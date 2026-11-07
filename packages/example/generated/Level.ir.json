@@ -1,0 +1,404 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/example/src/Level.tsx",
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Enemy",
+      "span": {
+        "fileName": "packages/example/src/Level.tsx",
+        "start": 0,
+        "end": 153,
+        "line": 1,
+        "column": 1
+      },
+      "hooks": [],
+      "state": [],
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Enemy"
+            }
+          }
+        ],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Enemy/0",
+              "fieldName": "sprite",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Sprite"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "image",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "enemy.png"
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 62,
+                "end": 90,
+                "line": 4,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Enemy/1",
+              "fieldName": "collider",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Collider"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 20
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 20
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 97,
+                "end": 132,
+                "line": 5,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/example/src/Level.tsx",
+          "start": 34,
+          "end": 146,
+          "line": 3,
+          "column": 5
+        }
+      }
+    },
+    {
+      "kind": "Component",
+      "name": "Level",
+      "span": {
+        "fileName": "packages/example/src/Level.tsx",
+        "start": 155,
+        "end": 588,
+        "line": 10,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Level.wave",
+          "setterName": "setWave",
+          "span": {
+            "fileName": "packages/example/src/Level.tsx",
+            "start": 182,
+            "end": 211,
+            "line": 11,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Level.bossVisible",
+          "setterName": "setBossVisible",
+          "span": {
+            "fileName": "packages/example/src/Level.tsx",
+            "start": 221,
+            "end": 268,
+            "line": 12,
+            "column": 9
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Level.wave",
+          "name": "wave",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 1
+          }
+        },
+        {
+          "kind": "State",
+          "id": "Level.bossVisible",
+          "name": "bossVisible",
+          "type": "boolean",
+          "initialValue": {
+            "kind": "BooleanLiteral",
+            "value": false
+          }
+        }
+      ],
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Level"
+            }
+          }
+        ],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Level/0",
+              "fieldName": "enemy",
+              "component": {
+                "kind": "Local",
+                "name": "Enemy"
+              },
+              "props": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 313,
+                "end": 322,
+                "line": 15,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Level/1",
+              "fieldName": "enemy2",
+              "component": {
+                "kind": "Local",
+                "name": "Enemy"
+              },
+              "props": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 329,
+                "end": 338,
+                "line": 16,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "ConditionalChild",
+            "condition": {
+              "kind": "Binary",
+              "operator": ">=",
+              "left": {
+                "kind": "StateRead",
+                "state": "Level.wave"
+              },
+              "right": {
+                "kind": "NumberLiteral",
+                "value": 3
+              }
+            },
+            "dependencies": [
+              "Level.wave"
+            ],
+            "element": {
+              "kind": "Element",
+              "id": "Level/2",
+              "fieldName": "enemy3",
+              "component": {
+                "kind": "Local",
+                "name": "Enemy"
+              },
+              "props": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 359,
+                "end": 368,
+                "line": 17,
+                "column": 21
+              }
+            }
+          },
+          {
+            "kind": "ConditionalChild",
+            "condition": {
+              "kind": "StateRead",
+              "state": "Level.bossVisible"
+            },
+            "dependencies": [
+              "Level.bossVisible"
+            ],
+            "element": {
+              "kind": "Element",
+              "id": "Level/3",
+              "fieldName": "entity",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Entity"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "name",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "Boss"
+                  }
+                }
+              ],
+              "children": [
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Level/3/0",
+                    "fieldName": "sprite",
+                    "component": {
+                      "kind": "Intrinsic",
+                      "name": "Sprite"
+                    },
+                    "props": [
+                      {
+                        "kind": "DynamicProp",
+                        "name": "image",
+                        "value": {
+                          "kind": "Conditional",
+                          "test": {
+                            "kind": "Binary",
+                            "operator": ">",
+                            "left": {
+                              "kind": "StateRead",
+                              "state": "Level.wave"
+                            },
+                            "right": {
+                              "kind": "NumberLiteral",
+                              "value": 5
+                            }
+                          },
+                          "whenTrue": {
+                            "kind": "StringLiteral",
+                            "value": "boss-enraged.png"
+                          },
+                          "whenFalse": {
+                            "kind": "StringLiteral",
+                            "value": "boss.png"
+                          }
+                        },
+                        "dependencies": [
+                          "Level.wave"
+                        ]
+                      }
+                    ],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/example/src/Level.tsx",
+                      "start": 433,
+                      "end": 494,
+                      "line": 20,
+                      "column": 11
+                    }
+                  }
+                },
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Level/3/1",
+                    "fieldName": "collider",
+                    "component": {
+                      "kind": "Intrinsic",
+                      "name": "Collider"
+                    },
+                    "props": [
+                      {
+                        "kind": "StaticProp",
+                        "name": "width",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 64
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "height",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 64
+                        }
+                      }
+                    ],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/example/src/Level.tsx",
+                      "start": 505,
+                      "end": 540,
+                      "line": 21,
+                      "column": 11
+                    }
+                  }
+                }
+              ],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 402,
+                "end": 558,
+                "line": 19,
+                "column": 9
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/example/src/Level.tsx",
+          "start": 285,
+          "end": 581,
+          "line": 14,
+          "column": 5
+        }
+      }
+    }
+  ]
+}
