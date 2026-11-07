@@ -1,4 +1,5 @@
 import { GameObject } from "./GameObject.ts";
+import { NO_INPUT, type InputState } from "./input.ts";
 
 /**
  * Owns the root of the object tree and drives dirty-driven updates:
@@ -8,6 +9,8 @@ export class World {
   readonly root: GameObject = new GameObject();
   #dirty = new Set<GameObject>();
   #structure = new Set<GameObject>();
+  #onInput = new Set<GameObject>();
+  #onUpdate = new Set<GameObject>();
 
   constructor() {
     this.root.attachToWorld(this);
@@ -26,28 +29,43 @@ export class World {
   }
 
   /**
-   * Advance one tick: run `onUpdate(dt)` on every attached object (parents
-   * before children), then flush the resulting renders and structure changes.
-   * The tree is snapshotted per object, and objects removed mid-tick are skipped.
+   * Run one frame, in a fixed order: `onInput` → `onUpdate` → render dirty
+   * objects → commit structure. Only objects that override a hook are visited
+   * (registered on attach), and the visit lists are snapshotted at the start,
+   * so objects attached during a frame start receiving hooks next frame and
+   * objects detached mid-frame are skipped. Returns the number of renders run.
    */
-  update(dt: number): number {
-    const visit = (object: GameObject): void => {
-      if (object.world !== this) return;
-      object.onUpdate(dt);
-      for (const child of [...object.children]) visit(child);
-    };
-    for (const child of [...this.root.children]) visit(child);
+  tick(dt: number, input: InputState = NO_INPUT): number {
+    const inputs = [...this.#onInput];
+    const updates = [...this.#onUpdate];
+    for (const object of inputs) if (object.world === this) object.onInput(input);
+    for (const object of updates) if (object.world === this) object.onUpdate(dt);
     return this.flush();
   }
 
   /**
-   * Report that `a` and `b` began colliding (the mock runtime has no physics;
-   * a collision system calls this). Notifies both, then flushes.
+   * Report that two colliders began touching (the mock has no physics; a
+   * collision system calls this). Each side's nearest compiled component, the
+   * first ancestor-or-self that is not a runtime intrinsic, gets
+   * `onCollisionEnter` with the other side's component (or the collider itself
+   * if it has none). Dispatch only: renders happen in the next `tick`.
    */
-  collide(a: GameObject, b: GameObject): number {
-    if (a.world === this) a.onCollisionEnter(b);
-    if (b.world === this) b.onCollisionEnter(a);
-    return this.flush();
+  reportCollision(a: GameObject, b: GameObject): void {
+    const ownerA = componentOwner(a);
+    const ownerB = componentOwner(b);
+    if (ownerA?.world === this) ownerA.onCollisionEnter(ownerB ?? b);
+    if (ownerB?.world === this) ownerB.onCollisionEnter(ownerA ?? a);
+  }
+
+  /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */
+  registerObject(object: GameObject): void {
+    if (object.onInput !== GameObject.prototype.onInput) this.#onInput.add(object);
+    if (object.onUpdate !== GameObject.prototype.onUpdate) this.#onUpdate.add(object);
+  }
+
+  unregisterObject(object: GameObject): void {
+    this.#onInput.delete(object);
+    this.#onUpdate.delete(object);
   }
 
   /** Process all pending work until the tree is stable. Returns the number of renders run. */
@@ -67,4 +85,15 @@ export class World {
     }
     return renders;
   }
+}
+
+function isIntrinsic(object: GameObject): boolean {
+  return Object.hasOwn(object.constructor, "intrinsic");
+}
+
+function componentOwner(start: GameObject): GameObject | null {
+  for (let object: GameObject | null = start; object !== null; object = object.parent) {
+    if (!isIntrinsic(object)) return object;
+  }
+  return null;
 }

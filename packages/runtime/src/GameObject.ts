@@ -1,3 +1,4 @@
+import type { InputState } from "./input.ts";
 import type { World } from "./World.ts";
 
 type StructureOp =
@@ -10,6 +11,9 @@ type StructureOp =
  * structural changes; it knows nothing about rendering backends.
  */
 export class GameObject {
+  /** Marks runtime-provided classes; compiled components do not have this as an own static. */
+  static readonly intrinsic = true;
+
   parent: GameObject | null = null;
   readonly children: GameObject[] = [];
   world: World | null = null;
@@ -79,10 +83,12 @@ export class GameObject {
     this.render();
   }
 
-  /** Called once per `World.update(dt)` tick. Generated code overrides this for `onUpdate`. */
+  /** Per-tick hooks. Generated code overrides the ones a component declares; the World only visits overriders. */
+  onInput(_input: InputState): void {}
+
   onUpdate(_dt: number): void {}
 
-  /** Called when the World reports a new collision with `other`. Generated code overrides this. */
+  /** Called when the World reports a new collision involving this component. */
   onCollisionEnter(_other: GameObject): void {}
 
   /** Recompute dynamic props and conditional children. Generated code overrides this. */
@@ -90,12 +96,14 @@ export class GameObject {
 
   attachToWorld(world: World): void {
     this.world = world;
+    world.registerObject(this);
     if (this.#dirty) world.scheduleRender(this);
     if (this.#pending.length > 0) world.scheduleCommit(this);
     for (const child of this.children) child.attachToWorld(world);
   }
 
   detachFromWorld(): void {
+    this.world?.unregisterObject(this);
     this.world = null;
     for (const child of this.children) child.detachFromWorld();
   }

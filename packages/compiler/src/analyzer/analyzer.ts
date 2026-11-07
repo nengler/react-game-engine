@@ -61,7 +61,7 @@ export type HookCallAnalysis = UseStateCallAnalysis | HandlerCallAnalysis;
 
 /** `onUpdate(() => ...)` / `onCollisionEnter(() => ...)` as a top-level statement. */
 export interface HandlerCallAnalysis {
-  readonly kind: "onUpdate" | "onCollisionEnter";
+  readonly kind: "onUpdate" | "onInput" | "onCollisionEnter";
   readonly handler: ArrowFunction;
   readonly call: CallExpression;
   readonly statement: Statement;
@@ -79,7 +79,7 @@ export interface UseStateCallAnalysis {
 
 const HOOK_NAME = /^use[A-Z0-9]/;
 const KNOWN_HOOKS = new Set(["useState"]);
-const HANDLER_HOOKS = new Set(["onUpdate", "onCollisionEnter"]);
+const HANDLER_HOOKS = new Set(["onUpdate", "onInput", "onCollisionEnter"]);
 
 /**
  * @param fileName Name used in spans and diagnostics. Defaults to the parsed

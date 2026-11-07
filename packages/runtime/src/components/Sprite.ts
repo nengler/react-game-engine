@@ -5,6 +5,8 @@ export interface SpriteProps {
 }
 
 export class Sprite extends GameObject {
+  static override readonly intrinsic = true;
+
   image: string;
 
   constructor(props: SpriteProps) {

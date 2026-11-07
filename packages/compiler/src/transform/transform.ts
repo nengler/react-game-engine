@@ -1,12 +1,9 @@
-import { NodeFlags, SyntaxKind, type ArrowFunction, type Expression, type Statement, type JsxAttributes, type JsxChild, type Node, type SourceFile } from "typescript/ast";
+import { SyntaxKind, type CallExpression, type Expression, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type Node, type SourceFile } from "typescript/ast";
 import {
-  isArrowFunction,
   isBinaryExpression,
-  isBlock,
   isCallExpression,
-  isExpressionStatement,
-  isIfStatement,
-  isVariableStatement,
+  isPropertyAccessExpression,
+  isTemplateExpression,
   isConditionalExpression,
   isIdentifier,
   isJsxAttribute,
@@ -20,9 +17,10 @@ import {
   isStringLiteral,
   isNoSubstitutionTemplateLiteral,
 } from "typescript/ast/is";
-import { unwrapParens, type ComponentAnalysis, type HandlerCallAnalysis, type JsxRoot, type SourceAnalysis } from "../analyzer/analyzer.ts";
+import { unwrapParens, type ComponentAnalysis, type JsxRoot, type SourceAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
+  assertNever,
   collectDependencies,
   elementId,
   stateId,
@@ -31,19 +29,24 @@ import {
   type ComponentIR,
   type ComponentRef,
   type ElementIR,
+  type CalleeIR,
   type ExprIR,
+  type ParamReadIR,
   type HookIR,
   type HostElementIR,
   type IRModule,
   type PropIR,
   type SourceSpan,
-  type StmtIR,
   type StateId,
   type StateIR,
   type UnaryOperator,
   type ValueType,
 } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
+import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
+import { ALLOWED_FUNCTIONS, HANDLE_TYPES } from "./handles.ts";
+import { Scope } from "./scope.ts";
+import { lowerFunction, type LoweringContext } from "./statements.ts";
 
 export interface TransformOptions {
   /** Tag names provided by the runtime package. */
@@ -65,13 +68,8 @@ const RESERVED_MEMBERS = new Set([
   "constructor", "parent", "children", "world", "name", "isDirty", "hasPendingStructure",
   "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "commitStructure",
   "markDirty", "runRender", "render", "attachToWorld", "detachFromWorld",
-  "onUpdate", "onCollisionEnter", "update", "collide",
+  "onUpdate", "onInput", "onCollisionEnter",
 ]);
-
-type Binding =
-  | { readonly kind: "state"; readonly id: StateId }
-  | { readonly kind: "setter"; readonly state: StateId; readonly name: string }
-  | { readonly kind: "local" };
 
 const BINARY_OPERATORS: ReadonlyMap<SyntaxKind, BinaryOperator> = new Map([
   [SyntaxKind.PlusToken, "+"], [SyntaxKind.MinusToken, "-"], [SyntaxKind.AsteriskToken, "*"],
@@ -115,8 +113,19 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   return { module: { kind: "Module", sourceFile: analysis.fileName, components }, diagnostics };
 }
 
-class ComponentLowering {
-  readonly #scope = new Map<string, Binding>();
+const HANDLER_KIND = {
+  onUpdate: "OnUpdate",
+  onInput: "OnInput",
+  onCollisionEnter: "OnCollisionEnter",
+} as const;
+
+class ComponentLowering implements LoweringContext {
+  readonly componentName: string;
+  /** Component scope; function lowering nests scopes beneath it via `scope`. */
+  readonly #componentScope = new Scope();
+  readonly #stateTypes = new Map<StateId, ValueType>();
+  #serial = 0;
+  scope: Scope = this.#componentScope;
   readonly #usedNames = new Set<string>(RESERVED_MEMBERS);
   readonly #component: ComponentAnalysis;
   readonly #sourceFile: SourceFile;
@@ -137,6 +146,7 @@ class ComponentLowering {
     diagnostics: CompilerDiagnostic[],
   ) {
     this.#component = component;
+    this.componentName = component.name;
     this.#sourceFile = sourceFile;
     this.#fileName = fileName;
     this.#intrinsics = intrinsics;
@@ -156,18 +166,19 @@ class ComponentLowering {
   #lowerHooks(): { hooks: HookIR[]; state: StateIR[] } {
     const hooks: HookIR[] = [];
     const state: StateIR[] = [];
-    const seenHandlers = new Set<string>();
     for (const hook of this.#component.hooks) {
       switch (hook.kind) {
         case "onUpdate":
+        case "onInput":
         case "onCollisionEnter": {
-          if (seenHandlers.has(hook.kind)) {
-            this.#error(DiagnosticCode.DuplicateHandler, `${hook.kind} may be declared only once per component.`, hook.statement);
-            continue;
-          }
-          seenHandlers.add(hook.kind);
-          const lowered = this.#lowerHandler(hook);
-          if (lowered) hooks.push(lowered);
+          const kind = HANDLER_KIND[hook.kind];
+          const signature = HANDLER_SIGNATURES[kind];
+          const handler = lowerFunction(this, hook.handler, {
+            paramTypes: signature.params.map((p) => p.type),
+            returns: "void",
+            what: `${signature.method} handler`,
+          });
+          if (handler) hooks.push({ kind, handler, span: this.#span(hook.statement) });
           break;
         }
         case "useState": {
@@ -189,137 +200,15 @@ class ComponentLowering {
           const type = this.#stateType(hook.typeArgument, initialValue, hook.call);
           if (!type) continue;
           state.push({ kind: "State", id, name: hook.valueName, type, initialValue });
+          this.#stateTypes.set(id, type);
           hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.#span(hook.declaration) });
-          this.#scope.set(hook.valueName, { kind: "state", id });
-          if (hook.setterName !== null) this.#scope.set(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
+          this.#componentScope.declare(hook.valueName, { kind: "state", id });
+          if (hook.setterName !== null) this.#componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
           break;
         }
       }
     }
     return { hooks, state };
-  }
-
-  // -- handlers -------------------------------------------------------------
-
-  #lowerHandler(hook: HandlerCallAnalysis): HookIR | null {
-    const fn = hook.handler;
-    const span = this.#span(hook.statement);
-    const params = fn.parameters;
-    let deltaParam: string | null = null;
-    const bound: string[] = [];
-    if (hook.kind === "onCollisionEnter") {
-      if (params.length > 0) {
-        this.#error(DiagnosticCode.InvalidHandler, "onCollisionEnter handlers take no parameters yet.", params[0]!);
-        return null;
-      }
-    } else if (params.length > 1 || (params[0] && !isIdentifier(params[0].name))) {
-      this.#error(DiagnosticCode.InvalidHandler, "onUpdate handlers take at most one plain parameter: the delta time.", params[1] ?? params[0]!);
-      return null;
-    } else if (params[0]) {
-      deltaParam = (params[0].name as { text: string }).text;
-      if (!this.#declareLocal(deltaParam, params[0])) return null;
-      bound.push(deltaParam);
-    }
-    const body = this.#lowerHandlerBody(fn);
-    for (const name of bound) this.#scope.delete(name);
-    if (!body) return null;
-    return hook.kind === "onUpdate"
-      ? { kind: "OnUpdate", deltaParam, body, span }
-      : { kind: "OnCollisionEnter", body, span };
-  }
-
-  #lowerHandlerBody(fn: ArrowFunction): StmtIR[] | null {
-    if (isBlock(fn.body)) return this.#lowerBlock(fn.body.statements);
-    // Expression body: `() => setX(1)` is a single expression statement.
-    const stmt = this.#lowerCall(fn.body, fn.body);
-    return stmt && [stmt];
-  }
-
-  /** Lowers statements in a fresh scope: locals declared inside do not leak out. */
-  #lowerBlock(statements: readonly Statement[]): StmtIR[] | null {
-    const declared: string[] = [];
-    const out: StmtIR[] = [];
-    let ok = true;
-    for (const statement of statements) {
-      const lowered = this.#lowerStatement(statement, declared);
-      if (lowered) out.push(lowered);
-      else ok = false;
-    }
-    for (const name of declared) this.#scope.delete(name);
-    return ok ? out : null;
-  }
-
-  #lowerStatement(statement: Statement, declared: string[]): StmtIR | null {
-    if (isExpressionStatement(statement)) return this.#lowerCall(statement.expression, statement);
-    if (isIfStatement(statement)) {
-      const test = this.#lowerExpression(statement.expression);
-      const thenBranch = this.#lowerBranch(statement.thenStatement);
-      const elseBranch = statement.elseStatement ? this.#lowerBranch(statement.elseStatement) : [];
-      return test && thenBranch && elseBranch && { kind: "If", test, then: thenBranch, else: elseBranch };
-    }
-    if (isVariableStatement(statement)) {
-      const list = statement.declarationList;
-      const decl = list.declarations[0]!;
-      if ((list.flags & NodeFlags.Const) === 0 || list.declarations.length !== 1 || !isIdentifier(decl.name) || !decl.initializer) {
-        this.#error(DiagnosticCode.UnsupportedStatement, "Only `const name = expression;` declarations are supported in handlers.", statement);
-        return null;
-      }
-      const value = this.#lowerExpression(decl.initializer);
-      if (!value || !this.#declareLocal(decl.name.text, decl.name)) return null;
-      declared.push(decl.name.text);
-      return { kind: "LocalDecl", name: decl.name.text, value };
-    }
-    this.#error(
-      DiagnosticCode.UnsupportedStatement,
-      "Unsupported statement in handler (supported: setter calls, `if`/`else`, and `const` declarations).",
-      statement,
-    );
-    return null;
-  }
-
-  #lowerBranch(statement: Statement): StmtIR[] | null {
-    return this.#lowerBlock(isBlock(statement) ? statement.statements : [statement]);
-  }
-
-  /** `setX(value)` or `setX(prev => expr)`, where the updater's parameter is a read of that state. */
-  #lowerCall(expression: Expression, at: Node): StmtIR | null {
-    const call = unwrapParens(expression);
-    const callee = isCallExpression(call) && isIdentifier(call.expression) ? this.#scope.get(call.expression.text) : undefined;
-    if (!isCallExpression(call) || callee?.kind !== "setter") {
-      this.#error(DiagnosticCode.UnsupportedStatement, "Handler statements must call a state setter, e.g. `setHealth(health - 1)`.", at);
-      return null;
-    }
-    if (call.arguments.length !== 1) {
-      this.#error(DiagnosticCode.UnsupportedStatement, "State setters take exactly one argument.", call);
-      return null;
-    }
-    const arg = unwrapParens(call.arguments[0]!);
-    let value: ExprIR | null;
-    if (isArrowFunction(arg)) {
-      const param = arg.parameters[0];
-      if (arg.parameters.length !== 1 || !param || !isIdentifier(param.name) || isBlock(arg.body)) {
-        this.#error(DiagnosticCode.UnsupportedStatement, "Updater functions must look like `prev => expression`.", arg);
-        return null;
-      }
-      const name = param.name.text;
-      const shadowed = this.#scope.get(name);
-      this.#scope.set(name, { kind: "state", id: callee.state });
-      value = this.#lowerExpression(arg.body);
-      if (shadowed) this.#scope.set(name, shadowed);
-      else this.#scope.delete(name);
-    } else {
-      value = this.#lowerExpression(arg);
-    }
-    return value && { kind: "SetState", state: callee.state, setterName: callee.name, value };
-  }
-
-  #declareLocal(name: string, at: Node): boolean {
-    if (this.#scope.has(name)) {
-      this.#error(DiagnosticCode.InvalidHandler, `'${name}' is already declared in this component.`, at);
-      return false;
-    }
-    this.#scope.set(name, { kind: "local" });
-    return true;
   }
 
   #stateType(typeArgument: Node | null, initial: ExprIR, at: Node): ValueType | null {
@@ -474,7 +363,7 @@ class ComponentLowering {
       case SyntaxKind.NullKeyword: return { kind: "NullLiteral" };
     }
     if (isIdentifier(node)) {
-      const binding = this.#scope.get(node.text);
+      const binding = this.scope.get(node.text);
       if (!binding) {
         this.#error(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component.`, node);
         return null;
@@ -483,8 +372,12 @@ class ComponentLowering {
         this.#error(DiagnosticCode.UnsupportedExpression, `State setter '${node.text}' cannot be used in an expression yet.`, node);
         return null;
       }
-      if (binding.kind === "local") return { kind: "LocalRead", name: node.text };
-      return { kind: "StateRead", state: binding.id };
+      switch (binding.kind) {
+        case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
+        case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
+        case "state": return { kind: "StateRead", state: binding.id };
+        default: return assertNever(binding, "binding");
+      }
     }
     if (isPrefixUnaryExpression(node)) {
       const operator = UNARY_OPERATORS.get(node.operator);
@@ -511,8 +404,81 @@ class ComponentLowering {
       const whenFalse = this.#lowerExpression(node.whenFalse);
       return test && whenTrue && whenFalse && { kind: "Conditional", test, whenTrue, whenFalse };
     }
+    if (isTemplateExpression(node)) {
+      const quasis = [node.head.text, ...node.templateSpans.map((span) => span.literal.text)];
+      const expressions: ExprIR[] = [];
+      for (const span of node.templateSpans) {
+        const e = this.#lowerExpression(span.expression);
+        if (!e) return null;
+        expressions.push(e);
+      }
+      return { kind: "TemplateLiteral", quasis, expressions };
+    }
+    if (isPropertyAccessExpression(node)) return this.#lowerPropertyRead(node);
+    if (isCallExpression(node)) return this.#lowerCall(node);
     this.#error(DiagnosticCode.UnsupportedExpression, `Unsupported expression (${SyntaxKind[node.kind]}).`, node);
     return null;
+  }
+
+  /** `param.name`, where `param` is a handler parameter of a runtime handle type. */
+  #lowerPropertyRead(node: PropertyAccessExpression): ExprIR | null {
+    const receiver = this.#lowerHandle(node.expression);
+    if (!receiver) return null;
+    const name = node.name.text;
+    if (!HANDLE_TYPES[receiver.type]!.properties.includes(name)) {
+      this.#error(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no readable property '${name}'.`, node.name);
+      return null;
+    }
+    return { kind: "PropertyRead", object: receiver.read, name };
+  }
+
+  /** `Math.max(...)`, `clamp(...)`, or `param.method(...)` on a runtime handle parameter. */
+  #lowerCall(node: CallExpression): ExprIR | null {
+    const callee = node.expression;
+    let result: { callee: CalleeIR; expected: number; label: string } | null = null;
+    if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
+      const name = `Math.${callee.name.text}`;
+      const expected = ALLOWED_FUNCTIONS[name];
+      if (expected !== undefined) result = { callee: { kind: "Function", name }, expected, label: name };
+    } else if (isIdentifier(callee) && callee.text === "clamp" && !this.scope.has("clamp")) {
+      result = { callee: { kind: "Function", name: "clamp" }, expected: ALLOWED_FUNCTIONS["clamp"]!, label: "clamp" };
+    } else if (isPropertyAccessExpression(callee)) {
+      const receiver = this.#lowerHandle(callee.expression);
+      if (!receiver) return null;
+      const expected = HANDLE_TYPES[receiver.type]!.methods[callee.name.text];
+      if (expected === undefined) {
+        this.#error(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no callable method '${callee.name.text}'.`, callee.name);
+        return null;
+      }
+      result = { callee: { kind: "Method", receiver: receiver.read, name: callee.name.text }, expected, label: callee.name.text };
+    }
+    if (!result) {
+      this.#error(DiagnosticCode.UnsupportedExpression, "Only allowlisted calls are supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, clamp, and methods of handler parameters.", node);
+      return null;
+    }
+    const count = node.arguments.length;
+    if (result.expected === -1 ? count < 1 : count !== result.expected) {
+      this.#error(DiagnosticCode.UnsupportedExpression, `${result.label} expects ${result.expected === -1 ? "at least one" : result.expected} argument(s).`, node);
+      return null;
+    }
+    const args: ExprIR[] = [];
+    for (const argument of node.arguments) {
+      const lowered = this.#lowerExpression(argument);
+      if (!lowered) return null;
+      args.push(lowered);
+    }
+    return { kind: "Call", callee: result.callee, args };
+  }
+
+  /** Resolves an expression that must be a handler parameter of a named runtime type. */
+  #lowerHandle(node: Expression): { type: string; read: ParamReadIR } | null {
+    const target = unwrapParens(node);
+    const binding = isIdentifier(target) ? this.scope.get(target.text) : undefined;
+    if (binding?.kind !== "param" || binding.type.kind !== "Named") {
+      this.#error(DiagnosticCode.UnsupportedExpression, "Members can only be accessed on handler parameters of a runtime type (e.g. `input`).", node);
+      return null;
+    }
+    return { type: binding.type.name, read: { kind: "ParamRead", param: binding.id, name: binding.name } };
   }
 
   #claimName(name: string, at: Node): boolean {
@@ -530,6 +496,26 @@ class ComponentLowering {
     for (let n = 2; this.#usedNames.has(candidate); n++) candidate = `${base}${n}`;
     this.#usedNames.add(candidate);
     return candidate;
+  }
+
+  // -- LoweringContext --------------------------------------------------------
+
+  lowerExpression(node: Expression): ExprIR | null {
+    return this.#lowerExpression(node);
+  }
+
+  stateType(state: StateId): ValueType {
+    const type = this.#stateTypes.get(state);
+    if (!type) throw new Error(`Unknown state ${state}`);
+    return type;
+  }
+
+  nextSerial(): number {
+    return ++this.#serial;
+  }
+
+  error(code: CompilerDiagnostic["code"], message: string, node: Node): void {
+    this.#error(code, message, node);
   }
 
   #span(node: Node): SourceSpan {

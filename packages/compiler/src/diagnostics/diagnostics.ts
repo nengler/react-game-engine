@@ -20,6 +20,7 @@ export const DiagnosticCode = {
   NonConstantInitialState: "RGE1303",
   InvalidHandler: "RGE1401",
   UnsupportedStatement: "RGE1402",
+  /** Retired: several handlers of one kind are now allowed. Kept so codes are never reused. */
   DuplicateHandler: "RGE1403",
   GeneratedTypeError: "RGE9001",
 } as const;
