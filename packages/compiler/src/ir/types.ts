@@ -204,7 +204,7 @@ export interface StateIR {
 // ---------------------------------------------------------------------------
 
 /** What an element instantiates. */
-export type ComponentRef = IntrinsicComponentRef | LocalComponentRef;
+export type ComponentRef = IntrinsicComponentRef | LocalComponentRef | ImportedComponentRef;
 
 /** A component provided by the runtime package (Entity, Sprite, ...). */
 export interface IntrinsicComponentRef {
@@ -216,6 +216,14 @@ export interface IntrinsicComponentRef {
 export interface LocalComponentRef {
   readonly kind: "Local";
   readonly name: string;
+}
+
+/** A compiled component declared in another source file. */
+export interface ImportedComponentRef {
+  readonly kind: "Imported";
+  readonly name: string;
+  /** The specifier as written in the source (`./WarningIcon.tsx`); the generator points it at the generated `.ts`. */
+  readonly module: string;
 }
 
 /** The component's root element; it *is* the instance, so it has no field. */

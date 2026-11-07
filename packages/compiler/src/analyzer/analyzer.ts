@@ -6,6 +6,7 @@ import {
   type ArrowFunction,
   type Expression,
   type FunctionDeclaration,
+  type ImportDeclaration,
   type JsxElement,
   type JsxSelfClosingElement,
   type Node,
@@ -21,6 +22,8 @@ import {
   isFunctionDeclaration,
   isIdentifier,
   isImportDeclaration,
+  isNamedImports,
+  isStringLiteral,
   isJsxElement,
   isJsxSelfClosingElement,
   isParenthesizedExpression,
@@ -39,7 +42,17 @@ export interface SourceAnalysis {
   readonly fileName: string;
   readonly sourceFile: SourceFile;
   readonly components: readonly ComponentAnalysis[];
+  /** Components imported from other `.tsx` files, by the name they have in this file. */
+  readonly imports: readonly ImportAnalysis[];
   readonly diagnostics: readonly CompilerDiagnostic[];
+}
+
+/** `import { Name } from "./Name.tsx"`: a component declared in another source file. */
+export interface ImportAnalysis {
+  readonly name: string;
+  /** The specifier as written, e.g. `./WarningIcon.tsx`. */
+  readonly module: string;
+  readonly node: Node;
 }
 
 export type JsxRoot = JsxElement | JsxSelfClosingElement;
@@ -88,10 +101,18 @@ const HANDLER_HOOKS = new Set(["onUpdate", "onInput", "onCollisionEnter"]);
 export function analyzeSourceFile(sourceFile: SourceFile, fileName: string = sourceFile.fileName): SourceAnalysis {
   const diagnostics: CompilerDiagnostic[] = [];
   const components: ComponentAnalysis[] = [];
+  const imports: ImportAnalysis[] = [];
   const span = (node: Node) => spanOf(node, sourceFile, fileName);
 
   for (const statement of sourceFile.statements) {
-    if (isImportDeclaration(statement)) continue; // imports (e.g. of useState / intrinsics) are authoring-only
+    if (isImportDeclaration(statement)) {
+      // Imports of other modules (useState, intrinsics, ...) are authoring-only; relative `.tsx` imports are components.
+      const specifier = isStringLiteral(statement.moduleSpecifier) ? statement.moduleSpecifier.text : null;
+      if (specifier !== null && /^\.\.?\/.*\.tsx$/.test(specifier)) {
+        analyzeComponentImport(statement, specifier, imports, diagnostics, span);
+      }
+      continue;
+    }
     if (isFunctionDeclaration(statement) && statement.name && /^[A-Z]/.test(statement.name.text)) {
       const component = analyzeComponent(statement, statement.name.text, span, diagnostics);
       if (component) components.push(component);
@@ -106,7 +127,33 @@ export function analyzeSourceFile(sourceFile: SourceFile, fileName: string = sou
     );
   }
 
-  return { fileName, sourceFile, components, diagnostics };
+  return { fileName, sourceFile, components, imports, diagnostics };
+}
+
+function analyzeComponentImport(
+  statement: ImportDeclaration,
+  module: string,
+  imports: ImportAnalysis[],
+  diagnostics: CompilerDiagnostic[],
+  span: (node: Node) => ReturnType<typeof spanOf>,
+): void {
+  const clause = statement.importClause;
+  const bindings = clause?.namedBindings;
+  if (!clause || clause.name || !bindings || !isNamedImports(bindings)) {
+    diagnostics.push(
+      error(DiagnosticCode.UnsupportedSyntax, `Import components by name: \`import { Name } from "${module}"\` (no default or namespace imports).`, span(statement)),
+    );
+    return;
+  }
+  for (const element of bindings.elements) {
+    if (element.isTypeOnly || element.propertyName) {
+      diagnostics.push(
+        error(DiagnosticCode.UnsupportedSyntax, "Component imports must be plain `{ Name }`: no `type` modifier and no `as` aliases.", span(element)),
+      );
+      continue;
+    }
+    imports.push({ name: element.name.text, module, node: element });
+  }
 }
 
 function analyzeComponent(

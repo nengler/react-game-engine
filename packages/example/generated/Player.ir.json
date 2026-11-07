@@ -7,9 +7,9 @@
       "name": "Player",
       "span": {
         "fileName": "packages/example/src/Player.tsx",
-        "start": 0,
-        "end": 269,
-        "line": 1,
+        "start": 50,
+        "end": 319,
+        "line": 3,
         "column": 1
       },
       "hooks": [
@@ -19,9 +19,9 @@
           "setterName": "setHealth",
           "span": {
             "fileName": "packages/example/src/Player.tsx",
-            "start": 28,
-            "end": 63,
-            "line": 2,
+            "start": 78,
+            "end": 113,
+            "line": 4,
             "column": 9
           }
         }
@@ -100,9 +100,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",
-                "start": 109,
-                "end": 167,
-                "line": 5,
+                "start": 159,
+                "end": 217,
+                "line": 7,
                 "column": 7
               }
             }
@@ -138,9 +138,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",
-                "start": 174,
-                "end": 209,
-                "line": 6,
+                "start": 224,
+                "end": 259,
+                "line": 8,
                 "column": 7
               }
             }
@@ -167,16 +167,17 @@
               "id": "Player/2",
               "fieldName": "warningIcon",
               "component": {
-                "kind": "Local",
-                "name": "WarningIcon"
+                "kind": "Imported",
+                "name": "WarningIcon",
+                "module": "./WarningIcon.tsx"
               },
               "props": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",
-                "start": 232,
-                "end": 247,
-                "line": 7,
+                "start": 282,
+                "end": 297,
+                "line": 9,
                 "column": 23
               }
             }
@@ -184,78 +185,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Player.tsx",
-          "start": 80,
-          "end": 262,
-          "line": 4,
-          "column": 5
-        }
-      }
-    },
-    {
-      "kind": "Component",
-      "name": "WarningIcon",
-      "span": {
-        "fileName": "packages/example/src/Player.tsx",
-        "start": 271,
-        "end": 392,
-        "line": 12,
-        "column": 1
-      },
-      "hooks": [],
-      "state": [],
-      "root": {
-        "kind": "HostElement",
-        "component": {
-          "kind": "Intrinsic",
-          "name": "Entity"
-        },
-        "props": [
-          {
-            "kind": "StaticProp",
-            "name": "name",
-            "value": {
-              "kind": "StringLiteral",
-              "value": "Warning"
-            }
-          }
-        ],
-        "children": [
-          {
-            "kind": "StaticChild",
-            "element": {
-              "kind": "Element",
-              "id": "WarningIcon/0",
-              "fieldName": "sprite",
-              "component": {
-                "kind": "Intrinsic",
-                "name": "Sprite"
-              },
-              "props": [
-                {
-                  "kind": "StaticProp",
-                  "name": "image",
-                  "value": {
-                    "kind": "StringLiteral",
-                    "value": "warning.png"
-                  }
-                }
-              ],
-              "children": [],
-              "span": {
-                "fileName": "packages/example/src/Player.tsx",
-                "start": 341,
-                "end": 371,
-                "line": 15,
-                "column": 7
-              }
-            }
-          }
-        ],
-        "span": {
-          "fileName": "packages/example/src/Player.tsx",
-          "start": 311,
-          "end": 385,
-          "line": 14,
+          "start": 130,
+          "end": 312,
+          "line": 6,
           "column": 5
         }
       }

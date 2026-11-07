@@ -60,13 +60,19 @@ export class GameObject {
     this.world?.scheduleCommit(this);
   }
 
-  /** Apply queued structural changes in the order they were queued. */
+  /** Apply queued structural changes in the order they were queued, then those of children just attached. */
   commitStructure(): void {
     const ops = this.#pending;
     this.#pending = [];
     for (const op of ops) {
-      if (op.kind === "add") this.addChild(op.child);
-      else this.removeChild(op.child);
+      if (op.kind === "add") {
+        this.addChild(op.child);
+        // A child that queued its own changes while it had no parent (nested conditionals)
+        // is now attached; settle it too, so a subtree is complete without a World.
+        if (op.child.hasPendingStructure) op.child.commitStructure();
+      } else {
+        this.removeChild(op.child);
+      }
     }
   }
 

@@ -86,8 +86,11 @@ ignored):
 * Hooks: top-level `onInput((input) => ...)`, `onUpdate((dt) => ...)` and
   `onCollisionEnter((other) => ...)` statements; each may appear several times
   and runs in source order. See "Handlers" below.
-* Element tags are either runtime intrinsics (`Entity`, `Sprite`, `Collider`)
-  or components declared in the same file. Local components take no props yet.
+* Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`; the list
+  comes from the runtime manifest), components declared in the same file, or
+  components imported from another `.tsx` file with
+  `import { Name } from "./Name.tsx"` (named imports only: no default,
+  namespace, `as` or `type` forms). Components take no props yet.
 * Expressions: number/string/boolean/null literals, state reads, unary
   `! - +`, binary arithmetic / comparison / logical, `?:`, parentheses.
 
@@ -248,9 +251,36 @@ Decisions:
 * The generated class extends the runtime `Entity` (not bare `GameObject`)
   because the root `<Entity>`'s props (e.g. `name`) belong to the instance.
 
+## Runtime manifest
+
+`packages/runtime/src/manifest.ts` exports `runtimeManifest`, the one place
+that says what the runtime provides: the intrinsic tag names, the host
+intrinsic generated classes extend, the member names of that class that
+generated fields must not shadow (`reservedMembers`), the handle types handler
+parameters may have (`InputState`, `GameObject`) with their readable members,
+and the runtime functions handler code may call (`clamp`). The compiler takes
+it as `CompilerConfig.manifest` (default: the runtime's own), so adding an
+intrinsic or a handle type is a runtime-only edit. A runtime test fails if a
+member inherited from `Entity` is missing from `reservedMembers`. The `Math.*`
+allowlist is language-level and stays in the compiler (`transform/handles.ts`).
+
+## Components across files
+
+The analyzer records relative `.tsx` named imports; the transform resolves a
+tag to `Intrinsic`, `Local` or `Imported { name, module }` (name clashes between
+the three are `RGE1206`). The generator imports each name once per module and
+rewrites the specifier to the generated file (`./WarningIcon.tsx` →
+`./WarningIcon.ts`). The CLI compiles every file in a directory and type-checks
+all outputs together, so a broken cross-file reference is caught there.
+Cross-file static cycles are not detected yet (the `RGE1205` check is per file).
+
 ## Runtime (mock)
 
 `packages/runtime` is deliberately minimal: `GameObject` (tree, dirty flag,
 queued structure ops), `World` (dirty queue + flush), and three intrinsics
 with public prop fields. It has no rendering backend; the compiler only knows
-the runtime's module specifier and the list of intrinsic tag names.
+what the manifest tells it.
+
+`commitStructure()` also settles children it has just attached, so a freshly
+constructed object whose nested conditions are true has its whole subtree
+attached without a `World`.

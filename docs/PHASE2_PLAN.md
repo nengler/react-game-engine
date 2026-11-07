@@ -4,14 +4,14 @@ Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice
 
 ## Status
 
-Last updated 2026-11-07. **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone is *Done* only when its PR is merged; until then it is *Done on branch*.
+Last updated 2026-11-07 (M0 in review). **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone is *Done* only when its PR is merged; until then it is *Done on branch*.
 
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
-| M0 Hardening | Not started | n/a | Independent of M1/M2; can go first or in parallel |
-| M1 Statement and function IR | Done on branch (PR not opened) | `claude/stoic-wozniak-9u5gpn` | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
-| M2 Lifecycle and input hooks | Done on branch (PR not opened) | `claude/stoic-wozniak-9u5gpn` | `other` in `onCollisionEnter` is received but has no readable members yet. Handle/allowlist tables are hardcoded in `transform/handles.ts` until M0's manifest exists |
-| M3 useTransform and refs | Not started | n/a | Next after M0; adds `Assign` |
+| M0 Hardening | Done on branch (PR not opened) | `claude/stoic-wozniak-9u5gpn` | Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet. CI workflow is untested on GitHub until the PR runs it |
+| M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
+| M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
+| M3 useTransform and refs | Not started | n/a | Next; adds `Assign` |
 | M4 Props and callbacks | Not started | n/a | n/a |
 | M5 Keyed dynamic lists | Not started | n/a | Needs M4 |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
@@ -250,12 +250,12 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M0 Hardening
 
-- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
-- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
-- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
-- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
-- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
-- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+- [x] New IR variants added in `ir/types.ts`, with every `assertNever` site handled (`ImportedComponentRef`)
+- [x] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test (default / namespace / alias / type-only imports, name clashes)
+- [x] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example (runtime manifest and cross-file sections)
+- [x] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed (`WarningIcon.tsx` split out of `Player.tsx`)
+- [x] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (`m0.test.ts`, `runtime/test/manifest.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M1 Statement and function IR
 

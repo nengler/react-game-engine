@@ -65,3 +65,41 @@ export function cleanOutput(): void {
 export function stripSpans<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value, (key, v: unknown) => (key === "span" ? undefined : v)));
 }
+
+export type CompiledProject = Readonly<Record<string, CompiledModule>>;
+
+/** Compile several TSX files that import each other; all outputs share one directory. */
+export function compileProject(sources: Readonly<Record<string, string>>): CompiledProject {
+  const dir = join(PROCESS_DIR, String(++counter));
+  const out: Record<string, CompiledModule> = {};
+  for (const [name, source] of Object.entries(sources)) {
+    const result = getCompiler().compile(name, source);
+    if (!result.ok) {
+      throw new Error(`Compilation of ${name} failed:\n${result.diagnostics.map(formatDiagnostic).join("\n")}`);
+    }
+    out[name] = { ir: result.ir, code: result.code, fileName: join(dir, name.replace(/\.tsx$/, ".ts")) };
+  }
+  return out;
+}
+
+export function typeCheckProject(project: CompiledProject): readonly CompilerDiagnostic[] {
+  return getCompiler().typeCheck(Object.values(project).map((m) => ({ fileName: m.fileName, text: m.code })));
+}
+
+/** Write every module of a project to disk and import `main`. */
+export async function loadProject<T = Record<string, unknown>>(project: CompiledProject, main: string): Promise<T> {
+  for (const m of Object.values(project)) {
+    mkdirSync(dirname(m.fileName), { recursive: true });
+    writeFileSync(m.fileName, m.code);
+  }
+  return (await import(pathToFileURL(project[main]!.fileName).href)) as T;
+}
+
+/** Diagnostics for a project whose files are expected not to compile (files compiled in order, errors from the first failure). */
+export function compileProjectErrors(sources: Readonly<Record<string, string>>): readonly CompilerDiagnostic[] {
+  for (const [name, source] of Object.entries(sources)) {
+    const result = getCompiler().compile(name, source);
+    if (!result.ok) return result.diagnostics;
+  }
+  throw new Error("Expected a compilation failure");
+}
