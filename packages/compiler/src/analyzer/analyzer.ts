@@ -3,6 +3,7 @@ import {
   NodeFlags,
   SyntaxKind,
   type CallExpression,
+  type ArrowFunction,
   type Expression,
   type FunctionDeclaration,
   type JsxElement,
@@ -14,6 +15,8 @@ import {
 } from "typescript/ast";
 import {
   isArrayBindingPattern,
+  isArrowFunction,
+  isExpressionStatement,
   isCallExpression,
   isFunctionDeclaration,
   isIdentifier,
@@ -54,7 +57,15 @@ export interface ComponentAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStateCallAnalysis;
+export type HookCallAnalysis = UseStateCallAnalysis | HandlerCallAnalysis;
+
+/** `onUpdate(() => ...)` / `onCollisionEnter(() => ...)` as a top-level statement. */
+export interface HandlerCallAnalysis {
+  readonly kind: "onUpdate" | "onCollisionEnter";
+  readonly handler: ArrowFunction;
+  readonly call: CallExpression;
+  readonly statement: Statement;
+}
 
 export interface UseStateCallAnalysis {
   readonly kind: "useState";
@@ -68,6 +79,7 @@ export interface UseStateCallAnalysis {
 
 const HOOK_NAME = /^use[A-Z0-9]/;
 const KNOWN_HOOKS = new Set(["useState"]);
+const HANDLER_HOOKS = new Set(["onUpdate", "onCollisionEnter"]);
 
 /**
  * @param fileName Name used in spans and diagnostics. Defaults to the parsed
@@ -143,10 +155,20 @@ function analyzeComponent(
       }
       return;
     }
+    const handler = matchHandlerStatement(statement);
+    if (handler) {
+      if (handler.kind === "ok") {
+        hooks.push(handler.hook);
+        acceptedHookCalls.add(handler.hook.call);
+      } else {
+        diagnostics.push(error(DiagnosticCode.InvalidHandler, handler.message, span(statement)));
+      }
+      return;
+    }
     diagnostics.push(
       error(
         DiagnosticCode.InvalidComponentBody,
-        `Component '${name}': only \`const [value, setValue] = useState(...)\` statements and a final \`return\` are supported.`,
+        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`onUpdate(...)\` / \`onCollisionEnter(...)\` statements and a final \`return\` are supported.`,
         span(statement),
       ),
     );
@@ -243,6 +265,23 @@ function matchUseStateStatement(statement: Statement): UseStateMatch | null {
       declaration,
     },
   };
+}
+
+type HandlerMatch =
+  | { readonly kind: "ok"; readonly hook: HandlerCallAnalysis }
+  | { readonly kind: "invalid"; readonly message: string };
+
+/** Recognises `onUpdate(arrow)` / `onCollisionEnter(arrow)`; null if the statement is not a call to one of them. */
+function matchHandlerStatement(statement: Statement): HandlerMatch | null {
+  if (!isExpressionStatement(statement)) return null;
+  const call = unwrapParens(statement.expression);
+  if (!isCallExpression(call) || !isIdentifier(call.expression) || !HANDLER_HOOKS.has(call.expression.text)) return null;
+  const name = call.expression.text as HandlerCallAnalysis["kind"];
+  const handler = call.arguments.length === 1 ? unwrapParens(call.arguments[0]!) : undefined;
+  if (!handler || !isArrowFunction(handler)) {
+    return { kind: "invalid", message: `${name} takes exactly one arrow function: \`${name}(() => { ... })\`.` };
+  }
+  return { kind: "ok", hook: { kind: name, handler, call, statement } };
 }
 
 export function unwrapParens(expression: Expression): Expression {

@@ -25,6 +25,31 @@ export class World {
     this.#structure.add(object);
   }
 
+  /**
+   * Advance one tick: run `onUpdate(dt)` on every attached object (parents
+   * before children), then flush the resulting renders and structure changes.
+   * The tree is snapshotted per object, and objects removed mid-tick are skipped.
+   */
+  update(dt: number): number {
+    const visit = (object: GameObject): void => {
+      if (object.world !== this) return;
+      object.onUpdate(dt);
+      for (const child of [...object.children]) visit(child);
+    };
+    for (const child of [...this.root.children]) visit(child);
+    return this.flush();
+  }
+
+  /**
+   * Report that `a` and `b` began colliding (the mock runtime has no physics;
+   * a collision system calls this). Notifies both, then flushes.
+   */
+  collide(a: GameObject, b: GameObject): number {
+    if (a.world === this) a.onCollisionEnter(b);
+    if (b.world === this) b.onCollisionEnter(a);
+    return this.flush();
+  }
+
   /** Process all pending work until the tree is stable. Returns the number of renders run. */
   flush(): number {
     let renders = 0;

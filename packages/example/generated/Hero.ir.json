@@ -1,0 +1,286 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/example/src/Hero.tsx",
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Hero",
+      "span": {
+        "fileName": "packages/example/src/Hero.tsx",
+        "start": 0,
+        "end": 494,
+        "line": 1,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Hero.health",
+          "setterName": "setHealth",
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 26,
+            "end": 61,
+            "line": 2,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Hero.poisoned",
+          "setterName": "setPoisoned",
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 71,
+            "end": 112,
+            "line": 3,
+            "column": 9
+          }
+        },
+        {
+          "kind": "OnUpdate",
+          "deltaParam": "dt",
+          "body": [
+            {
+              "kind": "If",
+              "test": {
+                "kind": "StateRead",
+                "state": "Hero.poisoned"
+              },
+              "then": [
+                {
+                  "kind": "LocalDecl",
+                  "name": "next",
+                  "value": {
+                    "kind": "Binary",
+                    "operator": "-",
+                    "left": {
+                      "kind": "StateRead",
+                      "state": "Hero.health"
+                    },
+                    "right": {
+                      "kind": "Binary",
+                      "operator": "*",
+                      "left": {
+                        "kind": "LocalRead",
+                        "name": "dt"
+                      },
+                      "right": {
+                        "kind": "NumberLiteral",
+                        "value": 5
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "SetState",
+                  "state": "Hero.health",
+                  "setterName": "setHealth",
+                  "value": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": ">",
+                      "left": {
+                        "kind": "LocalRead",
+                        "name": "next"
+                      },
+                      "right": {
+                        "kind": "NumberLiteral",
+                        "value": 0
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "LocalRead",
+                      "name": "next"
+                    },
+                    "whenFalse": {
+                      "kind": "NumberLiteral",
+                      "value": 0
+                    }
+                  }
+                }
+              ],
+              "else": []
+            }
+          ],
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 117,
+            "end": 241,
+            "line": 5,
+            "column": 3
+          }
+        },
+        {
+          "kind": "OnCollisionEnter",
+          "body": [
+            {
+              "kind": "SetState",
+              "state": "Hero.health",
+              "setterName": "setHealth",
+              "value": {
+                "kind": "Binary",
+                "operator": "-",
+                "left": {
+                  "kind": "StateRead",
+                  "state": "Hero.health"
+                },
+                "right": {
+                  "kind": "NumberLiteral",
+                  "value": 10
+                }
+              }
+            },
+            {
+              "kind": "SetState",
+              "state": "Hero.poisoned",
+              "setterName": "setPoisoned",
+              "value": {
+                "kind": "BooleanLiteral",
+                "value": true
+              }
+            }
+          ],
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 245,
+            "end": 328,
+            "line": 12,
+            "column": 3
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Hero.health",
+          "name": "health",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 100
+          }
+        },
+        {
+          "kind": "State",
+          "id": "Hero.poisoned",
+          "name": "poisoned",
+          "type": "boolean",
+          "initialValue": {
+            "kind": "BooleanLiteral",
+            "value": false
+          }
+        }
+      ],
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Hero"
+            }
+          }
+        ],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Hero/0",
+              "fieldName": "sprite",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Sprite"
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "image",
+                  "value": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "StateRead",
+                      "state": "Hero.poisoned"
+                    },
+                    "whenTrue": {
+                      "kind": "StringLiteral",
+                      "value": "poisoned.png"
+                    },
+                    "whenFalse": {
+                      "kind": "StringLiteral",
+                      "value": "normal.png"
+                    }
+                  },
+                  "dependencies": [
+                    "Hero.poisoned"
+                  ]
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Hero.tsx",
+                "start": 372,
+                "end": 431,
+                "line": 19,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Hero/1",
+              "fieldName": "collider",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Collider"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 24
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Hero.tsx",
+                "start": 438,
+                "end": 473,
+                "line": 20,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/example/src/Hero.tsx",
+          "start": 345,
+          "end": 487,
+          "line": 18,
+          "column": 5
+        }
+      }
+    }
+  ]
+}

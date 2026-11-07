@@ -79,6 +79,12 @@ export class GameObject {
     this.render();
   }
 
+  /** Called once per `World.update(dt)` tick. Generated code overrides this for `onUpdate`. */
+  onUpdate(_dt: number): void {}
+
+  /** Called when the World reports a new collision with `other`. Generated code overrides this. */
+  onCollisionEnter(_other: GameObject): void {}
+
   /** Recompute dynamic props and conditional children. Generated code overrides this. */
   render(): void {}
 

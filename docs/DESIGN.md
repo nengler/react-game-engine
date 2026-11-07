@@ -83,6 +83,8 @@ ignored):
   State type is inferred from the initial literal (`number`/`string`/`boolean`).
 * Children: elements, or `{condition && <Element />}`. Text children,
   fragments, spread attributes and other expression children are rejected.
+* Handlers: top-level `onUpdate((dt) => ...)` and `onCollisionEnter(() => ...)`
+  statements, at most one of each per component. See "Handlers" below.
 * Element tags are either runtime intrinsics (`Entity`, `Sprite`, `Collider`)
   or components declared in the same file. Local components take no props yet.
 * Expressions: number/string/boolean/null literals, state reads, unary
@@ -121,15 +123,39 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 
 | Feature | IR change |
 | --- | --- |
-| `onUpdate`, `onCollisionEnter` | new `HookIR` variants carrying a statement IR; generator emits overriding methods |
+| ~~`onUpdate`, `onCollisionEnter`~~ | done: `OnUpdate` / `OnCollisionEnter` hooks carrying `StmtIR[]`; see "Handlers" |
 | `onInput` / event props | `PropIR` variant `EventHandlerProp` holding a callback IR |
 | `useTransform`, refs | new `HookIR` variants + storage slot kinds |
 | props between components | `ComponentIR.props: PropDeclIR[]`; `ExprIR` variant `PropRead`; `ComponentRef` `Local` accepts props |
 | keyed lists | `ChildIR` variant `KeyedListChild { items, key, element }` |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
 
-Statement-level IR (needed for handler bodies) is intentionally not designed
-yet; nothing in this slice needs it.
+## Handlers
+
+`onUpdate` and `onCollisionEnter` are hooks whose bodies are lowered to
+statement IR (`StmtIR`), the only place statements exist in the IR:
+
+* `SetState { state, setterName, value }` — the only way a handler changes
+  anything. Written `setX(expr)` or `setX(prev => expr)`; the updater's
+  parameter is lowered as a plain read of that state.
+* `If { test, then, else }` and `LocalDecl { name, value }` (`const` only,
+  scoped to the enclosing block). Locals and the `dt` parameter are
+  `LocalRead` expressions.
+* Anything else (loops, other calls, assignment, `let`) is `RGE1402`.
+
+Semantics: state reads in a handler are **live** (not React-style snapshots),
+so after `setHealth(...)` a later read sees the new value. Setters call
+`markDirty()`, so renders happen in the next `World.flush()`, never mid-handler.
+
+Generated code overrides `onUpdate(dt)` / `onCollisionEnter()` on the class.
+Runtime: `World.update(dt)` calls `onUpdate` on every attached object (parents
+first, over a per-object snapshot of children) and then flushes;
+`World.collide(a, b)` notifies both objects and flushes. The mock runtime has
+no physics, so a collision system is expected to call `collide`.
+
+Not yet: event props on elements (`onInput={...}`), handler parameters beyond
+`dt`, more than one handler of a kind per component, and `onCollisionEnter`
+receiving the other object.
 
 ## Code generation
 

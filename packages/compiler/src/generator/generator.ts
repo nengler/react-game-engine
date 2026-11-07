@@ -7,6 +7,7 @@ import {
   type ExprIR,
   type IRModule,
   type PropIR,
+  type StmtIR,
   type StateId,
   type StateIR,
 } from "../ir/types.ts";
@@ -108,8 +109,18 @@ class ComponentGenerator {
             });
             break;
           }
+          case "OnUpdate": {
+            w.blank();
+            const param = hook.deltaParam === null ? "" : `${hook.deltaParam}: number`;
+            w.block(`override onUpdate(${param}): void`, () => this.#stmts(hook.body));
+            break;
+          }
+          case "OnCollisionEnter":
+            w.blank();
+            w.block("override onCollisionEnter(): void", () => this.#stmts(hook.body));
+            break;
           default:
-            assertNever(hook.kind, "hook");
+            assertNever(hook, "hook");
         }
       }
 
@@ -123,6 +134,34 @@ class ComponentGenerator {
         });
       }
     });
+  }
+
+  // -- handler statements --------------------------------------------------
+
+  #stmts(body: readonly StmtIR[]): void {
+    const w = this.#w;
+    for (const stmt of body) {
+      switch (stmt.kind) {
+        case "SetState":
+          w.line(`this.${stmt.setterName}(${this.#expr(stmt.value, true)});`);
+          break;
+        case "LocalDecl":
+          w.line(`const ${stmt.name} = ${this.#expr(stmt.value, true)};`);
+          break;
+        case "If":
+          w.open(`if (${this.#expr(stmt.test, true)}) {`);
+          this.#stmts(stmt.then);
+          if (stmt.else.length > 0) {
+            w.close();
+            w.open("} else {");
+            this.#stmts(stmt.else);
+          }
+          w.close("}");
+          break;
+        default:
+          assertNever(stmt, "statement");
+      }
+    }
   }
 
   // -- fields ---------------------------------------------------------------
@@ -254,6 +293,7 @@ class ComponentGenerator {
       case "BooleanLiteral": return String(e.value);
       case "NullLiteral": return "null";
       case "StateRead": return `this.${this.#state(e.state).name}`;
+      case "LocalRead": return e.name;
       case "Unary": return wrap(`${e.operator}${this.#expr(e.operand)}`);
       case "Binary": return wrap(`${this.#expr(e.left)} ${e.operator} ${this.#expr(e.right)}`);
       case "Conditional": return wrap(`${this.#expr(e.test)} ? ${this.#expr(e.whenTrue)} : ${this.#expr(e.whenFalse)}`);

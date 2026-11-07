@@ -18,6 +18,9 @@ export const DiagnosticCode = {
   UnsupportedExpression: "RGE1301",
   UnknownIdentifier: "RGE1302",
   NonConstantInitialState: "RGE1303",
+  InvalidHandler: "RGE1401",
+  UnsupportedStatement: "RGE1402",
+  DuplicateHandler: "RGE1403",
   GeneratedTypeError: "RGE9001",
 } as const;
 

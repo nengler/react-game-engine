@@ -58,8 +58,58 @@ export interface ComponentIR {
 // Hooks and state
 // ---------------------------------------------------------------------------
 
-/** Hook declarations. Future: useTransform, useRef, onUpdate, onCollisionEnter, ... */
-export type HookIR = UseStateHookIR;
+/** Hook declarations. Future: useTransform, useRef, ... */
+export type HookIR = UseStateHookIR | OnUpdateHookIR | OnCollisionEnterHookIR;
+
+/** `onUpdate((dt) => { ... })`: runs once per `World.update(dt)` tick. */
+export interface OnUpdateHookIR {
+  readonly kind: "OnUpdate";
+  /** Name the handler gave its delta-time parameter, or null if it takes none. */
+  readonly deltaParam: string | null;
+  readonly body: readonly StmtIR[];
+  readonly span: SourceSpan;
+}
+
+/** `onCollisionEnter(() => { ... })`: runs when the World reports a new collision involving this object. */
+export interface OnCollisionEnterHookIR {
+  readonly kind: "OnCollisionEnter";
+  readonly body: readonly StmtIR[];
+  readonly span: SourceSpan;
+}
+
+// ---------------------------------------------------------------------------
+// Statements (handler bodies)
+// ---------------------------------------------------------------------------
+
+/**
+ * Statements are only valid inside handler bodies. State reads are live:
+ * after a `SetState`, later reads in the same handler see the new value.
+ */
+export type StmtIR = SetStateStmtIR | IfStmtIR | LocalDeclStmtIR;
+
+/** `setHealth(expr)` (or `setHealth(h => expr)`, lowered with `h` as a read of the state). */
+export interface SetStateStmtIR {
+  readonly kind: "SetState";
+  readonly state: StateId;
+  /** Name of the generated setter method to call. */
+  readonly setterName: string;
+  readonly value: ExprIR;
+}
+
+export interface IfStmtIR {
+  readonly kind: "If";
+  readonly test: ExprIR;
+  readonly then: readonly StmtIR[];
+  /** Empty when there is no `else`. */
+  readonly else: readonly StmtIR[];
+}
+
+/** `const name = expr;` scoped to the enclosing block. */
+export interface LocalDeclStmtIR {
+  readonly kind: "LocalDecl";
+  readonly name: string;
+  readonly value: ExprIR;
+}
 
 export interface UseStateHookIR {
   readonly kind: "UseState";
@@ -171,6 +221,7 @@ export type ExprIR =
   | BooleanLiteralIR
   | NullLiteralIR
   | StateReadIR
+  | LocalReadIR
   | UnaryExprIR
   | BinaryExprIR
   | ConditionalExprIR;
@@ -197,6 +248,12 @@ export interface NullLiteralIR {
 export interface StateReadIR {
   readonly kind: "StateRead";
   readonly state: StateId;
+}
+
+/** A handler parameter or a `const` local declared in a handler body. */
+export interface LocalReadIR {
+  readonly kind: "LocalRead";
+  readonly name: string;
 }
 
 export type UnaryOperator = "!" | "-" | "+";
@@ -244,6 +301,7 @@ export function collectDependencies(expr: ExprIR): StateId[] {
       case "StringLiteral":
       case "BooleanLiteral":
       case "NullLiteral":
+      case "LocalRead":
         return;
       case "StateRead":
         if (!out.includes(e.state)) out.push(e.state);
