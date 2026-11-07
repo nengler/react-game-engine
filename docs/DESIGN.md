@@ -164,9 +164,9 @@ Decisions:
 * **String emission via a small indenting writer, not `typescript/ast/factory`.**
   The factory builds nodes locally but printing goes through the remote
   printer, and the factory API is large and still moving in 7.x betas. A writer
-  keeps the generator synchronous, dependency-free and easy to read. All
-  expressions are emitted fully parenthesised from `ExprIR`, so precedence can
-  never be wrong. Correctness is enforced by type-checking the output with the
+  keeps the generator synchronous, dependency-free and easy to read. Every
+  compound sub-expression is parenthesised when emitted from `ExprIR`, so
+  precedence can never be wrong. Correctness is enforced by type-checking the output with the
   real compiler. Revisit if we need source maps (the factory/printer route
   would give them for free).
 * **Static children are `readonly` field initialisers**, so "never recreated"
