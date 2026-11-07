@@ -7,7 +7,9 @@ children are persistent instances, updated in place when state changes.
 
 This repository currently contains the **first vertical slice of the
 compiler** and a minimal mock runtime. See [docs/DESIGN.md](docs/DESIGN.md)
-for the architecture, the IR, and the design decisions.
+for the architecture, the IR, and the design decisions, and
+[docs/PHASE2_PLAN.md](docs/PHASE2_PLAN.md) for the milestone plan for what
+comes next (hooks, input, transforms, refs, props, keyed lists, prefabs, scenes).
 
 ```tsx
 function Player() {
