@@ -4,11 +4,11 @@ Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice
 
 ## Status
 
-Last updated 2026-11-07 (M0 in review). **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone is *Done* only when its PR is merged; until then it is *Done on branch*.
+Last updated 2026-11-07. **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone moves Not started → In review (PR open) → Done (PR merged); the PR number goes in the third column. Whoever lands the work keeps this table and the milestone's checklist current; for work done by Claude, that is Claude's job, including flipping to Done once the merge is seen.
 
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
-| M0 Hardening | Done on branch (PR not opened) | `claude/stoic-wozniak-9u5gpn` | Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet. CI workflow is untested on GitHub until the PR runs it |
+| M0 Hardening | In review | #5 | CI passed on the PR (first run of the workflow). Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet |
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
 | M3 useTransform and refs | Not started | n/a | Next; adds `Assign` |
