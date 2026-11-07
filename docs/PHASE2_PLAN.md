@@ -1,6 +1,20 @@
 # Phase 2 implementation plan
 
-Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes. It is split into seven milestones (M0–M6), each shippable on its own, each extending the existing IR rather than replacing it. Nothing here is implemented yet. Architecture of the current code: [DESIGN.md](DESIGN.md).
+Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes. It is split into seven milestones (M0–M6), each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md).
+
+## Status
+
+Last updated 2026-11-07. **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone is *Done* only when its PR is merged; until then it is *Done on branch*.
+
+| Milestone | Status | Branch / PR | Notes |
+| --- | --- | --- | --- |
+| M0 Hardening | Not started | n/a | Independent of M1/M2; can go first or in parallel |
+| M1 Statement and function IR | Done on branch (PR not opened) | `claude/stoic-wozniak-9u5gpn` | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
+| M2 Lifecycle and input hooks | Done on branch (PR not opened) | `claude/stoic-wozniak-9u5gpn` | `other` in `onCollisionEnter` is received but has no readable members yet. Handle/allowlist tables are hardcoded in `transform/handles.ts` until M0's manifest exists |
+| M3 useTransform and refs | Not started | n/a | Next after M0; adds `Assign` |
+| M4 Props and callbacks | Not started | n/a | n/a |
+| M5 Keyed dynamic lists | Not started | n/a | Needs M4 |
+| M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
 
 ## Decisions (settled)
 
@@ -232,7 +246,63 @@ Not in M6: hot reload and editor tooling. Stable `ElementId`s and scene `id`s ar
 
 ## Handoff checklist
 
-A milestone is done when every box is ticked for it.
+A milestone is done when every box under it is ticked. Tick boxes in the same PR as the work; add a note beside any box that is ticked with a caveat.
+
+### M0 Hardening
+
+- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
+- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
+- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
+- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
+- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
+- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M1 Statement and function IR
+
+- [x] New IR variants added in `ir/types.ts`, with every `assertNever` site handled (`Assign` deferred to M3)
+- [x] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
+- [x] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
+- [x] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed (`Hero.tsx`)
+- [x] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M2 Lifecycle and input hooks
+
+- [x] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
+- [x] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
+- [x] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
+- [x] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed (`Hero.tsx`)
+- [x] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M3 useTransform and refs
+
+- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
+- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
+- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
+- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
+- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
+- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M4 Props and callbacks
+
+- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
+- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
+- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
+- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
+- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
+- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M5 Keyed dynamic lists
+
+- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
+- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
+- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
+- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
+- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
+- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M6 Prefabs and scenes
 
 - [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
 - [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test

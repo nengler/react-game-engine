@@ -8,11 +8,19 @@
 
 declare const stateIdBrand: unique symbol;
 declare const elementIdBrand: unique symbol;
+declare const localIdBrand: unique symbol;
 
 /** Identifies a persistent state slot within a component. */
 export type StateId = string & { readonly [stateIdBrand]: true };
 /** Stable structural identity of an element within a component (e.g. `Player/0/1`). */
 export type ElementId = string & { readonly [elementIdBrand]: true };
+
+/** Identifies a parameter or `const` local inside one function body. */
+export type LocalId = string & { readonly [localIdBrand]: true };
+
+export function localId(component: string, name: string, serial: number): LocalId {
+  return `${component}.${name}#${serial}` as LocalId;
+}
 
 export function stateId(component: string, name: string): StateId {
   return `${component}.${name}` as StateId;
@@ -58,8 +66,8 @@ export interface ComponentIR {
 // Hooks and state
 // ---------------------------------------------------------------------------
 
-/** Hook declarations. Future: useTransform, useRef, onUpdate, onCollisionEnter, ... */
-export type HookIR = UseStateHookIR;
+/** Hook declarations. Future: useTransform, useRef, ... */
+export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnCollisionEnterHookIR;
 
 export interface UseStateHookIR {
   readonly kind: "UseState";
@@ -69,8 +77,117 @@ export interface UseStateHookIR {
   readonly span: SourceSpan;
 }
 
+/** `onUpdate((dt) => { ... })`: runs once per `World.tick(dt, input)`, after `onInput`. */
+export interface OnUpdateHookIR {
+  readonly kind: "OnUpdate";
+  readonly handler: FunctionIR;
+  readonly span: SourceSpan;
+}
+
+/** `onInput((input) => { ... })`: runs once per tick with the polled `InputState`, before `onUpdate`. */
+export interface OnInputHookIR {
+  readonly kind: "OnInput";
+  readonly handler: FunctionIR;
+  readonly span: SourceSpan;
+}
+
+/** `onCollisionEnter((other) => { ... })`: runs when the World reports a new collision involving this component. */
+export interface OnCollisionEnterHookIR {
+  readonly kind: "OnCollisionEnter";
+  readonly handler: FunctionIR;
+  readonly span: SourceSpan;
+}
+
+export type HandlerHookIR = OnUpdateHookIR | OnInputHookIR | OnCollisionEnterHookIR;
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 /** Value types the compiler can currently infer for state. */
 export type ValueType = "number" | "string" | "boolean";
+
+/** The types the IR can name. `ValueType` is the subset usable for state. */
+export type TypeIR = PrimitiveTypeIR | NamedTypeIR;
+
+export interface PrimitiveTypeIR {
+  readonly kind: "Primitive";
+  readonly name: ValueType | "void";
+}
+
+/** A type exported by the runtime package (`GameObject`, `InputState`). */
+export interface NamedTypeIR {
+  readonly kind: "Named";
+  readonly name: string;
+}
+
+// ---------------------------------------------------------------------------
+// Functions and statements (handler bodies)
+// ---------------------------------------------------------------------------
+
+export interface ParamIR {
+  readonly id: LocalId;
+  readonly name: string;
+  readonly type: TypeIR;
+}
+
+/** A small function body: a hook handler or a `setX(prev => ...)` updater. */
+export interface FunctionIR {
+  readonly kind: "Function";
+  readonly params: readonly ParamIR[];
+  readonly body: readonly StatementIR[];
+}
+
+/**
+ * Statements are only valid inside functions. State reads are live: after a
+ * `SetState`, later reads in the same function see the new value.
+ * Future: `Assign` (needs assignment targets, which arrive with `useTransform`).
+ */
+export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR;
+
+/** An allowlisted call evaluated for its effect (later: callback props). */
+export interface ExpressionStatementIR {
+  readonly kind: "ExpressionStatement";
+  readonly expression: ExprIR;
+}
+
+/** `const name = expr;` scoped to the enclosing block. */
+export interface LocalConstStmtIR {
+  readonly kind: "LocalConst";
+  readonly id: LocalId;
+  readonly name: string;
+  readonly value: ExprIR;
+}
+
+export interface IfStmtIR {
+  readonly kind: "If";
+  readonly test: ExprIR;
+  readonly then: readonly StatementIR[];
+  /** Empty when there is no `else`. */
+  readonly else: readonly StatementIR[];
+}
+
+/** `return;` in a handler, `return expr;` in an updater. */
+export interface ReturnStmtIR {
+  readonly kind: "Return";
+  readonly value: ExprIR | null;
+}
+
+/** `setX(value)` or `setX(prev => ...)`. Emitted as a call to the generated setter, so dirty marking stays in one place. */
+export type SetStateStmtIR = SetStateValueIR | SetStateUpdaterIR;
+
+export interface SetStateValueIR {
+  readonly kind: "SetState";
+  readonly state: StateId;
+  readonly value: ExprIR;
+}
+
+export interface SetStateUpdaterIR {
+  readonly kind: "SetState";
+  readonly state: StateId;
+  /** One parameter (the previous value), returning the next value. */
+  readonly updater: FunctionIR;
+}
 
 export interface StateIR {
   readonly kind: "State";
@@ -171,6 +288,11 @@ export type ExprIR =
   | BooleanLiteralIR
   | NullLiteralIR
   | StateReadIR
+  | LocalReadIR
+  | ParamReadIR
+  | PropertyReadIR
+  | CallIR
+  | TemplateLiteralIR
   | UnaryExprIR
   | BinaryExprIR
   | ConditionalExprIR;
@@ -197,6 +319,45 @@ export interface NullLiteralIR {
 export interface StateReadIR {
   readonly kind: "StateRead";
   readonly state: StateId;
+}
+
+/** A `const` local declared in a function body. */
+export interface LocalReadIR {
+  readonly kind: "LocalRead";
+  readonly local: LocalId;
+  readonly name: string;
+}
+
+/** A function parameter. */
+export interface ParamReadIR {
+  readonly kind: "ParamRead";
+  readonly param: LocalId;
+  readonly name: string;
+}
+
+/** `input.pointerX`: only on a parameter of a runtime handle type, checked in transform. */
+export interface PropertyReadIR {
+  readonly kind: "PropertyRead";
+  readonly object: ParamReadIR;
+  readonly name: string;
+}
+
+/** A call to a fixed allowlist (`Math.*`, `clamp`) or a method of a runtime handle parameter. */
+export interface CallIR {
+  readonly kind: "Call";
+  readonly callee: CalleeIR;
+  readonly args: readonly ExprIR[];
+}
+
+export type CalleeIR =
+  | { readonly kind: "Function"; readonly name: string }
+  | { readonly kind: "Method"; readonly receiver: ParamReadIR; readonly name: string };
+
+export interface TemplateLiteralIR {
+  readonly kind: "TemplateLiteral";
+  /** `quasis.length === expressions.length + 1`. */
+  readonly quasis: readonly string[];
+  readonly expressions: readonly ExprIR[];
 }
 
 export type UnaryOperator = "!" | "-" | "+";
@@ -235,35 +396,45 @@ export function assertNever(value: never, what = "value"): never {
   throw new Error(`Unhandled ${what}: ${JSON.stringify(value)}`);
 }
 
+/** Direct sub-expressions of an expression, in evaluation order. */
+export function childExpressions(e: ExprIR): readonly ExprIR[] {
+  switch (e.kind) {
+    case "NumberLiteral":
+    case "StringLiteral":
+    case "BooleanLiteral":
+    case "NullLiteral":
+    case "StateRead":
+    case "LocalRead":
+    case "ParamRead":
+      return [];
+    case "PropertyRead":
+      return [e.object];
+    case "Call":
+      return e.callee.kind === "Method" ? [e.callee.receiver, ...e.args] : e.args;
+    case "TemplateLiteral":
+      return e.expressions;
+    case "Unary":
+      return [e.operand];
+    case "Binary":
+      return [e.left, e.right];
+    case "Conditional":
+      return [e.test, e.whenTrue, e.whenFalse];
+    default:
+      return assertNever(e, "expression");
+  }
+}
+
+/** Pre-order walk over an expression tree. */
+export function walkExpr(expr: ExprIR, visit: (e: ExprIR) => void): void {
+  visit(expr);
+  for (const child of childExpressions(expr)) walkExpr(child, visit);
+}
+
 /** All state slots an expression reads, in first-read order, without duplicates. */
 export function collectDependencies(expr: ExprIR): StateId[] {
   const out: StateId[] = [];
-  const visit = (e: ExprIR): void => {
-    switch (e.kind) {
-      case "NumberLiteral":
-      case "StringLiteral":
-      case "BooleanLiteral":
-      case "NullLiteral":
-        return;
-      case "StateRead":
-        if (!out.includes(e.state)) out.push(e.state);
-        return;
-      case "Unary":
-        visit(e.operand);
-        return;
-      case "Binary":
-        visit(e.left);
-        visit(e.right);
-        return;
-      case "Conditional":
-        visit(e.test);
-        visit(e.whenTrue);
-        visit(e.whenFalse);
-        return;
-      default:
-        assertNever(e, "expression");
-    }
-  };
-  visit(expr);
+  walkExpr(expr, (e) => {
+    if (e.kind === "StateRead" && !out.includes(e.state)) out.push(e.state);
+  });
   return out;
 }

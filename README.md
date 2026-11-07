@@ -38,7 +38,7 @@ packages/
     src/typecheck/    type-checking generated code with TypeScript 7.1
     src/diagnostics/  diagnostic codes and formatting
     test/             end-to-end tests
-  runtime/    mock GameObject / World and Entity, Sprite, Collider
+  runtime/    mock GameObject / World (with `tick` / `reportCollision`) and Entity, Sprite, Collider
   example/    example components and their committed generated output
 ```
 

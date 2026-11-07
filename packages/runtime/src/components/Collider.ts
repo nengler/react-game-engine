@@ -6,6 +6,8 @@ export interface ColliderProps {
 }
 
 export class Collider extends GameObject {
+  static override readonly intrinsic = true;
+
   width: number;
   height: number;
 

@@ -6,6 +6,8 @@ export interface EntityProps {
 
 /** A named container. Compiled components extend Entity. */
 export class Entity extends GameObject {
+  static override readonly intrinsic = true;
+
   name: string;
 
   constructor(props: EntityProps = {}) {

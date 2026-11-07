@@ -83,6 +83,9 @@ ignored):
   State type is inferred from the initial literal (`number`/`string`/`boolean`).
 * Children: elements, or `{condition && <Element />}`. Text children,
   fragments, spread attributes and other expression children are rejected.
+* Hooks: top-level `onInput((input) => ...)`, `onUpdate((dt) => ...)` and
+  `onCollisionEnter((other) => ...)` statements; each may appear several times
+  and runs in source order. See "Handlers" below.
 * Element tags are either runtime intrinsics (`Entity`, `Sprite`, `Collider`)
   or components declared in the same file. Local components take no props yet.
 * Expressions: number/string/boolean/null literals, state reads, unary
@@ -121,15 +124,76 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 
 | Feature | IR change |
 | --- | --- |
-| `onUpdate`, `onCollisionEnter` | new `HookIR` variants carrying a statement IR; generator emits overriding methods |
+| ~~`onUpdate`, `onInput`, `onCollisionEnter`~~ | done: `OnUpdate` / `OnInput` / `OnCollisionEnter` hooks carrying a `FunctionIR`; see "Handlers" |
 | `onInput` / event props | `PropIR` variant `EventHandlerProp` holding a callback IR |
 | `useTransform`, refs | new `HookIR` variants + storage slot kinds |
 | props between components | `ComponentIR.props: PropDeclIR[]`; `ExprIR` variant `PropRead`; `ComponentRef` `Local` accepts props |
 | keyed lists | `ChildIR` variant `KeyedListChild { items, key, element }` |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
 
-Statement-level IR (needed for handler bodies) is intentionally not designed
-yet; nothing in this slice needs it.
+## Handlers
+
+`onInput`, `onUpdate` and `onCollisionEnter` are hooks whose handlers are
+lowered to a `FunctionIR { params, body: StatementIR[] }`. Statements exist
+only inside functions.
+
+**Statements** (`StatementIR`): `ExpressionStatement` (allowlisted calls),
+`LocalConst`, `If`, `Return`, and `SetState`, which is either
+`{ state, value }` or `{ state, updater: FunctionIR }` for `setX(prev => …)`.
+Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
+`Assign` is not here yet: its only targets (transform fields) arrive with
+`useTransform`.
+
+**Expressions** added: `ParamRead`, `LocalRead`, `PropertyRead` (only on a
+parameter of a runtime handle type, e.g. `input.pointerX`), `Call` and
+`TemplateLiteral`. `Call` is limited to an allowlist (`Math.abs/floor/ceil/
+round/sign/sqrt/sin/cos/min/max`, `clamp`) and to methods of handle
+parameters (`input.pressed/down/released`); the tables live in
+`transform/handles.ts`. Everything else (loops, `try`, `let`, assignment,
+closures that escape, `this`, `await`, other calls) is a diagnostic
+(`RGE1301`/`RGE1401`/`RGE1402`).
+
+**Scoping**: component scope (state, setters) → function scope (parameters) →
+block scope (`const`s). Shadowing any outer binding, or `Math`/`clamp`, is
+`RGE1401`.
+
+**Semantics**: state reads are *live* (not React-style snapshots): after
+`setHealth(...)`, a later read in the same handler sees the new value.
+Setters call `markDirty()`, so any number of setter calls in a frame cause one
+render, in the frame's render phase, never mid-handler.
+
+**Generated code**: one override per hook kind. A single handler is inlined:
+
+```ts
+override onInput(input: InputState): void { if (input.pressed("Space")) { … } }
+```
+
+Several handlers of one kind become private methods called in source order, so
+a `return;` in one cannot skip the others:
+
+```ts
+override onUpdate(dt: number): void { this.#onUpdate0(dt); this.#onUpdate1(dt); }
+```
+
+`SetState` emits `this.setX(…)`, so dirty marking stays in the setter.
+
+**Runtime frame** (`World.tick(dt, input = NO_INPUT)`): `onInput` → `onUpdate`
+→ render dirty objects → commit structure. Objects register on attach only if
+they override a hook (compared against `GameObject.prototype`), and the visit
+lists are snapshotted at the start of the tick, so objects attached during a
+frame start receiving hooks next frame and detached ones are skipped.
+`InputState` is a plain interface (`pressed`, `down`, `released`, `pointerX`,
+`pointerY`); the mock builds it with `createInputState({ pressed: [...], … })`.
+
+**Collisions**: the mock has no physics. A collision system calls
+`world.reportCollision(a, b)` with two colliders; each side's nearest compiled
+component (the first ancestor-or-self that is not a runtime intrinsic, i.e.
+without its own `static intrinsic`) receives `onCollisionEnter(otherComponent)`.
+Dispatch only; renders happen in the next `tick`.
+
+Input model decision (per the Phase 2 plan): a polled per-frame `onInput` hook,
+not JSX event props. Event props can be added later as a `PropIR`
+`EventHandlerProp`.
 
 ## Code generation
 

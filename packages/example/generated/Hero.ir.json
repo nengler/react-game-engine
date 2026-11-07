@@ -1,0 +1,491 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/example/src/Hero.tsx",
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Hero",
+      "span": {
+        "fileName": "packages/example/src/Hero.tsx",
+        "start": 0,
+        "end": 743,
+        "line": 1,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Hero.health",
+          "setterName": "setHealth",
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 26,
+            "end": 61,
+            "line": 2,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Hero.poisoned",
+          "setterName": "setPoisoned",
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 71,
+            "end": 112,
+            "line": 3,
+            "column": 9
+          }
+        },
+        {
+          "kind": "OnInput",
+          "handler": {
+            "kind": "Function",
+            "params": [
+              {
+                "id": "Hero.input#1",
+                "name": "input",
+                "type": {
+                  "kind": "Named",
+                  "name": "InputState"
+                }
+              }
+            ],
+            "body": [
+              {
+                "kind": "If",
+                "test": {
+                  "kind": "Call",
+                  "callee": {
+                    "kind": "Method",
+                    "receiver": {
+                      "kind": "ParamRead",
+                      "param": "Hero.input#1",
+                      "name": "input"
+                    },
+                    "name": "pressed"
+                  },
+                  "args": [
+                    {
+                      "kind": "StringLiteral",
+                      "value": "Space"
+                    }
+                  ]
+                },
+                "then": [
+                  {
+                    "kind": "SetState",
+                    "state": "Hero.health",
+                    "value": {
+                      "kind": "NumberLiteral",
+                      "value": 100
+                    }
+                  },
+                  {
+                    "kind": "SetState",
+                    "state": "Hero.poisoned",
+                    "value": {
+                      "kind": "BooleanLiteral",
+                      "value": false
+                    }
+                  }
+                ],
+                "else": []
+              }
+            ]
+          },
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 117,
+            "end": 231,
+            "line": 5,
+            "column": 3
+          }
+        },
+        {
+          "kind": "OnUpdate",
+          "handler": {
+            "kind": "Function",
+            "params": [
+              {
+                "id": "Hero.dt#2",
+                "name": "dt",
+                "type": {
+                  "kind": "Primitive",
+                  "name": "number"
+                }
+              }
+            ],
+            "body": [
+              {
+                "kind": "If",
+                "test": {
+                  "kind": "StateRead",
+                  "state": "Hero.poisoned"
+                },
+                "then": [
+                  {
+                    "kind": "SetState",
+                    "state": "Hero.health",
+                    "updater": {
+                      "kind": "Function",
+                      "params": [
+                        {
+                          "id": "Hero.h#3",
+                          "name": "h",
+                          "type": {
+                            "kind": "Primitive",
+                            "name": "number"
+                          }
+                        }
+                      ],
+                      "body": [
+                        {
+                          "kind": "Return",
+                          "value": {
+                            "kind": "Call",
+                            "callee": {
+                              "kind": "Function",
+                              "name": "clamp"
+                            },
+                            "args": [
+                              {
+                                "kind": "Binary",
+                                "operator": "-",
+                                "left": {
+                                  "kind": "ParamRead",
+                                  "param": "Hero.h#3",
+                                  "name": "h"
+                                },
+                                "right": {
+                                  "kind": "Binary",
+                                  "operator": "*",
+                                  "left": {
+                                    "kind": "ParamRead",
+                                    "param": "Hero.dt#2",
+                                    "name": "dt"
+                                  },
+                                  "right": {
+                                    "kind": "NumberLiteral",
+                                    "value": 5
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "NumberLiteral",
+                                "value": 0
+                              },
+                              {
+                                "kind": "NumberLiteral",
+                                "value": 100
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "else": []
+              }
+            ]
+          },
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 235,
+            "end": 336,
+            "line": 12,
+            "column": 3
+          }
+        },
+        {
+          "kind": "OnUpdate",
+          "handler": {
+            "kind": "Function",
+            "params": [
+              {
+                "id": "Hero.dt#4",
+                "name": "dt",
+                "type": {
+                  "kind": "Primitive",
+                  "name": "number"
+                }
+              }
+            ],
+            "body": [
+              {
+                "kind": "If",
+                "test": {
+                  "kind": "Binary",
+                  "operator": "<=",
+                  "left": {
+                    "kind": "StateRead",
+                    "state": "Hero.health"
+                  },
+                  "right": {
+                    "kind": "NumberLiteral",
+                    "value": 0
+                  }
+                },
+                "then": [
+                  {
+                    "kind": "Return",
+                    "value": null
+                  }
+                ],
+                "else": []
+              },
+              {
+                "kind": "LocalConst",
+                "id": "Hero.regen#5",
+                "name": "regen",
+                "value": {
+                  "kind": "Conditional",
+                  "test": {
+                    "kind": "StateRead",
+                    "state": "Hero.poisoned"
+                  },
+                  "whenTrue": {
+                    "kind": "NumberLiteral",
+                    "value": 0
+                  },
+                  "whenFalse": {
+                    "kind": "ParamRead",
+                    "param": "Hero.dt#4",
+                    "name": "dt"
+                  }
+                }
+              },
+              {
+                "kind": "SetState",
+                "state": "Hero.health",
+                "value": {
+                  "kind": "Call",
+                  "callee": {
+                    "kind": "Function",
+                    "name": "Math.min"
+                  },
+                  "args": [
+                    {
+                      "kind": "Binary",
+                      "operator": "+",
+                      "left": {
+                        "kind": "StateRead",
+                        "state": "Hero.health"
+                      },
+                      "right": {
+                        "kind": "LocalRead",
+                        "local": "Hero.regen#5",
+                        "name": "regen"
+                      }
+                    },
+                    {
+                      "kind": "NumberLiteral",
+                      "value": 100
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 340,
+            "end": 490,
+            "line": 18,
+            "column": 3
+          }
+        },
+        {
+          "kind": "OnCollisionEnter",
+          "handler": {
+            "kind": "Function",
+            "params": [],
+            "body": [
+              {
+                "kind": "SetState",
+                "state": "Hero.health",
+                "updater": {
+                  "kind": "Function",
+                  "params": [
+                    {
+                      "id": "Hero.h#6",
+                      "name": "h",
+                      "type": {
+                        "kind": "Primitive",
+                        "name": "number"
+                      }
+                    }
+                  ],
+                  "body": [
+                    {
+                      "kind": "Return",
+                      "value": {
+                        "kind": "Binary",
+                        "operator": "-",
+                        "left": {
+                          "kind": "ParamRead",
+                          "param": "Hero.h#6",
+                          "name": "h"
+                        },
+                        "right": {
+                          "kind": "NumberLiteral",
+                          "value": 10
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "SetState",
+                "state": "Hero.poisoned",
+                "value": {
+                  "kind": "BooleanLiteral",
+                  "value": true
+                }
+              }
+            ]
+          },
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 494,
+            "end": 577,
+            "line": 26,
+            "column": 3
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Hero.health",
+          "name": "health",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 100
+          }
+        },
+        {
+          "kind": "State",
+          "id": "Hero.poisoned",
+          "name": "poisoned",
+          "type": "boolean",
+          "initialValue": {
+            "kind": "BooleanLiteral",
+            "value": false
+          }
+        }
+      ],
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Hero"
+            }
+          }
+        ],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Hero/0",
+              "fieldName": "sprite",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Sprite"
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "image",
+                  "value": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "StateRead",
+                      "state": "Hero.poisoned"
+                    },
+                    "whenTrue": {
+                      "kind": "StringLiteral",
+                      "value": "poisoned.png"
+                    },
+                    "whenFalse": {
+                      "kind": "StringLiteral",
+                      "value": "normal.png"
+                    }
+                  },
+                  "dependencies": [
+                    "Hero.poisoned"
+                  ]
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Hero.tsx",
+                "start": 621,
+                "end": 680,
+                "line": 33,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Hero/1",
+              "fieldName": "collider",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Collider"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 24
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Hero.tsx",
+                "start": 687,
+                "end": 722,
+                "line": 34,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/example/src/Hero.tsx",
+          "start": 594,
+          "end": 736,
+          "line": 32,
+          "column": 5
+        }
+      }
+    }
+  ]
+}
