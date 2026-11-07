@@ -38,7 +38,8 @@ packages/
     src/typecheck/    type-checking generated code with TypeScript 7.1
     src/diagnostics/  diagnostic codes and formatting
     test/             end-to-end tests
-  runtime/    mock GameObject / World (with `tick` / `reportCollision`) and Entity, Sprite, Collider
+  runtime/    mock GameObject / World (with `tick` / `reportCollision`), Entity, Sprite, Collider,
+              and `runtimeManifest` (what the compiler is told about the runtime)
   example/    example components and their committed generated output
 ```
 
@@ -71,3 +72,6 @@ try {
   compiler.close(); // stops the TypeScript 7 server process
 }
 ```
+
+CI (`.github/workflows/ci.yml`) runs the tests and the typecheck, then regenerates the
+example and fails if `packages/example/generated` changed: commit regenerated output with any codegen change.

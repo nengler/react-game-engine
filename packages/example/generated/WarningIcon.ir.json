@@ -1,0 +1,75 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/example/src/WarningIcon.tsx",
+  "components": [
+    {
+      "kind": "Component",
+      "name": "WarningIcon",
+      "span": {
+        "fileName": "packages/example/src/WarningIcon.tsx",
+        "start": 0,
+        "end": 128,
+        "line": 1,
+        "column": 1
+      },
+      "hooks": [],
+      "state": [],
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Warning"
+            }
+          }
+        ],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "WarningIcon/0",
+              "fieldName": "sprite",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Sprite"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "image",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "warning.png"
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/WarningIcon.tsx",
+                "start": 77,
+                "end": 107,
+                "line": 4,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/example/src/WarningIcon.tsx",
+          "start": 47,
+          "end": 121,
+          "line": 3,
+          "column": 5
+        }
+      }
+    }
+  ]
+}

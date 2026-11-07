@@ -19,6 +19,7 @@
     "packages/compiler/src",
     "packages/compiler/test",
     "packages/runtime/src",
+    "packages/runtime/test",
     "packages/example/generated"
   ]
 }

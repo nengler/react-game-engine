@@ -44,32 +44,20 @@ import {
 } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
-import { ALLOWED_FUNCTIONS, HANDLE_TYPES } from "./handles.ts";
+import { MATH_FUNCTIONS } from "./handles.ts";
+import type { RuntimeManifest } from "@rge/runtime";
 import { Scope } from "./scope.ts";
 import { lowerFunction, type LoweringContext } from "./statements.ts";
 
 export interface TransformOptions {
-  /** Tag names provided by the runtime package. */
-  readonly intrinsics: readonly string[];
-  /** The intrinsic every component root must use. */
-  readonly hostIntrinsic: string;
+  /** What the runtime provides: intrinsic tags, the host class, reserved member names, handle types, functions. */
+  readonly manifest: RuntimeManifest;
 }
 
 export interface TransformResult {
   readonly module: IRModule;
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
-
-/**
- * Members of the runtime base classes (GameObject / Entity) that generated
- * fields and setters must not shadow.
- */
-const RESERVED_MEMBERS = new Set([
-  "constructor", "parent", "children", "world", "name", "isDirty", "hasPendingStructure",
-  "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "commitStructure",
-  "markDirty", "runRender", "render", "attachToWorld", "detachFromWorld",
-  "onUpdate", "onInput", "onCollisionEnter",
-]);
 
 const BINARY_OPERATORS: ReadonlyMap<SyntaxKind, BinaryOperator> = new Map([
   [SyntaxKind.PlusToken, "+"], [SyntaxKind.MinusToken, "-"], [SyntaxKind.AsteriskToken, "*"],
@@ -90,7 +78,8 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   const diagnostics: CompilerDiagnostic[] = [];
   const sourceFile = analysis.sourceFile;
   const span = (node: Node): SourceSpan => spanOf(node, sourceFile, analysis.fileName);
-  const intrinsics = new Set(options.intrinsics);
+  const manifest = options.manifest;
+  const intrinsics = new Set(manifest.intrinsics);
 
   const locals = new Set<string>();
   for (const c of analysis.components) {
@@ -101,10 +90,18 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
     }
     locals.add(c.name);
   }
+  const imported = new Map<string, string>();
+  for (const i of analysis.imports) {
+    if (intrinsics.has(i.name) || locals.has(i.name) || imported.has(i.name)) {
+      diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Imported component '${i.name}' conflicts with another component or a runtime intrinsic.`, span(i.node)));
+    } else {
+      imported.set(i.name, i.module);
+    }
+  }
 
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
-    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, intrinsics, locals, options.hostIntrinsic, diagnostics).lower();
+    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, diagnostics).lower();
     if (lowered) components.push(lowered);
   }
 
@@ -126,12 +123,14 @@ class ComponentLowering implements LoweringContext {
   readonly #stateTypes = new Map<StateId, ValueType>();
   #serial = 0;
   scope: Scope = this.#componentScope;
-  readonly #usedNames = new Set<string>(RESERVED_MEMBERS);
+  readonly #usedNames: Set<string>;
   readonly #component: ComponentAnalysis;
   readonly #sourceFile: SourceFile;
   readonly #fileName: string;
+  readonly #manifest: RuntimeManifest;
   readonly #intrinsics: ReadonlySet<string>;
   readonly #locals: ReadonlySet<string>;
+  readonly #imported: ReadonlyMap<string, string>;
   readonly #hostIntrinsic: string;
   readonly #diagnostics: CompilerDiagnostic[];
   #errorCount = 0;
@@ -140,18 +139,21 @@ class ComponentLowering implements LoweringContext {
     component: ComponentAnalysis,
     sourceFile: SourceFile,
     fileName: string,
-    intrinsics: ReadonlySet<string>,
+    manifest: RuntimeManifest,
     locals: ReadonlySet<string>,
-    hostIntrinsic: string,
+    imported: ReadonlyMap<string, string>,
     diagnostics: CompilerDiagnostic[],
   ) {
     this.#component = component;
     this.componentName = component.name;
     this.#sourceFile = sourceFile;
     this.#fileName = fileName;
-    this.#intrinsics = intrinsics;
+    this.#manifest = manifest;
+    this.#intrinsics = new Set(manifest.intrinsics);
+    this.#imported = imported;
+    this.#usedNames = new Set(manifest.reservedMembers);
     this.#locals = locals;
-    this.#hostIntrinsic = hostIntrinsic;
+    this.#hostIntrinsic = manifest.hostIntrinsic;
     this.#diagnostics = diagnostics;
   }
 
@@ -257,14 +259,15 @@ class ComponentLowering implements LoweringContext {
     let component: ComponentRef;
     if (this.#intrinsics.has(tag.text)) component = { kind: "Intrinsic", name: tag.text };
     else if (this.#locals.has(tag.text)) component = { kind: "Local", name: tag.text };
+    else if (this.#imported.has(tag.text)) component = { kind: "Imported", name: tag.text, module: this.#imported.get(tag.text)! };
     else {
-      this.#error(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>. Declare it in this file or use a runtime intrinsic.`, tag);
+      this.#error(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`, tag);
       return null;
     }
 
     const props = this.#lowerProps(opening.attributes);
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, path) : [];
-    if (component.kind === "Local") {
+    if (component.kind !== "Intrinsic") {
       if (props.length > 0) {
         this.#error(DiagnosticCode.LocalComponentProps, `Passing props to component <${tag.text}> is not supported yet.`, opening.attributes);
       }
@@ -425,7 +428,7 @@ class ComponentLowering implements LoweringContext {
     const receiver = this.#lowerHandle(node.expression);
     if (!receiver) return null;
     const name = node.name.text;
-    if (!HANDLE_TYPES[receiver.type]!.properties.includes(name)) {
+    if (!this.#manifest.handleTypes[receiver.type]!.properties.includes(name)) {
       this.#error(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no readable property '${name}'.`, node.name);
       return null;
     }
@@ -438,14 +441,14 @@ class ComponentLowering implements LoweringContext {
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
     if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
       const name = `Math.${callee.name.text}`;
-      const expected = ALLOWED_FUNCTIONS[name];
+      const expected = MATH_FUNCTIONS[name];
       if (expected !== undefined) result = { callee: { kind: "Function", name }, expected, label: name };
-    } else if (isIdentifier(callee) && callee.text === "clamp" && !this.scope.has("clamp")) {
-      result = { callee: { kind: "Function", name: "clamp" }, expected: ALLOWED_FUNCTIONS["clamp"]!, label: "clamp" };
+    } else if (isIdentifier(callee) && this.#manifest.functions[callee.text] !== undefined && !this.scope.has(callee.text)) {
+      result = { callee: { kind: "Function", name: callee.text }, expected: this.#manifest.functions[callee.text]!, label: callee.text };
     } else if (isPropertyAccessExpression(callee)) {
       const receiver = this.#lowerHandle(callee.expression);
       if (!receiver) return null;
-      const expected = HANDLE_TYPES[receiver.type]!.methods[callee.name.text];
+      const expected = this.#manifest.handleTypes[receiver.type]!.methods[callee.name.text];
       if (expected === undefined) {
         this.#error(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no callable method '${callee.name.text}'.`, callee.name);
         return null;
@@ -453,7 +456,7 @@ class ComponentLowering implements LoweringContext {
       result = { callee: { kind: "Method", receiver: receiver.read, name: callee.name.text }, expected, label: callee.name.text };
     }
     if (!result) {
-      this.#error(DiagnosticCode.UnsupportedExpression, "Only allowlisted calls are supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, clamp, and methods of handler parameters.", node);
+      this.#error(DiagnosticCode.UnsupportedExpression, "Only allowlisted calls are supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, runtime functions from the manifest, and methods of handler parameters.", node);
       return null;
     }
     const count = node.arguments.length;
@@ -508,6 +511,10 @@ class ComponentLowering implements LoweringContext {
     const type = this.#stateTypes.get(state);
     if (!type) throw new Error(`Unknown state ${state}`);
     return type;
+  }
+
+  isCallableName(name: string): boolean {
+    return name === "Math" || this.#manifest.functions[name] !== undefined;
   }
 
   nextSerial(): number {

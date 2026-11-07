@@ -32,6 +32,8 @@ export interface LoweringContext {
   lowerExpression(node: Expression): ExprIR | null;
   stateType(state: StateId): ValueType;
   nextSerial(): number;
+  /** Names handler code may never rebind, because the call allowlist refers to them (`Math`, runtime functions). */
+  isCallableName(name: string): boolean;
   error(code: (typeof DiagnosticCode)[keyof typeof DiagnosticCode], message: string, node: Node): void;
 }
 
@@ -44,8 +46,6 @@ export interface FunctionOptions {
   readonly what: string;
 }
 
-/** Names handler code may never rebind, because the call allowlist refers to them. */
-const RESERVED_LOCALS = new Set(["Math", "clamp"]);
 
 export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: FunctionOptions): FunctionIR | null {
   const outer = ctx.scope;
@@ -186,7 +186,7 @@ function lowerSetState(ctx: LoweringContext, args: readonly Expression[], state:
 }
 
 function checkFreshName(ctx: LoweringContext, name: string, at: Node): boolean {
-  if (ctx.scope.has(name) || RESERVED_LOCALS.has(name)) {
+  if (ctx.scope.has(name) || ctx.isCallableName(name)) {
     ctx.error(DiagnosticCode.InvalidHandler, `'${name}' is already declared in this component (or reserved); shadowing is not allowed.`, at);
     return false;
   }

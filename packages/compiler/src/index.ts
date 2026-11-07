@@ -1,3 +1,4 @@
+import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
 import { analyzeSourceFile, type SourceAnalysis } from "./analyzer/analyzer.ts";
 import { hasErrors, type CompilerDiagnostic } from "./diagnostics/diagnostics.ts";
 import { generateModule } from "./generator/generator.ts";
@@ -7,8 +8,9 @@ import { buildModuleIR } from "./transform/transform.ts";
 import { typeCheckFiles, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export * from "./ir/types.ts";
+export type { RuntimeManifest } from "@rge/runtime";
 export * from "./diagnostics/diagnostics.ts";
-export { analyzeSourceFile, type SourceAnalysis, type ComponentAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
+export { analyzeSourceFile, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
 export { generateModule, type GeneratorOptions } from "./generator/generator.ts";
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
@@ -17,10 +19,8 @@ export { typeCheckFiles, generatedCodeCompilerOptions, type VirtualFile } from "
 export interface CompilerConfig {
   /** Module specifier generated code imports runtime classes from. Default: `@rge/runtime`. */
   readonly runtimeModule?: string;
-  /** Tag names the runtime provides. Default: Entity, Sprite, Collider. */
-  readonly intrinsics?: readonly string[];
-  /** Intrinsic every component root must be. Default: Entity. */
-  readonly hostIntrinsic?: string;
+  /** What the runtime provides (intrinsics, host class, reserved names, handle types, functions). Default: `@rge/runtime`'s manifest. */
+  readonly manifest?: RuntimeManifest;
   /** Working directory for the TypeScript process. */
   readonly cwd?: string;
 }
@@ -40,8 +40,6 @@ export type CompileResult =
       readonly diagnostics: readonly CompilerDiagnostic[];
     };
 
-export const DEFAULT_INTRINSICS: readonly string[] = ["Entity", "Sprite", "Collider"];
-
 /**
  * Runs the full pipeline: parse → analyze → IR → generate. Owns one
  * TypeScript 7 API process; call `close()` when done.
@@ -49,14 +47,12 @@ export const DEFAULT_INTRINSICS: readonly string[] = ["Entity", "Sprite", "Colli
 export class Compiler {
   readonly #parser: TsxParser;
   readonly #runtimeModule: string;
-  readonly #intrinsics: readonly string[];
-  readonly #hostIntrinsic: string;
+  readonly #manifest: RuntimeManifest;
 
   constructor(config: CompilerConfig = {}) {
     this.#parser = new TsxParser({ cwd: config.cwd ?? process.cwd() });
     this.#runtimeModule = config.runtimeModule ?? "@rge/runtime";
-    this.#intrinsics = config.intrinsics ?? DEFAULT_INTRINSICS;
-    this.#hostIntrinsic = config.hostIntrinsic ?? "Entity";
+    this.#manifest = config.manifest ?? runtimeManifest;
   }
 
   /** Parse and analyze only. The callback receives the analysis while its AST is alive. */
@@ -71,10 +67,13 @@ export class Compiler {
 
   compile(fileName: string, text: string): CompileResult {
     return this.analyze(fileName, text, (analysis) => {
-      const transformed = buildModuleIR(analysis, { intrinsics: this.#intrinsics, hostIntrinsic: this.#hostIntrinsic });
+      const transformed = buildModuleIR(analysis, { manifest: this.#manifest });
       const diagnostics = [...analysis.diagnostics, ...transformed.diagnostics];
       if (hasErrors(diagnostics)) return { ok: false, fileName, ir: transformed.module, diagnostics };
-      const code = generateModule(transformed.module, { runtimeModule: this.#runtimeModule });
+      const code = generateModule(transformed.module, {
+        runtimeModule: this.#runtimeModule,
+        runtimeFunctions: new Set(Object.keys(this.#manifest.functions)),
+      });
       return { ok: true, fileName, ir: transformed.module, code, diagnostics };
     });
   }
