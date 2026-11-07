@@ -1,0 +1,15 @@
+{
+  "name": "@rge/compiler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "rge-compile": "./src/cli.ts"
+  },
+  "dependencies": {
+    "typescript": "7.1.0-beta"
+  }
+}

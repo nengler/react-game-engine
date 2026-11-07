@@ -1,0 +1,264 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/example/src/Player.tsx",
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Player",
+      "span": {
+        "fileName": "packages/example/src/Player.tsx",
+        "start": 0,
+        "end": 269,
+        "line": 1,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Player.health",
+          "setterName": "setHealth",
+          "span": {
+            "fileName": "packages/example/src/Player.tsx",
+            "start": 28,
+            "end": 63,
+            "line": 2,
+            "column": 9
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Player.health",
+          "name": "health",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 100
+          }
+        }
+      ],
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Player"
+            }
+          }
+        ],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Player/0",
+              "fieldName": "sprite",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Sprite"
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "image",
+                  "value": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": ">",
+                      "left": {
+                        "kind": "StateRead",
+                        "state": "Player.health"
+                      },
+                      "right": {
+                        "kind": "NumberLiteral",
+                        "value": 50
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "StringLiteral",
+                      "value": "normal.png"
+                    },
+                    "whenFalse": {
+                      "kind": "StringLiteral",
+                      "value": "hurt.png"
+                    }
+                  },
+                  "dependencies": [
+                    "Player.health"
+                  ]
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Player.tsx",
+                "start": 109,
+                "end": 167,
+                "line": 5,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Player/1",
+              "fieldName": "collider",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Collider"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 24
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Player.tsx",
+                "start": 174,
+                "end": 209,
+                "line": 6,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "ConditionalChild",
+            "condition": {
+              "kind": "Binary",
+              "operator": "<",
+              "left": {
+                "kind": "StateRead",
+                "state": "Player.health"
+              },
+              "right": {
+                "kind": "NumberLiteral",
+                "value": 25
+              }
+            },
+            "dependencies": [
+              "Player.health"
+            ],
+            "element": {
+              "kind": "Element",
+              "id": "Player/2",
+              "fieldName": "warningIcon",
+              "component": {
+                "kind": "Local",
+                "name": "WarningIcon"
+              },
+              "props": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Player.tsx",
+                "start": 232,
+                "end": 247,
+                "line": 7,
+                "column": 23
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/example/src/Player.tsx",
+          "start": 80,
+          "end": 262,
+          "line": 4,
+          "column": 5
+        }
+      }
+    },
+    {
+      "kind": "Component",
+      "name": "WarningIcon",
+      "span": {
+        "fileName": "packages/example/src/Player.tsx",
+        "start": 271,
+        "end": 392,
+        "line": 12,
+        "column": 1
+      },
+      "hooks": [],
+      "state": [],
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Warning"
+            }
+          }
+        ],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "WarningIcon/0",
+              "fieldName": "sprite",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Sprite"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "image",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "warning.png"
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Player.tsx",
+                "start": 341,
+                "end": 371,
+                "line": 15,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/example/src/Player.tsx",
+          "start": 311,
+          "end": 385,
+          "line": 14,
+          "column": 5
+        }
+      }
+    }
+  ]
+}
