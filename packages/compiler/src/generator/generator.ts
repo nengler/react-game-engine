@@ -10,7 +10,6 @@ import {
   type FunctionIR,
   type HandlerHookIR,
   type RefId,
-  type TransformId,
   isHandlerHook,
   type StatementIR,
   type TypeIR,
@@ -72,6 +71,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
       if (child.element.component.kind === "Intrinsic") values.add(child.element.component.name);
       if (child.kind === "ConditionalChild") visitExpr(child.condition);
       visitProps(child.element.props);
+      visitProps(child.element.transform);
       visitChildren(child.element.children);
     }
   };
@@ -95,8 +95,10 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
   for (const c of module.components) {
     values.add(c.root.component.name);
     visitProps(c.root.props);
+    visitProps(c.root.transform);
     visitChildren(c.root.children);
     c.state.forEach((s) => visitExpr(s.initialValue));
+    c.refs.forEach((r) => visitExpr(r.initialValue));
     for (const hook of c.hooks) if (isHandlerHook(hook)) visitFunction(hook.handler);
   }
   return [...[...values].sort(), ...[...types].sort().map((t) => `type ${t}`)];
@@ -142,6 +144,12 @@ class ComponentGenerator {
       // Persistent state.
       for (const s of c.state) {
         w.line(`${s.name}: ${s.type} = ${this.#expr(s.initialValue, true)};`);
+        // The value setters write; it becomes `s.name` when the component next renders.
+        if (this.#hasSetter(s.id)) w.line(`${pending(s)}: ${s.type} = this.${s.name};`);
+      }
+      // Refs: plain fields. Reading or writing them never marks anything dirty.
+      for (const r of c.refs) {
+        w.line(`${r.name}: ${r.type} = ${this.#expr(r.initialValue, true)};`);
       }
       // Persistent children (field initialisers run after state initialisers, so they can read state).
       this.#emitElementFields(c.root.children, "persistent");
@@ -150,10 +158,7 @@ class ComponentGenerator {
       w.block("constructor()", () => {
         const staticHostProps = c.root.props.filter((p) => p.kind === "StaticProp");
         w.line(staticHostProps.length > 0 ? `super(${this.#propsObject(staticHostProps)});` : "super();");
-        for (const hook of c.hooks) {
-          if (hook.kind !== "UseTransform") continue;
-          for (const [field, value] of Object.entries(hook.initial)) w.line(`this.transform.${field} = ${value};`);
-        }
+        this.#emitStaticTransform(c.root.transform, "this");
         this.#emitStaticWiring(c.root.children, "this");
         if (hasRender) {
           w.line("this.render();");
@@ -167,16 +172,15 @@ class ComponentGenerator {
             if (hook.setterName === null) break;
             const s = this.#state(hook.state);
             w.blank();
+            // React semantics: reads see the value from the last render; updaters chain on the pending value.
             w.block(`${hook.setterName}(value: ${s.type} | ((previous: ${s.type}) => ${s.type})): void`, () => {
-              w.line(`const next = typeof value === "function" ? value(this.${s.name}) : value;`);
-              w.line(`if (next === this.${s.name}) return;`);
-              w.line(`this.${s.name} = next;`);
+              w.line(`const next = typeof value === "function" ? value(${pendingRef(s)}) : value;`);
+              w.line(`if (next === ${pendingRef(s)}) return;`);
+              w.line(`${pendingRef(s)} = next;`);
               w.line("this.markDirty();");
             });
             break;
           }
-          case "UseTransform":
-            break; // initial values are applied in the constructor
           case "OnUpdate":
           case "OnInput":
           case "OnCollisionEnter":
@@ -184,6 +188,14 @@ class ComponentGenerator {
           default:
             assertNever(hook, "hook");
         }
+      }
+
+      const settable = c.state.filter((s) => this.#hasSetter(s.id));
+      if (settable.length > 0) {
+        w.blank();
+        w.block("override commitState(): void", () => {
+          for (const s of settable) w.line(`this.${s.name} = ${pendingRef(s)};`);
+        });
       }
 
       this.#emitHandlerMethods();
@@ -194,6 +206,7 @@ class ComponentGenerator {
           for (const prop of c.root.props) {
             if (prop.kind === "DynamicProp") w.line(`${access("this", prop.name)} = ${this.#expr(prop.value, true)};`);
           }
+          this.#emitDynamicTransform(c.root.transform, "this");
           this.#emitChildUpdates(c.root.children, "this", "persistent");
         });
       }
@@ -239,6 +252,10 @@ class ComponentGenerator {
     return fn.params.map((p) => `${p.name}: ${typeText(p.type)}`).join(", ");
   }
 
+  #hasSetter(state: StateId): boolean {
+    return this.#c.hooks.some((h) => h.kind === "UseState" && h.state === state && h.setterName !== null);
+  }
+
   #setter(state: StateId): string {
     for (const hook of this.#c.hooks) {
       if (hook.kind === "UseState" && hook.state === state && hook.setterName !== null) return hook.setterName;
@@ -272,7 +289,7 @@ class ComponentGenerator {
           w.line(`this.${this.#setter(stmt.state)}(${"updater" in stmt ? this.#updater(stmt.updater) : this.#expr(stmt.value, true)});`);
           break;
         case "Assign": {
-          const target = stmt.target.kind === "TransformField" ? this.#transformField(stmt.target.slot, stmt.target.field) : this.#refProperty(stmt.target.ref, stmt.target.property);
+          const target = `this.${this.#refField(stmt.target.ref)}`;
           w.line(`${target} ${stmt.operator} ${this.#expr(stmt.value, true)};`);
           break;
         }
@@ -316,10 +333,11 @@ class ComponentGenerator {
 
   /** Attach persistent children to their parents (constructor only). */
   #emitStaticWiring(children: readonly ChildIR[], parentRef: string): void {
-    for (const child of children) {
+    for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
-      this.#w.line(`${parentRef}.addChild(${ref});`);
+      this.#emitStaticTransform(child.element.transform, ref);
+      this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
       this.#emitStaticWiring(child.element.children, ref);
     }
   }
@@ -328,7 +346,7 @@ class ComponentGenerator {
 
   #emitChildUpdates(children: readonly ChildIR[], parentRef: string, presence: Presence): void {
     const w = this.#w;
-    for (const child of children) {
+    for (const [index, child] of children.entries()) {
       switch (child.kind) {
         case "StaticChild": {
           const el = child.element;
@@ -348,8 +366,9 @@ class ComponentGenerator {
           w.open(`if (${this.#expr(child.condition, true)}) {`);
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.#construct(el)};`);
+            this.#emitStaticTransform(el.transform, ref);
             this.#emitMountStatics(el.children, ref);
-            w.line(`${parentRef}.queueAddChild(${ref});`);
+            w.line(`${parentRef}.queueAddChild(${ref}${slotArgument(children, index)});`);
           });
           this.#emitElementUpdates(el, ref, "conditional");
           w.close();
@@ -369,26 +388,42 @@ class ComponentGenerator {
     for (const prop of el.props) {
       if (prop.kind === "DynamicProp") this.#w.line(`${access(ref, prop.name)} = ${this.#expr(prop.value, true)};`);
     }
+    this.#emitDynamicTransform(el.transform, ref);
     this.#emitChildUpdates(el.children, ref, presence);
   }
 
   /** When a conditional subtree mounts, construct its static descendants and attach them immediately. */
   #emitMountStatics(children: readonly ChildIR[], parentRef: string): void {
-    for (const child of children) {
+    for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
       this.#w.line(`${ref} = ${this.#construct(child.element)};`);
-      this.#w.line(`${parentRef}.addChild(${ref});`);
+      this.#emitStaticTransform(child.element.transform, ref);
+      this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
       this.#emitMountStatics(child.element.children, ref);
     }
   }
 
+  /** Transform fields that never change are set once, right after the element is constructed. */
+  #emitStaticTransform(transform: readonly PropIR[], ref: string): void {
+    for (const p of transform) {
+      if (p.kind === "StaticProp") this.#w.line(`${ref}.transform.${p.name} = ${this.#expr(p.value, true)};`);
+    }
+  }
+
+  /** Transform fields that read state are re-applied on render, like any dynamic prop. */
+  #emitDynamicTransform(transform: readonly PropIR[], ref: string): void {
+    for (const p of transform) {
+      if (p.kind === "DynamicProp") this.#w.line(`${ref}.transform.${p.name} = ${this.#expr(p.value, true)};`);
+    }
+  }
+
   #hostHasDynamicProps(): boolean {
-    return this.#c.root.props.some((p) => p.kind === "DynamicProp");
+    return [...this.#c.root.props, ...this.#c.root.transform].some((p) => p.kind === "DynamicProp");
   }
 
   #elementNeedsRender(el: ElementIR): boolean {
-    return el.props.some((p) => p.kind === "DynamicProp") || this.#childrenNeedRender(el.children);
+    return [...el.props, ...el.transform].some((p) => p.kind === "DynamicProp") || this.#childrenNeedRender(el.children);
   }
 
   #childrenNeedRender(children: readonly ChildIR[]): boolean {
@@ -413,20 +448,11 @@ class ComponentGenerator {
     return `{ ${props.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`).join(", ")} }`;
   }
 
-  // `slot` identifies the one transform a component has; it is `this.transform` (inherited from Entity).
-  #transformField(_slot: TransformId, field: string): string {
-    return `this.transform.${field}`;
-  }
-
-  /** A ref's name is the field of its element. */
+  /** A ref's name is its field. */
   #refField(id: RefId): string {
     const ref = this.#c.refs.find((r) => r.id === id);
     if (!ref) throw new Error(`Unknown ref ${id} in component ${this.#c.name}`);
     return ref.name;
-  }
-
-  #refProperty(id: RefId, property: string): string {
-    return access(`this.${this.#refField(id)}`, property);
   }
 
   #state(id: StateId): StateIR {
@@ -447,9 +473,7 @@ class ComponentGenerator {
       case "LocalRead": return e.name;
       case "ParamRead": return e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
-      case "TransformRead": return this.#transformField(e.slot, e.field);
       case "RefRead": return `this.${this.#refField(e.ref)}`;
-      case "RefPropertyRead": return this.#refProperty(e.ref, e.property);
       case "Call": {
         const args = e.args.map((a) => this.#expr(a, true)).join(", ");
         return e.callee.kind === "Function" ? `${e.callee.name}(${args})` : `${e.callee.receiver.name}.${e.callee.name}(${args})`;
@@ -474,6 +498,24 @@ function escapeTemplate(text: string): string {
 
 function typeName(ref: ComponentRef): string {
   return ref.name;
+}
+
+/**
+ * `, <index>` when the parent has children that mount later, so the runtime
+ * keeps source order (a conditional lands between its siblings, not at the
+ * end). Empty otherwise: appending in source order is already correct.
+ */
+function slotArgument(siblings: readonly ChildIR[], index: number): string {
+  return siblings.some((c) => c.kind !== "StaticChild") ? `, ${index}` : "";
+}
+
+/** The private field holding a state slot's next value (`#healthNext`). Private names cannot clash with public ones. */
+function pending(s: StateIR): string {
+  return `#${s.name}Next`;
+}
+
+function pendingRef(s: StateIR): string {
+  return `this.${pending(s)}`;
 }
 
 /** Field names of an element and all its descendants (every one of them lives and dies with it). */

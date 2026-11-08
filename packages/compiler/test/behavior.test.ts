@@ -130,18 +130,30 @@ describe("generated component instances", () => {
 });
 
 describe("state setters", () => {
-  it("update the field and mark the object dirty", () => {
-    const player = new Player();
+  it("mark the object dirty and apply the value at the next render (React's snapshot semantics)", () => {
+    const { world, player } = mountPlayer();
     assert.equal(player.isDirty, false);
     player.setHealth(80);
-    assert.equal(player.health, 80);
     assert.equal(player.isDirty, true);
+    assert.equal(player.health, 100, "reads keep the value from the last render until it re-renders");
+    world.flush();
+    assert.equal(player.health, 80);
   });
 
-  it("accept an updater function", () => {
-    const player = new Player();
+  it("accept an updater function, chained on pending updates", () => {
+    const { world, player } = mountPlayer();
     player.setHealth((previous) => previous - 30);
-    assert.equal(player.health, 70);
+    player.setHealth((previous) => previous - 30);
+    world.flush();
+    assert.equal(player.health, 40);
+  });
+
+  it("with a plain value, last write wins, as in React's `setN(n + 1); setN(n + 1)`", () => {
+    const { world, player } = mountPlayer();
+    player.setHealth(player.health - 10);
+    player.setHealth(player.health - 10);
+    world.flush();
+    assert.equal(player.health, 90);
   });
 
   it("do not mark the object dirty when the value is unchanged", () => {
@@ -291,6 +303,49 @@ describe("nested components", () => {
     world.flush();
     assert.equal(level.enemy3, null);
     assert.deepEqual(level.children, [level.enemy, level.enemy2]);
+  });
+
+  it("mount a conditional child between its source siblings, not at the end (draw order)", async () => {
+    const { Ordered } = await load<{ Ordered: new () => Entity & { setShow: Setter<boolean>; setInner: Setter<boolean> } }>(
+      compile(`function Ordered() {
+  const [show, setShow] = useState(false);
+  const [inner, setInner] = useState(false);
+  return (
+    <Entity>
+      <Sprite image="a" />
+      {show && <Sprite image="b" />}
+      <Sprite image="c" />
+      {show && (
+        <Entity name="group">
+          <Sprite image="d" />
+          {inner && <Sprite image="e" />}
+          <Sprite image="f" />
+        </Entity>
+      )}
+      <Sprite image="g" />
+    </Entity>
+  );
+}`),
+    );
+    const images = (o: GameObject): string[] => o.children.map((c) => (c instanceof Sprite ? c.image : (c as Entity).name));
+    const world = new World();
+    const ordered = new Ordered();
+    world.mount(ordered);
+    assert.deepEqual(images(ordered), ["a", "c", "g"]);
+
+    ordered.setShow(true);
+    ordered.setInner(true);
+    world.flush();
+    assert.deepEqual(images(ordered), ["a", "b", "c", "group", "g"]);
+    assert.deepEqual(images(ordered.children[3]!), ["d", "e", "f"]);
+
+    // Unmount and remount: the slot is reused, not appended.
+    ordered.setShow(false);
+    world.flush();
+    assert.deepEqual(images(ordered), ["a", "c", "g"]);
+    ordered.setShow(true);
+    world.flush();
+    assert.deepEqual(images(ordered), ["a", "b", "c", "group", "g"]);
   });
 
   it("mount a conditional subtree with its own static and dynamic children", () => {

@@ -4,23 +4,28 @@ import { WarningIcon } from "./WarningIcon.ts";
 
 export class Player extends Entity {
   health: number = 100;
+  #healthNext: number = this.health;
   readonly sprite: Sprite = new Sprite({ image: (this.health > 50) ? "normal.png" : "hurt.png" });
   readonly collider: Collider = new Collider({ width: 16, height: 24 });
   warningIcon: WarningIcon | null = null;
 
   constructor() {
     super({ name: "Player" });
-    this.addChild(this.sprite);
-    this.addChild(this.collider);
+    this.addChild(this.sprite, 0);
+    this.addChild(this.collider, 1);
     this.render();
     this.commitStructure();
   }
 
   setHealth(value: number | ((previous: number) => number)): void {
-    const next = typeof value === "function" ? value(this.health) : value;
-    if (next === this.health) return;
-    this.health = next;
+    const next = typeof value === "function" ? value(this.#healthNext) : value;
+    if (next === this.#healthNext) return;
+    this.#healthNext = next;
     this.markDirty();
+  }
+
+  override commitState(): void {
+    this.health = this.#healthNext;
   }
 
   override render(): void {
@@ -28,7 +33,7 @@ export class Player extends Entity {
     if (this.health < 25) {
       if (this.warningIcon === null) {
         this.warningIcon = new WarningIcon();
-        this.queueAddChild(this.warningIcon);
+        this.queueAddChild(this.warningIcon, 2);
       }
     } else if (this.warningIcon !== null) {
       this.queueRemoveChild(this.warningIcon);

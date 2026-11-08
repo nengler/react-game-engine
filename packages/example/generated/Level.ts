@@ -14,7 +14,9 @@ export class Enemy extends Entity {
 
 export class Level extends Entity {
   wave: number = 1;
+  #waveNext: number = this.wave;
   bossVisible: boolean = false;
+  #bossVisibleNext: boolean = this.bossVisible;
   readonly enemy: Enemy = new Enemy();
   readonly enemy2: Enemy = new Enemy();
   enemy3: Enemy | null = null;
@@ -24,31 +26,36 @@ export class Level extends Entity {
 
   constructor() {
     super({ name: "Level" });
-    this.addChild(this.enemy);
-    this.addChild(this.enemy2);
+    this.addChild(this.enemy, 0);
+    this.addChild(this.enemy2, 1);
     this.render();
     this.commitStructure();
   }
 
   setWave(value: number | ((previous: number) => number)): void {
-    const next = typeof value === "function" ? value(this.wave) : value;
-    if (next === this.wave) return;
-    this.wave = next;
+    const next = typeof value === "function" ? value(this.#waveNext) : value;
+    if (next === this.#waveNext) return;
+    this.#waveNext = next;
     this.markDirty();
   }
 
   setBossVisible(value: boolean | ((previous: boolean) => boolean)): void {
-    const next = typeof value === "function" ? value(this.bossVisible) : value;
-    if (next === this.bossVisible) return;
-    this.bossVisible = next;
+    const next = typeof value === "function" ? value(this.#bossVisibleNext) : value;
+    if (next === this.#bossVisibleNext) return;
+    this.#bossVisibleNext = next;
     this.markDirty();
+  }
+
+  override commitState(): void {
+    this.wave = this.#waveNext;
+    this.bossVisible = this.#bossVisibleNext;
   }
 
   override render(): void {
     if (this.wave >= 3) {
       if (this.enemy3 === null) {
         this.enemy3 = new Enemy();
-        this.queueAddChild(this.enemy3);
+        this.queueAddChild(this.enemy3, 2);
       }
     } else if (this.enemy3 !== null) {
       this.queueRemoveChild(this.enemy3);
@@ -61,7 +68,7 @@ export class Level extends Entity {
         this.entity.addChild(this.sprite);
         this.collider = new Collider({ width: 64, height: 64 });
         this.entity.addChild(this.collider);
-        this.queueAddChild(this.entity);
+        this.queueAddChild(this.entity, 3);
       }
       if (this.sprite !== null) {
         this.sprite.image = (this.wave > 5) ? "boss-enraged.png" : "boss.png";

@@ -55,6 +55,7 @@
             }
           }
         ],
+        "transform": [],
         "children": [
           {
             "kind": "StaticChild",
@@ -98,6 +99,7 @@
                   ]
                 }
               ],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",
@@ -136,6 +138,7 @@
                   }
                 }
               ],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",
@@ -173,6 +176,7 @@
                 "module": "./WarningIcon.tsx"
               },
               "props": [],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",

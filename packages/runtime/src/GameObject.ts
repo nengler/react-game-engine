@@ -1,8 +1,9 @@
 import type { InputState } from "./input.ts";
+import { IDENTITY_TRANSFORM, Transform, composeTransforms, type WorldTransform } from "./Transform.ts";
 import type { World } from "./World.ts";
 
 type StructureOp =
-  | { readonly kind: "add"; readonly child: GameObject }
+  | { readonly kind: "add"; readonly child: GameObject; readonly slot: number }
   | { readonly kind: "remove"; readonly child: GameObject };
 
 /**
@@ -14,12 +15,20 @@ export class GameObject {
   /** Marks runtime-provided classes; compiled components do not have this as an own static. */
   static readonly intrinsic = true;
 
+  /**
+   * Position, rotation and scale relative to the parent (unless `global`).
+   * Every game object has one, so any built-in element can be placed; set
+   * with the `transform={{ x, y }}` attribute.
+   */
+  readonly transform: Transform = new Transform();
   parent: GameObject | null = null;
   readonly children: GameObject[] = [];
   world: World | null = null;
 
   #dirty = false;
   #pending: StructureOp[] = [];
+  /** Source position among the parent's children (see `addChild`); `Infinity` for unslotted children. */
+  #slot = Infinity;
 
   get isDirty(): boolean {
     return this.#dirty;
@@ -29,13 +38,22 @@ export class GameObject {
     return this.#pending.length > 0;
   }
 
-  /** Immediately attach a child. Used for children that exist for the object's whole life. */
-  addChild(child: GameObject): void {
+  /**
+   * Immediately attach a child. `slot` is the child's position in its parent's
+   * source (generated code passes it when a parent has children that come and
+   * go), so a child mounted later still lands between its source siblings:
+   * it goes after every child whose slot is <= its own. Without a slot, the
+   * child is appended (and stays after every slotted child).
+   */
+  addChild(child: GameObject, slot: number = Infinity): void {
     if (child.parent !== null) {
       throw new Error("GameObject already has a parent");
     }
     child.parent = this;
-    this.children.push(child);
+    child.#slot = slot;
+    const index = this.children.findIndex((sibling) => sibling.#slot > slot);
+    if (index === -1) this.children.push(child);
+    else this.children.splice(index, 0, child);
     if (this.world !== null) child.attachToWorld(this.world);
   }
 
@@ -45,12 +63,13 @@ export class GameObject {
     if (index === -1) throw new Error("GameObject is not a child of this object");
     this.children.splice(index, 1);
     child.parent = null;
+    child.#slot = Infinity;
     child.detachFromWorld();
   }
 
-  /** Queue a child to be attached when structure is next committed. */
-  queueAddChild(child: GameObject): void {
-    this.#pending.push({ kind: "add", child });
+  /** Queue a child to be attached (at `slot`, see `addChild`) when structure is next committed. */
+  queueAddChild(child: GameObject, slot: number = Infinity): void {
+    this.#pending.push({ kind: "add", child, slot });
     this.world?.scheduleCommit(this);
   }
 
@@ -66,7 +85,7 @@ export class GameObject {
     this.#pending = [];
     for (const op of ops) {
       if (op.kind === "add") {
-        this.addChild(op.child);
+        this.addChild(op.child, op.slot);
         // A child that queued its own changes while it had no parent (nested conditionals)
         // is now attached; settle it too, so a subtree is complete without a World.
         if (op.child.hasPendingStructure) op.child.commitStructure();
@@ -76,6 +95,12 @@ export class GameObject {
     }
   }
 
+  /** This object's transform in world space: its own, composed with every ancestor's (see `Transform`). */
+  worldTransform(): WorldTransform {
+    const parent = this.parent === null ? IDENTITY_TRANSFORM : this.parent.worldTransform();
+    return composeTransforms(parent, this.transform);
+  }
+
   /** Request a render pass for this object. */
   markDirty(): void {
     if (this.#dirty) return;
@@ -83,11 +108,19 @@ export class GameObject {
     this.world?.scheduleRender(this);
   }
 
-  /** Called by the World for dirty objects. Clears the flag, then renders. */
+  /**
+   * Called by the World for dirty objects: clears the flag, applies the state
+   * updates queued since the last render, then renders. This is the only
+   * place state changes, so every handler in a frame sees the same snapshot.
+   */
   runRender(): void {
     this.#dirty = false;
+    this.commitState();
     this.render();
   }
+
+  /** Apply queued state updates. Generated code overrides this for components with state setters. */
+  commitState(): void {}
 
   /** Per-tick hooks. Generated code overrides the ones a component declares; the World only visits overriders. */
   onInput(_input: InputState): void {}

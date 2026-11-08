@@ -29,6 +29,11 @@ describe("runtime manifest", () => {
     }
   });
 
+  it("lists only intrinsics as transformable, including the host", () => {
+    for (const tag of runtimeManifest.transformIntrinsics) assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
+    assert.ok(runtimeManifest.transformIntrinsics.includes(runtimeManifest.hostIntrinsic));
+  });
+
   it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
     const classes: Record<string, unknown> = { Entity, Sprite, Collider };
