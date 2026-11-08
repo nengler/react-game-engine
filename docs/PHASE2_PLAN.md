@@ -17,7 +17,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M4b Roots and component forms | Done | #11 | `<Collider onCollisionEnter>` replaces the hook (a per-collider callback), fragment and non-Entity roots, arrow-function and default-export components, the `props` object form, `useState` type inference over expressions. Completes M4 |
 | M8 Children | Not started | n/a | Needs M4 |
 | M5a Arrays and records in handlers | Done | #12 | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
-| M5b Keyed lists | In progress | `claude/pensive-faraday-lnmtga` | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
+| M5b Keyed lists | In review | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
 | M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
 | M10 `<Text>` | Not started | n/a | Needs M7. HUD and labels; `transformIntrinsics` |
