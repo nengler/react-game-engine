@@ -39,7 +39,7 @@ export class Player extends Entity {
 
   constructor() {
     super();
-    this.addChild(this.sprite);
+    this.addChild(this.sprite, 0);
     this.render();
     this.commitStructure();
   }
@@ -55,7 +55,7 @@ export class Player extends Entity {
     if (this.health < 25) {
       if (this.warningIcon === null) {
         this.warningIcon = new WarningIcon();
-        this.queueAddChild(this.warningIcon);
+        this.queueAddChild(this.warningIcon, 1);
       }
     } else if (this.warningIcon !== null) {
       this.queueRemoveChild(this.warningIcon);

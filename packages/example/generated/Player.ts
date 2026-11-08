@@ -10,8 +10,8 @@ export class Player extends Entity {
 
   constructor() {
     super({ name: "Player" });
-    this.addChild(this.sprite);
-    this.addChild(this.collider);
+    this.addChild(this.sprite, 0);
+    this.addChild(this.collider, 1);
     this.render();
     this.commitStructure();
   }
@@ -28,7 +28,7 @@ export class Player extends Entity {
     if (this.health < 25) {
       if (this.warningIcon === null) {
         this.warningIcon = new WarningIcon();
-        this.queueAddChild(this.warningIcon);
+        this.queueAddChild(this.warningIcon, 2);
       }
     } else if (this.warningIcon !== null) {
       this.queueRemoveChild(this.warningIcon);

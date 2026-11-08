@@ -2,7 +2,7 @@ import type { InputState } from "./input.ts";
 import type { World } from "./World.ts";
 
 type StructureOp =
-  | { readonly kind: "add"; readonly child: GameObject }
+  | { readonly kind: "add"; readonly child: GameObject; readonly slot: number }
   | { readonly kind: "remove"; readonly child: GameObject };
 
 /**
@@ -20,6 +20,8 @@ export class GameObject {
 
   #dirty = false;
   #pending: StructureOp[] = [];
+  /** Source position among the parent's children (see `addChild`); `Infinity` for unslotted children. */
+  #slot = Infinity;
 
   get isDirty(): boolean {
     return this.#dirty;
@@ -29,13 +31,22 @@ export class GameObject {
     return this.#pending.length > 0;
   }
 
-  /** Immediately attach a child. Used for children that exist for the object's whole life. */
-  addChild(child: GameObject): void {
+  /**
+   * Immediately attach a child. `slot` is the child's position in its parent's
+   * source (generated code passes it when a parent has children that come and
+   * go), so a child mounted later still lands between its source siblings:
+   * it goes after every child whose slot is <= its own. Without a slot, the
+   * child is appended (and stays after every slotted child).
+   */
+  addChild(child: GameObject, slot: number = Infinity): void {
     if (child.parent !== null) {
       throw new Error("GameObject already has a parent");
     }
     child.parent = this;
-    this.children.push(child);
+    child.#slot = slot;
+    const index = this.children.findIndex((sibling) => sibling.#slot > slot);
+    if (index === -1) this.children.push(child);
+    else this.children.splice(index, 0, child);
     if (this.world !== null) child.attachToWorld(this.world);
   }
 
@@ -45,12 +56,13 @@ export class GameObject {
     if (index === -1) throw new Error("GameObject is not a child of this object");
     this.children.splice(index, 1);
     child.parent = null;
+    child.#slot = Infinity;
     child.detachFromWorld();
   }
 
-  /** Queue a child to be attached when structure is next committed. */
-  queueAddChild(child: GameObject): void {
-    this.#pending.push({ kind: "add", child });
+  /** Queue a child to be attached (at `slot`, see `addChild`) when structure is next committed. */
+  queueAddChild(child: GameObject, slot: number = Infinity): void {
+    this.#pending.push({ kind: "add", child, slot });
     this.world?.scheduleCommit(this);
   }
 
@@ -66,7 +78,7 @@ export class GameObject {
     this.#pending = [];
     for (const op of ops) {
       if (op.kind === "add") {
-        this.addChild(op.child);
+        this.addChild(op.child, op.slot);
         // A child that queued its own changes while it had no parent (nested conditionals)
         // is now attached; settle it too, so a subtree is complete without a World.
         if (op.child.hasPendingStructure) op.child.commitStructure();

@@ -1,6 +1,6 @@
 # Phase 2 implementation plan
 
-Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes. It is split into seven milestones (M0–M6), each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md).
+Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes. It is split into seven milestones (M0–M6), each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). A review of M3 and a worked-out approach for M4–M6, including proposed changes to this plan, is in [PHASE2_M3_REVIEW_M4_M6.md](PHASE2_M3_REVIEW_M4_M6.md).
 
 ## Status
 
@@ -204,7 +204,7 @@ function Level() {
 
 - One field per list: `enemyItems: Map<string | number, Enemy> = new Map()`.
 - `render()` walks the source once: an existing key calls `updateProps`; a new key constructs and queues an insert; keys no longer present queue a removal. Duplicate keys throw in development builds.
-- Order matters for draw order, so the runtime needs new `queueInsertChild(child, before: GameObject | null)` and `queueMoveChild`. Moves are emitted only when the key order actually changed.
+- Order matters for draw order. Children already carry a source *slot* (`addChild(child, slot)`), so a conditional mounts between its siblings. Lists extend this to `(slot, order)` with a `queueReorder` emitted only when the key order actually changed (proposed in [PHASE2_M3_REVIEW_M4_M6.md](PHASE2_M3_REVIEW_M4_M6.md) in place of `queueInsertChild` / `queueMoveChild`).
 - Change detection relies on immutable updates (`setEnemies([...enemies, e])`): the setter's `===` check means mutating the array in place does nothing. Document this; do not deep-compare.
 
 **Acceptance tests**: add, remove, reorder and update by key; an unchanged item keeps its identity and is not re-rendered; static siblings before and after the list keep their positions; duplicate key error; each restriction has a diagnostic.
@@ -240,7 +240,7 @@ Not in M6: hot reload and editor tooling. Stable `ElementId`s and scene `id`s ar
 | --- | --- | --- |
 | TypeScript 7.1 is beta (`7.1.0-beta`); the API may change before stable | All | Keep the exact pin; all TS calls stay in `parser.ts` and `typecheck.ts`; re-verify `.d.ts` on each upgrade |
 | Handler language creep: users expect arbitrary JS in handlers | M1–M4 | Allowlist grows only per milestone; every rejection has a clear diagnostic |
-| Draw order for lists needs ordered inserts in the runtime | M5 | Add `queueInsertChild` / `queueMoveChild`; emit moves only on key-order change |
+| Draw order for lists needs ordered inserts in the runtime | M5 | Source slots landed for conditionals; extend to `(slot, order)` with `queueReorder`, emitted only on key-order change |
 | Mutating state arrays in place silently does nothing | M5 | Document immutable updates; consider a dev-mode freeze of array state |
 | Per-frame cost of visiting every object | M2 | Register only objects that override a hook |
 

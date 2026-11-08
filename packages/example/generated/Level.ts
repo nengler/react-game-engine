@@ -24,8 +24,8 @@ export class Level extends Entity {
 
   constructor() {
     super({ name: "Level" });
-    this.addChild(this.enemy);
-    this.addChild(this.enemy2);
+    this.addChild(this.enemy, 0);
+    this.addChild(this.enemy2, 1);
     this.render();
     this.commitStructure();
   }
@@ -48,7 +48,7 @@ export class Level extends Entity {
     if (this.wave >= 3) {
       if (this.enemy3 === null) {
         this.enemy3 = new Enemy();
-        this.queueAddChild(this.enemy3);
+        this.queueAddChild(this.enemy3, 2);
       }
     } else if (this.enemy3 !== null) {
       this.queueRemoveChild(this.enemy3);
@@ -61,7 +61,7 @@ export class Level extends Entity {
         this.entity.addChild(this.sprite);
         this.collider = new Collider({ width: 64, height: 64 });
         this.entity.addChild(this.collider);
-        this.queueAddChild(this.entity);
+        this.queueAddChild(this.entity, 3);
       }
       if (this.sprite !== null) {
         this.sprite.image = (this.wave > 5) ? "boss-enraged.png" : "boss.png";

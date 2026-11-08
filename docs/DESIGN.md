@@ -276,7 +276,7 @@ export class Player extends Entity {
   warningIcon: WarningIcon | null = null;
   constructor() {
     super({ name: "Player" });
-    this.addChild(this.sprite);
+    this.addChild(this.sprite, 0);
     this.render();
     this.commitStructure();
   }
@@ -284,7 +284,7 @@ export class Player extends Entity {
   override render(): void {
     this.sprite.image = (this.health > 50) ? "normal.png" : "hurt.png";
     if (this.health < 25) {
-      if (this.warningIcon === null) { this.warningIcon = new WarningIcon(); this.queueAddChild(this.warningIcon); }
+      if (this.warningIcon === null) { this.warningIcon = new WarningIcon(); this.queueAddChild(this.warningIcon, 1); }
     } else if (this.warningIcon !== null) {
       this.queueRemoveChild(this.warningIcon);
       this.warningIcon = null;
@@ -313,7 +313,16 @@ Decisions:
   public fields, and the type checker validates prop names and types.
 * **Structural changes are queued** (`queueAddChild` / `queueRemoveChild`) and
   applied by `World.flush()` after all dirty objects have rendered, so render
-  never mutates the tree it might be iterating. The constructor runs `render()`
+  never mutates the tree it might be iterating.
+* **Children keep source order.** Child order is draw order. When a parent has
+  a conditional child, every child is attached with its *slot* (its index in
+  the parent's JSX children: `addChild(child, 0)`, `queueAddChild(child, 1)`),
+  and the runtime inserts after every sibling with a lower or equal slot, so a
+  conditional that mounts later lands between its source siblings instead of
+  at the end. Children attached without a slot (`World.mount`, later scene
+  loading) go after all slotted ones. Parents with only static children pass
+  no slot: appending in source order is already correct. Keyed lists (M5)
+  extend the slot with an order within it. The constructor runs `render()`
   then `commitStructure()` so a freshly constructed object is complete.
 * The generated class extends the runtime `Entity` (not bare `GameObject`)
   because the root `<Entity>`'s props (e.g. `name`) belong to the instance.

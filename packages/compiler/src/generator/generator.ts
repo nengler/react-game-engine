@@ -316,10 +316,10 @@ class ComponentGenerator {
 
   /** Attach persistent children to their parents (constructor only). */
   #emitStaticWiring(children: readonly ChildIR[], parentRef: string): void {
-    for (const child of children) {
+    for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
-      this.#w.line(`${parentRef}.addChild(${ref});`);
+      this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
       this.#emitStaticWiring(child.element.children, ref);
     }
   }
@@ -328,7 +328,7 @@ class ComponentGenerator {
 
   #emitChildUpdates(children: readonly ChildIR[], parentRef: string, presence: Presence): void {
     const w = this.#w;
-    for (const child of children) {
+    for (const [index, child] of children.entries()) {
       switch (child.kind) {
         case "StaticChild": {
           const el = child.element;
@@ -349,7 +349,7 @@ class ComponentGenerator {
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.#construct(el)};`);
             this.#emitMountStatics(el.children, ref);
-            w.line(`${parentRef}.queueAddChild(${ref});`);
+            w.line(`${parentRef}.queueAddChild(${ref}${slotArgument(children, index)});`);
           });
           this.#emitElementUpdates(el, ref, "conditional");
           w.close();
@@ -374,11 +374,11 @@ class ComponentGenerator {
 
   /** When a conditional subtree mounts, construct its static descendants and attach them immediately. */
   #emitMountStatics(children: readonly ChildIR[], parentRef: string): void {
-    for (const child of children) {
+    for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
       this.#w.line(`${ref} = ${this.#construct(child.element)};`);
-      this.#w.line(`${parentRef}.addChild(${ref});`);
+      this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
       this.#emitMountStatics(child.element.children, ref);
     }
   }
@@ -474,6 +474,15 @@ function escapeTemplate(text: string): string {
 
 function typeName(ref: ComponentRef): string {
   return ref.name;
+}
+
+/**
+ * `, <index>` when the parent has children that mount later, so the runtime
+ * keeps source order (a conditional lands between its siblings, not at the
+ * end). Empty otherwise: appending in source order is already correct.
+ */
+function slotArgument(siblings: readonly ChildIR[], index: number): string {
+  return siblings.some((c) => c.kind !== "StaticChild") ? `, ${index}` : "";
 }
 
 /** Field names of an element and all its descendants (every one of them lives and dies with it). */
