@@ -1,3 +1,5 @@
+import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+
 function Mover() {
   const [x, setX] = useState(0);
 

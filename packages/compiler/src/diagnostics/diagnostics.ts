@@ -5,6 +5,8 @@ export const DiagnosticCode = {
   UnsupportedSyntax: "RGE1001",
   InvalidComponentBody: "RGE1002",
   RootMustBeEntity: "RGE1003",
+  /** A name imported from the authoring module that the compiler does not know. */
+  UnknownImport: "RGE1004",
   HookNotAtTopLevel: "RGE1101",
   UnknownHook: "RGE1102",
   InvalidUseState: "RGE1103",
@@ -32,6 +34,8 @@ export const DiagnosticCode = {
   /** Retired: refs no longer point at elements, so there are no ref property writes to conflict with JSX. */
   ConflictingRefWrite: "RGE1404",
   GeneratedTypeError: "RGE9001",
+  /** A TypeScript error in the authored TSX itself (wrong prop, wrong type, undefined name). */
+  SourceTypeError: "RGE9002",
 } as const;
 
 export type DiagnosticCode = (typeof DiagnosticCode)[keyof typeof DiagnosticCode];

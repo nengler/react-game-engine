@@ -5,16 +5,16 @@ import { generateModule } from "./generator/generator.ts";
 import type { IRModule } from "./ir/types.ts";
 import { TsxParser } from "./parser/parser.ts";
 import { buildModuleIR } from "./transform/transform.ts";
-import { typeCheckFiles, type VirtualFile } from "./typecheck/typecheck.ts";
+import { typeCheckFiles, typeCheckSources, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export * from "./ir/types.ts";
 export type { RuntimeManifest } from "@rge/runtime";
 export * from "./diagnostics/diagnostics.ts";
-export { analyzeSourceFile, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
+export { analyzeSourceFile, AUTHORING_HOOKS, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
 export { generateModule, type GeneratorOptions } from "./generator/generator.ts";
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
-export { typeCheckFiles, generatedCodeCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
+export { typeCheckFiles, typeCheckSources, generatedCodeCompilerOptions, sourceCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export interface CompilerConfig {
   /** Module specifier generated code imports runtime classes from. Default: `@rge/runtime`. */
@@ -59,7 +59,7 @@ export class Compiler {
   analyze<T>(fileName: string, text: string, use: (analysis: SourceAnalysis) => T): T {
     const parsed = this.#parser.parse(fileName, text);
     try {
-      return use(analyzeSourceFile(parsed.sourceFile, fileName));
+      return use(analyzeSourceFile(parsed.sourceFile, fileName, this.#manifest.authoringModule));
     } finally {
       parsed.dispose();
     }
@@ -81,6 +81,14 @@ export class Compiler {
   /** Type-check generated (or any) TypeScript files with the TypeScript 7.1 checker. */
   typeCheck(files: readonly VirtualFile[]): CompilerDiagnostic[] {
     return typeCheckFiles(this.#parser.api, files);
+  }
+
+  /**
+   * Type-check authored `.tsx` files (absolute paths) against the authoring
+   * module's declarations: wrong props, undefined names, bad hook arguments.
+   */
+  typeCheckSources(files: readonly VirtualFile[]): CompilerDiagnostic[] {
+    return typeCheckSources(this.#parser.api, files);
   }
 
   close(): void {

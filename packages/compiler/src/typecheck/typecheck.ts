@@ -1,4 +1,4 @@
-import { DiagnosticCategory, ModuleKind, ModuleResolutionKind, type API, type Diagnostic } from "typescript/sync";
+import { DiagnosticCategory, JsxEmit, ModuleKind, ModuleResolutionKind, type API, type Diagnostic } from "typescript/sync";
 import { createFileSystemLayer } from "typescript/fs";
 import { ScriptTarget } from "typescript/ast";
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
@@ -26,14 +26,39 @@ export const generatedCodeCompilerOptions = {
 } satisfies Parameters<API["createProgram"]>[1];
 
 /**
+ * Options used to check authored TSX: the same strictness, plus JSX typed by
+ * the runtime's authoring module (`@rge/runtime/jsx-runtime`), so a wrong
+ * prop or an undefined hook is a type error in the source.
+ */
+export const sourceCompilerOptions = {
+  ...generatedCodeCompilerOptions,
+  jsx: JsxEmit.ReactJSX,
+  jsxImportSource: "@rge/runtime",
+} satisfies Parameters<API["createProgram"]>[1];
+
+/**
  * Type-check in-memory files with the TypeScript 7.1 checker. The files are
  * supplied as a filesystem layer over the host filesystem, so they can import
  * real packages (e.g. the runtime) from disk.
  */
 export function typeCheckFiles(api: API, files: readonly VirtualFile[]): CompilerDiagnostic[] {
+  return checkFiles(api, files, generatedCodeCompilerOptions, DiagnosticCode.GeneratedTypeError);
+}
+
+/** Type-check authored `.tsx` files. Errors are `RGE9002`, to tell them from errors in generated code (`RGE9001`). */
+export function typeCheckSources(api: API, files: readonly VirtualFile[]): CompilerDiagnostic[] {
+  return checkFiles(api, files, sourceCompilerOptions, DiagnosticCode.SourceTypeError);
+}
+
+function checkFiles(
+  api: API,
+  files: readonly VirtualFile[],
+  compilerOptions: Parameters<API["createProgram"]>[1],
+  code: DiagnosticCode,
+): CompilerDiagnostic[] {
   const snapshot = api.createSnapshot({
     fileSystem: createFileSystemLayer(files.map((f) => [f.fileName, f.text] as const)),
-    createPrograms: [{ rootFiles: files.map((f) => f.fileName), compilerOptions: generatedCodeCompilerOptions }],
+    createPrograms: [{ rootFiles: files.map((f) => f.fileName), compilerOptions }],
   });
   try {
     const program = snapshot.operation.createdPrograms[0];
@@ -43,17 +68,17 @@ export function typeCheckFiles(api: API, files: readonly VirtualFile[]): Compile
       ...program.getSyntacticDiagnostics(),
       ...program.getSemanticDiagnostics(),
     ];
-    return raw.map(toCompilerDiagnostic);
+    return raw.map((d) => toCompilerDiagnostic(d, code));
   } finally {
     snapshot.dispose();
   }
 }
 
 
-function toCompilerDiagnostic(d: Diagnostic): CompilerDiagnostic {
+function toCompilerDiagnostic(d: Diagnostic, code: DiagnosticCode): CompilerDiagnostic {
   const message = [d.text, ...(d.messageChain ?? []).map((m) => m.text)].join(" ");
   return {
-    code: DiagnosticCode.GeneratedTypeError,
+    code,
     severity: d.category === DiagnosticCategory.Error ? "error" : "warning",
     message: `TS${d.code}: ${message}`,
     span: d.fileName

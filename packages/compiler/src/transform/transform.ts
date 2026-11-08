@@ -20,7 +20,7 @@ import {
   isStringLiteral,
   isNoSubstitutionTemplateLiteral,
 } from "typescript/ast/is";
-import { unwrapParens, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
+import { AUTHORING_HOOKS, unwrapParens, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
@@ -106,6 +106,20 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Imported component '${i.name}' conflicts with another component or a runtime intrinsic.`, span(i.node)));
     } else {
       imported.set(i.name, i.module);
+    }
+  }
+
+  // Names imported from the authoring module must be ones the compiler understands.
+  const authored = new Set([...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions)]);
+  for (const i of analysis.authoringImports) {
+    if (!authored.has(i.name)) {
+      diagnostics.push(
+        error(
+          DiagnosticCode.UnknownImport,
+          `'${i.name}' is not exported by "${manifest.authoringModule}". It exports: ${[...authored].sort().join(", ")}.`,
+          span(i.node),
+        ),
+      );
     }
   }
 

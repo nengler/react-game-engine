@@ -4,6 +4,12 @@
  * type here needs no compiler edit.
  */
 export interface RuntimeManifest {
+  /**
+   * The module component source imports hooks, built-in elements and runtime
+   * functions from. The compiler accepts imports from it (and from `.tsx`
+   * components) and nothing else.
+   */
+  readonly authoringModule: string;
   /** Tag names usable in JSX without a declaration. */
   readonly intrinsics: readonly string[];
   /** The intrinsic every component root must be; generated classes extend it. */
@@ -32,6 +38,7 @@ export interface HandleTypeManifest {
 }
 
 export const runtimeManifest: RuntimeManifest = {
+  authoringModule: "@rge/runtime/jsx",
   intrinsics: ["Entity", "Sprite", "Collider"],
   hostIntrinsic: "Entity",
   reservedMembers: [

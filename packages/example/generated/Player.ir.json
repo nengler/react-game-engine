@@ -7,9 +7,9 @@
       "name": "Player",
       "span": {
         "fileName": "packages/example/src/Player.tsx",
-        "start": 50,
-        "end": 319,
-        "line": 3,
+        "start": 121,
+        "end": 390,
+        "line": 4,
         "column": 1
       },
       "hooks": [
@@ -19,9 +19,9 @@
           "setterName": "setHealth",
           "span": {
             "fileName": "packages/example/src/Player.tsx",
-            "start": 78,
-            "end": 113,
-            "line": 4,
+            "start": 149,
+            "end": 184,
+            "line": 5,
             "column": 9
           }
         }
@@ -103,9 +103,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",
-                "start": 159,
-                "end": 217,
-                "line": 7,
+                "start": 230,
+                "end": 288,
+                "line": 8,
                 "column": 7
               }
             }
@@ -142,9 +142,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",
-                "start": 224,
-                "end": 259,
-                "line": 8,
+                "start": 295,
+                "end": 330,
+                "line": 9,
                 "column": 7
               }
             }
@@ -180,9 +180,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Player.tsx",
-                "start": 282,
-                "end": 297,
-                "line": 9,
+                "start": 353,
+                "end": 368,
+                "line": 10,
                 "column": 23
               }
             }
@@ -190,9 +190,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Player.tsx",
-          "start": 130,
-          "end": 312,
-          "line": 6,
+          "start": 201,
+          "end": 383,
+          "line": 7,
           "column": 5
         }
       }

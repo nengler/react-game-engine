@@ -7,9 +7,9 @@
       "name": "Hero",
       "span": {
         "fileName": "packages/example/src/Hero.tsx",
-        "start": 0,
-        "end": 758,
-        "line": 1,
+        "start": 118,
+        "end": 876,
+        "line": 3,
         "column": 1
       },
       "hooks": [
@@ -19,9 +19,9 @@
           "setterName": "setHealth",
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 26,
-            "end": 61,
-            "line": 2,
+            "start": 144,
+            "end": 179,
+            "line": 4,
             "column": 9
           }
         },
@@ -31,9 +31,9 @@
           "setterName": "setPoisoned",
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 71,
-            "end": 112,
-            "line": 3,
+            "start": 189,
+            "end": 230,
+            "line": 5,
             "column": 9
           }
         },
@@ -96,9 +96,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 117,
-            "end": 232,
-            "line": 5,
+            "start": 235,
+            "end": 350,
+            "line": 7,
             "column": 3
           }
         },
@@ -192,9 +192,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 236,
-            "end": 338,
-            "line": 12,
+            "start": 354,
+            "end": 456,
+            "line": 14,
             "column": 3
           }
         },
@@ -309,9 +309,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 342,
-            "end": 505,
-            "line": 18,
+            "start": 460,
+            "end": 623,
+            "line": 20,
             "column": 3
           }
         },
@@ -368,9 +368,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 509,
-            "end": 592,
-            "line": 26,
+            "start": 627,
+            "end": 710,
+            "line": 28,
             "column": 3
           }
         }
@@ -454,9 +454,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
-                "start": 636,
-                "end": 695,
-                "line": 33,
+                "start": 754,
+                "end": 813,
+                "line": 35,
                 "column": 7
               }
             }
@@ -493,9 +493,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
-                "start": 702,
-                "end": 737,
-                "line": 34,
+                "start": 820,
+                "end": 855,
+                "line": 36,
                 "column": 7
               }
             }
@@ -503,9 +503,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Hero.tsx",
-          "start": 609,
-          "end": 751,
-          "line": 32,
+          "start": 727,
+          "end": 869,
+          "line": 34,
           "column": 5
         }
       }

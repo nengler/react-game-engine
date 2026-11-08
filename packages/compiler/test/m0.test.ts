@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { Entity, Sprite, World, runtimeManifest } from "@rge/runtime";
 import { Compiler, DiagnosticCode } from "../src/index.ts";
 import {
-  cleanOutput, closeCompiler, compile, compileProject, compileProjectErrors, load, loadProject, typeCheck, typeCheckProject,
+  cleanOutput, closeCompiler, compile, compileErrors, compileProject, compileProjectErrors, load, loadProject, typeCheck, typeCheckProject,
 } from "./helpers.ts";
 
 after(() => {
@@ -231,8 +231,37 @@ function Player() {
     assert.deepEqual(props.map((d) => d.code), [DiagnosticCode.LocalComponentProps]);
   });
 
-  it("ignores non-component imports", () => {
-    const { code } = compile(`import { useState } from "react";\nimport "./style.css";\nfunction S() { return <Entity name="S" />; }`, "S.tsx");
-    assert.doesNotMatch(code, /react|style\.css/);
+  it("rejects imports it would otherwise drop silently", () => {
+    for (const source of [
+      `import { useState } from "react";`,
+      `import "./style.css";`,
+      `import { helper } from "./helper.ts";`,
+      `import * as jsx from "@rge/runtime/jsx";`,
+      `import jsx from "@rge/runtime/jsx";`,
+      `import { useState as state } from "@rge/runtime/jsx";`,
+      `import type { useState } from "@rge/runtime/jsx";`,
+      `import { type useState } from "@rge/runtime/jsx";`,
+    ]) {
+      const codes = compileErrors(`${source}\nfunction S() { return <Entity name="S" />; }`).map((d) => d.code);
+      assert.deepEqual(codes, [DiagnosticCode.UnsupportedSyntax], source);
+    }
+  });
+
+  it("accepts the authoring module's hooks, built-ins and functions, and generates the same code as without the import", () => {
+    const body = `function S() {
+  const [n, setN] = useState(0);
+  useUpdate((dt) => setN((n) => clamp(n + dt, 0, 10)));
+  return <Entity name="S"><Sprite image="a.png" /></Entity>;
+}`;
+    const withImport = compile(`import { useState, useUpdate, clamp, Entity, Sprite } from "@rge/runtime/jsx";\n${body}`, "S.tsx");
+    const without = compile(body, "S.tsx");
+    assert.equal(withImport.code, without.code);
+    assert.doesNotMatch(withImport.code, /rge\/runtime\/jsx/);
+  });
+
+  it("rejects names the authoring module does not export", () => {
+    const result = compileErrors(`import { useState, useTransform, Nope } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`);
+    assert.deepEqual(result.map((d) => d.code), [DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport]);
+    assert.match(result[0]!.message, /'useTransform' is not exported/);
   });
 });

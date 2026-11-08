@@ -1,3 +1,4 @@
+import { useState, Entity, Sprite, Collider } from "@rge/runtime/jsx";
 import { WarningIcon } from "./WarningIcon.tsx";
 
 function Player() {

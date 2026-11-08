@@ -1,3 +1,5 @@
+import { useState, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+
 function Enemy() {
   return (
     <Entity name="Enemy">

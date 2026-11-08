@@ -12,7 +12,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
 | M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform` and element refs; #8 replaced them with a `transform={{ x, y }}` attribute driven by state and value refs (`useRef(0)`), and also renamed the per-frame hooks to `useUpdate`/`useInput` and switched state reads to React's snapshot semantics (see Decisions) |
-| M7 Authoring types | Not started | n/a | Next. Typed imports for hooks and intrinsics so source TSX type-checks in editors; see below |
+| M7 Authoring types | In review | `claude/wizardly-gauss-dfqppf` | Component source imports from `@rge/runtime/jsx`; the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI). Imports are still optional: the compiler resolves names itself, so existing unimported source compiles but does not type-check |
 | M4 Props and callbacks | Not started | n/a | Also: collision events as `<Collider onCollisionEnter>` props, fragment and non-Entity roots, arrow-function and default-export components |
 | M8 Children | Not started | n/a | Needs M4 |
 | M5 Keyed dynamic lists | Not started | n/a | Needs M4; split into M5a (arrays and records in handlers) and M5b (keyed list) |
@@ -264,7 +264,7 @@ Lets data files, not only TSX, place components in a world: a prefab is a compil
 
 Not in M6: hot reload and editor tooling. Stable `ElementId`s and scene `id`s are what they will key on.
 
-## M7 — Authoring types (~3–4 days, next)
+## M7 — Authoring types (done in #9)
 
 Source files import what they use, as in React, and type-check in an editor:
 
@@ -272,9 +272,14 @@ Source files import what they use, as in React, and type-check in an editor:
 import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
 ```
 
-- A typed entry point declares the hooks (`useState`, `useRef`, `useUpdate`, `useInput`, later `useMount`/`useUnmount`), the intrinsics with their props (including `transform`), and a `JSX` namespace (`jsxImportSource`), so editors give autocomplete and prop errors on the TSX itself.
-- The compiler already ignores non-relative imports; it should check that hooks and intrinsics come from this entry point (or are unimported, for now) and report a clear diagnostic otherwise.
-- Examples switch to explicit imports, and CI type-checks `packages/example/src` with the declarations.
+What shipped:
+
+- **Entry point** `@rge/runtime/jsx` declares the hooks (`useState`, `useRef`, `useUpdate`, `useInput`, `onCollisionEnter`), the built-in elements with their props (including `transform`), and `clamp`. `@rge/runtime/jsx-runtime` holds the `JSX` namespace, so a project sets `"jsx": "react-jsx"` and `"jsxImportSource": "@rge/runtime"`. Everything is a declaration (calling one throws); the compiler never executes source.
+- **No drift.** Element props are the runtime's own prop interfaces and `TransformProps` is `Partial<Transform>`, so they follow the runtime. A test checks the module exports exactly the names the compiler accepts (intrinsics, hooks, manifest functions).
+- **Imports are validated.** Component source may import from `./X.tsx` and from the manifest's `authoringModule`; any other import (`react`, a CSS file, a `.ts` helper, a default, namespace, aliased or `type` import) is `RGE1001` instead of being silently dropped. A name the entry point does not export is `RGE1004`.
+- **Source type-checking.** `Compiler.typeCheckSources` runs the TypeScript checker over the authored TSX (`RGE9002`), so a wrong prop, a bad hook argument or an undefined name is reported with TypeScript's own message (`Did you mean 'image'?`). `rge-compile` runs it before compiling; `--no-check` skips it. `packages/example/tsconfig.json` type-checks the examples from `npm run typecheck`, which CI runs.
+- **Imports stay optional for now.** Source without imports still compiles (the compiler resolves hook and element names itself), but it fails the source type-check. Requiring them would mean migrating every test source; it is a one-line change in the analyzer when we want it.
+- **One divergence to know.** TypeScript accepts `ref.current` in JSX, but the compiler rejects it (`RGE1304`), because it would go stale.
 
 ## M8 — Children (~1 week, needs M4)
 
@@ -447,6 +452,15 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 - [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
 - [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
 - [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M7 Authoring types
+
+- [x] New diagnostics appended (`RGE1004` unknown import, `RGE9002` source type error)
+- [x] Analyzer validates imports: components, authoring module, everything else rejected; every form has a test
+- [x] `docs/DESIGN.md` updated: authoring rules, entry point, source type-checking
+- [x] Every example imports from `@rge/runtime/jsx`; `npm run example` regenerated and committed
+- [x] Tests cover the exports matching the compiler, source type errors, import diagnostics and the CLI (`m7.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+ (typecheck now includes the example sources)
 
 ### M10 `<Text>`
 

@@ -58,6 +58,9 @@ Limitations found while integrating:
 ## Authoring model
 
 ```tsx
+import { useState, Entity, Sprite } from "@rge/runtime/jsx";
+import { WarningIcon } from "./WarningIcon.tsx";
+
 function Player() {
   const [health, setHealth] = useState(100);
   return (
@@ -89,6 +92,17 @@ ignored):
   `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two
   conditional children, on `condition` and `!condition`). Text children,
   fragments, spread attributes and other expression children are rejected.
+* Imports: components from `./Name.tsx`, and hooks, built-in elements and
+  `clamp` from `@rge/runtime/jsx` (the manifest's `authoringModule`). Named
+  imports only; any other import is `RGE1001`, and a name the entry point does
+  not export is `RGE1004`. The entry point is a set of declarations (calling
+  one throws) typed from the runtime's own classes, with the `JSX` namespace in
+  `@rge/runtime/jsx-runtime`, so the TSX itself type-checks: a project uses
+  `"jsx": "react-jsx"` and `"jsxImportSource": "@rge/runtime"`
+  (`packages/example/tsconfig.json`). `rge-compile` runs this check first
+  (`RGE9002`; `--no-check` skips it). The imports themselves are optional for
+  the compiler, which resolves names itself, but source without them fails the
+  source type-check.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
   element (`<Entity>`, `<Sprite>`, `<Collider>`; the root or a child),
   relative to its parent unless
