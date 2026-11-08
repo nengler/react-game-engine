@@ -1,4 +1,5 @@
 export { GameObject } from "./GameObject.ts";
+export { Transform } from "./Transform.ts";
 export { World } from "./World.ts";
 export { Entity, type EntityProps } from "./components/Entity.ts";
 export { Sprite, type SpriteProps } from "./components/Sprite.ts";

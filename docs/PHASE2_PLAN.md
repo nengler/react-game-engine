@@ -4,14 +4,14 @@ Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice
 
 ## Status
 
-Last updated 2026-11-07. **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone moves Not started → In review (PR open) → Done (PR merged); the PR number goes in the third column. Whoever lands the work keeps this table and the milestone's checklist current; for work done by Claude, that is Claude's job, including flipping to Done once the merge is seen.
+Last updated 2026-11-08. **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone moves Not started → In review (PR open) → Done (PR merged); the PR number goes in the third column. Whoever lands the work keeps this table and the milestone's checklist current; for work done by Claude, that is Claude's job, including flipping to Done once the merge is seen.
 
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
 | M0 Hardening | Done | #5 | CI passed on the PR (first run of the workflow). Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet |
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
-| M3 useTransform and refs | Not started | n/a | Next; adds `Assign` |
+| M3 useTransform and refs | In review | `claude/hopeful-euler-2dv4xe` | Adds `Assign` (`=`, `+=`, `-=`, `*=`, `/=`). A ref write to a property that is also a dynamic prop is overwritten at the next render. Field names stay generated for unnamed elements |
 | M4 Props and callbacks | Not started | n/a | n/a |
 | M5 Keyed dynamic lists | Not started | n/a | Needs M4 |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
@@ -277,12 +277,12 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M3 useTransform and refs
 
-- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
-- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
-- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
-- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
-- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
-- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+- [x] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
+- [x] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
+- [x] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
+- [x] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
+- [x] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+ (`m3.test.ts`; example `Mover.tsx`)
 
 ### M4 Props and callbacks
 

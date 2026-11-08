@@ -38,6 +38,7 @@
           }
         }
       ],
+      "refs": [],
       "root": {
         "kind": "HostElement",
         "component": {

@@ -9,6 +9,9 @@ import {
   type PropIR,
   type FunctionIR,
   type HandlerHookIR,
+  type RefId,
+  type TransformId,
+  isHandlerHook,
   type StatementIR,
   type TypeIR,
   walkExpr,
@@ -84,6 +87,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
         case "If": visitExpr(stmt.test); visitStatements(stmt.then); visitStatements(stmt.else); break;
         case "Return": if (stmt.value) visitExpr(stmt.value); break;
         case "SetState": if ("updater" in stmt) visitFunction(stmt.updater); else visitExpr(stmt.value); break;
+        case "Assign": visitExpr(stmt.value); break;
         default: assertNever(stmt, "statement");
       }
     }
@@ -93,7 +97,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
     visitProps(c.root.props);
     visitChildren(c.root.children);
     c.state.forEach((s) => visitExpr(s.initialValue));
-    for (const hook of c.hooks) if (hook.kind !== "UseState") visitFunction(hook.handler);
+    for (const hook of c.hooks) if (isHandlerHook(hook)) visitFunction(hook.handler);
   }
   return [...[...values].sort(), ...[...types].sort().map((t) => `type ${t}`)];
 }
@@ -146,6 +150,10 @@ class ComponentGenerator {
       w.block("constructor()", () => {
         const staticHostProps = c.root.props.filter((p) => p.kind === "StaticProp");
         w.line(staticHostProps.length > 0 ? `super(${this.#propsObject(staticHostProps)});` : "super();");
+        for (const hook of c.hooks) {
+          if (hook.kind !== "UseTransform") continue;
+          for (const [field, value] of Object.entries(hook.initial)) w.line(`this.transform.${field} = ${value};`);
+        }
         this.#emitStaticWiring(c.root.children, "this");
         if (hasRender) {
           w.line("this.render();");
@@ -167,6 +175,8 @@ class ComponentGenerator {
             });
             break;
           }
+          case "UseTransform":
+            break; // initial values are applied in the constructor
           case "OnUpdate":
           case "OnInput":
           case "OnCollisionEnter":
@@ -200,7 +210,7 @@ class ComponentGenerator {
     const w = this.#w;
     const byKind = new Map<HandlerHookIR["kind"], HandlerHookIR[]>();
     for (const hook of this.#c.hooks) {
-      if (hook.kind === "UseState") continue;
+      if (!isHandlerHook(hook)) continue;
       byKind.set(hook.kind, [...(byKind.get(hook.kind) ?? []), hook]);
     }
     for (const [kind, hooks] of byKind) {
@@ -261,6 +271,11 @@ class ComponentGenerator {
         case "SetState":
           w.line(`this.${this.#setter(stmt.state)}(${"updater" in stmt ? this.#updater(stmt.updater) : this.#expr(stmt.value, true)});`);
           break;
+        case "Assign": {
+          const target = stmt.target.kind === "TransformField" ? this.#transformField(stmt.target.slot, stmt.target.field) : this.#refProperty(stmt.target.ref, stmt.target.property);
+          w.line(`${target} ${stmt.operator} ${this.#expr(stmt.value, true)};`);
+          break;
+        }
         case "LocalConst":
           w.line(`const ${stmt.name} = ${this.#expr(stmt.value, true)};`);
           break;
@@ -398,6 +413,22 @@ class ComponentGenerator {
     return `{ ${props.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`).join(", ")} }`;
   }
 
+  // `slot` identifies the one transform a component has; it is `this.transform` (inherited from Entity).
+  #transformField(_slot: TransformId, field: string): string {
+    return `this.transform.${field}`;
+  }
+
+  /** A ref's name is the field of its element. */
+  #refField(id: RefId): string {
+    const ref = this.#c.refs.find((r) => r.id === id);
+    if (!ref) throw new Error(`Unknown ref ${id} in component ${this.#c.name}`);
+    return ref.name;
+  }
+
+  #refProperty(id: RefId, property: string): string {
+    return access(`this.${this.#refField(id)}`, property);
+  }
+
   #state(id: StateId): StateIR {
     const s = this.#stateById.get(id);
     if (!s) throw new Error(`Unknown state ${id} in component ${this.#c.name}`);
@@ -416,6 +447,9 @@ class ComponentGenerator {
       case "LocalRead": return e.name;
       case "ParamRead": return e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
+      case "TransformRead": return this.#transformField(e.slot, e.field);
+      case "RefRead": return `this.${this.#refField(e.ref)}`;
+      case "RefPropertyRead": return this.#refProperty(e.ref, e.property);
       case "Call": {
         const args = e.args.map((a) => this.#expr(a, true)).join(", ");
         return e.callee.kind === "Function" ? `${e.callee.name}(${args})` : `${e.callee.receiver.name}.${e.callee.name}(${args})`;

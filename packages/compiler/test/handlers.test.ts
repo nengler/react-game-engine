@@ -5,7 +5,7 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Collider, Entity, GameObject, Sprite, World, createInputState } from "@rge/runtime";
-import { DiagnosticCode, type ComponentIR, type FunctionIR, type StatementIR } from "../src/index.ts";
+import { DiagnosticCode, isHandlerHook, type ComponentIR, type FunctionIR, type StatementIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, stripSpans, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -81,7 +81,7 @@ function C() {
 
 function handlerOf(component: ComponentIR, index = 1): FunctionIR {
   const hook = component.hooks[index]!;
-  assert.ok(hook.kind !== "UseState");
+  assert.ok(isHandlerHook(hook));
   return hook.handler;
 }
 
@@ -184,7 +184,7 @@ function C() {
 
   it("rejects `let`, assignment and escaping closures", () => {
     assert.deepEqual(codes("onUpdate(() => { let x = 1; });"), [DiagnosticCode.UnsupportedStatement]);
-    assert.deepEqual(codes("onUpdate(() => { n = 1; });"), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes("onUpdate(() => { n = 1; });"), [DiagnosticCode.UnsupportedStatement]);
     assert.ok(codes("onUpdate(() => { const f = () => 1; });").length > 0);
   });
 
