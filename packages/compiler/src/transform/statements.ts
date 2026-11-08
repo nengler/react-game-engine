@@ -23,7 +23,6 @@ import {
   type StateId,
   type StatementIR,
   type TypeIR,
-  type ValueType,
 } from "../ir/types.ts";
 import { Scope } from "./scope.ts";
 
@@ -35,7 +34,7 @@ export interface LoweringContext {
   lowerExpression(node: Expression): ExprIR | null;
   /** Resolves `r.current.prop`; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
   lowerAssignTarget(node: Expression): AssignTargetIR | null;
-  stateType(state: StateId): ValueType;
+  stateType(state: StateId): TypeIR;
   nextSerial(): number;
   /** Names handler code may never rebind, because the call allowlist refers to them (`Math`, runtime functions). */
   isCallableName(name: string): boolean;
@@ -212,7 +211,7 @@ function lowerSetState(ctx: LoweringContext, args: readonly Expression[], state:
   }
   const arg = unwrapParens(args[0]!);
   if (isArrowFunction(arg)) {
-    const type: TypeIR = { kind: "Primitive", name: ctx.stateType(state) };
+    const type = ctx.stateType(state);
     const updater = lowerFunction(ctx, arg, { paramTypes: [type], returns: "value", what: "State updater" });
     return updater && { kind: "SetState", state, updater };
   }

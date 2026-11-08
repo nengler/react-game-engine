@@ -170,9 +170,9 @@ class ComponentGenerator {
     w.block(`export class ${c.name} extends ${extendsClause}`, () => {
       // Persistent state.
       for (const s of c.state) {
-        w.line(`${s.name}: ${s.type} = ${this.#expr(s.initialValue, true)};`);
+        w.line(`${s.name}: ${typeText(s.type)} = ${this.#expr(s.initialValue, true)};`);
         // The value setters write; it becomes `s.name` when the component next renders.
-        if (this.#hasSetter(s.id)) w.line(`${pending(s)}: ${s.type} = this.${s.name};`);
+        if (this.#hasSetter(s.id)) w.line(`${pending(s)}: ${typeText(s.type)} = this.${s.name};`);
       }
       // Refs: plain fields. Reading or writing them never marks anything dirty.
       for (const r of c.refs) {
@@ -223,9 +223,10 @@ class ComponentGenerator {
           case "UseState": {
             if (hook.setterName === null) break;
             const s = this.#state(hook.state);
+            const type = typeText(s.type);
             w.blank();
             // React semantics: reads see the value from the last render; updaters chain on the pending value.
-            w.block(`${hook.setterName}(value: ${s.type} | ((previous: ${s.type}) => ${s.type})): void`, () => {
+            w.block(`${hook.setterName}(value: ${type} | ((previous: ${type}) => ${type})): void`, () => {
               w.line(`const next = typeof value === "function" ? value(${pendingRef(s)}) : value;`);
               w.line(`if (next === ${pendingRef(s)}) return;`);
               w.line(`${pendingRef(s)} = next;`);
@@ -317,7 +318,7 @@ class ComponentGenerator {
   #updater(fn: FunctionIR): string {
     const params = fn.params.map(param).join(", ");
     const only = fn.body.length === 1 ? fn.body[0]! : null;
-    if (only?.kind === "Return" && only.value) return `(${params}) => ${this.#expr(only.value, true)}`;
+    if (only?.kind === "Return" && only.value) return `(${params}) => ${this.#arrowBody(only.value)}`;
     const inner = new CodeWriter();
     const outer = this.#w;
     this.#w = inner;
@@ -540,6 +541,12 @@ class ComponentGenerator {
     return s;
   }
 
+  /** The body of an expression-bodied arrow: an object literal needs parentheses, or it would read as a block. */
+  #arrowBody(e: ExprIR): string {
+    const body = this.#expr(e, true);
+    return e.kind === "ObjectLiteral" ? `(${body})` : body;
+  }
+
   /** Compound sub-expressions are always parenthesised, so operator precedence can never be wrong. */
   #expr(e: ExprIR, top = false): string {
     const wrap = (s: string): string => (top ? s : `(${s})`);
@@ -559,12 +566,19 @@ class ComponentGenerator {
         return `this.props.${e.name}${guaranteed ? "!" : ""}`;
       }
       case "RefRead": return `this.${this.#refField(e.ref)}`;
+      case "MemberRead": return `${this.#expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
+      case "ArrayLiteral": return `[${e.elements.map((el) => `${el.spread ? "..." : ""}${this.#expr(el.value, true)}`).join(", ")}]`;
+      case "ObjectLiteral":
+        if (e.properties.length === 0) return "{}";
+        return `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.#expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`)).join(", ")} }`;
+      case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.#arrowBody(e.body)}`);
       case "Call": {
         const args = e.args.map((a) => this.#expr(a, true)).join(", ");
         switch (e.callee.kind) {
           case "Function": return `${e.callee.name}(${args})`;
           case "Method": return `${e.callee.receiver.name}.${e.callee.name}(${args})`;
           case "Prop": return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
+          case "ArrayMethod": return `${this.#expr(e.callee.receiver)}.${e.callee.name}(${args})`;
           default: return assertNever(e.callee, "callee");
         }
       }
@@ -584,7 +598,27 @@ function param(p: ParamIR): string {
 }
 
 function annotated(name: string, type: TypeIR): string {
-  return type.kind === "Contextual" ? name : `${name}: ${type.name}`;
+  return type.kind === "Contextual" ? name : `${name}: ${typeText(type)}`;
+}
+
+/** A type as written in generated code. */
+function typeText(type: TypeIR): string {
+  switch (type.kind) {
+    case "Primitive":
+    case "Named":
+      return type.name;
+    case "SourceType":
+      return type.text;
+    case "Array": {
+      const element = typeText(type.element);
+      // `(A | B)[]`, not `A | B[]`.
+      return `${IDENTIFIER.test(element) || element.endsWith("[]") ? element : `(${element})`}[]`;
+    }
+    case "Contextual":
+      throw new Error("A contextual type has no text: it is left to inference");
+    default:
+      return assertNever(type, "type");
+  }
 }
 
 /** A transform attribute on a component element places it (`placement`); on a built-in it sets the object's own `transform`. */

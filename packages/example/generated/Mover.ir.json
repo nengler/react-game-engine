@@ -101,7 +101,10 @@
           "kind": "State",
           "id": "Mover.x",
           "name": "x",
-          "type": "number",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
           "initialValue": {
             "kind": "NumberLiteral",
             "value": 0

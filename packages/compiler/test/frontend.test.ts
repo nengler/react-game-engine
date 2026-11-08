@@ -128,7 +128,7 @@ describe("IR construction", () => {
               kind: "State",
               id: "Player.health",
               name: "health",
-              type: "number",
+              type: { kind: "Primitive", name: "number" },
               initialValue: { kind: "NumberLiteral", value: 100 },
             },
           ],

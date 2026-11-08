@@ -1,4 +1,4 @@
-import { SyntaxKind, type JsxElement, type JsxSelfClosingElement, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type Node, type SourceFile } from "typescript/ast";
+import { SyntaxKind, type ObjectLiteralExpression, type JsxElement, type JsxSelfClosingElement, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type Node, type SourceFile } from "typescript/ast";
 import {
   isBinaryExpression,
   isCallExpression,
@@ -28,11 +28,21 @@ import {
   isPrefixUnaryExpression,
   isStringLiteral,
   isNoSubstitutionTemplateLiteral,
+  isArrayLiteralExpression,
+  isSpreadElement,
+  isSpreadAssignment,
+  isBlock,
 } from "typescript/ast/is";
 import { AUTHORING_HOOKS, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
+  ARRAY_METHODS,
+  MUTATING_ARRAY_METHODS,
+  type ArrayMethodName,
+  type ArrayElementIR,
+  type ObjectPropertyIR,
+  type TypeIR,
   collectDependencies,
   stateReads,
   elementId,
@@ -199,7 +209,7 @@ class ComponentLowering implements LoweringContext {
   readonly componentName: string;
   /** Component scope; function lowering nests scopes beneath it via `scope`. */
   readonly #componentScope = new Scope();
-  readonly #stateTypes = new Map<StateId, ValueType>();
+  readonly #stateTypes = new Map<StateId, TypeIR>();
   #serial = 0;
   scope: Scope = this.#componentScope;
   readonly #usedNames: Set<string>;
@@ -454,7 +464,7 @@ class ComponentLowering implements LoweringContext {
             this.#error(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state (it may read props).", hook.initializer);
             continue;
           }
-          const type = this.#valueType(hook.typeArgument, initialValue, hook.call, "useState", DiagnosticCode.UnsupportedStateType);
+          const type = this.#stateType(hook.typeArgument, initialValue, hook.call);
           if (!type) continue;
           state.push({ kind: "State", id, name: hook.valueName, type, initialValue });
           this.#stateTypes.set(id, type);
@@ -501,7 +511,43 @@ class ComponentLowering implements LoweringContext {
     return true;
   }
 
-  /** The type of a `useState` / `useRef` value: its type argument, or inferred from a literal initial value. */
+  /**
+   * The type of a `useState` value: its type argument (a primitive, an array,
+   * or any type written in this file, such as a record interface), or
+   * inferred from the initial value. An array or record needs the type
+   * argument unless it comes from a prop, as in TypeScript, where `[]` alone
+   * would be `never[]`.
+   */
+  #stateType(typeArgument: Node | null, initial: ExprIR, at: Node): TypeIR | null {
+    if (typeArgument) return this.#typeFromNode(typeArgument);
+    const primitive = this.#inferType(initial);
+    if (primitive) return { kind: "Primitive", name: primitive };
+    if (initial.kind === "PropRead") {
+      const decl = this.#propDecls.find((p) => p.name === initial.name);
+      if (decl?.role === "value") return propTypeToType(decl.type);
+    }
+    const code = DiagnosticCode.UnsupportedStateType;
+    if (initial.kind === "ArrayLiteral" || initial.kind === "ObjectLiteral") {
+      this.#error(code, `An ${initial.kind === "ArrayLiteral" ? "array" : "object"} state needs its type: \`useState<${initial.kind === "ArrayLiteral" ? "EnemyData[]" : "EnemyData"}>(…)\`, with the type declared in this file.`, at);
+    } else {
+      this.#error(code, "Cannot infer the type; use a number/string/boolean literal, a prop, or `useState<T>(...)`.", at);
+    }
+    return null;
+  }
+
+  /** A type argument: primitives and arrays are understood; anything else is kept as source text for the type-check. */
+  #typeFromNode(node: Node): TypeIR {
+    const t = unwrapTypeParens(node);
+    switch (t.kind) {
+      case SyntaxKind.NumberKeyword: return { kind: "Primitive", name: "number" };
+      case SyntaxKind.StringKeyword: return { kind: "Primitive", name: "string" };
+      case SyntaxKind.BooleanKeyword: return { kind: "Primitive", name: "boolean" };
+    }
+    if (isArrayTypeNode(t)) return { kind: "Array", element: this.#typeFromNode(t.elementType) };
+    return { kind: "SourceType", text: t.getText(this.#sourceFile) };
+  }
+
+  /** The type of a `useRef` value: its type argument, or inferred from a literal initial value. Refs hold primitives only. */
   #valueType(typeArgument: Node | null, initial: ExprIR, at: Node, hook: string, code: CompilerDiagnostic["code"]): ValueType | null {
     if (typeArgument) {
       switch (typeArgument.kind) {
@@ -903,8 +949,74 @@ class ComponentLowering implements LoweringContext {
     }
     if (isPropertyAccessExpression(node)) return this.#lowerPropertyRead(node);
     if (isCallExpression(node)) return this.#lowerCall(node);
+    if (isArrayLiteralExpression(node)) {
+      const elements: ArrayElementIR[] = [];
+      for (const element of node.elements) {
+        const spread = isSpreadElement(element);
+        const value = this.#lowerExpression(spread ? element.expression : element);
+        if (!value) return null;
+        elements.push({ spread, value });
+      }
+      return { kind: "ArrayLiteral", elements };
+    }
+    if (isObjectLiteralExpression(node)) return this.#lowerObjectLiteral(node);
+    if (isArrowFunction(node)) {
+      this.#error(
+        DiagnosticCode.UnsupportedExpression,
+        "An arrow function can only be a callback prop (`onX={() => …}`), a state updater (`setX((x) => …)`) or the argument of an array method (`items.filter((e) => …)`).",
+        node,
+      );
+      return null;
+    }
     this.#error(DiagnosticCode.UnsupportedExpression, `Unsupported expression (${SyntaxKind[node.kind]}).`, node);
     return null;
+  }
+
+  /** `{ id, speed: 2, ...e }`: plain, shorthand and spread properties. */
+  #lowerObjectLiteral(node: ObjectLiteralExpression): ExprIR | null {
+    const properties: ObjectPropertyIR[] = [];
+    let ok = true;
+    for (const property of node.properties) {
+      let entry: ObjectPropertyIR | null = null;
+      if (isPropertyAssignment(property) && (isIdentifier(property.name) || isStringLiteral(property.name))) {
+        const value = this.#lowerExpression(property.initializer);
+        entry = value && { kind: "Property", name: property.name.text, value };
+      } else if (isShorthandPropertyAssignment(property) && isIdentifier(property.name) && !property.objectAssignmentInitializer) {
+        const value = this.#lowerExpression(property.name);
+        entry = value && { kind: "Property", name: property.name.text, value };
+      } else if (isSpreadAssignment(property)) {
+        const value = this.#lowerExpression(property.expression);
+        entry = value && { kind: "Spread", value };
+      } else {
+        this.#error(DiagnosticCode.UnsupportedExpression, "Object properties must be `name: value`, `name` (shorthand) or `...spread`; no methods, getters or computed names.", property);
+      }
+      if (entry) properties.push(entry);
+      else ok = false;
+    }
+    return ok ? { kind: "ObjectLiteral", properties } : null;
+  }
+
+  /**
+   * The callback of an array method: an expression-bodied arrow, lowered in
+   * its own scope. Its parameters are typed by the array, so they carry no
+   * annotation. A block body could set state or call callbacks while the
+   * array is being walked, so it is not allowed.
+   */
+  #lowerArrow(node: Expression, method: string): ExprIR | null {
+    const fn = unwrapParens(node);
+    if (!isArrowFunction(fn)) {
+      this.#error(DiagnosticCode.UnsupportedExpression, `\`${method}\` takes an inline arrow function: \`items.${method}((item) => …)\`.`, node);
+      return null;
+    }
+    if (isBlock(fn.body)) {
+      this.#error(DiagnosticCode.UnsupportedExpression, `The \`${method}\` callback must be a single expression (\`(item) => item.alive\`), not a block.`, fn.body);
+      return null;
+    }
+    const lowered = lowerFunction(this, fn, { paramTypes: "contextual", returns: "value", what: `${method} callback` });
+    if (!lowered) return null;
+    const only = lowered.body[0];
+    if (lowered.body.length !== 1 || only?.kind !== "Return" || !only.value) throw new Error("expression-bodied arrow lowered to statements");
+    return { kind: "Arrow", params: lowered.params, body: only.value };
   }
 
   /** `ref.current`, or `param.name` where `param` is a handler parameter of a runtime handle type. */
@@ -931,14 +1043,24 @@ class ComponentLowering implements LoweringContext {
       }
       return { kind: "RefRead", ref };
     }
-    const receiver = this.#lowerHandle(node.expression);
-    if (!receiver) return null;
+    const receiver = this.#handleParam(node.expression);
     const name = node.name.text;
-    if (!this.#manifest.handleTypes[receiver.type]!.properties.includes(name)) {
-      this.#error(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no readable property '${name}'.`, node.name);
+    if (receiver) {
+      if (!this.#manifest.handleTypes[receiver.type]!.properties.includes(name)) {
+        this.#error(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no readable property '${name}'.`, node.name);
+        return null;
+      }
+      return { kind: "PropertyRead", object: receiver.read, name };
+    }
+    // A member of a value (`e.id`, `enemies.length`): the type-check of the generated code validates it.
+    // Numbers and booleans have no members worth reading, so those are caught here.
+    const primitive = this.#knownPrimitive(node.expression);
+    if (primitive === "number" || primitive === "boolean") {
+      this.#error(DiagnosticCode.UnsupportedExpression, `'${node.expression.getText(this.#sourceFile)}' is a ${primitive}; it has no member '${name}'.`, node.name);
       return null;
     }
-    return { kind: "PropertyRead", object: receiver.read, name };
+    const object = this.#lowerExpression(node.expression);
+    return object && { kind: "MemberRead", object, name, optional: node.questionDotToken !== undefined };
   }
 
   /**
@@ -1016,6 +1138,8 @@ class ComponentLowering implements LoweringContext {
     } else if (isIdentifier(callee) && this.#manifest.functions[callee.text] !== undefined && !this.scope.has(callee.text)) {
       this.#requireImport(callee.text, callee);
       result = { callee: { kind: "Function", name: callee.text }, expected: this.#manifest.functions[callee.text]!, label: callee.text };
+    } else if (isPropertyAccessExpression(callee) && !this.#handleParam(callee.expression)) {
+      return this.#lowerArrayMethod(node, callee);
     } else if (isPropertyAccessExpression(callee)) {
       const receiver = this.#lowerHandle(callee.expression);
       if (!receiver) return null;
@@ -1042,6 +1166,67 @@ class ComponentLowering implements LoweringContext {
       args.push(lowered);
     }
     return { kind: "Call", callee: result.callee, args };
+  }
+
+  /** `enemies.filter((e) => e.alive)`: an allowlisted array method that does not mutate its receiver. */
+  #lowerArrayMethod(node: CallExpression, callee: PropertyAccessExpression): ExprIR | null {
+    const name = callee.name.text;
+    const code = DiagnosticCode.UnsupportedExpression;
+    if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
+      this.#error(
+        code,
+        `\`${name}\` changes the array in place, which never re-renders (a setter only renders when it gets a new array). Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}.`,
+        callee.name,
+      );
+      return null;
+    }
+    if (!Object.hasOwn(ARRAY_METHODS, name)) {
+      this.#error(
+        code,
+        `'${name}' is not an allowlisted call. Supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, runtime functions from the manifest, methods of handler parameters, and the array methods ${Object.keys(ARRAY_METHODS).join(", ")}.`,
+        callee.name,
+      );
+      return null;
+    }
+    if (callee.questionDotToken || node.questionDotToken) {
+      this.#error(code, `Optional calls of array methods are not supported: check the value first.`, node);
+      return null;
+    }
+    const method = ARRAY_METHODS[name as ArrayMethodName];
+    const [min, max] = method.args;
+    const count = node.arguments.length;
+    if (count < min || count > max) {
+      const expected = min === max ? `${min}` : max === Infinity ? `at least ${min}` : `${min} to ${max}`;
+      this.#error(code, `\`${name}\` expects ${expected} argument(s).`, node);
+      return null;
+    }
+    const receiver = this.#lowerExpression(callee.expression);
+    if (!receiver) return null;
+    const args: ExprIR[] = [];
+    for (const [i, argument] of node.arguments.entries()) {
+      const lowered = method.callback && i === 0 ? this.#lowerArrow(argument, name) : this.#lowerExpression(argument);
+      if (!lowered) return null;
+      args.push(lowered);
+    }
+    return { kind: "Call", callee: { kind: "ArrayMethod", receiver, name: name as ArrayMethodName }, args };
+  }
+
+  /** The primitive type of a name, if it is a parameter or state slot whose type is known to be primitive. */
+  #knownPrimitive(node: Expression): ValueType | null {
+    const target = unwrapParens(node);
+    const binding = isIdentifier(target) ? this.scope.get(target.text) : undefined;
+    let type: TypeIR | undefined;
+    if (binding?.kind === "param") type = binding.type;
+    else if (binding?.kind === "state") type = this.#stateTypes.get(binding.id);
+    return type?.kind === "Primitive" && type.name !== "void" ? type.name : null;
+  }
+
+  /** The handler parameter of a runtime handle type (`input`) that `node` names, or null (no diagnostic). */
+  #handleParam(node: Expression): { type: string; read: ParamReadIR } | null {
+    const target = unwrapParens(node);
+    const binding = isIdentifier(target) ? this.scope.get(target.text) : undefined;
+    if (binding?.kind !== "param" || binding.type.kind !== "Named") return null;
+    return { type: binding.type.name, read: { kind: "ParamRead", param: binding.id, name: binding.name } };
   }
 
   /** Resolves an expression that must be a handler parameter of a named runtime type. */
@@ -1085,7 +1270,7 @@ class ComponentLowering implements LoweringContext {
     return this.#lowerExpression(node);
   }
 
-  stateType(state: StateId): ValueType {
+  stateType(state: StateId): TypeIR {
     const type = this.#stateTypes.get(state);
     if (!type) throw new Error(`Unknown state ${state}`);
     return type;
@@ -1122,6 +1307,21 @@ class ComponentLowering implements LoweringContext {
   #error(code: CompilerDiagnostic["code"], message: string, node: Node): void {
     this.#errorCount++;
     this.#diagnostics.push(error(code, message, this.#span(node)));
+  }
+}
+
+/** A declared prop's type as a state type (`useState(items)` takes the prop's type). */
+function propTypeToType(type: PropTypeIR): TypeIR | null {
+  switch (type.kind) {
+    case "Primitive": return { kind: "Primitive", name: type.name };
+    case "Literals": return { kind: "SourceType", text: type.values.map((v) => JSON.stringify(v)).join(" | ") };
+    case "Array": {
+      const element = propTypeToType(type.element);
+      return element && { kind: "Array", element };
+    }
+    case "Function": return null;
+    case "SourceText": return { kind: "SourceType", text: type.text };
+    default: return assertNever(type, "prop type");
   }
 }
 

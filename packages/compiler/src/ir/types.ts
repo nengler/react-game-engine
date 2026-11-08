@@ -156,11 +156,31 @@ export function isHandlerHook(hook: HookIR): hook is HandlerHookIR {
 // Types
 // ---------------------------------------------------------------------------
 
-/** Value types the compiler can currently infer for state. */
+/** Primitive value types (what a ref holds, and what the compiler infers from a literal). */
 export type ValueType = "number" | "string" | "boolean";
 
-/** The types the IR can name. `ValueType` is the subset usable for state. */
-export type TypeIR = PrimitiveTypeIR | NamedTypeIR | ContextualTypeIR;
+/**
+ * The types the IR can name. State is a primitive, an `Array`, or a
+ * `SourceType` (a type written in the component's file, such as a record
+ * interface); refs hold primitives only.
+ */
+export type TypeIR = PrimitiveTypeIR | NamedTypeIR | ContextualTypeIR | ArrayTypeIR | SourceTypeIR;
+
+/** `T[]`. */
+export interface ArrayTypeIR {
+  readonly kind: "Array";
+  readonly element: TypeIR;
+}
+
+/**
+ * A type written in the source (`EnemyData`, `{ x: number }`, `"a" | "b"`),
+ * copied into the generated code as text. The type declarations of the file
+ * are copied too, so the type-check resolves it.
+ */
+export interface SourceTypeIR {
+  readonly kind: "SourceType";
+  readonly text: string;
+}
 
 /**
  * No annotation: the parameter's type comes from where the function is used.
@@ -273,7 +293,8 @@ export interface StateIR {
   readonly id: StateId;
   /** Field name on the generated class. */
   readonly name: string;
-  readonly type: ValueType;
+  /** A primitive, an array (`useState<EnemyData[]>([])`) or a source type. */
+  readonly type: TypeIR;
   /** Must not depend on any state. */
   readonly initialValue: ExprIR;
 }
@@ -445,6 +466,10 @@ export type ExprIR =
   | PropertyReadIR
   | PropReadIR
   | RefReadIR
+  | MemberReadIR
+  | ArrayLiteralIR
+  | ObjectLiteralIR
+  | ArrowIR
   | CallIR
   | TemplateLiteralIR
   | UnaryExprIR
@@ -508,6 +533,84 @@ export interface RefReadIR {
   readonly ref: RefId;
 }
 
+/**
+ * `e.id`, `enemies.length`, `found?.hp`: a member of a value (a record, an
+ * array). The compiler does not know the value's type; the type-check of the
+ * generated code does. Members of runtime handle parameters are
+ * `PropertyRead`, which the manifest checks.
+ */
+export interface MemberReadIR {
+  readonly kind: "MemberRead";
+  readonly object: ExprIR;
+  readonly name: string;
+  /** `?.` */
+  readonly optional: boolean;
+}
+
+/** `[a, ...rest]`. */
+export interface ArrayLiteralIR {
+  readonly kind: "ArrayLiteral";
+  readonly elements: readonly ArrayElementIR[];
+}
+
+export interface ArrayElementIR {
+  /** `...value`. */
+  readonly spread: boolean;
+  readonly value: ExprIR;
+}
+
+/** `{ id, speed: 2, ...e }`. Later properties override earlier ones, as in JS. */
+export interface ObjectLiteralIR {
+  readonly kind: "ObjectLiteral";
+  readonly properties: readonly ObjectPropertyIR[];
+}
+
+export type ObjectPropertyIR =
+  | { readonly kind: "Property"; readonly name: string; readonly value: ExprIR }
+  | { readonly kind: "Spread"; readonly value: ExprIR };
+
+/**
+ * `(e) => e.id !== id`: an expression-bodied arrow, only valid as the
+ * argument of an allowlisted array method, which calls it synchronously (it
+ * never escapes). Parameters are `Contextual`: the array's element type
+ * provides them.
+ */
+export interface ArrowIR {
+  readonly kind: "Arrow";
+  readonly params: readonly ParamIR[];
+  readonly body: ExprIR;
+}
+
+/** Array methods handler code may call. None mutates its receiver (state updates must be immutable). */
+export const ARRAY_METHODS = {
+  filter: { args: [1, 1], callback: true },
+  map: { args: [1, 1], callback: true },
+  some: { args: [1, 1], callback: true },
+  every: { args: [1, 1], callback: true },
+  find: { args: [1, 1], callback: true },
+  findIndex: { args: [1, 1], callback: true },
+  includes: { args: [1, 1], callback: false },
+  indexOf: { args: [1, 1], callback: false },
+  slice: { args: [0, 2], callback: false },
+  concat: { args: [1, Infinity], callback: false },
+} as const satisfies Record<string, { readonly args: readonly [number, number]; readonly callback: boolean }>;
+
+export type ArrayMethodName = keyof typeof ARRAY_METHODS;
+
+/** Array methods that change the array in place: reported with the immutable alternative. */
+export const MUTATING_ARRAY_METHODS: Readonly<Record<string, string>> = {
+  push: "`setItems([...items, item])`",
+  unshift: "`setItems([item, ...items])`",
+  pop: "`setItems(items.slice(0, -1))`",
+  shift: "`setItems(items.slice(1))`",
+  splice: "`filter`, `slice` and spreads",
+  sort: "a sorted copy built from `slice()` (sorting is not supported yet)",
+  reverse: "a reversed copy (not supported yet)",
+  fill: "`map`",
+  copyWithin: "`map`",
+  forEach: "`map`, `filter` or `some` (handler code builds new arrays rather than looping)",
+};
+
 /** A call to a fixed allowlist (`Math.*`, `clamp`) or a method of a runtime handle parameter. */
 export interface CallIR {
   readonly kind: "Call";
@@ -518,6 +621,8 @@ export interface CallIR {
 export type CalleeIR =
   | { readonly kind: "Function"; readonly name: string }
   | { readonly kind: "Method"; readonly receiver: ParamReadIR; readonly name: string }
+  /** `enemies.filter((e) => …)`: an allowlisted, non-mutating array method (`ARRAY_METHODS`) on any value. */
+  | { readonly kind: "ArrayMethod"; readonly receiver: ExprIR; readonly name: ArrayMethodName }
   /** A callback prop: `onDefeated()` or `onDefeated?.()`. Argument counts and types are left to the type-check. */
   | { readonly kind: "Prop"; readonly name: string; readonly optional: boolean };
 
@@ -578,9 +683,16 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "PropRead":
       return [];
     case "PropertyRead":
+    case "MemberRead":
       return [e.object];
+    case "ArrayLiteral":
+      return e.elements.map((el) => el.value);
+    case "ObjectLiteral":
+      return e.properties.map((p) => p.value);
+    case "Arrow":
+      return [e.body];
     case "Call":
-      return e.callee.kind === "Method" ? [e.callee.receiver, ...e.args] : e.args;
+      return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" ? [e.callee.receiver, ...e.args] : e.args;
     case "TemplateLiteral":
       return e.expressions;
     case "Unary":

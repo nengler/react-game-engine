@@ -8,6 +8,11 @@ export interface EnemyProps {
   onDefeated?: () => void;
 }
 
+export interface Defeat {
+  tint: "red" | "blue";
+  wave: number;
+}
+
 export class Enemy extends Entity<EnemyProps> {
   hp: number = 3;
   #hpNext: number = this.hp;
@@ -56,10 +61,16 @@ export class Level extends Entity {
   #waveNext: number = this.wave;
   score: number = 0;
   #scoreNext: number = this.score;
-  bossVisible: boolean = false;
-  #bossVisibleNext: boolean = this.bossVisible;
-  readonly enemy: Enemy = new Enemy({ speed: this.wave, onDefeated: () => { this.setScore((score: number) => score + 1); } });
-  readonly enemy2: Enemy = new Enemy({ speed: this.wave * 2, tint: "blue", onDefeated: () => { this.setScore((score: number) => score + 5); } });
+  defeats: Defeat[] = [];
+  #defeatsNext: Defeat[] = this.defeats;
+  readonly enemy: Enemy = new Enemy({ speed: this.wave, onDefeated: () => {
+    this.setScore((score: number) => score + 1);
+    this.setDefeats((list: Defeat[]) => [...list, { tint: "red", wave: this.wave }]);
+  } });
+  readonly enemy2: Enemy = new Enemy({ speed: this.wave * 2, tint: "blue", onDefeated: () => {
+    this.setScore((score: number) => score + 5);
+    this.setDefeats((list: Defeat[]) => [...list, { tint: "blue", wave: this.wave }]);
+  } });
   enemy3: Enemy | null = null;
   readonly coin: Coin = new Coin({ value: this.score });
   readonly trail: Trail = new Trail({ value: this.wave });
@@ -96,17 +107,17 @@ export class Level extends Entity {
     this.markDirty();
   }
 
-  setBossVisible(value: boolean | ((previous: boolean) => boolean)): void {
-    const next = typeof value === "function" ? value(this.#bossVisibleNext) : value;
-    if (next === this.#bossVisibleNext) return;
-    this.#bossVisibleNext = next;
+  setDefeats(value: Defeat[] | ((previous: Defeat[]) => Defeat[])): void {
+    const next = typeof value === "function" ? value(this.#defeatsNext) : value;
+    if (next === this.#defeatsNext) return;
+    this.#defeatsNext = next;
     this.markDirty();
   }
 
   override commitState(): void {
     this.wave = this.#waveNext;
     this.score = this.#scoreNext;
-    this.bossVisible = this.#bossVisibleNext;
+    this.defeats = this.#defeatsNext;
   }
 
   override render(): void {
@@ -125,7 +136,7 @@ export class Level extends Entity {
     }
     this.coin.updateProps({ value: this.score });
     this.trail.updateProps({ value: this.wave });
-    if (this.bossVisible) {
+    if (this.defeats.some((d) => d.tint === "blue") && (this.defeats.length >= 2)) {
       if (this.entity === null) {
         this.entity = new Entity({ name: "Boss" });
         this.sprite = new Sprite({ image: (this.wave > 5) ? "boss-enraged.png" : "boss.png" });

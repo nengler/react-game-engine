@@ -106,6 +106,8 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 
 **M5a: records and arrays in handler code.**
 
+*Status.* Implemented on `claude/pensive-faraday-lnmtga`, described in [DESIGN.md](DESIGN.md#arrays-and-records). It differs from the sketch below in four ways: object literals take spreads (`{ ...e, hp: e.hp - 1 }` is the usual record update, and it costs nothing to generate); the allowlist also has `every`, `findIndex`, `includes` and `indexOf`; array-method callbacks must be expression-bodied (a block could set state while the array is walked); and the arrow is its own `ExprIR` `Arrow { params, body }` rather than a `FunctionIR`, since it is a single expression. State initialised from an array prop also infers its type from the prop.
+
 - New `ExprIR` variants:
   - `ArrayLiteral` with spread elements
   - `ObjectLiteral` with plain `key: value` and shorthand properties (no spread at first)
@@ -188,5 +190,6 @@ The runtime stays a mock: no rendering or asset loading.
 | Structured `PropTypeIR` alongside the copied text | M4 IR, used by M6 | Lets M6 build a data schema without the TypeScript checker; unrepresentable types become code-only props |
 | `transform` on a component element writes `placement`, which composes with the child's own `transform` | M4 runtime, M6 | Parent placement and the child's own movement never conflict, and scenes place any prefab the same way |
 | Split M5 into M5a (records and arrays in handlers) and M5b (keyed list) | M5 | Array state cannot be updated with today's handler language |
+| Object spread, `every`/`findIndex`/`includes`/`indexOf`, and expression-bodied array callbacks in M5a | M5a | Spread is the usual record update; the extra methods are non-mutating; a block callback could set state mid-walk |
 | `(slot, order)` child ordering and `queueReorder` in place of `queueInsertChild` / `queueMoveChild` | M5 runtime | Extends the existing child slot instead of adding a second ordering mechanism |
 | Registry types via `ConstructorParameters<typeof X>[0]` | M6 codegen | Props interfaces do not need to be exported |
