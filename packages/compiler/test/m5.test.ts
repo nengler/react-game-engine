@@ -8,7 +8,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Entity, Sprite, World, type InputState } from "@rge/runtime";
 import { DiagnosticCode, type ComponentIR, type ExprIR, type StatementIR } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, stripSpans, typeCheck } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, stripSpans, typeCheck, withAuthoringImports as withAuthoring } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -384,5 +384,334 @@ describe("M5a: diagnostics", () => {
     assert.deepEqual(codes(withHandler(`const [n, setN] = useState(0);`, `setN(n.x);`)), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes(withHandler(`const [b, setB] = useState(false);`, `setB(b.x);`)), [DiagnosticCode.UnsupportedExpression]);
     assert.doesNotThrow(() => compile(withHandler(`const [s, setS] = useState("ab"); const [n, setN] = useState(0);`, `setN(s.length);`)), "a string's length is fine");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M5b: keyed lists
+// ---------------------------------------------------------------------------
+
+const PACK = `
+interface EnemyData {
+  id: string;
+  speed: number;
+}
+
+interface EnemyProps {
+  speed: number;
+  onDefeated?: () => void;
+}
+
+function Enemy({ speed, onDefeated }: EnemyProps) {
+  return <Entity name="Enemy" transform={{ x: speed }} />;
+}
+
+function Pack() {
+  const [enemies, setEnemies] = useState<EnemyData[]>([]);
+  const [defeated, setDefeated] = useState("");
+  const [showBoss, setShowBoss] = useState(false);
+  return (
+    <Entity name="Pack">
+      <Sprite image="bg.png" />
+      {enemies.map((e) => (
+        <Enemy
+          key={e.id}
+          speed={e.speed}
+          onDefeated={() => {
+            setDefeated(\`\${e.id}@\${e.speed}\`);
+            setEnemies(enemies.filter((x) => x.id !== e.id));
+          }}
+        />
+      ))}
+      <Sprite image="fg.png" />
+      {showBoss && (
+        <Entity name="Boss">
+          {enemies.filter((e) => e.speed > 5).map((e, i) => <Sprite key={e.id} image={e.id + ".png"} transform={{ x: i * 10 }} />)}
+        </Entity>
+      )}
+    </Entity>
+  );
+}
+`;
+
+interface EnemyBInstance extends Entity {
+  props: { speed: number; onDefeated?: () => void };
+}
+interface PackInstance extends Entity {
+  enemies: EnemyData2[];
+  defeated: string;
+  setEnemies(value: EnemyData2[]): void;
+  setShowBoss(value: boolean): void;
+  readonly enemyItems: Map<string | number, EnemyBInstance>;
+  readonly sprite: Sprite;
+  readonly sprite2: Sprite;
+  entity: Entity | null;
+  readonly sprite3Items: Map<string | number, Sprite>;
+}
+interface EnemyData2 {
+  id: string;
+  speed: number;
+}
+
+let Pack: new () => PackInstance;
+
+before(async () => {
+  ({ Pack } = await load<{ Pack: typeof Pack }>(compile(PACK, "Pack.tsx")));
+});
+
+/** A mounted Pack holding `enemies`. */
+function pack(enemies: EnemyData2[] = []): { world: World; pack: PackInstance } {
+  const world = new World();
+  const p = new Pack();
+  world.mount(p);
+  p.setEnemies(enemies);
+  world.flush();
+  return { world, pack: p };
+}
+
+const ids = (p: PackInstance): string[] => p.children.map((c) => (c instanceof Sprite ? c.image : `${(c as EnemyBInstance).props.speed}`));
+
+describe("M5b: IR shape", () => {
+  it("lowers a map over state to a KeyedListChild", () => {
+    const c = component(PACK, "Pack");
+    const list = c.root.children[1]!;
+    assert.equal(list.kind, "KeyedListChild");
+    if (list.kind !== "KeyedListChild") return;
+    assert.deepEqual(list.source, { kind: "StateRead", state: "Pack.enemies" });
+    assert.deepEqual(list.dependencies, [{ kind: "State", state: "Pack.enemies" }]);
+    assert.equal(list.item.name, "e");
+    assert.equal(list.index, null);
+    assert.deepEqual(list.key, { kind: "MemberRead", object: { kind: "ParamRead", param: list.item.id, name: "e" }, name: "id", optional: false });
+    assert.equal(list.element.fieldName, "enemy");
+    const speed = list.element.props.find((p) => p.name === "speed");
+    assert.deepEqual(speed && speed.kind === "DynamicProp" && speed.dependencies, [{ kind: "Item" }], "a prop that reads the item is re-applied per item");
+    assert.equal(list.element.props.find((p) => p.name === "onDefeated")?.kind, "CallbackProp");
+  });
+
+  it("takes a filtered source and an index", () => {
+    const c = component(PACK, "Pack");
+    const boss = c.root.children[3]!.element;
+    const list = boss.children[0]!;
+    assert.ok(list.kind === "KeyedListChild");
+    assert.equal(list.source.kind, "Call");
+    assert.equal(list.index?.name, "i");
+    const x = list.element.transform.find((p) => p.name === "x");
+    assert.deepEqual(x?.kind === "DynamicProp" && x.dependencies, [{ kind: "Item" }]);
+  });
+
+  it("takes a prop as the source", () => {
+    const c = component(
+      `interface Item { id: string }
+interface P { items: Item[] }
+function C({ items }: P) {
+  return <Entity name="C">{items.map((it) => <Sprite key={it.id} image={it.id} />)}</Entity>;
+}`,
+      "C",
+    );
+    const list = c.root.children[0]!;
+    assert.ok(list.kind === "KeyedListChild");
+    assert.deepEqual(list.dependencies, [{ kind: "Prop", name: "items" }]);
+  });
+});
+
+describe("M5b: generated code", () => {
+  it("keeps the instances in a map and the key order in a private field", () => {
+    const { code } = compile(PACK, "Pack.tsx");
+    assert.match(code, /readonly enemyItems: Map<string \| number, Enemy> = new Map\(\);/);
+    assert.match(code, /#enemyOrder: \(string \| number\)\[\] = \[\];/);
+    assert.match(code, /#enemyRecords: Map<string \| number, Pack\["enemies"\]\[number\]> = new Map\(\);/, "a callback reads the item");
+    assert.doesNotMatch(code, /#sprite3Records/, "no callback reads the item: no records");
+  });
+
+  it("checks keys first, then updates, adds at (slot, position), removes and reorders", () => {
+    const { code } = compile(PACK, "Pack.tsx");
+    assert.match(code, /const \$keys = \$list\.map\(\(e\) => e\.id\);/);
+    assert.match(code, /throw new Error\("Duplicate key " \+ JSON\.stringify\(\$key\) \+ " in the <Enemy> list of Pack\."\)/);
+    assert.match(code, /\$parent\.queueAddChild\(\$item, 1, \$n\);/);
+    assert.match(code, /\$item\.updateProps\(\{ speed: e\.speed \}\);/);
+    assert.match(code, /\$parent\.queueRemoveChild\(\$item\);/);
+    assert.match(code, /\$parent\.queueReorder\(1, \$keys\.map\(\(\$k\) => this\.enemyItems\.get\(\$k\)!\)\);/);
+    assert.match(code, /this\.addChild\(this\.sprite2, 2\);/, "static siblings get slots");
+  });
+
+  it("reads the current item inside a callback, by key", () => {
+    const { code } = compile(PACK, "Pack.tsx");
+    assert.match(code, /this\.setDefeated\(`\$\{this\.#enemyRecords\.get\(\$key\)!\.id\}@\$\{this\.#enemyRecords\.get\(\$key\)!\.speed\}`\);/);
+    assert.match(code, /this\.enemies\.filter\(\(x\) => x\.id !== this\.#enemyRecords\.get\(\$key\)!\.id\)/);
+  });
+
+  it("empties a list when its conditional subtree unmounts", () => {
+    const { code } = compile(PACK, "Pack.tsx");
+    assert.match(code, /this\.entity = null;\n\s+this\.sprite3Items\.clear\(\);\n\s+this\.#sprite3Order = \[\];/);
+  });
+
+  it("type-checks the generated module", () => {
+    assert.deepEqual(typeCheck(compile(PACK, "Pack.tsx")), []);
+  });
+
+  it("type-checks authored source with a list", () => {
+    const source = `import { useState, Entity, Sprite } from "@rge/runtime/jsx";
+interface Item { id: string; n: number }
+function C() {
+  const [items, setItems] = useState<Item[]>([]);
+  return <Entity name="C">{items.map((e, i) => <Sprite key={e.id} image={e.id} transform={{ x: i * e.n }} />)}</Entity>;
+}`;
+    assert.ok(getCompiler().compile("C.tsx", source).ok);
+    assert.deepEqual(getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M5bSource.tsx`, text: source }]), []);
+  });
+});
+
+describe("M5b: runtime behaviour", () => {
+  it("adds items by key between the static siblings", () => {
+    const { pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }]);
+    assert.deepEqual(ids(p), ["bg.png", "1", "2", "fg.png"]);
+    assert.deepEqual([...p.enemyItems.keys()], ["a", "b"]);
+  });
+
+  it("updates an item in place; an unchanged item keeps its identity and is not re-rendered", () => {
+    const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }]);
+    const [a, b] = [p.enemyItems.get("a")!, p.enemyItems.get("b")!];
+    const renders = { a: 0, b: 0 };
+    for (const [name, item] of [["a", a], ["b", b]] as const) {
+      const render = item.render.bind(item);
+      item.render = () => { renders[name]++; render(); };
+    }
+    p.setEnemies([{ id: "a", speed: 1 }, { id: "b", speed: 5 }]);
+    assert.equal(world.flush(), 2, "the pack and the changed item render once each");
+    assert.deepEqual(renders, { a: 0, b: 1 });
+    assert.equal(p.enemyItems.get("a"), a);
+    assert.equal(p.enemyItems.get("b"), b);
+    assert.equal(b.props.speed, 5);
+    assert.equal(b.transform.x, 5, "the item's own JSX followed its prop");
+  });
+
+  it("removes items whose key is gone", () => {
+    const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }, { id: "c", speed: 3 }]);
+    const b = p.enemyItems.get("b")!;
+    p.setEnemies([{ id: "a", speed: 1 }, { id: "c", speed: 3 }]);
+    world.flush();
+    assert.deepEqual(ids(p), ["bg.png", "1", "3", "fg.png"]);
+    assert.equal(b.parent, null);
+    assert.equal(b.world, null);
+    assert.equal(p.enemyItems.has("b"), false);
+  });
+
+  it("reorders by key, keeping instances, with static siblings in place", () => {
+    const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }, { id: "c", speed: 3 }]);
+    const before = [...p.enemyItems.values()];
+    p.setEnemies([{ id: "c", speed: 3 }, { id: "x", speed: 9 }, { id: "a", speed: 1 }, { id: "b", speed: 2 }]);
+    world.flush();
+    assert.deepEqual(ids(p), ["bg.png", "3", "9", "1", "2", "fg.png"]);
+    assert.ok(before.every((item) => [...p.enemyItems.values()].includes(item)), "same instances");
+    assert.equal(p.children[0], p.sprite);
+    assert.equal(p.children.at(-1), p.sprite2);
+  });
+
+  it("throws on a duplicate key without changing the list", () => {
+    const { world, pack: p } = pack([{ id: "a", speed: 1 }]);
+    const a = p.enemyItems.get("a");
+    p.setEnemies([{ id: "a", speed: 1 }, { id: "a", speed: 2 }]);
+    assert.throws(() => world.flush(), /Duplicate key "a" in the <Enemy> list of Pack/);
+    assert.deepEqual([...p.enemyItems.keys()], ["a"]);
+    assert.equal(p.enemyItems.get("a"), a);
+  });
+
+  it("gives a callback the item's current value, not the one it was created with", () => {
+    const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }]);
+    p.setEnemies([{ id: "a", speed: 7 }, { id: "b", speed: 2 }]);
+    world.flush();
+    p.enemyItems.get("a")!.props.onDefeated!();
+    world.flush();
+    assert.equal(p.defeated, "a@7");
+    assert.deepEqual(p.enemies, [{ id: "b", speed: 2 }]);
+    assert.deepEqual(ids(p), ["bg.png", "2", "fg.png"]);
+  });
+
+  it("renders a filtered list inside a conditional, and starts it afresh when it remounts", () => {
+    const { world, pack: p } = pack([{ id: "slow", speed: 1 }, { id: "fast", speed: 8 }, { id: "faster", speed: 9 }]);
+    p.setShowBoss(true);
+    world.flush();
+    const boss = p.entity!;
+    assert.deepEqual(boss.children.map((c) => [(c as Sprite).image, c.transform.x]), [["fast.png", 0], ["faster.png", 10]]);
+    p.setEnemies([{ id: "faster", speed: 9 }, { id: "fast", speed: 8 }]);
+    world.flush();
+    assert.deepEqual(boss.children.map((c) => [(c as Sprite).image, c.transform.x]), [["faster.png", 0], ["fast.png", 10]], "the index follows the order");
+    p.setShowBoss(false);
+    world.flush();
+    assert.equal(p.entity, null);
+    assert.equal(p.sprite3Items.size, 0);
+    p.setShowBoss(true);
+    world.flush();
+    assert.notEqual(p.entity, boss);
+    assert.deepEqual(p.entity!.children.map((c) => (c as Sprite).image), ["faster.png", "fast.png"]);
+  });
+
+  it("builds the list in the constructor from a prop", async () => {
+    const { C } = await load<{ C: new (props: { items: { id: string }[] }) => Entity }>(
+      compile(`interface Item { id: string }
+interface P { items: Item[] }
+function C({ items }: P) {
+  return <Entity name="C">{items.map((it) => <Sprite key={it.id} image={it.id} />)}</Entity>;
+}`),
+    );
+    const c = new C({ items: [{ id: "a" }, { id: "b" }] });
+    assert.deepEqual(c.children.map((s) => (s as Sprite).image), ["a", "b"]);
+  });
+});
+
+describe("M5b: diagnostics", () => {
+  const list = (item: string, state = `const [items, setItems] = useState<Item[]>([]);`) => `interface Item { id: string; n: number }
+function C() {
+  ${state}
+  return <Entity name="C">{${item}}</Entity>;
+}`;
+  const listCodes = (item: string, state?: string) => codes(list(item, state));
+
+  it("requires a key that reads the item", () => {
+    assert.deepEqual(listCodes(`items.map((e) => <Sprite image={e.id} />)`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.map((e) => <Sprite key="k" image={e.id} />)`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.map((e) => <Sprite key={1} image={e.id} />)`), [DiagnosticCode.InvalidList]);
+  });
+
+  it("warns about an index key, but compiles it", () => {
+    const result = getCompiler().compile("C.tsx", withAuthoring(list(`items.map((e, i) => <Sprite key={i} image={e.id} />)`)));
+    assert.ok(result.ok);
+    assert.deepEqual(result.diagnostics.map((d) => [d.code, d.severity]), [[DiagnosticCode.InvalidList, "warning"]]);
+  });
+
+  it("takes one element with no children from an inline arrow", () => {
+    assert.deepEqual(listCodes(`items.map((e) => e.n > 0 && <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.map((e) => <><Sprite key={e.id} image={e.id} /></>)`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.map((e) => { const x = 1; return <Sprite key={e.id} image={e.id} />; })`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.map((e) => <Entity key={e.id}><Sprite image={e.id} /></Entity>)`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.map()`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.map(({ id }) => <Sprite key={id} image={id} />)`), [DiagnosticCode.InvalidList]);
+    assert.doesNotThrow(() => compile(list(`items.map((e) => { return <Sprite key={e.id} image={e.id} />; })`)), "a block with one return is fine");
+  });
+
+  it("takes a state or prop array, optionally filtered", () => {
+    assert.deepEqual(listCodes(`[1, 2].map((e) => <Sprite key={e} image="a" />)`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.slice(1).map((e) => <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items?.map((e) => <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
+  });
+
+  it("does not let a callback read the index", () => {
+    const P = `interface Item { id: string; n: number }
+interface RowProps { onPick: () => void }
+function Row({ onPick }: RowProps) { return <Entity name="r" />; }
+function C() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [picked, setPicked] = useState(0);
+  return <Entity name="C">{items.map((e, i) => <Row key={e.id} onPick={() => setPicked(i)} />)}</Entity>;
+}`;
+    assert.deepEqual(codes(P), [DiagnosticCode.InvalidList]);
+  });
+
+  it("reserves $ names for generated code", () => {
+    assert.deepEqual(listCodes(`items.map(($e) => <Sprite key={$e.id} image={$e.id} />)`), [DiagnosticCode.InvalidHandler]);
+  });
+
+  it("still rejects key outside a list", () => {
+    assert.deepEqual(codes(`function A() { return <Entity name="A"><Sprite key="x" image="a" /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
   });
 });

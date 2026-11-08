@@ -27,6 +27,8 @@ export const DiagnosticCode = {
   InvalidTransformAttribute: "RGE1207",
   /** A component's props parameter or props type is not in the supported form, or a prop is passed the wrong way. */
   InvalidProps: "RGE1208",
+  /** A keyed list (`{items.map((e) => <X key={e.id} />)}`) that is not in the supported form, or a key on an element outside one. */
+  InvalidList: "RGE1209",
   UnsupportedExpression: "RGE1301",
   UnknownIdentifier: "RGE1302",
   NonConstantInitialState: "RGE1303",
@@ -56,6 +58,10 @@ export interface CompilerDiagnostic {
 
 export function error(code: DiagnosticCode, message: string, span: SourceSpan | null): CompilerDiagnostic {
   return { code, severity: "error", message, span };
+}
+
+export function warning(code: DiagnosticCode, message: string, span: SourceSpan | null): CompilerDiagnostic {
+  return { code, severity: "warning", message, span };
 }
 
 export function formatDiagnostic(d: CompilerDiagnostic): string {

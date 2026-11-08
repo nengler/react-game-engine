@@ -94,10 +94,12 @@ ignored):
   or a prop; an array or record needs its type (`useState<EnemyData[]>([])`,
   with `EnemyData` declared in the file) and is updated immutably. See
   "Arrays and records".
-* Children: elements, `{condition && <Element />}`, or
+* Children: elements, `{condition && <Element />}`,
   `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two
-  conditional children, on `condition` and `!condition`). Text children,
-  fragments, spread attributes and other expression children are rejected.
+  conditional children, on `condition` and `!condition`), or a keyed list
+  `{items.map((item) => <Element key={item.id} … />)}` (see "Keyed lists").
+  Text children, fragments, spread attributes and other expression children
+  are rejected.
 * Imports: components from `./Name.tsx`, and hooks, built-in elements and
   `clamp` from `@rge/runtime/jsx` (the manifest's `authoringModule`). Named
   imports only; any other import is `RGE1001`, and a name the entry point does
@@ -151,10 +153,11 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
   element, `CallbackProp` (an inline function, created once). A dependency is
   a state slot of this component or one of its props
   (`{ kind: "State" | "Prop" }`), so JSX that reads a prop updates when the
-  parent changes it.
-* Children are `StaticChild` (instantiated once, never recreated) or
-  `ConditionalChild` (created/destroyed when `condition` flips). The wrapper
-  is the extension point for `KeyedListChild` later.
+  parent changes it, or, inside a keyed list, the list's item
+  (`{ kind: "Item" }`).
+* Children are `StaticChild` (instantiated once, never recreated),
+  `ConditionalChild` (created/destroyed when `condition` flips) or
+  `KeyedListChild` (one instance per item, kept by key).
 * The root is a distinct `HostElementIR` (no field name, it *is* `this`), so
   "root element stored in a field" is unrepresentable.
 * Each `ElementIR` has a stable `id` (structural path, e.g. `Player/1`) and a
@@ -177,7 +180,7 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 | ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
 | ~~props between components~~ | done: `ComponentIR.props: PropDeclIR[]` and `propsType`, `IRModule.typeDeclarations`, `ExprIR` `PropRead`, `CalleeIR` `Prop`, `PropIR` `CallbackProp`, `DependencyIR`; see "Props and callbacks" |
 | ~~arrays and records in handlers (M5a)~~ | done: `TypeIR` `Array` / `SourceType` for state, `ExprIR` `ArrayLiteral`, `ObjectLiteral`, `MemberRead`, `Arrow`, `CalleeIR` `ArrayMethod`; see "Arrays and records" |
-| keyed lists (M5b) | `ChildIR` variant `KeyedListChild { source, item, index, key, element, dependencies }` |
+| ~~keyed lists (M5b)~~ | done: `ChildIR` `KeyedListChild { source, item, index, key, element, dependencies }`, `DependencyIR` `Item`; runtime `(slot, order)` and `queueReorder`; see "Keyed lists" |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
 
 ## Handlers
@@ -331,6 +334,104 @@ override onUpdate(dt: number): void {
 
 An arrow whose body is an object literal is parenthesised, in callbacks and in
 updaters (`setP((p: P) => ({ ...p, x: 1 }))`).
+
+## Keyed lists
+
+`{items.map((item) => <Element key={…} … />)}` keeps one instance of the
+element per item of an array, by key (M5b):
+
+```tsx
+const [enemies, setEnemies] = useState<EnemyData[]>([]);
+return (
+  <Entity name="Pack">
+    <Sprite image="bg.png" />
+    {enemies.map((e) => <Enemy key={e.id} speed={e.speed} onDefeated={() => remove(e.id)} />)}
+    <Sprite image="fg.png" />
+  </Entity>
+);
+```
+
+**Rules** (each `RGE1209` otherwise):
+
+* The source is a state or prop array, optionally followed by
+  `.filter((e) => …)` (a derived `const` that inlines to one counts).
+* `map` takes one inline arrow with the item and optionally the index as
+  plain names, returning exactly one element: an expression body, or a block
+  holding only `return <Element … />`. No conditionals, fragments or children
+  inside it; a richer item is a component.
+* The element has a `key` that reads the item. A key that reads only the
+  index compiles with a warning (instances then follow positions, not
+  identities); a key that reads neither is an error, since every item would
+  share it. `key` anywhere else is `RGE1203`.
+* A callback prop on the item may read the item but not the index, which
+  changes when items move.
+
+**IR.** `KeyedListChild { source, item, index, key, element, dependencies }`.
+`item` and `index` are `ParamIR`s with `Contextual` types (the array gives
+them), read as `ParamRead`, so `e.speed` is a `MemberRead` the type-check
+validates. The element's props and transform fields that read the item or
+index are `DynamicProp`s with an `Item` dependency; `dependencies` are what
+`source` reads. The element's `fieldName` names the list's fields.
+
+**Generated code.** Fields `enemyItems: Map<string | number, Enemy>` (public,
+by key) and `#enemyOrder` (the key order of the last render), plus
+`#enemyRecords` (each key's current item) when a callback reads the item.
+`render()` handles the list in its own block, with `$`-prefixed temporaries
+(author names may not start with `$`):
+
+```ts
+{
+  const $parent = this;
+  const $list = this.enemies;
+  const $keys = $list.map((e) => e.id);
+  const $seen = new Set<string | number>();
+  for (const $key of $keys) {                       // 1. every key first: a duplicate throws before anything changes
+    if ($seen.has($key)) throw new Error("Duplicate key " + JSON.stringify($key) + " in the <Enemy> list of Pack.");
+    $seen.add($key);
+  }
+  for (const [$n, e] of $list.entries()) {
+    const $key = $keys[$n]!;
+    let $item = this.enemyItems.get($key);
+    if ($item === undefined) {                      // 2. a new key: construct, queue at (slot, position)
+      $item = new Enemy({ speed: e.speed, onDefeated: () => { this.remove(this.#enemyRecords.get($key)!.id); } });
+      this.enemyItems.set($key, $item);
+      $parent.queueAddChild($item, 1, $n);
+    } else {                                        // 3. an existing key: update in place
+      $item.updateProps({ speed: e.speed });
+    }
+    this.#enemyRecords.set($key, e);
+  }
+  for (const [$key, $item] of this.enemyItems) {    // 4. keys that are gone
+    if (!$seen.has($key)) { $parent.queueRemoveChild($item); this.enemyItems.delete($key); this.#enemyRecords.delete($key); }
+  }
+  if ($keys.length !== this.#enemyOrder.length || $keys.some(($k, $i) => $k !== this.#enemyOrder[$i])) {
+    $parent.queueReorder(1, $keys.map(($k) => this.enemyItems.get($k)!));   // 5. only if the key sequence changed
+    this.#enemyOrder = $keys;
+  }
+}
+```
+
+* **Identity and renders.** An existing item gets `updateProps` with its
+  dynamic props; `applyProps` compares with `===`, so an item whose values did
+  not change is not marked dirty and does not render.
+* **Callbacks see the current item.** A callback prop is created once, with
+  the item's first value. Inside it, item reads are looked up by the item's
+  key in `#enemyRecords`, which every render refreshes, so after
+  `setEnemies` replaces a record under the same key the callback reads the
+  new one (as of the last render, like any state read).
+* **In a conditional subtree** the list's fields are emptied when the subtree
+  unmounts, so it is built afresh when it mounts again.
+* **Immutable updates** are what make the list re-render: see "Arrays and
+  records".
+
+**Runtime.** Children are sorted by `(slot, order)`: `addChild(child, slot,
+order = 0)` and `queueAddChild(child, slot, order)` insert after every sibling
+with a lower slot, or the same slot and a lower or equal order.
+`queueReorder(slot, children)` queues a new order: at commit each child's
+order becomes its index in `children` and the children are re-sorted (stably,
+so only that slot's range moves). Static siblings before and after the list
+keep their places because they have their own slots. Generated code queues
+removals and adds before the reorder.
 
 ## Transforms and refs
 
@@ -642,8 +743,9 @@ Decisions:
   conditional that mounts later lands between its source siblings instead of
   at the end. Children attached without a slot (`World.mount`, later scene
   loading) go after all slotted ones. Parents with only static children pass
-  no slot: appending in source order is already correct. Keyed lists (M5)
-  extend the slot with an order within it. The constructor runs `render()`
+  no slot: appending in source order is already correct. A keyed list's
+  items share the list's slot and are ordered within it (`(slot, order)`, see
+  "Keyed lists"). The constructor runs `render()`
   then `commitStructure()` so a freshly constructed object is complete.
 * The generated class extends the runtime `Entity` (not bare `GameObject`)
   because the root `<Entity>`'s props (e.g. `name`) belong to the instance.

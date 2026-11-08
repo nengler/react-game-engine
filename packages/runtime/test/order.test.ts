@@ -33,3 +33,55 @@ describe("child slots", () => {
     assert.equal(other.children[1], child);
   });
 });
+
+describe("keyed list order", () => {
+  it("orders children within a slot by order, between their slotted siblings", () => {
+    const parent = new GameObject();
+    const [before, a, b, c, after] = [new GameObject(), new GameObject(), new GameObject(), new GameObject(), new GameObject()];
+    parent.addChild(before, 0);
+    parent.addChild(after, 2);
+    parent.addChild(c, 1, 2);
+    parent.addChild(a, 1, 0);
+    parent.addChild(b, 1, 1);
+    assert.deepEqual(parent.children, [before, a, b, c, after]);
+  });
+
+  it("reorders one slot at commit, leaving the other slots alone", () => {
+    const parent = new GameObject();
+    const [before, a, b, c, after, external] = [new GameObject(), new GameObject(), new GameObject(), new GameObject(), new GameObject(), new GameObject()];
+    parent.addChild(before, 0);
+    parent.addChild(a, 1, 0);
+    parent.addChild(b, 1, 1);
+    parent.addChild(after, 2);
+    parent.addChild(external);
+    parent.queueAddChild(c, 1, 2);
+    parent.queueReorder(1, [c, b, a]);
+    parent.commitStructure();
+    assert.deepEqual(parent.children, [before, c, b, a, after, external]);
+  });
+
+  it("applies removals before a reorder, and a new item lands at its order", () => {
+    const parent = new GameObject();
+    const [a, b, c, x] = [new GameObject(), new GameObject(), new GameObject(), new GameObject()];
+    parent.addChild(a, 0, 0);
+    parent.addChild(b, 0, 1);
+    parent.addChild(c, 0, 2);
+    parent.queueRemoveChild(b);
+    parent.queueAddChild(x, 0, 1);
+    parent.queueReorder(0, [a, x, c]);
+    parent.commitStructure();
+    assert.deepEqual(parent.children, [a, x, c]);
+  });
+
+  it("forgets the order when a child is removed", () => {
+    const parent = new GameObject();
+    const child = new GameObject();
+    parent.addChild(child, 0, 7);
+    parent.removeChild(child);
+    const other = new GameObject();
+    const first = new GameObject();
+    other.addChild(child, 0);
+    other.addChild(first, 0, 0);
+    assert.deepEqual(other.children, [child, first], "equal (slot, order): insertion order");
+  });
+});

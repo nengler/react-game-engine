@@ -118,6 +118,8 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 
 **M5b: `KeyedListChild`.**
 
+*Status.* Implemented on `claude/pensive-faraday-lnmtga`, described in [DESIGN.md](DESIGN.md#keyed-lists). Additions to the sketch below: props that read the item are dynamic with a new `Item` dependency; item callbacks are created once, so their item reads look up the current item by key (`#enemyRecords`), and they may not read the index; every key is checked before anything changes, so a duplicate leaves the list intact; a key must read the item (an index-only key is a warning); the reorder is queued whenever the key sequence changes, including adds and removals, since a new item's order may tie with an existing one's until then; generated temporaries are `$`-prefixed, and author names may not start with `$`.
+
 - **IR.** `{ source: ExprIR; item: ParamIR; index: ParamIR | null; key: ExprIR; element: ElementIR; dependencies }`, as in the plan. The source is a state or prop read. The item's member reads are `MemberRead`, so the type-check validates them.
 - **Restrictions**, each a diagnostic:
   - a single element with `key`
@@ -191,5 +193,6 @@ The runtime stays a mock: no rendering or asset loading.
 | `transform` on a component element writes `placement`, which composes with the child's own `transform` | M4 runtime, M6 | Parent placement and the child's own movement never conflict, and scenes place any prefab the same way |
 | Split M5 into M5a (records and arrays in handlers) and M5b (keyed list) | M5 | Array state cannot be updated with today's handler language |
 | Object spread, `every`/`findIndex`/`includes`/`indexOf`, and expression-bodied array callbacks in M5a | M5a | Spread is the usual record update; the extra methods are non-mutating; a block callback could set state mid-walk |
+| Item callbacks read the current item by key; index reads in callbacks rejected | M5b | A callback created with the item's first value would otherwise go stale when the record is replaced under the same key |
 | `(slot, order)` child ordering and `queueReorder` in place of `queueInsertChild` / `queueMoveChild` | M5 runtime | Extends the existing child slot instead of adding a second ordering mechanism |
 | Registry types via `ConstructorParameters<typeof X>[0]` | M6 codegen | Props interfaces do not need to be exported |

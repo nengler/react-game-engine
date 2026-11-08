@@ -13,6 +13,12 @@ export interface Defeat {
   wave: number;
 }
 
+export interface Spawn {
+  id: string;
+  tint: "red" | "blue";
+  x: number;
+}
+
 export class Enemy extends Entity<EnemyProps> {
   hp: number = 3;
   #hpNext: number = this.hp;
@@ -61,17 +67,14 @@ export class Level extends Entity {
   #waveNext: number = this.wave;
   score: number = 0;
   #scoreNext: number = this.score;
+  spawns: Spawn[] = [{ id: "red-1", tint: "red", x: 40 }, { id: "blue-1", tint: "blue", x: 80 }];
+  #spawnsNext: Spawn[] = this.spawns;
   defeats: Defeat[] = [];
   #defeatsNext: Defeat[] = this.defeats;
-  readonly enemy: Enemy = new Enemy({ speed: this.wave, onDefeated: () => {
-    this.setScore((score: number) => score + 1);
-    this.setDefeats((list: Defeat[]) => [...list, { tint: "red", wave: this.wave }]);
-  } });
-  readonly enemy2: Enemy = new Enemy({ speed: this.wave * 2, tint: "blue", onDefeated: () => {
-    this.setScore((score: number) => score + 5);
-    this.setDefeats((list: Defeat[]) => [...list, { tint: "blue", wave: this.wave }]);
-  } });
-  enemy3: Enemy | null = null;
+  readonly enemyItems: Map<string | number, Enemy> = new Map();
+  #enemyOrder: (string | number)[] = [];
+  #enemyRecords: Map<string | number, Level["spawns"][number]> = new Map();
+  enemy2: Enemy | null = null;
   readonly coin: Coin = new Coin({ value: this.score });
   readonly trail: Trail = new Trail({ value: this.wave });
   entity: Entity | null = null;
@@ -80,15 +83,11 @@ export class Level extends Entity {
 
   constructor() {
     super({ name: "Level" });
-    this.enemy.placement.x = 40;
-    this.addChild(this.enemy, 0);
-    this.enemy2.placement.x = 80;
-    this.addChild(this.enemy2, 1);
     this.coin.placement.x = 160;
-    this.addChild(this.coin, 3);
+    this.addChild(this.coin, 2);
     this.trail.placement.x = 200;
     this.trail.placement.y = 20;
-    this.addChild(this.trail, 4);
+    this.addChild(this.trail, 3);
     this.render();
     this.commitStructure();
   }
@@ -107,6 +106,13 @@ export class Level extends Entity {
     this.markDirty();
   }
 
+  setSpawns(value: Spawn[] | ((previous: Spawn[]) => Spawn[])): void {
+    const next = typeof value === "function" ? value(this.#spawnsNext) : value;
+    if (next === this.#spawnsNext) return;
+    this.#spawnsNext = next;
+    this.markDirty();
+  }
+
   setDefeats(value: Defeat[] | ((previous: Defeat[]) => Defeat[])): void {
     const next = typeof value === "function" ? value(this.#defeatsNext) : value;
     if (next === this.#defeatsNext) return;
@@ -117,22 +123,59 @@ export class Level extends Entity {
   override commitState(): void {
     this.wave = this.#waveNext;
     this.score = this.#scoreNext;
+    this.spawns = this.#spawnsNext;
     this.defeats = this.#defeatsNext;
   }
 
   override render(): void {
-    this.enemy.updateProps({ speed: this.wave });
-    this.enemy2.updateProps({ speed: this.wave * 2 });
-    if (this.wave >= 3) {
-      if (this.enemy3 === null) {
-        this.enemy3 = new Enemy({ speed: this.wave });
-        this.enemy3.placement.x = 120;
-        this.queueAddChild(this.enemy3, 2);
+    {
+      const $parent = this;
+      const $list = this.spawns;
+      const $keys = $list.map((s) => s.id);
+      const $seen = new Set<string | number>();
+      for (const $key of $keys) {
+        if ($seen.has($key)) throw new Error("Duplicate key " + JSON.stringify($key) + " in the <Enemy> list of Level.");
+        $seen.add($key);
       }
-      this.enemy3.updateProps({ speed: this.wave });
-    } else if (this.enemy3 !== null) {
-      this.queueRemoveChild(this.enemy3);
-      this.enemy3 = null;
+      for (const [$n, s] of $list.entries()) {
+        const $key = $keys[$n]!;
+        let $item = this.enemyItems.get($key);
+        if ($item === undefined) {
+          $item = new Enemy({ speed: (s.tint === "blue") ? (this.wave * 2) : this.wave, tint: s.tint, onDefeated: () => {
+            this.setScore((score: number) => score + ((this.#enemyRecords.get($key)!.tint === "blue") ? 5 : 1));
+            this.setDefeats((list: Defeat[]) => [...list, { tint: this.#enemyRecords.get($key)!.tint, wave: this.wave }]);
+            this.setSpawns((list: Spawn[]) => list.filter((other) => other.id !== this.#enemyRecords.get($key)!.id));
+          } });
+          this.enemyItems.set($key, $item);
+          $parent.queueAddChild($item, 0, $n);
+        } else {
+          $item.updateProps({ speed: (s.tint === "blue") ? (this.wave * 2) : this.wave, tint: s.tint });
+        }
+        $item.placement.x = s.x;
+        this.#enemyRecords.set($key, s);
+      }
+      for (const [$key, $item] of this.enemyItems) {
+        if (!$seen.has($key)) {
+          $parent.queueRemoveChild($item);
+          this.enemyItems.delete($key);
+          this.#enemyRecords.delete($key);
+        }
+      }
+      if ($keys.length !== this.#enemyOrder.length || $keys.some(($k, $i) => $k !== this.#enemyOrder[$i])) {
+        $parent.queueReorder(0, $keys.map(($k) => this.enemyItems.get($k)!));
+        this.#enemyOrder = $keys;
+      }
+    }
+    if (this.wave >= 3) {
+      if (this.enemy2 === null) {
+        this.enemy2 = new Enemy({ speed: this.wave });
+        this.enemy2.placement.x = 120;
+        this.queueAddChild(this.enemy2, 1);
+      }
+      this.enemy2.updateProps({ speed: this.wave });
+    } else if (this.enemy2 !== null) {
+      this.queueRemoveChild(this.enemy2);
+      this.enemy2 = null;
     }
     this.coin.updateProps({ value: this.score });
     this.trail.updateProps({ value: this.wave });
@@ -143,7 +186,7 @@ export class Level extends Entity {
         this.entity.addChild(this.sprite);
         this.collider = new Collider({ width: 64, height: 64 });
         this.entity.addChild(this.collider);
-        this.queueAddChild(this.entity, 5);
+        this.queueAddChild(this.entity, 4);
       }
       if (this.sprite !== null) {
         this.sprite.image = (this.wave > 5) ? "boss-enraged.png" : "boss.png";

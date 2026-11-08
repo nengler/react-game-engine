@@ -11,6 +11,11 @@
       "kind": "TypeDeclaration",
       "name": "Defeat",
       "text": "interface Defeat {\n  tint: \"red\" | \"blue\";\n  wave: number;\n}"
+    },
+    {
+      "kind": "TypeDeclaration",
+      "name": "Spawn",
+      "text": "interface Spawn {\n  id: string;\n  tint: \"red\" | \"blue\";\n  x: number;\n}"
     }
   ],
   "components": [
@@ -365,9 +370,9 @@
       "name": "Level",
       "span": {
         "fileName": "packages/example/src/Level.tsx",
-        "start": 829,
-        "end": 2054,
-        "line": 36,
+        "start": 977,
+        "end": 2401,
+        "line": 43,
         "column": 1
       },
       "hooks": [
@@ -377,9 +382,9 @@
           "setterName": "setWave",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 856,
-            "end": 885,
-            "line": 37,
+            "start": 1004,
+            "end": 1033,
+            "line": 44,
             "column": 9
           }
         },
@@ -389,9 +394,21 @@
           "setterName": "setScore",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 895,
-            "end": 926,
-            "line": 38,
+            "start": 1043,
+            "end": 1074,
+            "line": 45,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Level.spawns",
+          "setterName": "setSpawns",
+          "span": {
+            "fileName": "packages/example/src/Level.tsx",
+            "start": 1171,
+            "end": 1301,
+            "line": 47,
             "column": 9
           }
         },
@@ -401,9 +418,9 @@
           "setterName": "setDefeats",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 1023,
-            "end": 1069,
-            "line": 40,
+            "start": 1311,
+            "end": 1357,
+            "line": 51,
             "column": 9
           }
         }
@@ -433,6 +450,87 @@
           "initialValue": {
             "kind": "NumberLiteral",
             "value": 0
+          }
+        },
+        {
+          "kind": "State",
+          "id": "Level.spawns",
+          "name": "spawns",
+          "type": {
+            "kind": "Array",
+            "element": {
+              "kind": "SourceType",
+              "text": "Spawn"
+            }
+          },
+          "initialValue": {
+            "kind": "ArrayLiteral",
+            "elements": [
+              {
+                "spread": false,
+                "value": {
+                  "kind": "ObjectLiteral",
+                  "properties": [
+                    {
+                      "kind": "Property",
+                      "name": "id",
+                      "value": {
+                        "kind": "StringLiteral",
+                        "value": "red-1"
+                      }
+                    },
+                    {
+                      "kind": "Property",
+                      "name": "tint",
+                      "value": {
+                        "kind": "StringLiteral",
+                        "value": "red"
+                      }
+                    },
+                    {
+                      "kind": "Property",
+                      "name": "x",
+                      "value": {
+                        "kind": "NumberLiteral",
+                        "value": 40
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "spread": false,
+                "value": {
+                  "kind": "ObjectLiteral",
+                  "properties": [
+                    {
+                      "kind": "Property",
+                      "name": "id",
+                      "value": {
+                        "kind": "StringLiteral",
+                        "value": "blue-1"
+                      }
+                    },
+                    {
+                      "kind": "Property",
+                      "name": "tint",
+                      "value": {
+                        "kind": "StringLiteral",
+                        "value": "blue"
+                      }
+                    },
+                    {
+                      "kind": "Property",
+                      "name": "x",
+                      "value": {
+                        "kind": "NumberLiteral",
+                        "value": 80
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
           }
         },
         {
@@ -475,7 +573,29 @@
         "transform": [],
         "children": [
           {
-            "kind": "StaticChild",
+            "kind": "KeyedListChild",
+            "source": {
+              "kind": "StateRead",
+              "state": "Level.spawns"
+            },
+            "item": {
+              "id": "Level.s#2",
+              "name": "s",
+              "type": {
+                "kind": "Contextual"
+              }
+            },
+            "index": null,
+            "key": {
+              "kind": "MemberRead",
+              "object": {
+                "kind": "ParamRead",
+                "param": "Level.s#2",
+                "name": "s"
+              },
+              "name": "id",
+              "optional": false
+            },
             "element": {
               "kind": "Element",
               "id": "Level/0",
@@ -489,13 +609,68 @@
                   "kind": "DynamicProp",
                   "name": "speed",
                   "value": {
-                    "kind": "StateRead",
-                    "state": "Level.wave"
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": "===",
+                      "left": {
+                        "kind": "MemberRead",
+                        "object": {
+                          "kind": "ParamRead",
+                          "param": "Level.s#2",
+                          "name": "s"
+                        },
+                        "name": "tint",
+                        "optional": false
+                      },
+                      "right": {
+                        "kind": "StringLiteral",
+                        "value": "blue"
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "Binary",
+                      "operator": "*",
+                      "left": {
+                        "kind": "StateRead",
+                        "state": "Level.wave"
+                      },
+                      "right": {
+                        "kind": "NumberLiteral",
+                        "value": 2
+                      }
+                    },
+                    "whenFalse": {
+                      "kind": "StateRead",
+                      "state": "Level.wave"
+                    }
                   },
                   "dependencies": [
                     {
                       "kind": "State",
                       "state": "Level.wave"
+                    },
+                    {
+                      "kind": "Item"
+                    }
+                  ]
+                },
+                {
+                  "kind": "DynamicProp",
+                  "name": "tint",
+                  "value": {
+                    "kind": "MemberRead",
+                    "object": {
+                      "kind": "ParamRead",
+                      "param": "Level.s#2",
+                      "name": "s"
+                    },
+                    "name": "tint",
+                    "optional": false
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "Item"
                     }
                   ]
                 },
@@ -513,7 +688,7 @@
                           "kind": "Function",
                           "params": [
                             {
-                              "id": "Level.score#2",
+                              "id": "Level.score#3",
                               "name": "score",
                               "type": {
                                 "kind": "Primitive",
@@ -529,12 +704,37 @@
                                 "operator": "+",
                                 "left": {
                                   "kind": "ParamRead",
-                                  "param": "Level.score#2",
+                                  "param": "Level.score#3",
                                   "name": "score"
                                 },
                                 "right": {
-                                  "kind": "NumberLiteral",
-                                  "value": 1
+                                  "kind": "Conditional",
+                                  "test": {
+                                    "kind": "Binary",
+                                    "operator": "===",
+                                    "left": {
+                                      "kind": "MemberRead",
+                                      "object": {
+                                        "kind": "ParamRead",
+                                        "param": "Level.s#2",
+                                        "name": "s"
+                                      },
+                                      "name": "tint",
+                                      "optional": false
+                                    },
+                                    "right": {
+                                      "kind": "StringLiteral",
+                                      "value": "blue"
+                                    }
+                                  },
+                                  "whenTrue": {
+                                    "kind": "NumberLiteral",
+                                    "value": 5
+                                  },
+                                  "whenFalse": {
+                                    "kind": "NumberLiteral",
+                                    "value": 1
+                                  }
                                 }
                               }
                             }
@@ -548,7 +748,7 @@
                           "kind": "Function",
                           "params": [
                             {
-                              "id": "Level.list#3",
+                              "id": "Level.list#4",
                               "name": "list",
                               "type": {
                                 "kind": "Array",
@@ -569,7 +769,7 @@
                                     "spread": true,
                                     "value": {
                                       "kind": "ParamRead",
-                                      "param": "Level.list#3",
+                                      "param": "Level.list#4",
                                       "name": "list"
                                     }
                                   },
@@ -582,8 +782,14 @@
                                           "kind": "Property",
                                           "name": "tint",
                                           "value": {
-                                            "kind": "StringLiteral",
-                                            "value": "red"
+                                            "kind": "MemberRead",
+                                            "object": {
+                                              "kind": "ParamRead",
+                                              "param": "Level.s#2",
+                                              "name": "s"
+                                            },
+                                            "name": "tint",
+                                            "optional": false
                                           }
                                         },
                                         {
@@ -602,117 +808,10 @@
                             }
                           ]
                         }
-                      }
-                    ]
-                  }
-                }
-              ],
-              "transform": [
-                {
-                  "kind": "StaticProp",
-                  "name": "x",
-                  "value": {
-                    "kind": "NumberLiteral",
-                    "value": 40
-                  }
-                }
-              ],
-              "children": [],
-              "span": {
-                "fileName": "packages/example/src/Level.tsx",
-                "start": 1199,
-                "end": 1412,
-                "line": 44,
-                "column": 7
-              }
-            }
-          },
-          {
-            "kind": "StaticChild",
-            "element": {
-              "kind": "Element",
-              "id": "Level/1",
-              "fieldName": "enemy2",
-              "component": {
-                "kind": "Local",
-                "name": "Enemy"
-              },
-              "props": [
-                {
-                  "kind": "DynamicProp",
-                  "name": "speed",
-                  "value": {
-                    "kind": "Binary",
-                    "operator": "*",
-                    "left": {
-                      "kind": "StateRead",
-                      "state": "Level.wave"
-                    },
-                    "right": {
-                      "kind": "NumberLiteral",
-                      "value": 2
-                    }
-                  },
-                  "dependencies": [
-                    {
-                      "kind": "State",
-                      "state": "Level.wave"
-                    }
-                  ]
-                },
-                {
-                  "kind": "StaticProp",
-                  "name": "tint",
-                  "value": {
-                    "kind": "StringLiteral",
-                    "value": "blue"
-                  }
-                },
-                {
-                  "kind": "CallbackProp",
-                  "name": "onDefeated",
-                  "handler": {
-                    "kind": "Function",
-                    "params": [],
-                    "body": [
-                      {
-                        "kind": "SetState",
-                        "state": "Level.score",
-                        "updater": {
-                          "kind": "Function",
-                          "params": [
-                            {
-                              "id": "Level.score#4",
-                              "name": "score",
-                              "type": {
-                                "kind": "Primitive",
-                                "name": "number"
-                              }
-                            }
-                          ],
-                          "body": [
-                            {
-                              "kind": "Return",
-                              "value": {
-                                "kind": "Binary",
-                                "operator": "+",
-                                "left": {
-                                  "kind": "ParamRead",
-                                  "param": "Level.score#4",
-                                  "name": "score"
-                                },
-                                "right": {
-                                  "kind": "NumberLiteral",
-                                  "value": 5
-                                }
-                              }
-                            }
-                          ]
-                        }
                       },
                       {
                         "kind": "SetState",
-                        "state": "Level.defeats",
+                        "state": "Level.spawns",
                         "updater": {
                           "kind": "Function",
                           "params": [
@@ -723,7 +822,7 @@
                                 "kind": "Array",
                                 "element": {
                                   "kind": "SourceType",
-                                  "text": "Defeat"
+                                  "text": "Spawn"
                                 }
                               }
                             }
@@ -732,38 +831,51 @@
                             {
                               "kind": "Return",
                               "value": {
-                                "kind": "ArrayLiteral",
-                                "elements": [
-                                  {
-                                    "spread": true,
-                                    "value": {
-                                      "kind": "ParamRead",
-                                      "param": "Level.list#5",
-                                      "name": "list"
-                                    }
+                                "kind": "Call",
+                                "callee": {
+                                  "kind": "ArrayMethod",
+                                  "receiver": {
+                                    "kind": "ParamRead",
+                                    "param": "Level.list#5",
+                                    "name": "list"
                                   },
+                                  "name": "filter"
+                                },
+                                "args": [
                                   {
-                                    "spread": false,
-                                    "value": {
-                                      "kind": "ObjectLiteral",
-                                      "properties": [
-                                        {
-                                          "kind": "Property",
-                                          "name": "tint",
-                                          "value": {
-                                            "kind": "StringLiteral",
-                                            "value": "blue"
-                                          }
-                                        },
-                                        {
-                                          "kind": "Property",
-                                          "name": "wave",
-                                          "value": {
-                                            "kind": "StateRead",
-                                            "state": "Level.wave"
-                                          }
+                                    "kind": "Arrow",
+                                    "params": [
+                                      {
+                                        "id": "Level.other#6",
+                                        "name": "other",
+                                        "type": {
+                                          "kind": "Contextual"
                                         }
-                                      ]
+                                      }
+                                    ],
+                                    "body": {
+                                      "kind": "Binary",
+                                      "operator": "!==",
+                                      "left": {
+                                        "kind": "MemberRead",
+                                        "object": {
+                                          "kind": "ParamRead",
+                                          "param": "Level.other#6",
+                                          "name": "other"
+                                        },
+                                        "name": "id",
+                                        "optional": false
+                                      },
+                                      "right": {
+                                        "kind": "MemberRead",
+                                        "object": {
+                                          "kind": "ParamRead",
+                                          "param": "Level.s#2",
+                                          "name": "s"
+                                        },
+                                        "name": "id",
+                                        "optional": false
+                                      }
                                     }
                                   }
                                 ]
@@ -778,23 +890,40 @@
               ],
               "transform": [
                 {
-                  "kind": "StaticProp",
+                  "kind": "DynamicProp",
                   "name": "x",
                   "value": {
-                    "kind": "NumberLiteral",
-                    "value": 80
-                  }
+                    "kind": "MemberRead",
+                    "object": {
+                      "kind": "ParamRead",
+                      "param": "Level.s#2",
+                      "name": "s"
+                    },
+                    "name": "x",
+                    "optional": false
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "Item"
+                    }
+                  ]
                 }
               ],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 1419,
-                "end": 1657,
-                "line": 52,
-                "column": 7
+                "start": 1516,
+                "end": 1994,
+                "line": 56,
+                "column": 9
               }
-            }
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Level.spawns"
+              }
+            ]
           },
           {
             "kind": "ConditionalChild",
@@ -818,8 +947,8 @@
             ],
             "element": {
               "kind": "Element",
-              "id": "Level/2",
-              "fieldName": "enemy3",
+              "id": "Level/1",
+              "fieldName": "enemy2",
               "component": {
                 "kind": "Local",
                 "name": "Enemy"
@@ -853,9 +982,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 1678,
-                "end": 1723,
-                "line": 61,
+                "start": 2025,
+                "end": 2070,
+                "line": 69,
                 "column": 21
               }
             }
@@ -864,7 +993,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Level/3",
+              "id": "Level/2",
               "fieldName": "coin",
               "component": {
                 "kind": "Imported",
@@ -901,9 +1030,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 1731,
-                "end": 1776,
-                "line": 62,
+                "start": 2078,
+                "end": 2123,
+                "line": 70,
                 "column": 7
               }
             }
@@ -912,7 +1041,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Level/4",
+              "id": "Level/3",
               "fieldName": "trail",
               "component": {
                 "kind": "Imported",
@@ -957,9 +1086,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 1783,
-                "end": 1835,
-                "line": 63,
+                "start": 2130,
+                "end": 2182,
+                "line": 71,
                 "column": 7
               }
             }
@@ -1038,7 +1167,7 @@
             ],
             "element": {
               "kind": "Element",
-              "id": "Level/5",
+              "id": "Level/4",
               "fieldName": "entity",
               "component": {
                 "kind": "Intrinsic",
@@ -1060,7 +1189,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/5/0",
+                    "id": "Level/4/0",
                     "fieldName": "sprite",
                     "component": {
                       "kind": "Intrinsic",
@@ -1105,9 +1234,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 1899,
-                      "end": 1960,
-                      "line": 66,
+                      "start": 2246,
+                      "end": 2307,
+                      "line": 74,
                       "column": 11
                     }
                   }
@@ -1116,7 +1245,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/5/1",
+                    "id": "Level/4/1",
                     "fieldName": "collider",
                     "component": {
                       "kind": "Intrinsic",
@@ -1144,9 +1273,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 1971,
-                      "end": 2006,
-                      "line": 67,
+                      "start": 2318,
+                      "end": 2353,
+                      "line": 75,
                       "column": 11
                     }
                   }
@@ -1154,9 +1283,9 @@
               ],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 1868,
-                "end": 2024,
-                "line": 65,
+                "start": 2215,
+                "end": 2371,
+                "line": 73,
                 "column": 9
               }
             }
@@ -1164,9 +1293,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Level.tsx",
-          "start": 1171,
-          "end": 2047,
-          "line": 43,
+          "start": 1459,
+          "end": 2394,
+          "line": 54,
           "column": 5
         }
       }

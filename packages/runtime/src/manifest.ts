@@ -85,7 +85,7 @@ export const runtimeManifest: RuntimeManifest = {
     // `updateProps` is generated into every component that has props, so a field may not take the name.
     "name", "props", "applyProps", "updateProps", "transform", "placement", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure",
-    "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "commitStructure",
+    "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure",
     "markDirty", "runRender", "commitState", "render",
     "onInput", "onUpdate",
     "attachToWorld", "detachFromWorld",
