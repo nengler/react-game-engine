@@ -152,6 +152,7 @@
       ],
       "propsType": "CoinProps",
       "isDefaultExport": true,
+      "isExported": true,
       "acceptsChildren": false,
       "root": {
         "kind": "HostElement",
@@ -248,6 +249,7 @@
       ],
       "propsType": "TrailProps",
       "isDefaultExport": false,
+      "isExported": true,
       "acceptsChildren": false,
       "root": {
         "kind": "HostElement",

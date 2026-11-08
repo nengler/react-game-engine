@@ -37,6 +37,7 @@
       ],
       "propsType": "PanelProps",
       "isDefaultExport": false,
+      "isExported": true,
       "acceptsChildren": true,
       "root": {
         "kind": "HostElement",

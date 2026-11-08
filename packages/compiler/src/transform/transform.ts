@@ -303,6 +303,7 @@ class ComponentLowering implements LoweringContext {
       props,
       propsType: this.#component.props?.typeName ?? null,
       isDefaultExport: this.#component.isDefault,
+      isExported: this.#component.exported || this.#component.isDefault,
       acceptsChildren: this.#declaredChildren,
       root,
     };

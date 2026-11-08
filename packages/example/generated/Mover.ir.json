@@ -115,6 +115,7 @@
       "props": [],
       "propsType": null,
       "isDefaultExport": false,
+      "isExported": false,
       "acceptsChildren": false,
       "root": {
         "kind": "HostElement",

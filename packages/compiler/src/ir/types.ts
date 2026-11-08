@@ -88,6 +88,11 @@ export interface ComponentIR {
   /** `export default function Enemy() {}` or `export default Enemy;`: the module also exports it as its default. */
   readonly isDefaultExport: boolean;
   /**
+   * Exported (`export function`, or the module's default export): a prefab, which
+   * scenes can place by name. A component that is not exported is private to its file.
+   */
+  readonly isExported: boolean;
+  /**
    * The props type declares `children: Child` and the JSX has a `{children}`
    * slot: a parent may pass elements, which mount at the slot. Such a
    * component's runtime props are the props type without `children`.

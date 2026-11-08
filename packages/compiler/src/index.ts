@@ -4,6 +4,8 @@ import { hasErrors, type CompilerDiagnostic } from "./diagnostics/diagnostics.ts
 import { generateModule } from "./generator/generator.ts";
 import type { IRModule } from "./ir/types.ts";
 import { TsxParser } from "./parser/parser.ts";
+import type { PrefabSchema } from "./prefabs/prefabs.ts";
+import { validateScene } from "./scenes/validate.ts";
 import { buildModuleIR } from "./transform/transform.ts";
 import { typeCheckFiles, typeCheckSources, type VirtualFile } from "./typecheck/typecheck.ts";
 
@@ -14,6 +16,10 @@ export { analyzeSourceFile, AUTHORING_HOOKS, AUTHORING_TYPES, type PropsAnalysis
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
 export { generateModule, type GeneratorOptions } from "./generator/generator.ts";
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
+export { constantValue, exportedComponents, moduleSchemas, prefabSchema, type JsonValue, type PrefabPropSchema, type PrefabSchema } from "./prefabs/prefabs.ts";
+export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
+export { importTiled, type TiledImport } from "./scenes/tiled.ts";
+export { checkProject, prefabsIndexSource, prefabsJson, projectSchemas, type ProjectModule } from "./project.ts";
 export { typeCheckFiles, typeCheckSources, generatedCodeCompilerOptions, sourceCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export interface CompilerConfig {
@@ -90,6 +96,11 @@ export class Compiler {
    */
   typeCheckSources(files: readonly VirtualFile[]): CompilerDiagnostic[] {
     return typeCheckSources(this.#parser.api, files);
+  }
+
+  /** Validate a scene file's text against the project's prefabs; diagnostics point at the offending JSON value. */
+  validateScene(fileName: string, text: string, prefabs: ReadonlyMap<string, PrefabSchema>): CompilerDiagnostic[] {
+    return validateScene(this.#parser, fileName, text, prefabs);
   }
 
   close(): void {

@@ -503,7 +503,7 @@ const Pair = () => (<Entity name="pair"><Dot /><Dot /></Entity>);`);
   it("supports a default export, as a declaration or as `export default Name;`", () => {
     const declaration = compile(`export default function Enemy() { return <Entity name="E" />; }`);
     assert.equal(declaration.ir.components[0]!.isDefaultExport, true);
-    assert.match(declaration.code, /export class Enemy extends Entity \{[\s\S]*\}\n\nexport default Enemy;\n$/);
+    assert.match(declaration.code, /export class Enemy extends Entity \{[\s\S]*\}\n\nexport default Enemy;\n\nexport const prefabs = \{/);
     const separate = compile(`const Enemy = () => <Entity name="E" />;\nexport default Enemy;`);
     assert.equal(separate.ir.components[0]!.isDefaultExport, true);
     assert.deepEqual(typeCheck(separate), []);

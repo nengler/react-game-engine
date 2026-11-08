@@ -1,0 +1,58 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "orientation": "orthogonal",
+  "width": 16,
+  "height": 12,
+  "tilewidth": 16,
+  "tileheight": 16,
+  "layers": [
+    { "type": "tilelayer", "name": "Ground", "width": 16, "height": 12, "data": [] },
+    {
+      "type": "objectgroup",
+      "name": "Enemies",
+      "objects": [
+        {
+          "id": 1,
+          "name": "grunt",
+          "class": "Enemy",
+          "x": 48,
+          "y": 96,
+          "width": 0,
+          "height": 0,
+          "rotation": 0,
+          "visible": true,
+          "properties": [{ "name": "speed", "type": "float", "value": 1.5 }]
+        },
+        {
+          "id": 2,
+          "name": "brute",
+          "class": "Enemy",
+          "x": 144,
+          "y": 96,
+          "width": 0,
+          "height": 0,
+          "rotation": 90,
+          "visible": true,
+          "properties": [
+            { "name": "speed", "type": "float", "value": 0.5 },
+            { "name": "tint", "type": "string", "value": "blue" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "Pickups",
+      "layers": [
+        {
+          "type": "objectgroup",
+          "name": "Coins",
+          "objects": [
+            { "id": 3, "class": "Coin", "gid": 5, "x": 80, "y": 64, "width": 16, "height": 16, "rotation": 0, "visible": true, "properties": [{ "name": "value", "type": "int", "value": 5 }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+/**
+ * Whole-project checks and outputs, over the IR of every module: what the
+ * per-file compile cannot see. Prefab names must be unique (scenes refer to
+ * them by name), a component may not statically contain itself through other
+ * files, and the registry (`prefabs.ts`) and schema (`prefabs.json`) cover
+ * every exported component.
+ */
+import { dirname, resolve } from "node:path";
+import { DiagnosticCode, error, type CompilerDiagnostic } from "./diagnostics/diagnostics.ts";
+import type { ChildIR, ComponentIR, IRModule } from "./ir/types.ts";
+import { exportedComponents, moduleSchemas, type PrefabSchema } from "./prefabs/prefabs.ts";
+
+export interface ProjectModule {
+  readonly ir: IRModule;
+  /** The generated `.ts` file's name next to `prefabs.ts` (`Level.ts`). */
+  readonly generatedName: string;
+}
+
+export function checkProject(modules: readonly ProjectModule[]): CompilerDiagnostic[] {
+  return [...checkDuplicatePrefabs(modules), ...checkCrossFileCycles(modules)];
+}
+
+function checkDuplicatePrefabs(modules: readonly ProjectModule[]): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const first = new Map<string, string>();
+  for (const { ir } of modules) {
+    for (const c of exportedComponents(ir)) {
+      const earlier = first.get(c.name);
+      if (earlier === undefined) first.set(c.name, ir.sourceFile);
+      else diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Exported component '${c.name}' is also exported from ${earlier}: scenes place prefabs by name, so each name can be exported once.`, c.span));
+    }
+  }
+  return diagnostics;
+}
+
+/**
+ * A component that statically contains itself would construct forever. Within
+ * one file the transform reports it; this follows imports, so a cycle through
+ * several files is reported too (only cycles that cross files, to not repeat).
+ */
+function checkCrossFileCycles(modules: readonly ProjectModule[]): CompilerDiagnostic[] {
+  const byPath = new Map(modules.map((m) => [resolve(m.ir.sourceFile), m.ir] as const));
+  const key = (path: string, name: string): string => `${path}#${name}`;
+  const nodes = new Map<string, ComponentIR>();
+  for (const [path, ir] of byPath) for (const c of ir.components) nodes.set(key(path, c.name), c);
+
+  const edges = new Map<string, string[]>();
+  for (const [path, ir] of byPath) {
+    for (const c of ir.components) {
+      const targets: string[] = [];
+      const walk = (children: readonly ChildIR[]): void => {
+        for (const child of children) {
+          if (child.kind !== "StaticChild") continue;
+          const ref = child.element.component;
+          if (ref.kind === "Local") targets.push(key(path, ref.name));
+          else if (ref.kind === "Imported") {
+            const target = byPath.get(resolve(dirname(path), ref.module));
+            const component = target && (ref.isDefault ? target.components.find((x) => x.isDefaultExport) : target.components.find((x) => x.name === ref.name));
+            if (target && component) targets.push(key(resolve(target.sourceFile), component.name));
+          }
+          walk(child.element.children);
+        }
+      };
+      walk(c.root.children);
+      edges.set(key(path, c.name), targets);
+    }
+  }
+
+  const diagnostics: CompilerDiagnostic[] = [];
+  const reported = new Set<string>();
+  for (const start of nodes.keys()) {
+    const stack: string[] = [];
+    const dfs = (node: string): string[] | null => {
+      if (node === start && stack.length > 0) return [...stack];
+      if (stack.includes(node)) return null;
+      stack.push(node);
+      for (const next of edges.get(node) ?? []) {
+        const cycle = dfs(next);
+        if (cycle) return cycle;
+      }
+      stack.pop();
+      return null;
+    };
+    const cycle = dfs(start);
+    if (!cycle || reported.has(start)) continue;
+    const files = new Set(cycle.map((n) => n.split("#")[0]));
+    if (files.size < 2) continue; // inside one file: the transform already reported it
+    for (const n of cycle) reported.add(n);
+    const names = cycle.map((n) => n.split("#")[1]);
+    diagnostics.push(error(DiagnosticCode.ComponentCycle, `Component '${nodes.get(start)!.name}' statically contains itself through other files (${[...names, names[0]].join(" → ")}).`, nodes.get(start)!.span));
+  }
+  return diagnostics;
+}
+
+/** Every exported component of the project, by name. Later duplicates are ignored (they are reported by `checkProject`). */
+export function projectSchemas(modules: readonly ProjectModule[]): Map<string, PrefabSchema> {
+  const out = new Map<string, PrefabSchema>();
+  for (const { ir } of modules) for (const schema of moduleSchemas(ir)) if (!out.has(schema.name)) out.set(schema.name, schema);
+  return out;
+}
+
+/** `prefabs.ts`: every module's `prefabs`, merged, for `loadScene`. */
+export function prefabsIndexSource(modules: readonly ProjectModule[]): string {
+  const withPrefabs = modules.filter((m) => exportedComponents(m.ir).length > 0);
+  const lines = ["// Generated by @rge/compiler. Do not edit."];
+  withPrefabs.forEach((m, i) => lines.push(`import { prefabs as prefabs${i} } from ${JSON.stringify(`./${m.generatedName}`)};`));
+  lines.push("", withPrefabs.length === 0 ? "export const prefabs = {};" : `export const prefabs = { ${withPrefabs.map((_, i) => `...prefabs${i}`).join(", ")} };`);
+  return lines.join("\n") + "\n";
+}
+
+/** `prefabs.json`: the data schema scenes are validated against, and editors read. */
+export function prefabsJson(modules: readonly ProjectModule[]): string {
+  const prefabs: Record<string, { module: string; props: PrefabSchema["props"] }> = {};
+  for (const schema of [...projectSchemas(modules).values()].sort((a, b) => a.name.localeCompare(b.name))) {
+    prefabs[schema.name] = { module: schema.module, props: schema.props };
+  }
+  return JSON.stringify({ version: 1, prefabs }, null, 2) + "\n";
+}

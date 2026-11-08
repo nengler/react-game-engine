@@ -11,7 +11,7 @@
   "scripts": {
     "test": "node --test \"packages/*/test/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p packages/example/tsconfig.json",
-    "example": "node packages/compiler/src/cli.ts packages/example/src packages/example/generated"
+    "example": "node packages/compiler/src/cli.ts packages/example/src packages/example/generated --scenes packages/example/scenes"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
