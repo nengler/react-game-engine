@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { SyntaxKind, type Node } from "typescript/ast";
 import { isFunctionDeclaration, isJsxElement, isReturnStatement } from "typescript/ast/is";
 import { analyzeSourceFile, DiagnosticCode, TsxParser, type IRModule } from "../src/index.ts";
-import { closeCompiler, compile, compileErrors, getCompiler, stripSpans } from "./helpers.ts";
+import { closeCompiler, compile, compileErrors, getCompiler, stripSpans, elementOf } from "./helpers.ts";
 
 after(closeCompiler);
 
@@ -123,6 +123,7 @@ describe("IR construction", () => {
           props: [],
           propsType: null,
           isDefaultExport: false,
+          acceptsChildren: false,
           state: [
             {
               kind: "State",
@@ -179,6 +180,7 @@ describe("IR construction", () => {
           props: [],
           propsType: null,
           isDefaultExport: false,
+          acceptsChildren: false,
           hooks: [],
           state: [],
           root: {
@@ -211,7 +213,7 @@ describe("IR construction", () => {
     assert.deepEqual(stripSpans(p.root.props), [
       { kind: "DynamicProp", name: "name", value: { kind: "StateRead", state: "P.label" }, dependencies: [{ kind: "State", state: "P.label" }] },
     ]);
-    const [sprite, collider] = p.root.children.map((c) => c.element);
+    const [sprite, collider] = p.root.children.map((c) => elementOf(c));
     assert.deepEqual(stripSpans(sprite!.props[0]), {
       kind: "DynamicProp",
       name: "image",
@@ -261,10 +263,10 @@ describe("IR construction", () => {
     const describe = (m: IRModule["components"][number]["root"]["children"]): unknown =>
       m.map((c) => ({
         kind: c.kind,
-        id: c.element.id,
-        field: c.element.fieldName,
-        ref: c.element.component,
-        children: describe(c.element.children),
+        id: elementOf(c).id,
+        field: elementOf(c).fieldName,
+        ref: elementOf(c).component,
+        children: describe(elementOf(c).children),
       }));
     assert.deepEqual(describe(level.root.children), [
       { kind: "StaticChild", id: "Level/0", field: "enemy", ref: { kind: "Local", name: "Enemy" }, children: [] },
@@ -294,9 +296,9 @@ describe("diagnostics", () => {
       `function A() { const [a, setA] = useState(1); return <Entity name={setA} />; }`,
     ],
     [
-      "children passed to a component",
+      "{children} in a component that does not declare it",
       DiagnosticCode.UnsupportedJsxChild,
-      `function B() { return <Entity />; } function A() { return <Entity><B><Entity /></B></Entity>; }`,
+      `function A() { return <Entity>{children}</Entity>; }`,
     ],
     ["static self-reference", DiagnosticCode.ComponentCycle, `function A() { return <Entity><A /></Entity>; }`],
     ["non-literal state type", DiagnosticCode.UnsupportedStateType, `function A() { const [a, setA] = useState(null); return <Entity />; }`],

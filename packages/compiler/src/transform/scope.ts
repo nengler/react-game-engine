@@ -8,6 +8,8 @@ export type Binding =
   | { readonly kind: "prop"; readonly name: string; readonly role: "value" | "callback" }
   /** The whole props object of `function Enemy(props: EnemyProps)`: only read as `props.speed` or called as `props.onDefeated?.()`. */
   | { readonly kind: "propsObject"; readonly name: string }
+  /** The `children` prop of a component that renders `{children}`: only valid as that child, never read as a value. */
+  | { readonly kind: "children"; readonly name: string }
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
   | { readonly kind: "local"; readonly id: LocalId; readonly name: string }

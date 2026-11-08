@@ -46,6 +46,7 @@
       "props": [],
       "propsType": null,
       "isDefaultExport": false,
+      "acceptsChildren": false,
       "root": {
         "kind": "HostElement",
         "component": {

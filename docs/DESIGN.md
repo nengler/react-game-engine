@@ -101,9 +101,11 @@ ignored):
   Text children, fragments, spread attributes and other expression children
   are rejected.
 * Imports: components from `./Name.tsx`, and hooks, built-in elements and
-  `clamp` from `@rge/runtime/jsx` (the manifest's `authoringModule`). Named
-  imports only; any other import is `RGE1001`, and a name the entry point does
-  not export is `RGE1004`. The entry point is a set of declarations (calling
+  `clamp` and the `Child` type from `@rge/runtime/jsx` (the manifest's
+  `authoringModule`; the type is written `import { type Child }`, the one
+  place `type` is accepted). Named imports only; any other import is
+  `RGE1001`, and a name the entry point does not export, a `type` on a value,
+  or a type imported as a value is `RGE1004`. The entry point is a set of declarations (calling
   one throws) typed from the runtime's own classes, with the `JSX` namespace in
   `@rge/runtime/jsx-runtime`, so the TSX itself type-checks: a project uses
   `"jsx": "react-jsx"` and `"jsxImportSource": "@rge/runtime"`
@@ -156,8 +158,9 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
   parent changes it, or, inside a keyed list, the list's item
   (`{ kind: "Item" }`).
 * Children are `StaticChild` (instantiated once, never recreated),
-  `ConditionalChild` (created/destroyed when `condition` flips) or
-  `KeyedListChild` (one instance per item, kept by key).
+  `ConditionalChild` (created/destroyed when `condition` flips),
+  `KeyedListChild` (one instance per item, kept by key) or `ChildrenSlot`
+  (where a parent's passed children mount).
 * The root is a distinct `HostElementIR` (no field name, it *is* `this`), so
   "root element stored in a field" is unrepresentable.
 * Each `ElementIR` has a stable `id` (structural path, e.g. `Player/1`) and a
@@ -180,6 +183,7 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 | ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
 | ~~props between components~~ | done: `ComponentIR.props: PropDeclIR[]` and `propsType`, `IRModule.typeDeclarations`, `ExprIR` `PropRead`, `CalleeIR` `Prop`, `PropIR` `CallbackProp`, `DependencyIR`; see "Props and callbacks" |
 | ~~arrays and records in handlers (M5a)~~ | done: `TypeIR` `Array` / `SourceType` for state, `ExprIR` `ArrayLiteral`, `ObjectLiteral`, `MemberRead`, `Arrow`, `CalleeIR` `ArrayMethod`; see "Arrays and records" |
+| ~~children (M8)~~ | done: `ChildIR` `ChildrenSlot`, `ComponentIR.acceptsChildren`, `ElementIR.children` on a component element are the children passed to it; runtime `attachPassedChild` and friends; see "Children" |
 | ~~keyed lists (M5b)~~ | done: `ChildIR` `KeyedListChild { source, item, index, key, element, dependencies }`, `DependencyIR` `Item`; runtime `(slot, order)` and `queueReorder`; see "Keyed lists" |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
 
@@ -433,6 +437,109 @@ so only that slot's range moves). Static siblings before and after the list
 keep their places because they have their own slots. Generated code queues
 removals and adds before the reorder.
 
+## Children
+
+A parent passes elements to a component between its tags, and the component
+decides where they mount (M8):
+
+```tsx
+import { type Child, Entity, Sprite } from "@rge/runtime/jsx";
+
+interface PanelProps {
+  title: string;
+  children: Child;
+}
+
+function Panel({ title, children }: PanelProps) {
+  return (
+    <Entity name="Panel">
+      <Sprite image={title + ".png"} />
+      <Entity name="Content">{children}</Entity>
+    </Entity>
+  );
+}
+
+function Hud() {
+  const [score, setScore] = useState(0);
+  return (
+    <Entity name="Hud">
+      <Panel title="hud">
+        <Coin value={score} />
+        {score > 10 && <Sprite image="star.png" />}
+      </Panel>
+    </Entity>
+  );
+}
+```
+
+**The parent owns what it passes.** The elements are fields of `Hud`, built
+from `Hud`'s state and props and updated in `Hud`'s `render()`, exactly as if
+they were `Hud`'s own children: `<Coin value={score} />` follows `score`
+without `Panel` knowing, and `{score > 10 && …}` is a conditional child of
+`Hud`. `Panel` only says where they mount, so a passed child's `transform` is
+relative to the container that holds `{children}`.
+
+**Receiving** (`RGE1208`/`RGE1202` otherwise):
+
+* The props type declares `children: Child` (`import { type Child }`).
+  `children` is not a value prop: it has no `PropDeclIR`, and cannot have a
+  default or be read as a value (`RGE1301`). `ComponentIR.acceptsChildren` is
+  set, and the runtime props type becomes `Omit<PanelProps, "children">`, so
+  `new Panel({ title })` needs no `children`.
+* `{children}` (or `{props.children}`) is a direct child of a container, once.
+  The container is the root, a fragment, or a static `<Entity>` below it:
+  not inside a condition, a list, a block passed to another component, or a
+  built-in that cannot have children. A declared `children` that is never
+  rendered is an error. Forwarding to another component
+  (`<Box>{children}</Box>`) is not supported yet.
+* IR: a `ChildrenSlot` child takes the slot's position among its siblings, so
+  the siblings are attached with explicit slots (`addChild(child, 0)`,
+  `addChild(footer, 2)`).
+
+**Passing.** The children of a component element are lowered into its
+`ElementIR.children` as static children, conditional children, or a keyed
+list, owned by the parent. A list must be the only child of the block (its
+items and other children would share positions); children on a list item are
+not supported yet, and `children={…}` as an attribute is `RGE1203`. Whether
+the receiver renders `{children}` is its own file's business: the source
+type-check catches `<Leaf>…</Leaf>` for a props type without `children`
+(`RGE9002`), and the runtime throws a clear error if a component that does not
+render `{children}` is given some.
+
+**Generated code.** The receiver records where passed children mount, in its
+constructor, after its own children are wired:
+
+```ts
+export class Panel extends Entity<Omit<PanelProps, "children">> {
+  constructor(props: Omit<PanelProps, "children">) {
+    super({ name: "Panel" }, props);
+    this.addChild(this.sprite, 0);
+    this.addChild(this.entity, 1);
+    this.passedChildrenHost = this.entity;   // the container holding {children}
+    this.passedChildrenSlot = 0;             // the slot's position among its children
+    …
+```
+
+and the parent mounts into it by order (the child's position in the block):
+
+```ts
+this.panel.attachPassedChild(this.coin, 0);                // static, in the constructor
+this.panel.queueAttachPassedChild(this.sprite, 1);         // a condition turning on
+this.panel.queueDetachPassedChild(this.sprite);            // and off
+```
+
+A list passed as the children uses `queueAttachPassedChild(item, position)`,
+`queueDetachPassedChild` and `queueReorderPassedChildren`. When a conditional
+`<Panel>` unmounts, its passed children go with it and the parent's fields
+reset, so remounting builds them afresh.
+
+**Runtime.** `GameObject` has `passedChildrenHost` / `passedChildrenSlot`
+(protected, set by the generated receiver) and `attachPassedChild`,
+`queueAttachPassedChild`, `queueDetachPassedChild` and
+`queueReorderPassedChildren`, which add to the host at `(slot, order)` (see
+"Keyed lists"). The parent never needs the receiver's slot index, so a
+component from another file works.
+
 ## Transforms and refs
 
 Components should read like React: what is on screen, position included, is a
@@ -623,7 +730,7 @@ and the child write different transforms. `global` works at either level. The
 attribute is reserved like `key`, so the component's props type never declares
 it; the JSX types accept it on every element.
 
-Not yet: `children` (M8).
+`children` is passed between elements, `<Panel>…</Panel>`: see "Children".
 
 ## Roots and component forms
 

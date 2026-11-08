@@ -8,7 +8,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Entity, Sprite, World, type InputState } from "@rge/runtime";
 import { DiagnosticCode, type ComponentIR, type ExprIR, type StatementIR } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, stripSpans, typeCheck, withAuthoringImports as withAuthoring } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, stripSpans, typeCheck, withAuthoringImports as withAuthoring, elementOf } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -179,7 +179,7 @@ function C() {
 }`,
       "C",
     );
-    const sprite = c.root.children[0]!.element;
+    const sprite = elementOf(c.root.children[0]!);
     const image = sprite.props[0]!;
     assert.equal(image.kind, "DynamicProp");
     assert.deepEqual(image.kind === "DynamicProp" && image.dependencies, [{ kind: "State", state: "C.items" }]);
@@ -490,7 +490,7 @@ describe("M5b: IR shape", () => {
 
   it("takes a filtered source and an index", () => {
     const c = component(PACK, "Pack");
-    const boss = c.root.children[3]!.element;
+    const boss = elementOf(c.root.children[3]!);
     const list = boss.children[0]!;
     assert.ok(list.kind === "KeyedListChild");
     assert.equal(list.source.kind, "Call");
@@ -713,5 +713,302 @@ function C() {
 
   it("still rejects key outside a list", () => {
     assert.deepEqual(codes(`function A() { return <Entity name="A"><Sprite key="x" image="a" /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M8: children
+// ---------------------------------------------------------------------------
+
+const CARD = `
+import { type Child, Entity, Sprite, Collider, useState } from "@rge/runtime/jsx";
+
+interface PanelProps {
+  title: string;
+  children: Child;
+}
+
+function Panel({ title, children }: PanelProps) {
+  return (
+    <Entity name="Panel">
+      <Sprite image={title + ".png"} />
+      <Entity name="Body">
+        <Collider width={1} height={1} />
+        {children}
+        <Collider width={2} height={2} />
+      </Entity>
+    </Entity>
+  );
+}
+
+function Card() {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("a");
+  return (
+    <Entity name="Card">
+      <Panel title={label}>
+        <Sprite image="first.png" />
+        {open && <Sprite image={label + "-open.png"} />}
+        <Sprite image="last.png" />
+      </Panel>
+      {open && (
+        <Panel title="shown">
+          <Sprite image="inner.png" />
+          {label === "b" && <Sprite image="inner-b.png" />}
+        </Panel>
+      )}
+    </Entity>
+  );
+}
+`;
+
+interface PanelInstance extends Entity {
+  props: { title: string };
+  readonly entity: Entity;
+}
+interface CardInstance extends Entity {
+  setOpen(value: boolean): void;
+  setLabel(value: string): void;
+  readonly panel: PanelInstance;
+  panel2: PanelInstance | null;
+}
+
+let Card: new () => CardInstance;
+let PanelClass: new (props: { title: string }) => PanelInstance;
+
+before(async () => {
+  ({ Card, Panel: PanelClass } = await load<{ Card: typeof Card; Panel: typeof PanelClass }>(compile(CARD, "Card.tsx")));
+});
+
+/** The names of a container's children: images for sprites, widths for colliders, names for entities. */
+const kids = (e: Entity): string[] => e.children.map((c) => (c instanceof Sprite ? c.image : c instanceof Entity ? c.name : `${(c as unknown as { width: number }).width}`));
+const body = (p: PanelInstance): Entity => p.children[1] as Entity;
+
+describe("M8: IR shape", () => {
+  it("marks a component that renders {children}, and keeps the slot among its siblings", () => {
+    const c = component(CARD, "Panel");
+    assert.equal(c.acceptsChildren, true);
+    assert.deepEqual(c.props.map((p) => p.name), ["title"], "children is not a value prop");
+    const bodyEl = elementOf(c.root.children[1]!);
+    assert.deepEqual(bodyEl.children.map((k) => k.kind), ["StaticChild", "ChildrenSlot", "StaticChild"]);
+    assert.equal(component(CARD, "Card").acceptsChildren, false);
+  });
+
+  it("holds the children passed to a component on its element, owned by the parent", () => {
+    const card = component(CARD, "Card");
+    const panel = elementOf(card.root.children[0]!);
+    assert.equal(panel.component.kind, "Local");
+    assert.deepEqual(panel.children.map((k) => k.kind), ["StaticChild", "ConditionalChild", "StaticChild"]);
+    const conditional = panel.children[1]!;
+    assert.ok(conditional.kind === "ConditionalChild");
+    assert.deepEqual(conditional.dependencies, [{ kind: "State", state: "Card.open" }]);
+  });
+});
+
+describe("M8: generated code", () => {
+  it("extends the host with the props type minus children, and says where passed children mount", () => {
+    const { code } = compile(CARD, "Card.tsx");
+    assert.match(code, /export class Panel extends Entity<Omit<PanelProps, "children">> \{/);
+    assert.match(code, /constructor\(props: Omit<PanelProps, "children">\) \{/);
+    assert.match(code, /updateProps\(next: Partial<Omit<PanelProps, "children">>\): void \{/);
+    assert.match(code, /this\.passedChildrenHost = this\.entity;\n\s+this\.passedChildrenSlot = 1;/, "the slot follows the first collider");
+    assert.match(code, /import \{[^}]*type Child[^}]*\} from "@rge\/runtime";/);
+  });
+
+  it("gives the component's own children slots, so passed children land between them", () => {
+    const { code } = compile(CARD, "Card.tsx");
+    assert.match(code, /this\.entity\.addChild\(this\.collider, 0\);/);
+    assert.match(code, /this\.entity\.addChild\(this\.collider2, 2\);/);
+  });
+
+  it("attaches passed children at their position in the block; a condition queues and detaches", () => {
+    const { code } = compile(CARD, "Card.tsx");
+    assert.match(code, /this\.panel\.attachPassedChild\(this\.sprite, 0\);/);
+    assert.match(code, /this\.panel\.attachPassedChild\(this\.sprite3, 2\);/);
+    assert.match(code, /this\.panel\.queueAttachPassedChild\(this\.sprite2, 1\);/);
+    assert.match(code, /this\.panel\.queueDetachPassedChild\(this\.sprite2\);/);
+  });
+
+  it("mounts a passed block when its component mounts conditionally", () => {
+    const { code } = compile(CARD, "Card.tsx");
+    assert.match(code, /this\.panel2\.attachPassedChild\(this\.sprite4, 0\);/);
+    assert.match(code, /this\.panel2\.queueAttachPassedChild\(this\.sprite5, 1\);/);
+  });
+
+  it("type-checks the generated module", () => {
+    assert.deepEqual(typeCheck(compile(CARD, "Card.tsx")), []);
+  });
+
+  it("type-checks authored source: children are required where declared, and rejected where not", () => {
+    const check = (source: string) => getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M8Source${Math.random()}.tsx`, text: source }]);
+    const head = `import { Entity, Sprite, type Child } from "@rge/runtime/jsx";
+interface BoxProps { children: Child }
+function Box({ children }: BoxProps) { return <Entity name="Box">{children}</Entity>; }
+interface LeafProps { n: number }
+function Leaf({ n }: LeafProps) { return <Sprite image={"a" + n} />; }
+`;
+    assert.deepEqual(check(`${head}function Ok() { return <Entity name="Ok"><Box><Sprite image="a" /></Box></Entity>; }`), []);
+    assert.ok(check(`${head}function Bad() { return <Entity name="Bad"><Box /></Entity>; }`).length > 0, "children are required");
+    assert.ok(check(`${head}function Bad() { return <Entity name="Bad"><Leaf n={1}><Sprite image="a" /></Leaf></Entity>; }`).length > 0, "Leaf takes no children");
+  });
+});
+
+describe("M8: runtime behaviour", () => {
+  it("mounts the passed children at the slot, between the component's own children", () => {
+    const card = new Card();
+    assert.deepEqual(kids(body(card.panel)), ["1", "first.png", "last.png", "2"]);
+  });
+
+  it("mounts a passed child that appears later between its siblings, and removes it again", () => {
+    const world = new World();
+    const card = new Card();
+    world.mount(card);
+    card.setOpen(true);
+    world.flush();
+    assert.deepEqual(kids(body(card.panel)), ["1", "first.png", "a-open.png", "last.png", "2"]);
+    card.setOpen(false);
+    world.flush();
+    assert.deepEqual(kids(body(card.panel)), ["1", "first.png", "last.png", "2"]);
+  });
+
+  it("updates a passed child from the parent's state, not the receiver's", () => {
+    const world = new World();
+    const card = new Card();
+    world.mount(card);
+    card.setOpen(true);
+    world.flush();
+    const open = body(card.panel).children[2] as Sprite;
+    card.setLabel("b");
+    world.flush();
+    assert.equal(open.image, "b-open.png", "same instance, the parent's prop followed its state");
+    assert.equal(card.panel.props.title, "b");
+  });
+
+  it("builds a conditional component's passed children afresh each time it mounts", () => {
+    const world = new World();
+    const card = new Card();
+    world.mount(card);
+    card.setOpen(true);
+    card.setLabel("b");
+    world.flush();
+    const first = card.panel2!;
+    assert.deepEqual(kids(body(first)), ["1", "inner.png", "inner-b.png", "2"]);
+    card.setOpen(false);
+    world.flush();
+    assert.equal(card.panel2, null);
+    card.setOpen(true);
+    world.flush();
+    assert.notEqual(card.panel2, first);
+    assert.deepEqual(kids(body(card.panel2!)), ["1", "inner.png", "inner-b.png", "2"]);
+  });
+
+  it("throws a clear error when a component that does not render {children} is given some", () => {
+    const leaf = new PanelClass({ title: "x" });
+    const stray = new Sprite({ image: "z" });
+    assert.doesNotThrow(() => leaf.attachPassedChild(stray, 0));
+    assert.throws(() => new Entity().attachPassedChild(stray, 0), /does not render \{children\}/);
+  });
+});
+
+describe("M8: a list as the children", () => {
+  const LIST = `
+import { type Child, Entity, Sprite, Collider, useState } from "@rge/runtime/jsx";
+interface Row { id: string }
+interface ColumnProps { children: Child }
+function Column({ children }: ColumnProps) {
+  return <Entity name="Column"><Sprite image="header" />{children}<Sprite image="footer" /></Entity>;
+}
+function Table() {
+  const [rows, setRows] = useState<Row[]>([]);
+  return <Entity name="Table"><Column>{rows.map((r) => <Sprite key={r.id} image={r.id} />)}</Column></Entity>;
+}
+`;
+  interface TableInstance extends Entity {
+    setRows(value: { id: string }[]): void;
+    readonly column: Entity;
+  }
+  let Table: new () => TableInstance;
+  before(async () => {
+    ({ Table } = await load<{ Table: typeof Table }>(compile(LIST, "Table.tsx")));
+  });
+
+  it("generates passed attaches", () => {
+    const { code } = compile(LIST, "Table.tsx");
+    assert.match(code, /\$parent\.queueAttachPassedChild\(\$item, \$n\);/);
+    assert.match(code, /\$parent\.queueDetachPassedChild\(\$item\);/);
+    assert.match(code, /\$parent\.queueReorderPassedChildren\(\$keys\.map/);
+    assert.deepEqual(typeCheck(compile(LIST, "Table.tsx")), []);
+  });
+
+  it("adds, reorders and removes items between the receiver's own children", () => {
+    const world = new World();
+    const t = new Table();
+    world.mount(t);
+    t.setRows([{ id: "a" }, { id: "b" }, { id: "c" }]);
+    world.flush();
+    assert.deepEqual(kids(t.column), ["header", "a", "b", "c", "footer"]);
+    t.setRows([{ id: "c" }, { id: "x" }, { id: "a" }]);
+    world.flush();
+    assert.deepEqual(kids(t.column), ["header", "c", "x", "a", "footer"]);
+  });
+});
+
+describe("M8: diagnostics", () => {
+  const IMPORT = `import { type Child, Entity, Sprite, Collider, useState } from "@rge/runtime/jsx";\n`;
+  const box = (props: string, body: string) => `${IMPORT}interface BoxProps { ${props} }\nfunction Box({ ${props.includes("children") ? "children" : ""} }: BoxProps) { return <Entity name="Box">${body}</Entity>; }`;
+  const diag = (source: string) => compileErrors(source).map((d) => d.code);
+
+  it("types children as Child", () => {
+    assert.deepEqual(diag(box("children: string", "")), [DiagnosticCode.InvalidProps]);
+    assert.deepEqual(diag(box("children: () => void", "")), [DiagnosticCode.InvalidProps]);
+  });
+
+  it("asks for a {children} slot when children is declared", () => {
+    assert.deepEqual(diag(box("children: Child", "")), [DiagnosticCode.InvalidProps]);
+  });
+
+  it("allows one slot, in a container that is always there", () => {
+    assert.deepEqual(diag(box("children: Child", "{children}{children}")), [DiagnosticCode.UnsupportedJsxChild]);
+    assert.deepEqual(diag(box("children: Child", `<Entity name="a">{children}</Entity><Entity name="b">{children}</Entity>`)), [DiagnosticCode.UnsupportedJsxChild]);
+    assert.deepEqual(diag(box("children: Child", `{true && <Entity name="a">{children}</Entity>}`)), [DiagnosticCode.UnsupportedJsxChild]);
+    assert.deepEqual(diag(box("children: Child", `<Sprite image="a">{children}</Sprite>`)), [DiagnosticCode.UnsupportedJsxChild]);
+  });
+
+  it("does not forward children to another component yet", () => {
+    const source = `${box("children: Child", "{children}")}
+function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
+    assert.deepEqual(diag(source), [DiagnosticCode.UnsupportedJsxChild]);
+  });
+
+  it("does not read children as a value", () => {
+    assert.deepEqual(diag(box("children: Child", `{children}<Sprite image={children} />`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(diag(box("children: Child", `{children}<Sprite image={String(children)} />`)).includes(DiagnosticCode.UnsupportedExpression), true);
+  });
+
+  it("rejects a default for children", () => {
+    const source = `${IMPORT}interface BoxProps { children?: Child }\nfunction Box({ children = null }: BoxProps) { return <Entity name="Box">{children}</Entity>; }`;
+    assert.ok(diag(source).includes(DiagnosticCode.InvalidProps));
+  });
+
+  it("takes a list only as the whole of the passed children", () => {
+    const parent = (children: string) => `${box("children: Child", "{children}")}
+interface Row { id: string }
+function Table() {
+  const [rows, setRows] = useState<Row[]>([]);
+  return <Entity name="Table"><Box>${children}</Box></Entity>;
+}`;
+    assert.ok(diag(parent(`<Sprite image="x" />{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)).includes(DiagnosticCode.InvalidList));
+    assert.doesNotThrow(() => compile(parent(`{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)));
+  });
+
+  it("still rejects children on a list item and children as an attribute", () => {
+    const source = `${box("children: Child", "{children}")}
+interface Row { id: string }
+function Table() {
+  const [rows, setRows] = useState<Row[]>([]);
+  return <Entity name="Table">{rows.map((r) => <Box key={r.id}><Sprite image="x" /></Box>)}</Entity>;
+}`;
+    assert.ok(diag(source).includes(DiagnosticCode.InvalidList));
+    assert.ok(diag(`${box("children: Child", "{children}")}\nfunction A() { return <Entity name="A"><Box children={1} /></Entity>; }`).includes(DiagnosticCode.UnsupportedAttribute));
   });
 });

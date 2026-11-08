@@ -87,6 +87,12 @@ export interface ComponentIR {
   readonly propsType: string | null;
   /** `export default function Enemy() {}` or `export default Enemy;`: the module also exports it as its default. */
   readonly isDefaultExport: boolean;
+  /**
+   * The props type declares `children: Child` and the JSX has a `{children}`
+   * slot: a parent may pass elements, which mount at the slot. Such a
+   * component's runtime props are the props type without `children`.
+   */
+  readonly acceptsChildren: boolean;
   /** The root `<Entity>`: describes the component instance itself. */
   readonly root: HostElementIR;
 }
@@ -353,12 +359,28 @@ export interface ElementIR {
    * prop like any other, so position is ordinary state: `setX(...)` moves it.
    */
   readonly transform: readonly TransformPropIR[];
+  /**
+   * On a built-in, its own children. On a component, the children passed to it
+   * (`<Panel><Button /></Panel>`): still owned by this component, which
+   * constructs, updates and removes them, while the receiving component says
+   * where they mount (its `{children}` slot).
+   */
   readonly children: readonly ChildIR[];
   readonly span: SourceSpan;
 }
 
 /** How a child exists over time. */
-export type ChildIR = StaticChildIR | ConditionalChildIR | KeyedListChildIR;
+export type ChildIR = StaticChildIR | ConditionalChildIR | KeyedListChildIR | ChildrenSlotChildIR;
+
+/**
+ * `{children}`: where the elements a parent passes to this component mount.
+ * It takes a position among its siblings (so passed children land between
+ * them), but is no element of this component: the parent owns what mounts.
+ * Only in a container reachable through static elements, once per component.
+ */
+export interface ChildrenSlotChildIR {
+  readonly kind: "ChildrenSlot";
+}
 
 /** Created once with its parent; never recreated. */
 export interface StaticChildIR {

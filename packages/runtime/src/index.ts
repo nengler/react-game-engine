@@ -1,6 +1,7 @@
 export { GameObject } from "./GameObject.ts";
 export { Transform, composeTransforms, IDENTITY_TRANSFORM, type WorldTransform } from "./Transform.ts";
 export { World } from "./World.ts";
+export type { Child } from "./jsx-runtime.ts";
 export { Entity, type EntityProps } from "./components/Entity.ts";
 export { Sprite, type SpriteProps } from "./components/Sprite.ts";
 export { Collider, type ColliderProps } from "./components/Collider.ts";

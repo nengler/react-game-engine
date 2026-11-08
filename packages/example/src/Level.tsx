@@ -1,5 +1,6 @@
 import { useState, useRef, useUpdate, Entity, Sprite, Collider } from "@rge/runtime/jsx";
 import Coin, { Trail } from "./Coin.tsx";
+import { Panel } from "./Panel.tsx";
 
 interface EnemyProps {
   speed: number;
@@ -67,8 +68,10 @@ function Level() {
         />
       ))}
       {wave >= 3 && <Enemy speed={wave} transform={{ x: 120 }} />}
-      <Coin value={score} transform={{ x: 160 }} />
-      <Trail value={wave} transform={{ x: 200, y: 20 }} />
+      <Panel title="hud" transform={{ x: 160 }}>
+        <Coin value={score} />
+        <Trail value={wave} transform={{ x: 40, y: 20 }} />
+      </Panel>
       {bossVisible && (
         <Entity name="Boss">
           <Sprite image={wave > 5 ? "boss-enraged.png" : "boss.png"} />

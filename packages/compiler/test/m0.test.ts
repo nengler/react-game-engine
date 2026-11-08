@@ -4,8 +4,7 @@ import assert from "node:assert/strict";
 import { Entity, Sprite, World, runtimeManifest } from "@rge/runtime";
 import { Compiler, DiagnosticCode } from "../src/index.ts";
 import {
-  cleanOutput, closeCompiler, compile, compileErrors, compileProject, compileProjectErrors, load, loadProject, typeCheck, typeCheckProject, withAuthoringImports,
-} from "./helpers.ts";
+  cleanOutput, closeCompiler, compile, compileErrors, compileProject, compileProjectErrors, load, loadProject, typeCheck, typeCheckProject, withAuthoringImports, elementOf, getCompiler } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -155,7 +154,7 @@ function Player() {
   it("lowers an imported component to an Imported ref", () => {
     const project = compileProject({ "WarningIcon.tsx": WARNING, "Player.tsx": PLAYER });
     const player = project["Player.tsx"]!.ir.components[0]!;
-    const refs = player.root.children.map((c) => c.element.component);
+    const refs = player.root.children.map((c) => elementOf(c).component);
     assert.deepEqual(refs, [
       { kind: "Imported", name: "WarningIcon", module: "./WarningIcon.tsx", isDefault: false },
       { kind: "Imported", name: "WarningIcon", module: "./WarningIcon.tsx", isDefault: false },
@@ -236,11 +235,19 @@ function Player() {
       `import jsx from "@rge/runtime/jsx";`,
       `import { useState as state } from "@rge/runtime/jsx";`,
       `import type { useState } from "@rge/runtime/jsx";`,
-      `import { type useState } from "@rge/runtime/jsx";`,
     ]) {
       const codes = compileErrors(`import { Entity } from "@rge/runtime/jsx";\n${source}\nfunction S() { return <Entity name="S" />; }`).map((d) => d.code);
       assert.deepEqual(codes, [DiagnosticCode.UnsupportedSyntax], source);
     }
+  });
+
+  it("accepts `type` only on the authoring module's types, and requires it there", () => {
+    const wrap = (specifier: string) => `import { Entity, ${specifier} } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`;
+    assert.ok(getCompiler().compile("S.tsx", wrap("type Child")).ok);
+    assert.deepEqual(getCompiler().compile("S.tsx", wrap("type useState")).diagnostics.map((d) => d.code), [DiagnosticCode.UnknownImport], "a value cannot be imported as a type");
+    const value = getCompiler().compile("S.tsx", wrap("Child"));
+    assert.deepEqual(value.diagnostics.map((d) => d.code), [DiagnosticCode.UnknownImport]);
+    assert.match(value.diagnostics[0]!.message, /import \{ type Child \}/);
   });
 
   it("accepts the authoring module's hooks, built-ins and functions, and leaves no trace of the import in the output", () => {

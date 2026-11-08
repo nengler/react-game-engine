@@ -85,3 +85,43 @@ describe("keyed list order", () => {
     assert.deepEqual(other.children, [child, first], "equal (slot, order): insertion order");
   });
 });
+
+describe("passed children", () => {
+  /** A component that renders {children} in `body`, between a header and a footer. */
+  function panel(): { panel: GameObject; body: GameObject; header: GameObject; footer: GameObject } {
+    const panel = new GameObject();
+    const [body, header, footer] = [new GameObject(), new GameObject(), new GameObject()];
+    panel.addChild(body);
+    body.addChild(header, 0);
+    body.addChild(footer, 2);
+    (panel as unknown as { passedChildrenHost: GameObject }).passedChildrenHost = body;
+    (panel as unknown as { passedChildrenSlot: number }).passedChildrenSlot = 1;
+    return { panel, body, header, footer };
+  }
+
+  it("mount between the component's own children, by order", () => {
+    const { panel: p, body, header, footer } = panel();
+    const [a, b, c] = [new GameObject(), new GameObject(), new GameObject()];
+    p.attachPassedChild(c, 2);
+    p.attachPassedChild(a, 0);
+    p.queueAttachPassedChild(b, 1);
+    body.commitStructure();
+    assert.deepEqual(body.children, [header, a, b, c, footer]);
+  });
+
+  it("detach and reorder through the component", () => {
+    const { panel: p, body, header, footer } = panel();
+    const [a, b, c] = [new GameObject(), new GameObject(), new GameObject()];
+    p.attachPassedChild(a, 0);
+    p.attachPassedChild(b, 1);
+    p.attachPassedChild(c, 2);
+    p.queueDetachPassedChild(b);
+    p.queueReorderPassedChildren([c, a]);
+    body.commitStructure();
+    assert.deepEqual(body.children, [header, c, a, footer]);
+  });
+
+  it("throw a clear error when the component does not render {children}", () => {
+    assert.throws(() => new GameObject().attachPassedChild(new GameObject(), 0), /does not render \{children\}/);
+  });
+});

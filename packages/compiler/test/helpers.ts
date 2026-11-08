@@ -2,7 +2,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
-import { AUTHORING_HOOKS, Compiler, formatDiagnostic, type CompilerDiagnostic, type IRModule } from "../src/index.ts";
+import { AUTHORING_HOOKS, Compiler, formatDiagnostic, type ChildIR, type CompilerDiagnostic, type ElementIR, type IRModule } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** Inside the repo so generated code resolves `@rge/runtime` through the workspace. */
@@ -120,4 +120,10 @@ export function compileProjectErrors(sources: Readonly<Record<string, string>>):
     if (!result.ok) return result.diagnostics;
   }
   throw new Error("Expected a compilation failure");
+}
+
+/** The element a child holds; a `{children}` slot holds none. */
+export function elementOf(child: ChildIR): ElementIR {
+  if (child.kind === "ChildrenSlot") throw new Error("expected a child with an element, found the {children} slot");
+  return child.element;
 }
