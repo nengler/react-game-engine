@@ -43,7 +43,8 @@ export const runtimeManifest: RuntimeManifest = {
   hostIntrinsic: "Entity",
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
-    "name", "transform", "worldTransform", "parent", "children", "world",
+    // `updateProps` is generated into every component that has props, so a field may not take the name.
+    "name", "props", "applyProps", "updateProps", "transform", "placement", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "commitStructure",
     "markDirty", "runRender", "commitState", "render",

@@ -10,11 +10,12 @@
  */
 import type { GameObject } from "./GameObject.ts";
 import type { InputState } from "./input.ts";
-import type { Transform } from "./Transform.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
+
+export type { TransformProps } from "./jsx-runtime.ts";
 
 export { clamp } from "./math.ts";
 
@@ -58,25 +59,17 @@ export function onCollisionEnter(_handler: (other: GameObject) => void): void {
 
 // -- elements -----------------------------------------------------------------
 
-/** Position, rotation, scale and `global`, derived from the runtime's `Transform`. All optional. */
-export type TransformProps = Partial<Transform>;
-
-interface Placeable {
-  /** Relative to the parent unless `global: true`. Values may come from state. */
-  transform?: TransformProps;
-}
-
 /** A named container; the usual root of a component. */
-export function Entity(_props: EntityProps & Placeable & { children?: Child }): JSX.Element {
+export function Entity(_props: EntityProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Entity");
 }
 
 /** Draws an image. */
-export function Sprite(_props: SpriteProps & Placeable): JSX.Element {
+export function Sprite(_props: SpriteProps): JSX.Element {
   return compileTimeOnly("Sprite");
 }
 
 /** A hit area for collisions. */
-export function Collider(_props: ColliderProps & Placeable): JSX.Element {
+export function Collider(_props: ColliderProps): JSX.Element {
   return compileTimeOnly("Collider");
 }

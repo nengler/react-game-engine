@@ -1,6 +1,7 @@
 {
   "kind": "Module",
   "sourceFile": "packages/example/src/Hero.tsx",
+  "typeDeclarations": [],
   "components": [
     {
       "kind": "Component",
@@ -398,6 +399,8 @@
         }
       ],
       "refs": [],
+      "props": [],
+      "propsType": null,
       "root": {
         "kind": "HostElement",
         "component": {
@@ -446,7 +449,10 @@
                     }
                   },
                   "dependencies": [
-                    "Hero.poisoned"
+                    {
+                      "kind": "State",
+                      "state": "Hero.poisoned"
+                    }
                   ]
                 }
               ],

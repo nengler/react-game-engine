@@ -109,6 +109,16 @@ function C() {
     }
   });
 
+  it("accepts transform and key on a component element, whose props type does not declare them", () => {
+    const source = `${IMPORTS}
+interface CoinProps { value: number }
+function Coin({ value }: CoinProps) { return <Entity name="coin" transform={{ y: value }} />; }
+function Level() { return <Entity name="level"><Coin value={1} transform={{ x: 10, global: true }} /></Entity>; }`;
+    assert.deepEqual(checkSource(source), []);
+    assert.ok(checkSource(source.replace("global: true", `global: "yes"`)).length > 0, "its values are still type-checked");
+    assert.ok(checkSource(source.replace("<Coin value={1}", "<Coin value={1} nope={2}")).length > 0, "other unknown props are still reported");
+  });
+
   it("reports setter and ref misuse", () => {
     for (const body of [`setN("a");`, `setN((n) => n + "a");`, `r.current = "a";`, `useUpdate((dt) => dt.x);`, `useInput((input) => input.nope);`]) {
       const errors = checkSource(`${IMPORTS}

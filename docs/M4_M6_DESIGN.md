@@ -6,6 +6,8 @@ Guiding rule: authoring should feel as close to ideal React as possible, so the 
 
 ## M4: props and callbacks
 
+**Status.** M4a (everything below except the "Also in M4" items) shipped in #10, as described in [DESIGN.md](DESIGN.md#props-and-callbacks). It differs from this design in two small ways: defaults are passed to the runtime host as a third constructor argument (`super(host, props, defaults)`) instead of being merged in the generated `super` call, and a props type must be declared in the same file as its component (the parent never needs it, so this only rules out importing a props type from elsewhere). M4b covers the rest.
+
 #### a. Top-level `interface` and `type` declarations (analyzer)
 
 Today any top-level statement that is not an import or a component is `RGE1001`, so `interface EnemyProps {…}` does not compile at all.

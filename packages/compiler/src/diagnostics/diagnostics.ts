@@ -19,11 +19,14 @@ export const DiagnosticCode = {
   UnknownComponent: "RGE1201",
   UnsupportedJsxChild: "RGE1202",
   UnsupportedAttribute: "RGE1203",
+  /** Retired: props on local and imported components are supported (M4). */
   LocalComponentProps: "RGE1204",
   ComponentCycle: "RGE1205",
   DuplicateComponent: "RGE1206",
   /** `transform={{ ... }}` that is malformed, or on an element that has no transform. */
   InvalidTransformAttribute: "RGE1207",
+  /** A component's props parameter or props type is not in the supported form, or a prop is passed the wrong way. */
+  InvalidProps: "RGE1208",
   UnsupportedExpression: "RGE1301",
   UnknownIdentifier: "RGE1302",
   NonConstantInitialState: "RGE1303",

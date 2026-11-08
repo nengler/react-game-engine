@@ -13,7 +13,8 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
 | M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform` and element refs; #8 replaced them with a `transform={{ x, y }}` attribute driven by state and value refs (`useRef(0)`), and also renamed the per-frame hooks to `useUpdate`/`useInput` and switched state reads to React's snapshot semantics (see Decisions) |
 | M7 Authoring types | In review | #9 | Component source imports from `@rge/runtime/jsx` (mandatory: `RGE1005` otherwise); the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI) |
-| M4 Props and callbacks | Not started | n/a | Also: collision events as `<Collider onCollisionEnter>` props, fragment and non-Entity roots, arrow-function and default-export components |
+| M4a Props and callbacks | In review | #10 | Destructured props with a declared type, defaults, callbacks, `updateProps`, prop dependencies, `transform` on a component as `placement`, `useState(prop)` type inference. Imported children work: the parent needs nothing about their props |
+| M4b Roots and component forms | Not started | n/a | Collision events as `<Collider onCollisionEnter>` props, fragment and non-Entity roots, arrow-function and default-export components, the non-destructured `props` form |
 | M8 Children | Not started | n/a | Needs M4 |
 | M5 Keyed dynamic lists | Not started | n/a | Needs M4; split into M5a (arrays and records in handlers) and M5b (keyed list) |
 | M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
@@ -175,6 +176,8 @@ function Player() {
 ## M4 — Props and callbacks between components (~1.5 weeks, needs M1)
 
 Detailed design, which supersedes the details below where they differ: [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m4-props-and-callbacks).
+
+**Split.** M4a (props, callbacks, placement) is in review in #10 and described in [DESIGN.md](DESIGN.md#props-and-callbacks). M4b is the "Also in M4" list further down: collision props, fragment and non-Entity roots, arrow-function and default-export components.
 
 A parent passes values and callbacks to a local or imported component; a changed value updates the existing child instance in place.
 
@@ -446,14 +449,22 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 - [x] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
 - [x] `npm test` and `npm run typecheck` pass on Node 22.18+ (`m3.test.ts`; example `Mover.tsx`)
 
-### M4 Props and callbacks
+### M4a Props and callbacks
 
-- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
-- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
-- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
-- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
-- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
-- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+- [x] New IR variants added in `ir/types.ts`, with every `assertNever` site handled (`PropDeclIR`, `PropTypeIR`, `PropRead`, `CallbackProp`, `DependencyIR`, `TypeDeclarationIR`)
+- [x] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test (`RGE1208`, `m4.test.ts`)
+- [x] `docs/DESIGN.md` updated: authoring rules, IR notes, generated-code example ("Props and callbacks")
+- [x] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed (`Level.tsx`)
+- [x] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change, defaults, callbacks, placement, cross-file)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M4b Roots and component forms
+
+- [ ] `<Collider onCollisionEnter>` callback prop replaces the `onCollisionEnter` hook
+- [ ] Fragment and non-Entity roots (the class extends the root element's type), with children only where the element accepts them
+- [ ] Arrow-function components, default exports and default imports
+- [ ] The non-destructured `props` parameter form
+- [ ] Docs, example and tests as for every milestone
 
 ### M5 Keyed dynamic lists
 

@@ -113,12 +113,15 @@ describe("IR construction", () => {
     const expected = {
       kind: "Module",
       sourceFile: "Player.tsx",
+      typeDeclarations: [],
       components: [
         {
           kind: "Component",
           name: "Player",
           hooks: [{ kind: "UseState", state: "Player.health", setterName: "setHealth" }],
           refs: [],
+          props: [],
+          propsType: null,
           state: [
             {
               kind: "State",
@@ -154,7 +157,7 @@ describe("IR construction", () => {
                   left: { kind: "StateRead", state: "Player.health" },
                   right: { kind: "NumberLiteral", value: 25 },
                 },
-                dependencies: ["Player.health"],
+                dependencies: [{ kind: "State", state: "Player.health" }],
                 element: {
                   kind: "Element",
                   id: "Player/1",
@@ -172,6 +175,8 @@ describe("IR construction", () => {
           kind: "Component",
           name: "WarningIcon",
           refs: [],
+          props: [],
+          propsType: null,
           hooks: [],
           state: [],
           root: {
@@ -202,13 +207,13 @@ describe("IR construction", () => {
     `);
     const p = ir.components[0]!;
     assert.deepEqual(stripSpans(p.root.props), [
-      { kind: "DynamicProp", name: "name", value: { kind: "StateRead", state: "P.label" }, dependencies: ["P.label"] },
+      { kind: "DynamicProp", name: "name", value: { kind: "StateRead", state: "P.label" }, dependencies: [{ kind: "State", state: "P.label" }] },
     ]);
     const [sprite, collider] = p.root.children.map((c) => c.element);
     assert.deepEqual(stripSpans(sprite!.props[0]), {
       kind: "DynamicProp",
       name: "image",
-      dependencies: ["P.health"],
+      dependencies: [{ kind: "State", state: "P.health" }],
       value: {
         kind: "Conditional",
         test: {
@@ -287,9 +292,9 @@ describe("diagnostics", () => {
       `function A() { const [a, setA] = useState(1); return <Entity name={setA} />; }`,
     ],
     [
-      "props on local component",
-      DiagnosticCode.LocalComponentProps,
-      `function B() { return <Entity />; } function A() { return <Entity><B x={1} /></Entity>; }`,
+      "children passed to a component",
+      DiagnosticCode.UnsupportedJsxChild,
+      `function B() { return <Entity />; } function A() { return <Entity><B><Entity /></B></Entity>; }`,
     ],
     ["static self-reference", DiagnosticCode.ComponentCycle, `function A() { return <Entity><A /></Entity>; }`],
     ["non-literal state type", DiagnosticCode.UnsupportedStateType, `function A() { const [a, setA] = useState(null); return <Entity />; }`],

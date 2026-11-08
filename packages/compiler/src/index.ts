@@ -10,7 +10,7 @@ import { typeCheckFiles, typeCheckSources, type VirtualFile } from "./typecheck/
 export * from "./ir/types.ts";
 export type { RuntimeManifest } from "@rge/runtime";
 export * from "./diagnostics/diagnostics.ts";
-export { analyzeSourceFile, AUTHORING_HOOKS, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
+export { analyzeSourceFile, AUTHORING_HOOKS, type PropsAnalysis, type TypeDeclarationAnalysis, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
 export { generateModule, type GeneratorOptions } from "./generator/generator.ts";
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";

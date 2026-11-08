@@ -21,6 +21,14 @@ export class GameObject {
    * with the `transform={{ x, y }}` attribute.
    */
   readonly transform: Transform = new Transform();
+  /**
+   * Where the parent placed this object, composed under `transform`: a
+   * component's own (state-driven) `transform` moves it relative to its
+   * placement, so `<Mover transform={{ x: 200 }} />` starts at 200 and moves
+   * from there. Set by the parent's `transform` attribute on a component
+   * element, or by a scene; identity otherwise.
+   */
+  readonly placement: Transform = new Transform();
   parent: GameObject | null = null;
   readonly children: GameObject[] = [];
   world: World | null = null;
@@ -95,10 +103,14 @@ export class GameObject {
     }
   }
 
-  /** This object's transform in world space: its own, composed with every ancestor's (see `Transform`). */
+  /**
+   * This object's transform in world space: the parent's, then this object's
+   * `placement`, then its own `transform` (see `Transform`). A `global`
+   * placement ignores the parent; a `global` transform ignores both.
+   */
   worldTransform(): WorldTransform {
     const parent = this.parent === null ? IDENTITY_TRANSFORM : this.parent.worldTransform();
-    return composeTransforms(parent, this.transform);
+    return composeTransforms(composeTransforms(parent, this.placement), this.transform);
   }
 
   /** Request a render pass for this object. */
