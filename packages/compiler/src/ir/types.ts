@@ -9,6 +9,8 @@
 declare const stateIdBrand: unique symbol;
 declare const elementIdBrand: unique symbol;
 declare const localIdBrand: unique symbol;
+declare const transformIdBrand: unique symbol;
+declare const refIdBrand: unique symbol;
 
 /** Identifies a persistent state slot within a component. */
 export type StateId = string & { readonly [stateIdBrand]: true };
@@ -17,6 +19,19 @@ export type ElementId = string & { readonly [elementIdBrand]: true };
 
 /** Identifies a parameter or `const` local inside one function body. */
 export type LocalId = string & { readonly [localIdBrand]: true };
+
+/** Identifies a component's `useTransform` slot. */
+export type TransformId = string & { readonly [transformIdBrand]: true };
+/** Identifies a `useRef` handle within a component. */
+export type RefId = string & { readonly [refIdBrand]: true };
+
+export function transformId(component: string, name: string): TransformId {
+  return `${component}.${name}` as TransformId;
+}
+
+export function refId(component: string, name: string): RefId {
+  return `${component}.${name}` as RefId;
+}
 
 export function localId(component: string, name: string, serial: number): LocalId {
   return `${component}.${name}#${serial}` as LocalId;
@@ -58,6 +73,8 @@ export interface ComponentIR {
   readonly hooks: readonly HookIR[];
   /** Persistent storage slots created by hooks. */
   readonly state: readonly StateIR[];
+  /** `useRef` handles, each resolved to the element it is attached to. */
+  readonly refs: readonly RefIR[];
   /** The root `<Entity>`: describes the component instance itself. */
   readonly root: HostElementIR;
 }
@@ -66,8 +83,38 @@ export interface ComponentIR {
 // Hooks and state
 // ---------------------------------------------------------------------------
 
-/** Hook declarations. Future: useTransform, useRef, ... */
-export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnCollisionEnterHookIR;
+/** Hook declarations. (`useRef` is not a hook entry: its handle is a `RefIR` in `ComponentIR.refs`.) */
+export type HookIR = UseStateHookIR | UseTransformHookIR | OnUpdateHookIR | OnInputHookIR | OnCollisionEnterHookIR;
+
+/** The fields of a transform, which live on the runtime `Entity.transform`. */
+export const TRANSFORM_FIELDS = ["x", "y", "rotation", "scaleX", "scaleY"] as const;
+export type TransformField = (typeof TRANSFORM_FIELDS)[number];
+
+/**
+ * `const t = useTransform({ x: 0, y: 0 })`: binds the component's own
+ * `this.transform`. Not reactive: writes never mark the object dirty.
+ */
+export interface UseTransformHookIR {
+  readonly kind: "UseTransform";
+  readonly slot: TransformId;
+  /** The name the source binds it to. */
+  readonly name: string;
+  /** Fields not listed keep the runtime defaults (0, 0, 0, 1, 1). */
+  readonly initial: Readonly<Partial<Record<TransformField, number>>>;
+  readonly span: SourceSpan;
+}
+
+/** `const r = useRef<Sprite>()` attached with `ref={r}`. The element's field takes the ref's name. */
+export interface RefIR {
+  readonly kind: "Ref";
+  readonly id: RefId;
+  /** Also the generated field name of the target element. */
+  readonly name: string;
+  /** The tag the ref was declared for (`Sprite`). */
+  readonly componentName: string;
+  readonly target: ElementId;
+  readonly span: SourceSpan;
+}
 
 export interface UseStateHookIR {
   readonly kind: "UseState";
@@ -99,6 +146,10 @@ export interface OnCollisionEnterHookIR {
 }
 
 export type HandlerHookIR = OnUpdateHookIR | OnInputHookIR | OnCollisionEnterHookIR;
+
+export function isHandlerHook(hook: HookIR): hook is HandlerHookIR {
+  return hook.kind === "OnUpdate" || hook.kind === "OnInput" || hook.kind === "OnCollisionEnter";
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,9 +192,35 @@ export interface FunctionIR {
 /**
  * Statements are only valid inside functions. State reads are live: after a
  * `SetState`, later reads in the same function see the new value.
- * Future: `Assign` (needs assignment targets, which arrive with `useTransform`).
  */
-export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR;
+export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR | AssignStmtIR;
+
+export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=";
+
+/** Where an assignment writes. Neither target is reactive: no write marks anything dirty. */
+export type AssignTargetIR = TransformFieldTargetIR | RefPropertyTargetIR;
+
+/** `t.x`, where `t` is the component's `useTransform` binding. */
+export interface TransformFieldTargetIR {
+  readonly kind: "TransformField";
+  readonly slot: TransformId;
+  readonly field: TransformField;
+}
+
+/** `r.current.image`, where `r` is a `useRef` handle to an intrinsic element. */
+export interface RefPropertyTargetIR {
+  readonly kind: "RefProperty";
+  readonly ref: RefId;
+  readonly property: string;
+}
+
+/** `target = value;` and the compound forms. */
+export interface AssignStmtIR {
+  readonly kind: "Assign";
+  readonly target: AssignTargetIR;
+  readonly operator: AssignOperator;
+  readonly value: ExprIR;
+}
 
 /** An allowlisted call evaluated for its effect (later: callback props). */
 export interface ExpressionStatementIR {
@@ -299,6 +376,9 @@ export type ExprIR =
   | LocalReadIR
   | ParamReadIR
   | PropertyReadIR
+  | TransformReadIR
+  | RefReadIR
+  | RefPropertyReadIR
   | CallIR
   | TemplateLiteralIR
   | UnaryExprIR
@@ -348,6 +428,26 @@ export interface PropertyReadIR {
   readonly kind: "PropertyRead";
   readonly object: ParamReadIR;
   readonly name: string;
+}
+
+/** `t.x`: reads the live transform field. Only valid inside handlers (a JSX read would never update). */
+export interface TransformReadIR {
+  readonly kind: "TransformRead";
+  readonly slot: TransformId;
+  readonly field: TransformField;
+}
+
+/** `r.current`: the ref's element, `null` while a conditional element is unmounted. Only valid inside handlers. */
+export interface RefReadIR {
+  readonly kind: "RefRead";
+  readonly ref: RefId;
+}
+
+/** `r.current.image`: a property of the ref's element. The element must be non-null (the type-check enforces this). */
+export interface RefPropertyReadIR {
+  readonly kind: "RefPropertyRead";
+  readonly ref: RefId;
+  readonly property: string;
 }
 
 /** A call to a fixed allowlist (`Math.*`, `clamp`) or a method of a runtime handle parameter. */
@@ -414,6 +514,9 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "StateRead":
     case "LocalRead":
     case "ParamRead":
+    case "TransformRead":
+    case "RefRead":
+    case "RefPropertyRead":
       return [];
     case "PropertyRead":
       return [e.object];

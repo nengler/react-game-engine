@@ -13,6 +13,11 @@ export interface RuntimeManifest {
    * fields, setters and handlers must not shadow.
    */
   readonly reservedMembers: readonly string[];
+  /**
+   * Intrinsic → properties handler code may read and assign through a ref
+   * (`ref.current.image = "x.png"`). Refs to other components allow none.
+   */
+  readonly elementProperties: Readonly<Record<string, readonly string[]>>;
   /** Runtime types handler parameters may have, with the members handler code may use. */
   readonly handleTypes: Readonly<Record<string, HandleTypeManifest>>;
   /** Runtime functions handler code may call, imported from the runtime module. Name → argument count. */
@@ -30,7 +35,7 @@ export const runtimeManifest: RuntimeManifest = {
   hostIntrinsic: "Entity",
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
-    "name", "parent", "children", "world",
+    "name", "transform", "parent", "children", "world",
     "isDirty", "hasPendingStructure",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "commitStructure",
     "markDirty", "runRender", "render",
@@ -39,6 +44,11 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
+  elementProperties: {
+    Entity: ["name"],
+    Sprite: ["image"],
+    Collider: ["width", "height"],
+  },
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },

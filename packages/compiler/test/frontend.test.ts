@@ -99,7 +99,7 @@ describe("analyzer", () => {
   it("rejects unknown hooks", () => {
     const diagnostics = compileErrors(`
       function Bad() {
-        const pos = useTransform();
+        const pos = useWobble();
         return <Entity />;
       }
     `);
@@ -118,6 +118,7 @@ describe("IR construction", () => {
           kind: "Component",
           name: "Player",
           hooks: [{ kind: "UseState", state: "Player.health", setterName: "setHealth" }],
+          refs: [],
           state: [
             {
               kind: "State",
@@ -167,6 +168,7 @@ describe("IR construction", () => {
         {
           kind: "Component",
           name: "WarningIcon",
+          refs: [],
           hooks: [],
           state: [],
           root: {
