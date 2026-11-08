@@ -88,7 +88,7 @@ export const runtimeManifest: RuntimeManifest = {
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure",
     "passedChildrenHost", "passedChildrenSlot", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "runRender", "commitState", "render",
-    "onInput", "onUpdate",
+    "onInput", "onUpdate", "onMount", "onUnmount",
     "attachToWorld", "detachFromWorld",
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",

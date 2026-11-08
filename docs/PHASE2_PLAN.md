@@ -15,10 +15,10 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M7 Authoring types | Done | #9 | Component source imports from `@rge/runtime/jsx` (mandatory: `RGE1005` otherwise); the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI) |
 | M4a Props and callbacks | Done | #10 | Destructured props with a declared type, defaults, callbacks, `updateProps`, prop dependencies, `transform` on a component as `placement`, `useState(prop)` type inference. Imported children work: the parent needs nothing about their props |
 | M4b Roots and component forms | Done | #11 | `<Collider onCollisionEnter>` replaces the hook (a per-collider callback), fragment and non-Entity roots, arrow-function and default-export components, the `props` object form, `useState` type inference over expressions. Completes M4 |
-| M8 Children | In review | #14 | `children: Child` and `{children}` in the receiver, elements between the tags in the parent (static, conditional, or a sole list). The parent owns and updates what it passes; the receiver only says where it mounts. Forwarding `{children}` and children on list items are not supported yet |
+| M8 Children | Done | #14 | `children: Child` and `{children}` in the receiver, elements between the tags in the parent (static, conditional, or a sole list). The parent owns and updates what it passes; the receiver only says where it mounts. Forwarding `{children}` and children on list items are not supported yet |
 | M5a Arrays and records in handlers | Done | #12 | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
 | M5b Keyed lists | In review | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
-| M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
+| M9 Mount and unmount hooks | In review | #15 | `useMount` (may set state; renders in the same flush) and `useUnmount` (no setters; refs and callback props). Mount is children first, unmount parent first. Also fixes list-item callbacks that read the item during an unmount |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
 | M10 `<Text>` | Not started | n/a | Needs M7. HUD and labels; `transformIntrinsics` |
 | M11 `<Shape>` | Not started | n/a | Needs M7. Rectangles and circles for debugging and prototypes; `transformIntrinsics` |
@@ -302,6 +302,8 @@ Implemented as described in [DESIGN.md](DESIGN.md#children), with one difference
 
 `useMount(() => …)` runs once, after the component is first attached to a `World` and its first render has committed. `useUnmount(() => …)` runs when it is removed from the `World` (a conditional turning off, a list item removed, a scene unloaded). Both are top-level hooks lowered to `FunctionIR` like `useUpdate`. Setters in `useUnmount` are a diagnostic (the component is gone); refs may be read and written. There is no `useEffect`: reacting to a state change is done where the state changes.
 
+Implemented as described in [DESIGN.md](DESIGN.md#mount-and-unmount). Ordering, which the sketch left open: a subtree mounts children first and unmounts parent first. The sketch also said `useMount` runs "after its first render has committed": the constructor already runs the first render, so mounting at attach satisfies it.
+
 ## M10 — `<Text>` (~3–4 days, needs M7)
 
 A text element for HUDs, labels and menus. It is the first built-in whose content is a string prop, so it exercises dynamic string props in a built-in.
@@ -514,6 +516,16 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 - [x] `docs/DESIGN.md` updated ("Children", authoring rules, IR notes)
 - [x] `Panel.tsx` in the example, used by `Level.tsx`; `npm run example` regenerated and committed
 - [x] Tests cover the IR shape, generated code, both type-checks and runtime behaviour: mounting between the receiver's children, conditional passed children, a conditional receiver remounting, a sole list, the missing-slot error (`m5.test.ts`, `order.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M9 Mount and unmount hooks
+
+- [x] New IR (`OnMount`, `OnUnmount` hooks), with every `assertNever` site handled
+- [x] Analyzer and transform recognise the hooks; every unsupported form has a diagnostic and a test (setters in `useUnmount`, parameters, non-arrow and missing arguments, missing import, nested or conditional use)
+- [x] Runtime: `onMount` / `onUnmount` on `GameObject`, run once per stay in a world on attach and detach; reserved in the manifest
+- [x] `docs/DESIGN.md` updated ("Mount and unmount", authoring rules)
+- [x] `Banner.tsx` in the example, used by `Level.tsx`; `npm run example` regenerated and committed
+- [x] Tests cover the IR shape, generated code, both type-checks and runtime behaviour: order, once per stay, same-flush render of mount state, conditional and list unmount, an unmount callback reading a removed list item (`m9.test.ts`, `order.test.ts`)
 - [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M10 `<Text>`

@@ -60,6 +60,24 @@ export function useInput(_handler: (input: InputState) => void): void {
   return compileTimeOnly("useInput");
 }
 
+/**
+ * Runs once, when the component joins the world (after its children have).
+ * Setting state here renders in the same frame. There is no cleanup to
+ * return: that is `useUnmount`.
+ */
+export function useMount(_handler: () => void): void {
+  return compileTimeOnly("useMount");
+}
+
+/**
+ * Runs once, when the component leaves the world (a condition turning off, a
+ * list item removed). It cannot set state, since the component is going away;
+ * it can write refs and call callback props, which is how the parent finds out.
+ */
+export function useUnmount(_handler: () => void): void {
+  return compileTimeOnly("useUnmount");
+}
+
 // -- elements -----------------------------------------------------------------
 
 /** A named container; the usual root of a component. */

@@ -102,7 +102,7 @@ export interface ComponentIR {
 // ---------------------------------------------------------------------------
 
 /** Hook declarations. (`useRef` is not a hook entry: its handle is a `RefIR` in `ComponentIR.refs`.) */
-export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR;
+export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnMountHookIR | OnUnmountHookIR;
 
 /**
  * The fields of a transform (runtime `Entity.transform`), settable with the
@@ -152,10 +152,32 @@ export interface OnInputHookIR {
   readonly span: SourceSpan;
 }
 
-export type HandlerHookIR = OnUpdateHookIR | OnInputHookIR;
+/**
+ * `useMount(() => { ... })`: runs once when the component joins a `World`,
+ * after its children have mounted (and its first render, which the
+ * constructor runs). Setting state here renders in the same flush.
+ */
+export interface OnMountHookIR {
+  readonly kind: "OnMount";
+  readonly handler: FunctionIR;
+  readonly span: SourceSpan;
+}
+
+/**
+ * `useUnmount(() => { ... })`: runs once when the component leaves its
+ * `World`. It cannot set state (the component is going away); refs and
+ * callback props work.
+ */
+export interface OnUnmountHookIR {
+  readonly kind: "OnUnmount";
+  readonly handler: FunctionIR;
+  readonly span: SourceSpan;
+}
+
+export type HandlerHookIR = OnUpdateHookIR | OnInputHookIR | OnMountHookIR | OnUnmountHookIR;
 
 export function isHandlerHook(hook: HookIR): hook is HandlerHookIR {
-  return hook.kind === "OnUpdate" || hook.kind === "OnInput";
+  return hook.kind === "OnUpdate" || hook.kind === "OnInput" || hook.kind === "OnMount" || hook.kind === "OnUnmount";
 }
 
 // ---------------------------------------------------------------------------
