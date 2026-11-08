@@ -112,7 +112,10 @@
           "kind": "State",
           "id": "Coin.angle",
           "name": "angle",
-          "type": "number",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
           "initialValue": {
             "kind": "NumberLiteral",
             "value": 0

@@ -438,14 +438,15 @@ describe("M4: diagnostics", () => {
   it("infers a state's type from a primitive prop, and asks for a type argument otherwise", () => {
     const P = `interface P { label: string; count: number; items: number[]; onX?: () => void }`;
     const state = (initial: string, typeArgument = "") => withProps(P, `{ label, count, items }: P`, `const [v, setV] = useState${typeArgument}(${initial});`);
-    assert.equal(compile(state("label")).ir.components[0]!.state[0]!.type, "string");
-    assert.equal(compile(state("count")).ir.components[0]!.state[0]!.type, "number");
-    assert.deepEqual(codes(state("items")), [DiagnosticCode.UnsupportedStateType]);
+    const primitive = (name: string) => ({ kind: "Primitive", name });
+    assert.deepEqual(compile(state("label")).ir.components[0]!.state[0]!.type, primitive("string"));
+    assert.deepEqual(compile(state("count")).ir.components[0]!.state[0]!.type, primitive("number"));
+    assert.deepEqual(compile(state("items")).ir.components[0]!.state[0]!.type, { kind: "Array", element: primitive("number") }, "an array prop (M5a)");
     for (const [initial, type] of [["count * 2", "number"], ["count + 1", "number"], ["label + \"!\"", "string"], ["`${label}:${count}`", "string"], ["count > 3", "boolean"], ["!label", "boolean"], ["count > 3 ? 1 : 2", "number"]] as const) {
-      assert.equal(compile(state(initial)).ir.components[0]!.state[0]!.type, type, initial);
+      assert.deepEqual(compile(state(initial)).ir.components[0]!.state[0]!.type, primitive(type), initial);
     }
     assert.deepEqual(codes(state("count > 3 ? 1 : label")), [DiagnosticCode.UnsupportedStateType], "branches of different types");
-    assert.equal(compile(state("count", "<number>")).ir.components[0]!.state[0]!.type, "number");
+    assert.deepEqual(compile(state("count", "<number>")).ir.components[0]!.state[0]!.type, primitive("number"));
   });
 
   it("keeps the generated updateProps name free", () => {

@@ -20,8 +20,11 @@ export { clamp } from "./math.ts";
 
 // -- state and refs -----------------------------------------------------------
 
-/** `useState(100)` infers `number`, not the literal `100`. */
-type Widen<T> = T extends number ? number : T extends string ? string : T extends boolean ? boolean : never;
+/** `useState(100)` infers `number`, not the literal `100`. Arrays and records are kept as written. */
+type Widen<T> = T extends number ? number : T extends string ? string : T extends boolean ? boolean : T;
+
+/** Primitive values, the only thing a ref holds. */
+type Primitive = number | string | boolean;
 
 export type Setter<T> = (value: T | ((previous: T) => T)) => void;
 
@@ -29,13 +32,19 @@ function compileTimeOnly(name: string): never {
   throw new Error(`${name} is a compile-time declaration: components are compiled by @rge/compiler, not executed.`);
 }
 
-/** State: reads are a snapshot of the last render, as in React; setters batch into one render per frame. */
-export function useState<T extends number | string | boolean>(_initial: T): [Widen<T>, Setter<Widen<T>>] {
+/**
+ * State: reads are a snapshot of the last render, as in React; setters batch
+ * into one render per frame. Arrays and records need their type
+ * (`useState<EnemyData[]>([])`) and are updated immutably: a setter only
+ * renders when it is given a new value, so `setItems([...items, item])`, never
+ * a mutation of `items`.
+ */
+export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>] {
   return compileTimeOnly("useState");
 }
 
 /** A value that persists across frames but never renders. Read and write `.current` in handlers only. */
-export function useRef<T extends number | string | boolean>(_initial: T): { current: Widen<T> } {
+export function useRef<T extends Primitive>(_initial: T): { current: Widen<T> } {
   return compileTimeOnly("useRef");
 }
 

@@ -90,7 +90,10 @@ ignored):
   `Entity`. See "Roots and component forms".
 * `useState` is a compiler intrinsic. It must be a top-level `const` array
   destructuring. Calls anywhere else, or any other `use*` call, are errors.
-  State type is inferred from the initial literal (`number`/`string`/`boolean`).
+  State type is inferred from the initial literal (`number`/`string`/`boolean`)
+  or a prop; an array or record needs its type (`useState<EnemyData[]>([])`,
+  with `EnemyData` declared in the file) and is updated immutably. See
+  "Arrays and records".
 * Children: elements, `{condition && <Element />}`, or
   `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two
   conditional children, on `condition` and `!condition`). Text children,
@@ -125,7 +128,9 @@ ignored):
   destructured parameter annotated with a props type declared in the same
   file, and a parent passes them as attributes; see "Props and callbacks".
 * Expressions: number/string/boolean/null literals, state reads, unary
-  `! - +`, binary arithmetic / comparison / logical, `?:`, parentheses.
+  `! - +`, binary arithmetic / comparison / logical, `?:`, parentheses, array
+  and object literals (with spreads), member reads (`e.id`, `items.length`,
+  `found?.hp`) and the non-mutating array methods. See "Arrays and records".
 
 ## IR
 
@@ -171,7 +176,8 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 | ~~event props (`<Collider onCollisionEnter={…}>`)~~ | done: the same `CallbackProp` a component receives, with parameter types from the runtime manifest; see "Roots and component forms" |
 | ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
 | ~~props between components~~ | done: `ComponentIR.props: PropDeclIR[]` and `propsType`, `IRModule.typeDeclarations`, `ExprIR` `PropRead`, `CalleeIR` `Prop`, `PropIR` `CallbackProp`, `DependencyIR`; see "Props and callbacks" |
-| keyed lists | `ChildIR` variant `KeyedListChild { items, key, element }` |
+| ~~arrays and records in handlers (M5a)~~ | done: `TypeIR` `Array` / `SourceType` for state, `ExprIR` `ArrayLiteral`, `ObjectLiteral`, `MemberRead`, `Arrow`, `CalleeIR` `ArrayMethod`; see "Arrays and records" |
+| keyed lists (M5b) | `ChildIR` variant `KeyedListChild { source, item, index, key, element, dependencies }` |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
 
 ## Handlers
@@ -248,6 +254,83 @@ in the next `tick`.
 Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
 not JSX event props. Element-level events are callback props on the element
 (`<Collider onCollisionEnter>`, later `<Pointer onPress>`).
+
+## Arrays and records
+
+State can hold an array or a record (M5a), so a component can keep a list of
+things and change it from handlers:
+
+```tsx
+interface EnemyData { id: string; hp: number }
+
+function Swarm() {
+  const [enemies, setEnemies] = useState<EnemyData[]>([]);
+  useUpdate((dt) => {
+    setEnemies(enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0));
+  });
+  return <Entity name="Swarm"><Sprite image={enemies.length > 3 ? "busy.png" : "calm.png"} /></Entity>;
+}
+```
+
+**State types.** `StateIR.type` is a `TypeIR`: a `Primitive`, an `Array` of
+an element type, or a `SourceType { text }` (a type written in the file:
+`EnemyData`, `Item | null`), copied into the generated code as written, next
+to the file's copied type declarations, so the type-check resolves it. A
+primitive is inferred from the initial value as before; state initialised
+from a prop takes the prop's type; an array or object literal needs the type
+argument (`useState([])` is `RGE1104`, as `[]` alone would be `never[]` in
+TypeScript). Refs stay primitive (`RGE1106`). The authoring `useState<T>`
+accepts any `T` and widens only primitives.
+
+**Expressions.**
+
+| Source | IR |
+| --- | --- |
+| `[a, ...rest]` | `ArrayLiteral { elements: { spread, value }[] }` |
+| `{ id, hp: 2, ...e }` | `ObjectLiteral { properties: (Property \| Spread)[] }`; no methods, getters or computed names |
+| `e.id`, `items.length`, `found?.hp` | `MemberRead { object, name, optional }` |
+| `items.filter((e) => e.hp > 0)` | `Call` with `CalleeIR` `ArrayMethod { receiver, name }`; the callback is an `Arrow { params, body }` |
+
+`MemberRead` is a member of any value: the compiler does not know the value's
+type, and the type-check of the generated code (or of the source) validates
+it. Members of a number or boolean parameter or state are still rejected
+early. Members of a runtime handle parameter (`input.pointerX`) remain
+`PropertyRead`, checked against the manifest.
+
+**Array methods** (`ARRAY_METHODS` in `ir/types.ts`): `filter`, `map`,
+`some`, `every`, `find`, `findIndex` (each takes a callback), `includes`,
+`indexOf`, `slice` and `concat`. None changes its receiver. The mutating ones
+(`push`, `splice`, `sort`, `forEach`, …) are `RGE1301` with the immutable
+alternative (`setItems([...items, item])`). A callback is an inline,
+expression-bodied arrow: it is consumed synchronously by the method, so it
+never escapes (a deliberate, narrow exception to "no closures"), and with no
+block body it cannot set state or call callbacks while the array is walked.
+Its parameters are `Contextual`: the array's element type provides them, so
+`(e) => e.hp > 0` needs no annotation. An arrow anywhere else (other than a
+callback prop or a state updater) is `RGE1301`.
+
+**Dependencies.** A JSX value that reads an array, including inside a
+callback (`items.some((e) => e.hp < 1)`), depends on that state, so it
+re-renders when the array changes.
+
+**Immutable updates.** A setter renders only when it gets a new value (the
+`===` check in the generated setter), so changing an array in place would
+never render; that is why the mutating methods are rejected. `setItems(items)`
+and `setItems((list) => list)` are no-ops; `setItems([...items])` renders. The
+generated code is ordinary TypeScript:
+
+```ts
+enemies: EnemyData[] = [];
+#enemiesNext: EnemyData[] = this.enemies;
+setEnemies(value: EnemyData[] | ((previous: EnemyData[]) => EnemyData[])): void { … }
+
+override onUpdate(dt: number): void {
+  this.setEnemies(this.enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0));
+}
+```
+
+An arrow whose body is an object literal is parenthesised, in callbacks and in
+updaters (`setP((p: P) => ({ ...p, x: 1 }))`).
 
 ## Transforms and refs
 

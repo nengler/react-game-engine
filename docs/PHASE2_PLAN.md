@@ -16,7 +16,8 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M4a Props and callbacks | In review | #10 | Destructured props with a declared type, defaults, callbacks, `updateProps`, prop dependencies, `transform` on a component as `placement`, `useState(prop)` type inference. Imported children work: the parent needs nothing about their props |
 | M4b Roots and component forms | In review | #11 | `<Collider onCollisionEnter>` replaces the hook (a per-collider callback), fragment and non-Entity roots, arrow-function and default-export components, the `props` object form, `useState` type inference over expressions. Completes M4 |
 | M8 Children | Not started | n/a | Needs M4 |
-| M5 Keyed dynamic lists | Not started | n/a | Needs M4; split into M5a (arrays and records in handlers) and M5b (keyed list) |
+| M5a Arrays and records in handlers | In progress | `claude/pensive-faraday-lnmtga` | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
+| M5b Keyed lists | Not started | n/a | Needs M5a. `KeyedListChild`, `(slot, order)` child ordering and `queueReorder` in the runtime |
 | M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
 | M10 `<Text>` | Not started | n/a | Needs M7. HUD and labels; `transformIntrinsics` |
@@ -466,7 +467,16 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 - [x] Tests cover the IR shape, generated code, type-check and runtime behaviour (`m4.test.ts`)
 - [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
-### M5 Keyed dynamic lists
+### M5a Arrays and records in handlers
+
+- [x] New IR variants added in `ir/types.ts` (`TypeIR` `Array` / `SourceType`, `ExprIR` `ArrayLiteral`, `ObjectLiteral`, `MemberRead`, `Arrow`, `CalleeIR` `ArrayMethod`), with every `assertNever` site handled
+- [x] Transform recognises the new syntax; every unsupported form has a diagnostic and a test (untyped `[]`/`{}` state, record refs, mutating and unknown methods, argument counts, optional calls, block-bodied and non-inline callbacks, stray arrows, object methods and computed names)
+- [x] `docs/DESIGN.md` updated ("Arrays and records", authoring rules, IR table)
+- [x] `Level.tsx` keeps an array of `Defeat` records; `npm run example` regenerated and committed
+- [x] Tests cover the IR shape, generated code, both type-checks and runtime behaviour (`m5.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M5b Keyed lists
 
 - [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
 - [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
