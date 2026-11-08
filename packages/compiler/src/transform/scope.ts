@@ -1,9 +1,8 @@
-import type { LocalId, RefId, StateId, TransformId, TypeIR } from "../ir/types.ts";
+import type { LocalId, RefId, StateId, TypeIR } from "../ir/types.ts";
 
 export type Binding =
   | { readonly kind: "state"; readonly id: StateId }
   | { readonly kind: "setter"; readonly state: StateId; readonly name: string }
-  | { readonly kind: "transform"; readonly id: TransformId; readonly name: string }
   | { readonly kind: "ref"; readonly id: RefId; readonly name: string }
   | { readonly kind: "local"; readonly id: LocalId; readonly name: string }
   | { readonly kind: "param"; readonly id: LocalId; readonly name: string; readonly type: TypeIR };

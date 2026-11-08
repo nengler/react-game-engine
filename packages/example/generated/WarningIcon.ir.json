@@ -31,6 +31,7 @@
             }
           }
         ],
+        "transform": [],
         "children": [
           {
             "kind": "StaticChild",
@@ -52,6 +53,7 @@
                   }
                 }
               ],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/WarningIcon.tsx",

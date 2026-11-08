@@ -10,7 +10,7 @@ export class Entity extends GameObject {
   static override readonly intrinsic = true;
 
   name: string;
-  /** Per-frame position data; see `useTransform`. */
+  /** Position, rotation and scale; set with the `transform={{ x, y }}` attribute. */
   readonly transform: Transform = new Transform();
 
   constructor(props: EntityProps = {}) {

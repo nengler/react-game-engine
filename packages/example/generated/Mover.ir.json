@@ -8,23 +8,19 @@
       "span": {
         "fileName": "packages/example/src/Mover.tsx",
         "start": 0,
-        "end": 330,
+        "end": 264,
         "line": 1,
         "column": 1
       },
       "hooks": [
         {
-          "kind": "UseTransform",
-          "slot": "Mover.transform",
-          "name": "transform",
-          "initial": {
-            "x": 0,
-            "y": 0
-          },
+          "kind": "UseState",
+          "state": "Mover.x",
+          "setterName": "setX",
           "span": {
             "fileName": "packages/example/src/Mover.tsx",
             "start": 27,
-            "end": 67,
+            "end": 50,
             "line": 2,
             "column": 9
           }
@@ -45,88 +41,73 @@
             ],
             "body": [
               {
-                "kind": "Assign",
-                "target": {
-                  "kind": "TransformField",
-                  "slot": "Mover.transform",
-                  "field": "x"
-                },
-                "operator": "+=",
-                "value": {
-                  "kind": "Binary",
-                  "operator": "*",
-                  "left": {
-                    "kind": "NumberLiteral",
-                    "value": 60
-                  },
-                  "right": {
-                    "kind": "ParamRead",
-                    "param": "Mover.dt#1",
-                    "name": "dt"
-                  }
-                }
-              },
-              {
-                "kind": "Assign",
-                "target": {
-                  "kind": "RefProperty",
-                  "ref": "Mover.body",
-                  "property": "image"
-                },
-                "operator": "=",
-                "value": {
-                  "kind": "Conditional",
-                  "test": {
-                    "kind": "Binary",
-                    "operator": ">",
-                    "left": {
-                      "kind": "TransformRead",
-                      "slot": "Mover.transform",
-                      "field": "x"
-                    },
-                    "right": {
-                      "kind": "NumberLiteral",
-                      "value": 100
+                "kind": "SetState",
+                "state": "Mover.x",
+                "updater": {
+                  "kind": "Function",
+                  "params": [
+                    {
+                      "id": "Mover.previous#2",
+                      "name": "previous",
+                      "type": {
+                        "kind": "Primitive",
+                        "name": "number"
+                      }
                     }
-                  },
-                  "whenTrue": {
-                    "kind": "StringLiteral",
-                    "value": "run.png"
-                  },
-                  "whenFalse": {
-                    "kind": "StringLiteral",
-                    "value": "idle.png"
-                  }
+                  ],
+                  "body": [
+                    {
+                      "kind": "Return",
+                      "value": {
+                        "kind": "Binary",
+                        "operator": "+",
+                        "left": {
+                          "kind": "ParamRead",
+                          "param": "Mover.previous#2",
+                          "name": "previous"
+                        },
+                        "right": {
+                          "kind": "Binary",
+                          "operator": "*",
+                          "left": {
+                            "kind": "NumberLiteral",
+                            "value": 60
+                          },
+                          "right": {
+                            "kind": "ParamRead",
+                            "param": "Mover.dt#1",
+                            "name": "dt"
+                          }
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             ]
           },
           "span": {
             "fileName": "packages/example/src/Mover.tsx",
-            "start": 105,
-            "end": 226,
-            "line": 5,
+            "start": 55,
+            "end": 123,
+            "line": 4,
             "column": 3
           }
         }
       ],
-      "state": [],
-      "refs": [
+      "state": [
         {
-          "kind": "Ref",
-          "id": "Mover.body",
-          "name": "body",
-          "componentName": "Sprite",
-          "target": "Mover/0",
-          "span": {
-            "fileName": "packages/example/src/Mover.tsx",
-            "start": 77,
-            "end": 100,
-            "line": 3,
-            "column": 9
+          "kind": "State",
+          "id": "Mover.x",
+          "name": "x",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
           }
         }
       ],
+      "refs": [],
       "root": {
         "kind": "HostElement",
         "component": {
@@ -143,33 +124,77 @@
             }
           }
         ],
+        "transform": [
+          {
+            "kind": "DynamicProp",
+            "name": "x",
+            "value": {
+              "kind": "StateRead",
+              "state": "Mover.x"
+            },
+            "dependencies": [
+              "Mover.x"
+            ]
+          },
+          {
+            "kind": "StaticProp",
+            "name": "y",
+            "value": {
+              "kind": "NumberLiteral",
+              "value": 0
+            }
+          }
+        ],
         "children": [
           {
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
               "id": "Mover/0",
-              "fieldName": "body",
+              "fieldName": "sprite",
               "component": {
                 "kind": "Intrinsic",
                 "name": "Sprite"
               },
               "props": [
                 {
-                  "kind": "StaticProp",
+                  "kind": "DynamicProp",
                   "name": "image",
                   "value": {
-                    "kind": "StringLiteral",
-                    "value": "idle.png"
-                  }
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": ">",
+                      "left": {
+                        "kind": "StateRead",
+                        "state": "Mover.x"
+                      },
+                      "right": {
+                        "kind": "NumberLiteral",
+                        "value": 100
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "StringLiteral",
+                      "value": "run.png"
+                    },
+                    "whenFalse": {
+                      "kind": "StringLiteral",
+                      "value": "idle.png"
+                    }
+                  },
+                  "dependencies": [
+                    "Mover.x"
+                  ]
                 }
               ],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Mover.tsx",
-                "start": 271,
-                "end": 309,
-                "line": 12,
+                "start": 192,
+                "end": 243,
+                "line": 10,
                 "column": 7
               }
             }
@@ -177,9 +202,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Mover.tsx",
-          "start": 243,
-          "end": 323,
-          "line": 11,
+          "start": 140,
+          "end": 257,
+          "line": 9,
           "column": 5
         }
       }

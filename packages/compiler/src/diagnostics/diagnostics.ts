@@ -9,6 +9,7 @@ export const DiagnosticCode = {
   UnknownHook: "RGE1102",
   InvalidUseState: "RGE1103",
   UnsupportedStateType: "RGE1104",
+  /** Retired: `useTransform` was replaced by the `transform={{ x, y }}` attribute driven by state. */
   InvalidUseTransform: "RGE1105",
   InvalidUseRef: "RGE1106",
   UnknownComponent: "RGE1201",
@@ -17,15 +18,19 @@ export const DiagnosticCode = {
   LocalComponentProps: "RGE1204",
   ComponentCycle: "RGE1205",
   DuplicateComponent: "RGE1206",
+  /** `transform={{ ... }}` that is malformed, or on an element that has no transform. */
+  InvalidTransformAttribute: "RGE1207",
   UnsupportedExpression: "RGE1301",
   UnknownIdentifier: "RGE1302",
   NonConstantInitialState: "RGE1303",
-  /** A transform or ref read outside a handler (JSX, state initialisers): it would never update. */
+  /** A ref read outside a handler (JSX, state initialisers): it would never update. */
   HandleReadOutsideHandler: "RGE1304",
   InvalidHandler: "RGE1401",
   UnsupportedStatement: "RGE1402",
   /** Retired: several handlers of one kind are now allowed. Kept so codes are never reused. */
   DuplicateHandler: "RGE1403",
+  /** A handler writes a ref property that JSX also sets dynamically: the next render would overwrite it. */
+  ConflictingRefWrite: "RGE1404",
   GeneratedTypeError: "RGE9001",
 } as const;
 

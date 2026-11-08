@@ -70,16 +70,7 @@ export interface ComponentAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStateCallAnalysis | UseTransformCallAnalysis | UseRefCallAnalysis | HandlerCallAnalysis;
-
-/** `const t = useTransform({ x: 0, y: 0 })`. The argument is validated in the transform. */
-export interface UseTransformCallAnalysis {
-  readonly kind: "useTransform";
-  readonly name: string;
-  readonly arguments: readonly Expression[];
-  readonly call: CallExpression;
-  readonly declaration: VariableDeclaration;
-}
+export type HookCallAnalysis = UseStateCallAnalysis | UseRefCallAnalysis | HandlerCallAnalysis;
 
 /** `const r = useRef<Sprite>()`. */
 export interface UseRefCallAnalysis {
@@ -110,7 +101,7 @@ export interface UseStateCallAnalysis {
 }
 
 const HOOK_NAME = /^use[A-Z0-9]/;
-const KNOWN_HOOKS = new Set(["useState", "useTransform", "useRef"]);
+const KNOWN_HOOKS = new Set(["useState", "useRef"]);
 const HANDLER_HOOKS = new Set(["onUpdate", "onInput", "onCollisionEnter"]);
 
 /**
@@ -245,7 +236,7 @@ function analyzeComponent(
     diagnostics.push(
       error(
         DiagnosticCode.InvalidComponentBody,
-        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const t = useTransform(...)\`, \`const r = useRef<T>()\`, handler statements (\`onUpdate(...)\`, \`onInput(...)\`, \`onCollisionEnter(...)\`) and a final \`return\` are supported.`,
+        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, handler statements (\`onUpdate(...)\`, \`onInput(...)\`, \`onCollisionEnter(...)\`) and a final \`return\` are supported.`,
         span(statement),
       ),
     );
@@ -256,7 +247,15 @@ function analyzeComponent(
     if (!isCallExpression(node) || acceptedHookCalls.has(node)) return;
     const callee = node.expression;
     if (!isIdentifier(callee) || !HOOK_NAME.test(callee.text)) return;
-    if (KNOWN_HOOKS.has(callee.text)) {
+    if (callee.text === "useTransform") {
+      diagnostics.push(
+        error(
+          DiagnosticCode.UnknownHook,
+          "useTransform was removed: keep position in state and set it with the `transform={{ x, y }}` attribute on an <Entity>.",
+          span(node),
+        ),
+      );
+    } else if (KNOWN_HOOKS.has(callee.text)) {
       diagnostics.push(
         error(DiagnosticCode.HookNotAtTopLevel, `Hook '${callee.text}' must be called at the top level of a component.`, span(node)),
       );
@@ -345,10 +344,10 @@ function matchUseStateStatement(statement: Statement): UseStateMatch | null {
 }
 
 type HandleMatch =
-  | { readonly kind: "ok"; readonly hook: UseTransformCallAnalysis | UseRefCallAnalysis }
-  | { readonly kind: "invalid"; readonly code: typeof DiagnosticCode.InvalidUseTransform | typeof DiagnosticCode.InvalidUseRef; readonly message: string; readonly call: CallExpression };
+  | { readonly kind: "ok"; readonly hook: UseRefCallAnalysis }
+  | { readonly kind: "invalid"; readonly code: typeof DiagnosticCode.InvalidUseRef; readonly message: string; readonly call: CallExpression };
 
-/** Recognises `const t = useTransform(...)` and `const r = useRef<T>()`; null if the statement is neither. */
+/** Recognises `const r = useRef<T>()`; null if the statement is not one. */
 function matchHandleStatement(statement: Statement): HandleMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
@@ -357,17 +356,14 @@ function matchHandleStatement(statement: Statement): HandleMatch | null {
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression)) return null;
   const hook = init.expression.text;
-  if (hook !== "useTransform" && hook !== "useRef") return null;
+  if (hook !== "useRef") return null;
 
-  const code = hook === "useTransform" ? DiagnosticCode.InvalidUseTransform : DiagnosticCode.InvalidUseRef;
+  const code = DiagnosticCode.InvalidUseRef;
   const invalid = (message: string): HandleMatch => ({ kind: "invalid", code, message, call: init });
   if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) {
     return invalid(`${hook} must be bound with a plain \`const\` name: \`const handle = ${hook}(...)\`.`);
   }
   const name = declaration.name.text;
-  if (hook === "useTransform") {
-    return { kind: "ok", hook: { kind: "useTransform", name, arguments: init.arguments, call: init, declaration } };
-  }
   return { kind: "ok", hook: { kind: "useRef", name, typeArgument: init.typeArguments?.[0] ?? null, arguments: init.arguments, call: init, declaration } };
 }
 

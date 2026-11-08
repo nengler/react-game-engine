@@ -83,9 +83,10 @@ ignored):
   State type is inferred from the initial literal (`number`/`string`/`boolean`).
 * Children: elements, or `{condition && <Element />}`. Text children,
   fragments, spread attributes and other expression children are rejected.
-* `const t = useTransform({ x: 0, y: 0 })` (at most one per component, initial
-  values are number literals) and `const r = useRef<Sprite>()` plus
-  `ref={r}` on exactly one element of that tag. See "Transforms and refs".
+* Position is state: `transform={{ x, y: 0, rotation }}` on any `<Entity>`
+  (the root or a child). There is no transform hook. Refs:
+  `const r = useRef<Sprite>()` plus `ref={r}` on exactly one element of that
+  tag. See "Transforms and refs".
 * Hooks: top-level `onInput((input) => ...)`, `onUpdate((dt) => ...)` and
   `onCollisionEnter((other) => ...)` statements; each may appear several times
   and runs in source order. See "Handlers" below.
@@ -123,8 +124,11 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
   keys on; the field name is a codegen detail chosen once in the transform.
 * `hooks: HookIR[]` lists hook declarations in source order; `state: StateIR[]`
   lists the persistent storage slots they create. They are separate because
-  future hooks (`useTransform`, refs) declare storage that is not
-  user-settable state, and because hook order matters while storage does not.
+  hook order matters while storage does not. Refs are not hooks in the IR:
+  they live in `ComponentIR.refs`, resolved to the element they point at.
+* `transform` is not a prop: elements carry `transform: TransformPropIR[]`,
+  the same static/dynamic props, restricted to the transform fields and
+  written to the element's runtime `transform`.
 
 ### How future features slot in
 
@@ -132,7 +136,7 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 | --- | --- |
 | ~~`onUpdate`, `onInput`, `onCollisionEnter`~~ | done: `OnUpdate` / `OnInput` / `OnCollisionEnter` hooks carrying a `FunctionIR`; see "Handlers" |
 | `onInput` / event props | `PropIR` variant `EventHandlerProp` holding a callback IR |
-| ~~`useTransform`, refs~~ | done: `UseTransform` hook, `ComponentIR.refs`, `Assign`, `TransformRead` / `RefRead` / `RefPropertyRead`; see "Transforms and refs" |
+| ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs`, `Assign`, `RefRead` / `RefPropertyRead`; see "Transforms and refs" |
 | props between components | `ComponentIR.props: PropDeclIR[]`; `ExprIR` variant `PropRead`; `ComponentRef` `Local` accepts props |
 | keyed lists | `ChildIR` variant `KeyedListChild { items, key, element }` |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
@@ -147,8 +151,8 @@ only inside functions.
 `LocalConst`, `If`, `Return`, and `SetState`, which is either
 `{ state, value }` or `{ state, updater: FunctionIR }` for `setX(prev => …)`.
 Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
-`Assign` (`=`, `+=`, `-=`, `*=`, `/=`) writes a transform field or a ref
-property; see "Transforms and refs".
+`Assign` (`=`, `+=`, `-=`, `*=`, `/=`) writes a ref property; see
+"Transforms and refs". Position is not assigned: it is state.
 
 **Expressions** added: `ParamRead`, `LocalRead`, `PropertyRead` (only on a
 parameter of a runtime handle type, e.g. `input.pointerX`), `Call` and
@@ -157,8 +161,8 @@ round/sign/sqrt/sin/cos/min/max`, `clamp`) and to methods of handle
 parameters (`input.pressed/down/released`); the tables live in
 `transform/handles.ts`. Everything else (loops, `try`, `let`, assignment,
 closures that escape, `this`, `await`, other calls) is a diagnostic
-(`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but a transform field
-or ref property is `RGE1402`.
+(`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but a ref property is
+`RGE1402`.
 
 **Scoping**: component scope (state, setters) → function scope (parameters) →
 block scope (`const`s). Shadowing any outer binding, or `Math`/`clamp`, is
@@ -204,52 +208,77 @@ not JSX event props. Event props can be added later as a `PropIR`
 
 ## Transforms and refs
 
-Two non-reactive handles. Writing either never marks the object dirty, so
-per-frame motion costs no render.
+Components should read like React: what is on screen, position included, is a
+function of state. So there is no transform hook: position is ordinary state,
+written with a `transform` attribute on an `<Entity>`.
 
 ```tsx
 function Mover() {
-  const transform = useTransform({ x: 0, y: 0 });
-  const body = useRef<Sprite>();
-  onUpdate((dt) => {
-    transform.x += 60 * dt;
-    body.current.image = transform.x > 100 ? "run.png" : "idle.png";
-  });
-  return <Entity name="Mover"><Sprite ref={body} image="idle.png" /></Entity>;
+  const [x, setX] = useState(0);
+  onUpdate((dt) => setX((previous) => previous + 60 * dt));
+  return (
+    <Entity name="Mover" transform={{ x, y: 0 }}>
+      <Sprite image={x > 100 ? "run.png" : "idle.png"} />
+    </Entity>
+  );
 }
 ```
 
 ```ts
 export class Mover extends Entity {
-  readonly body: Sprite = new Sprite({ image: "idle.png" });
+  x: number = 0;
+  readonly sprite: Sprite = new Sprite({ image: (this.x > 100) ? "run.png" : "idle.png" });
   constructor() {
     super({ name: "Mover" });
-    this.transform.x = 0;
-    this.transform.y = 0;
-    this.addChild(this.body);
+    this.transform.y = 0;          // static fields: set once
+    this.addChild(this.sprite);
+    this.render();
+    this.commitStructure();
   }
-  override onUpdate(dt: number): void {
-    this.transform.x += 60 * dt;
-    this.body.image = (this.transform.x > 100) ? "run.png" : "idle.png";
+  override onUpdate(dt: number): void { this.setX((previous: number) => previous + (60 * dt)); }
+  override render(): void {
+    this.transform.x = this.x;     // dynamic fields: re-applied on render
+    this.sprite.image = (this.x > 100) ? "run.png" : "idle.png";
   }
 }
 ```
 
-**useTransform**: `UseTransformHookIR { slot, name, initial }`. The runtime
-`Entity` owns `transform: Transform` (`x, y, rotation, scaleX, scaleY`, default
-`0, 0, 0, 1, 1`); the constructor sets only the fields listed. Reads are
-`TransformRead`, writes are `Assign` with a `TransformField` target. A second
-`useTransform`, an unknown field or a non-literal initial value is `RGE1105`.
+**The transform attribute**: `transform={{ x, y: 0, rotation: angle }}` is an
+object literal whose keys are transform fields (`x`, `y`, `rotation`,
+`scaleX`, `scaleY`; plain or shorthand properties). Each field lowers exactly
+like a prop: a field that reads no state is a `StaticProp`, set once right
+after the element is constructed (and, for a child, before it is attached);
+one that reads state is a `DynamicProp`, re-applied in `render()`. Fields not
+listed keep the runtime defaults (`0, 0, 0, 1, 1`). The runtime
+`Entity.transform` object is never replaced. Units: pixels with y down,
+rotation in radians.
 
-**useRef**: `const r = useRef<T>()`, with `T` the tag of the target element
-(intrinsic, local or imported), and `ref={r}` on exactly one element of that
-tag. `ComponentIR.refs` holds `RefIR { id, name, componentName, target }`,
-resolved after the JSX is lowered. There is no runtime ref object: the element
-is already a field, so the ref's name *becomes* the element's field name
-(`this.body`), which is how authors control field names. `r.current` is
-`RefRead`; `r.current.image` is `RefPropertyRead` or an `Assign` to a
-`RefProperty` target. Properties come from `elementProperties` in the runtime
-manifest (`Sprite`: `image`, ...); refs to compiled components expose only
+Only `<Entity>` elements have a transform (the root, which is the component
+instance itself, or a child `<Entity>`); on `<Sprite>`/`<Collider>` it is
+`RGE1207` (wrap them in an `<Entity>`). On a component element
+(`<Enemy transform={…} />`) it would be placement by the parent, which needs
+a rule for combining it with the child's own root transform, so it arrives
+with props (M4) and is `RGE1207` until then. Malformed objects (spreads,
+computed keys, unknown or duplicate fields) are `RGE1207`. `useTransform` was
+removed; calling it reports `RGE1102` with a pointer to the attribute
+(`RGE1105` is retired).
+
+**Cost**: moving every frame is a state change every frame, so the component
+renders once per tick (one render however many setters ran). `render()`
+re-evaluates all of the component's dynamic props; the IR already records each
+prop's `dependencies`, so a later optimisation can re-evaluate only the props
+whose state changed.
+
+**useRef** (the escape hatch): `const r = useRef<T>()`, with `T` the tag of
+the target element (intrinsic, local or imported), and `ref={r}` on exactly
+one element of that tag. `ComponentIR.refs` holds `RefIR { id, name,
+componentName, target }`, resolved after the JSX is lowered. There is no
+runtime ref object: the element is already a field, so the ref's name
+*becomes* the element's field name (`this.body`), which is how authors control
+field names. `r.current` is `RefRead`; `r.current.image` is `RefPropertyRead`
+or an `Assign` to a `RefProperty` target. Properties come from
+`elementProperties` in the runtime manifest (`Sprite`: `image`, ...; a runtime
+test checks each is a real field); refs to compiled components expose only
 `.current`. Unattached, doubly attached, wrongly typed or root refs are
 `RGE1106`.
 
@@ -258,12 +287,14 @@ manifest (`Sprite`: `image`, ...); refs to compiled components expose only
 `if (r.current) { … }`. An unchecked access fails the type-check (`RGE9001`)
 rather than being accepted and crashing after the element unmounts.
 
-**Reads only in handlers**: a transform or ref read in JSX or a `useState`
-initialiser would be evaluated once or only on render and then go stale, so it
-is `RGE1304`.
+**Reads only in handlers**: a ref read in JSX or a `useState` initialiser
+would be evaluated once or only on render and then go stale, so it is
+`RGE1304`. Use state for anything JSX depends on.
 
-**Caveat**: a ref write to a property that is also a dynamic prop
-(`image={health > 0 ? …}`) is overwritten at the next render of that prop.
+**One writer per property**: a handler write to a ref property that JSX sets
+from state (`<Sprite ref={s} image={hurt ? …} />` plus `s.current.image = …`)
+would be overwritten at the next render, so it is `RGE1404`. Writing over a
+static prop is allowed (an imperative override after construction).
 
 ## Code generation
 

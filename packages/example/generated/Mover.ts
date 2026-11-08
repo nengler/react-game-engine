@@ -2,17 +2,30 @@
 import { Entity, Sprite } from "@rge/runtime";
 
 export class Mover extends Entity {
-  readonly body: Sprite = new Sprite({ image: "idle.png" });
+  x: number = 0;
+  readonly sprite: Sprite = new Sprite({ image: (this.x > 100) ? "run.png" : "idle.png" });
 
   constructor() {
     super({ name: "Mover" });
-    this.transform.x = 0;
     this.transform.y = 0;
-    this.addChild(this.body);
+    this.addChild(this.sprite);
+    this.render();
+    this.commitStructure();
+  }
+
+  setX(value: number | ((previous: number) => number)): void {
+    const next = typeof value === "function" ? value(this.x) : value;
+    if (next === this.x) return;
+    this.x = next;
+    this.markDirty();
   }
 
   override onUpdate(dt: number): void {
-    this.transform.x += 60 * dt;
-    this.body.image = (this.transform.x > 100) ? "run.png" : "idle.png";
+    this.setX((previous: number) => previous + (60 * dt));
+  }
+
+  override render(): void {
+    this.transform.x = this.x;
+    this.sprite.image = (this.x > 100) ? "run.png" : "idle.png";
   }
 }

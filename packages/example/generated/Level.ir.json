@@ -31,6 +31,7 @@
             }
           }
         ],
+        "transform": [],
         "children": [
           {
             "kind": "StaticChild",
@@ -52,6 +53,7 @@
                   }
                 }
               ],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
@@ -90,6 +92,7 @@
                   }
                 }
               ],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
@@ -185,6 +188,7 @@
             }
           }
         ],
+        "transform": [],
         "children": [
           {
             "kind": "StaticChild",
@@ -197,6 +201,7 @@
                 "name": "Enemy"
               },
               "props": [],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
@@ -218,6 +223,7 @@
                 "name": "Enemy"
               },
               "props": [],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
@@ -254,6 +260,7 @@
                 "name": "Enemy"
               },
               "props": [],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
@@ -291,6 +298,7 @@
                   }
                 }
               ],
+              "transform": [],
               "children": [
                 {
                   "kind": "StaticChild",
@@ -334,6 +342,7 @@
                         ]
                       }
                     ],
+                    "transform": [],
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
@@ -372,6 +381,7 @@
                         }
                       }
                     ],
+                    "transform": [],
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",

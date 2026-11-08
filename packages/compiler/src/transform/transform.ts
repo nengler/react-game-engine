@@ -14,13 +14,14 @@ import {
   isNumericLiteral,
   isObjectLiteralExpression,
   isPropertyAssignment,
+  isShorthandPropertyAssignment,
   isTypeReferenceNode,
   isParenthesizedExpression,
   isPrefixUnaryExpression,
   isStringLiteral,
   isNoSubstitutionTemplateLiteral,
 } from "typescript/ast/is";
-import { unwrapParens, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis, type UseTransformCallAnalysis } from "../analyzer/analyzer.ts";
+import { unwrapParens, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
@@ -28,14 +29,12 @@ import {
   elementId,
   refId,
   stateId,
-  transformId,
   TRANSFORM_FIELDS,
   type AssignTargetIR,
   type RefId,
   type RefIR,
   type TransformField,
-  type TransformId,
-  type UseTransformHookIR,
+  type TransformPropIR,
   type BinaryOperator,
   type ChildIR,
   type ComponentIR,
@@ -138,9 +137,10 @@ interface RefRecord {
   target: ElementId | null;
 }
 
-type HandleAccess =
-  | { readonly kind: "transform"; readonly slot: TransformId; readonly field: TransformField }
-  | { readonly kind: "ref"; readonly ref: RefId; readonly property: string | null };
+type HandleAccess = { readonly kind: "ref"; readonly ref: RefId; readonly property: string | null };
+
+/** Attributes the compiler handles itself; they never become props. */
+const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["ref", "transform"]);
 
 class ComponentLowering implements LoweringContext {
   readonly componentName: string;
@@ -160,10 +160,13 @@ class ComponentLowering implements LoweringContext {
   readonly #hostIntrinsic: string;
   readonly #diagnostics: CompilerDiagnostic[];
   #errorCount = 0;
-  /** Greater than zero while lowering a handler body: the only place transform and ref reads are allowed. */
+  /** Greater than zero while lowering a handler body: the only place ref reads are allowed. */
   #functionDepth = 0;
-  #transform: TransformId | null = null;
   readonly #refs = new Map<string, RefRecord>();
+  /** Every lowered element, for checks that need the whole tree (ref writes vs. dynamic props). */
+  readonly #elements = new Map<ElementId, ElementIR>();
+  /** Ref property writes in handlers, checked once the JSX is lowered. */
+  readonly #refWrites: { readonly ref: string; readonly property: string; readonly node: Node }[] = [];
 
   constructor(
     component: ComponentAnalysis,
@@ -199,6 +202,17 @@ class ComponentLowering implements LoweringContext {
       }
       refs.push({ kind: "Ref", id: ref.id, name: ref.name, componentName: ref.componentName, target: ref.target, span: this.#span(ref.declaration) });
     }
+    for (const write of this.#refWrites) {
+      const target = this.#refs.get(write.ref)?.target;
+      const element = target ? this.#elements.get(target) : undefined;
+      if (element?.props.some((p) => p.kind === "DynamicProp" && p.name === write.property)) {
+        this.#error(
+          DiagnosticCode.ConflictingRefWrite,
+          `'${write.property}' of <${element.component.name}> is set from state in JSX, so the next render would overwrite this write. Set it from state only, or make the JSX value static.`,
+          write.node,
+        );
+      }
+    }
     if (!root || this.#errorCount > 0) return null;
     return { kind: "Component", name, span: this.#span(this.#component.declaration), hooks, state, refs, root };
   }
@@ -221,11 +235,6 @@ class ComponentLowering implements LoweringContext {
           });
           this.#functionDepth--;
           if (handler) hooks.push({ kind, handler, span: this.#span(hook.statement) });
-          break;
-        }
-        case "useTransform": {
-          const lowered = this.#lowerUseTransform(hook);
-          if (lowered) hooks.push(lowered);
           break;
         }
         case "useRef":
@@ -261,59 +270,6 @@ class ComponentLowering implements LoweringContext {
     return { hooks, state };
   }
 
-  #lowerUseTransform(hook: UseTransformCallAnalysis): UseTransformHookIR | null {
-    const code = DiagnosticCode.InvalidUseTransform;
-    if (this.#transform !== null) {
-      this.#error(code, "A component can call useTransform only once.", hook.call);
-      return null;
-    }
-    if (!this.#checkHandleName(hook.name, code, hook.declaration.name)) return null;
-    if (hook.arguments.length > 1) {
-      this.#error(code, "useTransform takes at most one argument: `useTransform({ x: 0, y: 0 })`.", hook.call);
-      return null;
-    }
-    const initial: Partial<Record<TransformField, number>> = {};
-    const arg = hook.arguments[0] ? unwrapParens(hook.arguments[0]) : null;
-    if (arg) {
-      if (!isObjectLiteralExpression(arg)) {
-        this.#error(code, "useTransform's argument must be an object literal such as `{ x: 0, y: 0 }`.", arg);
-        return null;
-      }
-      let ok = true;
-      for (const property of arg.properties) {
-        const field = isPropertyAssignment(property) && isIdentifier(property.name) ? property.name.text : null;
-        if (!isPropertyAssignment(property) || field === null) {
-          this.#error(code, "useTransform fields must be written `name: number`.", property);
-          ok = false;
-          continue;
-        }
-        if (!(TRANSFORM_FIELDS as readonly string[]).includes(field)) {
-          this.#error(code, `'${field}' is not a transform field (${TRANSFORM_FIELDS.join(", ")}).`, property.name);
-          ok = false;
-          continue;
-        }
-        if (field in initial) {
-          this.#error(code, `Duplicate transform field '${field}'.`, property.name);
-          ok = false;
-          continue;
-        }
-        const value = this.#lowerExpression(property.initializer);
-        if (!value) { ok = false; continue; }
-        if (inferLiteralType(value) !== "number" || collectDependencies(value).length > 0) {
-          this.#error(code, `Initial value of transform field '${field}' must be a number literal.`, property.initializer);
-          ok = false;
-          continue;
-        }
-        initial[field as TransformField] = evaluateNumber(value);
-      }
-      if (!ok) return null;
-    }
-    const slot = transformId(this.#component.name, hook.name);
-    this.#transform = slot;
-    this.#componentScope.declare(hook.name, { kind: "transform", id: slot, name: hook.name });
-    return { kind: "UseTransform", slot, name: hook.name, initial, span: this.#span(hook.declaration) };
-  }
-
   #lowerUseRef(hook: UseRefCallAnalysis): void {
     const code = DiagnosticCode.InvalidUseRef;
     const tag = hook.typeArgument && isTypeReferenceNode(hook.typeArgument) && isIdentifier(hook.typeArgument.typeName) ? hook.typeArgument.typeName.text : null;
@@ -331,8 +287,8 @@ class ComponentLowering implements LoweringContext {
     this.#componentScope.declare(hook.name, { kind: "ref", id, name: hook.name });
   }
 
-  /** A `useTransform` / `useRef` binding must not collide with state, setters or the reserved call names. */
-  #checkHandleName(name: string, code: typeof DiagnosticCode.InvalidUseTransform | typeof DiagnosticCode.InvalidUseRef, at: Node): boolean {
+  /** A `useRef` binding must not collide with state, setters or the reserved call names. */
+  #checkHandleName(name: string, code: typeof DiagnosticCode.InvalidUseRef, at: Node): boolean {
     if (this.#componentScope.has(name) || this.isCallableName(name)) {
       this.#error(code, `'${name}' is already declared in this component (or reserved).`, at);
       return false;
@@ -369,12 +325,14 @@ class ComponentLowering implements LoweringContext {
     if (refAttribute) {
       this.#error(DiagnosticCode.InvalidUseRef, `The root <${this.#hostIntrinsic}> is the component instance itself and cannot have a ref.`, refAttribute);
     }
-    const props = this.#lowerProps(opening.attributes, refAttribute);
+    const props = this.#lowerProps(opening.attributes);
+    const transform = this.#lowerTransform(opening.attributes, tag.text, true);
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, []) : [];
     return {
       kind: "HostElement",
       component: { kind: "Intrinsic", name: tag.text },
       props,
+      transform,
       children,
       span: this.#span(jsx),
     };
@@ -398,7 +356,8 @@ class ComponentLowering implements LoweringContext {
 
     const refAttribute = findRefAttribute(opening.attributes);
     const ref = refAttribute ? this.#attachRef(refAttribute, tag.text, elementId(this.#component.name, path)) : null;
-    const props = this.#lowerProps(opening.attributes, refAttribute);
+    const props = this.#lowerProps(opening.attributes);
+    const transform = this.#lowerTransform(opening.attributes, tag.text, component.kind === "Intrinsic");
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, path) : [];
     if (component.kind !== "Intrinsic") {
       if (props.length > 0) {
@@ -409,15 +368,73 @@ class ComponentLowering implements LoweringContext {
       }
     }
 
-    return {
+    const element: ElementIR = {
       kind: "Element",
       id: elementId(this.#component.name, path),
       fieldName: ref ? ref.name : this.#allocateFieldName(tag.text),
       component,
       props,
+      transform,
       children,
       span: this.#span(jsx),
     };
+    this.#elements.set(element.id, element);
+    return element;
+  }
+
+  /**
+   * `transform={{ x, y: 0, rotation: angle }}`: each field becomes a static or
+   * dynamic prop on the element's runtime transform, so moving is `setX(...)`.
+   * Only the host intrinsic (`<Entity>`) has a transform. On a component
+   * element it would be placement by the parent, which arrives with props (M4).
+   */
+  #lowerTransform(attributes: JsxAttributes, tag: string, intrinsic: boolean): TransformPropIR[] {
+    const attribute = findAttribute(attributes, "transform");
+    if (!attribute) return [];
+    const code = DiagnosticCode.InvalidTransformAttribute;
+    if (!intrinsic) {
+      this.#error(code, `Placing component <${tag}> with \`transform\` is not supported yet (it arrives with props); set the transform on its root <${this.#hostIntrinsic}> instead.`, attribute);
+      return [];
+    }
+    if (tag !== this.#hostIntrinsic) {
+      this.#error(code, `<${tag}> has no transform; only <${this.#hostIntrinsic}> elements do. Wrap it in an <${this.#hostIntrinsic}> to position it.`, attribute);
+      return [];
+    }
+    const init = attribute.initializer;
+    const object = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
+    if (!object || !isObjectLiteralExpression(object)) {
+      this.#error(code, "`transform` takes an object literal: `transform={{ x, y: 0 }}`.", attribute);
+      return [];
+    }
+    const out: TransformPropIR[] = [];
+    for (const property of object.properties) {
+      let field: string;
+      let valueNode: Expression;
+      if (isPropertyAssignment(property) && isIdentifier(property.name)) {
+        field = property.name.text;
+        valueNode = property.initializer;
+      } else if (isShorthandPropertyAssignment(property) && isIdentifier(property.name)) {
+        field = property.name.text;
+        valueNode = property.name;
+      } else {
+        this.#error(code, "Transform fields must be written `field: value` or `field` (shorthand); no spreads or computed names.", property);
+        continue;
+      }
+      if (!(TRANSFORM_FIELDS as readonly string[]).includes(field)) {
+        this.#error(code, `'${field}' is not a transform field (${TRANSFORM_FIELDS.join(", ")}).`, property);
+        continue;
+      }
+      if (out.some((p) => p.name === field)) {
+        this.#error(code, `Duplicate transform field '${field}'.`, property);
+        continue;
+      }
+      const value = this.#lowerExpression(valueNode);
+      if (!value) continue;
+      const name = field as TransformField;
+      const dependencies = collectDependencies(value);
+      out.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
+    }
+    return out;
   }
 
   /** Validates `ref={r}` on an element with the given tag and records the element as the ref's target. */
@@ -443,11 +460,11 @@ class ComponentLowering implements LoweringContext {
     return record;
   }
 
-  #lowerProps(attributes: JsxAttributes, skip: JsxAttribute | null = null): PropIR[] {
+  /** Plain props. `ref` and `transform` are lowered separately, but still count for duplicate detection. */
+  #lowerProps(attributes: JsxAttributes): PropIR[] {
     const props: PropIR[] = [];
     const seen = new Set<string>();
     for (const attribute of attributes.properties) {
-      if (attribute === skip) continue;
       if (!isJsxAttribute(attribute) || !isIdentifier(attribute.name)) {
         this.#error(DiagnosticCode.UnsupportedAttribute, "Only plain `name={value}` attributes are supported.", attribute);
         continue;
@@ -458,6 +475,7 @@ class ComponentLowering implements LoweringContext {
         continue;
       }
       seen.add(name);
+      if (SPECIAL_ATTRIBUTES.has(name)) continue;
       const init = attribute.initializer;
       let value: ExprIR | null;
       if (!init) value = { kind: "BooleanLiteral", value: true };
@@ -536,7 +554,6 @@ class ComponentLowering implements LoweringContext {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
-        case "transform":
         case "ref":
           this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' can only be used as \`${node.text}.${binding.kind === "ref" ? "current" : "<field>"}\`.`, node);
           return null;
@@ -592,12 +609,11 @@ class ComponentLowering implements LoweringContext {
       if (this.#functionDepth === 0) {
         this.#error(
           DiagnosticCode.HandleReadOutsideHandler,
-          "Transforms and refs can only be read inside handlers: they are not reactive, so a read here would never update.",
+          "Refs can only be read inside handlers: they are not reactive, so a read here would never update. Use state for values JSX depends on.",
           node,
         );
         return null;
       }
-      if (access.kind === "transform") return { kind: "TransformRead", slot: access.slot, field: access.field };
       return access.property === null ? { kind: "RefRead", ref: access.ref } : { kind: "RefPropertyRead", ref: access.ref, property: access.property };
     }
     const receiver = this.#lowerHandle(node.expression);
@@ -611,7 +627,7 @@ class ComponentLowering implements LoweringContext {
   }
 
   /**
-   * Resolves `t.x`, `r.current` and `r.current.prop` against the component's transform and refs.
+   * Resolves `r.current` and `r.current.prop` against the component's refs.
    * Returns undefined if `node` does not start at one of them (the caller carries on), "error" after reporting.
    */
   #handleAccess(node: PropertyAccessExpression): HandleAccess | "error" | undefined {
@@ -619,13 +635,6 @@ class ComponentLowering implements LoweringContext {
     const name = node.name.text;
     if (isIdentifier(object)) {
       const binding = this.scope.get(object.text);
-      if (binding?.kind === "transform") {
-        if (!(TRANSFORM_FIELDS as readonly string[]).includes(name)) {
-          this.#error(DiagnosticCode.UnsupportedExpression, `'${name}' is not a transform field (${TRANSFORM_FIELDS.join(", ")}).`, node.name);
-          return "error";
-        }
-        return { kind: "transform", slot: binding.id, field: name as TransformField };
-      }
       if (binding?.kind === "ref") {
         if (name !== "current") {
           this.#error(DiagnosticCode.UnsupportedExpression, `Refs only have \`.current\`, not '${name}'.`, node.name);
@@ -736,11 +745,14 @@ class ComponentLowering implements LoweringContext {
   lowerAssignTarget(node: Expression): AssignTargetIR | null {
     const access = isPropertyAccessExpression(node) ? this.#handleAccess(node) : undefined;
     if (access === "error") return null;
-    if (access?.kind === "transform") return { kind: "TransformField", slot: access.slot, field: access.field };
-    if (access?.kind === "ref" && access.property !== null) return { kind: "RefProperty", ref: access.ref, property: access.property };
+    if (access?.kind === "ref" && access.property !== null) {
+      const ref = isPropertyAccessExpression(node) && isPropertyAccessExpression(node.expression) && isIdentifier(node.expression.expression) ? node.expression.expression.text : null;
+      if (ref !== null) this.#refWrites.push({ ref, property: access.property, node });
+      return { kind: "RefProperty", ref: access.ref, property: access.property };
+    }
     this.#error(
       DiagnosticCode.UnsupportedStatement,
-      "Assignment targets are limited to transform fields (`transform.x`) and properties of a ref's element (`ref.current.image`). Use the state setter to change state.",
+      "Assignment targets are limited to properties of a ref's element (`ref.current.image`). Use the state setter to change state, including position (`transform={{ x }}`).",
       node,
     );
     return null;
@@ -768,18 +780,15 @@ class ComponentLowering implements LoweringContext {
   }
 }
 
-function findRefAttribute(attributes: JsxAttributes): JsxAttribute | null {
+function findAttribute(attributes: JsxAttributes, name: string): JsxAttribute | null {
   for (const attribute of attributes.properties) {
-    if (isJsxAttribute(attribute) && isIdentifier(attribute.name) && attribute.name.text === "ref") return attribute;
+    if (isJsxAttribute(attribute) && isIdentifier(attribute.name) && attribute.name.text === name) return attribute;
   }
   return null;
 }
 
-/** Value of an expression `inferLiteralType` accepted as a number (literals with unary `-`/`+`). */
-function evaluateNumber(expr: ExprIR): number {
-  if (expr.kind === "NumberLiteral") return expr.value;
-  if (expr.kind === "Unary") return expr.operator === "-" ? -evaluateNumber(expr.operand) : evaluateNumber(expr.operand);
-  throw new Error(`Not a numeric literal: ${expr.kind}`);
+function findRefAttribute(attributes: JsxAttributes): JsxAttribute | null {
+  return findAttribute(attributes, "ref");
 }
 
 function inferLiteralType(expr: ExprIR): ValueType | null {

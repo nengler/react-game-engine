@@ -395,6 +395,7 @@
             }
           }
         ],
+        "transform": [],
         "children": [
           {
             "kind": "StaticChild",
@@ -430,6 +431,7 @@
                   ]
                 }
               ],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
@@ -468,6 +470,7 @@
                   }
                 }
               ],
+              "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",

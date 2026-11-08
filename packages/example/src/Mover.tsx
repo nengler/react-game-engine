@@ -1,15 +1,13 @@
 function Mover() {
-  const transform = useTransform({ x: 0, y: 0 });
-  const body = useRef<Sprite>();
+  const [x, setX] = useState(0);
 
   onUpdate((dt) => {
-    transform.x += 60 * dt;
-    body.current.image = transform.x > 100 ? "run.png" : "idle.png";
+    setX((previous) => previous + 60 * dt);
   });
 
   return (
-    <Entity name="Mover">
-      <Sprite ref={body} image="idle.png" />
+    <Entity name="Mover" transform={{ x, y: 0 }}>
+      <Sprite image={x > 100 ? "run.png" : "idle.png"} />
     </Entity>
   );
 }

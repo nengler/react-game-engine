@@ -1,6 +1,8 @@
 /**
- * Position data that changes every frame. Not reactive: writing a field never
- * marks anything dirty, because a renderer reads transforms directly each frame.
+ * Where an Entity is: position in pixels (y points down), rotation in radians
+ * (positive turns clockwise on a y-down screen), and scale. Components set it
+ * with the `transform={{ x, y }}` attribute, usually from state; a renderer
+ * reads it directly each frame.
  */
 export class Transform {
   x = 0;

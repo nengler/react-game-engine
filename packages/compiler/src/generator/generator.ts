@@ -10,7 +10,6 @@ import {
   type FunctionIR,
   type HandlerHookIR,
   type RefId,
-  type TransformId,
   isHandlerHook,
   type StatementIR,
   type TypeIR,
@@ -72,6 +71,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
       if (child.element.component.kind === "Intrinsic") values.add(child.element.component.name);
       if (child.kind === "ConditionalChild") visitExpr(child.condition);
       visitProps(child.element.props);
+      visitProps(child.element.transform);
       visitChildren(child.element.children);
     }
   };
@@ -95,6 +95,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
   for (const c of module.components) {
     values.add(c.root.component.name);
     visitProps(c.root.props);
+    visitProps(c.root.transform);
     visitChildren(c.root.children);
     c.state.forEach((s) => visitExpr(s.initialValue));
     for (const hook of c.hooks) if (isHandlerHook(hook)) visitFunction(hook.handler);
@@ -150,10 +151,7 @@ class ComponentGenerator {
       w.block("constructor()", () => {
         const staticHostProps = c.root.props.filter((p) => p.kind === "StaticProp");
         w.line(staticHostProps.length > 0 ? `super(${this.#propsObject(staticHostProps)});` : "super();");
-        for (const hook of c.hooks) {
-          if (hook.kind !== "UseTransform") continue;
-          for (const [field, value] of Object.entries(hook.initial)) w.line(`this.transform.${field} = ${value};`);
-        }
+        this.#emitStaticTransform(c.root.transform, "this");
         this.#emitStaticWiring(c.root.children, "this");
         if (hasRender) {
           w.line("this.render();");
@@ -175,8 +173,6 @@ class ComponentGenerator {
             });
             break;
           }
-          case "UseTransform":
-            break; // initial values are applied in the constructor
           case "OnUpdate":
           case "OnInput":
           case "OnCollisionEnter":
@@ -194,6 +190,7 @@ class ComponentGenerator {
           for (const prop of c.root.props) {
             if (prop.kind === "DynamicProp") w.line(`${access("this", prop.name)} = ${this.#expr(prop.value, true)};`);
           }
+          this.#emitDynamicTransform(c.root.transform, "this");
           this.#emitChildUpdates(c.root.children, "this", "persistent");
         });
       }
@@ -272,7 +269,7 @@ class ComponentGenerator {
           w.line(`this.${this.#setter(stmt.state)}(${"updater" in stmt ? this.#updater(stmt.updater) : this.#expr(stmt.value, true)});`);
           break;
         case "Assign": {
-          const target = stmt.target.kind === "TransformField" ? this.#transformField(stmt.target.slot, stmt.target.field) : this.#refProperty(stmt.target.ref, stmt.target.property);
+          const target = this.#refProperty(stmt.target.ref, stmt.target.property);
           w.line(`${target} ${stmt.operator} ${this.#expr(stmt.value, true)};`);
           break;
         }
@@ -319,6 +316,7 @@ class ComponentGenerator {
     for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
+      this.#emitStaticTransform(child.element.transform, ref);
       this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
       this.#emitStaticWiring(child.element.children, ref);
     }
@@ -348,6 +346,7 @@ class ComponentGenerator {
           w.open(`if (${this.#expr(child.condition, true)}) {`);
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.#construct(el)};`);
+            this.#emitStaticTransform(el.transform, ref);
             this.#emitMountStatics(el.children, ref);
             w.line(`${parentRef}.queueAddChild(${ref}${slotArgument(children, index)});`);
           });
@@ -369,6 +368,7 @@ class ComponentGenerator {
     for (const prop of el.props) {
       if (prop.kind === "DynamicProp") this.#w.line(`${access(ref, prop.name)} = ${this.#expr(prop.value, true)};`);
     }
+    this.#emitDynamicTransform(el.transform, ref);
     this.#emitChildUpdates(el.children, ref, presence);
   }
 
@@ -378,17 +378,32 @@ class ComponentGenerator {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
       this.#w.line(`${ref} = ${this.#construct(child.element)};`);
+      this.#emitStaticTransform(child.element.transform, ref);
       this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
       this.#emitMountStatics(child.element.children, ref);
     }
   }
 
+  /** Transform fields that never change are set once, right after the element is constructed. */
+  #emitStaticTransform(transform: readonly PropIR[], ref: string): void {
+    for (const p of transform) {
+      if (p.kind === "StaticProp") this.#w.line(`${ref}.transform.${p.name} = ${this.#expr(p.value, true)};`);
+    }
+  }
+
+  /** Transform fields that read state are re-applied on render, like any dynamic prop. */
+  #emitDynamicTransform(transform: readonly PropIR[], ref: string): void {
+    for (const p of transform) {
+      if (p.kind === "DynamicProp") this.#w.line(`${ref}.transform.${p.name} = ${this.#expr(p.value, true)};`);
+    }
+  }
+
   #hostHasDynamicProps(): boolean {
-    return this.#c.root.props.some((p) => p.kind === "DynamicProp");
+    return [...this.#c.root.props, ...this.#c.root.transform].some((p) => p.kind === "DynamicProp");
   }
 
   #elementNeedsRender(el: ElementIR): boolean {
-    return el.props.some((p) => p.kind === "DynamicProp") || this.#childrenNeedRender(el.children);
+    return [...el.props, ...el.transform].some((p) => p.kind === "DynamicProp") || this.#childrenNeedRender(el.children);
   }
 
   #childrenNeedRender(children: readonly ChildIR[]): boolean {
@@ -411,11 +426,6 @@ class ComponentGenerator {
 
   #propsObject(props: readonly PropIR[]): string {
     return `{ ${props.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`).join(", ")} }`;
-  }
-
-  // `slot` identifies the one transform a component has; it is `this.transform` (inherited from Entity).
-  #transformField(_slot: TransformId, field: string): string {
-    return `this.transform.${field}`;
   }
 
   /** A ref's name is the field of its element. */
@@ -447,7 +457,6 @@ class ComponentGenerator {
       case "LocalRead": return e.name;
       case "ParamRead": return e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
-      case "TransformRead": return this.#transformField(e.slot, e.field);
       case "RefRead": return `this.${this.#refField(e.ref)}`;
       case "RefPropertyRead": return this.#refProperty(e.ref, e.property);
       case "Call": {

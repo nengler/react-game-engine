@@ -11,7 +11,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M0 Hardening | Done | #5 | CI passed on the PR (first run of the workflow). Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet |
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
-| M3 useTransform and refs | In review | `claude/hopeful-euler-2dv4xe` | Adds `Assign` (`=`, `+=`, `-=`, `*=`, `/=`). A ref write to a property that is also a dynamic prop is overwritten at the next render. Field names stay generated for unnamed elements |
+| M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform`; #8 replaced it with a `transform={{ x, y }}` attribute driven by state (see Decisions). Adds `Assign` for ref properties; a ref write to a property JSX sets from state is `RGE1404` |
 | M4 Props and callbacks | Not started | n/a | n/a |
 | M5 Keyed dynamic lists | Not started | n/a | Needs M4 |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
@@ -23,6 +23,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | Prop and list types: copy source type text into output, or query the TS 7.1 checker through the API | Copy source text; revisit if prefab schemas need resolved types (unions, aliases across files) | M4, M5, M6 |
 | Input model | Per-frame `onInput` hook with polled `InputState`; JSX event props can be added later as a `PropIR` variant | M2 |
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs | M6 |
+| Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on an `<Entity>` (decided 2026-11-08). Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters | M3, M4, M6 |
 
 ## Ground rules
 
@@ -118,24 +119,25 @@ function Player() {
 
 Decision: `onInput` is a per-frame hook with a polled `InputState`, not JSX event props such as `onKeyDown`. Event props come later as `PropIR` `EventHandlerProp` if needed.
 
-## M3 — useTransform and refs (~1 week, needs M1)
+## M3 — Transform attribute and refs (~1 week, needs M1)
 
-Two non-reactive handles: a transform for position data that changes every frame, and refs to the component's own persistent children.
+Position as ordinary state, written through a `transform` attribute, plus refs to the component's own persistent children. (The first version shipped a non-reactive `useTransform` hook; it was replaced so that components read like React. See Decisions.)
 
 ```tsx
 function Player() {
-  const transform = useTransform({ x: 0, y: 0 });
+  const [x, setX] = useState(0);
   const body = useRef<Sprite>();
-  onUpdate((dt) => { transform.x += 60 * dt; body.current.image = "run.png"; });
-  return <Entity><Sprite ref={body} image="idle.png" /></Entity>;
+  onUpdate((dt) => setX((previous) => previous + 60 * dt));
+  return <Entity transform={{ x, y: 0 }}><Sprite ref={body} image="idle.png" /></Entity>;
 }
 ```
 
-**useTransform**
+**Transform attribute**
 
-- IR: `HookIR` `UseTransform { slot: TransformId; initial: { x?, y?, rotation?, scaleX?, scaleY? } }` and a storage kind for it. `ExprIR` `TransformRead { field }`; `AssignTargetIR` `TransformField`.
-- Runtime: `Entity` gets `transform: Transform` (`x, y, rotation, scaleX, scaleY`). Generated code binds the hook to `this.transform` and sets initial values in the constructor. One `useTransform` per component; a second is a diagnostic.
-- Not reactive: writing a transform never marks the object dirty, because a renderer reads transforms directly each frame. Reading a transform inside JSX is a diagnostic (it would never update).
+- Runtime: `Entity` owns `transform: Transform` (`x, y, rotation, scaleX, scaleY`; pixels, y down, radians).
+- IR: `ElementIR.transform` / `HostElementIR.transform: TransformPropIR[]`, static or dynamic props restricted to the transform fields. `transform` is never a `PropIR`.
+- Codegen: static fields are set once after construction; dynamic fields are re-applied in `render()` like any dynamic prop.
+- Only `<Entity>` elements (root or child) take it. On a component element it is placement by the parent and waits for M4.
 
 **useRef**
 
@@ -144,7 +146,7 @@ function Player() {
 - Codegen needs no runtime ref object: the element is already a field, so `r.current` compiles to `this.<field>`. The element's field takes the ref's name, which finally gives authors control of field names.
 - Refs to conditional elements are typed `T | null`; the type-check forces a null check in handlers.
 
-**Acceptance tests**: transform writes in `onUpdate` cause no render; `useTransform` initial values; ref read compiles to the field with the same identity; conditional ref is null after unmount; misuse diagnostics.
+**Acceptance tests**: transform fields from state render once per tick and update in place; static fields set once; ref read compiles to the field with the same identity; conditional ref is null after unmount; misuse diagnostics.
 
 ## M4 — Props and callbacks between components (~1.5 weeks, needs M1)
 
@@ -222,7 +224,7 @@ Lets data files, not only TSX, place components in a world: a prefab is a compil
 
 - A scene is JSON: `{ version, entities: [{ id, prefab, props, transform, children? }] }`. `id` is author-assigned and stable, for diffing and hot reload.
 - A build step (`rge-compile --scenes`) validates every scene against `prefabs.json` and reports problems as compiler diagnostics with file and JSON path.
-- Runtime: `loadScene(world, scene, prefabs)` constructs each prefab, applies `transform` through M3's `Transform`, and mounts it. Callback props cannot come from data; a scene may only set value props.
+- Runtime: `loadScene(world, scene, prefabs)` constructs each prefab, applies `transform` to the instance's `Entity.transform` (M3), and mounts it. Callback props cannot come from data; a scene may only set value props.
 
 **Maps**
 
@@ -275,7 +277,7 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 - [x] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
 - [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
-### M3 useTransform and refs
+### M3 Transform attribute and refs
 
 - [x] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
 - [x] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test

@@ -132,6 +132,7 @@ describe("IR construction", () => {
             kind: "HostElement",
             component: { kind: "Intrinsic", name: "Entity" },
             props: [],
+            transform: [],
             children: [
               {
                 kind: "StaticChild",
@@ -141,6 +142,7 @@ describe("IR construction", () => {
                   fieldName: "sprite",
                   component: { kind: "Intrinsic", name: "Sprite" },
                   props: [{ kind: "StaticProp", name: "image", value: { kind: "StringLiteral", value: "player.png" } }],
+                  transform: [],
                   children: [],
                 },
               },
@@ -159,6 +161,7 @@ describe("IR construction", () => {
                   fieldName: "warningIcon",
                   component: { kind: "Local", name: "WarningIcon" },
                   props: [],
+                  transform: [],
                   children: [],
                 },
               },
@@ -175,6 +178,7 @@ describe("IR construction", () => {
             kind: "HostElement",
             component: { kind: "Intrinsic", name: "Entity" },
             props: [{ kind: "StaticProp", name: "name", value: { kind: "StringLiteral", value: "Warning" } }],
+            transform: [],
             children: [],
           },
         },

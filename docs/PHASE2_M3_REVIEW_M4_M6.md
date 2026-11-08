@@ -1,40 +1,50 @@
 # M3 review and M4–M6 investigation
 
-Written 2026-11-08 against `main` at `b53b55a`. Part 1 reviews the M3 work in progress, part 2 is one runtime fix that M5 needs and that ships with this document, and part 3 works out how to build M4, M5 and M6 in this codebase. Where this document disagrees with [PHASE2_PLAN.md](PHASE2_PLAN.md), it says so and gives the reason. Changes to settled decisions are listed together in [Proposed plan changes](#proposed-plan-changes).
+Written 2026-11-08 and updated after M3 merged (#7). Part 1 reviews M3 and describes the follow-up changes in this PR, including replacing `useTransform` with a `transform` attribute. Part 2 is a runtime fix that M5 needs, also in this PR. Part 3 works out how to build M4, M5 and M6 in this codebase.
 
-## 1. M3 review (work in progress)
+**Guiding principle.** Authoring should feel as close to ideal React as possible. What is on screen, including position, is a function of state and props. Hooks and special attributes follow React's conventions (`useState`, `useRef`, `ref`, `key`). The compiler does the work of making that efficient, so authors do not hand-write imperative, engine-specific APIs. Where this document disagrees with [PHASE2_PLAN.md](PHASE2_PLAN.md), it says so and gives the reason. Changes to settled decisions are listed together in [Proposed plan changes](#proposed-plan-changes).
 
-**What was reviewed.** The M3 agent is working on the local branch `claude/hopeful-euler-2dv4xe`, which is not pushed yet. This review covers its edits up to about 05:35 UTC: the runtime `Transform`, the IR types, the diagnostics, the analyzer, `scope.ts`, and `Assign` lowering in `statements.ts`. Transform lowering, codegen, tests and docs were not written yet.
+## 1. M3 review and follow-up
 
-### In line with the plan and the ground rules
+### Change in this PR: `useTransform` is replaced by a `transform` attribute
 
-- **Runtime.** `Transform` (`x`, `y`, `rotation`, `scaleX`, `scaleY`) is a plain class that `Entity` owns as a `readonly transform` field. Writing to it marks nothing dirty. `transform` is added to `reservedMembers`.
-- **IR first.**
-  - New variants: `UseTransformHookIR`, `RefIR` in `ComponentIR.refs`, `AssignStmtIR` with targets `TransformField | RefProperty`, and `TransformRead`, `RefRead` and `RefPropertyRead` expressions.
-  - `childExpressions` handles the new leaves.
-  - Separate read variants are the right choice: `PropertyReadIR.object` is typed `ParamReadIR`, so reusing it would have meant loosening that type.
-- **Branded ids.** `TransformId` and `RefId` follow the pattern of `StateId` and `ElementId`.
-- **Diagnostics.**
-  - New codes are appended (`RGE1105`, `RGE1106`, `RGE1304`), never renumbered.
-  - Unsupported compound operators (`%=`, `||=`, `??=`, …) get their own diagnostic instead of falling through to "unsupported expression".
-- **Refs are not a `HookIR`.** The plan defines `RefIR { id, name, target }` and leaves its location open, so keeping refs in `ComponentIR.refs` is fine. `useTransform` remains a hook because it carries initial values.
+M3 shipped a non-reactive `const t = useTransform({...})` handle that handlers wrote to imperatively (`t.x += 60 * dt`). That is fast, but it is not React. Position lived outside state, JSX could not read it (`RGE1304`), and authors had to learn a second, engine-specific way to change what is on screen. Position is now ordinary state, set with an attribute:
 
-### Issues to resolve before the M3 PR merges
+```tsx
+function Mover() {
+  const [x, setX] = useState(0);
+  onUpdate((dt) => setX((previous) => previous + 60 * dt));
+  return <Entity name="Mover" transform={{ x, y: 0 }}><Sprite image={x > 100 ? "run.png" : "idle.png"} /></Entity>;
+}
+```
 
-| # | Issue | Why it matters | Suggested fix |
-| --- | --- | --- | --- |
-| 1 | **A ref property write can fight a JSX prop.** With `<Sprite ref={body} image={hurt ? "a" : "b"} />` and `body.current.image = "run.png"` in `onUpdate`, the next `render()` overwrites the write. | There would be two writers and a silent last-write-wins. That breaks the rule that unsupported means a diagnostic. | Report a diagnostic when an `Assign` targets a `RefProperty` that is a `DynamicProp` on the ref's element. Assigning over a `StaticProp` is fine: it is an imperative override after construction. |
-| 2 | **Nullability of a ref must follow the element's presence, not its own child kind.** A static `<Sprite ref={s}/>` inside a `{cond && <Entity>…</Entity>}` subtree is also nullable. | If the ref is typed non-null, the generated code fails to type-check, or worse, type-checks with the wrong type. | Use the generator's existing `Presence` (`persistent` / `conditional`) logic, which already types such descendant fields as `T \| null`. |
-| 3 | **`ref={…}` must not become a `PropIR`**, and `ref` on the root `<Entity>` needs a rule. | `ref` would otherwise reach `new Sprite({ ref: … })`, and the root element has no field to name. | Remove `ref` in `#lowerProps`. Make `ref` on the root a diagnostic that points to `useTransform` (the root *is* `this`). M4 should also reserve `ref` and `key` as attribute names on components. |
-| 4 | **Ref names compete with automatically chosen field names.** | `const sprite = useRef<Sprite>()` on the second `<Sprite>` collides with the automatic name `sprite` of the first one. | Claim every ref name during `#lowerHooks`, which runs before `#lowerRoot`, so `#allocateFieldName` skips them. Add a test with this exact case. |
-| 5 | **The new `elementProperties` manifest table can drift from the runtime classes.** | `Sprite: ["image"]` is a hand-written list. | Add a runtime test, like the one for `reservedMembers`, that checks every listed property is an own field of a constructed instance of that intrinsic. |
-| 6 | **Transform units are not specified.** | M6 imports Tiled maps, which store rotation in degrees clockwise with y pointing down. Renderers need to know the convention. | Write the convention down in `Transform.ts` and DESIGN.md: radians (to match the allowlisted `Math.sin`/`Math.cos`), y down, pixels. M6 converts on import. |
-| 7 | **`useTransform` initial values.** | The plan says `{ x?, y?, rotation?, scaleX?, scaleY? }`. | Accept only number literals (including unary minus) in M3. Report unknown keys and spreads as `RGE1105`. After M4, prop reads can be allowed (`useTransform({ x: props.spawnX })`), but scenes (M6) set transforms directly, so this is optional. |
-| 8 | **DESIGN.md is now out of date.** | It says "`Assign` is not here yet" (Handlers section) and lists useTransform/refs under "How future features slot in". | This is already on the M3 checklist; listed here so it is not missed. |
+- **IR.**
+  - `ElementIR.transform` and `HostElementIR.transform` are `TransformPropIR[]`: the existing `StaticProp`/`DynamicProp`, restricted to `x`, `y`, `rotation`, `scaleX` and `scaleY`.
+  - Removed: `UseTransformHookIR`, `TransformRead`, the `TransformField` assign target, and `TransformId`. `Assign` now writes ref properties only.
+- **Codegen.**
+  - Static fields are set once, right after the element is constructed (before a child is attached).
+  - Dynamic fields are re-applied in `render()`.
+  - `Entity.transform` is never replaced.
+- **Where it is allowed.**
+  - Any `<Entity>`: the root or a child.
+  - Not on `<Sprite>`/`<Collider>`, which have no transform (`RGE1207`: wrap them in an `<Entity>`).
+  - Not on component elements yet. That is placement by the parent, designed in 3.1g.
+  - Malformed objects (spreads, computed keys, unknown or duplicate fields) are `RGE1207`.
+- **Removal.** `useTransform` now reports `RGE1102` with a pointer to the attribute. `RGE1105` is retired, not reused.
+- **Cost.** A per-frame move is a per-frame state change: one render per tick, however many setters ran. `render()` re-evaluates all dynamic props. Every `DynamicProp` already carries `dependencies`, so the optimisation, if it is ever needed, is to re-evaluate only the props whose state changed (a dirty bit per state slot). Authors would not change anything.
 
-### Merge note
+### Status of the earlier review points
 
-Part 2 below changes `#emitStaticWiring`, `#emitMountStatics` and the conditional mount in `generator.ts`, and regenerates `packages/example/generated`. M3 will touch nearby code, because ref names become field names. Whichever PR merges second has to rebase, rerun `npm run example`, and commit the regenerated output (CI checks this).
+| # | Point | Status |
+| --- | --- | --- |
+| 1 | A ref property write can fight a JSX prop set from state | **Fixed in this PR**: `RGE1404` when a handler writes a ref property that is a `DynamicProp` on the ref's element. Writing over a static prop is still allowed |
+| 2 | Ref nullability must follow the element's presence | Handled in #7: the generator types the field from presence, and a test forces the null check |
+| 3 | `ref` must not become a prop; `ref` on the root | Handled in #7 (`RGE1106` on the root). `ref` and `transform` are now both handled outside `#lowerProps`, and duplicates of either are still reported |
+| 4 | Ref names vs automatic field names | Handled in #7: ref names are claimed in `#lowerHooks`, before the JSX is lowered |
+| 5 | `elementProperties` can drift from the runtime | **Fixed in this PR**: a runtime test checks each listed property is a field of that intrinsic |
+| 6 | Transform units | **Fixed in this PR**: pixels, y down, rotation in radians, documented in `Transform.ts` and DESIGN.md |
+| 7 | `useTransform` initial values | No longer applies: the hook is gone. Transform fields are any expression, including state |
+| 8 | DESIGN.md out of date | Handled in #7, then rewritten in this PR for the attribute |
 
 ## 2. Fix shipped with this document: children keep source order
 
@@ -130,6 +140,27 @@ Today a prop or condition is dynamic only if it reads **state** (`collectDepende
   - `ref` used as a prop name.
   - Retire `RGE1204` with a "Retired" comment, as was done for `RGE1403`.
 
+#### g. `transform` on component elements: placement composes with the child's own transform
+
+`<Enemy transform={{ x: 100 }} />` is how a React author would expect to place a component. But a generated component *is* its root `<Entity>`, so the parent's transform and the child's own root `transform={{ x }}` would write the same object, and the last writer would win. Cross-file, the compiler cannot even see that both write it.
+
+**Proposal: two transforms that compose.**
+
+- The runtime `Entity` gains `placement: Transform`, which defaults to identity.
+- The parent's `transform` attribute on a *component* element writes `child.placement`, static or dynamic like any prop. Scenes (M6) write `placement` too.
+- The component's own root `transform` attribute writes `transform`, as today.
+- A renderer computes `world = parentWorld × placement × transform`.
+
+What this gives:
+
+- Nothing can conflict, and no cross-file check is needed.
+- A component's own movement is relative to where it was placed, which is what a spawn point means: `<Mover transform={{ x: 200 }} />` starts at 200 and moves from there.
+- It reads exactly like React. Like `key` and `ref`, `transform` is a reserved attribute on component elements, not a prop the component declares.
+
+On intrinsic `<Entity>` children nothing changes: there is no separate "own" transform to compose with, so the attribute writes `transform`.
+
+The alternative is pure React: no special attribute, and parents pass `x`/`y` props that the child forwards to its root. That makes every prefab declare position props, and it gives scenes no uniform way to place an arbitrary prefab, so it is not recommended.
+
 **Suggested split:**
 
 - **M4a:** type declarations, `PropDeclIR`, `PropRead`, dependencies, and the runtime `Entity<P>`.
@@ -194,7 +225,7 @@ Today a prop or condition is dynamic only if it reads **state** (`collectDepende
 **Runtime `loadScene(world, scene, prefabs)`**
 
 1. For each entity: `create(props)`.
-2. Copy `transform` fields onto `object.transform`. This overrides `useTransform` initial values; document that.
+2. Copy `transform` fields onto `object.placement` (3.1g). The component's own state-driven `transform` composes on top, so a placed `Mover` still moves relative to its spawn point.
 3. Mount: top-level entities with `world.mount`; `children` with `parent.addChild(child)` and no slot, so they come after the prefab's own children (see part 2).
 4. Return `Map<id, GameObject>`. Hot reload and editors can key on that map, so no new `GameObject` field is needed.
 
@@ -225,4 +256,7 @@ The runtime stays a mock: no rendering or asset loading.
 | Split M5 into M5a (records and arrays in handlers) and M5b (keyed list) | Plan | Array state cannot be updated with today's handler language |
 | `(slot, order)` child ordering and `queueReorder` in place of `queueInsertChild` / `queueMoveChild` | M5 runtime | Extends part 2's slot instead of adding a second ordering mechanism |
 | Registry types via `ConstructorParameters<typeof X>[0]` | M6 codegen | Props interfaces do not need to be exported |
-| Transform units: radians, y down | M3 docs | Needed for M6's Tiled conversion and for renderers |
+| Transform units: radians, y down (**done in this PR**) | M3 docs | Needed for M6's Tiled conversion and for renderers |
+| Position is state via `transform={{ x, y }}`; `useTransform` removed (**done in this PR**) | M3 | Authoring should read like React; position is no longer a second, imperative channel |
+| `transform` on a component element writes `placement`, which composes with the child's own `transform` | M4 runtime, M6 | Parent placement and the child's own movement never conflict, and scenes place any prefab the same way |
+| Dependency-scoped `render()` (re-evaluate only props whose state changed) | Later, if profiling asks for it | State-driven per-frame movement re-runs the whole render each tick |

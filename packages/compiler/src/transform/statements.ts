@@ -33,7 +33,7 @@ export interface LoweringContext {
   /** Innermost scope; expression lowering resolves identifiers against it. */
   scope: Scope;
   lowerExpression(node: Expression): ExprIR | null;
-  /** Resolves `t.x` / `r.current.prop`; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
+  /** Resolves `r.current.prop`; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
   lowerAssignTarget(node: Expression): AssignTargetIR | null;
   stateType(state: StateId): ValueType;
   nextSerial(): number;
@@ -153,7 +153,7 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
 
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
-    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, transform / ref assignments, allowlisted calls, \`if\`/\`else\`, \`const\` and \`return\`.`,
+    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, ref property assignments, allowlisted calls, \`if\`/\`else\`, \`const\` and \`return\`.`,
     statement,
   );
   return null;
@@ -171,7 +171,7 @@ const ASSIGNMENT_TOKENS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.AmpersandAmpersandEqualsToken, SyntaxKind.QuestionQuestionEqualsToken,
 ]);
 
-/** `target = value` / `target += value` (transform fields and ref properties). */
+/** `target = value` / `target += value` (ref properties). */
 function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): StatementIR | null {
   const operator = ASSIGN_OPERATORS.get(expression.operatorToken.kind);
   if (!operator) {
@@ -194,7 +194,7 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   const lowered = ctx.lowerExpression(call);
   if (!lowered) return null;
   if (lowered.kind !== "Call") {
-    ctx.error(DiagnosticCode.UnsupportedStatement, "Expression statements must be a state setter call, an assignment to a transform field or ref property, or an allowlisted call.", at);
+    ctx.error(DiagnosticCode.UnsupportedStatement, "Expression statements must be a state setter call, an assignment to a ref property, or an allowlisted call.", at);
     return null;
   }
   return { kind: "ExpressionStatement", expression: lowered };
