@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * Usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check]
- * Compiles every .tsx file in srcDir to a .ts file in outDir, writes the IR
- * next to it as .ir.json, then type-checks the output.
+ * Type-checks every .tsx file in srcDir (imports from the authoring module,
+ * prop types, hook arguments), compiles each to a .ts file in outDir, writes
+ * the IR next to it as .ir.json, then type-checks the output. `--no-check`
+ * skips both type-checks.
  */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -29,7 +31,16 @@ function main(argv: readonly string[]): number {
   const outputs: VirtualFile[] = [];
   try {
     mkdirSync(outDir, { recursive: true });
-    for (const name of readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort()) {
+    const sourceNames = readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort();
+    if (check && sourceNames.length > 0) {
+      diagnostics.push(
+        ...compiler.typeCheckSources(sourceNames.map((name) => {
+          const sourcePath = resolve(srcDir, name);
+          return { fileName: sourcePath, text: readFileSync(sourcePath, "utf8") };
+        })),
+      );
+    }
+    for (const name of sourceNames) {
       const sourcePath = resolve(srcDir, name);
       // Use a cwd-relative name so generated headers and IR spans are machine-independent.
       const result = compiler.compile(relative(process.cwd(), sourcePath), readFileSync(sourcePath, "utf8"));

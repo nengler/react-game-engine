@@ -12,6 +12,9 @@ and the design decisions, and [docs/PHASE2_PLAN.md](docs/PHASE2_PLAN.md) for
 the roadmap and current milestone status.
 
 ```tsx
+import { useState, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { WarningIcon } from "./WarningIcon.tsx";
+
 function Player() {
   const [health, setHealth] = useState(100);
   return (
@@ -40,7 +43,8 @@ packages/
     src/typecheck/    type-checking generated code with TypeScript 7.1
     src/diagnostics/  diagnostic codes and formatting
     test/             end-to-end tests
-  runtime/    mock GameObject / World (with `tick` / `reportCollision`), Entity, Sprite, Collider,
+  runtime/    the authoring entry point (`@rge/runtime/jsx`: typed hooks and built-in elements for
+              component source), and the mock GameObject / World (with `tick` / `reportCollision`), Entity, Sprite, Collider,
               and `runtimeManifest` (what the compiler is told about the runtime)
   example/    example components and their committed generated output
 ```

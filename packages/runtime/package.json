@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./jsx": "./src/jsx.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts"
   }
 }

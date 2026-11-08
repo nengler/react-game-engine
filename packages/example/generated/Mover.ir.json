@@ -7,9 +7,9 @@
       "name": "Mover",
       "span": {
         "fileName": "packages/example/src/Mover.tsx",
-        "start": 0,
-        "end": 265,
-        "line": 1,
+        "start": 73,
+        "end": 338,
+        "line": 3,
         "column": 1
       },
       "hooks": [
@@ -19,9 +19,9 @@
           "setterName": "setX",
           "span": {
             "fileName": "packages/example/src/Mover.tsx",
-            "start": 27,
-            "end": 50,
-            "line": 2,
+            "start": 100,
+            "end": 123,
+            "line": 4,
             "column": 9
           }
         },
@@ -88,9 +88,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Mover.tsx",
-            "start": 55,
-            "end": 124,
-            "line": 4,
+            "start": 128,
+            "end": 197,
+            "line": 6,
             "column": 3
           }
         }
@@ -192,9 +192,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Mover.tsx",
-                "start": 193,
-                "end": 244,
-                "line": 10,
+                "start": 266,
+                "end": 317,
+                "line": 12,
                 "column": 7
               }
             }
@@ -202,9 +202,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Mover.tsx",
-          "start": 141,
-          "end": 258,
-          "line": 9,
+          "start": 214,
+          "end": 331,
+          "line": 11,
           "column": 5
         }
       }

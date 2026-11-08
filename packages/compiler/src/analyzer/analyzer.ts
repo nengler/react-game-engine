@@ -44,10 +44,12 @@ export interface SourceAnalysis {
   readonly components: readonly ComponentAnalysis[];
   /** Components imported from other `.tsx` files, by the name they have in this file. */
   readonly imports: readonly ImportAnalysis[];
+  /** Hooks, built-in elements and runtime functions imported from the authoring module. Validated in the transform, which has the runtime manifest. */
+  readonly authoringImports: readonly ImportAnalysis[];
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
-/** `import { Name } from "./Name.tsx"`: a component declared in another source file. */
+/** `import { Name } from "./Name.tsx"` (a component in another source file) or `import { useState } from "@rge/runtime/jsx"`. */
 export interface ImportAnalysis {
   readonly name: string;
   /** The specifier as written, e.g. `./WarningIcon.tsx`. */
@@ -116,25 +118,46 @@ const HOOK_NAME = /^use[A-Z0-9]/;
 const KNOWN_HOOKS = new Set(["useState", "useRef", "useUpdate", "useInput"]);
 /** `onCollisionEnter` stays a hook until it becomes a prop on `<Collider>` (M4). */
 const HANDLER_HOOKS = new Set(["useUpdate", "useInput", "onCollisionEnter"]);
+/** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
+export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS, ...HANDLER_HOOKS].filter((name, i, all) => all.indexOf(name) === i);
 /** Earlier names of the per-frame hooks, reported with their replacement. */
 const RENAMED_HOOKS: Readonly<Record<string, string>> = { onUpdate: "useUpdate", onInput: "useInput" };
 
 /**
  * @param fileName Name used in spans and diagnostics. Defaults to the parsed
  * file's (absolute, normalised) name.
+ * @param authoringModule The module hooks, built-ins and runtime functions are
+ * imported from (the runtime manifest's `authoringModule`). Without it, only
+ * component imports are accepted.
  */
-export function analyzeSourceFile(sourceFile: SourceFile, fileName: string = sourceFile.fileName): SourceAnalysis {
+export function analyzeSourceFile(
+  sourceFile: SourceFile,
+  fileName: string = sourceFile.fileName,
+  authoringModule: string | null = null,
+): SourceAnalysis {
   const diagnostics: CompilerDiagnostic[] = [];
   const components: ComponentAnalysis[] = [];
   const imports: ImportAnalysis[] = [];
+  const authoringImports: ImportAnalysis[] = [];
   const span = (node: Node) => spanOf(node, sourceFile, fileName);
 
   for (const statement of sourceFile.statements) {
     if (isImportDeclaration(statement)) {
-      // Imports of other modules (useState, intrinsics, ...) are authoring-only; relative `.tsx` imports are components.
+      // Two kinds of import are understood: components from relative `.tsx` files, and hooks, built-ins and
+      // runtime functions from the authoring module. Anything else would be silently dropped, so it is an error.
       const specifier = isStringLiteral(statement.moduleSpecifier) ? statement.moduleSpecifier.text : null;
       if (specifier !== null && /^\.\.?\/.*\.tsx$/.test(specifier)) {
-        analyzeComponentImport(statement, specifier, imports, diagnostics, span);
+        analyzeNamedImport(statement, specifier, imports, diagnostics, span, "Component imports", `import { Name } from "${specifier}"`);
+      } else if (specifier !== null && specifier === authoringModule) {
+        analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity } from "${specifier}"`);
+      } else {
+        diagnostics.push(
+          error(
+            DiagnosticCode.UnsupportedSyntax,
+            `Import of ${specifier === null ? "this module" : `"${specifier}"`} is not supported: component source imports components from "./Name.tsx"${authoringModule ? ` and hooks and built-in elements from "${authoringModule}"` : ""}.`,
+            span(statement),
+          ),
+        );
       }
       continue;
     }
@@ -152,28 +175,36 @@ export function analyzeSourceFile(sourceFile: SourceFile, fileName: string = sou
     );
   }
 
-  return { fileName, sourceFile, components, imports, diagnostics };
+  return { fileName, sourceFile, components, imports, authoringImports, diagnostics };
 }
 
-function analyzeComponentImport(
+/** `import { A, B } from "module"`: named imports only, no default, namespace, `type` or `as` forms. */
+function analyzeNamedImport(
   statement: ImportDeclaration,
   module: string,
   imports: ImportAnalysis[],
   diagnostics: CompilerDiagnostic[],
   span: (node: Node) => ReturnType<typeof spanOf>,
+  what: string,
+  example: string,
 ): void {
   const clause = statement.importClause;
   const bindings = clause?.namedBindings;
   if (!clause || clause.name || !bindings || !isNamedImports(bindings)) {
     diagnostics.push(
-      error(DiagnosticCode.UnsupportedSyntax, `Import components by name: \`import { Name } from "${module}"\` (no default or namespace imports).`, span(statement)),
+      error(DiagnosticCode.UnsupportedSyntax, `${what} must name what they import: \`${example}\` (no side-effect, default or namespace imports).`, span(statement)),
     );
+    return;
+  }
+  // `import type {…}` (and the `defer` / `source` phases) carry a phase modifier on the whole clause.
+  if (clause.phaseModifier !== undefined) {
+    diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(statement)));
     return;
   }
   for (const element of bindings.elements) {
     if (element.isTypeOnly || element.propertyName) {
       diagnostics.push(
-        error(DiagnosticCode.UnsupportedSyntax, "Component imports must be plain `{ Name }`: no `type` modifier and no `as` aliases.", span(element)),
+        error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(element)),
       );
       continue;
     }

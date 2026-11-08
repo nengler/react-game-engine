@@ -1,7 +1,8 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { Compiler, formatDiagnostic, type CompilerDiagnostic, type IRModule } from "../src/index.ts";
+import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
+import { AUTHORING_HOOKS, Compiler, formatDiagnostic, type CompilerDiagnostic, type IRModule } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** Inside the repo so generated code resolves `@rge/runtime` through the workspace. */
@@ -29,9 +30,26 @@ export interface CompiledModule {
   readonly fileName: string;
 }
 
+/**
+ * Component source must import the hooks, built-in elements and functions it
+ * uses from the authoring module (`RGE1005` otherwise). Most test sources are
+ * short snippets about something else, so the helpers below add the import
+ * line for the names a source uses. It goes on the source's first line, so
+ * line numbers are unchanged, and a source that already imports from the
+ * authoring module is left alone. Tests about the import rules themselves
+ * bypass this by calling the compiler directly.
+ */
+export function withAuthoringImports(source: string, manifest: RuntimeManifest = runtimeManifest): string {
+  if (source.includes(`from "${manifest.authoringModule}"`)) return source;
+  const exported = [...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions)];
+  const used = exported.filter((name) => new RegExp(`\\b${name}\\b`).test(source));
+  if (used.length === 0) return source;
+  return `import { ${used.join(", ")} } from "${manifest.authoringModule}"; ${source}`;
+}
+
 /** Compile TSX source, throwing with formatted diagnostics if compilation fails. */
 export function compile(source: string, name = "Test.tsx"): CompiledModule {
-  const result = getCompiler().compile(name, source);
+  const result = getCompiler().compile(name, withAuthoringImports(source));
   if (!result.ok) {
     throw new Error(`Compilation failed:\n${result.diagnostics.map(formatDiagnostic).join("\n")}`);
   }
@@ -41,7 +59,7 @@ export function compile(source: string, name = "Test.tsx"): CompiledModule {
 
 /** Diagnostics for source that is expected not to compile. */
 export function compileErrors(source: string): readonly CompilerDiagnostic[] {
-  const result = getCompiler().compile("Invalid.tsx", source);
+  const result = getCompiler().compile("Invalid.tsx", withAuthoringImports(source));
   if (result.ok) throw new Error(`Expected compilation to fail, got:\n${result.code}`);
   return result.diagnostics;
 }
@@ -73,7 +91,7 @@ export function compileProject(sources: Readonly<Record<string, string>>): Compi
   const dir = join(PROCESS_DIR, String(++counter));
   const out: Record<string, CompiledModule> = {};
   for (const [name, source] of Object.entries(sources)) {
-    const result = getCompiler().compile(name, source);
+    const result = getCompiler().compile(name, withAuthoringImports(source));
     if (!result.ok) {
       throw new Error(`Compilation of ${name} failed:\n${result.diagnostics.map(formatDiagnostic).join("\n")}`);
     }
@@ -98,7 +116,7 @@ export async function loadProject<T = Record<string, unknown>>(project: Compiled
 /** Diagnostics for a project whose files are expected not to compile (files compiled in order, errors from the first failure). */
 export function compileProjectErrors(sources: Readonly<Record<string, string>>): readonly CompilerDiagnostic[] {
   for (const [name, source] of Object.entries(sources)) {
-    const result = getCompiler().compile(name, source);
+    const result = getCompiler().compile(name, withAuthoringImports(source));
     if (!result.ok) return result.diagnostics;
   }
   throw new Error("Expected a compilation failure");

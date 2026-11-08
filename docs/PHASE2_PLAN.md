@@ -1,6 +1,6 @@
 # Phase 2 implementation plan
 
-Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes. It is split into seven milestones (M0–M6), each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). A review of M3 and a worked-out approach for M4–M6, including proposed changes to this plan, is in [PHASE2_M3_REVIEW_M4_M6.md](PHASE2_M3_REVIEW_M4_M6.md). How close the current and planned authoring API is to React, and the open decisions that follow from it, is in [REACT_API_REVIEW.md](REACT_API_REVIEW.md).
+Snapshot of the plan as of 2026-11-08. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes, plus the authoring types and built-in elements that grew out of the design. It is split into milestones, each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). Build-level design for M4–M6: [M4_M6_DESIGN.md](M4_M6_DESIGN.md).
 
 ## Status
 
@@ -12,14 +12,20 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
 | M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform` and element refs; #8 replaced them with a `transform={{ x, y }}` attribute driven by state and value refs (`useRef(0)`), and also renamed the per-frame hooks to `useUpdate`/`useInput` and switched state reads to React's snapshot semantics (see Decisions) |
-| M7 Authoring types | Not started | n/a | Next. Typed imports for hooks and intrinsics so source TSX type-checks in editors; see below |
+| M7 Authoring types | In review | #9 | Component source imports from `@rge/runtime/jsx` (mandatory: `RGE1005` otherwise); the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI) |
 | M4 Props and callbacks | Not started | n/a | Also: collision events as `<Collider onCollisionEnter>` props, fragment and non-Entity roots, arrow-function and default-export components |
 | M8 Children | Not started | n/a | Needs M4 |
 | M5 Keyed dynamic lists | Not started | n/a | Needs M4; split into M5a (arrays and records in handlers) and M5b (keyed list) |
 | M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
+| M10 `<Text>` | Not started | n/a | Needs M7. HUD and labels; `transformIntrinsics` |
+| M11 `<Shape>` | Not started | n/a | Needs M7. Rectangles and circles for debugging and prototypes; `transformIntrinsics` |
+| M12 `<Camera>` | Not started | n/a | Needs M4 (to follow a target through a prop). The view transform is its own `transform`; `transformIntrinsics` |
+| M13 `<AnimatedSprite>` | Not started | n/a | Needs M5a (frame lists). Sprite-sheet playback; `transformIntrinsics` |
+| M14 `<Pointer>` | Not started | n/a | Needs M4 (callback props). Clickable hit area; `transformIntrinsics` |
+| M15 `useSound` | Not started | n/a | Needs M1 and the hook machinery from M3. A handle called in handlers; no transform, because sounds are not placed |
 
-Rows are in the order the work is planned (M7–M9 were added on 2026-11-08 after the [React API review](REACT_API_REVIEW.md)).
+Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 after a review of the authoring API against React; M10–M15 were added the same day for the built-in elements and the sound hook.
 
 ## Decisions (settled)
 
@@ -33,12 +39,16 @@ Rows are in the order the work is planned (M7–M9 were added on 2026-11-08 afte
 | Refs | Refs hold values only (`const timer = useRef(0)`; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) | M3 |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) | M4 |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) | M9 |
+| Built-in elements | Planned set: `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) | M10–M14 |
+| Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) | M15 |
 | Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) | M7 |
 | Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on any built-in element (decided 2026-11-08; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the attribute). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters | M3, M4, M6 |
 
 ## Ground rules
 
 Every milestone keeps the slice's architecture intact; a change that breaks one of these rules needs a design note first.
+
+- **Feel like ideal React.** A component is a function of state and props, hooks follow React's conventions, and imports, `key`, and callbacks-as-props look like React's. "Ideal" means React's model, not its accidents (stale closures, dependency arrays). A feature that makes authors learn an engine-specific API where a React one exists needs a design note first.
 
 - **IR first.** Each feature starts as new variants in `packages/compiler/src/ir/types.ts`. Code is generated only from IR, never from the AST.
 - **Exhaustive unions.** Add the variant, then let `assertNever` failures show every place that must handle it. Never add a `default:` that silently passes.
@@ -164,6 +174,8 @@ function Player() {
 
 ## M4 — Props and callbacks between components (~1.5 weeks, needs M1)
 
+Detailed design, which supersedes the details below where they differ: [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m4-props-and-callbacks).
+
 A parent passes values and callbacks to a local or imported component; a changed value updates the existing child instance in place.
 
 ```tsx
@@ -197,13 +209,15 @@ Remove diagnostic RGE1204 (props on local components). `children` as a prop stay
 
 **Acceptance tests**: parent state change updates the child's prop and renders the child once; the child keeps its identity; callback invoked from the child's `onCollisionEnter` updates parent state; missing required prop fails the type-check; defaults apply.
 
-**Also in M4** (from the [React API review](REACT_API_REVIEW.md)):
+**Also in M4:**
 
 - **Collision events as props**: `<Collider width={16} onCollisionEnter={(other) => …} />` replaces the `onCollisionEnter` hook. The runtime calls the collider's own callback, so a component with several colliders knows which one was hit. The hook reports `RGE1102` with the new form.
 - **Fragment and non-Entity roots**: `return <>…</>` lowers to an implicit container (the host `Entity`, no props). `return <Sprite image="coin.png" />` makes the generated class extend `Sprite` itself, with no container. JSX children under the root are allowed only if that element type accepts children (a manifest list). Every intrinsic already has a transform (#8), so such a component can be placed like any other.
 - **Component forms**: `const Enemy = (props: EnemyProps) => …` and `export default function Enemy`, plus default imports (`import Enemy from "./Enemy.tsx"`).
 
 ## M5 — Keyed dynamic lists (~1.5 weeks, needs M4)
+
+Detailed design, which supersedes the details below where they differ: [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m5-keyed-dynamic-lists).
 
 One component per item of an array state, keyed so each item keeps its instance across updates.
 
@@ -226,12 +240,14 @@ function Level() {
 
 - One field per list: `enemyItems: Map<string | number, Enemy> = new Map()`.
 - `render()` walks the source once: an existing key calls `updateProps`; a new key constructs and queues an insert; keys no longer present queue a removal. Duplicate keys throw in development builds.
-- Order matters for draw order. Children already carry a source *slot* (`addChild(child, slot)`), so a conditional mounts between its siblings. Lists extend this to `(slot, order)` with a `queueReorder` emitted only when the key order actually changed (proposed in [PHASE2_M3_REVIEW_M4_M6.md](PHASE2_M3_REVIEW_M4_M6.md) in place of `queueInsertChild` / `queueMoveChild`).
+- Order matters for draw order. Children already carry a source *slot* (`addChild(child, slot)`), so a conditional mounts between its siblings. Lists extend this to `(slot, order)` with a `queueReorder` emitted only when the key order actually changed (designed in [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m5-keyed-dynamic-lists) in place of `queueInsertChild` / `queueMoveChild`).
 - Change detection relies on immutable updates (`setEnemies([...enemies, e])`): the setter's `===` check means mutating the array in place does nothing. Document this; do not deep-compare.
 
 **Acceptance tests**: add, remove, reorder and update by key; an unchanged item keeps its identity and is not re-rendered; static siblings before and after the list keep their positions; duplicate key error; each restriction has a diagnostic.
 
 ## M6 — Prefabs and scene/map integration (~2 weeks, needs M3 + M4)
+
+Detailed design, which supersedes the details below where they differ: [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m6-prefabs-and-scenes).
 
 Lets data files, not only TSX, place components in a world: a prefab is a compiled component plus a machine-readable description of its props.
 
@@ -256,7 +272,7 @@ Lets data files, not only TSX, place components in a world: a prefab is a compil
 
 Not in M6: hot reload and editor tooling. Stable `ElementId`s and scene `id`s are what they will key on.
 
-## M7 — Authoring types (~3–4 days, next)
+## M7 — Authoring types (done in #9)
 
 Source files import what they use, as in React, and type-check in an editor:
 
@@ -264,9 +280,14 @@ Source files import what they use, as in React, and type-check in an editor:
 import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
 ```
 
-- A typed entry point declares the hooks (`useState`, `useRef`, `useUpdate`, `useInput`, later `useMount`/`useUnmount`), the intrinsics with their props (including `transform`), and a `JSX` namespace (`jsxImportSource`), so editors give autocomplete and prop errors on the TSX itself.
-- The compiler already ignores non-relative imports; it should check that hooks and intrinsics come from this entry point (or are unimported, for now) and report a clear diagnostic otherwise.
-- Examples switch to explicit imports, and CI type-checks `packages/example/src` with the declarations.
+What shipped:
+
+- **Entry point** `@rge/runtime/jsx` declares the hooks (`useState`, `useRef`, `useUpdate`, `useInput`, `onCollisionEnter`), the built-in elements with their props (including `transform`), and `clamp`. `@rge/runtime/jsx-runtime` holds the `JSX` namespace, so a project sets `"jsx": "react-jsx"` and `"jsxImportSource": "@rge/runtime"`. Everything is a declaration (calling one throws); the compiler never executes source.
+- **No drift.** Element props are the runtime's own prop interfaces and `TransformProps` is `Partial<Transform>`, so they follow the runtime. A test checks the module exports exactly the names the compiler accepts (intrinsics, hooks, manifest functions).
+- **Imports are validated.** Component source may import from `./X.tsx` and from the manifest's `authoringModule`; any other import (`react`, a CSS file, a `.ts` helper, a default, namespace, aliased or `type` import) is `RGE1001` instead of being silently dropped. A name the entry point does not export is `RGE1004`.
+- **Source type-checking.** `Compiler.typeCheckSources` runs the TypeScript checker over the authored TSX (`RGE9002`), so a wrong prop, a bad hook argument or an undefined name is reported with TypeScript's own message (`Did you mean 'image'?`). `rge-compile` runs it before compiling; `--no-check` skips it. `packages/example/tsconfig.json` type-checks the examples from `npm run typecheck`, which CI runs.
+- **Imports are mandatory.** A hook, built-in element or runtime function used without being imported from the authoring module is `RGE1005`, reported once per name per file with the import line to add (`Math` is a global and needs none). The test helpers add the import line to short snippets (see `withAuthoringImports`); `m7.test.ts` tests the rule by calling the compiler directly.
+- **One divergence to know.** TypeScript accepts `ref.current` in JSX, but the compiler rejects it (`RGE1304`), because it would go stale.
 
 ## M8 — Children (~1 week, needs M4)
 
@@ -275,6 +296,105 @@ import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
 ## M9 — Mount and unmount hooks (~3–4 days)
 
 `useMount(() => …)` runs once, after the component is first attached to a `World` and its first render has committed. `useUnmount(() => …)` runs when it is removed from the `World` (a conditional turning off, a list item removed, a scene unloaded). Both are top-level hooks lowered to `FunctionIR` like `useUpdate`. Setters in `useUnmount` are a diagnostic (the component is gone); refs may be read and written. There is no `useEffect`: reacting to a state change is done where the state changes.
+
+## M10 — `<Text>` (~3–4 days, needs M7)
+
+A text element for HUDs, labels and menus. It is the first built-in whose content is a string prop, so it exercises dynamic string props in a built-in.
+
+```tsx
+<Text transform={{ x: 8, y: 8 }} size={16} color="white">{`Score: ${score}`}</Text>
+```
+
+- **Runtime:** `Text extends GameObject` with `text`, `size`, `color` as fields. The mock records what it would draw; there is no font rendering.
+- **Compiler:** text children are not supported elsewhere, so the content is a `text` prop, not JSX text. A template or string expression is a `DynamicProp` like any other.
+- **Manifest:** added to `intrinsics` and `transformIntrinsics`.
+- **Tests:** the text updates in place when state changes; the element keeps its identity; `text` type-checks as `string`.
+
+## M11 — `<Shape>` (~2–3 days, needs M7)
+
+A primitive shape (`kind: "rect" | "circle"`, `width`, `height`, `color`). It is mainly for debugging colliders and for prototyping before art exists.
+
+- **Runtime:** `Shape extends GameObject`; the mock stores the fields.
+- **Compiler:** `kind` must be a string literal from the allowed set (`rect`, `circle`), checked in the transform against the manifest. A misspelt kind is a new diagnostic (appended to `diagnostics.ts`), not a generated-code type error.
+- **Manifest:** `intrinsics` and `transformIntrinsics`.
+- **Tests:** a shape placed inside a parent follows it; an unknown kind is rejected.
+
+## M12 — `<Camera>` (~1 week, needs M4)
+
+The viewport. A camera's `transform` is the view: a renderer draws the world through its inverse, so moving the camera pans the view. `zoom` scales it.
+
+```tsx
+function Level() {
+  return (
+    <Entity>
+      <Camera zoom={2} follow={hero} />
+      <Hero />
+    </Entity>
+  );
+}
+```
+
+- **Following a target** needs a prop that takes another object, so it waits for M4's callback and prop machinery. `follow` is an object prop, not a ref (refs hold values only). The mock resolves the target's `worldTransform()` each frame. The exact way a component names one of its own children to pass it on is decided in M4.
+- **Runtime:** `Camera extends GameObject` with `zoom`; `Camera.viewTransform()` returns the inverse of `worldTransform()` composed with zoom.
+- **Manifest:** `intrinsics` and `transformIntrinsics`, since the camera's own position is its view.
+- **Tests:** moving the camera changes the view transform without changing any object's world transform; following a target keeps the view on it after the target moves.
+
+## M13 — `<AnimatedSprite>` (~1 week, needs M5a)
+
+A sprite that cycles through frames. Frames are an array, so it needs M5a's array literals to be written in source; the playing state is state.
+
+```tsx
+const [running, setRunning] = useState(false);
+<AnimatedSprite frames={["run1.png", "run2.png", "run3.png"]} fps={8} playing={running} />
+```
+
+- **Runtime:** `AnimatedSprite extends GameObject`; it advances its frame in `update(dt)`, which the World calls for every object that overrides it (the existing registration rule).
+- **Compiler:** `frames` is a string-array prop; it is evaluated once when it is static and read per render when dynamic.
+- **Manifest:** `intrinsics` and `transformIntrinsics`.
+- **Tests:** the frame advances at `fps`; `playing={false}` freezes it; changing `frames` restarts at frame 0.
+
+## M14 — `<Pointer>` (~1 week, needs M4)
+
+A hit area for clicks and presses, positioned with `transform` like everything else. It is the first element-level event, so it follows the same pattern as `<Collider onCollisionEnter>`.
+
+```tsx
+<Pointer width={120} height={40} onPress={() => setOpen(true)} />
+```
+
+- **Runtime:** `Pointer extends GameObject`. The mock dispatches `world.reportPress(pointer, x, y)`, as it does collisions, and the press is tested against the pointer's `worldTransform()` and size.
+- **Compiler:** `onPress` is a callback prop on an intrinsic, the same mechanism M4 adds for `onCollisionEnter`.
+- **Manifest:** `intrinsics` and `transformIntrinsics`.
+- **Tests:** a press inside the area calls the handler; a press outside does not; a moved or scaled pointer is hit where it is drawn.
+
+## M15 — `useSound` (~3–4 days, needs M1)
+
+A sound is a hook that returns a function. It is not an element and has no position, so it does not take `transform`.
+
+```tsx
+function Hero() {
+  const playHit = useSound("hit.wav");
+  onCollisionEnter(() => playHit());
+  return <Entity name="Hero" />;
+}
+```
+
+- **Semantics:** `useSound` is a top-level hook like `useRef`, with one binding per call. The returned function may only be called in handlers; calling it in JSX or a derived `const` is a new diagnostic, for the same reason as `RGE1304` (it would run on every render). A call plays immediately; it is an effect, not state, so it does not wait for the next render.
+- **Arguments:** the path is a string literal, so a missing asset can be reported at build time once an asset list exists. Options (`volume`) come later.
+- **Runtime:** a mock `Sound` records plays; there is no audio backend (the ground rule stays).
+- **IR:** a `SoundHookIR { id, name, path }` and a `PlaySound` expression statement, lowered like `SetState` and dispatched to the sound's runtime handle.
+- **Tests:** a call in a handler records one play; calling it in JSX is rejected; two `useSound` bindings of the same path are independent.
+
+## Later (not scheduled)
+
+Ideas that came out of reviewing the API against React. None blocks a milestone.
+
+| Idea | Notes |
+| --- | --- |
+| Custom hooks (`function useHealth(max) { … }`) | Inline them at compile time. They are ordinary functions whose hooks follow the same top-level rule, so inlining fits "hooks are compiler intrinsics". |
+| Context (`createContext` / `useContext`) | After M4, for sharing state down the tree without passing props. |
+| Spread props (`{...rest}`) | M4 reports a clear diagnostic. Reconsider if props grow large. |
+| Lists with conditionals inside the `.map` callback | M5 restricts the callback to a single keyed element; lift once the basics are in. |
+| Dependency-scoped `render()` | Re-evaluate only the props whose state changed. State-driven per-frame movement re-runs the whole render each tick; every `DynamicProp` already records its dependencies, so authors would not change anything. Do it if profiling asks. |
 
 ## Other risks
 
@@ -352,5 +472,68 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 - [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
 - [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
 - [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+
+### M7 Authoring types
+
+- [x] New diagnostics appended (`RGE1004` unknown import, `RGE9002` source type error)
+- [x] Analyzer validates imports: components, authoring module, everything else rejected; every form has a test
+- [x] `docs/DESIGN.md` updated: authoring rules, entry point, source type-checking
+- [x] Every example imports from `@rge/runtime/jsx`; `npm run example` regenerated and committed
+- [x] Tests cover the exports matching the compiler, source type errors, import diagnostics and the CLI (`m7.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+ (typecheck now includes the example sources)
+
+### M10 `<Text>`
+
+- [ ] New runtime class and manifest entries (`intrinsics`, `transformIntrinsics`)
+- [ ] Analyzer and transform accept the element; unsupported forms have diagnostics and tests
+- [ ] `docs/DESIGN.md` updated: built-in list
+- [ ] At least one example uses it; `npm run example` regenerated and committed
+- [ ] Tests cover the IR shape, generated code, type-check, and in-place update
+- [ ] `npm test` and `npm run typecheck` pass
+
+### M11 `<Shape>`
+
+- [ ] New runtime class, manifest entries, and the `kind` literal check
+- [ ] Analyzer and transform accept the element; unsupported forms have diagnostics and tests
+- [ ] `docs/DESIGN.md` updated
+- [ ] At least one example uses it; `npm run example` regenerated and committed
+- [ ] Tests cover IR, generated code, type-check, and runtime
+- [ ] `npm test` and `npm run typecheck` pass
+
+### M12 `<Camera>`
+
+- [ ] Runtime `Camera` with `zoom` and `viewTransform()`; manifest entries
+- [ ] `follow` prop lowered through M4's prop machinery
+- [ ] `docs/DESIGN.md` updated
+- [ ] At least one example uses it; `npm run example` regenerated and committed
+- [ ] Tests cover view-only moves and following a target
+- [ ] `npm test` and `npm run typecheck` pass
+
+### M13 `<AnimatedSprite>`
+
+- [ ] Runtime `AnimatedSprite` with frame advance in `update(dt)`; manifest entries
+- [ ] `frames` string-array prop, static and dynamic
+- [ ] `docs/DESIGN.md` updated
+- [ ] At least one example uses it; `npm run example` regenerated and committed
+- [ ] Tests cover fps, `playing`, and restart on frame change
+- [ ] `npm test` and `npm run typecheck` pass
+
+### M14 `<Pointer>`
+
+- [ ] Runtime `Pointer` and `world.reportPress`; manifest entries
+- [ ] `onPress` callback prop on an intrinsic
+- [ ] `docs/DESIGN.md` updated
+- [ ] At least one example uses it; `npm run example` regenerated and committed
+- [ ] Tests cover inside and outside presses, and moved or scaled pointers
+- [ ] `npm test` and `npm run typecheck` pass
+
+### M15 `useSound`
+
+- [ ] `SoundHookIR` and `PlaySound` statement in `ir/types.ts`, with every `assertNever` site handled
+- [ ] Analyzer and transform reject calls outside handlers; every unsupported form has a diagnostic and a test
+- [ ] Runtime mock `Sound` records plays
+- [ ] `docs/DESIGN.md` updated
+- [ ] At least one example uses it; `npm run example` regenerated and committed
+- [ ] `npm test` and `npm run typecheck` pass
 
 Orientation for the implementer: start with `docs/DESIGN.md`, then `packages/compiler/test/behavior.test.ts` (how generated classes behave), then `transform/transform.ts` (where most milestones land). Each milestone fits one PR; M1 and M4 may split into IR-plus-lowering and codegen-plus-runtime PRs.

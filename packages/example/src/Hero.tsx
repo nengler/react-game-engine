@@ -1,3 +1,5 @@
+import { useState, useUpdate, useInput, onCollisionEnter, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+
 function Hero() {
   const [health, setHealth] = useState(100);
   const [poisoned, setPoisoned] = useState(false);

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { Entity, Sprite, World, runtimeManifest } from "@rge/runtime";
 import { Compiler, DiagnosticCode } from "../src/index.ts";
 import {
-  cleanOutput, closeCompiler, compile, compileProject, compileProjectErrors, load, loadProject, typeCheck, typeCheckProject,
+  cleanOutput, closeCompiler, compile, compileErrors, compileProject, compileProjectErrors, load, loadProject, typeCheck, typeCheckProject, withAuthoringImports,
 } from "./helpers.ts";
 
 after(() => {
@@ -72,16 +72,18 @@ function Lamp() {
   it("rejects an intrinsic the manifest does not list", () => {
     const compiler = new Compiler();
     try {
-      assert.equal(compiler.compile("Lamp.tsx", LIGHT).ok, false);
+      const result = compiler.compile("Lamp.tsx", withAuthoringImports(LIGHT));
+      assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.UnknownComponent]);
     } finally {
       compiler.close();
     }
   });
 
   it("accepts a new intrinsic with no compiler edit", () => {
-    const compiler = new Compiler({ manifest: { ...runtimeManifest, intrinsics: [...runtimeManifest.intrinsics, "Light"] } });
+    const manifest = { ...runtimeManifest, intrinsics: [...runtimeManifest.intrinsics, "Light"] };
+    const compiler = new Compiler({ manifest });
     try {
-      const result = compiler.compile("Lamp.tsx", LIGHT);
+      const result = compiler.compile("Lamp.tsx", withAuthoringImports(LIGHT, manifest));
       assert.ok(result.ok);
       assert.match(result.code, /import \{ Entity, Light \} from "@rge\/runtime";/);
       assert.match(result.code, /new Light\(\{ radius: 4 \}\)/);
@@ -93,34 +95,33 @@ function Lamp() {
   it("reserves the manifest's member names for generated state", () => {
     const compiler = new Compiler();
     try {
-      const result = compiler.compile("Bad.tsx", `
+      const result = compiler.compile("Bad.tsx", withAuthoringImports(`
 function Bad() {
   const [render, setRender] = useState(0);
   return <Entity name="Bad" />;
-}`);
-      assert.equal(result.ok, false);
+}`));
+      assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.InvalidUseState]);
     } finally {
       compiler.close();
     }
   });
 
   it("takes the reserved names, host intrinsic and functions from the manifest it is given", () => {
-    const compiler = new Compiler({
-      manifest: { ...runtimeManifest, reservedMembers: [...runtimeManifest.reservedMembers, "score"], functions: { clamp: 3, wrap: 2 } },
-    });
+    const manifest = { ...runtimeManifest, reservedMembers: [...runtimeManifest.reservedMembers, "score"], functions: { clamp: 3, wrap: 2 } };
+    const compiler = new Compiler({ manifest });
     try {
-      const reserved = compiler.compile("R.tsx", `
+      const reserved = compiler.compile("R.tsx", withAuthoringImports(`
 function R() {
   const [score, setScore] = useState(0);
   return <Entity name="R" />;
-}`);
-      assert.equal(reserved.ok, false);
-      const calls = compiler.compile("W.tsx", `
+}`, manifest));
+      assert.deepEqual(reserved.diagnostics.map((d) => d.code), [DiagnosticCode.InvalidUseState]);
+      const calls = compiler.compile("W.tsx", withAuthoringImports(`
 function W() {
   const [n, setN] = useState(0);
   useUpdate(() => setN(wrap(n, 10)));
   return <Entity name="W" />;
-}`);
+}`, manifest));
       assert.ok(calls.ok);
       assert.match(calls.code, /import \{ Entity, wrap \} from "@rge\/runtime";/);
     } finally {
@@ -231,8 +232,36 @@ function Player() {
     assert.deepEqual(props.map((d) => d.code), [DiagnosticCode.LocalComponentProps]);
   });
 
-  it("ignores non-component imports", () => {
-    const { code } = compile(`import { useState } from "react";\nimport "./style.css";\nfunction S() { return <Entity name="S" />; }`, "S.tsx");
-    assert.doesNotMatch(code, /react|style\.css/);
+  it("rejects imports it would otherwise drop silently", () => {
+    for (const source of [
+      `import { useState } from "react";`,
+      `import "./style.css";`,
+      `import { helper } from "./helper.ts";`,
+      `import * as jsx from "@rge/runtime/jsx";`,
+      `import jsx from "@rge/runtime/jsx";`,
+      `import { useState as state } from "@rge/runtime/jsx";`,
+      `import type { useState } from "@rge/runtime/jsx";`,
+      `import { type useState } from "@rge/runtime/jsx";`,
+    ]) {
+      const codes = compileErrors(`import { Entity } from "@rge/runtime/jsx";\n${source}\nfunction S() { return <Entity name="S" />; }`).map((d) => d.code);
+      assert.deepEqual(codes, [DiagnosticCode.UnsupportedSyntax], source);
+    }
+  });
+
+  it("accepts the authoring module's hooks, built-ins and functions, and leaves no trace of the import in the output", () => {
+    const { code } = compile(`import { useState, useUpdate, clamp, Entity, Sprite } from "@rge/runtime/jsx";
+function S() {
+  const [n, setN] = useState(0);
+  useUpdate((dt) => setN((n) => clamp(n + dt, 0, 10)));
+  return <Entity name="S"><Sprite image="a.png" /></Entity>;
+}`, "S.tsx");
+    assert.doesNotMatch(code, /rge\/runtime\/jsx/);
+    assert.match(code, /import \{ Entity, Sprite, clamp \} from "@rge\/runtime";/);
+  });
+
+  it("rejects names the authoring module does not export", () => {
+    const result = compileErrors(`import { useState, useTransform, Nope, Entity } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`);
+    assert.deepEqual(result.map((d) => d.code), [DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport]);
+    assert.match(result[0]!.message, /'useTransform' is not exported/);
   });
 });
