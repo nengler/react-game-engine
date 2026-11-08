@@ -157,8 +157,8 @@ function Player() {
     const player = project["Player.tsx"]!.ir.components[0]!;
     const refs = player.root.children.map((c) => c.element.component);
     assert.deepEqual(refs, [
-      { kind: "Imported", name: "WarningIcon", module: "./WarningIcon.tsx" },
-      { kind: "Imported", name: "WarningIcon", module: "./WarningIcon.tsx" },
+      { kind: "Imported", name: "WarningIcon", module: "./WarningIcon.tsx", isDefault: false },
+      { kind: "Imported", name: "WarningIcon", module: "./WarningIcon.tsx", isDefault: false },
     ]);
   });
 
@@ -199,10 +199,9 @@ function Player() {
     assert.deepEqual(typeCheck(compile(WARNING, "Solo.tsx")), []);
   });
 
-  it("rejects default, namespace, aliased and type-only component imports", () => {
+  it("rejects namespace, aliased and type-only component imports", () => {
     const body = `function P() { return <Entity name="P"><WarningIcon /></Entity>; }`;
     for (const imp of [
-      `import WarningIcon from "./WarningIcon.tsx";`,
       `import * as W from "./WarningIcon.tsx";`,
       `import { WarningIcon as W } from "./WarningIcon.tsx";`,
       `import { type WarningIcon } from "./WarningIcon.tsx";`,

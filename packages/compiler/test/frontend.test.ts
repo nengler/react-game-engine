@@ -122,6 +122,7 @@ describe("IR construction", () => {
           refs: [],
           props: [],
           propsType: null,
+          isDefaultExport: false,
           state: [
             {
               kind: "State",
@@ -177,6 +178,7 @@ describe("IR construction", () => {
           refs: [],
           props: [],
           propsType: null,
+          isDefaultExport: false,
           hooks: [],
           state: [],
           root: {
@@ -282,7 +284,7 @@ describe("IR construction", () => {
 
 describe("diagnostics", () => {
   const cases: [string, string, string][] = [
-    ["root must be Entity", DiagnosticCode.RootMustBeEntity, `function A() { return <Sprite image="x" />; }`],
+    ["root is another component", DiagnosticCode.RootMustBeEntity, `function B() { return <Entity />; } function A() { return <B />; }`],
     ["unknown component", DiagnosticCode.UnknownComponent, `function A() { return <Entity><Missing /></Entity>; }`],
     ["text child", DiagnosticCode.UnsupportedJsxChild, `function A() { return <Entity>hello</Entity>; }`],
     ["unknown identifier", DiagnosticCode.UnknownIdentifier, `function A() { return <Entity name={other} />; }`],

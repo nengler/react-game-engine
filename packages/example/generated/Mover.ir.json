@@ -111,6 +111,7 @@
       "refs": [],
       "props": [],
       "propsType": null,
+      "isDefaultExport": false,
       "root": {
         "kind": "HostElement",
         "component": {

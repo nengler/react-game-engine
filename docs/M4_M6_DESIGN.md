@@ -6,7 +6,7 @@ Guiding rule: authoring should feel as close to ideal React as possible, so the 
 
 ## M4: props and callbacks
 
-**Status.** M4a (everything below except the "Also in M4" items) shipped in #10, as described in [DESIGN.md](DESIGN.md#props-and-callbacks). It differs from this design in two small ways: defaults are passed to the runtime host as a third constructor argument (`super(host, props, defaults)`) instead of being merged in the generated `super` call, and a props type must be declared in the same file as its component (the parent never needs it, so this only rules out importing a props type from elsewhere). M4b covers the rest.
+**Status.** M4a (everything below except the "Also in M4" items) shipped in #10, as described in [DESIGN.md](DESIGN.md#props-and-callbacks). It differs from this design in two small ways: defaults are passed to the runtime host as a third constructor argument (`super(host, props, defaults)`) instead of being merged in the generated `super` call, and a props type must be declared in the same file as its component (the parent never needs it, so this only rules out importing a props type from elsewhere). M4b (the "Also in M4" items) shipped in #11, described in [DESIGN.md](DESIGN.md#roots-and-component-forms). Two details differ from the sketch below: collision is a per-collider callback (the runtime calls the collider's own `onCollisionEnter`, so a component with several colliders knows which was hit), and `props` and `applyProps` moved from `Entity` down to `GameObject` so any built-in can be a root.
 
 #### a. Top-level `interface` and `type` declarations (analyzer)
 

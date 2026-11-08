@@ -10,11 +10,11 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | --- | --- | --- | --- |
 | M0 Hardening | Done | #5 | CI passed on the PR (first run of the workflow). Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet |
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
-| M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
+| M2 Lifecycle and input hooks | Done | #4 | Collision handling began as a component hook; M4b moved it to a `<Collider onCollisionEnter>` prop. `other` has no readable members yet |
 | M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform` and element refs; #8 replaced them with a `transform={{ x, y }}` attribute driven by state and value refs (`useRef(0)`), and also renamed the per-frame hooks to `useUpdate`/`useInput` and switched state reads to React's snapshot semantics (see Decisions) |
 | M7 Authoring types | In review | #9 | Component source imports from `@rge/runtime/jsx` (mandatory: `RGE1005` otherwise); the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI) |
 | M4a Props and callbacks | In review | #10 | Destructured props with a declared type, defaults, callbacks, `updateProps`, prop dependencies, `transform` on a component as `placement`, `useState(prop)` type inference. Imported children work: the parent needs nothing about their props |
-| M4b Roots and component forms | Not started | n/a | Collision events as `<Collider onCollisionEnter>` props, fragment and non-Entity roots, arrow-function and default-export components, the non-destructured `props` form |
+| M4b Roots and component forms | In review | #11 | `<Collider onCollisionEnter>` replaces the hook (a per-collider callback), fragment and non-Entity roots, arrow-function and default-export components, the `props` object form, `useState` type inference over expressions. Completes M4 |
 | M8 Children | Not started | n/a | Needs M4 |
 | M5 Keyed dynamic lists | Not started | n/a | Needs M4; split into M5a (arrays and records in handlers) and M5b (keyed list) |
 | M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
@@ -35,7 +35,7 @@ Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 afte
 | Prop and list types: copy source type text into output, or query the TS 7.1 checker through the API | Copy source text; revisit if prefab schemas need resolved types (unions, aliases across files) | M4, M5, M6 |
 | Input model | Per-frame `useInput` hook with polled `InputState`; JSX event props can be added later as a `PropIR` variant | M2 |
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs | M6 |
-| Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling becomes a prop on `<Collider onCollisionEnter={…}>` in M4, replacing the `onCollisionEnter` hook (decided 2026-11-08) | M2, M4 |
+| Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) | M2, M4 |
 | State reads in handlers | React's snapshot semantics: reads see the value from the last render; setters queue, updaters chain on the pending value, and `commitState()` applies them just before the render. Every handler in a frame sees the same state (decided 2026-11-08) | M1, M2 |
 | Refs | Refs hold values only (`const timer = useRef(0)`; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) | M3 |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) | M4 |
@@ -113,21 +113,20 @@ Decision: no general-purpose JS subset. The allowlist grows only when a mileston
 
 ## M2 — Lifecycle and input hooks (~1 week, needs M1)
 
-Three top-level hooks that compile to overridden methods, plus a fixed frame order in `World`. (Shipped as `onUpdate`/`onInput`; renamed to `useUpdate`/`useInput` in #8. The `onCollisionEnter` hook becomes a `<Collider>` prop in M4.)
+Three top-level hooks that compile to overridden methods, plus a fixed frame order in `World`. (Shipped as `onUpdate`/`onInput`; renamed to `useUpdate`/`useInput` in #8. The `onCollisionEnter` hook was replaced by a `<Collider>` prop in M4b, and the third hook below no longer exists.)
 
 ```tsx
 function Player() {
   const [health, setHealth] = useState(100);
   useUpdate((dt) => { if (health < 100) setHealth((h) => h + dt); });
   useInput((input) => { if (input.pressed("Space")) setHealth(100); });
-  onCollisionEnter((other) => setHealth((h) => h - 10));
   return <Entity>…</Entity>;
 }
 ```
 
 **IR**: `HookIR` gains `OnUpdate { handler: FunctionIR }`, `OnInput { handler }`, `OnCollisionEnter { handler }`. Several calls of the same hook are allowed and run in source order.
 
-**Generated code**: one method per hook kind: `override onUpdate(dt: number): void`, `override onInput(input: InputState): void`, `override onCollisionEnter(other: GameObject): void`, each holding the handler bodies in order. Handlers read state through `this.*`, so they never see a stale closure; since #8 they read the snapshot from the last render, as in React (see Decisions).
+**Generated code**: one method per hook kind: `override onUpdate(dt: number): void`, `override onInput(input: InputState): void`, each holding the handler bodies in order. Handlers read state through `this.*`, so they never see a stale closure; since #8 they read the snapshot from the last render, as in React (see Decisions).
 
 **Runtime**:
 
@@ -135,7 +134,7 @@ function Player() {
 2. `World.tick(dt, input)` runs one frame in this order: `onInput` → `onUpdate` → render dirty objects → commit structure. Objects attached during a frame start receiving hooks next frame.
 3. Only objects that override a hook are visited: `attachToWorld` registers them by comparing against the base prototype method.
 4. `InputState` is a plain interface (`pressed`, `down`, `released`, pointer position); the mock builds it from test-supplied data.
-5. Collisions: the mock exposes `world.reportCollision(a, b)`, which calls `onCollisionEnter` on the nearest compiled component that owns each `Collider`. Real detection is out of scope.
+5. Collisions: the mock exposes `world.reportCollision(a, b)`, which calls each mounted `Collider`'s own `onCollisionEnter` callback with the other collider. Real detection is out of scope.
 
 **Acceptance tests**: frame order; setter calls in `onUpdate` render once per tick; a handler added by a conditional child starts the next frame and stops after removal; collision dispatch reaches the owning component; hooks inside conditions or callbacks are rejected.
 
@@ -177,7 +176,7 @@ function Player() {
 
 Detailed design, which supersedes the details below where they differ: [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m4-props-and-callbacks).
 
-**Split.** M4a (props, callbacks, placement) is in review in #10 and described in [DESIGN.md](DESIGN.md#props-and-callbacks). M4b is the "Also in M4" list further down: collision props, fragment and non-Entity roots, arrow-function and default-export components.
+**Split.** M4a (props, callbacks, placement, #10) is described in [DESIGN.md](DESIGN.md#props-and-callbacks); M4b (the "Also in M4" list further down, #11) in [DESIGN.md](DESIGN.md#roots-and-component-forms). With both, M4 is done.
 
 A parent passes values and callbacks to a local or imported component; a changed value updates the existing child instance in place.
 
@@ -210,13 +209,13 @@ function Level() {
 
 Remove diagnostic RGE1204 (props on local components). `children` as a prop stays unsupported.
 
-**Acceptance tests**: parent state change updates the child's prop and renders the child once; the child keeps its identity; callback invoked from the child's `onCollisionEnter` updates parent state; missing required prop fails the type-check; defaults apply.
+**Acceptance tests**: parent state change updates the child's prop and renders the child once; the child keeps its identity; callback invoked from the child's `useUpdate` updates parent state; missing required prop fails the type-check; defaults apply.
 
 **Also in M4:**
 
-- **Collision events as props**: `<Collider width={16} onCollisionEnter={(other) => …} />` replaces the `onCollisionEnter` hook. The runtime calls the collider's own callback, so a component with several colliders knows which one was hit. The hook reports `RGE1102` with the new form.
-- **Fragment and non-Entity roots**: `return <>…</>` lowers to an implicit container (the host `Entity`, no props). `return <Sprite image="coin.png" />` makes the generated class extend `Sprite` itself, with no container. JSX children under the root are allowed only if that element type accepts children (a manifest list). Every intrinsic already has a transform (#8), so such a component can be placed like any other.
-- **Component forms**: `const Enemy = (props: EnemyProps) => …` and `export default function Enemy`, plus default imports (`import Enemy from "./Enemy.tsx"`).
+- **Collision events as props** (done): `<Collider width={16} onCollisionEnter={(other) => …} />` replaces the `onCollisionEnter` hook. The runtime calls the collider's own callback, so a component with several colliders knows which one was hit. The hook reports `RGE1102` with the new form.
+- **Fragment and non-Entity roots** (done): `return <>…</>` lowers to an implicit container (the host `Entity`, no props). `return <Sprite image="coin.png" />` makes the generated class extend `Sprite` itself, with no container. JSX children under the root are allowed only if that element type accepts children (a manifest list). Every intrinsic already has a transform (#8), so such a component can be placed like any other.
+- **Component forms** (done, with the non-destructured `props` form): `const Enemy = (props: EnemyProps) => …` and `export default function Enemy`, plus default imports (`import Enemy from "./Enemy.tsx"`).
 
 ## M5 — Keyed dynamic lists (~1.5 weeks, needs M4)
 
@@ -285,7 +284,7 @@ import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
 
 What shipped:
 
-- **Entry point** `@rge/runtime/jsx` declares the hooks (`useState`, `useRef`, `useUpdate`, `useInput`, `onCollisionEnter`), the built-in elements with their props (including `transform`), and `clamp`. `@rge/runtime/jsx-runtime` holds the `JSX` namespace, so a project sets `"jsx": "react-jsx"` and `"jsxImportSource": "@rge/runtime"`. Everything is a declaration (calling one throws); the compiler never executes source.
+- **Entry point** `@rge/runtime/jsx` declares the hooks (`useState`, `useRef`, `useUpdate`, `useInput`), the built-in elements with their props (including `transform`), and `clamp`. `@rge/runtime/jsx-runtime` holds the `JSX` namespace, so a project sets `"jsx": "react-jsx"` and `"jsxImportSource": "@rge/runtime"`. Everything is a declaration (calling one throws); the compiler never executes source.
 - **No drift.** Element props are the runtime's own prop interfaces and `TransformProps` is `Partial<Transform>`, so they follow the runtime. A test checks the module exports exactly the names the compiler accepts (intrinsics, hooks, manifest functions).
 - **Imports are validated.** Component source may import from `./X.tsx` and from the manifest's `authoringModule`; any other import (`react`, a CSS file, a `.ts` helper, a default, namespace, aliased or `type` import) is `RGE1001` instead of being silently dropped. A name the entry point does not export is `RGE1004`.
 - **Source type-checking.** `Compiler.typeCheckSources` runs the TypeScript checker over the authored TSX (`RGE9002`), so a wrong prop, a bad hook argument or an undefined name is reported with TypeScript's own message (`Did you mean 'image'?`). `rge-compile` runs it before compiling; `--no-check` skips it. `packages/example/tsconfig.json` type-checks the examples from `npm run typecheck`, which CI runs.
@@ -358,14 +357,14 @@ const [running, setRunning] = useState(false);
 
 ## M14 — `<Pointer>` (~1 week, needs M4)
 
-A hit area for clicks and presses, positioned with `transform` like everything else. It is the first element-level event, so it follows the same pattern as `<Collider onCollisionEnter>`.
+A hit area for clicks and presses, positioned with `transform` like everything else. It is an element-level event like `<Collider onCollisionEnter>`, and follows the same pattern.
 
 ```tsx
 <Pointer width={120} height={40} onPress={() => setOpen(true)} />
 ```
 
 - **Runtime:** `Pointer extends GameObject`. The mock dispatches `world.reportPress(pointer, x, y)`, as it does collisions, and the press is tested against the pointer's `worldTransform()` and size.
-- **Compiler:** `onPress` is a callback prop on an intrinsic, the same mechanism M4 adds for `onCollisionEnter`.
+- **Compiler:** `onPress` is a callback prop on an intrinsic, the same mechanism as `<Collider onCollisionEnter>`.
 - **Manifest:** `intrinsics` and `transformIntrinsics`.
 - **Tests:** a press inside the area calls the handler; a press outside does not; a moved or scaled pointer is hit where it is drawn.
 
@@ -376,8 +375,7 @@ A sound is a hook that returns a function. It is not an element and has no posit
 ```tsx
 function Hero() {
   const playHit = useSound("hit.wav");
-  onCollisionEnter(() => playHit());
-  return <Entity name="Hero" />;
+  return <Entity name="Hero"><Collider width={16} height={24} onCollisionEnter={() => playHit()} /></Entity>;
 }
 ```
 
@@ -460,11 +458,13 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M4b Roots and component forms
 
-- [ ] `<Collider onCollisionEnter>` callback prop replaces the `onCollisionEnter` hook
-- [ ] Fragment and non-Entity roots (the class extends the root element's type), with children only where the element accepts them
-- [ ] Arrow-function components, default exports and default imports
-- [ ] The non-destructured `props` parameter form
-- [ ] Docs, example and tests as for every milestone
+- [x] `<Collider onCollisionEnter>` callback prop replaces the `onCollisionEnter` hook (IR variant removed, `RGE1102` points at the prop, manifest `intrinsicCallbacks`)
+- [x] Fragment and non-Entity roots (the class extends the root element's type), with children only where the element accepts them (manifest `containerIntrinsics`, `intrinsicMembers`, `intrinsicRequired`)
+- [x] Arrow-function components, default exports and default imports
+- [x] The non-destructured `props` parameter form
+- [x] `docs/DESIGN.md` updated ("Roots and component forms"); `Coin.tsx` and `Hero.tsx` use the features; `npm run example` regenerated and committed
+- [x] Tests cover the IR shape, generated code, type-check and runtime behaviour (`m4.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M5 Keyed dynamic lists
 

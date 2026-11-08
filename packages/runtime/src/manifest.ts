@@ -12,8 +12,27 @@ export interface RuntimeManifest {
   readonly authoringModule: string;
   /** Tag names usable in JSX without a declaration. */
   readonly intrinsics: readonly string[];
-  /** The intrinsic every component root must be; generated classes extend it. */
+  /** The intrinsic a fragment root (`<>…</>`) becomes. A component whose root is another built-in extends that one instead. */
   readonly hostIntrinsic: string;
+  /** Intrinsics whose JSX may contain children. Others (a `Sprite`, a `Collider`) are leaves. */
+  readonly containerIntrinsics: readonly string[];
+  /**
+   * The fields each intrinsic defines on itself, beyond `GameObject`'s. A
+   * component rooted at one extends it, so its state, refs and props may not
+   * reuse these names. A runtime test checks each is a real field.
+   */
+  readonly intrinsicMembers: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Props each intrinsic's constructor requires. A component rooted at one
+   * must pass them to `super()`, before any state exists, so a dynamic value
+   * gets a placeholder there and its real value in the first `render()`.
+   */
+  readonly intrinsicRequired: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Callback props an intrinsic accepts, by intrinsic then prop name, with
+   * the parameters its callback receives (a runtime handle type each).
+   */
+  readonly intrinsicCallbacks: Readonly<Record<string, Readonly<Record<string, readonly CallbackParamManifest[]>>>>;
   /**
    * Member names of the host class (and `Object.prototype`) that generated
    * fields, setters and handlers must not shadow.
@@ -31,6 +50,12 @@ export interface RuntimeManifest {
   readonly functions: Readonly<Record<string, number>>;
 }
 
+export interface CallbackParamManifest {
+  readonly name: string;
+  /** A key of `handleTypes`. */
+  readonly type: string;
+}
+
 export interface HandleTypeManifest {
   /** Method name → exact argument count. */
   readonly methods: Readonly<Record<string, number>>;
@@ -41,6 +66,20 @@ export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
   intrinsics: ["Entity", "Sprite", "Collider"],
   hostIntrinsic: "Entity",
+  containerIntrinsics: ["Entity"],
+  intrinsicMembers: {
+    Entity: ["name"],
+    Sprite: ["image"],
+    Collider: ["width", "height", "onCollisionEnter"],
+  },
+  intrinsicRequired: {
+    Entity: [],
+    Sprite: ["image"],
+    Collider: ["width", "height"],
+  },
+  intrinsicCallbacks: {
+    Collider: { onCollisionEnter: [{ name: "other", type: "GameObject" }] },
+  },
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
     // `updateProps` is generated into every component that has props, so a field may not take the name.
@@ -48,7 +87,7 @@ export const runtimeManifest: RuntimeManifest = {
     "isDirty", "hasPendingStructure",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "commitStructure",
     "markDirty", "runRender", "commitState", "render",
-    "onInput", "onUpdate", "onCollisionEnter",
+    "onInput", "onUpdate",
     "attachToWorld", "detachFromWorld",
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",

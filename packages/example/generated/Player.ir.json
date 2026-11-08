@@ -42,6 +42,7 @@
       "refs": [],
       "props": [],
       "propsType": null,
+      "isDefaultExport": false,
       "root": {
         "kind": "HostElement",
         "component": {
@@ -182,7 +183,8 @@
               "component": {
                 "kind": "Imported",
                 "name": "WarningIcon",
-                "module": "./WarningIcon.tsx"
+                "module": "./WarningIcon.tsx",
+                "isDefault": false
               },
               "props": [],
               "transform": [],

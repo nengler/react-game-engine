@@ -1,4 +1,4 @@
-import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type Node, type SourceFile } from "typescript/ast";
+import { SyntaxKind, type JsxElement, type JsxSelfClosingElement, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type Node, type SourceFile } from "typescript/ast";
 import {
   isBinaryExpression,
   isCallExpression,
@@ -23,6 +23,7 @@ import {
   isLiteralTypeNode,
   isTypeLiteralNode,
   isInterfaceDeclaration,
+  isJsxFragment,
   isParenthesizedExpression,
   isPrefixUnaryExpression,
   isStringLiteral,
@@ -113,12 +114,12 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
     }
     locals.add(c.name);
   }
-  const imported = new Map<string, string>();
+  const imported = new Map<string, { module: string; isDefault: boolean }>();
   for (const i of analysis.imports) {
     if (intrinsics.has(i.name) || locals.has(i.name) || imported.has(i.name)) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Imported component '${i.name}' conflicts with another component or a runtime intrinsic.`, span(i.node)));
     } else {
-      imported.set(i.name, i.module);
+      imported.set(i.name, { module: i.module, isDefault: i.isDefault });
     }
   }
 
@@ -156,7 +157,6 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
 const HANDLER_KIND = {
   useUpdate: "OnUpdate",
   useInput: "OnInput",
-  onCollisionEnter: "OnCollisionEnter",
 } as const;
 
 /** Names imported from the authoring module, shared by every component of a file. */
@@ -168,6 +168,15 @@ interface AuthoringImports {
 
 /** Names a component cannot declare as props: the framework reads them off the element. */
 const RESERVED_PROP_NAMES: ReadonlySet<string> = new Set(["key", "ref", "transform", "children"]);
+
+/** The built-in a component's root is: its tag, or the host intrinsic for a fragment. */
+function rootTag(jsx: JsxRoot, hostIntrinsic: string): string {
+  if (isJsxFragment(jsx)) return hostIntrinsic;
+  const tag = (isJsxElement(jsx) ? jsx.openingElement : jsx).tagName;
+  return isIdentifier(tag) ? tag.text : hostIntrinsic;
+}
+
+type JsxElementNode = JsxElement | JsxSelfClosingElement;
 
 function unwrapTypeParens(node: Node): Node {
   let current = node;
@@ -200,7 +209,7 @@ class ComponentLowering implements LoweringContext {
   readonly #manifest: RuntimeManifest;
   readonly #intrinsics: ReadonlySet<string>;
   readonly #locals: ReadonlySet<string>;
-  readonly #imported: ReadonlyMap<string, string>;
+  readonly #imported: ReadonlyMap<string, { module: string; isDefault: boolean }>;
   readonly #hostIntrinsic: string;
   readonly #authoring: AuthoringImports;
   readonly #typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>;
@@ -219,7 +228,7 @@ class ComponentLowering implements LoweringContext {
     fileName: string,
     manifest: RuntimeManifest,
     locals: ReadonlySet<string>,
-    imported: ReadonlyMap<string, string>,
+    imported: ReadonlyMap<string, { module: string; isDefault: boolean }>,
     authoring: AuthoringImports,
     typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>,
     diagnostics: CompilerDiagnostic[],
@@ -233,7 +242,8 @@ class ComponentLowering implements LoweringContext {
     this.#manifest = manifest;
     this.#intrinsics = new Set(manifest.intrinsics);
     this.#imported = imported;
-    this.#usedNames = new Set(manifest.reservedMembers);
+    // A component extends its root element's class, so it may not reuse that class's own field names.
+    this.#usedNames = new Set([...manifest.reservedMembers, ...(manifest.intrinsicMembers[rootTag(component.jsx, manifest.hostIntrinsic)] ?? [])]);
     this.#locals = locals;
     this.#hostIntrinsic = manifest.hostIntrinsic;
     this.#diagnostics = diagnostics;
@@ -255,6 +265,7 @@ class ComponentLowering implements LoweringContext {
       refs: this.#refs,
       props,
       propsType: this.#component.props?.typeName ?? null,
+      isDefaultExport: this.#component.isDefault,
       root,
     };
   }
@@ -277,6 +288,7 @@ class ComponentLowering implements LoweringContext {
     if (!members) return [];
 
     const bindings = new Map(analysis.bindings.map((b) => [b.name, b] as const));
+    if (analysis.objectName !== null) this.#componentScope.declare(analysis.objectName, { kind: "propsObject", name: analysis.objectName });
     for (const binding of analysis.bindings) {
       if (!members.has(binding.name)) {
         this.#error(code, `'${binding.name}' is not a prop of ${analysis.typeName}.`, binding.node);
@@ -372,10 +384,14 @@ class ComponentLowering implements LoweringContext {
    * handler runs like any other (state through `this`, refs allowed), but its
    * parameters are not annotated: the child's props type provides them.
    */
-  #lowerCallback(name: string, fn: Node & { kind: SyntaxKind.ArrowFunction }): CallbackPropIR | null {
+  #lowerCallback(
+    name: string,
+    fn: Node & { kind: SyntaxKind.ArrowFunction },
+    params?: readonly { readonly name: string; readonly type: string }[],
+  ): CallbackPropIR | null {
     this.#functionDepth++;
     const handler = lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
-      paramTypes: "contextual",
+      paramTypes: params ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
       returns: "void",
       what: `${name} callback`,
     });
@@ -390,8 +406,7 @@ class ComponentLowering implements LoweringContext {
       if (hook.kind !== "const") this.#requireImport(hook.kind, hook.call);
       switch (hook.kind) {
         case "useUpdate":
-        case "useInput":
-        case "onCollisionEnter": {
+        case "useInput": {
           const kind = HANDLER_KIND[hook.kind];
           const signature = HANDLER_SIGNATURES[kind];
           this.#functionDepth++;
@@ -498,31 +513,84 @@ class ComponentLowering implements LoweringContext {
           return null;
       }
     }
-    const inferred = inferLiteralType(initial) ?? this.#inferFromProp(initial);
+    const inferred = this.#inferType(initial);
     if (!inferred) {
       this.#error(code, `Cannot infer the type; use a number/string/boolean literal, a prop, or \`${hook}<T>(...)\`.`, at);
     }
     return inferred;
   }
 
-  /** `useState(start)`: the type of a primitive prop, from its declaration in the props type. */
-  #inferFromProp(expr: ExprIR): ValueType | null {
-    if (expr.kind !== "PropRead") return null;
-    const decl = this.#propDecls.find((p) => p.name === expr.name);
-    return decl?.role === "value" && decl.type.kind === "Primitive" ? decl.type.name : null;
+  /**
+   * The type of an initial value, as TypeScript would infer it: literals, a
+   * primitive prop (from its declaration in the props type), and operators
+   * over those (`props.speed * 10` is a number, `n > 0` a boolean). Null
+   * when it cannot be told, and the author writes `useState<number>(…)`.
+   */
+  #inferType(expr: ExprIR): ValueType | null {
+    switch (expr.kind) {
+      case "NumberLiteral": return "number";
+      case "StringLiteral":
+      case "TemplateLiteral": return "string";
+      case "BooleanLiteral": return "boolean";
+      case "PropRead": {
+        const decl = this.#propDecls.find((p) => p.name === expr.name);
+        return decl?.role === "value" && decl.type.kind === "Primitive" ? decl.type.name : null;
+      }
+      case "Unary": return expr.operator === "!" ? "boolean" : this.#inferType(expr.operand) === "number" ? "number" : null;
+      case "Binary": {
+        switch (expr.operator) {
+          case "<": case "<=": case ">": case ">=": case "===": case "!==": case "==": case "!=": return "boolean";
+          case "-": case "*": case "/": case "%": return this.#inferType(expr.left) === "number" && this.#inferType(expr.right) === "number" ? "number" : null;
+          case "+": {
+            const [left, right] = [this.#inferType(expr.left), this.#inferType(expr.right)];
+            if (left === "string" || right === "string") return left && right ? "string" : null;
+            return left === "number" && right === "number" ? "number" : null;
+          }
+          case "&&": case "||": case "??": {
+            const [left, right] = [this.#inferType(expr.left), this.#inferType(expr.right)];
+            return left !== null && left === right ? left : null;
+          }
+          default: return null;
+        }
+      }
+      case "Conditional": {
+        const [a, b] = [this.#inferType(expr.whenTrue), this.#inferType(expr.whenFalse)];
+        return a !== null && a === b ? a : null;
+      }
+      default: return null;
+    }
   }
 
+  /**
+   * The root is a built-in element (the component's class extends it) or a
+   * fragment, which is an implicit container: a bare `<Entity>` with no props.
+   */
   #lowerRoot(jsx: JsxRoot): HostElementIR | null {
+    if (isJsxFragment(jsx)) {
+      return {
+        kind: "HostElement",
+        component: { kind: "Intrinsic", name: this.#hostIntrinsic },
+        props: [],
+        transform: [],
+        children: this.#lowerChildren(jsx.children, []),
+        span: this.#span(jsx),
+      };
+    }
     const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
     const tag = opening.tagName;
-    if (!isIdentifier(tag) || tag.text !== this.#hostIntrinsic) {
-      this.#error(DiagnosticCode.RootMustBeEntity, `The root element of component '${this.#component.name}' must be <${this.#hostIntrinsic}>.`, tag);
+    if (!isIdentifier(tag) || !this.#intrinsics.has(tag.text)) {
+      this.#error(
+        DiagnosticCode.RootMustBeEntity,
+        `The root of component '${this.#component.name}' must be a built-in element (${this.#manifest.intrinsics.map((t) => `<${t}>`).join(", ")}) or a fragment \`<>…</>\`; a component cannot be the root of another.`,
+        tag,
+      );
       return null;
     }
     this.#requireImport(tag.text, tag);
-    const props = this.#lowerProps(opening.attributes);
+    const props = this.#lowerProps(opening.attributes, tag.text, false);
     const transform = this.#lowerTransform(opening.attributes, tag.text, false);
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, []) : [];
+    this.#checkContainer(tag.text, children.length, jsx);
     return {
       kind: "HostElement",
       component: { kind: "Intrinsic", name: tag.text },
@@ -533,7 +601,14 @@ class ComponentLowering implements LoweringContext {
     };
   }
 
-  #lowerElement(jsx: JsxRoot, path: readonly number[]): ElementIR | null {
+  /** Only a container (`<Entity>`) may hold JSX children; other built-ins are leaves. */
+  #checkContainer(tag: string, childCount: number, at: Node): void {
+    if (childCount > 0 && !this.#manifest.containerIntrinsics.includes(tag)) {
+      this.#error(DiagnosticCode.UnsupportedJsxChild, `<${tag}> cannot have children; wrap them in <${this.#hostIntrinsic}>.`, at);
+    }
+  }
+
+  #lowerElement(jsx: JsxElementNode, path: readonly number[]): ElementIR | null {
     const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
     const tag = opening.tagName;
     if (!isIdentifier(tag)) {
@@ -546,19 +621,23 @@ class ComponentLowering implements LoweringContext {
       component = { kind: "Intrinsic", name: tag.text };
     }
     else if (this.#locals.has(tag.text)) component = { kind: "Local", name: tag.text };
-    else if (this.#imported.has(tag.text)) component = { kind: "Imported", name: tag.text, module: this.#imported.get(tag.text)! };
+    else if (this.#imported.has(tag.text)) {
+      const { module, isDefault } = this.#imported.get(tag.text)!;
+      component = { kind: "Imported", name: tag.text, module, isDefault };
+    }
     else {
       this.#error(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`, tag);
       return null;
     }
 
     const isComponent = component.kind !== "Intrinsic";
-    const props = this.#lowerProps(opening.attributes, isComponent);
+    const props = this.#lowerProps(opening.attributes, tag.text, isComponent);
     const transform = this.#lowerTransform(opening.attributes, tag.text, isComponent);
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, path) : [];
     if (isComponent && children.length > 0) {
       this.#error(DiagnosticCode.UnsupportedJsxChild, `Passing children to component <${tag.text}> is not supported yet.`, jsx);
     }
+    if (!isComponent) this.#checkContainer(tag.text, children.length, jsx);
 
     return {
       kind: "Element",
@@ -626,11 +705,12 @@ class ComponentLowering implements LoweringContext {
 
   /**
    * Props of an element. `transform` is lowered separately but still counts
-   * for duplicate detection; `ref` is rejected. On a component element
-   * (`toComponent`) an arrow function is a callback prop; on an intrinsic it
-   * is an error.
+   * for duplicate detection; `ref` is rejected. An arrow function is a callback
+   * prop: on a component element its parameters come from the child's props
+   * type; on a built-in it must be one the runtime manifest lists
+   * (`<Collider onCollisionEnter>`), with the parameter types it gives.
    */
-  #lowerProps(attributes: JsxAttributes, toComponent = false): PropIR[] {
+  #lowerProps(attributes: JsxAttributes, tag: string, toComponent: boolean): PropIR[] {
     const props: PropIR[] = [];
     const seen = new Set<string>();
     for (const attribute of attributes.properties) {
@@ -660,16 +740,17 @@ class ComponentLowering implements LoweringContext {
       else if (isJsxExpression(init) && init.expression && !init.dotDotDotToken) {
         const expression = unwrapParens(init.expression);
         if (isArrowFunction(expression)) {
-          if (!toComponent) {
-            this.#error(DiagnosticCode.UnsupportedAttribute, `'${name}' is a function: callbacks can only be passed to components.`, attribute);
+          const params = toComponent ? undefined : this.#manifest.intrinsicCallbacks[tag]?.[name];
+          if (!toComponent && !params) {
+            this.#error(DiagnosticCode.UnsupportedAttribute, `<${tag}> has no callback prop '${name}': callbacks can be passed to components, and to the built-in callback props the runtime lists.`, attribute);
             continue;
           }
-          const callback = this.#lowerCallback(name, expression);
+          const callback = this.#lowerCallback(name, expression, params);
           if (callback) props.push(callback);
           continue;
         }
         // `onX={onX}` forwards a callback prop whole.
-        this.#allowCallbackRead = toComponent && isIdentifier(expression);
+        this.#allowCallbackRead = toComponent && (isIdentifier(expression) || isPropertyAccessExpression(expression));
         try {
           value = this.#lowerExpression(init.expression);
         } finally {
@@ -767,6 +848,9 @@ class ComponentLowering implements LoweringContext {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
+        case "propsObject":
+          this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`, node);
+          return null;
         case "prop":
           if (binding.role === "callback" && !this.#allowCallbackRead) {
             this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a callback prop: call it (\`${node.text}?.()\`) or forward it whole (\`onX={${node.text}}\`).`, node);
@@ -825,6 +909,15 @@ class ComponentLowering implements LoweringContext {
 
   /** `ref.current`, or `param.name` where `param` is a handler parameter of a runtime handle type. */
   #lowerPropertyRead(node: PropertyAccessExpression): ExprIR | null {
+    const propsObject = this.#propsObjectMember(node);
+    if (propsObject !== undefined) {
+      if (propsObject === null) return null;
+      if (propsObject.role === "callback" && !this.#allowCallbackRead) {
+        this.#error(DiagnosticCode.UnsupportedExpression, `'${propsObject.name}' is a callback prop: call it (\`props.${propsObject.name}?.()\`) or forward it whole (\`onX={props.${propsObject.name}}\`).`, node);
+        return null;
+      }
+      return { kind: "PropRead", name: propsObject.name };
+    }
     const ref = this.#refAccess(node);
     if (ref === "error") return null;
     if (ref) {
@@ -848,6 +941,23 @@ class ComponentLowering implements LoweringContext {
     return { kind: "PropertyRead", object: receiver.read, name };
   }
 
+  /**
+   * `props.speed` for a component that takes `(props: EnemyProps)`. Undefined if
+   * `node` is not on the props object (the caller carries on); null after
+   * reporting a member the props type does not have.
+   */
+  #propsObjectMember(node: PropertyAccessExpression): { name: string; role: "value" | "callback" } | null | undefined {
+    const object = unwrapParens(node.expression);
+    const binding = isIdentifier(object) ? this.scope.get(object.text) : undefined;
+    if (binding?.kind !== "propsObject") return undefined;
+    const decl = this.#propDecls.find((p) => p.name === node.name.text);
+    if (!decl) {
+      this.#error(DiagnosticCode.UnsupportedExpression, `'${node.name.text}' is not a prop of ${this.#component.props?.typeName ?? "this component"}.`, node.name);
+      return null;
+    }
+    return { name: decl.name, role: decl.role };
+  }
+
   /** Resolves `r.current` for a ref `r`. Undefined if `node` is not on a ref (the caller carries on), "error" after reporting. */
   #refAccess(node: PropertyAccessExpression): RefId | "error" | undefined {
     const object = unwrapParens(node.expression);
@@ -863,6 +973,24 @@ class ComponentLowering implements LoweringContext {
   /** `Math.max(...)`, `clamp(...)`, or `param.method(...)` on a runtime handle parameter. */
   #lowerCall(node: CallExpression): ExprIR | null {
     const callee = node.expression;
+    // `props.onDefeated?.()` on the props object.
+    if (isPropertyAccessExpression(callee)) {
+      const member = this.#propsObjectMember(callee);
+      if (member === null) return null;
+      if (member) {
+        if (member.role !== "callback") {
+          this.#error(DiagnosticCode.UnsupportedExpression, `Prop '${member.name}' is not a function, so it cannot be called.`, callee);
+          return null;
+        }
+        const args: ExprIR[] = [];
+        for (const argument of node.arguments) {
+          const lowered = this.#lowerExpression(argument);
+          if (!lowered) return null;
+          args.push(lowered);
+        }
+        return { kind: "Call", callee: { kind: "Prop", name: member.name, optional: node.questionDotToken !== undefined }, args };
+      }
+    }
     // A callback prop: `onDefeated()` or `onDefeated?.()`. Arguments are not counted here; the type-check does that.
     if (isIdentifier(callee)) {
       const binding = this.scope.get(callee.text);
@@ -1002,18 +1130,6 @@ function findAttribute(attributes: JsxAttributes, name: string): JsxAttribute | 
     if (isJsxAttribute(attribute) && isIdentifier(attribute.name) && attribute.name.text === name) return attribute;
   }
   return null;
-}
-
-function inferLiteralType(expr: ExprIR): ValueType | null {
-  switch (expr.kind) {
-    case "NumberLiteral": return "number";
-    case "StringLiteral": return "string";
-    case "BooleanLiteral": return "boolean";
-    case "Unary":
-      if (expr.operator === "!") return "boolean";
-      return inferLiteralType(expr.operand) === "number" ? "number" : null;
-    default: return null;
-  }
 }
 
 /** A component that statically contains itself (directly or indirectly) would construct forever. */

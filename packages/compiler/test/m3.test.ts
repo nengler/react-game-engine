@@ -29,12 +29,12 @@ function Runner() {
       setLaps((laps) => laps + 1);
     }
   });
-  onCollisionEnter(() => setLives((n) => n - 1));
   return (
     <Entity name="Runner" transform={{ x, y: -5, rotation: x / 100, scaleX: 2 }}>
       <Sprite image={x > 100 ? "run.png" : "idle.png"} />
       <Sprite image={lives > 0 ? "alive.png" : "dead.png"} />
       <Entity name="shadow" transform={{ y: 4 }} />
+      <Collider width={4} height={4} onCollisionEnter={() => setLives((n) => n - 1)} />
     </Entity>
   );
 }
@@ -122,7 +122,7 @@ describe("M3: IR shape", () => {
 describe("M3: generated code", () => {
   it("sets static transform fields once and dynamic ones in render", () => {
     const { code } = compile(RUNNER);
-    const constructor = code.slice(code.indexOf("constructor()"), code.indexOf("setLives("));
+    const constructor = code.slice(code.indexOf("constructor()"), code.indexOf("override render"));
     assert.match(constructor, /this\.transform\.y = -5;/);
     assert.match(constructor, /this\.transform\.scaleX = 2;/);
     assert.match(constructor, /this\.entity\.transform\.y = 4;\n\s*this\.addChild\(this\.entity\);/, "a child's transform is set before it is attached");

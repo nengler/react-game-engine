@@ -14,9 +14,9 @@
       "name": "Enemy",
       "span": {
         "fileName": "packages/example/src/Level.tsx",
-        "start": 186,
-        "end": 662,
-        "line": 9,
+        "start": 228,
+        "end": 704,
+        "line": 10,
         "column": 1
       },
       "hooks": [
@@ -26,9 +26,9 @@
           "setterName": "setHp",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 260,
-            "end": 285,
-            "line": 10,
+            "start": 302,
+            "end": 327,
+            "line": 11,
             "column": 9
           }
         },
@@ -149,9 +149,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 324,
-            "end": 484,
-            "line": 13,
+            "start": 366,
+            "end": 526,
+            "line": 14,
             "column": 3
           }
         }
@@ -180,9 +180,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 295,
-            "end": 319,
-            "line": 11,
+            "start": 337,
+            "end": 361,
+            "line": 12,
             "column": 9
           }
         }
@@ -228,6 +228,7 @@
         }
       ],
       "propsType": "EnemyProps",
+      "isDefaultExport": false,
       "root": {
         "kind": "HostElement",
         "component": {
@@ -295,9 +296,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 529,
-                "end": 599,
-                "line": 23,
+                "start": 571,
+                "end": 641,
+                "line": 24,
                 "column": 7
               }
             }
@@ -334,9 +335,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 606,
-                "end": 641,
-                "line": 24,
+                "start": 648,
+                "end": 683,
+                "line": 25,
                 "column": 7
               }
             }
@@ -344,9 +345,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Level.tsx",
-          "start": 501,
-          "end": 655,
-          "line": 22,
+          "start": 543,
+          "end": 697,
+          "line": 23,
           "column": 5
         }
       }
@@ -356,9 +357,9 @@
       "name": "Level",
       "span": {
         "fileName": "packages/example/src/Level.tsx",
-        "start": 664,
-        "end": 1360,
-        "line": 29,
+        "start": 706,
+        "end": 1513,
+        "line": 30,
         "column": 1
       },
       "hooks": [
@@ -368,9 +369,9 @@
           "setterName": "setWave",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 691,
-            "end": 720,
-            "line": 30,
+            "start": 733,
+            "end": 762,
+            "line": 31,
             "column": 9
           }
         },
@@ -380,9 +381,9 @@
           "setterName": "setScore",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 730,
-            "end": 761,
-            "line": 31,
+            "start": 772,
+            "end": 803,
+            "line": 32,
             "column": 9
           }
         },
@@ -392,9 +393,9 @@
           "setterName": "setBossVisible",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 771,
-            "end": 818,
-            "line": 32,
+            "start": 813,
+            "end": 860,
+            "line": 33,
             "column": 9
           }
         }
@@ -434,6 +435,7 @@
       "refs": [],
       "props": [],
       "propsType": null,
+      "isDefaultExport": false,
       "root": {
         "kind": "HostElement",
         "component": {
@@ -536,9 +538,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 863,
-                "end": 957,
-                "line": 35,
+                "start": 905,
+                "end": 999,
+                "line": 36,
                 "column": 7
               }
             }
@@ -643,9 +645,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 964,
-                "end": 1074,
-                "line": 36,
+                "start": 1006,
+                "end": 1116,
+                "line": 37,
                 "column": 7
               }
             }
@@ -707,10 +709,114 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 1095,
-                "end": 1140,
-                "line": 37,
+                "start": 1137,
+                "end": 1182,
+                "line": 38,
                 "column": 21
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Level/3",
+              "fieldName": "coin",
+              "component": {
+                "kind": "Imported",
+                "name": "Coin",
+                "module": "./Coin.tsx",
+                "isDefault": true
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "value",
+                  "value": {
+                    "kind": "StateRead",
+                    "state": "Level.score"
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Level.score"
+                    }
+                  ]
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 160
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 1190,
+                "end": 1235,
+                "line": 39,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Level/4",
+              "fieldName": "trail",
+              "component": {
+                "kind": "Imported",
+                "name": "Trail",
+                "module": "./Coin.tsx",
+                "isDefault": false
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "value",
+                  "value": {
+                    "kind": "StateRead",
+                    "state": "Level.wave"
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Level.wave"
+                    }
+                  ]
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 200
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 20
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 1242,
+                "end": 1294,
+                "line": 40,
+                "column": 7
               }
             }
           },
@@ -728,7 +834,7 @@
             ],
             "element": {
               "kind": "Element",
-              "id": "Level/3",
+              "id": "Level/5",
               "fieldName": "entity",
               "component": {
                 "kind": "Intrinsic",
@@ -750,7 +856,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/3/0",
+                    "id": "Level/5/0",
                     "fieldName": "sprite",
                     "component": {
                       "kind": "Intrinsic",
@@ -795,9 +901,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 1205,
-                      "end": 1266,
-                      "line": 40,
+                      "start": 1358,
+                      "end": 1419,
+                      "line": 43,
                       "column": 11
                     }
                   }
@@ -806,7 +912,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/3/1",
+                    "id": "Level/5/1",
                     "fieldName": "collider",
                     "component": {
                       "kind": "Intrinsic",
@@ -834,9 +940,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 1277,
-                      "end": 1312,
-                      "line": 41,
+                      "start": 1430,
+                      "end": 1465,
+                      "line": 44,
                       "column": 11
                     }
                   }
@@ -844,9 +950,9 @@
               ],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 1174,
-                "end": 1330,
-                "line": 39,
+                "start": 1327,
+                "end": 1483,
+                "line": 42,
                 "column": 9
               }
             }
@@ -854,9 +960,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Level.tsx",
-          "start": 835,
-          "end": 1353,
-          "line": 34,
+          "start": 877,
+          "end": 1506,
+          "line": 35,
           "column": 5
         }
       }

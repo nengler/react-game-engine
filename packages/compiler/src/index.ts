@@ -73,6 +73,7 @@ export class Compiler {
       const code = generateModule(transformed.module, {
         runtimeModule: this.#runtimeModule,
         runtimeFunctions: new Set(Object.keys(this.#manifest.functions)),
+        requiredHostProps: this.#manifest.intrinsicRequired,
       });
       return { ok: true, fileName, ir: transformed.module, code, diagnostics };
     });

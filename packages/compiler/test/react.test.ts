@@ -5,7 +5,7 @@
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Sprite, World } from "@rge/runtime";
+import { Collider, Entity, Sprite, World } from "@rge/runtime";
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -19,9 +19,6 @@ function Status() {
   const [health, setHealth] = useState(100);
   const hurt = health < 25;
   const image = hurt ? "hurt.png" : "ok.png";
-  onCollisionEnter(() => {
-    setHealth((health) => health - 50);
-  });
   useUpdate(() => {
     if (hurt) setHealth((health) => health + 1);
   });
@@ -30,6 +27,7 @@ function Status() {
       <Sprite image={image} />
       {hurt ? <Sprite image="warning.png" /> : <Entity name="fine" />}
       {health > 90 ? <Sprite image="sparkle.png" /> : null}
+      <Collider width={4} height={4} onCollisionEnter={() => setHealth((health) => health - 50)} />
     </Entity>
   );
 }
@@ -37,6 +35,12 @@ function Status() {
 
 interface StatusInstance extends Entity {
   health: number;
+  readonly collider: Collider;
+}
+
+/** A collision with something outside the component: the status collider's callback runs once. */
+function hit(world: World, status: StatusInstance): void {
+  world.reportCollision(status.collider, new Collider({ width: 1, height: 1 }));
 }
 
 describe("React idioms", () => {
@@ -54,8 +58,8 @@ describe("React idioms", () => {
     world.mount(status);
     const first = status.children[0] as Sprite;
     assert.equal(first.image, "ok.png");
-    status.onCollisionEnter(status);
-    status.onCollisionEnter(status);
+    hit(world, status);
+    hit(world, status);
     world.flush();
     assert.equal(status.health, 0);
     assert.equal(status.children[0], first, "same instance, updated in place");
@@ -69,10 +73,10 @@ describe("React idioms", () => {
     const world = new World();
     const status = new Status();
     world.mount(status);
-    const describe = () => status.children.map((c) => (c instanceof Sprite ? c.image : (c as Entity).name));
+    const describe = () => status.children.filter((c) => !(c instanceof Collider)).map((c) => (c instanceof Sprite ? c.image : (c as Entity).name));
     assert.deepEqual(describe(), ["ok.png", "fine", "sparkle.png"]);
-    status.onCollisionEnter(status);
-    status.onCollisionEnter(status);
+    hit(world, status);
+    hit(world, status);
     world.flush();
     assert.deepEqual(describe(), ["hurt.png", "warning.png"]);
   });
