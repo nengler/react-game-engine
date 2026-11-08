@@ -12,12 +12,12 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | Collision handling began as a component hook; M4b moved it to a `<Collider onCollisionEnter>` prop. `other` has no readable members yet |
 | M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform` and element refs; #8 replaced them with a `transform={{ x, y }}` attribute driven by state and value refs (`useRef(0)`), and also renamed the per-frame hooks to `useUpdate`/`useInput` and switched state reads to React's snapshot semantics (see Decisions) |
-| M7 Authoring types | In review | #9 | Component source imports from `@rge/runtime/jsx` (mandatory: `RGE1005` otherwise); the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI) |
-| M4a Props and callbacks | In review | #10 | Destructured props with a declared type, defaults, callbacks, `updateProps`, prop dependencies, `transform` on a component as `placement`, `useState(prop)` type inference. Imported children work: the parent needs nothing about their props |
-| M4b Roots and component forms | In review | #11 | `<Collider onCollisionEnter>` replaces the hook (a per-collider callback), fragment and non-Entity roots, arrow-function and default-export components, the `props` object form, `useState` type inference over expressions. Completes M4 |
+| M7 Authoring types | Done | #9 | Component source imports from `@rge/runtime/jsx` (mandatory: `RGE1005` otherwise); the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI) |
+| M4a Props and callbacks | Done | #10 | Destructured props with a declared type, defaults, callbacks, `updateProps`, prop dependencies, `transform` on a component as `placement`, `useState(prop)` type inference. Imported children work: the parent needs nothing about their props |
+| M4b Roots and component forms | Done | #11 | `<Collider onCollisionEnter>` replaces the hook (a per-collider callback), fragment and non-Entity roots, arrow-function and default-export components, the `props` object form, `useState` type inference over expressions. Completes M4 |
 | M8 Children | Not started | n/a | Needs M4 |
-| M5a Arrays and records in handlers | In progress | `claude/pensive-faraday-lnmtga` | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
-| M5b Keyed lists | Not started | n/a | Needs M5a. `KeyedListChild`, `(slot, order)` child ordering and `queueReorder` in the runtime |
+| M5a Arrays and records in handlers | Done | #12 | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
+| M5b Keyed lists | In review | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
 | M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
 | M10 `<Text>` | Not started | n/a | Needs M7. HUD and labels; `transformIntrinsics` |
@@ -478,12 +478,13 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M5b Keyed lists
 
-- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
-- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
-- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
-- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
-- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
-- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+- [x] New IR variants added in `ir/types.ts` (`KeyedListChild`, `DependencyIR` `Item`), with every `assertNever` site handled; new diagnostic `RGE1209`
+- [x] Transform recognises the new syntax; every unsupported form has a diagnostic and a test (missing or constant key, index-only key warning, non-element or multi-statement callback, item children, unsupported sources, `?.map`, index reads in callbacks, `$` names)
+- [x] Runtime: `(slot, order)` child ordering and `queueReorder` (`order.test.ts`); `queueReorder` added to `reservedMembers`
+- [x] `docs/DESIGN.md` updated ("Keyed lists", authoring rules, IR notes, runtime ordering)
+- [x] `Level.tsx` renders its enemies from an array of spawns; `npm run example` regenerated and committed
+- [x] Tests cover the IR shape, generated code, both type-checks and runtime behaviour: add, remove, reorder and update by key, identity kept and unchanged items not re-rendered, static siblings in place, duplicate keys, current item in callbacks, lists in conditionals (`m5.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M6 Prefabs and scenes
 

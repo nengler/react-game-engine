@@ -32,17 +32,24 @@ import {
   isSpreadElement,
   isSpreadAssignment,
   isBlock,
+  isReturnStatement,
 } from "typescript/ast/is";
 import { AUTHORING_HOOKS, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
-import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
+import { DiagnosticCode, error, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
+  localId,
   ARRAY_METHODS,
   MUTATING_ARRAY_METHODS,
   type ArrayMethodName,
   type ArrayElementIR,
   type ObjectPropertyIR,
   type TypeIR,
+  type KeyedListChildIR,
+  type ParamIR,
+  type ValuePropIR,
+  readsParam,
+  functionReadsParam,
   collectDependencies,
   stateReads,
   elementId,
@@ -81,7 +88,7 @@ import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { MATH_FUNCTIONS } from "./handles.ts";
 import type { RuntimeManifest } from "@rge/runtime";
 import { Scope } from "./scope.ts";
-import { lowerFunction, type LoweringContext } from "./statements.ts";
+import { checkFreshName, lowerFunction, type LoweringContext } from "./statements.ts";
 
 export interface TransformOptions {
   /** What the runtime provides: intrinsic tags, the host class, reserved member names, handle types, functions. */
@@ -654,7 +661,126 @@ class ComponentLowering implements LoweringContext {
     }
   }
 
-  #lowerElement(jsx: JsxElementNode, path: readonly number[]): ElementIR | null {
+  /**
+   * `{enemies.map((e, i) => <Enemy key={e.id} speed={e.speed} />)}`. The
+   * source is a state or prop array, optionally filtered; the callback is an
+   * inline arrow returning one element with a `key` and no children. The
+   * item and index are parameters in a scope of their own, and the element's
+   * props that read them become dynamic with an `Item` dependency, so every
+   * item's props are re-applied when the list renders.
+   */
+  #lowerList(call: CallExpression, path: readonly number[]): KeyedListChildIR | null {
+    const code = DiagnosticCode.InvalidList;
+    const callee = call.expression as PropertyAccessExpression;
+    const shape = "A list is written `{items.map((item) => <Element key={item.id} … />)}`";
+    if (call.questionDotToken || callee.questionDotToken) {
+      this.#error(code, `${shape}, without \`?.\`.`, call);
+      return null;
+    }
+    const fn = call.arguments.length === 1 ? unwrapParens(call.arguments[0]!) : null;
+    if (!fn || !isArrowFunction(fn)) {
+      this.#error(code, `${shape}: \`map\` takes one inline arrow function.`, call);
+      return null;
+    }
+    let returned: Expression | null = null;
+    if (!isBlock(fn.body)) returned = fn.body;
+    else if (fn.body.statements.length === 1 && isReturnStatement(fn.body.statements[0]!) && fn.body.statements[0].expression) returned = fn.body.statements[0].expression;
+    const jsx = returned ? unwrapParens(returned) : null;
+    if (!jsx || !(isJsxElement(jsx) || isJsxSelfClosingElement(jsx))) {
+      this.#error(code, `${shape}: the callback returns exactly one element (no conditionals, fragments or other statements).`, fn.body);
+      return null;
+    }
+    if (fn.parameters.length < 1 || fn.parameters.length > 2) {
+      this.#error(code, `${shape}: the callback takes the item, and optionally its index.`, fn);
+      return null;
+    }
+    const source = this.#lowerExpression(callee.expression);
+    if (!source) return null;
+    if (!isListSource(source)) {
+      this.#error(code, "A list's items come from a state or prop array, optionally followed by `.filter(…)`: `enemies.map(…)` or `enemies.filter((e) => e.alive).map(…)`.", callee.expression);
+      return null;
+    }
+
+    const outer = this.scope;
+    this.scope = new Scope(outer);
+    try {
+      const params: ParamIR[] = [];
+      for (const param of fn.parameters) {
+        if (!isIdentifier(param.name) || param.initializer || param.dotDotDotToken || param.type) {
+          this.#error(code, "The list callback's parameters are plain names: `(item, index) =>`.", param);
+          return null;
+        }
+        const name = param.name.text;
+        if (!checkFreshName(this, name, param)) return null;
+        const id = localId(this.componentName, name, this.nextSerial());
+        this.scope.declare(name, { kind: "param", id, name, type: { kind: "Contextual" } });
+        params.push({ id, name, type: { kind: "Contextual" } });
+      }
+      const [item, index = null] = params as [ParamIR, ParamIR?];
+
+      const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
+      const keyAttribute = findAttribute(opening.attributes, "key");
+      if (!keyAttribute) {
+        this.#error(code, `Each item of a list needs a \`key\` that identifies it across renders: \`key={${item.name}.id}\`.`, opening);
+        return null;
+      }
+      const keyInit = keyAttribute.initializer;
+      const keyNode = keyInit && isJsxExpression(keyInit) && keyInit.expression && !keyInit.dotDotDotToken ? keyInit.expression : null;
+      if (!keyNode) {
+        this.#error(code, `\`key\` takes an expression that reads the item: \`key={${item.name}.id}\`.`, keyAttribute);
+        return null;
+      }
+      const key = this.#lowerExpression(keyNode);
+      const lowered = this.#lowerElement(jsx, path, true);
+      if (!key || !lowered) return null;
+      const readsItem = readsParam(key, item.id);
+      const readsIndex = index !== null && readsParam(key, index.id);
+      if (!readsItem && !readsIndex) {
+        this.#error(code, `\`key\` must read the item (\`key={${item.name}.id}\`): a key that is the same for every item is always a duplicate.`, keyNode);
+        return null;
+      }
+      if (!readsItem) {
+        this.#diagnostics.push(
+          warning(code, `\`key\` reads only the index, so an item keeps its instance by position, not by identity: removing or reordering items moves state between them. Prefer an id from the item.`, this.#span(keyNode)),
+        );
+      }
+      if (lowered.children.length > 0) {
+        this.#error(code, "A list item cannot have children yet: make the item a component that renders them.", jsx);
+        return null;
+      }
+      const element = this.#asListItem(lowered, item, index);
+      return element && { kind: "KeyedListChild", source, item, index, key, element, dependencies: collectDependencies(source) };
+    } finally {
+      this.scope = outer;
+    }
+  }
+
+  /**
+   * A list item's props that read the item or index are re-applied for every
+   * item on each render (an `Item` dependency); a callback prop may read the
+   * item (generated code looks up its current value by key) but not the
+   * index, which changes when items move.
+   */
+  #asListItem(el: ElementIR, item: ParamIR, index: ParamIR | null): ElementIR | null {
+    const readsItem = (e: ExprIR): boolean => readsParam(e, item.id) || (index !== null && readsParam(e, index.id));
+    const dynamic = <T extends ValuePropIR>(p: T): T => {
+      if (!readsItem(p.value)) return p;
+      return { kind: "DynamicProp", name: p.name, value: p.value, dependencies: [...collectDependencies(p.value), { kind: "Item" }] } as unknown as T;
+    };
+    let ok = true;
+    const props = el.props.map((p) => {
+      if (p.kind !== "CallbackProp") return dynamic(p);
+      if (index !== null && functionReadsParam(p.handler, index.id)) {
+        this.#diagnostics.push(error(DiagnosticCode.InvalidList, `Callback '${p.name}' cannot read the index '${index.name}': it changes when items move. Read the item (\`${item.name}.id\`) instead.`, el.span));
+        this.#errorCount++;
+        ok = false;
+      }
+      return p;
+    });
+    return ok ? { ...el, props, transform: el.transform.map(dynamic) } : null;
+  }
+
+  #lowerElement(jsx: JsxElementNode, path: readonly number[], listItem = false): ElementIR | null {
     const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
     const tag = opening.tagName;
     if (!isIdentifier(tag)) {
@@ -677,7 +803,7 @@ class ComponentLowering implements LoweringContext {
     }
 
     const isComponent = component.kind !== "Intrinsic";
-    const props = this.#lowerProps(opening.attributes, tag.text, isComponent);
+    const props = this.#lowerProps(opening.attributes, tag.text, isComponent, listItem);
     const transform = this.#lowerTransform(opening.attributes, tag.text, isComponent);
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, path) : [];
     if (isComponent && children.length > 0) {
@@ -688,7 +814,7 @@ class ComponentLowering implements LoweringContext {
     return {
       kind: "Element",
       id: elementId(this.#component.name, path),
-      fieldName: this.#allocateFieldName(tag.text),
+      fieldName: this.#allocateFieldName(tag.text, listItem ? "Items" : null),
       component,
       props,
       transform,
@@ -756,7 +882,7 @@ class ComponentLowering implements LoweringContext {
    * type; on a built-in it must be one the runtime manifest lists
    * (`<Collider onCollisionEnter>`), with the parameter types it gives.
    */
-  #lowerProps(attributes: JsxAttributes, tag: string, toComponent: boolean): PropIR[] {
+  #lowerProps(attributes: JsxAttributes, tag: string, toComponent: boolean, listItem = false): PropIR[] {
     const props: PropIR[] = [];
     const seen = new Set<string>();
     for (const attribute of attributes.properties) {
@@ -770,9 +896,13 @@ class ComponentLowering implements LoweringContext {
         continue;
       }
       seen.add(name);
-      if (SPECIAL_ATTRIBUTES.has(name)) continue;
+      if (SPECIAL_ATTRIBUTES.has(name) || (name === "key" && listItem)) continue;
       if (name === "key" || name === "children") {
-        this.#error(DiagnosticCode.UnsupportedAttribute, name === "key" ? "`key` is for items of a list, which arrives with keyed lists." : "`children` cannot be passed yet.", attribute);
+        this.#error(
+          DiagnosticCode.UnsupportedAttribute,
+          name === "key" ? "`key` belongs on the element a list returns: `{items.map((item) => <Element key={item.id} />)}`." : "`children` cannot be passed yet.",
+          attribute,
+        );
         continue;
       }
       if (name === "ref") {
@@ -833,6 +963,11 @@ class ComponentLowering implements LoweringContext {
       }
       if (isJsxExpression(child) && child.expression) {
         const expression = unwrapParens(child.expression);
+        if (isCallExpression(expression) && isPropertyAccessExpression(expression.expression) && expression.expression.name.text === "map") {
+          const list = this.#lowerList(expression, path);
+          if (list) out.push(list);
+          continue;
+        }
         if (isBinaryExpression(expression) && expression.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken) {
           const right = unwrapParens(expression.right);
           if (isJsxElement(right) || isJsxSelfClosingElement(right)) {
@@ -863,7 +998,7 @@ class ComponentLowering implements LoweringContext {
             continue;
           }
         }
-        this.#error(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}` or `{condition ? <A /> : <B />}` (a branch may be `null`).", child);
+        this.#error(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`) or `{items.map((item) => <Element key={item.id} />)}`.", child);
         continue;
       }
       this.#error(DiagnosticCode.UnsupportedJsxChild, `Unsupported JSX child (${SyntaxKind[child.kind]}).`, child);
@@ -1256,11 +1391,14 @@ class ComponentLowering implements LoweringContext {
     return true;
   }
 
-  #allocateFieldName(tag: string): string {
+  /** A free field name for an element; with a suffix (a list's `enemyItems`), the suffixed name is claimed too. */
+  #allocateFieldName(tag: string, suffix: string | null = null): string {
     const base = tag.charAt(0).toLowerCase() + tag.slice(1);
+    const taken = (name: string): boolean => this.#usedNames.has(name) || (suffix !== null && this.#usedNames.has(name + suffix));
     let candidate = base;
-    for (let n = 2; this.#usedNames.has(candidate); n++) candidate = `${base}${n}`;
+    for (let n = 2; taken(candidate); n++) candidate = `${base}${n}`;
     this.#usedNames.add(candidate);
+    if (suffix !== null) this.#usedNames.add(candidate + suffix);
     return candidate;
   }
 
@@ -1308,6 +1446,12 @@ class ComponentLowering implements LoweringContext {
     this.#errorCount++;
     this.#diagnostics.push(error(code, message, this.#span(node)));
   }
+}
+
+/** A list's source: a state or prop array, optionally followed by `.filter(…)` calls. */
+function isListSource(e: ExprIR): boolean {
+  if (e.kind === "StateRead" || e.kind === "PropRead") return true;
+  return e.kind === "Call" && e.callee.kind === "ArrayMethod" && e.callee.name === "filter" && isListSource(e.callee.receiver);
 }
 
 /** A declared prop's type as a state type (`useState(items)` takes the prop's type). */

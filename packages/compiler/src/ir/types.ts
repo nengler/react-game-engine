@@ -357,8 +357,8 @@ export interface ElementIR {
   readonly span: SourceSpan;
 }
 
-/** How a child exists over time. Future: KeyedListChild. */
-export type ChildIR = StaticChildIR | ConditionalChildIR;
+/** How a child exists over time. */
+export type ChildIR = StaticChildIR | ConditionalChildIR | KeyedListChildIR;
 
 /** Created once with its parent; never recreated. */
 export interface StaticChildIR {
@@ -372,6 +372,32 @@ export interface ConditionalChildIR {
   readonly condition: ExprIR;
   readonly dependencies: readonly DependencyIR[];
   readonly element: ElementIR;
+}
+
+/**
+ * `{enemies.map((e) => <Enemy key={e.id} speed={e.speed} />)}`: one instance
+ * of `element` per item of `source`, kept by key across renders. A new key
+ * constructs an instance, a missing key removes it, and an existing key
+ * updates its instance's props in place. The items share their parent slot
+ * and are ordered within it by list position.
+ */
+export interface KeyedListChildIR {
+  readonly kind: "KeyedListChild";
+  /** A state or prop array, optionally followed by `.filter(…)` calls. */
+  readonly source: ExprIR;
+  /** The item parameter: read as `ParamRead` in `key` and the element's props. */
+  readonly item: ParamIR;
+  /** The index parameter, if the callback declares one. Not readable inside callback props (it changes on reorder). */
+  readonly index: ParamIR | null;
+  readonly key: ExprIR;
+  /**
+   * The item element. Its props that read the item or index are dynamic
+   * with an `Item` dependency; it has no children. Its `fieldName` names the
+   * list's generated fields (`enemyItems`, `#enemyOrder`).
+   */
+  readonly element: ElementIR;
+  /** What `source` reads: the list re-renders when one changes. */
+  readonly dependencies: readonly DependencyIR[];
 }
 
 // ---------------------------------------------------------------------------
@@ -393,7 +419,9 @@ export type TransformPropIR = ValuePropIR & { readonly name: TransformField };
  */
 export type DependencyIR =
   | { readonly kind: "State"; readonly state: StateId }
-  | { readonly kind: "Prop"; readonly name: string };
+  | { readonly kind: "Prop"; readonly name: string }
+  /** The item (or index) of the keyed list the element belongs to: re-applied for every item on each render of the list. */
+  | { readonly kind: "Item" };
 
 /**
  * A callback passed to a child component: `onDefeated={() => setScore(…)}`.
@@ -716,13 +744,58 @@ export function walkExpr(expr: ExprIR, visit: (e: ExprIR) => void): void {
 export function collectDependencies(expr: ExprIR): DependencyIR[] {
   const out: DependencyIR[] = [];
   const add = (d: DependencyIR): void => {
-    if (!out.some((o) => o.kind === d.kind && (o.kind === "State" ? o.state === (d as typeof o).state : o.name === (d as typeof o).name))) out.push(d);
+    if (!out.some((o) => sameDependency(o, d))) out.push(d);
   };
   walkExpr(expr, (e) => {
     if (e.kind === "StateRead") add({ kind: "State", state: e.state });
     else if (e.kind === "PropRead") add({ kind: "Prop", name: e.name });
   });
   return out;
+}
+
+export function sameDependency(a: DependencyIR, b: DependencyIR): boolean {
+  switch (a.kind) {
+    case "State": return b.kind === "State" && a.state === b.state;
+    case "Prop": return b.kind === "Prop" && a.name === b.name;
+    case "Item": return b.kind === "Item";
+    default: return assertNever(a, "dependency");
+  }
+}
+
+/** Every expression in a function body, including nested functions (updaters), in pre-order. */
+export function walkFunction(fn: FunctionIR, visit: (e: ExprIR) => void): void {
+  const statements = (body: readonly StatementIR[]): void => {
+    for (const stmt of body) {
+      switch (stmt.kind) {
+        case "ExpressionStatement": walkExpr(stmt.expression, visit); break;
+        case "LocalConst": walkExpr(stmt.value, visit); break;
+        case "If": walkExpr(stmt.test, visit); statements(stmt.then); statements(stmt.else); break;
+        case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
+        case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit); else walkExpr(stmt.value, visit); break;
+        case "Assign": walkExpr(stmt.value, visit); break;
+        default: assertNever(stmt, "statement");
+      }
+    }
+  };
+  statements(fn.body);
+}
+
+/** Whether an expression reads the parameter `param`. */
+export function readsParam(expr: ExprIR, param: LocalId): boolean {
+  let found = false;
+  walkExpr(expr, (e) => {
+    if (e.kind === "ParamRead" && e.param === param) found = true;
+  });
+  return found;
+}
+
+/** Whether a function body reads the parameter `param`. */
+export function functionReadsParam(fn: FunctionIR, param: LocalId): boolean {
+  let found = false;
+  walkFunction(fn, (e) => {
+    if (e.kind === "ParamRead" && e.param === param) found = true;
+  });
+  return found;
 }
 
 /** Only the state slots an expression reads (what a `useState` initial value may not touch). */

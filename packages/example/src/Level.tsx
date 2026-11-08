@@ -33,31 +33,39 @@ interface Defeat {
   wave: number;
 }
 
+/** One live enemy: the list below keeps one <Enemy> per spawn, by `id`. */
+interface Spawn {
+  id: string;
+  tint: "red" | "blue";
+  x: number;
+}
+
 function Level() {
   const [wave, setWave] = useState(1);
   const [score, setScore] = useState(0);
   // Array state is updated immutably: a setter only renders when it gets a new array.
+  const [spawns, setSpawns] = useState<Spawn[]>([
+    { id: "red-1", tint: "red", x: 40 },
+    { id: "blue-1", tint: "blue", x: 80 },
+  ]);
   const [defeats, setDefeats] = useState<Defeat[]>([]);
   const bossVisible = defeats.some((d) => d.tint === "blue") && defeats.length >= 2;
   return (
     <Entity name="Level">
-      <Enemy
-        speed={wave}
-        transform={{ x: 40 }}
-        onDefeated={() => {
-          setScore((score) => score + 1);
-          setDefeats((list) => [...list, { tint: "red", wave }]);
-        }}
-      />
-      <Enemy
-        speed={wave * 2}
-        tint="blue"
-        transform={{ x: 80 }}
-        onDefeated={() => {
-          setScore((score) => score + 5);
-          setDefeats((list) => [...list, { tint: "blue", wave }]);
-        }}
-      />
+      {spawns.map((s) => (
+        <Enemy
+          key={s.id}
+          speed={s.tint === "blue" ? wave * 2 : wave}
+          tint={s.tint}
+          transform={{ x: s.x }}
+          onDefeated={() => {
+            // `s` is the spawn's current value, looked up by its key.
+            setScore((score) => score + (s.tint === "blue" ? 5 : 1));
+            setDefeats((list) => [...list, { tint: s.tint, wave }]);
+            setSpawns((list) => list.filter((other) => other.id !== s.id));
+          }}
+        />
+      ))}
       {wave >= 3 && <Enemy speed={wave} transform={{ x: 120 }} />}
       <Coin value={score} transform={{ x: 160 }} />
       <Trail value={wave} transform={{ x: 200, y: 20 }} />

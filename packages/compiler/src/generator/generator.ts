@@ -17,6 +17,9 @@ import {
   walkExpr,
   type StateId,
   type StateIR,
+  type KeyedListChildIR,
+  type LocalId,
+  functionReadsParam,
 } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { CodeWriter } from "./writer.ts";
@@ -86,6 +89,10 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
     for (const child of children) {
       if (child.element.component.kind === "Intrinsic") values.add(child.element.component.name);
       if (child.kind === "ConditionalChild") visitExpr(child.condition);
+      if (child.kind === "KeyedListChild") {
+        visitExpr(child.source);
+        visitExpr(child.key);
+      }
       visitProps(child.element.props);
       visitProps(child.element.transform);
       visitChildren(child.element.children);
@@ -152,6 +159,14 @@ class ComponentGenerator {
   readonly #requiredHostProps: Readonly<Record<string, readonly string[]>>;
   #w: CodeWriter;
   readonly #stateById: ReadonlyMap<StateId, StateIR>;
+  /**
+   * While emitting a keyed list: inside a callback prop, a read of the list's
+   * item is its current value, looked up by the item's key (`text`), because
+   * the callback was created with the item's first value.
+   */
+  #itemLookup: { readonly id: LocalId; readonly text: string } | null = null;
+  /** Greater than zero while emitting a callback prop's body. */
+  #callbackDepth = 0;
 
   constructor(component: ComponentIR, writer: CodeWriter, requiredHostProps: Readonly<Record<string, readonly string[]>>) {
     this.#requiredHostProps = requiredHostProps;
@@ -372,6 +387,13 @@ class ComponentGenerator {
     for (const child of children) {
       const el = child.element;
       const type = typeName(el.component);
+      if (child.kind === "KeyedListChild") {
+        // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
+        this.#w.line(`readonly ${el.fieldName}Items: Map<string | number, ${type}> = new Map();`);
+        this.#w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
+        if (this.#listNeedsRecords(child)) this.#w.line(`#${el.fieldName}Records: Map<string | number, ${this.#listItemType(child)}> = new Map();`);
+        continue;
+      }
       const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
       if (childPresence === "persistent") {
         this.#w.line(`readonly ${el.fieldName}: ${type} = ${this.#construct(el)};`);
@@ -425,10 +447,13 @@ class ComponentGenerator {
           w.close();
           w.open(`} else if (${ref} !== null) {`);
           w.line(`${parentRef}.queueRemoveChild(${ref});`);
-          for (const field of subtreeFields(el)) w.line(`this.${field} = null;`);
+          for (const line of this.#subtreeResets(el)) w.line(line);
           w.close("}");
           break;
         }
+        case "KeyedListChild":
+          this.#emitList(child, parentRef, index);
+          break;
         default:
           assertNever(child, "child");
       }
@@ -436,6 +461,12 @@ class ComponentGenerator {
   }
 
   #emitElementUpdates(el: ElementIR, ref: string, presence: Presence): void {
+    this.#emitPropUpdates(el, ref);
+    this.#emitDynamicTransform(el.transform, ref, transformTarget(el));
+    this.#emitChildUpdates(el.children, ref, presence);
+  }
+
+  #emitPropUpdates(el: ElementIR, ref: string): void {
     const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
     if (el.component.kind === "Intrinsic") {
       for (const prop of dynamic) this.#w.line(`${access(ref, prop.name)} = ${this.#expr(prop.value, true)};`);
@@ -443,8 +474,96 @@ class ComponentGenerator {
       // A component takes all its changed props in one call, which marks it dirty once.
       this.#w.line(`${ref}.updateProps(${this.#propsObject(dynamic)});`);
     }
-    this.#emitDynamicTransform(el.transform, ref, transformTarget(el));
-    this.#emitChildUpdates(el.children, ref, presence);
+  }
+
+  /**
+   * A keyed list, in its own block so its temporaries (`$`-prefixed: author
+   * names cannot start with `$`) never clash: compute every key and reject
+   * duplicates before changing anything; then update an existing key's
+   * instance, or construct and queue a new one at (slot, position); queue
+   * removal of keys that are gone; and queue a reorder only if the key
+   * sequence changed.
+   */
+  #emitList(list: KeyedListChildIR, parentRef: string, slot: number): void {
+    const w = this.#w;
+    const el = list.element;
+    const items = `this.${el.fieldName}Items`;
+    const order = `this.#${el.fieldName}Order`;
+    const records = this.#listNeedsRecords(list) ? `this.#${el.fieldName}Records` : null;
+    const item = list.item.name;
+    const position = list.index?.name ?? "$n";
+    const params = list.index ? `${item}, ${list.index.name}` : item;
+    const target = transformTarget(el);
+    const where = `in the <${el.component.name}> list of ${this.#c.name}`;
+    w.open("{");
+    w.line(`const $parent = ${parentRef};`);
+    w.line(`const $list = ${this.#expr(list.source, true)};`);
+    w.line(`const $keys = $list.map((${params}) => ${this.#arrowBody(list.key)});`);
+    w.line("const $seen = new Set<string | number>();");
+    w.block("for (const $key of $keys)", () => {
+      w.line(`if ($seen.has($key)) throw new Error("Duplicate key " + JSON.stringify($key) + ${JSON.stringify(` ${where}.`)});`);
+      w.line("$seen.add($key);");
+    });
+    w.block(`for (const [${position}, ${item}] of $list.entries())`, () => {
+      w.line(`const $key = $keys[${position}]!;`);
+      w.line(`let $item = ${items}.get($key);`);
+      w.open("if ($item === undefined) {");
+      this.#itemLookup = records ? { id: list.item.id, text: `${records}.get($key)!` } : null;
+      try {
+        w.line(`$item = ${this.#construct(el)};`);
+      } finally {
+        this.#itemLookup = null;
+      }
+      this.#emitStaticTransform(el.transform, "$item", target);
+      w.line(`${items}.set($key, $item);`);
+      w.line(`$parent.queueAddChild($item, ${slot}, ${position});`);
+      if (el.props.some((p) => p.kind === "DynamicProp")) {
+        w.close();
+        w.open("} else {");
+        this.#emitPropUpdates(el, "$item");
+      }
+      w.close("}");
+      this.#emitDynamicTransform(el.transform, "$item", target);
+      if (records) w.line(`${records}.set($key, ${item});`);
+    });
+    w.block(`for (const [$key, $item] of ${items})`, () => {
+      w.block("if (!$seen.has($key))", () => {
+        w.line("$parent.queueRemoveChild($item);");
+        w.line(`${items}.delete($key);`);
+        if (records) w.line(`${records}.delete($key);`);
+      });
+    });
+    w.block(`if ($keys.length !== ${order}.length || $keys.some(($k, $i) => $k !== ${order}[$i]))`, () => {
+      w.line(`$parent.queueReorder(${slot}, $keys.map(($k) => ${items}.get($k)!));`);
+      w.line(`${order} = $keys;`);
+    });
+    w.close("}");
+  }
+
+  /** Whether a list's item callbacks read the item, so each key's current item must be kept. */
+  #listNeedsRecords(list: KeyedListChildIR): boolean {
+    return list.element.props.some((p) => p.kind === "CallbackProp" && functionReadsParam(p.handler, list.item.id));
+  }
+
+  /** The element type of a list's source array, named through the state field or the props type. */
+  #listItemType(list: KeyedListChildIR): string {
+    let base = list.source;
+    while (base.kind === "Call" && base.callee.kind === "ArrayMethod") base = base.callee.receiver;
+    if (base.kind === "StateRead") return `${this.#c.name}[${JSON.stringify(this.#state(base.state).name)}][number]`;
+    if (base.kind === "PropRead" && this.#c.propsType) return `NonNullable<${this.#c.propsType}[${JSON.stringify(base.name)}]>[number]`;
+    throw new Error(`Unexpected list source in component ${this.#c.name}`);
+  }
+
+  /** What unmounting a conditional subtree resets: its element fields to null, its lists to empty. */
+  #subtreeResets(el: ElementIR): string[] {
+    return [
+      `this.${el.fieldName} = null;`,
+      ...el.children.flatMap((c) => {
+        if (c.kind !== "KeyedListChild") return this.#subtreeResets(c.element);
+        const f = c.element.fieldName;
+        return [`this.${f}Items.clear();`, `this.#${f}Order = [];`, ...(this.#listNeedsRecords(c) ? [`this.#${f}Records.clear();`] : [])];
+      }),
+    ];
   }
 
   /** When a conditional subtree mounts, construct its static descendants and attach them immediately. */
@@ -482,7 +601,7 @@ class ComponentGenerator {
   }
 
   #childrenNeedRender(children: readonly ChildIR[]): boolean {
-    return children.some((c) => c.kind === "ConditionalChild" || this.#elementNeedsRender(c.element));
+    return children.some((c) => c.kind !== "StaticChild" || this.#elementNeedsRender(c.element));
   }
 
   // -- expressions ----------------------------------------------------------
@@ -511,8 +630,13 @@ class ComponentGenerator {
     const inner = new CodeWriter();
     const outer = this.#w;
     this.#w = inner;
-    this.#stmts(fn.body);
-    this.#w = outer;
+    this.#callbackDepth++;
+    try {
+      this.#stmts(fn.body);
+    } finally {
+      this.#callbackDepth--;
+      this.#w = outer;
+    }
     return this.#arrow(params, inner.toString().trimEnd().split("\n"), fn);
   }
 
@@ -557,7 +681,8 @@ class ComponentGenerator {
       case "NullLiteral": return "null";
       case "StateRead": return `this.${this.#state(e.state).name}`;
       case "LocalRead": return e.name;
-      case "ParamRead": return e.name;
+      case "ParamRead":
+        return this.#itemLookup !== null && this.#callbackDepth > 0 && e.param === this.#itemLookup.id ? this.#itemLookup.text : e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
       case "PropRead": {
         // A prop with a default is never undefined (the runtime applies the default at construction and on update),
@@ -650,11 +775,6 @@ function pending(s: StateIR): string {
 
 function pendingRef(s: StateIR): string {
   return `this.${pending(s)}`;
-}
-
-/** Field names of an element and all its descendants (every one of them lives and dies with it). */
-function subtreeFields(el: ElementIR): string[] {
-  return [el.fieldName, ...el.children.flatMap((c) => subtreeFields(c.element))];
 }
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;

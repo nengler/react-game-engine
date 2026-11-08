@@ -223,10 +223,15 @@ function lowerSetState(ctx: LoweringContext, args: readonly Expression[], state:
  * Shadowing follows JS: a parameter or `const` may reuse an outer name, which
  * is what makes `setCount((count) => count + 1)` work (state is emitted as
  * `this.count`, so the generated code cannot confuse them). Only a
- * redeclaration in the same scope, or rebinding a name the call allowlist
- * relies on (`Math`, runtime functions), is an error.
+ * redeclaration in the same scope, rebinding a name the call allowlist
+ * relies on (`Math`, runtime functions), or a `$` name (generated code's
+ * temporaries), is an error.
  */
-function checkFreshName(ctx: LoweringContext, name: string, at: Node): boolean {
+export function checkFreshName(ctx: LoweringContext, name: string, at: Node): boolean {
+  if (name.startsWith("$")) {
+    ctx.error(DiagnosticCode.InvalidHandler, `'${name}': names starting with \`$\` are reserved for generated code.`, at);
+    return false;
+  }
   if (ctx.scope.hasOwn(name)) {
     ctx.error(DiagnosticCode.InvalidHandler, `'${name}' is already declared in this scope.`, at);
     return false;
