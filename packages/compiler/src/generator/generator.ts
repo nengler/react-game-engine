@@ -87,6 +87,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
     });
   const visitChildren = (children: readonly ChildIR[]): void => {
     for (const child of children) {
+      if (child.kind === "ChildrenSlot") continue;
       if (child.element.component.kind === "Intrinsic") values.add(child.element.component.name);
       if (child.kind === "ConditionalChild") visitExpr(child.condition);
       if (child.kind === "KeyedListChild") {
@@ -116,6 +117,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
     }
   };
   for (const c of module.components) {
+    if (c.acceptsChildren) types.add("Child");
     values.add(c.root.component.name);
     visitProps(c.root.props);
     visitProps(c.root.transform);
@@ -133,6 +135,7 @@ function collectComponentImports(module: IRModule): Map<string, { defaultName: s
   const defaults = new Map<string, string>();
   const visit = (children: readonly ChildIR[]): void => {
     for (const child of children) {
+      if (child.kind === "ChildrenSlot") continue;
       const ref = child.element.component;
       if (ref.kind === "Imported") {
         const specifier = ref.module.replace(/\.tsx$/, ".ts");
@@ -149,6 +152,47 @@ function collectComponentImports(module: IRModule): Map<string, { defaultName: s
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([specifier, names]) => [specifier, { defaultName: defaults.get(specifier) ?? null, names: [...names].sort() }]),
   );
+}
+
+/**
+ * What children attach to. A built-in takes them by position among its
+ * children (slot); a component takes the children its parent passes at its
+ * `{children}` slot (`passed`), in the order they were written.
+ */
+interface Mount {
+  readonly ref: string;
+  readonly passed: boolean;
+}
+
+const ROOT: Mount = { ref: "this", passed: false };
+
+function mountOf(el: ElementIR, ref: string): Mount {
+  return { ref, passed: el.component.kind !== "Intrinsic" };
+}
+
+function addChild(mount: Mount, child: string, siblings: readonly ChildIR[], index: number): string {
+  return mount.passed ? `${mount.ref}.attachPassedChild(${child}, ${index})` : `${mount.ref}.addChild(${child}${slotArgument(siblings, index)})`;
+}
+
+function queueAddChild(mount: Mount, child: string, siblings: readonly ChildIR[], index: number): string {
+  return mount.passed ? `${mount.ref}.queueAttachPassedChild(${child}, ${index})` : `${mount.ref}.queueAddChild(${child}${slotArgument(siblings, index)})`;
+}
+
+function queueRemoveChild(mount: Mount, child: string): string {
+  return mount.passed ? `${mount.ref}.queueDetachPassedChild(${child})` : `${mount.ref}.queueRemoveChild(${child})`;
+}
+
+/** The container holding `{children}` and the slot's index among its children, found through static elements (`{children}` is only allowed there). */
+function findChildrenSlot(children: readonly ChildIR[], host: string): { host: string; index: number } | null {
+  for (const [index, child] of children.entries()) {
+    if (child.kind === "ChildrenSlot") return { host, index };
+  }
+  for (const child of children) {
+    if (child.kind !== "StaticChild") continue;
+    const found = findChildrenSlot(child.element.children, `this.${child.element.fieldName}`);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** Where an element lives: always present (readonly), or only while an enclosing condition holds. */
@@ -181,7 +225,9 @@ class ComponentGenerator {
     const hasRender = this.#hostHasDynamicProps() || this.#childrenNeedRender(c.root.children);
 
     // A component with props passes them (and its defaults) up to the runtime host, which owns `this.props`.
-    const extendsClause = c.propsType ? `${c.root.component.name}<${c.propsType}>` : c.root.component.name;
+    // `children` is not a runtime prop: the parent mounts elements at the `{children}` slot instead.
+    const runtimeProps = c.propsType && c.acceptsChildren ? `Omit<${c.propsType}, "children">` : c.propsType;
+    const extendsClause = runtimeProps ? `${c.root.component.name}<${runtimeProps}>` : c.root.component.name;
     w.block(`export class ${c.name} extends ${extendsClause}`, () => {
       // Persistent state.
       for (const s of c.state) {
@@ -200,7 +246,7 @@ class ComponentGenerator {
       const defaults = c.props.filter((p) => p.defaultValue !== null);
       const defaultsObject = defaults.length > 0 ? `{ ${defaults.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.defaultValue!, true)}`).join(", ")} }` : null;
       // Every prop optional: the parent may omit the object entirely.
-      const constructorParams = c.propsType ? `props: ${c.propsType}${c.props.every((p) => p.optional) ? " = {}" : ""}` : "";
+      const constructorParams = runtimeProps ? `props: ${runtimeProps}${c.props.every((p) => p.optional) ? " = {}" : ""}` : "";
       w.block(`constructor(${constructorParams})`, () => {
         const staticHostProps = c.root.props.filter((p) => p.kind === "StaticProp");
         // A built-in's constructor may require a prop (a Sprite's `image`) that is dynamic here. `super()` runs before
@@ -219,7 +265,13 @@ class ComponentGenerator {
           if (p.kind === "CallbackProp") w.line(`this.${p.name} = ${this.#callback(p.handler)};`);
         }
         this.#emitStaticTransform(c.root.transform, "this", "transform");
-        this.#emitStaticWiring(c.root.children, "this");
+        this.#emitStaticWiring(c.root.children, ROOT);
+        const slot = findChildrenSlot(c.root.children, "this");
+        if (slot) {
+          // Where a parent's children mount: the container holding `{children}`, and the slot's position among its children.
+          w.line(`this.passedChildrenHost = ${slot.host};`);
+          w.line(`this.passedChildrenSlot = ${slot.index};`);
+        }
         if (hasRender) {
           w.line("this.render();");
           w.line("this.commitStructure();");
@@ -228,7 +280,7 @@ class ComponentGenerator {
 
       if (c.propsType) {
         w.blank();
-        w.block(`updateProps(next: Partial<${c.propsType}>): void`, () => {
+        w.block(`updateProps(next: Partial<${runtimeProps}>): void`, () => {
           w.line(`if (this.applyProps(next${defaultsObject ? `, ${defaultsObject}` : ""})) this.markDirty();`);
         });
       }
@@ -274,7 +326,7 @@ class ComponentGenerator {
             if (prop.kind === "DynamicProp") w.line(`${access("this", prop.name)} = ${this.#expr(prop.value, true)};`);
           }
           this.#emitDynamicTransform(c.root.transform, "this", "transform");
-          this.#emitChildUpdates(c.root.children, "this", "persistent");
+          this.#emitChildUpdates(c.root.children, ROOT, "persistent");
         });
       }
     });
@@ -385,6 +437,7 @@ class ComponentGenerator {
 
   #emitElementFields(children: readonly ChildIR[], presence: Presence): void {
     for (const child of children) {
+      if (child.kind === "ChildrenSlot") continue;
       const el = child.element;
       const type = typeName(el.component);
       if (child.kind === "KeyedListChild") {
@@ -405,19 +458,19 @@ class ComponentGenerator {
   }
 
   /** Attach persistent children to their parents (constructor only). */
-  #emitStaticWiring(children: readonly ChildIR[], parentRef: string): void {
+  #emitStaticWiring(children: readonly ChildIR[], mount: Mount): void {
     for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
       this.#emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
-      this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
-      this.#emitStaticWiring(child.element.children, ref);
+      this.#w.line(`${addChild(mount, ref, children, index)};`);
+      this.#emitStaticWiring(child.element.children, mountOf(child.element, ref));
     }
   }
 
   // -- render ---------------------------------------------------------------
 
-  #emitChildUpdates(children: readonly ChildIR[], parentRef: string, presence: Presence): void {
+  #emitChildUpdates(children: readonly ChildIR[], mount: Mount, presence: Presence): void {
     const w = this.#w;
     for (const [index, child] of children.entries()) {
       switch (child.kind) {
@@ -440,20 +493,22 @@ class ComponentGenerator {
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.#construct(el)};`);
             this.#emitStaticTransform(el.transform, ref, transformTarget(el));
-            this.#emitMountStatics(el.children, ref);
-            w.line(`${parentRef}.queueAddChild(${ref}${slotArgument(children, index)});`);
+            this.#emitMountStatics(el.children, mountOf(el, ref));
+            w.line(`${queueAddChild(mount, ref, children, index)};`);
           });
           this.#emitElementUpdates(el, ref, "conditional");
           w.close();
           w.open(`} else if (${ref} !== null) {`);
-          w.line(`${parentRef}.queueRemoveChild(${ref});`);
+          w.line(`${queueRemoveChild(mount, ref)};`);
           for (const line of this.#subtreeResets(el)) w.line(line);
           w.close("}");
           break;
         }
         case "KeyedListChild":
-          this.#emitList(child, parentRef, index);
+          this.#emitList(child, mount, index);
           break;
+        case "ChildrenSlot":
+          break; // nothing renders here: the parent mounts its elements
         default:
           assertNever(child, "child");
       }
@@ -463,7 +518,7 @@ class ComponentGenerator {
   #emitElementUpdates(el: ElementIR, ref: string, presence: Presence): void {
     this.#emitPropUpdates(el, ref);
     this.#emitDynamicTransform(el.transform, ref, transformTarget(el));
-    this.#emitChildUpdates(el.children, ref, presence);
+    this.#emitChildUpdates(el.children, mountOf(el, ref), presence);
   }
 
   #emitPropUpdates(el: ElementIR, ref: string): void {
@@ -484,7 +539,7 @@ class ComponentGenerator {
    * removal of keys that are gone; and queue a reorder only if the key
    * sequence changed.
    */
-  #emitList(list: KeyedListChildIR, parentRef: string, slot: number): void {
+  #emitList(list: KeyedListChildIR, mount: Mount, slot: number): void {
     const w = this.#w;
     const el = list.element;
     const items = `this.${el.fieldName}Items`;
@@ -496,7 +551,7 @@ class ComponentGenerator {
     const target = transformTarget(el);
     const where = `in the <${el.component.name}> list of ${this.#c.name}`;
     w.open("{");
-    w.line(`const $parent = ${parentRef};`);
+    w.line(`const $parent = ${mount.ref};`);
     w.line(`const $list = ${this.#expr(list.source, true)};`);
     w.line(`const $keys = $list.map((${params}) => ${this.#arrowBody(list.key)});`);
     w.line("const $seen = new Set<string | number>();");
@@ -516,7 +571,7 @@ class ComponentGenerator {
       }
       this.#emitStaticTransform(el.transform, "$item", target);
       w.line(`${items}.set($key, $item);`);
-      w.line(`$parent.queueAddChild($item, ${slot}, ${position});`);
+      w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, ${position})` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
       if (el.props.some((p) => p.kind === "DynamicProp")) {
         w.close();
         w.open("} else {");
@@ -528,13 +583,14 @@ class ComponentGenerator {
     });
     w.block(`for (const [$key, $item] of ${items})`, () => {
       w.block("if (!$seen.has($key))", () => {
-        w.line("$parent.queueRemoveChild($item);");
+        w.line(`${queueRemoveChild({ ref: "$parent", passed: mount.passed }, "$item")};`);
         w.line(`${items}.delete($key);`);
         if (records) w.line(`${records}.delete($key);`);
       });
     });
     w.block(`if ($keys.length !== ${order}.length || $keys.some(($k, $i) => $k !== ${order}[$i]))`, () => {
-      w.line(`$parent.queueReorder(${slot}, $keys.map(($k) => ${items}.get($k)!));`);
+      const ordered = `$keys.map(($k) => ${items}.get($k)!)`;
+      w.line(`${mount.passed ? `$parent.queueReorderPassedChildren(${ordered})` : `$parent.queueReorder(${slot}, ${ordered})`};`);
       w.line(`${order} = $keys;`);
     });
     w.close("}");
@@ -559,6 +615,7 @@ class ComponentGenerator {
     return [
       `this.${el.fieldName} = null;`,
       ...el.children.flatMap((c) => {
+        if (c.kind === "ChildrenSlot") return [];
         if (c.kind !== "KeyedListChild") return this.#subtreeResets(c.element);
         const f = c.element.fieldName;
         return [`this.${f}Items.clear();`, `this.#${f}Order = [];`, ...(this.#listNeedsRecords(c) ? [`this.#${f}Records.clear();`] : [])];
@@ -567,14 +624,14 @@ class ComponentGenerator {
   }
 
   /** When a conditional subtree mounts, construct its static descendants and attach them immediately. */
-  #emitMountStatics(children: readonly ChildIR[], parentRef: string): void {
+  #emitMountStatics(children: readonly ChildIR[], mount: Mount): void {
     for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
       this.#w.line(`${ref} = ${this.#construct(child.element)};`);
       this.#emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
-      this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
-      this.#emitMountStatics(child.element.children, ref);
+      this.#w.line(`${addChild(mount, ref, children, index)};`);
+      this.#emitMountStatics(child.element.children, mountOf(child.element, ref));
     }
   }
 
@@ -601,7 +658,7 @@ class ComponentGenerator {
   }
 
   #childrenNeedRender(children: readonly ChildIR[]): boolean {
-    return children.some((c) => c.kind !== "StaticChild" || this.#elementNeedsRender(c.element));
+    return children.some((c) => c.kind === "ConditionalChild" || c.kind === "KeyedListChild" || (c.kind === "StaticChild" && this.#elementNeedsRender(c.element)));
   }
 
   // -- expressions ----------------------------------------------------------

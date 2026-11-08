@@ -71,6 +71,43 @@ export class GameObject<P extends object = {}> {
   /** Position within the slot: the item's index in a keyed list (see `queueReorder`); 0 otherwise. */
   #order = 0;
 
+  /**
+   * Where children passed by a parent (`<Panel><Button /></Panel>`) mount: a
+   * component that renders `{children}` sets these in its constructor to the
+   * container holding that slot and the slot's position among that
+   * container's children. The parent owns the passed children (their props,
+   * their conditions); this only says where they go.
+   */
+  protected passedChildrenHost: GameObject | null = null;
+  protected passedChildrenSlot = Infinity;
+
+  /** Immediately attach a passed child, at `order` among the passed children (the slot of `{children}` is fixed). */
+  attachPassedChild(child: GameObject, order: number): void {
+    this.#passedHost().addChild(child, this.passedChildrenSlot, order);
+  }
+
+  /** Queue a passed child to be attached when structure is next committed. */
+  queueAttachPassedChild(child: GameObject, order: number): void {
+    this.#passedHost().queueAddChild(child, this.passedChildrenSlot, order);
+  }
+
+  /** Queue a passed child to be detached when structure is next committed. */
+  queueDetachPassedChild(child: GameObject): void {
+    this.#passedHost().queueRemoveChild(child);
+  }
+
+  /** Queue a new order for the passed children (a keyed list passed as the whole of the children), see `queueReorder`. */
+  queueReorderPassedChildren(children: readonly GameObject[]): void {
+    this.#passedHost().queueReorder(this.passedChildrenSlot, children);
+  }
+
+  #passedHost(): GameObject {
+    if (this.passedChildrenHost === null) {
+      throw new Error(`${this.constructor.name} was given children but does not render {children}: declare \`children: Child\` in its props and write {children} where they belong.`);
+    }
+    return this.passedChildrenHost;
+  }
+
   get isDirty(): boolean {
     return this.#dirty;
   }

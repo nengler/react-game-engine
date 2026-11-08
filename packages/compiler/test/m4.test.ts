@@ -7,7 +7,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Collider, Entity, Sprite, World } from "@rge/runtime";
 import { DiagnosticCode, type ComponentIR } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, compileProject, getCompiler, load, loadProject, typeCheck, typeCheckProject } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, compileProject, getCompiler, load, loadProject, typeCheck, typeCheckProject, elementOf } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -103,7 +103,7 @@ function P({ points }: Shape) { return <Entity name="P" />; }`, "P");
 
   it("makes a prop read a dependency, so JSX that uses a prop re-renders when the parent changes it", () => {
     const enemy = component(GAME, "Enemy");
-    const sprite = enemy.root.children[0]!.element;
+    const sprite = elementOf(enemy.root.children[0]!);
     const image = sprite.props[0]!;
     assert.ok(image.kind === "DynamicProp");
     assert.deepEqual(image.dependencies, [{ kind: "Prop", name: "skin" }]);
@@ -113,7 +113,7 @@ function P({ points }: Shape) { return <Entity name="P" />; }`, "P");
 
   it("lowers an inline arrow passed to a component to a callback with contextually typed parameters", () => {
     const level = component(GAME, "Level");
-    const props = level.root.children[0]!.element.props;
+    const props = elementOf(level.root.children[0]!).props;
     assert.deepEqual(props.map((p) => [p.name, p.kind]), [["speed", "DynamicProp"], ["onDefeated", "CallbackProp"]]);
     const callback = props[1]!;
     assert.ok(callback.kind === "CallbackProp");
@@ -124,7 +124,7 @@ function Child({ onHit }: ChildProps) { return <Entity name="C" />; }
 function P() { const [n, setN] = useState(0); return <Entity name="P"><Child onHit={(amount) => setN(n + amount)} /></Entity>; }`,
       "P",
     );
-    const hit = parametrised.root.children[0]!.element.props[0]!;
+    const hit = elementOf(parametrised.root.children[0]!).props[0]!;
     assert.ok(hit.kind === "CallbackProp" && hit.handler.params[0]!.type.kind === "Contextual");
   });
 });
@@ -690,7 +690,7 @@ describe("M4b: collider callbacks", () => {
     const compiled = compile(`function Hero() {
   return <Entity name="H"><Collider width={1} height={1} onCollisionEnter={(other) => {}} /></Entity>;
 }`);
-    const collider = compiled.ir.components[0]!.root.children[0]!.element;
+    const collider = elementOf(compiled.ir.components[0]!.root.children[0]!);
     const callback = collider.props.find((p) => p.kind === "CallbackProp");
     assert.ok(callback?.kind === "CallbackProp");
     assert.deepEqual(callback.handler.params.map((p) => p.type), [{ kind: "Named", name: "GameObject" }]);

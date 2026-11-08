@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { Entity, GameObject, Sprite, Transform, World } from "@rge/runtime";
 import { runtimeManifest } from "@rge/runtime";
 import { Compiler, DiagnosticCode, type ComponentIR, type StatementIR } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, withAuthoringImports } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, withAuthoringImports, elementOf } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -98,7 +98,7 @@ describe("M3: IR shape", () => {
     assert.ok(x.kind === "DynamicProp" && x.value.kind === "StateRead");
     assert.deepEqual(x.dependencies, [{ kind: "State", state: "Runner.x" }]);
     assert.ok(!c.root.props.some((p) => p.name === "transform"), "transform is not a prop");
-    const shadow = c.root.children[2]!.element;
+    const shadow = elementOf(c.root.children[2]!);
     assert.deepEqual(shadow.transform.map((p) => [p.name, p.kind]), [["y", "StaticProp"]]);
   });
 

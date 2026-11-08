@@ -34,7 +34,7 @@ import {
   isBlock,
   isReturnStatement,
 } from "typescript/ast/is";
-import { AUTHORING_HOOKS, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
+import { AUTHORING_HOOKS, AUTHORING_TYPES, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
@@ -142,8 +142,15 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
 
   // Names imported from the authoring module must be ones the compiler understands.
   const authored = new Set([...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions)]);
+  const authoredTypes = new Set(AUTHORING_TYPES);
   for (const i of analysis.authoringImports) {
-    if (!authored.has(i.name)) {
+    if (i.isTypeOnly && !authoredTypes.has(i.name)) {
+      diagnostics.push(
+        error(DiagnosticCode.UnknownImport, `'${i.name}' is not a type exported by "${manifest.authoringModule}" (its types: ${AUTHORING_TYPES.join(", ")}): import it without \`type\`.`, span(i.node)),
+      );
+    } else if (!i.isTypeOnly && authoredTypes.has(i.name)) {
+      diagnostics.push(error(DiagnosticCode.UnknownImport, `'${i.name}' is a type: write \`import { type ${i.name} } from "${manifest.authoringModule}"\`.`, span(i.node)));
+    } else if (!i.isTypeOnly && !authored.has(i.name)) {
       diagnostics.push(
         error(
           DiagnosticCode.UnknownImport,
@@ -155,7 +162,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   }
 
   // Hooks, built-in elements and runtime functions must be imported, as in React. Each missing name is reported once per file.
-  const authoring: AuthoringImports = { names: new Set(analysis.authoringImports.map((i) => i.name)), reported: new Set() };
+  const authoring: AuthoringImports = { names: new Set(analysis.authoringImports.filter((i) => !i.isTypeOnly).map((i) => i.name)), reported: new Set() };
 
   const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
   const typeDeclarations: TypeDeclarationIR[] = analysis.typeDeclarations.map((t) => ({ kind: "TypeDeclaration", name: t.name, text: t.text }));
@@ -237,6 +244,12 @@ class ComponentLowering implements LoweringContext {
   #errorCount = 0;
   /** Greater than zero while lowering a handler body: the only place `ref.current` is allowed. */
   #functionDepth = 0;
+  /** The props type declares `children: Child`. */
+  #declaredChildren = false;
+  /** A `{children}` slot has been lowered (there may be one). */
+  #slotSeen = false;
+  /** A `{children}` was written where it cannot go (already reported, so the missing slot is not reported again). */
+  #slotRejected = false;
   readonly #refs: RefIR[] = [];
 
   constructor(
@@ -272,6 +285,9 @@ class ComponentLowering implements LoweringContext {
     this.#propDecls = props;
     const { hooks, state } = this.#lowerHooks();
     const root = this.#lowerRoot(this.#component.jsx);
+    if (this.#declaredChildren && !this.#slotSeen && !this.#slotRejected) {
+      this.#error(DiagnosticCode.InvalidProps, "The props type declares `children`, but the component never renders `{children}`: put it where passed elements belong, or remove the prop.", this.#component.declaration);
+    }
     if (!root || this.#errorCount > 0) return null;
     return {
       kind: "Component",
@@ -283,6 +299,7 @@ class ComponentLowering implements LoweringContext {
       props,
       propsType: this.#component.props?.typeName ?? null,
       isDefaultExport: this.#component.isDefault,
+      acceptsChildren: this.#declaredChildren,
       root,
     };
   }
@@ -314,6 +331,19 @@ class ComponentLowering implements LoweringContext {
 
     const out: PropDeclIR[] = [];
     for (const [name, member] of members) {
+      if (name === "children") {
+        // Not a value prop: the elements a parent passes mount at `{children}`. Typed `Child` so the TSX type-checks.
+        const binding = bindings.get(name);
+        if (member.role !== "value" || member.type.kind !== "SourceText" || member.type.text !== "Child") {
+          this.#error(code, `\`children\` must be typed \`Child\`: \`children: Child;\`, with \`import { type Child } from "${this.#manifest.authoringModule}"\`.`, member.node);
+        } else if (binding?.defaultValue) {
+          this.#error(code, "`children` cannot have a default value.", binding.node);
+        } else {
+          this.#declaredChildren = true;
+          if (binding) this.#componentScope.declare(name, { kind: "children", name });
+        }
+        continue;
+      }
       if (RESERVED_PROP_NAMES.has(name)) {
         this.#error(code, `'${name}' is reserved by the framework and cannot be a prop name.`, member.node);
         continue;
@@ -625,7 +655,7 @@ class ComponentLowering implements LoweringContext {
         component: { kind: "Intrinsic", name: this.#hostIntrinsic },
         props: [],
         transform: [],
-        children: this.#lowerChildren(jsx.children, []),
+        children: this.#lowerChildren(jsx.children, [], { slot: true, passed: false }),
         span: this.#span(jsx),
       };
     }
@@ -642,7 +672,7 @@ class ComponentLowering implements LoweringContext {
     this.#requireImport(tag.text, tag);
     const props = this.#lowerProps(opening.attributes, tag.text, false);
     const transform = this.#lowerTransform(opening.attributes, tag.text, false);
-    const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, []) : [];
+    const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, [], { slot: true, passed: false }) : [];
     this.#checkContainer(tag.text, children.length, jsx);
     return {
       kind: "HostElement",
@@ -780,7 +810,8 @@ class ComponentLowering implements LoweringContext {
     return ok ? { ...el, props, transform: el.transform.map(dynamic) } : null;
   }
 
-  #lowerElement(jsx: JsxElementNode, path: readonly number[], listItem = false): ElementIR | null {
+  /** `slotOk`: a `{children}` slot may appear in this element's children (it is in a static chain from the root). */
+  #lowerElement(jsx: JsxElementNode, path: readonly number[], listItem = false, slotOk = false): ElementIR | null {
     const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
     const tag = opening.tagName;
     if (!isIdentifier(tag)) {
@@ -805,9 +836,15 @@ class ComponentLowering implements LoweringContext {
     const isComponent = component.kind !== "Intrinsic";
     const props = this.#lowerProps(opening.attributes, tag.text, isComponent, listItem);
     const transform = this.#lowerTransform(opening.attributes, tag.text, isComponent);
-    const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, path) : [];
-    if (isComponent && children.length > 0) {
-      this.#error(DiagnosticCode.UnsupportedJsxChild, `Passing children to component <${tag.text}> is not supported yet.`, jsx);
+    // On a component, the children are passed to it: the block is lowered here (this component owns them) but mounts
+    // at the receiver's slot. A built-in keeps them.
+    const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent }) : [];
+    if (isComponent && children.some((c) => c.kind === "KeyedListChild") && children.length > 1) {
+      this.#error(
+        DiagnosticCode.InvalidList,
+        `A list passed to <${tag.text}> must be its only child: the list's items and the other children would share positions. Wrap the list in an <${this.#hostIntrinsic}> or make the others part of the list.`,
+        jsx,
+      );
     }
     if (!isComponent) this.#checkContainer(tag.text, children.length, jsx);
 
@@ -943,7 +980,11 @@ class ComponentLowering implements LoweringContext {
     return props;
   }
 
-  #lowerChildren(children: readonly JsxChild[], parentPath: readonly number[]): ChildIR[] {
+  /**
+   * `slot`: a `{children}` may appear here (a container reachable through static elements). `passed`: these are
+   * children passed to a component, which mount at its slot.
+   */
+  #lowerChildren(children: readonly JsxChild[], parentPath: readonly number[], context: { readonly slot: boolean; readonly passed: boolean }): ChildIR[] {
     const out: ChildIR[] = [];
     let index = 0;
     for (const child of children) {
@@ -957,12 +998,16 @@ class ComponentLowering implements LoweringContext {
       const path = [...parentPath, index++];
 
       if (isJsxElement(child) || isJsxSelfClosingElement(child)) {
-        const element = this.#lowerElement(child, path);
+        const element = this.#lowerElement(child, path, false, context.slot);
         if (element) out.push({ kind: "StaticChild", element });
         continue;
       }
       if (isJsxExpression(child) && child.expression) {
         const expression = unwrapParens(child.expression);
+        if (this.#isChildrenReference(expression)) {
+          if (this.#lowerChildrenSlot(child, context)) out.push({ kind: "ChildrenSlot" });
+          continue;
+        }
         if (isCallExpression(expression) && isPropertyAccessExpression(expression.expression) && expression.expression.name.text === "map") {
           const list = this.#lowerList(expression, path);
           if (list) out.push(list);
@@ -1006,6 +1051,37 @@ class ComponentLowering implements LoweringContext {
     return out;
   }
 
+  /** `children` or `props.children`, where it names the `children` prop of this component. */
+  #isChildrenReference(node: Expression): boolean {
+    if (isIdentifier(node)) return this.scope.get(node.text)?.kind === "children";
+    if (isPropertyAccessExpression(node) && node.name.text === "children") {
+      const object = unwrapParens(node.expression);
+      return isIdentifier(object) && this.scope.get(object.text)?.kind === "propsObject";
+    }
+    return false;
+  }
+
+  /** Checks that `{children}` is somewhere a slot can be. A slot must be in a container that is always there, once. */
+  #lowerChildrenSlot(at: Node, context: { readonly slot: boolean; readonly passed: boolean }): boolean {
+    const code = DiagnosticCode.UnsupportedJsxChild;
+    this.#slotRejected = true;
+    if (context.passed) {
+      this.#error(code, "Forwarding `children` to another component is not supported yet: render `{children}` inside a built-in container instead.", at);
+      return false;
+    }
+    if (!context.slot) {
+      this.#error(code, "`{children}` must be a direct child of a container that is always present: not inside a condition, a list, or another component's children.", at);
+      return false;
+    }
+    if (this.#slotSeen) {
+      this.#error(code, "`{children}` can appear only once in a component.", at);
+      return false;
+    }
+    this.#slotSeen = true;
+    this.#slotRejected = false;
+    return true;
+  }
+
   #lowerExpression(node: Expression): ExprIR | null {
     if (isParenthesizedExpression(node)) return this.#lowerExpression(node.expression);
     if (isNumericLiteral(node)) return { kind: "NumberLiteral", value: Number(node.text) };
@@ -1031,6 +1107,9 @@ class ComponentLowering implements LoweringContext {
         case "state": return { kind: "StateRead", state: binding.id };
         case "propsObject":
           this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`, node);
+          return null;
+        case "children":
+          this.#error(DiagnosticCode.UnsupportedExpression, "`children` can only be used as a JSX child, `{children}`: it is the elements a parent passes, not a value.", node);
           return null;
         case "prop":
           if (binding.role === "callback" && !this.#allowCallbackRead) {
@@ -1208,6 +1287,10 @@ class ComponentLowering implements LoweringContext {
     const binding = isIdentifier(object) ? this.scope.get(object.text) : undefined;
     if (binding?.kind !== "propsObject") return undefined;
     const decl = this.#propDecls.find((p) => p.name === node.name.text);
+    if (!decl && node.name.text === "children" && this.#declaredChildren) {
+      this.#error(DiagnosticCode.UnsupportedExpression, "`children` can only be used as a JSX child, `{props.children}`: it is the elements a parent passes, not a value.", node.name);
+      return null;
+    }
     if (!decl) {
       this.#error(DiagnosticCode.UnsupportedExpression, `'${node.name.text}' is not a prop of ${this.#component.props?.typeName ?? "this component"}.`, node.name);
       return null;

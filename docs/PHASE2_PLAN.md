@@ -15,7 +15,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M7 Authoring types | Done | #9 | Component source imports from `@rge/runtime/jsx` (mandatory: `RGE1005` otherwise); the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI) |
 | M4a Props and callbacks | Done | #10 | Destructured props with a declared type, defaults, callbacks, `updateProps`, prop dependencies, `transform` on a component as `placement`, `useState(prop)` type inference. Imported children work: the parent needs nothing about their props |
 | M4b Roots and component forms | Done | #11 | `<Collider onCollisionEnter>` replaces the hook (a per-collider callback), fragment and non-Entity roots, arrow-function and default-export components, the `props` object form, `useState` type inference over expressions. Completes M4 |
-| M8 Children | Not started | n/a | Needs M4 |
+| M8 Children | In review | #14 | `children: Child` and `{children}` in the receiver, elements between the tags in the parent (static, conditional, or a sole list). The parent owns and updates what it passes; the receiver only says where it mounts. Forwarding `{children}` and children on list items are not supported yet |
 | M5a Arrays and records in handlers | Done | #12 | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
 | M5b Keyed lists | In review | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
 | M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
@@ -296,6 +296,8 @@ What shipped:
 
 `<Panel><Button /></Panel>`: the parent constructs the child elements (it owns their props and state) and passes them as `children`; the child mounts them where `{children}` appears in its JSX. IR: a slot child (`ChildrenSlotIR`) in the receiving component and a `children` prop on the element that passes them. Conditional children inside the passed block stay owned by the parent.
 
+Implemented as described in [DESIGN.md](DESIGN.md#children), with one difference from the sketch above: the passed children are the element's ordinary `children` (`ElementIR.children` on a component element) rather than a separate `children` prop, since the parent lowers, constructs and updates them like any of its own children. They mount through `(slot, order)` (M5b), so the receiver's other children and a conditional passed child keep their places.
+
 ## M9 — Mount and unmount hooks (~3–4 days)
 
 `useMount(() => …)` runs once, after the component is first attached to a `World` and its first render has committed. `useUnmount(() => …)` runs when it is removed from the `World` (a conditional turning off, a list item removed, a scene unloaded). Both are top-level hooks lowered to `FunctionIR` like `useUpdate`. Setters in `useUnmount` are a diagnostic (the component is gone); refs may be read and written. There is no `useEffect`: reacting to a state change is done where the state changes.
@@ -503,6 +505,16 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 - [x] Every example imports from `@rge/runtime/jsx`; `npm run example` regenerated and committed
 - [x] Tests cover the exports matching the compiler, source type errors, import diagnostics and the CLI (`m7.test.ts`)
 - [x] `npm test` and `npm run typecheck` pass on Node 22.18+ (typecheck now includes the example sources)
+
+### M8 Children
+
+- [x] New IR (`ChildrenSlot` child, `ComponentIR.acceptsChildren`; `DependencyIR` unchanged), with every `assertNever` site handled
+- [x] Transform recognises `children: Child` and `{children}`; every unsupported form has a diagnostic and a test (wrong type, no slot, two slots, slot in a condition, list or built-in leaf, forwarding, `children` as a value or with a default, list mixed with siblings, children on a list item)
+- [x] Runtime: `attachPassedChild` and friends on `GameObject`, reserved in the manifest; `Child` exported from the runtime and the authoring module (`import { type Child }`, the only `type` import accepted)
+- [x] `docs/DESIGN.md` updated ("Children", authoring rules, IR notes)
+- [x] `Panel.tsx` in the example, used by `Level.tsx`; `npm run example` regenerated and committed
+- [x] Tests cover the IR shape, generated code, both type-checks and runtime behaviour: mounting between the receiver's children, conditional passed children, a conditional receiver remounting, a sole list, the missing-slot error (`m5.test.ts`, `order.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M10 `<Text>`
 

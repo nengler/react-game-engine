@@ -86,6 +86,7 @@ export const runtimeManifest: RuntimeManifest = {
     "name", "props", "applyProps", "updateProps", "transform", "placement", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure",
+    "passedChildrenHost", "passedChildrenSlot", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "runRender", "commitState", "render",
     "onInput", "onUpdate",
     "attachToWorld", "detachFromWorld",

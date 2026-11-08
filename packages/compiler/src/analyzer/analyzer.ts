@@ -70,8 +70,13 @@ export interface ImportAnalysis {
   readonly isDefault: boolean;
   /** The specifier as written, e.g. `./WarningIcon.tsx`. */
   readonly module: string;
+  /** `import { type Child } from "@rge/runtime/jsx"`: a type, erased from the output (allowed from the authoring module only). */
+  readonly isTypeOnly: boolean;
   readonly node: Node;
 }
+
+/** Types the authoring module exports: written `import { type Child }`, never values. */
+export const AUTHORING_TYPES: readonly string[] = ["Child"];
 
 export type JsxRoot = JsxElement | JsxSelfClosingElement | JsxFragment;
 
@@ -200,7 +205,7 @@ export function analyzeSourceFile(
       if (specifier !== null && /^\.\.?\/.*\.tsx$/.test(specifier)) {
         analyzeNamedImport(statement, specifier, imports, diagnostics, span, "Component imports", `import { Name } from "${specifier}"`, true);
       } else if (specifier !== null && specifier === authoringModule) {
-        analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity } from "${specifier}"`);
+        analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity, type Child } from "${specifier}"`, false, true);
       } else {
         diagnostics.push(
           error(
@@ -311,6 +316,7 @@ function analyzeNamedImport(
   what: string,
   example: string,
   allowDefault = false,
+  allowTypeSpecifiers = false,
 ): void {
   const clause = statement.importClause;
   const bindings = clause?.namedBindings;
@@ -326,16 +332,16 @@ function analyzeNamedImport(
     diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(statement)));
     return;
   }
-  if (clause.name) imports.push({ name: clause.name.text, isDefault: true, module, node: clause });
+  if (clause.name) imports.push({ name: clause.name.text, isDefault: true, isTypeOnly: false, module, node: clause });
   if (bindings && isNamedImports(bindings)) {
     for (const element of bindings.elements) {
-      if (element.isTypeOnly || element.propertyName) {
+      if ((element.isTypeOnly && !allowTypeSpecifiers) || element.propertyName) {
         diagnostics.push(
           error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(element)),
         );
         continue;
       }
-      imports.push({ name: element.name.text, isDefault: false, module, node: element });
+      imports.push({ name: element.name.text, isDefault: false, isTypeOnly: element.isTypeOnly, module, node: element });
     }
   }
 }

@@ -14,7 +14,7 @@ import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
-export type { TransformProps } from "./jsx-runtime.ts";
+export type { TransformProps, Child } from "./jsx-runtime.ts";
 
 export { clamp } from "./math.ts";
 

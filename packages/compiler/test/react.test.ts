@@ -7,7 +7,7 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Collider, Entity, Sprite, World } from "@rge/runtime";
 import { DiagnosticCode } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, elementOf } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -46,7 +46,7 @@ function hit(world: World, status: StatusInstance): void {
 describe("React idioms", () => {
   it("inlines component-body consts, so JSX that uses them updates with state", async () => {
     const compiled = compile(STATUS);
-    const sprite = compiled.ir.components[0]!.root.children[0]!.element;
+    const sprite = elementOf(compiled.ir.components[0]!.root.children[0]!);
     const image = sprite.props[0]!;
     assert.ok(image.kind === "DynamicProp", "a const derived from state is dynamic where it is used");
     assert.deepEqual(image.dependencies, [{ kind: "State", state: "Status.health" }]);
