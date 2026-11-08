@@ -13,5 +13,4 @@ export interface HandlerSignature {
 export const HANDLER_SIGNATURES: Readonly<Record<HandlerHookIR["kind"], HandlerSignature>> = {
   OnUpdate: { method: "onUpdate", params: [{ name: "dt", type: number }] },
   OnInput: { method: "onInput", params: [{ name: "input", type: { kind: "Named", name: "InputState" } }] },
-  OnCollisionEnter: { method: "onCollisionEnter", params: [{ name: "other", type: { kind: "Named", name: "GameObject" } }] },
 };

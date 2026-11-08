@@ -1,5 +1,5 @@
 /**
- * M1 (function / statement IR) and M2 (onInput / onUpdate / onCollisionEnter):
+ * M1 (function / statement IR) and M2 (useInput / useUpdate, and collision callbacks):
  * lowering, diagnostics, type-checking of generated code, and runtime behaviour.
  */
 import { after, before, describe, it } from "node:test";
@@ -35,14 +35,17 @@ function Hero() {
     const regen = poisoned ? 0 : dt;
     setHealth((health) => Math.min(health + regen, 100));
   });
-  onCollisionEnter(() => {
-    setHealth((h) => h - 10);
-    setPoisoned(true);
-  });
   return (
     <Entity name="Hero">
       <Sprite image={poisoned ? "poisoned.png" : "normal.png"} />
-      <Collider width={16} height={24} />
+      <Collider
+        width={16}
+        height={24}
+        onCollisionEnter={() => {
+          setHealth((h) => h - 10);
+          setPoisoned(true);
+        }}
+      />
     </Entity>
   );
 }
@@ -281,7 +284,8 @@ describe("M2: hooks and the frame loop", () => {
     const { code } = compile(HERO, "Hero.tsx");
     assert.equal(code.match(/override onUpdate\(/g)?.length, 1);
     assert.match(code, /override onInput\(input: InputState\): void/);
-    assert.match(code, /override onCollisionEnter\(\): void/);
+    assert.match(code, /new Collider\(\{ width: 16, height: 24, onCollisionEnter: \(\) => \{/, "a collider's callback is created with the collider");
+    assert.doesNotMatch(code, /override onCollisionEnter/, "collision is not a component-wide hook any more");
     assert.match(code, /this\.#onUpdate0\(dt\);\n\s+this\.#onUpdate1\(dt\);/);
   });
 
@@ -388,55 +392,52 @@ function Spawner() {
     assert.equal(attached.ticks, before);
   });
 
-  it("dispatches collisions to the nearest compiled component owning each collider", async () => {
-    const mod = await load<{ Shooter: new () => Entity & { hits: number }; Boss: new () => Entity & { hits: number } }>(
+  it("calls the callback of each collider that was hit, so a component can tell its colliders apart", async () => {
+    const mod = await load<{ Fighter: new () => Entity & { hurt: number; blocked: number; setHurt(v: number): void; readonly hitbox: Collider; readonly shield: Collider } }>(
       compile(`
-function Shooter() {
-  const [hits, setHits] = useState(0);
-  onCollisionEnter(() => setHits(hits + 1));
+function Fighter() {
+  const [hurt, setHurt] = useState(0);
+  const [blocked, setBlocked] = useState(0);
   return (
-    <Entity name="Shooter">
-      <Entity name="Muzzle"><Collider width={1} height={1} /></Entity>
+    <Entity name="Fighter">
+      <Collider width={8} height={16} onCollisionEnter={() => setHurt((n) => n + 1)} />
+      <Collider width={12} height={4} onCollisionEnter={() => setBlocked((n) => n + 1)} />
     </Entity>
   );
-}
-function Boss() {
-  const [hits, setHits] = useState(0);
-  onCollisionEnter((other) => setHits(hits + 1));
-  return <Entity name="Boss"><Collider width={9} height={9} /></Entity>;
-}`, "Owners.tsx"),
+}`, "Fighter.tsx"),
     );
     const world = new World();
-    const shooter = new mod.Shooter();
-    const boss = new mod.Boss();
-    world.mount(shooter);
-    world.mount(boss);
-    const muzzleCollider = shooter.children[0]!.children[0]!;
-    const bossCollider = boss.children[0]!;
-    assert.ok(muzzleCollider instanceof Collider);
-    world.reportCollision(muzzleCollider, bossCollider);
+    const fighter = new mod.Fighter();
+    world.mount(fighter);
+    const [hitbox, shield] = fighter.children as [Collider, Collider];
+    const bullet = new Collider({ width: 1, height: 1 });
+    world.mount(bullet);
+
+    world.reportCollision(shield, bullet);
     world.flush();
-    assert.equal(shooter.hits, 1); // the Collider sits in a plain <Entity>; the owner is the component
-    assert.equal(boss.hits, 1);
+    assert.deepEqual([fighter.hurt, fighter.blocked], [0, 1], "only the shield's callback ran");
+    world.reportCollision(bullet, hitbox);
+    world.flush();
+    assert.deepEqual([fighter.hurt, fighter.blocked], [1, 1], "the order of the two sides does not matter");
   });
 
-  it("passes the other component to onCollisionEnter", async () => {
-    const mod = await load<{ Probe: new () => Entity & { seen: boolean } }>(
-      compile(`
-function Probe() {
-  const [seen, setSeen] = useState(false);
-  onCollisionEnter((other) => setSeen(true));
-  return <Entity name="Probe"><Collider width={1} height={1} /></Entity>;
-}`, "Probe.tsx"),
-    );
+  it("calls both colliders' callbacks, each with the other collider, only while mounted", () => {
     const world = new World();
-    const a = new mod.Probe();
-    const b = new mod.Probe();
+    const seen: string[] = [];
+    const a = new Collider({ width: 1, height: 1, onCollisionEnter: (other) => seen.push(other === b ? "a saw b" : "a saw ?") });
+    const b: Collider = new Collider({ width: 1, height: 1, onCollisionEnter: (other) => seen.push(other === a ? "b saw a" : "b saw ?") });
     world.mount(a);
+    world.reportCollision(a, b);
+    assert.deepEqual(seen, ["a saw b"], "b is not mounted in this world");
     world.mount(b);
-    const received: GameObject[] = [];
-    a.onCollisionEnter = (other) => received.push(other);
-    world.reportCollision(a.children[0]!, b.children[0]!);
-    assert.deepEqual(received, [b]);
+    world.reportCollision(a, b);
+    assert.deepEqual(seen, ["a saw b", "a saw b", "b saw a"]);
+    assert.doesNotThrow(() => world.reportCollision(new Entity(), a), "a non-collider has no callback");
+  });
+
+  it("reports the old onCollisionEnter hook with where it went", () => {
+    const [diagnostic] = compileErrors(`function C() { onCollisionEnter(() => {}); return <Entity name="C" />; }`);
+    assert.equal(diagnostic!.code, DiagnosticCode.UnknownHook);
+    assert.match(diagnostic!.message, /<Collider width=\{16\} height=\{24\} onCollisionEnter=/);
   });
 });

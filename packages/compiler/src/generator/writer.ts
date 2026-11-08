@@ -3,6 +3,11 @@ export class CodeWriter {
   readonly #lines: string[] = [];
   #indent = 0;
 
+  /** The indentation the next line gets, for code that builds a multi-line expression to embed in one. */
+  get indentation(): string {
+    return "  ".repeat(this.#indent);
+  }
+
   line(text: string): void {
     this.#lines.push(text === "" ? "" : "  ".repeat(this.#indent) + text);
   }

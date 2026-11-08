@@ -5,9 +5,9 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Sprite, World } from "@rge/runtime";
+import { Collider, Entity, Sprite, World } from "@rge/runtime";
 import { DiagnosticCode, type ComponentIR } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, compileProject, load, loadProject, typeCheck, typeCheckProject } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, compileProject, getCompiler, load, loadProject, typeCheck, typeCheckProject } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -145,6 +145,18 @@ describe("M4: generated code", () => {
     assert.match(code, /readonly enemy: Enemy = new Enemy\(\{ speed: \(this\.score > 10\) \? 2 : 1, onDefeated: \(\) => \{ this\.setScore\(/);
     assert.match(code, /this\.enemy\.updateProps\(\{ speed: \(this\.score > 10\) \? 2 : 1 \}\);/);
     assert.doesNotMatch(code.slice(code.indexOf("class Level")), /updateProps\(\{[^}]*onDefeated/, "a callback is created once, never re-sent");
+  });
+
+  it("treats an optional prop with a default as defined, so arithmetic on it type-checks", () => {
+    const compiled = compile(`interface SpinProps { rate?: number; label?: string }
+function Spinner({ rate = 2, label }: SpinProps) {
+  const [angle, setAngle] = useState(0);
+  useUpdate((dt) => setAngle((angle) => angle + dt * rate));
+  return <Entity name="spinner" transform={{ rotation: angle * rate, x: label ? 1 : 0 }} />;
+}`);
+    assert.match(compiled.code, /dt \* this\.props\.rate!/);
+    assert.match(compiled.code, /this\.props\.label\b(?!!)/, "an optional prop without a default really can be undefined");
+    assert.deepEqual(typeCheck(compiled), []);
   });
 
   it("allows every prop to be omitted when each is optional", () => {
@@ -397,7 +409,7 @@ describe("M4: diagnostics", () => {
     const P = `interface P { a: number; b?: number }`;
     assert.deepEqual(codes(withProps(P, `{ a }: Missing`)), [DiagnosticCode.InvalidProps]);
     assert.deepEqual(codes(withProps(P, `{ a }`)), [DiagnosticCode.InvalidProps]);
-    assert.deepEqual(codes(withProps(P, `props: P`)), [DiagnosticCode.InvalidProps]);
+    assert.deepEqual(codes(withProps(P, `props`)), [DiagnosticCode.InvalidProps]);
     assert.deepEqual(codes(withProps(P, `{ a, ...rest }: P`)), [DiagnosticCode.InvalidProps]);
     assert.deepEqual(codes(withProps(P, `{ a: renamed }: P`)), [DiagnosticCode.InvalidProps]);
     assert.deepEqual(codes(withProps(P, `{ a }: P, other: P`)), [DiagnosticCode.InvalidProps]);
@@ -429,6 +441,10 @@ describe("M4: diagnostics", () => {
     assert.equal(compile(state("label")).ir.components[0]!.state[0]!.type, "string");
     assert.equal(compile(state("count")).ir.components[0]!.state[0]!.type, "number");
     assert.deepEqual(codes(state("items")), [DiagnosticCode.UnsupportedStateType]);
+    for (const [initial, type] of [["count * 2", "number"], ["count + 1", "number"], ["label + \"!\"", "string"], ["`${label}:${count}`", "string"], ["count > 3", "boolean"], ["!label", "boolean"], ["count > 3 ? 1 : 2", "number"]] as const) {
+      assert.equal(compile(state(initial)).ir.components[0]!.state[0]!.type, type, initial);
+    }
+    assert.deepEqual(codes(state("count > 3 ? 1 : label")), [DiagnosticCode.UnsupportedStateType], "branches of different types");
     assert.equal(compile(state("count", "<number>")).ir.components[0]!.state[0]!.type, "number");
   });
 
@@ -451,5 +467,253 @@ describe("M4: diagnostics", () => {
     assert.deepEqual(codes(`function A() { return <Entity name="A"><Sprite image="a" onClick={() => {}} /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
     assert.deepEqual(codes(`function B() { return <Entity name="B" />; } function A() { return <Entity name="A"><B key="x" /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
     assert.deepEqual(codes(`function B() { return <Entity name="B" />; } function A() { return <Entity name="A"><B children={1} /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M4b: component forms, roots, collider callbacks
+// ---------------------------------------------------------------------------
+
+describe("M4b: component forms", () => {
+  it("compiles an arrow-function component with props, hooks and state like a function declaration", async () => {
+    const { Badge } = await load<{ Badge: new (props: { label: string; step?: number }) => Entity & { n: number } }>(
+      compile(`interface BadgeProps { label: string; step?: number }
+export const Badge = ({ label, step = 2 }: BadgeProps) => {
+  const [n, setN] = useState(0);
+  useUpdate(() => setN((n) => n + step));
+  return <Entity name={label} />;
+};`),
+    );
+    const world = new World();
+    const badge = new Badge({ label: "b" });
+    world.mount(badge);
+    world.tick(1);
+    assert.deepEqual([badge.name, badge.n], ["b", 2]);
+  });
+
+  it("compiles an arrow with an expression body, which can hold no hooks", async () => {
+    const compiled = compile(`const Dot = () => <Sprite image="dot.png" />;
+const Pair = () => (<Entity name="pair"><Dot /><Dot /></Entity>);`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Pair } = await load<{ Pair: new () => Entity }>(compiled);
+    assert.equal(new Pair().children.length, 2);
+  });
+
+  it("supports a default export, as a declaration or as `export default Name;`", () => {
+    const declaration = compile(`export default function Enemy() { return <Entity name="E" />; }`);
+    assert.equal(declaration.ir.components[0]!.isDefaultExport, true);
+    assert.match(declaration.code, /export class Enemy extends Entity \{[\s\S]*\}\n\nexport default Enemy;\n$/);
+    const separate = compile(`const Enemy = () => <Entity name="E" />;\nexport default Enemy;`);
+    assert.equal(separate.ir.components[0]!.isDefaultExport, true);
+    assert.deepEqual(typeCheck(separate), []);
+  });
+
+  it("imports a default export under any local name, alone or with named imports", async () => {
+    const project = compileProject({
+      "Enemy.tsx": `interface EnemyProps { speed: number }
+export default function Enemy({ speed }: EnemyProps) { return <Entity name="E" transform={{ x: speed }} />; }
+export function Boss() { return <Entity name="B" />; }`,
+      "Level.tsx": `import Monster, { Boss } from "./Enemy.tsx";
+export function Level() {
+  return <Entity name="L"><Monster speed={4} /><Boss /></Entity>;
+}`,
+    });
+    assert.match(project["Level.tsx"]!.code, /^import Monster, \{ Boss \} from "\.\/Enemy\.ts";$/m);
+    assert.deepEqual(typeCheckProject(project), []);
+    const { Level } = await loadProject<{ Level: new () => Entity & { monster: Entity } }>(project, "Level.tsx");
+    const level = new Level();
+    assert.equal(level.monster.transform.x, 4);
+  });
+
+  it("rejects forms it cannot name or place", () => {
+    assert.deepEqual(codes(`export default function () { return <Entity />; }`), [DiagnosticCode.UnsupportedSyntax]);
+    assert.deepEqual(codes(`let Dot = () => <Entity />;`), [DiagnosticCode.UnsupportedSyntax]);
+    assert.deepEqual(codes(`const Dot = () => 5;`), [DiagnosticCode.InvalidComponentBody]);
+    assert.deepEqual(codes(`export default Missing;`), [DiagnosticCode.UnsupportedSyntax]);
+    assert.deepEqual(codes(`function A() { return <Entity />; } function B() { return <Entity />; } export default A; export default B;`), [DiagnosticCode.UnsupportedSyntax]);
+    assert.deepEqual(codes(`const x = 5;`), [DiagnosticCode.UnsupportedSyntax]);
+  });
+
+  function codes(source: string): string[] {
+    return compileErrors(source).map((d) => d.code);
+  }
+});
+
+describe("M4b: the props object", () => {
+  const SOURCE = `interface EnemyProps { speed: number; skin?: "red" | "blue"; onDefeated?: () => void }
+function Enemy(props: EnemyProps) {
+  const [hp, setHp] = useState(props.speed * 10);
+  useUpdate((dt) => {
+    setHp((hp) => hp - dt * props.speed);
+    if (hp <= 0) props.onDefeated?.();
+  });
+  return (
+    <Entity name="Enemy" transform={{ x: props.speed }}>
+      <Sprite image={props.skin === "blue" ? "blue.png" : "red.png"} />
+    </Entity>
+  );
+}`;
+
+  it("reads props as props.name, with the same lowering as destructuring", async () => {
+    const compiled = compile(SOURCE);
+    assert.match(compiled.code, /this\.props\.speed/);
+    assert.match(compiled.code, /this\.props\.onDefeated\?\.\(\)/);
+    assert.deepEqual(typeCheck(compiled), []);
+    const enemy = compiled.ir.components[0]!;
+    assert.deepEqual(enemy.props.map((p) => p.name), ["speed", "skin", "onDefeated"], "every member of the type is a prop");
+    const { Enemy } = await load<{ Enemy: new (props: EnemyProps) => EnemyInstance }>(compiled);
+    let defeated = 0;
+    const world = new World();
+    const e = new Enemy({ speed: 2, onDefeated: () => { defeated++; } });
+    world.mount(e);
+    assert.equal(e.hp, 20);
+    e.updateProps({ speed: 5, skin: "blue" });
+    world.flush();
+    assert.equal(e.transform.x, 5, "JSX that reads props.speed followed the update");
+    assert.equal(e.sprite.image, "blue.png");
+    world.tick(100);
+    world.tick(1);
+    assert.equal(defeated, 1);
+  });
+
+  it("applies no defaults, since there is no destructuring to hold them", () => {
+    const { code } = compile(SOURCE);
+    assert.match(code, /super\(\{ name: "Enemy" \}, props\);/);
+    assert.match(code, /this\.applyProps\(next\)\) this\.markDirty\(\);/);
+  });
+
+  it("forwards a callback whole", () => {
+    const { code } = compile(`interface BarProps { onDone?: () => void }
+function Bar(props: BarProps) { return <Entity name="Bar" />; }
+function Panel(props: BarProps) { return <Entity name="Panel"><Bar onDone={props.onDone} /></Entity>; }`);
+    assert.match(code, /new Bar\(\{ onDone: this\.props\.onDone \}\)/);
+  });
+
+  it("rejects the bare object, unknown members, and calling a value", () => {
+    const P = `interface P { a: number; f?: () => void }`;
+    const run = (body: string) => compileErrors(`${P}\nfunction A(props: P) { ${body} return <Entity name="A" />; }`).map((d) => d.code);
+    assert.deepEqual(run(`const copy = props;`), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(run(`useUpdate(() => { props.nope; });`).includes(DiagnosticCode.UnsupportedExpression), true);
+    assert.deepEqual(run(`useUpdate(() => { props.a(); });`), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(run(`const g = props.f;`), [DiagnosticCode.UnsupportedExpression]);
+  });
+});
+
+describe("M4b: roots", () => {
+  it("lowers a fragment root to an implicit container, without needing Entity imported", async () => {
+    const source = `import { useState, Sprite } from "@rge/runtime/jsx";
+function Pair() {
+  const [on, setOn] = useState(true);
+  return (<>
+    <Sprite image="a.png" />
+    {on && <Sprite image="b.png" />}
+  </>);
+}`;
+    const result = getCompiler().compile("Pair.tsx", source);
+    assert.ok(result.ok, "no import of Entity is required");
+    const root = result.ir.components[0]!.root;
+    assert.deepEqual([root.component.name, root.props.length, root.transform.length], ["Entity", 0, 0]);
+    assert.match(result.code, /export class Pair extends Entity \{/);
+    assert.match(result.code, /super\(\);/);
+    assert.deepEqual(getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/Pair.tsx`, text: source }]), []);
+  });
+
+  it("lets a component be a Sprite, with no container around it", async () => {
+    const compiled = compile(`interface CoinProps { value: number }
+function Coin({ value }: CoinProps) {
+  const [spin, setSpin] = useState(0);
+  useUpdate(() => setSpin((n) => n + value));
+  return <Sprite image={spin > 5 ? "gold.png" : "coin.png"} />;
+}
+function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }} /></Entity>; }`);
+    assert.match(compiled.code, /export class Coin extends Sprite<CoinProps> \{/);
+    assert.match(compiled.code, /super\(\{ image: undefined as never \}, props\);/, "a dynamic image gets a placeholder; render() sets the real one");
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Coin, Level } = await load<{ Coin: new (props: { value: number }) => Sprite & { spin: number }; Level: new () => Entity }>(compiled);
+    const world = new World();
+    const level = new Level();
+    world.mount(level);
+    const coin = level.children[0] as Sprite & { spin: number };
+    assert.ok(coin instanceof Coin && coin instanceof Sprite);
+    assert.equal(coin.image, "coin.png");
+    world.tick(1);
+    world.tick(1);
+    assert.equal(coin.image, "gold.png");
+    assert.equal(coin.placement.x, 10);
+    assert.equal(coin.worldTransform().x, 10, "placed like any component");
+  });
+
+  it("passes a static image straight to the Sprite constructor", () => {
+    const { code } = compile(`const Dot = () => <Sprite image="dot.png" transform={{ x: 3 }} />;`);
+    assert.match(code, /super\(\{ image: "dot\.png" \}\);/);
+    assert.match(code, /this\.transform\.x = 3;/);
+  });
+
+  it("lets a component be a Collider whose callback is set after super()", async () => {
+    const compiled = compile(`function Trap() {
+  const [hits, setHits] = useState(0);
+  return <Collider width={10} height={10} onCollisionEnter={() => setHits((n) => n + 1)} />;
+}`);
+    assert.match(compiled.code, /export class Trap extends Collider \{/);
+    assert.match(compiled.code, /super\(\{ width: 10, height: 10 \}\);\n\s+this\.onCollisionEnter = \(\) => \{ this\.setHits/, "an arrow that uses `this` cannot be made inside the super() call");
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Trap } = await load<{ Trap: new () => Collider & { hits: number } }>(compiled);
+    const world = new World();
+    const trap = new Trap();
+    world.mount(trap);
+    world.reportCollision(trap, new Collider({ width: 1, height: 1 }));
+    world.flush();
+    assert.equal(trap.hits, 1);
+  });
+
+  it("keeps the root's own fields free of state, refs and props", () => {
+    for (const [root, field] of [["Sprite image=\"a\"", "image"], ["Collider width={1} height={1}", "width"], ["Entity", "name"]] as const) {
+      const codes = compileErrors(`function A() { const [${field}, setX] = useState(0); return <${root} />; }`).map((d) => d.code);
+      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), `${root}: ${field}`);
+    }
+    // A field of a different built-in is free.
+    assert.doesNotThrow(() => compile(`function A() { const [image, setImage] = useState(0); return <Collider width={1} height={1} />; }`));
+  });
+
+  it("rejects a component as a root, children on a leaf built-in, and a nested fragment", () => {
+    const run = (source: string) => compileErrors(source).map((d) => d.code);
+    assert.deepEqual(run(`function B() { return <Entity />; } function A() { return <B />; }`), [DiagnosticCode.RootMustBeEntity]);
+    assert.deepEqual(run(`function A() { return <Sprite image="a"><Entity /></Sprite>; }`), [DiagnosticCode.UnsupportedJsxChild]);
+    assert.deepEqual(run(`function A() { return <Entity><Collider width={1} height={1}><Entity /></Collider></Entity>; }`), [DiagnosticCode.UnsupportedJsxChild]);
+    assert.deepEqual(run(`function A() { return <Entity><><Sprite image="a" /></></Entity>; }`), [DiagnosticCode.UnsupportedJsxChild]);
+  });
+});
+
+describe("M4b: collider callbacks", () => {
+  it("types the callback's parameter from the runtime and imports what it needs", () => {
+    const compiled = compile(`function Hero() {
+  return <Entity name="H"><Collider width={1} height={1} onCollisionEnter={(other) => {}} /></Entity>;
+}`);
+    const collider = compiled.ir.components[0]!.root.children[0]!.element;
+    const callback = collider.props.find((p) => p.kind === "CallbackProp");
+    assert.ok(callback?.kind === "CallbackProp");
+    assert.deepEqual(callback.handler.params.map((p) => p.type), [{ kind: "Named", name: "GameObject" }]);
+    assert.match(compiled.code, /import \{ Collider, Entity, type GameObject \} from "@rge\/runtime";/);
+    assert.match(compiled.code, /onCollisionEnter: \(other: GameObject\) => \{/);
+    assert.deepEqual(typeCheck(compiled), []);
+  });
+
+  it("rejects a function on a built-in that has no such callback, and an unknown callback name", () => {
+    const run = (jsx: string) => compileErrors(`function A() { return <Entity>${jsx}</Entity>; }`).map((d) => d.code);
+    assert.deepEqual(run(`<Sprite image="a" onClick={() => {}} />`), [DiagnosticCode.UnsupportedAttribute]);
+    assert.deepEqual(run(`<Collider width={1} height={1} onTouch={() => {}} />`), [DiagnosticCode.UnsupportedAttribute]);
+    assert.deepEqual(run(`<Collider width={1} height={1} onCollisionEnter={(a, b) => {}} />`), [DiagnosticCode.InvalidHandler]);
+  });
+
+  it("type-checks authored collider callbacks", () => {
+    const source = `import { useState, Entity, Collider } from "@rge/runtime/jsx";
+function A() {
+  const [n, setN] = useState(0);
+  return <Entity name="A"><Collider width={1} height={1} onCollisionEnter={(other) => setN(n + 1)} /></Entity>;
+}`;
+    const check = (text: string) => getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/Cb.tsx`, text }]);
+    assert.deepEqual(check(source), []);
+    assert.ok(check(source.replace("setN(n + 1)", `setN("a")`)).length > 0);
+    assert.ok(check(source.replace("(other) =>", "(other: string) =>")).length > 0, "the parameter is typed");
   });
 });

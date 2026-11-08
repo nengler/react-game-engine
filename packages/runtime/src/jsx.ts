@@ -8,7 +8,6 @@
  * derived from the runtime's own classes, so they cannot drift from it, and a
  * test checks that this module exports exactly what the compiler accepts.
  */
-import type { GameObject } from "./GameObject.ts";
 import type { InputState } from "./input.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
@@ -40,7 +39,7 @@ export function useRef<T extends number | string | boolean>(_initial: T): { curr
   return compileTimeOnly("useRef");
 }
 
-// -- per-frame and event hooks ------------------------------------------------
+// -- per-frame hooks ----------------------------------------------------------
 
 /** Runs every frame, after `useInput`. `dt` is the frame time in seconds. */
 export function useUpdate(_handler: (dt: number) => void): void {
@@ -50,11 +49,6 @@ export function useUpdate(_handler: (dt: number) => void): void {
 /** Runs every frame with the polled input state, before `useUpdate`. */
 export function useInput(_handler: (input: InputState) => void): void {
   return compileTimeOnly("useInput");
-}
-
-/** Runs when a collider of this component starts touching another. Becomes a `<Collider>` prop in a later milestone. */
-export function onCollisionEnter(_handler: (other: GameObject) => void): void {
-  return compileTimeOnly("onCollisionEnter");
 }
 
 // -- elements -----------------------------------------------------------------

@@ -26,6 +26,8 @@ export interface GeneratorOptions {
   readonly runtimeModule: string;
   /** Runtime functions handler code may call (imported from `runtimeModule`). */
   readonly runtimeFunctions: ReadonlySet<string>;
+  /** Props each built-in's constructor requires (the runtime manifest's `intrinsicRequired`). */
+  readonly requiredHostProps: Readonly<Record<string, readonly string[]>>;
 }
 
 /**
@@ -45,8 +47,9 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
   if (imports.length > 0) {
     w.line(`import { ${imports.join(", ")} } from ${JSON.stringify(options.runtimeModule)};`);
   }
-  for (const [specifier, names] of collectComponentImports(module)) {
-    w.line(`import { ${names.join(", ")} } from ${JSON.stringify(specifier)};`);
+  for (const [specifier, { defaultName, names }] of collectComponentImports(module)) {
+    const clause = [defaultName, names.length > 0 ? `{ ${names.join(", ")} }` : null].filter((part) => part !== null).join(", ");
+    w.line(`import ${clause} from ${JSON.stringify(specifier)};`);
   }
   for (const declaration of module.typeDeclarations) {
     w.blank();
@@ -54,7 +57,11 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
   }
   for (const component of module.components) {
     w.blank();
-    new ComponentGenerator(component, w).emit();
+    new ComponentGenerator(component, w, options.requiredHostProps).emit();
+    if (component.isDefaultExport) {
+      w.blank();
+      w.line(`export default ${component.name};`);
+    }
   }
   return w.toString();
 }
@@ -114,20 +121,27 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
 }
 
 /** Components imported from other source files, grouped by the specifier of their generated module (`.tsx` → `.ts`). */
-function collectComponentImports(module: IRModule): Map<string, string[]> {
-  const out = new Map<string, Set<string>>();
+function collectComponentImports(module: IRModule): Map<string, { defaultName: string | null; names: string[] }> {
+  const named = new Map<string, Set<string>>();
+  const defaults = new Map<string, string>();
   const visit = (children: readonly ChildIR[]): void => {
     for (const child of children) {
       const ref = child.element.component;
       if (ref.kind === "Imported") {
         const specifier = ref.module.replace(/\.tsx$/, ".ts");
-        out.set(specifier, (out.get(specifier) ?? new Set()).add(ref.name));
+        if (!named.has(specifier)) named.set(specifier, new Set());
+        if (ref.isDefault) defaults.set(specifier, ref.name);
+        else named.get(specifier)!.add(ref.name);
       }
       visit(child.element.children);
     }
   };
   for (const c of module.components) visit(c.root.children);
-  return new Map([...out].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, [...v].sort()]));
+  return new Map(
+    [...named]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([specifier, names]) => [specifier, { defaultName: defaults.get(specifier) ?? null, names: [...names].sort() }]),
+  );
 }
 
 /** Where an element lives: always present (readonly), or only while an enclosing condition holds. */
@@ -135,10 +149,12 @@ type Presence = "persistent" | "conditional";
 
 class ComponentGenerator {
   readonly #c: ComponentIR;
+  readonly #requiredHostProps: Readonly<Record<string, readonly string[]>>;
   #w: CodeWriter;
   readonly #stateById: ReadonlyMap<StateId, StateIR>;
 
-  constructor(component: ComponentIR, writer: CodeWriter) {
+  constructor(component: ComponentIR, writer: CodeWriter, requiredHostProps: Readonly<Record<string, readonly string[]>>) {
+    this.#requiredHostProps = requiredHostProps;
     this.#c = component;
     this.#w = writer;
     this.#stateById = new Map(component.state.map((s) => [s.id, s]));
@@ -172,9 +188,21 @@ class ComponentGenerator {
       const constructorParams = c.propsType ? `props: ${c.propsType}${c.props.every((p) => p.optional) ? " = {}" : ""}` : "";
       w.block(`constructor(${constructorParams})`, () => {
         const staticHostProps = c.root.props.filter((p) => p.kind === "StaticProp");
-        const host = staticHostProps.length > 0 ? this.#propsObject(staticHostProps) : "{}";
+        // A built-in's constructor may require a prop (a Sprite's `image`) that is dynamic here. `super()` runs before
+        // state exists, so it gets a placeholder and its real value in the first `render()`, which the constructor runs.
+        const required = this.#requiredHostProps[c.root.component.name] ?? [];
+        const placeholders = c.root.props
+          .filter((p) => p.kind === "DynamicProp" && required.includes(p.name))
+          .map((p) => `${propertyKey(p.name)}: undefined as never`);
+        const hostEntries = [...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`), ...placeholders];
+        const host = hostEntries.length > 0 ? `{ ${hostEntries.join(", ")} }` : "{}";
         if (c.propsType) w.line(`super(${host}, props${defaultsObject ? `, ${defaultsObject}` : ""});`);
-        else w.line(staticHostProps.length > 0 ? `super(${host});` : "super();");
+        else w.line(hostEntries.length > 0 ? `super(${host});` : "super();");
+        // A callback on the root (`<Collider onCollisionEnter>`) is assigned after `super()`: an arrow that uses
+        // `this` cannot be created inside the call to it.
+        for (const p of c.root.props) {
+          if (p.kind === "CallbackProp") w.line(`this.${p.name} = ${this.#callback(p.handler)};`);
+        }
         this.#emitStaticTransform(c.root.transform, "this", "transform");
         this.#emitStaticWiring(c.root.children, "this");
         if (hasRender) {
@@ -207,7 +235,6 @@ class ComponentGenerator {
           }
           case "OnUpdate":
           case "OnInput":
-          case "OnCollisionEnter":
             break; // emitted below, grouped by kind
           default:
             assertNever(hook, "hook");
@@ -296,8 +323,7 @@ class ComponentGenerator {
     this.#w = inner;
     this.#stmts(fn.body);
     this.#w = outer;
-    const lines = inner.toString().trimEnd().split("\n").map((l) => `  ${l}`);
-    return `(${params}) => {\n${lines.join("\n")}\n}`;
+    return this.#arrow(params, inner.toString().trimEnd().split("\n"), fn);
   }
 
   // -- handler statements --------------------------------------------------
@@ -486,9 +512,19 @@ class ComponentGenerator {
     this.#w = inner;
     this.#stmts(fn.body);
     this.#w = outer;
-    const lines = inner.toString().trimEnd().split("\n");
+    return this.#arrow(params, inner.toString().trimEnd().split("\n"), fn);
+  }
+
+  /**
+   * An arrow function with a block body, from the statements already written
+   * (relative to column 0). One statement stays on one line. Several are laid
+   * out under the line that will contain the arrow, unless a string in them
+   * spans lines, where adding indentation would change its contents.
+   */
+  #arrow(params: string, lines: readonly string[], fn: FunctionIR): string {
     if (lines.length === 1) return `(${params}) => { ${lines[0]} }`;
-    return `(${params}) => {\n${lines.map((l) => `  ${l}`).join("\n")}\n}`;
+    const base = JSON.stringify(fn.body).includes("\\n") ? "" : this.#w.indentation;
+    return `(${params}) => {\n${lines.map((l) => `${base}  ${l}`).join("\n")}\n${base}}`;
   }
 
   /** A ref's name is its field. */
@@ -516,7 +552,12 @@ class ComponentGenerator {
       case "LocalRead": return e.name;
       case "ParamRead": return e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
-      case "PropRead": return `this.props.${e.name}`;
+      case "PropRead": {
+        // A prop with a default is never undefined (the runtime applies the default at construction and on update),
+        // but its declared type is optional; `!` says what the runtime guarantees.
+        const guaranteed = this.#c.props.find((p) => p.name === e.name)?.defaultValue != null;
+        return `this.props.${e.name}${guaranteed ? "!" : ""}`;
+      }
       case "RefRead": return `this.${this.#refField(e.ref)}`;
       case "Call": {
         const args = e.args.map((a) => this.#expr(a, true)).join(", ");

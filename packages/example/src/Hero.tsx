@@ -1,4 +1,4 @@
-import { useState, useUpdate, useInput, onCollisionEnter, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { useState, useUpdate, useInput, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";
 
 function Hero() {
   const [health, setHealth] = useState(100);
@@ -25,15 +25,17 @@ function Hero() {
     setHealth((health) => Math.min(health + regen, 100));
   });
 
-  onCollisionEnter(() => {
-    setHealth((h) => h - 10);
-    setPoisoned(true);
-  });
-
   return (
     <Entity name="Hero">
       <Sprite image={poisoned ? "poisoned.png" : "normal.png"} />
-      <Collider width={16} height={24} />
+      <Collider
+        width={16}
+        height={24}
+        onCollisionEnter={() => {
+          setHealth((h) => h - 10);
+          setPoisoned(true);
+        }}
+      />
     </Entity>
   );
 }

@@ -7,7 +7,10 @@ export class Hero extends Entity {
   poisoned: boolean = false;
   #poisonedNext: boolean = this.poisoned;
   readonly sprite: Sprite = new Sprite({ image: this.poisoned ? "poisoned.png" : "normal.png" });
-  readonly collider: Collider = new Collider({ width: 16, height: 24 });
+  readonly collider: Collider = new Collider({ width: 16, height: 24, onCollisionEnter: () => {
+    this.setHealth((h: number) => h - 10);
+    this.setPoisoned(true);
+  } });
 
   constructor() {
     super({ name: "Hero" });
@@ -60,11 +63,6 @@ export class Hero extends Entity {
     }
     const regen = this.poisoned ? 0 : dt;
     this.setHealth((health: number) => Math.min(health + regen, 100));
-  }
-
-  override onCollisionEnter(): void {
-    this.setHealth((h: number) => h - 10);
-    this.setPoisoned(true);
   }
 
   override render(): void {

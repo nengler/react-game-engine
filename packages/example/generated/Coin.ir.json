@@ -1,0 +1,404 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/example/src/Coin.tsx",
+  "typeDeclarations": [
+    {
+      "kind": "TypeDeclaration",
+      "name": "CoinProps",
+      "text": "interface CoinProps {\n  value: number;\n  spin?: number;\n}"
+    },
+    {
+      "kind": "TypeDeclaration",
+      "name": "TrailProps",
+      "text": "interface TrailProps {\n  value: number;\n}"
+    }
+  ],
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Coin",
+      "span": {
+        "fileName": "packages/example/src/Coin.tsx",
+        "start": 246,
+        "end": 508,
+        "line": 9,
+        "column": 7
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Coin.angle",
+          "setterName": "setAngle",
+          "span": {
+            "fileName": "packages/example/src/Coin.tsx",
+            "start": 299,
+            "end": 330,
+            "line": 10,
+            "column": 9
+          }
+        },
+        {
+          "kind": "OnUpdate",
+          "handler": {
+            "kind": "Function",
+            "params": [
+              {
+                "id": "Coin.dt#1",
+                "name": "dt",
+                "type": {
+                  "kind": "Primitive",
+                  "name": "number"
+                }
+              }
+            ],
+            "body": [
+              {
+                "kind": "SetState",
+                "state": "Coin.angle",
+                "updater": {
+                  "kind": "Function",
+                  "params": [
+                    {
+                      "id": "Coin.angle#2",
+                      "name": "angle",
+                      "type": {
+                        "kind": "Primitive",
+                        "name": "number"
+                      }
+                    }
+                  ],
+                  "body": [
+                    {
+                      "kind": "Return",
+                      "value": {
+                        "kind": "Binary",
+                        "operator": "+",
+                        "left": {
+                          "kind": "ParamRead",
+                          "param": "Coin.angle#2",
+                          "name": "angle"
+                        },
+                        "right": {
+                          "kind": "Binary",
+                          "operator": "*",
+                          "left": {
+                            "kind": "ParamRead",
+                            "param": "Coin.dt#1",
+                            "name": "dt"
+                          },
+                          "right": {
+                            "kind": "PropRead",
+                            "name": "spin"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "span": {
+            "fileName": "packages/example/src/Coin.tsx",
+            "start": 334,
+            "end": 403,
+            "line": 11,
+            "column": 3
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Coin.angle",
+          "name": "angle",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          }
+        }
+      ],
+      "refs": [],
+      "props": [
+        {
+          "kind": "PropDecl",
+          "name": "value",
+          "optional": false,
+          "defaultValue": null,
+          "role": "value",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          }
+        },
+        {
+          "kind": "PropDecl",
+          "name": "spin",
+          "optional": true,
+          "defaultValue": {
+            "kind": "NumberLiteral",
+            "value": 1
+          },
+          "role": "value",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          }
+        }
+      ],
+      "propsType": "CoinProps",
+      "isDefaultExport": true,
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Sprite"
+        },
+        "props": [
+          {
+            "kind": "DynamicProp",
+            "name": "image",
+            "value": {
+              "kind": "Conditional",
+              "test": {
+                "kind": "Binary",
+                "operator": ">=",
+                "left": {
+                  "kind": "PropRead",
+                  "name": "value"
+                },
+                "right": {
+                  "kind": "NumberLiteral",
+                  "value": 5
+                }
+              },
+              "whenTrue": {
+                "kind": "StringLiteral",
+                "value": "gold-coin.png"
+              },
+              "whenFalse": {
+                "kind": "StringLiteral",
+                "value": "coin.png"
+              }
+            },
+            "dependencies": [
+              {
+                "kind": "Prop",
+                "name": "value"
+              }
+            ]
+          }
+        ],
+        "transform": [
+          {
+            "kind": "DynamicProp",
+            "name": "rotation",
+            "value": {
+              "kind": "StateRead",
+              "state": "Coin.angle"
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Coin.angle"
+              }
+            ]
+          }
+        ],
+        "children": [],
+        "span": {
+          "fileName": "packages/example/src/Coin.tsx",
+          "start": 413,
+          "end": 505,
+          "line": 14,
+          "column": 10
+        }
+      }
+    },
+    {
+      "kind": "Component",
+      "name": "Trail",
+      "span": {
+        "fileName": "packages/example/src/Coin.tsx",
+        "start": 684,
+        "end": 917,
+        "line": 24,
+        "column": 1
+      },
+      "hooks": [],
+      "state": [],
+      "refs": [],
+      "props": [
+        {
+          "kind": "PropDecl",
+          "name": "value",
+          "optional": false,
+          "defaultValue": null,
+          "role": "value",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          }
+        }
+      ],
+      "propsType": "TrailProps",
+      "isDefaultExport": false,
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [],
+        "transform": [],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Trail/0",
+              "fieldName": "coin",
+              "component": {
+                "kind": "Local",
+                "name": "Coin"
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "value",
+                  "value": {
+                    "kind": "PropRead",
+                    "name": "value"
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "Prop",
+                      "name": "value"
+                    }
+                  ]
+                }
+              ],
+              "transform": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Coin.tsx",
+                "start": 751,
+                "end": 779,
+                "line": 27,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Trail/1",
+              "fieldName": "coin2",
+              "component": {
+                "kind": "Local",
+                "name": "Coin"
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "value",
+                  "value": {
+                    "kind": "PropRead",
+                    "name": "value"
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "Prop",
+                      "name": "value"
+                    }
+                  ]
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Coin.tsx",
+                "start": 786,
+                "end": 836,
+                "line": 28,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Trail/2",
+              "fieldName": "coin3",
+              "component": {
+                "kind": "Local",
+                "name": "Coin"
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "value",
+                  "value": {
+                    "kind": "PropRead",
+                    "name": "value"
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "Prop",
+                      "name": "value"
+                    }
+                  ]
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "spin",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 4
+                  }
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 32
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Coin.tsx",
+                "start": 843,
+                "end": 902,
+                "line": 29,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/example/src/Coin.tsx",
+          "start": 742,
+          "end": 910,
+          "line": 26,
+          "column": 5
+        }
+      }
+    }
+  ]
+}

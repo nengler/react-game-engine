@@ -1,4 +1,5 @@
 import { GameObject } from "./GameObject.ts";
+import { Collider } from "./components/Collider.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 
 /**
@@ -45,16 +46,13 @@ export class World {
 
   /**
    * Report that two colliders began touching (the mock has no physics; a
-   * collision system calls this). Each side's nearest compiled component, the
-   * first ancestor-or-self that is not a runtime intrinsic, gets
-   * `onCollisionEnter` with the other side's component (or the collider itself
-   * if it has none). Dispatch only: renders happen in the next `tick`.
+   * collision system calls this). Each collider's own `onCollisionEnter`
+   * callback is called with the other collider. Dispatch only: renders happen
+   * in the next `tick`.
    */
   reportCollision(a: GameObject, b: GameObject): void {
-    const ownerA = componentOwner(a);
-    const ownerB = componentOwner(b);
-    if (ownerA?.world === this) ownerA.onCollisionEnter(ownerB ?? b);
-    if (ownerB?.world === this) ownerB.onCollisionEnter(ownerA ?? a);
+    if (a instanceof Collider && a.world === this) a.onCollisionEnter?.(b);
+    if (b instanceof Collider && b.world === this) b.onCollisionEnter?.(a);
   }
 
   /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */
@@ -85,15 +83,4 @@ export class World {
     }
     return renders;
   }
-}
-
-function isIntrinsic(object: GameObject): boolean {
-  return Object.hasOwn(object.constructor, "intrinsic");
-}
-
-function componentOwner(start: GameObject): GameObject | null {
-  for (let object: GameObject | null = start; object !== null; object = object.parent) {
-    if (!isIntrinsic(object)) return object;
-  }
-  return null;
 }

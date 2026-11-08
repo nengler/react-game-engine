@@ -8,8 +8,8 @@
       "name": "Hero",
       "span": {
         "fileName": "packages/example/src/Hero.tsx",
-        "start": 118,
-        "end": 876,
+        "start": 100,
+        "end": 903,
         "line": 3,
         "column": 1
       },
@@ -20,8 +20,8 @@
           "setterName": "setHealth",
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 144,
-            "end": 179,
+            "start": 126,
+            "end": 161,
             "line": 4,
             "column": 9
           }
@@ -32,8 +32,8 @@
           "setterName": "setPoisoned",
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 189,
-            "end": 230,
+            "start": 171,
+            "end": 212,
             "line": 5,
             "column": 9
           }
@@ -97,8 +97,8 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 235,
-            "end": 350,
+            "start": 217,
+            "end": 332,
             "line": 7,
             "column": 3
           }
@@ -193,8 +193,8 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 354,
-            "end": 456,
+            "start": 336,
+            "end": 438,
             "line": 14,
             "column": 3
           }
@@ -310,68 +310,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 460,
-            "end": 623,
+            "start": 442,
+            "end": 605,
             "line": 20,
-            "column": 3
-          }
-        },
-        {
-          "kind": "OnCollisionEnter",
-          "handler": {
-            "kind": "Function",
-            "params": [],
-            "body": [
-              {
-                "kind": "SetState",
-                "state": "Hero.health",
-                "updater": {
-                  "kind": "Function",
-                  "params": [
-                    {
-                      "id": "Hero.h#7",
-                      "name": "h",
-                      "type": {
-                        "kind": "Primitive",
-                        "name": "number"
-                      }
-                    }
-                  ],
-                  "body": [
-                    {
-                      "kind": "Return",
-                      "value": {
-                        "kind": "Binary",
-                        "operator": "-",
-                        "left": {
-                          "kind": "ParamRead",
-                          "param": "Hero.h#7",
-                          "name": "h"
-                        },
-                        "right": {
-                          "kind": "NumberLiteral",
-                          "value": 10
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                "kind": "SetState",
-                "state": "Hero.poisoned",
-                "value": {
-                  "kind": "BooleanLiteral",
-                  "value": true
-                }
-              }
-            ]
-          },
-          "span": {
-            "fileName": "packages/example/src/Hero.tsx",
-            "start": 627,
-            "end": 710,
-            "line": 28,
             "column": 3
           }
         }
@@ -401,6 +342,7 @@
       "refs": [],
       "props": [],
       "propsType": null,
+      "isDefaultExport": false,
       "root": {
         "kind": "HostElement",
         "component": {
@@ -460,9 +402,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
-                "start": 754,
-                "end": 813,
-                "line": 35,
+                "start": 649,
+                "end": 708,
+                "line": 30,
                 "column": 7
               }
             }
@@ -493,15 +435,68 @@
                     "kind": "NumberLiteral",
                     "value": 24
                   }
+                },
+                {
+                  "kind": "CallbackProp",
+                  "name": "onCollisionEnter",
+                  "handler": {
+                    "kind": "Function",
+                    "params": [],
+                    "body": [
+                      {
+                        "kind": "SetState",
+                        "state": "Hero.health",
+                        "updater": {
+                          "kind": "Function",
+                          "params": [
+                            {
+                              "id": "Hero.h#7",
+                              "name": "h",
+                              "type": {
+                                "kind": "Primitive",
+                                "name": "number"
+                              }
+                            }
+                          ],
+                          "body": [
+                            {
+                              "kind": "Return",
+                              "value": {
+                                "kind": "Binary",
+                                "operator": "-",
+                                "left": {
+                                  "kind": "ParamRead",
+                                  "param": "Hero.h#7",
+                                  "name": "h"
+                                },
+                                "right": {
+                                  "kind": "NumberLiteral",
+                                  "value": 10
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "kind": "SetState",
+                        "state": "Hero.poisoned",
+                        "value": {
+                          "kind": "BooleanLiteral",
+                          "value": true
+                        }
+                      }
+                    ]
+                  }
                 }
               ],
               "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
-                "start": 820,
-                "end": 855,
-                "line": 36,
+                "start": 715,
+                "end": 882,
+                "line": 31,
                 "column": 7
               }
             }
@@ -509,9 +504,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Hero.tsx",
-          "start": 727,
-          "end": 869,
-          "line": 34,
+          "start": 622,
+          "end": 896,
+          "line": 29,
           "column": 5
         }
       }

@@ -75,16 +75,19 @@ function Player() {
 Rules in this slice (anything else is a compiler diagnostic, never silently
 ignored):
 
-* A component is a top-level `function` declaration with a capitalised name
-  (optionally `export`ed) whose body is: hooks (`useState`, `useRef`, the
-  handler hooks), `const name = expression;` derived values, then one
-  `return <Entity …>`. A derived `const` (`const hurt = health < 25;`) may read
+* A component is a top-level `function` declaration or `const` arrow function
+  with a capitalised name (optionally `export`ed, or the module's default
+  export) whose body is: hooks (`useState`, `useRef`, the handler hooks),
+  `const name = expression;` derived values, then one `return`. An arrow with
+  an expression body (`const Dot = () => <Sprite … />`) is just its return. A derived `const` (`const hurt = health < 25;`) may read
   anything declared above it; it is inlined where it is used, so JSX that uses
   it updates with the state it reads, and a handler that uses it sees current
   state.
-* The root element **must** be `<Entity>`. It describes the component instance
-  itself (the generated class extends the runtime `Entity`), so its props are
-  applied to `this`, and its children become children of `this`.
+* The root is a built-in element or a fragment, never another component. It
+  describes the component instance itself (the generated class extends that
+  built-in), so its props are applied to `this`, and its children become
+  children of `this`. A fragment `<>…</>` is an implicit container, a bare
+  `Entity`. See "Roots and component forms".
 * `useState` is a compiler intrinsic. It must be a top-level `const` array
   destructuring. Calls anywhere else, or any other `use*` call, are errors.
   State type is inferred from the initial literal (`number`/`string`/`boolean`).
@@ -110,16 +113,15 @@ ignored):
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
   There is no `ref={…}` on elements. See "Transforms and refs".
-* Hooks: top-level `useInput((input) => ...)`, `useUpdate((dt) => ...)` and
-  `onCollisionEnter((other) => ...)` statements (the last becomes a prop on
-  `<Collider>` in M4; `onUpdate`/`onInput` are the old names and report
-  `RGE1102` with the new one); each may appear several times
-  and runs in source order. See "Handlers" below.
+* Hooks: top-level `useInput((input) => ...)` and `useUpdate((dt) => ...)`
+  statements; each may appear several times and runs in source order.
+  `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
+  `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
 * Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`; the list
   comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
-  `import { Name } from "./Name.tsx"` (named imports only: no default,
-  namespace, `as` or `type` forms). A component takes props through a
+  `import { Name } from "./Name.tsx"` or `import Name from "./Name.tsx"` (the
+  default export, under any local name; no namespace, `as` or `type` forms). A component takes props through a
   destructured parameter annotated with a props type declared in the same
   file, and a parent passes them as attributes; see "Props and callbacks".
 * Expressions: number/string/boolean/null literals, state reads, unary
@@ -165,8 +167,8 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 
 | Feature | IR change |
 | --- | --- |
-| ~~`useUpdate`, `useInput`, `onCollisionEnter`~~ | done: `OnUpdate` / `OnInput` / `OnCollisionEnter` hooks carrying a `FunctionIR` (IR kinds are named after the runtime methods they override); see "Handlers" |
-| event props (`<Collider onCollisionEnter={…}>`) | `PropIR` variant for a callback on an intrinsic (M4) |
+| ~~`useUpdate`, `useInput`~~ | done: `OnUpdate` / `OnInput` hooks carrying a `FunctionIR` (IR kinds are named after the runtime methods they override); see "Handlers" |
+| ~~event props (`<Collider onCollisionEnter={…}>`)~~ | done: the same `CallbackProp` a component receives, with parameter types from the runtime manifest; see "Roots and component forms" |
 | ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
 | ~~props between components~~ | done: `ComponentIR.props: PropDeclIR[]` and `propsType`, `IRModule.typeDeclarations`, `ExprIR` `PropRead`, `CalleeIR` `Prop`, `PropIR` `CallbackProp`, `DependencyIR`; see "Props and callbacks" |
 | keyed lists | `ChildIR` variant `KeyedListChild { items, key, element }` |
@@ -174,7 +176,7 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 
 ## Handlers
 
-`useInput`, `useUpdate` and `onCollisionEnter` are hooks whose handlers are
+`useInput` and `useUpdate` are hooks whose handlers are
 lowered to a `FunctionIR { params, body: StatementIR[] }`. Statements exist
 only inside functions.
 
@@ -236,14 +238,16 @@ frame start receiving hooks next frame and detached ones are skipped.
 `pointerY`); the mock builds it with `createInputState({ pressed: [...], … })`.
 
 **Collisions**: the mock has no physics. A collision system calls
-`world.reportCollision(a, b)` with two colliders; each side's nearest compiled
-component (the first ancestor-or-self that is not a runtime intrinsic, i.e.
-without its own `static intrinsic`) receives `onCollisionEnter(otherComponent)`.
-Dispatch only; renders happen in the next `tick`.
+`world.reportCollision(a, b)` with two colliders; each collider's own
+`onCollisionEnter` callback (the `<Collider onCollisionEnter>` prop) is called
+with the other collider, if it is mounted in this world. Because it is the
+collider's callback and not the component's, a component with several colliders
+(a hitbox and a shield) knows which one was hit. Dispatch only; renders happen
+in the next `tick`.
 
 Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
-not JSX event props. Event props can be added later as a `PropIR`
-`EventHandlerProp`.
+not JSX event props. Element-level events are callback props on the element
+(`<Collider onCollisionEnter>`, later `<Pointer onPress>`).
 
 ## Transforms and refs
 
@@ -435,9 +439,69 @@ and the child write different transforms. `global` works at either level. The
 attribute is reserved like `key`, so the component's props type never declares
 it; the JSX types accept it on every element.
 
-Not yet: collision callbacks as `<Collider>` props, fragment and non-Entity
-roots, arrow-function components, and the non-destructured `props` form (M4b);
-`children` (M8).
+Not yet: `children` (M8).
+
+## Roots and component forms
+
+**Forms.** A component is a `function` declaration or a `const` arrow
+function; either may be `export`ed, and one per module may be the default
+export (`export default function Enemy() {}`, or `export default Enemy;`
+after the declaration). A default export needs a name, because the generated
+class has one. The importer picks the local name: `import Monster from
+"./Enemy.tsx"` (alone or with `{ Boss }`) puts `Monster` in the generated
+import and in `new Monster(…)`, and the generated module ends with
+`export default Enemy;`. An arrow with an expression body is just its return.
+
+**Props as an object.** `function Enemy(props: EnemyProps)` reads each prop as
+`props.speed` and calls callbacks as `props.onDefeated?.()`; the bare `props`
+cannot be used (no passing it on, no spreading). It lowers exactly like
+destructuring, but there is nowhere to write a default, so none is applied.
+Every member of the props type is a prop.
+
+**Roots.** The root is a built-in element, and the generated class extends it:
+
+```tsx
+const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : "coin.png"} />;
+```
+
+```ts
+export class Coin extends Sprite<CoinProps> {
+  constructor(props: CoinProps) {
+    super({ image: undefined as never }, props);   // a dynamic required prop: a placeholder here,
+    this.render();                                  // its real value in the first render
+    …
+```
+
+so a coin is a `Sprite`, with no container around it, and a parent places it
+like any component. Details:
+
+* A fragment root `<>…</>` is an implicit `Entity` with no props, and needs no
+  `Entity` import because the author never wrote it.
+* Every built-in passes `(hostProps, props, defaults)` up to `GameObject`,
+  which owns `props` and `applyProps`, so any of them can be a root with props.
+* A built-in constructor may require a prop (`Sprite.image`, `Collider`
+  `width`/`height`; the manifest's `intrinsicRequired`). `super()` runs before
+  state exists, so when such a root prop is dynamic it gets `undefined as never`
+  there and its real value in the first `render()`, which the constructor runs.
+* The class gains the root's own fields, so a state, ref or prop may not take
+  those names (`image` for a Sprite root, `width`/`height`/`onCollisionEnter`
+  for a Collider root, `name` for an Entity root): the manifest's
+  `intrinsicMembers`, `RGE1103`.
+* Only containers (the manifest's `containerIntrinsics`, today `Entity`) may
+  have JSX children; a child under a `Sprite` or `Collider`, at the root or
+  anywhere, is `RGE1202`. A component as a root (`return <Other />`) is
+  `RGE1003`; a fragment nested as a child is `RGE1202`.
+
+**Collider callbacks.** `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`
+is a callback prop on a built-in, which the manifest lists in
+`intrinsicCallbacks` along with its parameters (`other: GameObject`, a handle
+type). It lowers to the same `CallbackProp` a component receives, with
+annotated rather than contextual parameters, and the runtime calls the
+collider's own callback (see "Collisions"). On a child element it is created in
+the field initialiser. On a root it is assigned after `super()`
+(`this.onCollisionEnter = …`), because an arrow that uses `this` cannot be made
+inside the call to `super`. A function on any other built-in, or an unknown
+callback name, is `RGE1203`.
 
 ## Code generation
 

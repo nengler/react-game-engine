@@ -85,6 +85,8 @@ export interface ComponentIR {
   readonly props: readonly PropDeclIR[];
   /** The name of the props type (`EnemyProps`), or null for a component without props. */
   readonly propsType: string | null;
+  /** `export default function Enemy() {}` or `export default Enemy;`: the module also exports it as its default. */
+  readonly isDefaultExport: boolean;
   /** The root `<Entity>`: describes the component instance itself. */
   readonly root: HostElementIR;
 }
@@ -94,7 +96,7 @@ export interface ComponentIR {
 // ---------------------------------------------------------------------------
 
 /** Hook declarations. (`useRef` is not a hook entry: its handle is a `RefIR` in `ComponentIR.refs`.) */
-export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnCollisionEnterHookIR;
+export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR;
 
 /**
  * The fields of a transform (runtime `Entity.transform`), settable with the
@@ -144,17 +146,10 @@ export interface OnInputHookIR {
   readonly span: SourceSpan;
 }
 
-/** `onCollisionEnter((other) => { ... })`: runs when the World reports a new collision involving this component. */
-export interface OnCollisionEnterHookIR {
-  readonly kind: "OnCollisionEnter";
-  readonly handler: FunctionIR;
-  readonly span: SourceSpan;
-}
-
-export type HandlerHookIR = OnUpdateHookIR | OnInputHookIR | OnCollisionEnterHookIR;
+export type HandlerHookIR = OnUpdateHookIR | OnInputHookIR;
 
 export function isHandlerHook(hook: HookIR): hook is HandlerHookIR {
-  return hook.kind === "OnUpdate" || hook.kind === "OnInput" || hook.kind === "OnCollisionEnter";
+  return hook.kind === "OnUpdate" || hook.kind === "OnInput";
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +303,8 @@ export interface ImportedComponentRef {
   readonly name: string;
   /** The specifier as written in the source (`./WarningIcon.tsx`); the generator points it at the generated `.ts`. */
   readonly module: string;
+  /** `import Enemy from "./Enemy.tsx"`: `name` is the local name of the module's default export. */
+  readonly isDefault: boolean;
 }
 
 /** The component's root element; it *is* the instance, so it has no field. */

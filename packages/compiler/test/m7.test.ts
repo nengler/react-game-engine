@@ -29,7 +29,7 @@ function checkSource(source: string): { code: string; message: string }[] {
     .map((d) => ({ code: d.code, message: d.message }));
 }
 
-const IMPORTS = `import { useState, useRef, useUpdate, useInput, onCollisionEnter, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";`;
+const IMPORTS = `import { useState, useRef, useUpdate, useInput, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";`;
 
 describe("M7: the authoring module", () => {
   it("exports exactly the hooks, built-in elements and functions the compiler accepts", () => {
@@ -61,12 +61,11 @@ function Hero() {
   useInput((input) => {
     if (input.pressed("Space")) setTitle(\`hero \${input.pointerX}\`);
   });
-  onCollisionEnter(() => setAlive(false));
   const hurt = health < 25;
   return (
     <Entity name={title} transform={{ x: health > 0 ? 1 : 0, y: 2, rotation: 0.5, scaleX: 1, scaleY: 1, global: false }}>
       <Sprite image={hurt ? "hurt.png" : "ok.png"} transform={{ y: health }} />
-      {alive && <Collider width={16} height={24} />}
+      {alive && <Collider width={16} height={24} onCollisionEnter={(other) => setAlive(false)} />}
       {alive ? <Sprite image="a.png" /> : null}
     </Entity>
   );
@@ -195,7 +194,7 @@ function C() {
   });
 
   it("checks every hook kind, including the ones that shaped earlier tests", () => {
-    for (const hook of ["useState", "useRef", "useUpdate", "useInput", "onCollisionEnter"]) {
+    for (const hook of ["useState", "useRef", "useUpdate", "useInput"]) {
       const body = hook === "useState" ? `const [a] = useState(0);` : hook === "useRef" ? `const a = useRef(0);` : `${hook}(() => {});`;
       const others = ["Entity", ...AUTHORING_HOOKS.filter((h) => h !== hook)].join(", ");
       const result = codes(`import { ${others} } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`);

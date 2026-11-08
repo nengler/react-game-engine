@@ -7,11 +7,17 @@ type StructureOp =
   | { readonly kind: "remove"; readonly child: GameObject };
 
 /**
- * Base class for every persistent game object. Compiled components extend
- * this (via Entity). It owns the object tree, the dirty flag, and queued
- * structural changes; it knows nothing about rendering backends.
+ * Base class for every persistent game object. Compiled components extend a
+ * built-in that extends this. It owns the object tree, the dirty flag, the
+ * component's props, and queued structural changes; it knows nothing about
+ * rendering backends.
+ *
+ * `P` is the props type of a compiled component. A component with props
+ * passes them (and the defaults for the optional ones) up through its
+ * built-in's constructor, so they are available to field initialisers, which
+ * run right after `super()` returns.
  */
-export class GameObject {
+export class GameObject<P extends object = {}> {
   /** Marks runtime-provided classes; compiled components do not have this as an own static. */
   static readonly intrinsic = true;
 
@@ -29,9 +35,33 @@ export class GameObject {
    * element, or by a scene; identity otherwise.
    */
   readonly placement: Transform = new Transform();
+  /** The component's props: a private copy, updated in place by `updateProps`. */
+  props: P;
   parent: GameObject | null = null;
   readonly children: GameObject[] = [];
   world: World | null = null;
+
+  constructor(props?: P, defaults?: Partial<P>) {
+    this.props = { ...defaults, ...definedOnly(props) } as P;
+  }
+
+  /**
+   * Apply changed props from the parent. A key whose value is `undefined`
+   * falls back to its default; a key not mentioned is left alone. Compares
+   * with `===` and returns whether anything changed, so the caller can mark
+   * the component dirty exactly once.
+   */
+  protected applyProps(next: Partial<P>, defaults: Partial<P> = {}): boolean {
+    let changed = false;
+    for (const key of Object.keys(next) as (keyof P)[]) {
+      const value = (next[key] === undefined ? defaults[key] : next[key]) as P[keyof P];
+      if (this.props[key] !== value) {
+        this.props[key] = value;
+        changed = true;
+      }
+    }
+    return changed;
+  }
 
   #dirty = false;
   #pending: StructureOp[] = [];
@@ -139,9 +169,6 @@ export class GameObject {
 
   onUpdate(_dt: number): void {}
 
-  /** Called when the World reports a new collision involving this component. */
-  onCollisionEnter(_other: GameObject): void {}
-
   /** Recompute dynamic props and conditional children. Generated code overrides this. */
   render(): void {}
 
@@ -158,4 +185,10 @@ export class GameObject {
     this.world = null;
     for (const child of this.children) child.detachFromWorld();
   }
+}
+
+function definedOnly<T extends object>(value: T | undefined): Partial<T> {
+  const out: Partial<T> = {};
+  if (value) for (const key of Object.keys(value) as (keyof T)[]) if (value[key] !== undefined) out[key] = value[key];
+  return out;
 }

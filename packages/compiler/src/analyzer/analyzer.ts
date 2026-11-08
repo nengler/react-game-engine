@@ -4,8 +4,11 @@ import {
   SyntaxKind,
   type CallExpression,
   type ArrowFunction,
+  type Block,
   type Expression,
-  type FunctionDeclaration,
+  type JsxFragment,
+  type NodeArray,
+  type ParameterDeclaration,
   type ImportDeclaration,
   type InterfaceDeclaration,
   type JsxElement,
@@ -19,6 +22,9 @@ import {
 import {
   isArrayBindingPattern,
   isArrowFunction,
+  isBlock,
+  isExportAssignment,
+  isJsxFragment,
   isExpressionStatement,
   isCallExpression,
   isFunctionDeclaration,
@@ -60,12 +66,14 @@ export interface SourceAnalysis {
 /** `import { Name } from "./Name.tsx"` (a component in another source file) or `import { useState } from "@rge/runtime/jsx"`. */
 export interface ImportAnalysis {
   readonly name: string;
+  /** `import Enemy from "./Enemy.tsx"`: the module's default export, under a local name. */
+  readonly isDefault: boolean;
   /** The specifier as written, e.g. `./WarningIcon.tsx`. */
   readonly module: string;
   readonly node: Node;
 }
 
-export type JsxRoot = JsxElement | JsxSelfClosingElement;
+export type JsxRoot = JsxElement | JsxSelfClosingElement | JsxFragment;
 
 /** `interface EnemyProps { … }` or `type EnemyProps = { … }`. The transform reads its members for the props. */
 export interface TypeDeclarationAnalysis {
@@ -80,7 +88,10 @@ export interface PropsAnalysis {
   /** The name of the props type, resolved against the file's declarations in the transform. */
   readonly typeName: string;
   readonly typeNode: Node;
+  /** `({ speed }: EnemyProps)`: each destructured prop. Empty for the object form. */
   readonly bindings: readonly PropBindingAnalysis[];
+  /** `(props: EnemyProps)`: the name the whole props object is bound to, read as `props.speed`. Null when destructured. */
+  readonly objectName: string | null;
 }
 
 export interface PropBindingAnalysis {
@@ -91,8 +102,11 @@ export interface PropBindingAnalysis {
 
 export interface ComponentAnalysis {
   readonly name: string;
-  readonly declaration: FunctionDeclaration;
+  /** The function declaration, or the variable declaration of an arrow-function component. */
+  readonly declaration: Node;
   readonly exported: boolean;
+  /** `export default function Enemy() {}` or `export default Enemy;`. */
+  readonly isDefault: boolean;
   /** Hook calls at the top level of the component, in source order. */
   readonly hooks: readonly HookCallAnalysis[];
   /** The destructured props parameter, or null for a component without props. */
@@ -128,9 +142,9 @@ export interface UseRefCallAnalysis {
   readonly declaration: VariableDeclaration;
 }
 
-/** `useUpdate(() => ...)` / `useInput(...)` / `onCollisionEnter(...)` as a top-level statement. */
+/** `useUpdate(() => ...)` / `useInput(...)` as a top-level statement. */
 export interface HandlerCallAnalysis {
-  readonly kind: "useUpdate" | "useInput" | "onCollisionEnter";
+  readonly kind: "useUpdate" | "useInput";
   readonly handler: ArrowFunction;
   readonly call: CallExpression;
   readonly statement: Statement;
@@ -148,12 +162,15 @@ export interface UseStateCallAnalysis {
 
 const HOOK_NAME = /^use[A-Z0-9]/;
 const KNOWN_HOOKS = new Set(["useState", "useRef", "useUpdate", "useInput"]);
-/** `onCollisionEnter` stays a hook until it becomes a prop on `<Collider>` (M4). */
-const HANDLER_HOOKS = new Set(["useUpdate", "useInput", "onCollisionEnter"]);
+const HANDLER_HOOKS = new Set(["useUpdate", "useInput"]);
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS, ...HANDLER_HOOKS].filter((name, i, all) => all.indexOf(name) === i);
-/** Earlier names of the per-frame hooks, reported with their replacement. */
-const RENAMED_HOOKS: Readonly<Record<string, string>> = { onUpdate: "useUpdate", onInput: "useInput" };
+/** Hooks that were renamed or replaced, reported with what to write instead. */
+const REMOVED_HOOKS: Readonly<Record<string, string>> = {
+  onUpdate: "'onUpdate' was renamed to 'useUpdate' (hooks start with `use`, as in React).",
+  onInput: "'onInput' was renamed to 'useInput' (hooks start with `use`, as in React).",
+  onCollisionEnter: "'onCollisionEnter' is no longer a hook: pass it to the collider, `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`, so you know which collider was hit.",
+};
 
 /**
  * @param fileName Name used in spans and diagnostics. Defaults to the parsed
@@ -172,6 +189,7 @@ export function analyzeSourceFile(
   const imports: ImportAnalysis[] = [];
   const authoringImports: ImportAnalysis[] = [];
   const typeDeclarations: TypeDeclarationAnalysis[] = [];
+  const defaultExports: { name: string; node: Node }[] = [];
   const span = (node: Node) => spanOf(node, sourceFile, fileName);
 
   for (const statement of sourceFile.statements) {
@@ -180,7 +198,7 @@ export function analyzeSourceFile(
       // runtime functions from the authoring module. Anything else would be silently dropped, so it is an error.
       const specifier = isStringLiteral(statement.moduleSpecifier) ? statement.moduleSpecifier.text : null;
       if (specifier !== null && /^\.\.?\/.*\.tsx$/.test(specifier)) {
-        analyzeNamedImport(statement, specifier, imports, diagnostics, span, "Component imports", `import { Name } from "${specifier}"`);
+        analyzeNamedImport(statement, specifier, imports, diagnostics, span, "Component imports", `import { Name } from "${specifier}"`, true);
       } else if (specifier !== null && specifier === authoringModule) {
         analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity } from "${specifier}"`);
       } else {
@@ -203,23 +221,87 @@ export function analyzeSourceFile(
       continue;
     }
     if (isFunctionDeclaration(statement) && statement.name && /^[A-Z]/.test(statement.name.text)) {
-      const component = analyzeComponent(statement, statement.name.text, span, diagnostics);
+      const isDefault = (statement.modifierFlags & ModifierFlags.Default) !== 0;
+      const component = analyzeComponent(
+        { name: statement.name.text, node: statement, parameters: statement.parameters, body: statement.body, exported: (statement.modifierFlags & ModifierFlags.Export) !== 0, isDefault },
+        span,
+        diagnostics,
+      );
       if (component) components.push(component);
       continue;
+    }
+    if (isFunctionDeclaration(statement) && (statement.modifierFlags & ModifierFlags.Default) !== 0) {
+      diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, "A default-exported component needs a capitalised name: `export default function Enemy() {}`.", span(statement)));
+      continue;
+    }
+    // `const Enemy = ({ speed }: EnemyProps) => { … }` (optionally exported): an arrow-function component.
+    if (isVariableStatement(statement) && statement.declarationList.declarations.length === 1) {
+      const declaration = statement.declarationList.declarations[0]!;
+      const arrow = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
+      if (isIdentifier(declaration.name) && /^[A-Z]/.test(declaration.name.text) && arrow && isArrowFunction(arrow)) {
+        if ((statement.declarationList.flags & NodeFlags.Const) === 0) {
+          diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `Component '${declaration.name.text}' must be declared with \`const\`.`, span(statement)));
+          continue;
+        }
+        const component = analyzeComponent(
+          { name: declaration.name.text, node: declaration, parameters: arrow.parameters, body: arrow.body, exported: (statement.modifierFlags & ModifierFlags.Export) !== 0, isDefault: false },
+          span,
+          diagnostics,
+        );
+        if (component) components.push(component);
+        continue;
+      }
+    }
+    // `export default Enemy;` makes an already-declared component the module's default export.
+    if (isExportAssignment(statement) && !statement.isExportEquals) {
+      const target = unwrapParens(statement.expression);
+      if (isIdentifier(target)) {
+        defaultExports.push({ name: target.text, node: statement });
+        continue;
+      }
     }
     diagnostics.push(
       error(
         DiagnosticCode.UnsupportedSyntax,
-        "Only imports, `interface` / `type` declarations and component function declarations (capitalised `function Name() {}`) are supported at the top level.",
+        "Only imports, `interface` / `type` declarations, components (`function Name() {}` or `const Name = () => {}`, capitalised) and `export default Name;` are supported at the top level.",
         span(statement),
       ),
     );
   }
 
-  return { fileName, sourceFile, components, imports, authoringImports, typeDeclarations, diagnostics };
+  // Resolve `export default Enemy;` against the components declared in this file.
+  let resolved = components;
+  for (const { name, node } of defaultExports) {
+    const index = resolved.findIndex((c) => c.name === name);
+    if (index === -1) {
+      diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `\`export default ${name};\` must name a component declared in this file.`, span(node)));
+    } else if (resolved.some((c) => c.isDefault)) {
+      diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, "A module has one default export.", span(node)));
+    } else {
+      resolved = resolved.map((c, i) => (i === index ? { ...c, isDefault: true } : c));
+    }
+  }
+
+  return { fileName, sourceFile, components: resolved, imports, authoringImports, typeDeclarations, diagnostics };
 }
 
-/** `import { A, B } from "module"`: named imports only, no default, namespace, `type` or `as` forms. */
+/** What the analyzer reads from a component, whether it is a function declaration or an arrow assigned to a `const`. */
+interface ComponentFunction {
+  readonly name: string;
+  /** The node spans point at: the declaration, or the variable declaration of an arrow. */
+  readonly node: Node;
+  readonly parameters: NodeArray<ParameterDeclaration>;
+  /** A block, or (for an arrow) the returned expression itself. */
+  readonly body: Block | Expression | undefined;
+  readonly exported: boolean;
+  readonly isDefault: boolean;
+}
+
+/**
+ * `import { A, B } from "module"`: named imports, no namespace, `type` or `as`
+ * forms. A component module may also be imported by its default export
+ * (`import Enemy from "./Enemy.tsx"`, optionally with named imports too).
+ */
 function analyzeNamedImport(
   statement: ImportDeclaration,
   module: string,
@@ -228,12 +310,14 @@ function analyzeNamedImport(
   span: (node: Node) => ReturnType<typeof spanOf>,
   what: string,
   example: string,
+  allowDefault = false,
 ): void {
   const clause = statement.importClause;
   const bindings = clause?.namedBindings;
-  if (!clause || clause.name || !bindings || !isNamedImports(bindings)) {
+  const wellFormed = clause && (clause.name ? allowDefault : true) && (bindings ? isNamedImports(bindings) : clause.name !== undefined);
+  if (!clause || !wellFormed) {
     diagnostics.push(
-      error(DiagnosticCode.UnsupportedSyntax, `${what} must name what they import: \`${example}\` (no side-effect, default or namespace imports).`, span(statement)),
+      error(DiagnosticCode.UnsupportedSyntax, `${what} must name what they import: \`${example}\` (no side-effect${allowDefault ? "" : ", default"} or namespace imports).`, span(statement)),
     );
     return;
   }
@@ -242,44 +326,51 @@ function analyzeNamedImport(
     diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(statement)));
     return;
   }
-  for (const element of bindings.elements) {
-    if (element.isTypeOnly || element.propertyName) {
-      diagnostics.push(
-        error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(element)),
-      );
-      continue;
+  if (clause.name) imports.push({ name: clause.name.text, isDefault: true, module, node: clause });
+  if (bindings && isNamedImports(bindings)) {
+    for (const element of bindings.elements) {
+      if (element.isTypeOnly || element.propertyName) {
+        diagnostics.push(
+          error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(element)),
+        );
+        continue;
+      }
+      imports.push({ name: element.name.text, isDefault: false, module, node: element });
     }
-    imports.push({ name: element.name.text, module, node: element });
   }
 }
 
 /**
- * A component takes at most one parameter: destructured, annotated with the
- * name of a props type declared in the same file, defaults allowed.
- * `function Enemy({ speed = 1, onDefeated }: EnemyProps)`.
+ * A component takes at most one parameter, annotated with the name of a props
+ * type declared in the same file: destructured, defaults allowed
+ * (`function Enemy({ speed = 1, onDefeated }: EnemyProps)`), or a plain
+ * object read as `props.speed` (`function Enemy(props: EnemyProps)`).
  */
 function analyzeProps(
-  declaration: FunctionDeclaration,
-  name: string,
+  fn: ComponentFunction,
   span: (node: Node) => ReturnType<typeof spanOf>,
   diagnostics: CompilerDiagnostic[],
 ): PropsAnalysis | null {
+  const name = fn.name;
   const invalid = (message: string, at: Node): null => {
     diagnostics.push(error(DiagnosticCode.InvalidProps, `Component '${name}': ${message}`, span(at)));
     return null;
   };
-  const [param, ...extra] = declaration.parameters;
+  const [param, ...extra] = fn.parameters;
   if (!param) return null;
   if (extra.length > 0) return invalid("a component takes one props parameter.", extra[0]!);
   if (param.dotDotDotToken || param.initializer || param.questionToken) {
-    return invalid("the props parameter must be a plain destructuring, without a rest, default or `?`.", param);
-  }
-  if (!isObjectBindingPattern(param.name)) {
-    return invalid("destructure the props in the parameter: `function Enemy({ speed }: EnemyProps)`.", param.name);
+    return invalid("the props parameter must be a plain name or destructuring, without a rest, default or `?`.", param);
   }
   const type = param.type;
   if (!type || !isTypeReferenceNode(type) || !isIdentifier(type.typeName) || type.typeArguments) {
     return invalid("annotate the props parameter with the name of a props type declared in this file: `({ speed }: EnemyProps)`.", type ?? param);
+  }
+  if (isIdentifier(param.name)) {
+    return { typeName: type.typeName.text, typeNode: type, bindings: [], objectName: param.name.text };
+  }
+  if (!isObjectBindingPattern(param.name)) {
+    return invalid("destructure the props in the parameter (`{ speed }: EnemyProps`) or take them as one object (`props: EnemyProps`).", param.name);
   }
   const bindings: PropBindingAnalysis[] = [];
   for (const element of param.name.elements) {
@@ -289,37 +380,42 @@ function analyzeProps(
     }
     bindings.push({ name: element.name.text, defaultValue: element.initializer ?? null, node: element });
   }
-  return { typeName: type.typeName.text, typeNode: type, bindings };
+  return { typeName: type.typeName.text, typeNode: type, bindings, objectName: null };
 }
 
 function analyzeComponent(
-  declaration: FunctionDeclaration,
-  name: string,
+  fn: ComponentFunction,
   span: (node: Node) => ReturnType<typeof spanOf>,
   diagnostics: CompilerDiagnostic[],
 ): ComponentAnalysis | null {
-  const body = declaration.body;
+  const { name, node: declaration, body } = fn;
   if (!body) {
     diagnostics.push(error(DiagnosticCode.InvalidComponentBody, `Component '${name}' has no body.`, span(declaration)));
     return null;
   }
-  const props = analyzeProps(declaration, name, span, diagnostics);
+  const props = analyzeProps(fn, span, diagnostics);
+  // An arrow with an expression body (`() => <Entity />`) is just its return; it cannot hold hooks.
+  const expressionBody = isBlock(body) ? null : body;
+  const mustReturn = `Component '${name}' must end by returning a built-in element or a fragment: \`return <Entity>…</Entity>;\``;
 
   const hooks: HookCallAnalysis[] = [];
   const acceptedHookCalls = new Set<CallExpression>();
   let jsx: JsxRoot | null = null;
 
-  const statements = body.statements;
+  const statements: readonly Statement[] = isBlock(body) ? body.statements : [];
+  if (expressionBody) {
+    const returned = unwrapParens(expressionBody);
+    if (isJsxElement(returned) || isJsxSelfClosingElement(returned) || isJsxFragment(returned)) jsx = returned;
+    else diagnostics.push(error(DiagnosticCode.InvalidComponentBody, mustReturn, span(expressionBody)));
+  }
   statements.forEach((statement, index) => {
     const isLast = index === statements.length - 1;
     if (isLast && isReturnStatement(statement)) {
       const returned = statement.expression ? unwrapParens(statement.expression) : undefined;
-      if (returned && (isJsxElement(returned) || isJsxSelfClosingElement(returned))) {
+      if (returned && (isJsxElement(returned) || isJsxSelfClosingElement(returned) || isJsxFragment(returned))) {
         jsx = returned;
       } else {
-        diagnostics.push(
-          error(DiagnosticCode.InvalidComponentBody, `Component '${name}' must end with \`return <Entity>...</Entity>\`.`, span(statement)),
-        );
+        diagnostics.push(error(DiagnosticCode.InvalidComponentBody, mustReturn, span(statement)));
       }
       return;
     }
@@ -364,7 +460,7 @@ function analyzeComponent(
     diagnostics.push(
       error(
         DiagnosticCode.InvalidComponentBody,
-        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const name = expression\` (derived values), handler statements (\`useUpdate(...)\`, \`useInput(...)\`, \`onCollisionEnter(...)\`) and a final \`return\` are supported.`,
+        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const name = expression\` (derived values), handler statements (\`useUpdate(...)\`, \`useInput(...)\`) and a final \`return\` are supported.`,
         span(statement),
       ),
     );
@@ -393,10 +489,8 @@ function analyzeComponent(
   });
 
   if (jsx === null) {
-    if (!statements.some((s) => isReturnStatement(s))) {
-      diagnostics.push(
-        error(DiagnosticCode.InvalidComponentBody, `Component '${name}' must end with \`return <Entity>...</Entity>\`.`, span(declaration)),
-      );
+    if (!expressionBody && !statements.some((s) => isReturnStatement(s))) {
+      diagnostics.push(error(DiagnosticCode.InvalidComponentBody, mustReturn, span(declaration)));
     }
     return null;
   }
@@ -413,7 +507,8 @@ function analyzeComponent(
   return {
     name,
     declaration,
-    exported: (declaration.modifierFlags & ModifierFlags.Export) !== 0,
+    exported: fn.exported,
+    isDefault: fn.isDefault,
     hooks,
     props,
     jsx: root,
@@ -510,15 +605,13 @@ type HandlerMatch =
   | { readonly kind: "ok"; readonly hook: HandlerCallAnalysis }
   | { readonly kind: "invalid"; readonly code: DiagnosticCode; readonly message: string; readonly call: CallExpression | null };
 
-/** Recognises `useUpdate(arrow)`, `useInput(arrow)`, `onCollisionEnter(arrow)`; null if the statement is not a call to one of them. */
+/** Recognises `useUpdate(arrow)` and `useInput(arrow)`; null if the statement is not a call to one of them. */
 function matchHandlerStatement(statement: Statement): HandlerMatch | null {
   if (!isExpressionStatement(statement)) return null;
   const call = unwrapParens(statement.expression);
   if (!isCallExpression(call) || !isIdentifier(call.expression)) return null;
-  const renamed = RENAMED_HOOKS[call.expression.text];
-  if (renamed) {
-    return { kind: "invalid", code: DiagnosticCode.UnknownHook, message: `'${call.expression.text}' was renamed to '${renamed}' (hooks start with \`use\`, as in React).`, call };
-  }
+  const removed = REMOVED_HOOKS[call.expression.text];
+  if (removed) return { kind: "invalid", code: DiagnosticCode.UnknownHook, message: removed, call };
   if (!HANDLER_HOOKS.has(call.expression.text)) return null;
   const name = call.expression.text as HandlerCallAnalysis["kind"];
   const handler = call.arguments.length === 1 ? unwrapParens(call.arguments[0]!) : undefined;

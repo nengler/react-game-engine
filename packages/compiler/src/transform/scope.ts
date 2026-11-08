@@ -6,6 +6,8 @@ export type Binding =
   | { readonly kind: "ref"; readonly id: RefId; readonly name: string }
   /** A declared prop in scope as a plain name. A value reads `this.props.x`; a callback is only called (or forwarded whole). */
   | { readonly kind: "prop"; readonly name: string; readonly role: "value" | "callback" }
+  /** The whole props object of `function Enemy(props: EnemyProps)`: only read as `props.speed` or called as `props.onDefeated?.()`. */
+  | { readonly kind: "propsObject"; readonly name: string }
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
   | { readonly kind: "local"; readonly id: LocalId; readonly name: string }
