@@ -8,7 +8,7 @@ Last updated 2026-11-07. **Update this table and the milestone's checklist in th
 
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
-| M0 Hardening | In review | #5 | CI passed on the PR (first run of the workflow). Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet |
+| M0 Hardening | Done | #5 | CI passed on the PR (first run of the workflow). Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet |
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
 | M3 useTransform and refs | Not started | n/a | Next; adds `Assign` |
