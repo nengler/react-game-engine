@@ -25,6 +25,10 @@ function Mover() {
   - Static fields are set once, right after the element is constructed (before a child is attached).
   - Dynamic fields are re-applied in `render()`.
   - `Entity.transform` is never replaced.
+- **Relative by default.**
+  - A transform is relative to the nearest ancestor `Entity`. It moves, turns and scales with its parent.
+  - `global: true` (default `false`) puts it in world space. It can come from state.
+  - `Entity.worldTransform()` resolves the hierarchy. It is what a renderer reads.
 - **Where it is allowed.**
   - Any `<Entity>`: the root or a child.
   - Not on `<Sprite>`/`<Collider>`, which have no transform (`RGE1207`: wrap them in an `<Entity>`).
@@ -149,7 +153,8 @@ Today a prop or condition is dynamic only if it reads **state** (`collectDepende
 - The runtime `Entity` gains `placement: Transform`, which defaults to identity.
 - The parent's `transform` attribute on a *component* element writes `child.placement`, static or dynamic like any prop. Scenes (M6) write `placement` too.
 - The component's own root `transform` attribute writes `transform`, as today.
-- A renderer computes `world = parentWorld × placement × transform`.
+- A renderer computes `world = parentWorld × placement × transform`, the same nesting rule as everywhere else.
+- `global` works at either level: a global `placement` ignores the parent, and a global root `transform` ignores both the parent and the placement.
 
 What this gives:
 

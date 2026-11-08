@@ -23,7 +23,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | Prop and list types: copy source type text into output, or query the TS 7.1 checker through the API | Copy source text; revisit if prefab schemas need resolved types (unions, aliases across files) | M4, M5, M6 |
 | Input model | Per-frame `onInput` hook with polled `InputState`; JSX event props can be added later as a `PropIR` variant | M2 |
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs | M6 |
-| Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on an `<Entity>` (decided 2026-11-08). Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters | M3, M4, M6 |
+| Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on an `<Entity>` (decided 2026-11-08). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters | M3, M4, M6 |
 
 ## Ground rules
 
@@ -134,7 +134,7 @@ function Player() {
 
 **Transform attribute**
 
-- Runtime: `Entity` owns `transform: Transform` (`x, y, rotation, scaleX, scaleY`; pixels, y down, radians).
+- Runtime: `Entity` owns `transform: Transform` (`x, y, rotation, scaleX, scaleY`; pixels, y down, radians). Transforms are relative to the nearest ancestor `Entity`; `global: true` (default `false`) makes one world-space. `Entity.worldTransform()` resolves the hierarchy for renderers.
 - IR: `ElementIR.transform` / `HostElementIR.transform: TransformPropIR[]`, static or dynamic props restricted to the transform fields. `transform` is never a `PropIR`.
 - Codegen: static fields are set once after construction; dynamic fields are re-applied in `render()` like any dynamic prop.
 - Only `<Entity>` elements (root or child) take it. On a component element it is placement by the parent and waits for M4.

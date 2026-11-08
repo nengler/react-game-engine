@@ -167,9 +167,9 @@ describe("M3: runtime behaviour", () => {
   it("applies the transform at construction and leaves unset fields at the defaults", () => {
     const runner = new Runner();
     assert.ok(runner.transform instanceof Transform);
-    assert.deepEqual({ ...runner.transform }, { x: 10, y: -5, rotation: 0.1, scaleX: 2, scaleY: 1 });
-    assert.deepEqual({ ...runner.entity.transform }, { x: 0, y: 4, rotation: 0, scaleX: 1, scaleY: 1 });
-    assert.deepEqual({ ...new Entity().transform }, { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 });
+    assert.deepEqual({ ...runner.transform }, { x: 10, y: -5, rotation: 0.1, scaleX: 2, scaleY: 1, global: false });
+    assert.deepEqual({ ...runner.entity.transform }, { x: 0, y: 4, rotation: 0, scaleX: 1, scaleY: 1, global: false });
+    assert.deepEqual({ ...new Entity().transform }, { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, global: false });
   });
 
   it("moving is a state change: one render per tick, in place", () => {
@@ -219,6 +219,42 @@ describe("M3: runtime behaviour", () => {
     world.flush();
     assert.equal(spawner.children[0], marker);
     assert.equal(marker.transform.y, 9);
+  });
+
+  it("child transforms are relative to the parent unless `global`", async () => {
+    const { Ship } = await load<{ Ship: new () => Entity & { setX: (v: number) => void; setPinned: (v: boolean) => void; turret: Entity; hud: Entity } }>(
+      compile(`function Ship() {
+  const [x, setX] = useState(100);
+  const [pinned, setPinned] = useState(true);
+  const turret = useRef<Entity>();
+  const hud = useRef<Entity>();
+  return (
+    <Entity name="Ship" transform={{ x, y: 50 }}>
+      <Entity ref={turret} name="turret" transform={{ x: 10 }} />
+      <Entity ref={hud} name="hud" transform={{ x: 5, y: 5, global: pinned }} />
+    </Entity>
+  );
+}`),
+    );
+    const world = new World();
+    const ship = new Ship();
+    world.mount(ship);
+    assert.deepEqual([ship.turret.worldTransform().x, ship.turret.worldTransform().y], [110, 50]);
+    assert.deepEqual([ship.hud.worldTransform().x, ship.hud.worldTransform().y], [5, 5]);
+
+    ship.setX(200);
+    world.flush();
+    assert.equal(ship.turret.worldTransform().x, 210, "the child follows its parent");
+    assert.equal(ship.hud.worldTransform().x, 5, "a global child does not");
+
+    ship.setPinned(false);
+    world.flush();
+    assert.deepEqual([ship.hud.worldTransform().x, ship.hud.worldTransform().y], [205, 55], "`global` can come from state");
+  });
+
+  it("type-checks `global` as a boolean", () => {
+    const bad = compile(`function C() { return <Entity name="C" transform={{ global: 1 }} />; }`);
+    assert.deepEqual(typeCheck(bad).map((d) => d.code), [DiagnosticCode.GeneratedTypeError]);
   });
 
   it("a ref to a conditional element is null after unmount and the handler skips it", () => {

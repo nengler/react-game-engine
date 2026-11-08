@@ -84,7 +84,8 @@ ignored):
 * Children: elements, or `{condition && <Element />}`. Text children,
   fragments, spread attributes and other expression children are rejected.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any `<Entity>`
-  (the root or a child). There is no transform hook. Refs:
+  (the root or a child), relative to the nearest ancestor `<Entity>` unless
+  it sets `global: true`. There is no transform hook. Refs:
   `const r = useRef<Sprite>()` plus `ref={r}` on exactly one element of that
   tag. See "Transforms and refs".
 * Hooks: top-level `onInput((input) => ...)`, `onUpdate((dt) => ...)` and
@@ -245,13 +246,25 @@ export class Mover extends Entity {
 
 **The transform attribute**: `transform={{ x, y: 0, rotation: angle }}` is an
 object literal whose keys are transform fields (`x`, `y`, `rotation`,
-`scaleX`, `scaleY`; plain or shorthand properties). Each field lowers exactly
+`scaleX`, `scaleY`, `global`; plain or shorthand properties). Each field lowers exactly
 like a prop: a field that reads no state is a `StaticProp`, set once right
 after the element is constructed (and, for a child, before it is attached);
 one that reads state is a `DynamicProp`, re-applied in `render()`. Fields not
-listed keep the runtime defaults (`0, 0, 0, 1, 1`). The runtime
+listed keep the runtime defaults (`0, 0, 0, 1, 1`, not global). The runtime
 `Entity.transform` object is never replaced. Units: pixels with y down,
 rotation in radians.
+
+**Relative by default**: a transform is relative to the nearest ancestor
+`Entity` (objects without a transform, such as a `Sprite`, are skipped). A
+child at `{ x: 10 }` inside a parent at `{ x: 100 }` is at 110, and it turns
+and scales with the parent: the child's position is scaled, then rotated, by
+the parent and added to the parent's position; rotations add, scales
+multiply per axis. `global: true` (default `false`) puts the transform in
+world space, ignoring every ancestor; its own children are relative to it as
+usual. `global` is an ordinary field, so it can come from state
+(`transform={{ x, global: pinned }}`). The runtime resolves this in
+`Entity.worldTransform()`, which is what a renderer reads; the compiler only
+writes local fields.
 
 Only `<Entity>` elements have a transform (the root, which is the component
 instance itself, or a child `<Entity>`); on `<Sprite>`/`<Collider>` it is

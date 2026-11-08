@@ -82,8 +82,9 @@ export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnCollisi
 /**
  * The fields of a transform (runtime `Entity.transform`), settable with the
  * `transform={{ x, y }}` attribute. Pixels, y down; `rotation` in radians.
+ * Relative to the nearest ancestor `<Entity>` unless `global` is true.
  */
-export const TRANSFORM_FIELDS = ["x", "y", "rotation", "scaleX", "scaleY"] as const;
+export const TRANSFORM_FIELDS = ["x", "y", "rotation", "scaleX", "scaleY", "global"] as const;
 export type TransformField = (typeof TRANSFORM_FIELDS)[number];
 
 /** `const r = useRef<Sprite>()` attached with `ref={r}`. The element's field takes the ref's name. */

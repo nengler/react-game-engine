@@ -35,7 +35,7 @@ export const runtimeManifest: RuntimeManifest = {
   hostIntrinsic: "Entity",
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
-    "name", "transform", "parent", "children", "world",
+    "name", "transform", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "commitStructure",
     "markDirty", "runRender", "render",
