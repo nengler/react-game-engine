@@ -1,13 +1,13 @@
 /**
- * Where an Entity is: position in pixels (y points down), rotation in radians
- * (positive turns clockwise on a y-down screen), and scale. Components set it
- * with the `transform={{ x, y }}` attribute, usually from state.
+ * Where a game object is: position in pixels (y points down), rotation in
+ * radians (positive turns clockwise on a y-down screen), and scale. Every
+ * GameObject has one; components set it with the `transform={{ x, y }}`
+ * attribute, usually from state.
  *
- * A transform is relative to the nearest ancestor Entity: a child at
- * `{ x: 10 }` inside a parent at `{ x: 100 }` is at 110 in the world, and it
- * turns and scales with its parent. `global: true` opts out: the transform is
- * then in world space, whatever its ancestors do. A renderer reads
- * `Entity.worldTransform()`.
+ * A transform is relative to the parent: a child at `{ x: 10 }` inside a
+ * parent at `{ x: 100 }` is at 110 in the world, and it turns and scales with
+ * its parent. `global: true` opts out: the transform is then in world space,
+ * whatever its ancestors do. A renderer reads `GameObject.worldTransform()`.
  */
 export class Transform {
   x = 0;

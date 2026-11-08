@@ -1,4 +1,5 @@
 import type { InputState } from "./input.ts";
+import { IDENTITY_TRANSFORM, Transform, composeTransforms, type WorldTransform } from "./Transform.ts";
 import type { World } from "./World.ts";
 
 type StructureOp =
@@ -14,6 +15,12 @@ export class GameObject {
   /** Marks runtime-provided classes; compiled components do not have this as an own static. */
   static readonly intrinsic = true;
 
+  /**
+   * Position, rotation and scale relative to the parent (unless `global`).
+   * Every game object has one, so any built-in element can be placed; set
+   * with the `transform={{ x, y }}` attribute.
+   */
+  readonly transform: Transform = new Transform();
   parent: GameObject | null = null;
   readonly children: GameObject[] = [];
   world: World | null = null;
@@ -86,6 +93,12 @@ export class GameObject {
         this.removeChild(op.child);
       }
     }
+  }
+
+  /** This object's transform in world space: its own, composed with every ancestor's (see `Transform`). */
+  worldTransform(): WorldTransform {
+    const parent = this.parent === null ? IDENTITY_TRANSFORM : this.parent.worldTransform();
+    return composeTransforms(parent, this.transform);
   }
 
   /** Request a render pass for this object. */

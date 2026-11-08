@@ -34,7 +34,7 @@ Rows are in the order the work is planned (M7–M9 were added on 2026-11-08 afte
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) | M4 |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) | M9 |
 | Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) | M7 |
-| Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on an `<Entity>` (decided 2026-11-08). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters | M3, M4, M6 |
+| Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on any built-in element (decided 2026-11-08; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the attribute). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters | M3, M4, M6 |
 
 ## Ground rules
 
@@ -148,10 +148,10 @@ function Player() {
 
 **Transform attribute**
 
-- Runtime: `Entity` owns `transform: Transform` (`x, y, rotation, scaleX, scaleY`; pixels, y down, radians). Transforms are relative to the nearest ancestor `Entity`; `global: true` (default `false`) makes one world-space. `Entity.worldTransform()` resolves the hierarchy for renderers.
+- Runtime: every `GameObject` owns `transform: Transform` (`x, y, rotation, scaleX, scaleY`; pixels, y down, radians). Transforms are relative to the parent; `global: true` (default `false`) makes one world-space. `GameObject.worldTransform()` resolves the hierarchy for renderers.
 - IR: `ElementIR.transform` / `HostElementIR.transform: TransformPropIR[]`, static or dynamic props restricted to the transform fields. `transform` is never a `PropIR`.
 - Codegen: static fields are set once after construction; dynamic fields are re-applied in `render()` like any dynamic prop.
-- Only `<Entity>` elements (root or child) take it. On a component element it is placement by the parent and waits for M4.
+- Any built-in element in the manifest's `transformIntrinsics` takes it (today all of them), root or child. On a component element it is placement by the parent and waits for M4.
 
 **useRef**
 
@@ -200,7 +200,7 @@ Remove diagnostic RGE1204 (props on local components). `children` as a prop stay
 **Also in M4** (from the [React API review](REACT_API_REVIEW.md)):
 
 - **Collision events as props**: `<Collider width={16} onCollisionEnter={(other) => …} />` replaces the `onCollisionEnter` hook. The runtime calls the collider's own callback, so a component with several colliders knows which one was hit. The hook reports `RGE1102` with the new form.
-- **Fragment and non-Entity roots**: `return <>…</>` lowers to an implicit container (the host `Entity`, no props). `return <Sprite image="coin.png" />` makes the generated class extend `Sprite` itself, with no container. JSX children under the root are allowed only if that element type accepts children (a manifest list); placing such a component needs a transform on every intrinsic, so `transform` moves from `Entity` to `GameObject`.
+- **Fragment and non-Entity roots**: `return <>…</>` lowers to an implicit container (the host `Entity`, no props). `return <Sprite image="coin.png" />` makes the generated class extend `Sprite` itself, with no container. JSX children under the root are allowed only if that element type accepts children (a manifest list). Every intrinsic already has a transform (#8), so such a component can be placed like any other.
 - **Component forms**: `const Enemy = (props: EnemyProps) => …` and `export default function Enemy`, plus default imports (`import Enemy from "./Enemy.tsx"`).
 
 ## M5 — Keyed dynamic lists (~1.5 weeks, needs M4)

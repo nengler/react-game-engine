@@ -13,6 +13,12 @@ export interface RuntimeManifest {
    * fields, setters and handlers must not shadow.
    */
   readonly reservedMembers: readonly string[];
+  /**
+   * Intrinsics that take the `transform={{ x, y }}` attribute. Every runtime
+   * object has a transform; an intrinsic left out here (say, a sound with no
+   * position) simply cannot be placed from JSX.
+   */
+  readonly transformIntrinsics: readonly string[];
   /** Runtime types handler parameters may have, with the members handler code may use. */
   readonly handleTypes: Readonly<Record<string, HandleTypeManifest>>;
   /** Runtime functions handler code may call, imported from the runtime module. Name → argument count. */
@@ -39,6 +45,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
+  transformIntrinsics: ["Entity", "Sprite", "Collider"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },

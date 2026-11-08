@@ -89,8 +89,9 @@ ignored):
   `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two
   conditional children, on `condition` and `!condition`). Text children,
   fragments, spread attributes and other expression children are rejected.
-* Position is state: `transform={{ x, y: 0, rotation }}` on any `<Entity>`
-  (the root or a child), relative to the nearest ancestor `<Entity>` unless
+* Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
+  element (`<Entity>`, `<Sprite>`, `<Collider>`; the root or a child),
+  relative to its parent unless
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
   There is no `ref={…}` on elements. See "Transforms and refs".
@@ -227,7 +228,7 @@ not JSX event props. Event props can be added later as a `PropIR`
 
 Components should read like React: what is on screen, position included, is a
 function of state. So there is no transform hook: position is ordinary state,
-written with a `transform` attribute on an `<Entity>`.
+written with a `transform` attribute on a built-in element.
 
 ```tsx
 function Mover() {
@@ -271,11 +272,11 @@ like a prop: a field that reads no state is a `StaticProp`, set once right
 after the element is constructed (and, for a child, before it is attached);
 one that reads state is a `DynamicProp`, re-applied in `render()`. Fields not
 listed keep the runtime defaults (`0, 0, 0, 1, 1`, not global). The runtime
-`Entity.transform` object is never replaced. Units: pixels with y down,
+`transform` object is never replaced. Units: pixels with y down,
 rotation in radians.
 
-**Relative by default**: a transform is relative to the nearest ancestor
-`Entity` (objects without a transform, such as a `Sprite`, are skipped). A
+**Relative by default**: every runtime object (`GameObject`) has a transform,
+relative to its parent's (the World's root is the identity). A
 child at `{ x: 10 }` inside a parent at `{ x: 100 }` is at 110, and it turns
 and scales with the parent: the child's position is scaled, then rotated, by
 the parent and added to the parent's position; rotations add, scales
@@ -283,12 +284,13 @@ multiply per axis. `global: true` (default `false`) puts the transform in
 world space, ignoring every ancestor; its own children are relative to it as
 usual. `global` is an ordinary field, so it can come from state
 (`transform={{ x, global: pinned }}`). The runtime resolves this in
-`Entity.worldTransform()`, which is what a renderer reads; the compiler only
+`GameObject.worldTransform()`, which is what a renderer reads; the compiler only
 writes local fields.
 
-Only `<Entity>` elements have a transform (the root, which is the component
-instance itself, or a child `<Entity>`); on `<Sprite>`/`<Collider>` it is
-`RGE1207` (wrap them in an `<Entity>`). On a component element
+Every built-in element the runtime manifest lists in `transformIntrinsics`
+takes the attribute (today all of them: `<Entity>`, `<Sprite>`,
+`<Collider>`); one left out, such as a future sound with no position, gets
+`RGE1207`. On a component element
 (`<Enemy transform={…} />`) it would be placement by the parent, which needs
 a rule for combining it with the child's own root transform, so it arrives
 with props (M4) and is `RGE1207` until then. Malformed objects (spreads,

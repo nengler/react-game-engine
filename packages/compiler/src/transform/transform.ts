@@ -365,8 +365,9 @@ class ComponentLowering implements LoweringContext {
   /**
    * `transform={{ x, y: 0, rotation: angle }}`: each field becomes a static or
    * dynamic prop on the element's runtime transform, so moving is `setX(...)`.
-   * Only the host intrinsic (`<Entity>`) has a transform. On a component
-   * element it would be placement by the parent, which arrives with props (M4).
+   * Every intrinsic the manifest lists in `transformIntrinsics` takes it. On
+   * a component element it would be placement by the parent, which arrives
+   * with props (M4).
    */
   #lowerTransform(attributes: JsxAttributes, tag: string, intrinsic: boolean): TransformPropIR[] {
     const attribute = findAttribute(attributes, "transform");
@@ -376,8 +377,8 @@ class ComponentLowering implements LoweringContext {
       this.#error(code, `Placing component <${tag}> with \`transform\` is not supported yet (it arrives with props); set the transform on its root <${this.#hostIntrinsic}> instead.`, attribute);
       return [];
     }
-    if (tag !== this.#hostIntrinsic) {
-      this.#error(code, `<${tag}> has no transform; only <${this.#hostIntrinsic}> elements do. Wrap it in an <${this.#hostIntrinsic}> to position it.`, attribute);
+    if (!this.#manifest.transformIntrinsics.includes(tag)) {
+      this.#error(code, `<${tag}> cannot be placed with \`transform\` (it is not in the runtime's transformIntrinsics). Wrap it in an <${this.#hostIntrinsic}> to position it.`, attribute);
       return [];
     }
     const init = attribute.initializer;

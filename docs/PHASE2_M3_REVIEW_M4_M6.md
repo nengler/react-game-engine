@@ -24,14 +24,14 @@ function Mover() {
 - **Codegen.**
   - Static fields are set once, right after the element is constructed (before a child is attached).
   - Dynamic fields are re-applied in `render()`.
-  - `Entity.transform` is never replaced.
+  - The `transform` object is never replaced.
 - **Relative by default.**
-  - A transform is relative to the nearest ancestor `Entity`. It moves, turns and scales with its parent.
+  - Every runtime object has a transform, relative to its parent's. It moves, turns and scales with its parent.
   - `global: true` (default `false`) puts it in world space. It can come from state.
-  - `Entity.worldTransform()` resolves the hierarchy. It is what a renderer reads.
+  - `GameObject.worldTransform()` resolves the hierarchy. It is what a renderer reads.
 - **Where it is allowed.**
-  - Any `<Entity>`: the root or a child.
-  - Not on `<Sprite>`/`<Collider>`, which have no transform (`RGE1207`: wrap them in an `<Entity>`).
+  - Any built-in element listed in the manifest's `transformIntrinsics` (today `<Entity>`, `<Sprite>` and `<Collider>`): the root or a child.
+  - A built-in left out of that list is `RGE1207`.
   - Not on component elements yet. That is placement by the parent, designed in 3.1g.
   - Malformed objects (spreads, computed keys, unknown or duplicate fields) are `RGE1207`.
 - **Removal.** `useTransform` now reports `RGE1102` with a pointer to the attribute. `RGE1105` is retired, not reused.

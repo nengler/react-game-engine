@@ -5,8 +5,9 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Sprite, Transform, World } from "@rge/runtime";
-import { DiagnosticCode, type ComponentIR, type StatementIR } from "../src/index.ts";
+import { Entity, GameObject, Sprite, Transform, World } from "@rge/runtime";
+import { runtimeManifest } from "@rge/runtime";
+import { Compiler, DiagnosticCode, type ComponentIR, type StatementIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -242,6 +243,28 @@ describe("M3: runtime behaviour", () => {
     assert.deepEqual([hud.worldTransform().x, hud.worldTransform().y], [205, 55], "`global` can come from state");
   });
 
+  it("places built-in elements too: a Sprite's transform is relative to its parent", async () => {
+    const compiled = compile(`function Coin() {
+  const [bob, setBob] = useState(0);
+  return (
+    <Entity name="Coin" transform={{ x: 50, y: 20 }}>
+      <Sprite image="coin.png" transform={{ y: bob, rotation: 0.5 }} />
+      <Collider width={8} height={8} transform={{ x: -4, y: -4 }} />
+    </Entity>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Coin } = await load<{ Coin: new () => Entity & { setBob: (v: number) => void; sprite: Sprite; collider: GameObject } }>(compiled);
+    const world = new World();
+    const coin = new Coin();
+    world.mount(coin);
+    assert.deepEqual([coin.sprite.worldTransform().x, coin.sprite.worldTransform().y, coin.sprite.worldTransform().rotation], [50, 20, 0.5]);
+    assert.deepEqual([coin.collider.worldTransform().x, coin.collider.worldTransform().y], [46, 16]);
+    coin.setBob(3);
+    world.flush();
+    assert.equal(coin.sprite.worldTransform().y, 23);
+  });
+
   it("type-checks `global` as a boolean", () => {
     const bad = compile(`function C() { return <Entity name="C" transform={{ global: 1 }} />; }`);
     assert.deepEqual(typeCheck(bad).map((d) => d.code), [DiagnosticCode.GeneratedTypeError]);
@@ -266,12 +289,21 @@ function C() {
       "<Entity transform=\"x\" />",
       "<Entity transform={{ ...other }} />",
       "<Entity transform={{ [\"x\"]: 1 }} />",
-      "<Sprite image=\"a\" transform={{ x: 1 }} />",
       "<Child transform={{ x: 1 }} />",
     ]) {
       assert.ok(jsxCodes(jsx).includes(DiagnosticCode.InvalidTransformAttribute), jsx);
     }
     assert.ok(jsxCodes("<Entity transform={{ x: 1 }} transform={{ y: 1 }} />").includes(DiagnosticCode.UnsupportedAttribute));
+  });
+
+  it("rejects the attribute on an intrinsic the manifest does not list as transformable", () => {
+    const compiler = new Compiler({ manifest: { ...runtimeManifest, transformIntrinsics: ["Entity"] } });
+    try {
+      const result = compiler.compile("C.tsx", `function C() { return <Entity name="C"><Sprite image="a" transform={{ x: 1 }} /></Entity>; }`);
+      assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.InvalidTransformAttribute]);
+    } finally {
+      compiler.close();
+    }
   });
 
   it("points useTransform at the transform attribute", () => {

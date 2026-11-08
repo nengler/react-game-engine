@@ -7,12 +7,12 @@ function close(actual: number, expected: number): void {
 }
 
 describe("transform hierarchy", () => {
-  it("is relative to the nearest ancestor Entity, skipping non-Entity objects", () => {
+  it("is relative to the parent, whatever kind of object it is", () => {
     const world = new World();
     const parent = new Entity();
     parent.transform.x = 100;
     parent.transform.y = 20;
-    const holder = new GameObject(); // no transform of its own
+    const holder = new GameObject(); // identity transform: passes the parent's through
     const child = new Entity();
     child.transform.x = 10;
     world.mount(parent);
@@ -49,6 +49,16 @@ describe("transform hierarchy", () => {
     b.addChild(new Sprite({ image: "s" }));
     b.addChild(c);
     assert.equal(c.worldTransform().x, 6);
+  });
+
+  it("gives every built-in object a transform", () => {
+    const parent = new Entity();
+    parent.transform.x = 100;
+    const sprite = new Sprite({ image: "s" });
+    sprite.transform.x = 5;
+    sprite.transform.scaleY = 2;
+    parent.addChild(sprite);
+    assert.deepEqual(sprite.worldTransform(), { x: 105, y: 0, rotation: 0, scaleX: 1, scaleY: 2 });
   });
 
   it("`global` ignores every ancestor, and its own children are relative to it", () => {
