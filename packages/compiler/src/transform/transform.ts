@@ -240,7 +240,23 @@ class ComponentLowering implements LoweringContext {
         case "useRef":
           this.#lowerUseRef(hook);
           break;
+        case "const": {
+          // Lowered now, against what is declared above it (state, refs, earlier consts), outside any handler.
+          const value = this.#lowerExpression(hook.initializer);
+          if (!value) break;
+          if (this.#componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
+            this.#error(DiagnosticCode.InvalidComponentBody, `'${hook.name}' is already declared in this component (or reserved).`, hook.declaration.name);
+            break;
+          }
+          this.#componentScope.declare(hook.name, { kind: "derived", name: hook.name, value });
+          break;
+        }
         case "useState": {
+          const taken = [hook.valueName, hook.setterName].find((n) => n !== null && this.#componentScope.hasOwn(n));
+          if (taken) {
+            this.#error(DiagnosticCode.InvalidUseState, `'${taken}' is already declared in this component.`, hook.declaration);
+            continue;
+          }
           if (!this.#claimName(hook.valueName, hook.declaration)) continue;
           if (hook.setterName !== null && !this.#claimName(hook.setterName, hook.declaration)) continue;
           const id = stateId(this.#component.name, hook.valueName);
@@ -277,8 +293,10 @@ class ComponentLowering implements LoweringContext {
       this.#error(code, "useRef needs the tag of the element it will point to: `useRef<Sprite>()`.", hook.typeArgument ?? hook.call);
       return;
     }
-    if (hook.arguments.length > 0) {
-      this.#error(code, "useRef takes no arguments: `useRef<Sprite>()`.", hook.call);
+    // `useRef<Sprite>(null)` is the usual React spelling; `useRef<Sprite>()` is accepted too. Nothing else: the element is the value.
+    const onlyNull = hook.arguments.length === 1 && unwrapParens(hook.arguments[0]!).kind === SyntaxKind.NullKeyword;
+    if (hook.arguments.length > 0 && !onlyNull) {
+      this.#error(code, "useRef's only argument may be `null`: `useRef<Sprite>(null)`.", hook.call);
       return;
     }
     if (!this.#checkHandleName(hook.name, code, hook.declaration.name) || !this.#claimName(hook.name, hook.declaration, code)) return;
@@ -523,7 +541,26 @@ class ComponentLowering implements LoweringContext {
             continue;
           }
         }
-        this.#error(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`.", child);
+        if (isConditionalExpression(expression)) {
+          // `{c ? <A /> : <B />}` (either branch may be `null`): one conditional child per branch, the
+          // second on `!c`. Each branch keeps its own identity, so switching recreates, as React does
+          // for different element types.
+          const branches = [unwrapParens(expression.whenTrue), unwrapParens(expression.whenFalse)];
+          const usable = branches.every((b) => isJsxElement(b) || isJsxSelfClosingElement(b) || b.kind === SyntaxKind.NullKeyword);
+          if (usable) {
+            const condition = this.#lowerExpression(expression.condition);
+            if (!condition) continue;
+            const conditions: ExprIR[] = [condition, { kind: "Unary", operator: "!", operand: condition }];
+            branches.forEach((branch, i) => {
+              if (!(isJsxElement(branch) || isJsxSelfClosingElement(branch))) return;
+              const element = this.#lowerElement(branch, i === 0 ? path : [...parentPath, index++]);
+              const when = conditions[i]!;
+              if (element) out.push({ kind: "ConditionalChild", condition: when, dependencies: collectDependencies(when), element });
+            });
+            continue;
+          }
+        }
+        this.#error(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}` or `{condition ? <A /> : <B />}` (a branch may be `null`).", child);
         continue;
       }
       this.#error(DiagnosticCode.UnsupportedJsxChild, `Unsupported JSX child (${SyntaxKind[child.kind]}).`, child);
@@ -554,6 +591,9 @@ class ComponentLowering implements LoweringContext {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
+        // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
+        // in a handler it reads the current state, like recomputing it there.
+        case "derived": return binding.value;
         case "ref":
           this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' can only be used as \`${node.text}.${binding.kind === "ref" ? "current" : "<field>"}\`.`, node);
           return null;

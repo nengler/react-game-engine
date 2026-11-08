@@ -77,7 +77,8 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
 
     let body: StatementIR[] | null;
     if (isBlock(fn.body)) {
-      body = lowerStatements(ctx, fn.body.statements, options);
+      // The body's top-level block shares the parameters' scope, as in JS: `(n) => { const n = 1; }` is a redeclaration.
+      body = lowerStatements(ctx, fn.body.statements, options, false);
     } else if (options.returns === "value") {
       const value = ctx.lowerExpression(fn.body);
       body = value && [{ kind: "Return", value }];
@@ -92,9 +93,9 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
 }
 
 /** Lowers statements in a fresh block scope, so `const`s declared inside do not leak out. */
-function lowerStatements(ctx: LoweringContext, statements: readonly Statement[], options: FunctionOptions): StatementIR[] | null {
+function lowerStatements(ctx: LoweringContext, statements: readonly Statement[], options: FunctionOptions, newScope = true): StatementIR[] | null {
   const outer = ctx.scope;
-  ctx.scope = new Scope(outer);
+  if (newScope) ctx.scope = new Scope(outer);
   try {
     const out: StatementIR[] = [];
     let ok = true;
@@ -215,9 +216,20 @@ function lowerSetState(ctx: LoweringContext, args: readonly Expression[], state:
   return value && { kind: "SetState", state, value };
 }
 
+/**
+ * Shadowing follows JS: a parameter or `const` may reuse an outer name, which
+ * is what makes `setCount((count) => count + 1)` work (state is emitted as
+ * `this.count`, so the generated code cannot confuse them). Only a
+ * redeclaration in the same scope, or rebinding a name the call allowlist
+ * relies on (`Math`, runtime functions), is an error.
+ */
 function checkFreshName(ctx: LoweringContext, name: string, at: Node): boolean {
-  if (ctx.scope.has(name) || ctx.isCallableName(name)) {
-    ctx.error(DiagnosticCode.InvalidHandler, `'${name}' is already declared in this component (or reserved); shadowing is not allowed.`, at);
+  if (ctx.scope.hasOwn(name)) {
+    ctx.error(DiagnosticCode.InvalidHandler, `'${name}' is already declared in this scope.`, at);
+    return false;
+  }
+  if (ctx.isCallableName(name)) {
+    ctx.error(DiagnosticCode.InvalidHandler, `'${name}' is reserved for allowlisted calls and cannot be rebound.`, at);
     return false;
   }
   return true;

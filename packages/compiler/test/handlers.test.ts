@@ -192,11 +192,44 @@ function C() {
     assert.deepEqual(codes("onUpdate(() => { n + 1; });"), [DiagnosticCode.UnsupportedStatement]);
   });
 
-  it("rejects shadowing component bindings, including via updater parameters", () => {
-    assert.deepEqual(codes("onUpdate((n) => setN(1));"), [DiagnosticCode.InvalidHandler]);
-    assert.deepEqual(codes("onUpdate(() => { const n = 1; });"), [DiagnosticCode.InvalidHandler]);
-    assert.deepEqual(codes("onUpdate(() => setN((n) => n + 1));"), [DiagnosticCode.InvalidHandler]);
+  it("allows JS shadowing, so `setN((n) => n + 1)` reads the parameter, not the state", async () => {
+    const { Counter } = await load<{ Counter: new () => Entity & { n: number } }>(
+      compile(`function Counter() {
+  const [n, setN] = useState(0);
+  onUpdate(() => {
+    setN((n) => n + 1);
+    setN((n) => n + 1);
+  });
+  return <Entity name="Counter" />;
+}`),
+    );
+    const world = new World();
+    const counter = new Counter();
+    world.mount(counter);
+    world.tick(1);
+    assert.equal(counter.n, 2, "each updater receives the previous value through its own `n`");
+    // A handler `const` may shadow state too; state stays reachable as `this.n` in the output.
+    const shadowed = compile(`function C() {
+  const [n, setN] = useState(5);
+  onUpdate((dt) => { const n = dt * 2; setN(n); });
+  return <Entity name="C" />;
+}`);
+    assert.match(shadowed.code, /const n = dt \* 2;\s*this\.setN\(n\);/);
+    assert.deepEqual(typeCheck(shadowed), []);
+  });
+
+  it("rejects redeclarations in one scope and rebinding allowlisted call names", () => {
+    assert.deepEqual(codes("onUpdate(() => { const a = 1; const a = 2; });"), [DiagnosticCode.InvalidHandler]);
+    assert.deepEqual(codes("onUpdate((a) => { const a = 1; });"), [DiagnosticCode.InvalidHandler]);
     assert.deepEqual(codes("onUpdate(() => { const Math = 1; });"), [DiagnosticCode.InvalidHandler]);
+    assert.deepEqual(codes("onUpdate((clamp) => setN(1));"), [DiagnosticCode.InvalidHandler]);
+    // Inner blocks may shadow outer locals, as in JS.
+    const inner = compile(`function C() {
+  const [n, setN] = useState(0);
+  onUpdate(() => { const a = 1; if (n > 0) { const a = 2; setN(a); } setN(a); });
+  return <Entity name="C" />;
+}`);
+    assert.deepEqual(typeCheck(inner), []);
   });
 
   it("scopes locals to their block", () => {

@@ -73,15 +73,21 @@ Rules in this slice (anything else is a compiler diagnostic, never silently
 ignored):
 
 * A component is a top-level `function` declaration with a capitalised name
-  (optionally `export`ed) whose body is: zero or more
-  `const [x, setX] = useState(init)` statements, then one `return <Entity …>`.
+  (optionally `export`ed) whose body is: hooks (`useState`, `useRef`, the
+  handler hooks), `const name = expression;` derived values, then one
+  `return <Entity …>`. A derived `const` (`const hurt = health < 25;`) may read
+  anything declared above it; it is inlined where it is used, so JSX that uses
+  it updates with the state it reads, and a handler that uses it sees current
+  state.
 * The root element **must** be `<Entity>`. It describes the component instance
   itself (the generated class extends the runtime `Entity`), so its props are
   applied to `this`, and its children become children of `this`.
 * `useState` is a compiler intrinsic. It must be a top-level `const` array
   destructuring. Calls anywhere else, or any other `use*` call, are errors.
   State type is inferred from the initial literal (`number`/`string`/`boolean`).
-* Children: elements, or `{condition && <Element />}`. Text children,
+* Children: elements, `{condition && <Element />}`, or
+  `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two
+  conditional children, on `condition` and `!condition`). Text children,
   fragments, spread attributes and other expression children are rejected.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any `<Entity>`
   (the root or a child), relative to the nearest ancestor `<Entity>` unless
@@ -166,8 +172,11 @@ closures that escape, `this`, `await`, other calls) is a diagnostic
 `RGE1402`.
 
 **Scoping**: component scope (state, setters) → function scope (parameters) →
-block scope (`const`s). Shadowing any outer binding, or `Math`/`clamp`, is
-`RGE1401`.
+block scope (`const`s). Shadowing follows JS, so the React idiom
+`setCount((count) => count + 1)` works: state is emitted as `this.count`, so a
+parameter or local of the same name cannot be confused with it. Only a
+redeclaration in the same scope (the function body shares its parameters'
+scope, as in JS) or rebinding `Math`/`clamp` is `RGE1401`.
 
 **Semantics**: state reads are *live* (not React-style snapshots): after
 `setHealth(...)`, a later read in the same handler sees the new value.
@@ -282,7 +291,7 @@ re-evaluates all of the component's dynamic props; the IR already records each
 prop's `dependencies`, so a later optimisation can re-evaluate only the props
 whose state changed.
 
-**useRef** (the escape hatch): `const r = useRef<T>()`, with `T` the tag of
+**useRef** (the escape hatch): `const r = useRef<T>(null)` (or `useRef<T>()`), with `T` the tag of
 the target element (intrinsic, local or imported), and `ref={r}` on exactly
 one element of that tag. `ComponentIR.refs` holds `RefIR { id, name,
 componentName, target }`, resolved after the JSX is lowered. There is no

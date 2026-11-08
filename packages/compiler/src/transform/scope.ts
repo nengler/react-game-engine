@@ -1,9 +1,11 @@
-import type { LocalId, RefId, StateId, TypeIR } from "../ir/types.ts";
+import type { ExprIR, LocalId, RefId, StateId, TypeIR } from "../ir/types.ts";
 
 export type Binding =
   | { readonly kind: "state"; readonly id: StateId }
   | { readonly kind: "setter"; readonly state: StateId; readonly name: string }
   | { readonly kind: "ref"; readonly id: RefId; readonly name: string }
+  /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
+  | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
   | { readonly kind: "local"; readonly id: LocalId; readonly name: string }
   | { readonly kind: "param"; readonly id: LocalId; readonly name: string; readonly type: TypeIR };
 
@@ -22,6 +24,11 @@ export class Scope {
 
   has(name: string): boolean {
     return this.get(name) !== undefined;
+  }
+
+  /** Declared in this scope itself, not an outer one. */
+  hasOwn(name: string): boolean {
+    return this.#bindings.has(name);
   }
 
   declare(name: string, binding: Binding): void {

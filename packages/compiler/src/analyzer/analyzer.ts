@@ -70,7 +70,19 @@ export interface ComponentAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStateCallAnalysis | UseRefCallAnalysis | HandlerCallAnalysis;
+export type HookCallAnalysis = UseStateCallAnalysis | UseRefCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis;
+
+/**
+ * `const hurt = health < 25;` in the component body: a value derived from
+ * state, as in a React render. Not a hook, but kept in the same ordered list
+ * because it may only read what is declared above it.
+ */
+export interface RenderConstAnalysis {
+  readonly kind: "const";
+  readonly name: string;
+  readonly initializer: Expression;
+  readonly declaration: VariableDeclaration;
+}
 
 /** `const r = useRef<Sprite>()`. */
 export interface UseRefCallAnalysis {
@@ -233,10 +245,15 @@ function analyzeComponent(
       }
       return;
     }
+    const derived = matchRenderConst(statement);
+    if (derived) {
+      hooks.push(derived);
+      return;
+    }
     diagnostics.push(
       error(
         DiagnosticCode.InvalidComponentBody,
-        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, handler statements (\`onUpdate(...)\`, \`onInput(...)\`, \`onCollisionEnter(...)\`) and a final \`return\` are supported.`,
+        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const name = expression\` (derived values), handler statements (\`onUpdate(...)\`, \`onInput(...)\`, \`onCollisionEnter(...)\`) and a final \`return\` are supported.`,
         span(statement),
       ),
     );
@@ -341,6 +358,16 @@ function matchUseStateStatement(statement: Statement): UseStateMatch | null {
       declaration,
     },
   };
+}
+
+/** `const name = expression;` that is not a hook call (hooks are matched first). */
+function matchRenderConst(statement: Statement): RenderConstAnalysis | null {
+  if (!isVariableStatement(statement)) return null;
+  const list = statement.declarationList;
+  if ((list.flags & NodeFlags.Const) === 0 || list.declarations.length !== 1) return null;
+  const declaration = list.declarations[0]!;
+  if (!isIdentifier(declaration.name) || !declaration.initializer) return null;
+  return { kind: "const", name: declaration.name.text, initializer: declaration.initializer, declaration };
 }
 
 type HandleMatch =

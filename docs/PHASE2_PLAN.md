@@ -1,6 +1,6 @@
 # Phase 2 implementation plan
 
-Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes. It is split into seven milestones (M0–M6), each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). A review of M3 and a worked-out approach for M4–M6, including proposed changes to this plan, is in [PHASE2_M3_REVIEW_M4_M6.md](PHASE2_M3_REVIEW_M4_M6.md).
+Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes. It is split into seven milestones (M0–M6), each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). A review of M3 and a worked-out approach for M4–M6, including proposed changes to this plan, is in [PHASE2_M3_REVIEW_M4_M6.md](PHASE2_M3_REVIEW_M4_M6.md). How close the current and planned authoring API is to React, and the open decisions that follow from it, is in [REACT_API_REVIEW.md](REACT_API_REVIEW.md).
 
 ## Status
 

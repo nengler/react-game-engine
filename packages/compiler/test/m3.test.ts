@@ -351,9 +351,14 @@ function C() {
   });
 
   it("rejects malformed useRef calls", () => {
-    for (const extra of ["const r = useRef();", "const r = useRef<Sprite>(null);", "const r = useRef<Nope>();", "const r = useRef<number>();"]) {
+    for (const extra of ["const r = useRef();", "const r = useRef<Sprite>(5);", "const r = useRef<Nope>();", "const r = useRef<number>();"]) {
       assert.ok(codes("", extra).includes(DiagnosticCode.InvalidUseRef), extra);
     }
+  });
+
+  it("accepts React's `useRef<T>(null)` spelling", () => {
+    const c = ir(GHOST.replace("useRef<Sprite>()", "useRef<Sprite>(null)"));
+    assert.equal(c.refs[0]?.name, "aura");
   });
 
   it("rejects ref names that collide with state", () => {
@@ -369,6 +374,5 @@ function C() {
     assert.deepEqual(attach(codes("onUpdate(() => { r.current = 1; });", r)), [DiagnosticCode.UnsupportedStatement]);
     assert.deepEqual(attach(codes("onUpdate(() => { r.current.image ||= \"a\"; });", r)), [DiagnosticCode.UnsupportedStatement]);
     assert.deepEqual(codes("onUpdate(() => { n = 2; });"), [DiagnosticCode.UnsupportedStatement]);
-    assert.deepEqual(attach(codes("onUpdate(() => { const r = 1; });", r)), [DiagnosticCode.InvalidHandler]);
   });
 });
