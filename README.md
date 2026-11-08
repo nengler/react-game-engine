@@ -5,9 +5,11 @@ Components are written as TSX functions, but there is no React and no virtual
 DOM: a compiler turns each component into an ordinary TypeScript class whose
 children are persistent instances, updated in place when state changes.
 
-This repository currently contains the **first vertical slice of the
-compiler** and a minimal mock runtime. See [docs/DESIGN.md](docs/DESIGN.md)
-for the architecture, the IR, and the design decisions.
+This repository contains the **compiler** (the first vertical slice, extended
+by the Phase 2 milestones that have landed so far), a minimal mock runtime, and
+an example. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture, the IR,
+and the design decisions, and [docs/PHASE2_PLAN.md](docs/PHASE2_PLAN.md) for
+the roadmap and current milestone status.
 
 ```tsx
 function Player() {
@@ -32,7 +34,7 @@ packages/
   compiler/   TSX → IR → TypeScript compiler (uses the TypeScript 7.1 API)
     src/parser/       TypeScript 7.1 parsing (typescript/sync)
     src/analyzer/     component / hook / JSX discovery
-    src/ir/           IR types
+    src/ir/           IR types (types.ts) and hook/handler signatures (handlers.ts)
     src/transform/    analysis → IR
     src/generator/    IR → TypeScript
     src/typecheck/    type-checking generated code with TypeScript 7.1

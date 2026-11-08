@@ -10,7 +10,7 @@
     "rge-compile": "./src/cli.ts"
   },
   "dependencies": {
-    "@rge/runtime": "*",
+    "@rge/runtime": "0.0.0",
     "typescript": "7.1.0-beta"
   }
 }
