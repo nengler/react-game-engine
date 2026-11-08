@@ -7,6 +7,8 @@ export const DiagnosticCode = {
   RootMustBeEntity: "RGE1003",
   /** A name imported from the authoring module that the compiler does not know. */
   UnknownImport: "RGE1004",
+  /** A hook, built-in element or runtime function used without importing it from the authoring module. */
+  MissingImport: "RGE1005",
   HookNotAtTopLevel: "RGE1101",
   UnknownHook: "RGE1102",
   InvalidUseState: "RGE1103",

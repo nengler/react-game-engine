@@ -100,9 +100,10 @@ ignored):
   `@rge/runtime/jsx-runtime`, so the TSX itself type-checks: a project uses
   `"jsx": "react-jsx"` and `"jsxImportSource": "@rge/runtime"`
   (`packages/example/tsconfig.json`). `rge-compile` runs this check first
-  (`RGE9002`; `--no-check` skips it). The imports themselves are optional for
-  the compiler, which resolves names itself, but source without them fails the
-  source type-check.
+  (`RGE9002`; `--no-check` skips it). Imports are mandatory, as in React: a
+  hook, built-in element or runtime function used without being imported is
+  `RGE1005` (reported once per name per file, naming the import line to
+  add). `Math` is a global and needs none.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
   element (`<Entity>`, `<Sprite>`, `<Collider>`; the root or a child),
   relative to its parent unless

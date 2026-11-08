@@ -141,6 +141,63 @@ function Level() { return <Entity name="level"><Coin /><Coin /></Entity>; }`),
   });
 });
 
+describe("M7: imports are mandatory", () => {
+  /** Calls the compiler directly, so the test helpers cannot add imports for us. */
+  const codes = (source: string) => getCompiler().compile("Raw.tsx", source).diagnostics.map((d) => d.code);
+  const messages = (source: string) => getCompiler().compile("Raw.tsx", source).diagnostics.map((d) => d.message);
+
+  it("reports each hook, element and function used without an import, once per name", () => {
+    const source = `function C() {
+  const [n, setN] = useState(0);
+  const [m, setM] = useState(0);
+  useUpdate((dt) => setN(clamp(n + dt, 0, 10)));
+  useUpdate((dt) => setM(clamp(m + dt, 0, 10)));
+  return <Entity name="C"><Sprite image="a.png" /><Sprite image="b.png" /></Entity>;
+}`;
+    const result = getCompiler().compile("Raw.tsx", source);
+    assert.ok(!result.ok);
+    assert.ok(result.diagnostics.every((d) => d.code === DiagnosticCode.MissingImport));
+    // useState and useUpdate are each used twice, Sprite twice: still one report per name, in order of first use.
+    assert.deepEqual(
+      result.diagnostics.map((d) => /'(\w+)'/.exec(d.message)?.[1]),
+      ["useState", "useUpdate", "clamp", "Entity", "Sprite"],
+    );
+  });
+
+  it("names the import line to add", () => {
+    const [message] = messages(`function C() { return <Entity name="C" />; }`);
+    assert.equal(message, `'Entity' is not imported: add \`import { Entity } from "@rge/runtime/jsx"\`.`);
+  });
+
+  it("reports a name once per file, however many components use it", () => {
+    const source = `function A() { return <Entity name="A" />; }\nfunction B() { return <Entity name="B" />; }`;
+    assert.deepEqual(codes(source), [DiagnosticCode.MissingImport]);
+  });
+
+  it("is satisfied by importing, and does not ask for globals like Math", () => {
+    const source = `import { useState, useUpdate, Entity } from "@rge/runtime/jsx";
+function C() {
+  const [n, setN] = useState(0);
+  useUpdate(() => setN(Math.floor(n + 1)));
+  return <Entity name="C" />;
+}`;
+    assert.deepEqual(codes(source), []);
+  });
+
+  it("checks every hook kind, including the ones that shaped earlier tests", () => {
+    for (const hook of ["useState", "useRef", "useUpdate", "useInput", "onCollisionEnter"]) {
+      const body = hook === "useState" ? `const [a] = useState(0);` : hook === "useRef" ? `const a = useRef(0);` : `${hook}(() => {});`;
+      const others = ["Entity", ...AUTHORING_HOOKS.filter((h) => h !== hook)].join(", ");
+      const result = codes(`import { ${others} } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`);
+      assert.deepEqual(result, [DiagnosticCode.MissingImport], hook);
+    }
+  });
+
+  it("is a separate error from a name the entry point does not export", () => {
+    assert.deepEqual(codes(`import { Entity, Nope } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C" />; }`), [DiagnosticCode.UnknownImport]);
+  });
+});
+
 describe("M7: the CLI type-checks sources", () => {
   const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../src/cli.ts");
 
@@ -172,5 +229,12 @@ export function Coin() {
 
   it("skips the source check with --no-check", () => {
     assert.equal(runCli(COIN(`imag="coin.png"`), "--no-check").status, 0);
+  });
+
+  it("fails a source that does not import what it uses, with both the compiler's and TypeScript's error", () => {
+    const { status, output } = runCli(`export function Coin() { return <Entity name="coin" />; }`);
+    assert.equal(status, 1);
+    assert.match(output, /RGE1005: 'Entity' is not imported: add `import \{ Entity \} from "@rge\/runtime\/jsx"`/);
+    assert.match(output, /RGE9002/);
   });
 });

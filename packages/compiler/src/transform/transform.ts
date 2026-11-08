@@ -123,9 +123,12 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
     }
   }
 
+  // Hooks, built-in elements and runtime functions must be imported, as in React. Each missing name is reported once per file.
+  const authoring: AuthoringImports = { names: new Set(analysis.authoringImports.map((i) => i.name)), reported: new Set() };
+
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
-    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, diagnostics).lower();
+    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, diagnostics).lower();
     if (lowered) components.push(lowered);
   }
 
@@ -139,6 +142,13 @@ const HANDLER_KIND = {
   useInput: "OnInput",
   onCollisionEnter: "OnCollisionEnter",
 } as const;
+
+/** Names imported from the authoring module, shared by every component of a file. */
+interface AuthoringImports {
+  readonly names: ReadonlySet<string>;
+  /** Names already reported as missing, so each is reported once. */
+  readonly reported: Set<string>;
+}
 
 /** Attributes the compiler handles itself; they never become props. */
 const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["transform"]);
@@ -159,6 +169,7 @@ class ComponentLowering implements LoweringContext {
   readonly #locals: ReadonlySet<string>;
   readonly #imported: ReadonlyMap<string, string>;
   readonly #hostIntrinsic: string;
+  readonly #authoring: AuthoringImports;
   readonly #diagnostics: CompilerDiagnostic[];
   #errorCount = 0;
   /** Greater than zero while lowering a handler body: the only place `ref.current` is allowed. */
@@ -172,8 +183,10 @@ class ComponentLowering implements LoweringContext {
     manifest: RuntimeManifest,
     locals: ReadonlySet<string>,
     imported: ReadonlyMap<string, string>,
+    authoring: AuthoringImports,
     diagnostics: CompilerDiagnostic[],
   ) {
+    this.#authoring = authoring;
     this.#component = component;
     this.componentName = component.name;
     this.#sourceFile = sourceFile;
@@ -199,6 +212,7 @@ class ComponentLowering implements LoweringContext {
     const hooks: HookIR[] = [];
     const state: StateIR[] = [];
     for (const hook of this.#component.hooks) {
+      if (hook.kind !== "const") this.#requireImport(hook.kind, hook.call);
       switch (hook.kind) {
         case "useUpdate":
         case "useInput":
@@ -323,6 +337,7 @@ class ComponentLowering implements LoweringContext {
       this.#error(DiagnosticCode.RootMustBeEntity, `The root element of component '${this.#component.name}' must be <${this.#hostIntrinsic}>.`, tag);
       return null;
     }
+    this.#requireImport(tag.text, tag);
     const props = this.#lowerProps(opening.attributes);
     const transform = this.#lowerTransform(opening.attributes, tag.text, true);
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, []) : [];
@@ -344,7 +359,10 @@ class ComponentLowering implements LoweringContext {
       return null;
     }
     let component: ComponentRef;
-    if (this.#intrinsics.has(tag.text)) component = { kind: "Intrinsic", name: tag.text };
+    if (this.#intrinsics.has(tag.text)) {
+      this.#requireImport(tag.text, tag);
+      component = { kind: "Intrinsic", name: tag.text };
+    }
     else if (this.#locals.has(tag.text)) component = { kind: "Local", name: tag.text };
     else if (this.#imported.has(tag.text)) component = { kind: "Imported", name: tag.text, module: this.#imported.get(tag.text)! };
     else {
@@ -645,6 +663,7 @@ class ComponentLowering implements LoweringContext {
       const expected = MATH_FUNCTIONS[name];
       if (expected !== undefined) result = { callee: { kind: "Function", name }, expected, label: name };
     } else if (isIdentifier(callee) && this.#manifest.functions[callee.text] !== undefined && !this.scope.has(callee.text)) {
+      this.#requireImport(callee.text, callee);
       result = { callee: { kind: "Function", name: callee.text }, expected: this.#manifest.functions[callee.text]!, label: callee.text };
     } else if (isPropertyAccessExpression(callee)) {
       const receiver = this.#lowerHandle(callee.expression);
@@ -683,6 +702,13 @@ class ComponentLowering implements LoweringContext {
       return null;
     }
     return { type: binding.type.name, read: { kind: "ParamRead", param: binding.id, name: binding.name } };
+  }
+
+  /** A hook, built-in element or runtime function must be imported from the authoring module before it is used. */
+  #requireImport(name: string, at: Node): void {
+    if (this.#authoring.names.has(name) || this.#authoring.reported.has(name)) return;
+    this.#authoring.reported.add(name);
+    this.#error(DiagnosticCode.MissingImport, `'${name}' is not imported: add \`import { ${name} } from "${this.#manifest.authoringModule}"\`.`, at);
   }
 
   #claimName(name: string, at: Node, code: CompilerDiagnostic["code"] = DiagnosticCode.InvalidUseState): boolean {

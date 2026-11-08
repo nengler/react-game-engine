@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { Entity, GameObject, Sprite, Transform, World } from "@rge/runtime";
 import { runtimeManifest } from "@rge/runtime";
 import { Compiler, DiagnosticCode, type ComponentIR, type StatementIR } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, withAuthoringImports } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -299,7 +299,7 @@ function C() {
   it("rejects the attribute on an intrinsic the manifest does not list as transformable", () => {
     const compiler = new Compiler({ manifest: { ...runtimeManifest, transformIntrinsics: ["Entity"] } });
     try {
-      const result = compiler.compile("C.tsx", `function C() { return <Entity name="C"><Sprite image="a" transform={{ x: 1 }} /></Entity>; }`);
+      const result = compiler.compile("C.tsx", withAuthoringImports(`function C() { return <Entity name="C"><Sprite image="a" transform={{ x: 1 }} /></Entity>; }`));
       assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.InvalidTransformAttribute]);
     } finally {
       compiler.close();

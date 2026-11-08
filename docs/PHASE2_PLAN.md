@@ -12,7 +12,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
 | M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform` and element refs; #8 replaced them with a `transform={{ x, y }}` attribute driven by state and value refs (`useRef(0)`), and also renamed the per-frame hooks to `useUpdate`/`useInput` and switched state reads to React's snapshot semantics (see Decisions) |
-| M7 Authoring types | In review | `claude/wizardly-gauss-dfqppf` | Component source imports from `@rge/runtime/jsx`; the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI). Imports are still optional: the compiler resolves names itself, so existing unimported source compiles but does not type-check |
+| M7 Authoring types | In review | #9 | Component source imports from `@rge/runtime/jsx` (mandatory: `RGE1005` otherwise); the TSX itself is type-checked (editor, `npm run typecheck`, and the CLI) |
 | M4 Props and callbacks | Not started | n/a | Also: collision events as `<Collider onCollisionEnter>` props, fragment and non-Entity roots, arrow-function and default-export components |
 | M8 Children | Not started | n/a | Needs M4 |
 | M5 Keyed dynamic lists | Not started | n/a | Needs M4; split into M5a (arrays and records in handlers) and M5b (keyed list) |
@@ -278,7 +278,7 @@ What shipped:
 - **No drift.** Element props are the runtime's own prop interfaces and `TransformProps` is `Partial<Transform>`, so they follow the runtime. A test checks the module exports exactly the names the compiler accepts (intrinsics, hooks, manifest functions).
 - **Imports are validated.** Component source may import from `./X.tsx` and from the manifest's `authoringModule`; any other import (`react`, a CSS file, a `.ts` helper, a default, namespace, aliased or `type` import) is `RGE1001` instead of being silently dropped. A name the entry point does not export is `RGE1004`.
 - **Source type-checking.** `Compiler.typeCheckSources` runs the TypeScript checker over the authored TSX (`RGE9002`), so a wrong prop, a bad hook argument or an undefined name is reported with TypeScript's own message (`Did you mean 'image'?`). `rge-compile` runs it before compiling; `--no-check` skips it. `packages/example/tsconfig.json` type-checks the examples from `npm run typecheck`, which CI runs.
-- **Imports stay optional for now.** Source without imports still compiles (the compiler resolves hook and element names itself), but it fails the source type-check. Requiring them would mean migrating every test source; it is a one-line change in the analyzer when we want it.
+- **Imports are mandatory.** A hook, built-in element or runtime function used without being imported from the authoring module is `RGE1005`, reported once per name per file with the import line to add (`Math` is a global and needs none). The test helpers add the import line to short snippets (see `withAuthoringImports`); `m7.test.ts` tests the rule by calling the compiler directly.
 - **One divergence to know.** TypeScript accepts `ref.current` in JSX, but the compiler rejects it (`RGE1304`), because it would go stale.
 
 ## M8 — Children (~1 week, needs M4)
