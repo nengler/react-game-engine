@@ -1,7 +1,7 @@
 function Mover() {
   const [x, setX] = useState(0);
 
-  onUpdate((dt) => {
+  useUpdate((dt) => {
     setX((previous) => previous + 60 * dt);
   });
 

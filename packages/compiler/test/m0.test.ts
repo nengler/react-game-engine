@@ -118,7 +118,7 @@ function R() {
       const calls = compiler.compile("W.tsx", `
 function W() {
   const [n, setN] = useState(0);
-  onUpdate(() => setN(wrap(n, 10)));
+  useUpdate(() => setN(wrap(n, 10)));
   return <Entity name="W" />;
 }`);
       assert.ok(calls.ok);

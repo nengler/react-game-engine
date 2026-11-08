@@ -1,6 +1,7 @@
 /**
  * React idioms the compiler accepts: values derived in the component body,
- * ternary children, and JS shadowing in updaters (see handlers.test.ts).
+ * ternary children, snapshot state reads, and JS shadowing in updaters (see
+ * handlers.test.ts).
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +22,7 @@ function Status() {
   onCollisionEnter(() => {
     setHealth((health) => health - 50);
   });
-  onUpdate(() => {
+  useUpdate(() => {
     if (hurt) setHealth((health) => health + 1);
   });
   return (
@@ -89,7 +90,46 @@ describe("React idioms", () => {
     assert.deepEqual(codes("const a = b; const b = 1;"), [DiagnosticCode.UnknownIdentifier]);
     assert.deepEqual(codes("const f = () => 1;"), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes("let a = 1;"), [DiagnosticCode.InvalidComponentBody]);
-    assert.ok(codes("const r = useRef<Sprite>(); const s = r.current;").includes(DiagnosticCode.HandleReadOutsideHandler));
+    assert.ok(codes("const r = useRef(0); const s = r.current;").includes(DiagnosticCode.HandleReadOutsideHandler));
+  });
+
+  it("gives every handler in a frame the same state snapshot, as React does for a render", async () => {
+    const { Snap } = await load<{ Snap: new () => Entity & { n: number; seenBySecond: number; doubled: number } }>(
+      compile(`function Snap() {
+  const [n, setN] = useState(1);
+  const [seenBySecond, setSeenBySecond] = useState(0);
+  const [doubled, setDoubled] = useState(0);
+  useUpdate(() => {
+    setN(n + 10);
+    setN(n + 10); // the same snapshot: still 1 + 10, not 21
+    setDoubled(n * 2); // reads 1, not 11
+  });
+  useUpdate(() => {
+    setSeenBySecond(n); // a later handler sees the same snapshot
+  });
+  return <Entity name="Snap" />;
+}`),
+    );
+    const world = new World();
+    const snap = new Snap();
+    world.mount(snap);
+    assert.equal(world.tick(1), 1);
+    assert.deepEqual([snap.n, snap.doubled, snap.seenBySecond], [11, 2, 1]);
+    world.tick(1);
+    assert.deepEqual([snap.n, snap.doubled, snap.seenBySecond], [21, 22, 11]);
+  });
+
+  it("renders nothing when every queued update ends where it started", async () => {
+    const { Same } = await load<{ Same: new () => Entity & { n: number } }>(
+      compile(`function Same() {
+  const [n, setN] = useState(5);
+  useUpdate(() => setN(5));
+  return <Entity name="Same" />;
+}`),
+    );
+    const world = new World();
+    world.mount(new Same());
+    assert.equal(world.tick(1), 0);
   });
 
   it("rejects ternary children whose branches are not elements or null", () => {

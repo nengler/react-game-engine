@@ -4,6 +4,7 @@ import { WarningIcon } from "./WarningIcon.ts";
 
 export class Player extends Entity {
   health: number = 100;
+  #healthNext: number = this.health;
   readonly sprite: Sprite = new Sprite({ image: (this.health > 50) ? "normal.png" : "hurt.png" });
   readonly collider: Collider = new Collider({ width: 16, height: 24 });
   warningIcon: WarningIcon | null = null;
@@ -17,10 +18,14 @@ export class Player extends Entity {
   }
 
   setHealth(value: number | ((previous: number) => number)): void {
-    const next = typeof value === "function" ? value(this.health) : value;
-    if (next === this.health) return;
-    this.health = next;
+    const next = typeof value === "function" ? value(this.#healthNext) : value;
+    if (next === this.#healthNext) return;
+    this.#healthNext = next;
     this.markDirty();
+  }
+
+  override commitState(): void {
+    this.health = this.#healthNext;
   }
 
   override render(): void {

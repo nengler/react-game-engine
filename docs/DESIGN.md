@@ -91,11 +91,13 @@ ignored):
   fragments, spread attributes and other expression children are rejected.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any `<Entity>`
   (the root or a child), relative to the nearest ancestor `<Entity>` unless
-  it sets `global: true`. There is no transform hook. Refs:
-  `const r = useRef<Sprite>()` plus `ref={r}` on exactly one element of that
-  tag. See "Transforms and refs".
-* Hooks: top-level `onInput((input) => ...)`, `onUpdate((dt) => ...)` and
-  `onCollisionEnter((other) => ...)` statements; each may appear several times
+  it sets `global: true`. There is no transform hook. Refs hold values:
+  `const timer = useRef(0)`, read and written as `timer.current` in handlers.
+  There is no `ref={…}` on elements. See "Transforms and refs".
+* Hooks: top-level `useInput((input) => ...)`, `useUpdate((dt) => ...)` and
+  `onCollisionEnter((other) => ...)` statements (the last becomes a prop on
+  `<Collider>` in M4; `onUpdate`/`onInput` are the old names and report
+  `RGE1102` with the new one); each may appear several times
   and runs in source order. See "Handlers" below.
 * Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`; the list
   comes from the runtime manifest), components declared in the same file, or
@@ -132,7 +134,7 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 * `hooks: HookIR[]` lists hook declarations in source order; `state: StateIR[]`
   lists the persistent storage slots they create. They are separate because
   hook order matters while storage does not. Refs are not hooks in the IR:
-  they live in `ComponentIR.refs`, resolved to the element they point at.
+  they live in `ComponentIR.refs` as typed values with an initial value.
 * `transform` is not a prop: elements carry `transform: TransformPropIR[]`,
   the same static/dynamic props, restricted to the transform fields and
   written to the element's runtime `transform`.
@@ -141,16 +143,16 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 
 | Feature | IR change |
 | --- | --- |
-| ~~`onUpdate`, `onInput`, `onCollisionEnter`~~ | done: `OnUpdate` / `OnInput` / `OnCollisionEnter` hooks carrying a `FunctionIR`; see "Handlers" |
-| `onInput` / event props | `PropIR` variant `EventHandlerProp` holding a callback IR |
-| ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs`, `Assign`, `RefRead` / `RefPropertyRead`; see "Transforms and refs" |
+| ~~`useUpdate`, `useInput`, `onCollisionEnter`~~ | done: `OnUpdate` / `OnInput` / `OnCollisionEnter` hooks carrying a `FunctionIR` (IR kinds are named after the runtime methods they override); see "Handlers" |
+| event props (`<Collider onCollisionEnter={…}>`) | `PropIR` variant for a callback on an intrinsic (M4) |
+| ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
 | props between components | `ComponentIR.props: PropDeclIR[]`; `ExprIR` variant `PropRead`; `ComponentRef` `Local` accepts props |
 | keyed lists | `ChildIR` variant `KeyedListChild { items, key, element }` |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
 
 ## Handlers
 
-`onInput`, `onUpdate` and `onCollisionEnter` are hooks whose handlers are
+`useInput`, `useUpdate` and `onCollisionEnter` are hooks whose handlers are
 lowered to a `FunctionIR { params, body: StatementIR[] }`. Statements exist
 only inside functions.
 
@@ -158,7 +160,7 @@ only inside functions.
 `LocalConst`, `If`, `Return`, and `SetState`, which is either
 `{ state, value }` or `{ state, updater: FunctionIR }` for `setX(prev => …)`.
 Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
-`Assign` (`=`, `+=`, `-=`, `*=`, `/=`) writes a ref property; see
+`Assign` (`=`, `+=`, `-=`, `*=`, `/=`) writes `ref.current`; see
 "Transforms and refs". Position is not assigned: it is state.
 
 **Expressions** added: `ParamRead`, `LocalRead`, `PropertyRead` (only on a
@@ -168,8 +170,7 @@ round/sign/sqrt/sin/cos/min/max`, `clamp`) and to methods of handle
 parameters (`input.pressed/down/released`); the tables live in
 `transform/handles.ts`. Everything else (loops, `try`, `let`, assignment,
 closures that escape, `this`, `await`, other calls) is a diagnostic
-(`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but a ref property is
-`RGE1402`.
+(`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but `ref.current` is `RGE1402`.
 
 **Scoping**: component scope (state, setters) → function scope (parameters) →
 block scope (`const`s). Shadowing follows JS, so the React idiom
@@ -178,15 +179,21 @@ parameter or local of the same name cannot be confused with it. Only a
 redeclaration in the same scope (the function body shares its parameters'
 scope, as in JS) or rebinding `Math`/`clamp` is `RGE1401`.
 
-**Semantics**: state reads are *live* (not React-style snapshots): after
-`setHealth(...)`, a later read in the same handler sees the new value.
-Setters call `markDirty()`, so any number of setter calls in a frame cause one
-render, in the frame's render phase, never mid-handler.
+**Semantics** (React's): state is a snapshot. A setter records the next value
+in a private pending field (`#healthNext`) and calls `markDirty()`; reads
+(`this.health`) keep the value from the last render until the component
+renders again, when `commitState()` (run by `runRender()` just before
+`render()`) copies pending into current. So `setN(n + 1); setN(n + 1)` adds 1,
+`setN((n) => n + 1)` twice adds 2 (updaters chain on the pending value), and
+every handler in a frame sees the same state whichever runs first. Any number
+of setter calls in a frame cause one render, in the frame's render phase.
+Refs are the deliberate exception: `ref.current` is a plain field, read and
+written immediately.
 
 **Generated code**: one override per hook kind. A single handler is inlined:
 
 ```ts
-override onInput(input: InputState): void { if (input.pressed("Space")) { … } }
+override onInput(input: InputState): void { if (input.pressed("Space")) { … } }   // from useInput
 ```
 
 Several handlers of one kind become private methods called in source order, so
@@ -198,7 +205,7 @@ override onUpdate(dt: number): void { this.#onUpdate0(dt); this.#onUpdate1(dt); 
 
 `SetState` emits `this.setX(…)`, so dirty marking stays in the setter.
 
-**Runtime frame** (`World.tick(dt, input = NO_INPUT)`): `onInput` → `onUpdate`
+**Runtime frame** (`World.tick(dt, input = NO_INPUT)`): `onInput` → `onUpdate` (the methods `useInput` / `useUpdate` compile to)
 → render dirty objects → commit structure. Objects register on attach only if
 they override a hook (compared against `GameObject.prototype`), and the visit
 lists are snapshotted at the start of the tick, so objects attached during a
@@ -212,7 +219,7 @@ component (the first ancestor-or-self that is not a runtime intrinsic, i.e.
 without its own `static intrinsic`) receives `onCollisionEnter(otherComponent)`.
 Dispatch only; renders happen in the next `tick`.
 
-Input model decision (per the Phase 2 plan): a polled per-frame `onInput` hook,
+Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
 not JSX event props. Event props can be added later as a `PropIR`
 `EventHandlerProp`.
 
@@ -225,7 +232,9 @@ written with a `transform` attribute on an `<Entity>`.
 ```tsx
 function Mover() {
   const [x, setX] = useState(0);
-  onUpdate((dt) => setX((previous) => previous + 60 * dt));
+  useUpdate((dt) => {
+    setX((previous) => previous + 60 * dt);
+  });
   return (
     <Entity name="Mover" transform={{ x, y: 0 }}>
       <Sprite image={x > 100 ? "run.png" : "idle.png"} />
@@ -237,6 +246,7 @@ function Mover() {
 ```ts
 export class Mover extends Entity {
   x: number = 0;
+  #xNext: number = this.x;       // pending value written by setX
   readonly sprite: Sprite = new Sprite({ image: (this.x > 100) ? "run.png" : "idle.png" });
   constructor() {
     super({ name: "Mover" });
@@ -245,6 +255,7 @@ export class Mover extends Entity {
     this.render();
     this.commitStructure();
   }
+  override commitState(): void { this.x = this.#xNext; }
   override onUpdate(dt: number): void { this.setX((previous: number) => previous + (60 * dt)); }
   override render(): void {
     this.transform.x = this.x;     // dynamic fields: re-applied on render
@@ -291,32 +302,23 @@ re-evaluates all of the component's dynamic props; the IR already records each
 prop's `dependencies`, so a later optimisation can re-evaluate only the props
 whose state changed.
 
-**useRef** (the escape hatch): `const r = useRef<T>(null)` (or `useRef<T>()`), with `T` the tag of
-the target element (intrinsic, local or imported), and `ref={r}` on exactly
-one element of that tag. `ComponentIR.refs` holds `RefIR { id, name,
-componentName, target }`, resolved after the JSX is lowered. There is no
-runtime ref object: the element is already a field, so the ref's name
-*becomes* the element's field name (`this.body`), which is how authors control
-field names. `r.current` is `RefRead`; `r.current.image` is `RefPropertyRead`
-or an `Assign` to a `RefProperty` target. Properties come from
-`elementProperties` in the runtime manifest (`Sprite`: `image`, ...; a runtime
-test checks each is a real field); refs to compiled components expose only
-`.current`. Unattached, doubly attached, wrongly typed or root refs are
-`RGE1106`.
+**useRef** (values that never render): `const cooldown = useRef(0)` (or
+`useRef<number>(0)`; types as for `useState`) is a value that persists across
+frames but is not state. `RefIR { id, name, type, initialValue }` in
+`ComponentIR.refs` compiles to a plain field (`cooldown: number = 0`);
+`cooldown.current` reads it (`RefRead`) and `cooldown.current -= dt` writes it
+(`Assign` with a `RefCurrent` target). Neither marks anything dirty, so a ref
+is for bookkeeping nothing on screen depends on: timers, accumulators,
+previous values. Refs do not point at elements or components: what is on
+screen is driven by state and props, so `ref={…}` on any element is `RGE1106`
+(`RGE1404`, which guarded writes through element refs, is retired). The
+initial value must not read state, and a ref name must not clash with state
+(`RGE1106`).
 
-**Null safety**: a ref to an element inside `{cond && …}` is a nullable field
-(`Sprite | null`), so the generated code only type-checks behind
-`if (r.current) { … }`. An unchecked access fails the type-check (`RGE9001`)
-rather than being accepted and crashing after the element unmounts.
-
-**Reads only in handlers**: a ref read in JSX or a `useState` initialiser
-would be evaluated once or only on render and then go stale, so it is
-`RGE1304`. Use state for anything JSX depends on.
-
-**One writer per property**: a handler write to a ref property that JSX sets
-from state (`<Sprite ref={s} image={hurt ? …} />` plus `s.current.image = …`)
-would be overwritten at the next render, so it is `RGE1404`. Writing over a
-static prop is allowed (an imperative override after construction).
+**Reads only in handlers**: `ref.current` in JSX, a `useState` initialiser or
+a derived `const` would be evaluated at render and then go stale, because
+changing a ref never renders. That is `RGE1304`. Use state for anything JSX
+depends on.
 
 ## Code generation
 

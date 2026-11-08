@@ -2,25 +2,25 @@ function Hero() {
   const [health, setHealth] = useState(100);
   const [poisoned, setPoisoned] = useState(false);
 
-  onInput((input) => {
+  useInput((input) => {
     if (input.pressed("Space")) {
       setHealth(100);
       setPoisoned(false);
     }
   });
 
-  onUpdate((dt) => {
+  useUpdate((dt) => {
     if (poisoned) {
       setHealth((h) => clamp(h - dt * 5, 0, 100));
     }
   });
 
-  onUpdate((dt) => {
+  useUpdate((dt) => {
     if (health <= 0) {
       return;
     }
     const regen = poisoned ? 0 : dt;
-    setHealth(Math.min(health + regen, 100));
+    setHealth((health) => Math.min(health + regen, 100));
   });
 
   onCollisionEnter(() => {

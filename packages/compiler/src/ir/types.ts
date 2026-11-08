@@ -19,7 +19,7 @@ export type ElementId = string & { readonly [elementIdBrand]: true };
 /** Identifies a parameter or `const` local inside one function body. */
 export type LocalId = string & { readonly [localIdBrand]: true };
 
-/** Identifies a `useRef` handle within a component. */
+/** Identifies a `useRef` value within a component. */
 export type RefId = string & { readonly [refIdBrand]: true };
 
 export function refId(component: string, name: string): RefId {
@@ -66,7 +66,7 @@ export interface ComponentIR {
   readonly hooks: readonly HookIR[];
   /** Persistent storage slots created by hooks. */
   readonly state: readonly StateIR[];
-  /** `useRef` handles, each resolved to the element it is attached to. */
+  /** `useRef` values: mutable fields that never cause a render. */
   readonly refs: readonly RefIR[];
   /** The root `<Entity>`: describes the component instance itself. */
   readonly root: HostElementIR;
@@ -87,15 +87,21 @@ export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnCollisi
 export const TRANSFORM_FIELDS = ["x", "y", "rotation", "scaleX", "scaleY", "global"] as const;
 export type TransformField = (typeof TRANSFORM_FIELDS)[number];
 
-/** `const r = useRef<Sprite>()` attached with `ref={r}`. The element's field takes the ref's name. */
+/**
+ * `const cooldown = useRef(0)`: a value that persists across frames and
+ * renders but is not state. Reading or writing `cooldown.current` never marks
+ * anything dirty, so it is for bookkeeping nothing on screen depends on
+ * (timers, accumulators, previous values). Refs hold values only; there is no
+ * `ref={…}` on elements.
+ */
 export interface RefIR {
   readonly kind: "Ref";
   readonly id: RefId;
-  /** Also the generated field name of the target element. */
+  /** Also the generated field name. */
   readonly name: string;
-  /** The tag the ref was declared for (`Sprite`). */
-  readonly componentName: string;
-  readonly target: ElementId;
+  readonly type: ValueType;
+  /** Must not read state. */
+  readonly initialValue: ExprIR;
   readonly span: SourceSpan;
 }
 
@@ -181,13 +187,12 @@ export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | 
 export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=";
 
 /** Where an assignment writes. Not reactive: no write marks anything dirty. */
-export type AssignTargetIR = RefPropertyTargetIR;
+export type AssignTargetIR = RefCurrentTargetIR;
 
-/** `r.current.image`, where `r` is a `useRef` handle to an intrinsic element. */
-export interface RefPropertyTargetIR {
-  readonly kind: "RefProperty";
+/** `r.current`, where `r` is a `useRef` value. */
+export interface RefCurrentTargetIR {
+  readonly kind: "RefCurrent";
   readonly ref: RefId;
-  readonly property: string;
 }
 
 /** `target = value;` and the compound forms. */
@@ -364,7 +369,6 @@ export type ExprIR =
   | ParamReadIR
   | PropertyReadIR
   | RefReadIR
-  | RefPropertyReadIR
   | CallIR
   | TemplateLiteralIR
   | UnaryExprIR
@@ -416,17 +420,10 @@ export interface PropertyReadIR {
   readonly name: string;
 }
 
-/** `r.current`: the ref's element, `null` while a conditional element is unmounted. Only valid inside handlers. */
+/** `r.current`: the ref's current value. Only valid inside handlers (a JSX read would never update). */
 export interface RefReadIR {
   readonly kind: "RefRead";
   readonly ref: RefId;
-}
-
-/** `r.current.image`: a property of the ref's element. The element must be non-null (the type-check enforces this). */
-export interface RefPropertyReadIR {
-  readonly kind: "RefPropertyRead";
-  readonly ref: RefId;
-  readonly property: string;
 }
 
 /** A call to a fixed allowlist (`Math.*`, `clamp`) or a method of a runtime handle parameter. */
@@ -494,7 +491,6 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "LocalRead":
     case "ParamRead":
     case "RefRead":
-    case "RefPropertyRead":
       return [];
     case "PropertyRead":
       return [e.object];

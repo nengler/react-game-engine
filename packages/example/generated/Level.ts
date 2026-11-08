@@ -14,7 +14,9 @@ export class Enemy extends Entity {
 
 export class Level extends Entity {
   wave: number = 1;
+  #waveNext: number = this.wave;
   bossVisible: boolean = false;
+  #bossVisibleNext: boolean = this.bossVisible;
   readonly enemy: Enemy = new Enemy();
   readonly enemy2: Enemy = new Enemy();
   enemy3: Enemy | null = null;
@@ -31,17 +33,22 @@ export class Level extends Entity {
   }
 
   setWave(value: number | ((previous: number) => number)): void {
-    const next = typeof value === "function" ? value(this.wave) : value;
-    if (next === this.wave) return;
-    this.wave = next;
+    const next = typeof value === "function" ? value(this.#waveNext) : value;
+    if (next === this.#waveNext) return;
+    this.#waveNext = next;
     this.markDirty();
   }
 
   setBossVisible(value: boolean | ((previous: boolean) => boolean)): void {
-    const next = typeof value === "function" ? value(this.bossVisible) : value;
-    if (next === this.bossVisible) return;
-    this.bossVisible = next;
+    const next = typeof value === "function" ? value(this.#bossVisibleNext) : value;
+    if (next === this.#bossVisibleNext) return;
+    this.#bossVisibleNext = next;
     this.markDirty();
+  }
+
+  override commitState(): void {
+    this.wave = this.#waveNext;
+    this.bossVisible = this.#bossVisibleNext;
   }
 
   override render(): void {

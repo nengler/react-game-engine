@@ -98,6 +98,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
     visitProps(c.root.transform);
     visitChildren(c.root.children);
     c.state.forEach((s) => visitExpr(s.initialValue));
+    c.refs.forEach((r) => visitExpr(r.initialValue));
     for (const hook of c.hooks) if (isHandlerHook(hook)) visitFunction(hook.handler);
   }
   return [...[...values].sort(), ...[...types].sort().map((t) => `type ${t}`)];
@@ -143,6 +144,12 @@ class ComponentGenerator {
       // Persistent state.
       for (const s of c.state) {
         w.line(`${s.name}: ${s.type} = ${this.#expr(s.initialValue, true)};`);
+        // The value setters write; it becomes `s.name` when the component next renders.
+        if (this.#hasSetter(s.id)) w.line(`${pending(s)}: ${s.type} = this.${s.name};`);
+      }
+      // Refs: plain fields. Reading or writing them never marks anything dirty.
+      for (const r of c.refs) {
+        w.line(`${r.name}: ${r.type} = ${this.#expr(r.initialValue, true)};`);
       }
       // Persistent children (field initialisers run after state initialisers, so they can read state).
       this.#emitElementFields(c.root.children, "persistent");
@@ -165,10 +172,11 @@ class ComponentGenerator {
             if (hook.setterName === null) break;
             const s = this.#state(hook.state);
             w.blank();
+            // React semantics: reads see the value from the last render; updaters chain on the pending value.
             w.block(`${hook.setterName}(value: ${s.type} | ((previous: ${s.type}) => ${s.type})): void`, () => {
-              w.line(`const next = typeof value === "function" ? value(this.${s.name}) : value;`);
-              w.line(`if (next === this.${s.name}) return;`);
-              w.line(`this.${s.name} = next;`);
+              w.line(`const next = typeof value === "function" ? value(${pendingRef(s)}) : value;`);
+              w.line(`if (next === ${pendingRef(s)}) return;`);
+              w.line(`${pendingRef(s)} = next;`);
               w.line("this.markDirty();");
             });
             break;
@@ -180,6 +188,14 @@ class ComponentGenerator {
           default:
             assertNever(hook, "hook");
         }
+      }
+
+      const settable = c.state.filter((s) => this.#hasSetter(s.id));
+      if (settable.length > 0) {
+        w.blank();
+        w.block("override commitState(): void", () => {
+          for (const s of settable) w.line(`this.${s.name} = ${pendingRef(s)};`);
+        });
       }
 
       this.#emitHandlerMethods();
@@ -236,6 +252,10 @@ class ComponentGenerator {
     return fn.params.map((p) => `${p.name}: ${typeText(p.type)}`).join(", ");
   }
 
+  #hasSetter(state: StateId): boolean {
+    return this.#c.hooks.some((h) => h.kind === "UseState" && h.state === state && h.setterName !== null);
+  }
+
   #setter(state: StateId): string {
     for (const hook of this.#c.hooks) {
       if (hook.kind === "UseState" && hook.state === state && hook.setterName !== null) return hook.setterName;
@@ -269,7 +289,7 @@ class ComponentGenerator {
           w.line(`this.${this.#setter(stmt.state)}(${"updater" in stmt ? this.#updater(stmt.updater) : this.#expr(stmt.value, true)});`);
           break;
         case "Assign": {
-          const target = this.#refProperty(stmt.target.ref, stmt.target.property);
+          const target = `this.${this.#refField(stmt.target.ref)}`;
           w.line(`${target} ${stmt.operator} ${this.#expr(stmt.value, true)};`);
           break;
         }
@@ -428,15 +448,11 @@ class ComponentGenerator {
     return `{ ${props.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`).join(", ")} }`;
   }
 
-  /** A ref's name is the field of its element. */
+  /** A ref's name is its field. */
   #refField(id: RefId): string {
     const ref = this.#c.refs.find((r) => r.id === id);
     if (!ref) throw new Error(`Unknown ref ${id} in component ${this.#c.name}`);
     return ref.name;
-  }
-
-  #refProperty(id: RefId, property: string): string {
-    return access(`this.${this.#refField(id)}`, property);
   }
 
   #state(id: StateId): StateIR {
@@ -458,7 +474,6 @@ class ComponentGenerator {
       case "ParamRead": return e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
       case "RefRead": return `this.${this.#refField(e.ref)}`;
-      case "RefPropertyRead": return this.#refProperty(e.ref, e.property);
       case "Call": {
         const args = e.args.map((a) => this.#expr(a, true)).join(", ");
         return e.callee.kind === "Function" ? `${e.callee.name}(${args})` : `${e.callee.receiver.name}.${e.callee.name}(${args})`;
@@ -492,6 +507,15 @@ function typeName(ref: ComponentRef): string {
  */
 function slotArgument(siblings: readonly ChildIR[], index: number): string {
   return siblings.some((c) => c.kind !== "StaticChild") ? `, ${index}` : "";
+}
+
+/** The private field holding a state slot's next value (`#healthNext`). Private names cannot clash with public ones. */
+function pending(s: StateIR): string {
+  return `#${s.name}Next`;
+}
+
+function pendingRef(s: StateIR): string {
+  return `this.${pending(s)}`;
 }
 
 /** Field names of an element and all its descendants (every one of them lives and dies with it). */

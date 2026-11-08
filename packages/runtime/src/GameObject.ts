@@ -95,11 +95,19 @@ export class GameObject {
     this.world?.scheduleRender(this);
   }
 
-  /** Called by the World for dirty objects. Clears the flag, then renders. */
+  /**
+   * Called by the World for dirty objects: clears the flag, applies the state
+   * updates queued since the last render, then renders. This is the only
+   * place state changes, so every handler in a frame sees the same snapshot.
+   */
   runRender(): void {
     this.#dirty = false;
+    this.commitState();
     this.render();
   }
+
+  /** Apply queued state updates. Generated code overrides this for components with state setters. */
+  commitState(): void {}
 
   /** Per-tick hooks. Generated code overrides the ones a component declares; the World only visits overriders. */
   onInput(_input: InputState): void {}

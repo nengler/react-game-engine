@@ -8,7 +8,7 @@
       "span": {
         "fileName": "packages/example/src/Hero.tsx",
         "start": 0,
-        "end": 743,
+        "end": 758,
         "line": 1,
         "column": 1
       },
@@ -97,7 +97,7 @@
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
             "start": 117,
-            "end": 231,
+            "end": 232,
             "line": 5,
             "column": 3
           }
@@ -192,8 +192,8 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 235,
-            "end": 336,
+            "start": 236,
+            "end": 338,
             "line": 12,
             "column": 3
           }
@@ -259,29 +259,48 @@
               {
                 "kind": "SetState",
                 "state": "Hero.health",
-                "value": {
-                  "kind": "Call",
-                  "callee": {
-                    "kind": "Function",
-                    "name": "Math.min"
-                  },
-                  "args": [
+                "updater": {
+                  "kind": "Function",
+                  "params": [
                     {
-                      "kind": "Binary",
-                      "operator": "+",
-                      "left": {
-                        "kind": "StateRead",
-                        "state": "Hero.health"
-                      },
-                      "right": {
-                        "kind": "LocalRead",
-                        "local": "Hero.regen#5",
-                        "name": "regen"
+                      "id": "Hero.health#6",
+                      "name": "health",
+                      "type": {
+                        "kind": "Primitive",
+                        "name": "number"
                       }
-                    },
+                    }
+                  ],
+                  "body": [
                     {
-                      "kind": "NumberLiteral",
-                      "value": 100
+                      "kind": "Return",
+                      "value": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Function",
+                          "name": "Math.min"
+                        },
+                        "args": [
+                          {
+                            "kind": "Binary",
+                            "operator": "+",
+                            "left": {
+                              "kind": "ParamRead",
+                              "param": "Hero.health#6",
+                              "name": "health"
+                            },
+                            "right": {
+                              "kind": "LocalRead",
+                              "local": "Hero.regen#5",
+                              "name": "regen"
+                            }
+                          },
+                          {
+                            "kind": "NumberLiteral",
+                            "value": 100
+                          }
+                        ]
+                      }
                     }
                   ]
                 }
@@ -290,8 +309,8 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 340,
-            "end": 490,
+            "start": 342,
+            "end": 505,
             "line": 18,
             "column": 3
           }
@@ -309,7 +328,7 @@
                   "kind": "Function",
                   "params": [
                     {
-                      "id": "Hero.h#6",
+                      "id": "Hero.h#7",
                       "name": "h",
                       "type": {
                         "kind": "Primitive",
@@ -325,7 +344,7 @@
                         "operator": "-",
                         "left": {
                           "kind": "ParamRead",
-                          "param": "Hero.h#6",
+                          "param": "Hero.h#7",
                           "name": "h"
                         },
                         "right": {
@@ -349,8 +368,8 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 494,
-            "end": 577,
+            "start": 509,
+            "end": 592,
             "line": 26,
             "column": 3
           }
@@ -435,8 +454,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
-                "start": 621,
-                "end": 680,
+                "start": 636,
+                "end": 695,
                 "line": 33,
                 "column": 7
               }
@@ -474,8 +493,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
-                "start": 687,
-                "end": 722,
+                "start": 702,
+                "end": 737,
                 "line": 34,
                 "column": 7
               }
@@ -484,8 +503,8 @@
         ],
         "span": {
           "fileName": "packages/example/src/Hero.tsx",
-          "start": 594,
-          "end": 736,
+          "start": 609,
+          "end": 751,
           "line": 32,
           "column": 5
         }

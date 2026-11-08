@@ -13,7 +13,7 @@ M3 shipped a non-reactive `const t = useTransform({...})` handle that handlers w
 ```tsx
 function Mover() {
   const [x, setX] = useState(0);
-  onUpdate((dt) => setX((previous) => previous + 60 * dt));
+  useUpdate((dt) => setX((previous) => previous + 60 * dt));
   return <Entity name="Mover" transform={{ x, y: 0 }}><Sprite image={x > 100 ? "run.png" : "idle.png"} /></Entity>;
 }
 ```
@@ -41,11 +41,11 @@ function Mover() {
 
 | # | Point | Status |
 | --- | --- | --- |
-| 1 | A ref property write can fight a JSX prop set from state | **Fixed in this PR**: `RGE1404` when a handler writes a ref property that is a `DynamicProp` on the ref's element. Writing over a static prop is still allowed |
-| 2 | Ref nullability must follow the element's presence | Handled in #7: the generator types the field from presence, and a test forces the null check |
-| 3 | `ref` must not become a prop; `ref` on the root | Handled in #7 (`RGE1106` on the root). `ref` and `transform` are now both handled outside `#lowerProps`, and duplicates of either are still reported |
-| 4 | Ref names vs automatic field names | Handled in #7: ref names are claimed in `#lowerHooks`, before the JSX is lowered |
-| 5 | `elementProperties` can drift from the runtime | **Fixed in this PR**: a runtime test checks each listed property is a field of that intrinsic |
+| 1 | A ref property write can fight a JSX prop set from state | Fixed with `RGE1404`, then made moot: refs no longer point at elements (values only, decided after the React API review), so `RGE1404` is retired |
+| 2 | Ref nullability must follow the element's presence | Handled in #7; moot now that refs hold values |
+| 3 | `ref` must not become a prop; `ref` on the root | `ref={…}` on any element is now `RGE1106`: refs hold values |
+| 4 | Ref names vs automatic field names | Handled in #7: ref names are claimed before the JSX is lowered, and refs still compile to named fields |
+| 5 | `elementProperties` can drift from the runtime | Moot: the table is removed along with element refs |
 | 6 | Transform units | **Fixed in this PR**: pixels, y down, rotation in radians, documented in `Transform.ts` and DESIGN.md |
 | 7 | `useTransform` initial values | No longer applies: the hook is gone. Transform fields are any expression, including state |
 | 8 | DESIGN.md out of date | Handled in #7, then rewritten in this PR for the attribute |

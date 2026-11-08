@@ -1,11 +1,11 @@
 /**
- * M3: the `transform` attribute and refs: lowering, diagnostics, type-checking
- * of generated code, and runtime behaviour. Position is ordinary state written
- * to `transform={{ ... }}`; there is no `useTransform` hook.
+ * M3: the `transform` attribute and value refs: lowering, diagnostics,
+ * type-checking of generated code, and runtime behaviour. Position is ordinary
+ * state written to `transform={{ ... }}`; refs hold values that never render.
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Sprite, Transform, World, createInputState } from "@rge/runtime";
+import { Entity, Sprite, Transform, World } from "@rge/runtime";
 import { DiagnosticCode, type ComponentIR, type StatementIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -18,15 +18,20 @@ const RUNNER = `
 function Runner() {
   const [lives, setLives] = useState(3);
   const [x, setX] = useState(10);
-  const body = useRef<Sprite>();
-  onUpdate((dt) => {
-    setX((previous) => previous + 60 * dt);
-    body.current.image = x > 100 ? "run.png" : "idle.png";
+  const [laps, setLaps] = useState(0);
+  const travelled = useRef(0);
+  useUpdate((dt) => {
+    setX((x) => x + 60 * dt);
+    travelled.current += 60 * dt;
+    if (travelled.current >= 100) {
+      travelled.current -= 100;
+      setLaps((laps) => laps + 1);
+    }
   });
   onCollisionEnter(() => setLives((n) => n - 1));
   return (
     <Entity name="Runner" transform={{ x, y: -5, rotation: x / 100, scaleX: 2 }}>
-      <Sprite ref={body} image="idle.png" />
+      <Sprite image={x > 100 ? "run.png" : "idle.png"} />
       <Sprite image={lives > 0 ? "alive.png" : "dead.png"} />
       <Entity name="shadow" transform={{ y: 4 }} />
     </Entity>
@@ -34,43 +39,37 @@ function Runner() {
 }
 `;
 
-const GHOST = `
-function Ghost() {
-  const [visible, setVisible] = useState(true);
-  const aura = useRef<Sprite>();
-  onInput((input) => {
-    if (input.pressed("Space")) setVisible((v) => !v);
+const TIMER = `
+function Timer() {
+  const elapsed = useRef(0);
+  const label = useRef<string>("");
+  useUpdate((dt) => {
+    elapsed.current += dt;
+    label.current = \`t=\${elapsed.current}\`;
   });
-  onUpdate(() => {
-    if (aura.current) {
-      aura.current.image = "pulse.png";
-    }
-  });
-  return (
-    <Entity name="Ghost">
-      {visible && <Sprite ref={aura} image="aura.png" />}
-    </Entity>
-  );
+  return <Entity name="Timer" />;
 }
 `;
 
 interface RunnerInstance extends Entity {
   lives: number;
   x: number;
-  readonly body: Sprite;
+  laps: number;
+  travelled: number;
   readonly sprite: Sprite;
   readonly entity: Entity;
 }
-interface GhostInstance extends Entity {
-  aura: Sprite | null;
+interface TimerInstance extends Entity {
+  elapsed: number;
+  label: string;
 }
 
 let Runner: new () => RunnerInstance;
-let Ghost: new () => GhostInstance;
+let Timer: new () => TimerInstance;
 
 before(async () => {
   ({ Runner } = await load<{ Runner: typeof Runner }>(compile(RUNNER, "Runner.tsx")));
-  ({ Ghost } = await load<{ Ghost: typeof Ghost }>(compile(GHOST, "Ghost.tsx")));
+  ({ Timer } = await load<{ Timer: typeof Timer }>(compile(TIMER, "Timer.tsx")));
 });
 
 function ir(source: string): ComponentIR {
@@ -100,34 +99,22 @@ describe("M3: IR shape", () => {
     assert.ok(!c.root.props.some((p) => p.name === "transform"), "transform is not a prop");
     const shadow = c.root.children[2]!.element;
     assert.deepEqual(shadow.transform.map((p) => [p.name, p.kind]), [["y", "StaticProp"]]);
-    assert.ok(!c.hooks.some((h) => (h.kind as string) === "UseTransform"));
   });
 
-  it("lowers ref writes to Assign statements with a RefProperty target", () => {
+  it("lowers useRef to a typed value with an initial value", () => {
+    assert.deepEqual(
+      ir(RUNNER).refs.map((r) => [r.name, r.type, r.initialValue]),
+      [["travelled", "number", { kind: "NumberLiteral", value: 0 }]],
+    );
+    assert.deepEqual(ir(TIMER).refs.map((r) => [r.name, r.type]), [["elapsed", "number"], ["label", "string"]]);
+  });
+
+  it("lowers `.current` writes to Assign and reads to RefRead", () => {
     const hook = ir(RUNNER).hooks.find((h) => h.kind === "OnUpdate");
     assert.ok(hook?.kind === "OnUpdate");
-    const [a, b] = hook.handler.body as [StatementIR, StatementIR];
-    assert.ok(a.kind === "SetState");
-    assert.ok(b.kind === "Assign" && b.operator === "=" && b.target.kind === "RefProperty" && b.target.property === "image");
-  });
-
-  it("resolves a ref to its element, whose field takes the ref's name", () => {
-    const c = ir(RUNNER);
-    assert.equal(c.refs.length, 1);
-    const ref = c.refs[0]!;
-    const first = c.root.children[0]!.element;
-    assert.equal(ref.target, first.id);
-    assert.equal(ref.name, "body");
-    assert.equal(first.fieldName, "body");
-    assert.equal(c.root.children[1]!.element.fieldName, "sprite"); // unnamed elements keep generated names
-    assert.ok(!first.props.some((p) => p.name === "ref"), "ref is not a prop");
-  });
-
-  it("lowers `r.current` to RefRead", () => {
-    const hook = ir(GHOST).hooks.find((h) => h.kind === "OnUpdate");
-    assert.ok(hook?.kind === "OnUpdate");
-    const stmt = hook.handler.body[0]!;
-    assert.ok(stmt.kind === "If" && stmt.test.kind === "RefRead");
+    const [, write, check] = hook.handler.body as [StatementIR, StatementIR, StatementIR];
+    assert.ok(write.kind === "Assign" && write.operator === "+=" && write.target.kind === "RefCurrent");
+    assert.ok(check.kind === "If" && check.test.kind === "Binary" && check.test.left.kind === "RefRead");
   });
 });
 
@@ -142,24 +129,19 @@ describe("M3: generated code", () => {
     assert.match(render, /this\.transform\.x = this\.x;/);
     assert.match(render, /this\.transform\.rotation = \(?this\.x \/ 100\)?;/);
     assert.doesNotMatch(render, /transform\.y/, "static fields are not re-applied");
-    assert.match(code, /readonly body: Sprite = new Sprite/);
-    assert.match(code, /this\.body\.image = /);
+  });
+
+  it("emits a ref as a plain field read and written directly, with no dirty marking", () => {
+    const { code } = compile(TIMER);
+    assert.match(code, /^  elapsed: number = 0;$/m);
+    assert.match(code, /^  label: string = "";$/m);
+    assert.match(code, /this\.elapsed \+= dt;/);
+    assert.doesNotMatch(code, /markDirty|override render/);
   });
 
   it("type-checks", () => {
     assert.deepEqual(typeCheck(compile(RUNNER)), []);
-    assert.deepEqual(typeCheck(compile(GHOST)), []);
-  });
-
-  it("forces a null check for a ref to a conditional element", () => {
-    const unchecked = compile(`
-function Bad() {
-  const [on, setOn] = useState(true);
-  const aura = useRef<Sprite>();
-  onUpdate(() => { aura.current.image = "x.png"; });
-  return <Entity name="Bad">{on && <Sprite ref={aura} image="a.png" />}</Entity>;
-}`);
-    assert.deepEqual(typeCheck(unchecked).map((d) => d.code), [DiagnosticCode.GeneratedTypeError]);
+    assert.deepEqual(typeCheck(compile(TIMER)), []);
   });
 });
 
@@ -187,21 +169,29 @@ describe("M3: runtime behaviour", () => {
     assert.equal(runner.transform.x, 130);
   });
 
-  it("a ref write goes to the same instance and does not render by itself", () => {
+  it("ref writes never render, and persist across frames", () => {
+    const world = new World();
+    const timer = new Timer();
+    world.mount(timer);
+    assert.equal(world.tick(0.5), 0);
+    assert.equal(world.tick(0.25), 0);
+    assert.equal(timer.elapsed, 0.75);
+    assert.equal(timer.label, "t=0.75", "a ref read after a write in the same handler sees the write");
+  });
+
+  it("refs can gate state changes without rendering in between", () => {
     const world = new World();
     const runner = new Runner();
     world.mount(runner);
-    const body = runner.body;
-    world.tick(1); // x 10 → 70; the write saw 10
-    assert.equal(body.image, "idle.png");
-    world.tick(1); // the write sees 70
-    world.tick(1); // the write sees 130
-    assert.equal(runner.body, body, "identity preserved");
-    assert.equal(body.image, "run.png");
+    world.tick(1); // travelled 60: no lap
+    assert.equal(runner.laps, 0);
+    world.tick(1); // travelled 120 → a lap, 20 carried over
+    assert.equal(runner.laps, 1);
+    assert.equal(runner.travelled, 20);
   });
 
   it("a conditional <Entity> gets its transform when it mounts and keeps it in sync", async () => {
-    const { Spawner } = await load<{ Spawner: new () => Entity & { setOn: (v: boolean) => void; setY: (v: number) => void; marker: Entity | null } }>(
+    const { Spawner } = await load<{ Spawner: new () => Entity & { setOn: (v: boolean) => void; setY: (v: number) => void } }>(
       compile(`function Spawner() {
   const [on, setOn] = useState(false);
   const [y, setY] = useState(3);
@@ -222,16 +212,14 @@ describe("M3: runtime behaviour", () => {
   });
 
   it("child transforms are relative to the parent unless `global`", async () => {
-    const { Ship } = await load<{ Ship: new () => Entity & { setX: (v: number) => void; setPinned: (v: boolean) => void; turret: Entity; hud: Entity } }>(
+    const { Ship } = await load<{ Ship: new () => Entity & { setX: (v: number) => void; setPinned: (v: boolean) => void; entity: Entity; entity2: Entity } }>(
       compile(`function Ship() {
   const [x, setX] = useState(100);
   const [pinned, setPinned] = useState(true);
-  const turret = useRef<Entity>();
-  const hud = useRef<Entity>();
   return (
     <Entity name="Ship" transform={{ x, y: 50 }}>
-      <Entity ref={turret} name="turret" transform={{ x: 10 }} />
-      <Entity ref={hud} name="hud" transform={{ x: 5, y: 5, global: pinned }} />
+      <Entity name="turret" transform={{ x: 10 }} />
+      <Entity name="hud" transform={{ x: 5, y: 5, global: pinned }} />
     </Entity>
   );
 }`),
@@ -239,40 +227,24 @@ describe("M3: runtime behaviour", () => {
     const world = new World();
     const ship = new Ship();
     world.mount(ship);
-    assert.deepEqual([ship.turret.worldTransform().x, ship.turret.worldTransform().y], [110, 50]);
-    assert.deepEqual([ship.hud.worldTransform().x, ship.hud.worldTransform().y], [5, 5]);
+    const turret = ship.entity;
+    const hud = ship.entity2;
+    assert.deepEqual([turret.worldTransform().x, turret.worldTransform().y], [110, 50]);
+    assert.deepEqual([hud.worldTransform().x, hud.worldTransform().y], [5, 5]);
 
     ship.setX(200);
     world.flush();
-    assert.equal(ship.turret.worldTransform().x, 210, "the child follows its parent");
-    assert.equal(ship.hud.worldTransform().x, 5, "a global child does not");
+    assert.equal(turret.worldTransform().x, 210, "the child follows its parent");
+    assert.equal(hud.worldTransform().x, 5, "a global child does not");
 
     ship.setPinned(false);
     world.flush();
-    assert.deepEqual([ship.hud.worldTransform().x, ship.hud.worldTransform().y], [205, 55], "`global` can come from state");
+    assert.deepEqual([hud.worldTransform().x, hud.worldTransform().y], [205, 55], "`global` can come from state");
   });
 
   it("type-checks `global` as a boolean", () => {
     const bad = compile(`function C() { return <Entity name="C" transform={{ global: 1 }} />; }`);
     assert.deepEqual(typeCheck(bad).map((d) => d.code), [DiagnosticCode.GeneratedTypeError]);
-  });
-
-  it("a ref to a conditional element is null after unmount and the handler skips it", () => {
-    const world = new World();
-    const ghost = new Ghost();
-    world.mount(ghost);
-    const aura = ghost.aura;
-    assert.ok(aura);
-    world.tick(0.1);
-    assert.equal(aura.image, "pulse.png");
-
-    const space = createInputState({ pressed: ["Space"] });
-    world.tick(0.1, space);
-    assert.equal(ghost.aura, null);
-    assert.doesNotThrow(() => world.tick(0.1));
-
-    world.tick(0.1, space);
-    assert.ok(ghost.aura && ghost.aura !== aura, "a remounted element is a new instance");
   });
 });
 
@@ -309,70 +281,55 @@ function C() {
     assert.match(removed.message, /transform=\{\{ x, y \}\}/);
   });
 
-  it("rejects a ref write to a property JSX sets from state", () => {
-    const conflicting = jsxCodes(
-      "<Sprite ref={s} image={n > 0 ? \"a\" : \"b\"} />",
-      "const s = useRef<Sprite>(); onUpdate(() => { s.current.image = \"c\"; });",
-    );
-    assert.deepEqual(conflicting, [DiagnosticCode.ConflictingRefWrite]);
-    // A static prop may be overridden imperatively.
-    assert.doesNotThrow(() =>
-      compile(`function C() { const s = useRef<Sprite>(); onUpdate(() => { s.current.image = "c"; }); return <Entity name="C"><Sprite ref={s} image="a" /></Entity>; }`),
-    );
-  });
-
-  it("rejects hooks that are not at the top level", () => {
-    assert.ok(codes("onUpdate(() => { const r = useRef<Sprite>(); });").includes(DiagnosticCode.HookNotAtTopLevel));
-  });
-
-  it("rejects ref reads outside handlers", () => {
-    const jsx = compileErrors(`
-function C() {
-  const r = useRef<Sprite>();
-  return <Entity name="C"><Sprite ref={r} image="a" /><Sprite image={r.current.image} /></Entity>;
-}`);
-    assert.deepEqual(jsx.map((d) => d.code), [DiagnosticCode.HandleReadOutsideHandler]);
-  });
-
-  it("rejects unattached, doubly attached, mistyped and root refs", () => {
-    const body = (extra: string, jsx: string) => compileErrors(`
-function C() {
-  ${extra}
-  return <Entity name="C">${jsx}</Entity>;
-}`).map((d) => d.code);
-    assert.deepEqual(body("const r = useRef<Sprite>();", "<Sprite image=\"a\" />"), [DiagnosticCode.InvalidUseRef]);
-    assert.deepEqual(body("const r = useRef<Sprite>();", "<Sprite ref={r} image=\"a\" /><Sprite ref={r} image=\"b\" />"), [DiagnosticCode.InvalidUseRef]);
-    assert.deepEqual(body("const r = useRef<Collider>();", "<Sprite ref={r} image=\"a\" />"), [DiagnosticCode.InvalidUseRef, DiagnosticCode.InvalidUseRef]);
-    assert.deepEqual(body("const r = useRef<Sprite>();", "<Sprite ref={other} image=\"a\" />").includes(DiagnosticCode.InvalidUseRef), true);
-    assert.deepEqual(
-      compileErrors(`function C() { const r = useRef<Entity>(); return <Entity ref={r} name="C" />; }`).map((d) => d.code),
-      [DiagnosticCode.InvalidUseRef, DiagnosticCode.InvalidUseRef],
+  it("rejects `ref={…}` on any element: refs hold values, not elements", () => {
+    assert.deepEqual(jsxCodes("<Sprite ref={r} image=\"a\" />", "const r = useRef(0);"), [DiagnosticCode.InvalidUseRef]);
+    assert.deepEqual(jsxCodes("<Child ref={r} />", "const r = useRef(0);"), [DiagnosticCode.InvalidUseRef]);
+    assert.ok(
+      compileErrors(`function C() { const r = useRef(0); return <Entity ref={r} name="C" />; }`).some((d) => d.code === DiagnosticCode.InvalidUseRef),
     );
   });
 
   it("rejects malformed useRef calls", () => {
-    for (const extra of ["const r = useRef();", "const r = useRef<Sprite>(5);", "const r = useRef<Nope>();", "const r = useRef<number>();"]) {
+    for (const extra of [
+      "const r = useRef();",
+      "const r = useRef(1, 2);",
+      "const r = useRef<Sprite>(null);",
+      "const r = useRef(null);",
+      "const r = useRef(n);",
+      "let r = useRef(0);",
+      "const { current } = useRef(0);",
+    ]) {
       assert.ok(codes("", extra).includes(DiagnosticCode.InvalidUseRef), extra);
     }
+    // As with useState, a type argument that disagrees with the initial value fails the type-check.
+    const mismatched = compile(`function C() { const r = useRef<number>("a"); return <Entity name="C" />; }`);
+    assert.deepEqual(typeCheck(mismatched).map((d) => d.code), [DiagnosticCode.GeneratedTypeError]);
   });
 
-  it("accepts React's `useRef<T>(null)` spelling", () => {
-    const c = ir(GHOST.replace("useRef<Sprite>()", "useRef<Sprite>(null)"));
-    assert.equal(c.refs[0]?.name, "aura");
+  it("rejects hooks that are not at the top level", () => {
+    assert.ok(codes("useUpdate(() => { const r = useRef(0); });").includes(DiagnosticCode.HookNotAtTopLevel));
+  });
+
+  it("rejects `.current` reads outside handlers: in JSX, state initialisers and derived consts", () => {
+    const outside = (body: string) => compileErrors(`function C() {
+  const r = useRef(0);
+  ${body}
+}`).map((d) => d.code);
+    assert.deepEqual(outside(`return <Entity name="C"><Sprite image={r.current > 0 ? "a" : "b"} /></Entity>;`), [DiagnosticCode.HandleReadOutsideHandler]);
+    assert.deepEqual(outside(`const [n] = useState(r.current); return <Entity name="C" />;`), [DiagnosticCode.HandleReadOutsideHandler]);
+    assert.deepEqual(outside(`const big = r.current > 5; return <Entity name="C" />;`), [DiagnosticCode.HandleReadOutsideHandler]);
   });
 
   it("rejects ref names that collide with state", () => {
-    assert.ok(codes("", "const n = useRef<Sprite>();").includes(DiagnosticCode.InvalidUseRef));
+    assert.ok(codes("", "const n = useRef(0);").includes(DiagnosticCode.InvalidUseRef));
   });
 
   it("rejects bad uses of a ref, and assignments to anything else", () => {
-    const r = "const r = useRef<Sprite>();";
-    const attach = (c: string[]) => c.filter((x) => x !== DiagnosticCode.InvalidUseRef);
-    assert.deepEqual(attach(codes("onUpdate(() => { const q = r; });", r)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(attach(codes("onUpdate(() => { r.other = 1; });", r)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(attach(codes("onUpdate(() => { r.current.nope = 1; });", r)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(attach(codes("onUpdate(() => { r.current = 1; });", r)), [DiagnosticCode.UnsupportedStatement]);
-    assert.deepEqual(attach(codes("onUpdate(() => { r.current.image ||= \"a\"; });", r)), [DiagnosticCode.UnsupportedStatement]);
-    assert.deepEqual(codes("onUpdate(() => { n = 2; });"), [DiagnosticCode.UnsupportedStatement]);
+    const r = "const r = useRef(0);";
+    assert.deepEqual(codes("useUpdate(() => { const q = r; });", r), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes("useUpdate(() => { r.other = 1; });", r), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes("useUpdate(() => { r = 1; });", r), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(codes("useUpdate(() => { r.current ||= 1; });", r), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(codes("useUpdate(() => { n = 2; });"), [DiagnosticCode.UnsupportedStatement]);
   });
 });

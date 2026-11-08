@@ -23,13 +23,13 @@ export const DiagnosticCode = {
   UnsupportedExpression: "RGE1301",
   UnknownIdentifier: "RGE1302",
   NonConstantInitialState: "RGE1303",
-  /** A ref read outside a handler (JSX, state initialisers): it would never update. */
+  /** A `ref.current` read outside a handler (JSX, state initialisers, derived consts): it would never update. */
   HandleReadOutsideHandler: "RGE1304",
   InvalidHandler: "RGE1401",
   UnsupportedStatement: "RGE1402",
   /** Retired: several handlers of one kind are now allowed. Kept so codes are never reused. */
   DuplicateHandler: "RGE1403",
-  /** A handler writes a ref property that JSX also sets dynamically: the next render would overwrite it. */
+  /** Retired: refs no longer point at elements, so there are no ref property writes to conflict with JSX. */
   ConflictingRefWrite: "RGE1404",
   GeneratedTypeError: "RGE9001",
 } as const;

@@ -3,7 +3,9 @@ import { Collider, Entity, Sprite, clamp, type InputState } from "@rge/runtime";
 
 export class Hero extends Entity {
   health: number = 100;
+  #healthNext: number = this.health;
   poisoned: boolean = false;
+  #poisonedNext: boolean = this.poisoned;
   readonly sprite: Sprite = new Sprite({ image: this.poisoned ? "poisoned.png" : "normal.png" });
   readonly collider: Collider = new Collider({ width: 16, height: 24 });
 
@@ -16,17 +18,22 @@ export class Hero extends Entity {
   }
 
   setHealth(value: number | ((previous: number) => number)): void {
-    const next = typeof value === "function" ? value(this.health) : value;
-    if (next === this.health) return;
-    this.health = next;
+    const next = typeof value === "function" ? value(this.#healthNext) : value;
+    if (next === this.#healthNext) return;
+    this.#healthNext = next;
     this.markDirty();
   }
 
   setPoisoned(value: boolean | ((previous: boolean) => boolean)): void {
-    const next = typeof value === "function" ? value(this.poisoned) : value;
-    if (next === this.poisoned) return;
-    this.poisoned = next;
+    const next = typeof value === "function" ? value(this.#poisonedNext) : value;
+    if (next === this.#poisonedNext) return;
+    this.#poisonedNext = next;
     this.markDirty();
+  }
+
+  override commitState(): void {
+    this.health = this.#healthNext;
+    this.poisoned = this.#poisonedNext;
   }
 
   override onInput(input: InputState): void {
@@ -52,7 +59,7 @@ export class Hero extends Entity {
       return;
     }
     const regen = this.poisoned ? 0 : dt;
-    this.setHealth(Math.min(this.health + regen, 100));
+    this.setHealth((health: number) => Math.min(health + regen, 100));
   }
 
   override onCollisionEnter(): void {

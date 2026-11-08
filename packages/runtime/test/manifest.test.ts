@@ -29,18 +29,6 @@ describe("runtime manifest", () => {
     }
   });
 
-  it("lists only real instance fields as ref-accessible element properties", () => {
-    const instances: Record<string, object> = {
-      Entity: new Entity(),
-      Sprite: new Sprite({ image: "a" }),
-      Collider: new Collider({ width: 1, height: 1 }),
-    };
-    for (const [tag, properties] of Object.entries(runtimeManifest.elementProperties)) {
-      assert.ok(runtimeManifest.intrinsics.includes(tag), `${tag} is not an intrinsic`);
-      for (const property of properties) assert.ok(Object.hasOwn(instances[tag]!, property), `${tag}.${property} is not a field`);
-    }
-  });
-
   it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
     const classes: Record<string, unknown> = { Entity, Sprite, Collider };

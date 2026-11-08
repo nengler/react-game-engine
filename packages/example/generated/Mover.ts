@@ -3,6 +3,7 @@ import { Entity, Sprite } from "@rge/runtime";
 
 export class Mover extends Entity {
   x: number = 0;
+  #xNext: number = this.x;
   readonly sprite: Sprite = new Sprite({ image: (this.x > 100) ? "run.png" : "idle.png" });
 
   constructor() {
@@ -14,10 +15,14 @@ export class Mover extends Entity {
   }
 
   setX(value: number | ((previous: number) => number)): void {
-    const next = typeof value === "function" ? value(this.x) : value;
-    if (next === this.x) return;
-    this.x = next;
+    const next = typeof value === "function" ? value(this.#xNext) : value;
+    if (next === this.#xNext) return;
+    this.#xNext = next;
     this.markDirty();
+  }
+
+  override commitState(): void {
+    this.x = this.#xNext;
   }
 
   override onUpdate(dt: number): void {

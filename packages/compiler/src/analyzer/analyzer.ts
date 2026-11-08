@@ -94,9 +94,9 @@ export interface UseRefCallAnalysis {
   readonly declaration: VariableDeclaration;
 }
 
-/** `onUpdate(() => ...)` / `onCollisionEnter(() => ...)` as a top-level statement. */
+/** `useUpdate(() => ...)` / `useInput(...)` / `onCollisionEnter(...)` as a top-level statement. */
 export interface HandlerCallAnalysis {
-  readonly kind: "onUpdate" | "onInput" | "onCollisionEnter";
+  readonly kind: "useUpdate" | "useInput" | "onCollisionEnter";
   readonly handler: ArrowFunction;
   readonly call: CallExpression;
   readonly statement: Statement;
@@ -113,8 +113,11 @@ export interface UseStateCallAnalysis {
 }
 
 const HOOK_NAME = /^use[A-Z0-9]/;
-const KNOWN_HOOKS = new Set(["useState", "useRef"]);
-const HANDLER_HOOKS = new Set(["onUpdate", "onInput", "onCollisionEnter"]);
+const KNOWN_HOOKS = new Set(["useState", "useRef", "useUpdate", "useInput"]);
+/** `onCollisionEnter` stays a hook until it becomes a prop on `<Collider>` (M4). */
+const HANDLER_HOOKS = new Set(["useUpdate", "useInput", "onCollisionEnter"]);
+/** Earlier names of the per-frame hooks, reported with their replacement. */
+const RENAMED_HOOKS: Readonly<Record<string, string>> = { onUpdate: "useUpdate", onInput: "useInput" };
 
 /**
  * @param fileName Name used in spans and diagnostics. Defaults to the parsed
@@ -241,7 +244,8 @@ function analyzeComponent(
         hooks.push(handler.hook);
         acceptedHookCalls.add(handler.hook.call);
       } else {
-        diagnostics.push(error(DiagnosticCode.InvalidHandler, handler.message, span(statement)));
+        diagnostics.push(error(handler.code, handler.message, span(statement)));
+        if (handler.call) acceptedHookCalls.add(handler.call);
       }
       return;
     }
@@ -253,7 +257,7 @@ function analyzeComponent(
     diagnostics.push(
       error(
         DiagnosticCode.InvalidComponentBody,
-        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const name = expression\` (derived values), handler statements (\`onUpdate(...)\`, \`onInput(...)\`, \`onCollisionEnter(...)\`) and a final \`return\` are supported.`,
+        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const name = expression\` (derived values), handler statements (\`useUpdate(...)\`, \`useInput(...)\`, \`onCollisionEnter(...)\`) and a final \`return\` are supported.`,
         span(statement),
       ),
     );
@@ -396,17 +400,22 @@ function matchHandleStatement(statement: Statement): HandleMatch | null {
 
 type HandlerMatch =
   | { readonly kind: "ok"; readonly hook: HandlerCallAnalysis }
-  | { readonly kind: "invalid"; readonly message: string };
+  | { readonly kind: "invalid"; readonly code: DiagnosticCode; readonly message: string; readonly call: CallExpression | null };
 
-/** Recognises `onUpdate(arrow)` / `onCollisionEnter(arrow)`; null if the statement is not a call to one of them. */
+/** Recognises `useUpdate(arrow)`, `useInput(arrow)`, `onCollisionEnter(arrow)`; null if the statement is not a call to one of them. */
 function matchHandlerStatement(statement: Statement): HandlerMatch | null {
   if (!isExpressionStatement(statement)) return null;
   const call = unwrapParens(statement.expression);
-  if (!isCallExpression(call) || !isIdentifier(call.expression) || !HANDLER_HOOKS.has(call.expression.text)) return null;
+  if (!isCallExpression(call) || !isIdentifier(call.expression)) return null;
+  const renamed = RENAMED_HOOKS[call.expression.text];
+  if (renamed) {
+    return { kind: "invalid", code: DiagnosticCode.UnknownHook, message: `'${call.expression.text}' was renamed to '${renamed}' (hooks start with \`use\`, as in React).`, call };
+  }
+  if (!HANDLER_HOOKS.has(call.expression.text)) return null;
   const name = call.expression.text as HandlerCallAnalysis["kind"];
   const handler = call.arguments.length === 1 ? unwrapParens(call.arguments[0]!) : undefined;
   if (!handler || !isArrowFunction(handler)) {
-    return { kind: "invalid", message: `${name} takes exactly one arrow function: \`${name}(() => { ... })\`.` };
+    return { kind: "invalid", code: DiagnosticCode.InvalidHandler, message: `${name} takes exactly one arrow function: \`${name}(() => { ... })\`.`, call };
   }
   return { kind: "ok", hook: { kind: name, handler, call, statement } };
 }

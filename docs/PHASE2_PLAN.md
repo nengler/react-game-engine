@@ -11,18 +11,29 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M0 Hardening | Done | #5 | CI passed on the PR (first run of the workflow). Imports are named `.tsx` imports only (no aliases). Cross-file static cycles are not detected yet |
 | M1 Statement and function IR | Done | #4 | `Assign` deferred to M3: its only targets are transform fields. Tested through the M2 hooks rather than an internal test hook |
 | M2 Lifecycle and input hooks | Done | #4 | `other` in `onCollisionEnter` is received but has no readable members yet |
-| M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform`; #8 replaced it with a `transform={{ x, y }}` attribute driven by state (see Decisions). Adds `Assign` for ref properties; a ref write to a property JSX sets from state is `RGE1404` |
-| M4 Props and callbacks | Not started | n/a | n/a |
-| M5 Keyed dynamic lists | Not started | n/a | Needs M4 |
+| M3 Transform attribute and refs | Done | #7, #8 | #7 shipped `useTransform` and element refs; #8 replaced them with a `transform={{ x, y }}` attribute driven by state and value refs (`useRef(0)`), and also renamed the per-frame hooks to `useUpdate`/`useInput` and switched state reads to React's snapshot semantics (see Decisions) |
+| M7 Authoring types | Not started | n/a | Next. Typed imports for hooks and intrinsics so source TSX type-checks in editors; see below |
+| M4 Props and callbacks | Not started | n/a | Also: collision events as `<Collider onCollisionEnter>` props, fragment and non-Entity roots, arrow-function and default-export components |
+| M8 Children | Not started | n/a | Needs M4 |
+| M5 Keyed dynamic lists | Not started | n/a | Needs M4; split into M5a (arrays and records in handlers) and M5b (keyed list) |
+| M9 Mount and unmount hooks | Not started | n/a | `useMount` / `useUnmount`; no `useEffect` |
 | M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
+
+Rows are in the order the work is planned (M7–M9 were added on 2026-11-08 after the [React API review](REACT_API_REVIEW.md)).
 
 ## Decisions (settled)
 
 | Decision | Choice | Affects |
 | --- | --- | --- |
 | Prop and list types: copy source type text into output, or query the TS 7.1 checker through the API | Copy source text; revisit if prefab schemas need resolved types (unions, aliases across files) | M4, M5, M6 |
-| Input model | Per-frame `onInput` hook with polled `InputState`; JSX event props can be added later as a `PropIR` variant | M2 |
+| Input model | Per-frame `useInput` hook with polled `InputState`; JSX event props can be added later as a `PropIR` variant | M2 |
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs | M6 |
+| Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling becomes a prop on `<Collider onCollisionEnter={…}>` in M4, replacing the `onCollisionEnter` hook (decided 2026-11-08) | M2, M4 |
+| State reads in handlers | React's snapshot semantics: reads see the value from the last render; setters queue, updaters chain on the pending value, and `commitState()` applies them just before the render. Every handler in a frame sees the same state (decided 2026-11-08) | M1, M2 |
+| Refs | Refs hold values only (`const timer = useRef(0)`; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) | M3 |
+| Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) | M4 |
+| Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) | M9 |
+| Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) | M7 |
 | Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on an `<Entity>` (decided 2026-11-08). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters | M3, M4, M6 |
 
 ## Ground rules
@@ -91,13 +102,13 @@ Decision: no general-purpose JS subset. The allowlist grows only when a mileston
 
 ## M2 — Lifecycle and input hooks (~1 week, needs M1)
 
-Three top-level hooks that compile to overridden methods, plus a fixed frame order in `World`.
+Three top-level hooks that compile to overridden methods, plus a fixed frame order in `World`. (Shipped as `onUpdate`/`onInput`; renamed to `useUpdate`/`useInput` in #8. The `onCollisionEnter` hook becomes a `<Collider>` prop in M4.)
 
 ```tsx
 function Player() {
   const [health, setHealth] = useState(100);
-  onUpdate((dt) => { if (health < 100) setHealth((h) => h + dt); });
-  onInput((input) => { if (input.pressed("Space")) setHealth(100); });
+  useUpdate((dt) => { if (health < 100) setHealth((h) => h + dt); });
+  useInput((input) => { if (input.pressed("Space")) setHealth(100); });
   onCollisionEnter((other) => setHealth((h) => h - 10));
   return <Entity>…</Entity>;
 }
@@ -105,7 +116,7 @@ function Player() {
 
 **IR**: `HookIR` gains `OnUpdate { handler: FunctionIR }`, `OnInput { handler }`, `OnCollisionEnter { handler }`. Several calls of the same hook are allowed and run in source order.
 
-**Generated code**: one method per hook kind: `override onUpdate(dt: number): void`, `override onInput(input: InputState): void`, `override onCollisionEnter(other: GameObject): void`, each holding the handler bodies in order. Handlers read state through `this.*`, so they always see current values (no stale closures).
+**Generated code**: one method per hook kind: `override onUpdate(dt: number): void`, `override onInput(input: InputState): void`, `override onCollisionEnter(other: GameObject): void`, each holding the handler bodies in order. Handlers read state through `this.*`, so they never see a stale closure; since #8 they read the snapshot from the last render, as in React (see Decisions).
 
 **Runtime**:
 
@@ -117,18 +128,21 @@ function Player() {
 
 **Acceptance tests**: frame order; setter calls in `onUpdate` render once per tick; a handler added by a conditional child starts the next frame and stops after removal; collision dispatch reaches the owning component; hooks inside conditions or callbacks are rejected.
 
-Decision: `onInput` is a per-frame hook with a polled `InputState`, not JSX event props such as `onKeyDown`. Event props come later as `PropIR` `EventHandlerProp` if needed.
+Decision: `useInput` is a per-frame hook with a polled `InputState`, not JSX event props such as `onKeyDown`. Event props come later as `PropIR` `EventHandlerProp` if needed.
 
 ## M3 — Transform attribute and refs (~1 week, needs M1)
 
-Position as ordinary state, written through a `transform` attribute, plus refs to the component's own persistent children. (The first version shipped a non-reactive `useTransform` hook; it was replaced so that components read like React. See Decisions.)
+Position as ordinary state, written through a `transform` attribute, plus refs that hold values which never cause a render. (The first version shipped a non-reactive `useTransform` hook and refs to elements; both were replaced so that components read like React. See Decisions.)
 
 ```tsx
 function Player() {
   const [x, setX] = useState(0);
-  const body = useRef<Sprite>();
-  onUpdate((dt) => setX((previous) => previous + 60 * dt));
-  return <Entity transform={{ x, y: 0 }}><Sprite ref={body} image="idle.png" /></Entity>;
+  const travelled = useRef(0);
+  useUpdate((dt) => {
+    setX((x) => x + 60 * dt);
+    travelled.current += 60 * dt; // bookkeeping: no render
+  });
+  return <Entity transform={{ x, y: 0 }}><Sprite image="idle.png" /></Entity>;
 }
 ```
 
@@ -141,12 +155,12 @@ function Player() {
 
 **useRef**
 
-- Syntax: `const r = useRef<T>()` plus `ref={r}` on exactly one element. `r.current` is the only allowed use.
-- IR: `RefIR { id; name; target: ElementId }`, resolved in transform. `ExprIR` `RefRead { ref }`. A ref with no element, or on two elements, is a diagnostic.
-- Codegen needs no runtime ref object: the element is already a field, so `r.current` compiles to `this.<field>`. The element's field takes the ref's name, which finally gives authors control of field names.
-- Refs to conditional elements are typed `T | null`; the type-check forces a null check in handlers.
+- Syntax: `const r = useRef(0)` or `useRef<number>(0)` (types as for `useState`). `r.current` is the only allowed use, read and assigned in handlers.
+- IR: `RefIR { id; name; type; initialValue }` in `ComponentIR.refs`. `ExprIR` `RefRead { ref }`; `Assign` target `RefCurrent { ref }`.
+- Codegen: a plain field (`travelled: number = 0`); no dirty marking, no render.
+- Reading `.current` in JSX, a state initialiser or a derived `const` is `RGE1304` (it would go stale). `ref={…}` on any element is `RGE1106`.
 
-**Acceptance tests**: transform fields from state render once per tick and update in place; static fields set once; ref read compiles to the field with the same identity; conditional ref is null after unmount; misuse diagnostics.
+**Acceptance tests**: transform fields from state render once per tick and update in place; static fields set once; ref writes never render and persist across frames; misuse diagnostics.
 
 ## M4 — Props and callbacks between components (~1.5 weeks, needs M1)
 
@@ -182,6 +196,12 @@ function Level() {
 Remove diagnostic RGE1204 (props on local components). `children` as a prop stays unsupported.
 
 **Acceptance tests**: parent state change updates the child's prop and renders the child once; the child keeps its identity; callback invoked from the child's `onCollisionEnter` updates parent state; missing required prop fails the type-check; defaults apply.
+
+**Also in M4** (from the [React API review](REACT_API_REVIEW.md)):
+
+- **Collision events as props**: `<Collider width={16} onCollisionEnter={(other) => …} />` replaces the `onCollisionEnter` hook. The runtime calls the collider's own callback, so a component with several colliders knows which one was hit. The hook reports `RGE1102` with the new form.
+- **Fragment and non-Entity roots**: `return <>…</>` lowers to an implicit container (the host `Entity`, no props). `return <Sprite image="coin.png" />` makes the generated class extend `Sprite` itself, with no container. JSX children under the root are allowed only if that element type accepts children (a manifest list); placing such a component needs a transform on every intrinsic, so `transform` moves from `Entity` to `GameObject`.
+- **Component forms**: `const Enemy = (props: EnemyProps) => …` and `export default function Enemy`, plus default imports (`import Enemy from "./Enemy.tsx"`).
 
 ## M5 — Keyed dynamic lists (~1.5 weeks, needs M4)
 
@@ -235,6 +255,26 @@ Lets data files, not only TSX, place components in a world: a prefab is a compil
 **Acceptance tests**: registry generated for every exported component; schema matches `PropDeclIR`; a scene with an unknown prefab, missing required prop or wrong type fails validation; a loaded scene matches the object tree built from equivalent TSX; Tiled fixture imports to the expected scene.
 
 Not in M6: hot reload and editor tooling. Stable `ElementId`s and scene `id`s are what they will key on.
+
+## M7 — Authoring types (~3–4 days, next)
+
+Source files import what they use, as in React, and type-check in an editor:
+
+```tsx
+import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+```
+
+- A typed entry point declares the hooks (`useState`, `useRef`, `useUpdate`, `useInput`, later `useMount`/`useUnmount`), the intrinsics with their props (including `transform`), and a `JSX` namespace (`jsxImportSource`), so editors give autocomplete and prop errors on the TSX itself.
+- The compiler already ignores non-relative imports; it should check that hooks and intrinsics come from this entry point (or are unimported, for now) and report a clear diagnostic otherwise.
+- Examples switch to explicit imports, and CI type-checks `packages/example/src` with the declarations.
+
+## M8 — Children (~1 week, needs M4)
+
+`<Panel><Button /></Panel>`: the parent constructs the child elements (it owns their props and state) and passes them as `children`; the child mounts them where `{children}` appears in its JSX. IR: a slot child (`ChildrenSlotIR`) in the receiving component and a `children` prop on the element that passes them. Conditional children inside the passed block stay owned by the parent.
+
+## M9 — Mount and unmount hooks (~3–4 days)
+
+`useMount(() => …)` runs once, after the component is first attached to a `World` and its first render has committed. `useUnmount(() => …)` runs when it is removed from the `World` (a conditional turning off, a list item removed, a scene unloaded). Both are top-level hooks lowered to `FunctionIR` like `useUpdate`. Setters in `useUnmount` are a diagnostic (the component is gone); refs may be read and written. There is no `useEffect`: reacting to a state change is done where the state changes.
 
 ## Other risks
 

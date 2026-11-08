@@ -130,18 +130,30 @@ describe("generated component instances", () => {
 });
 
 describe("state setters", () => {
-  it("update the field and mark the object dirty", () => {
-    const player = new Player();
+  it("mark the object dirty and apply the value at the next render (React's snapshot semantics)", () => {
+    const { world, player } = mountPlayer();
     assert.equal(player.isDirty, false);
     player.setHealth(80);
-    assert.equal(player.health, 80);
     assert.equal(player.isDirty, true);
+    assert.equal(player.health, 100, "reads keep the value from the last render until it re-renders");
+    world.flush();
+    assert.equal(player.health, 80);
   });
 
-  it("accept an updater function", () => {
-    const player = new Player();
+  it("accept an updater function, chained on pending updates", () => {
+    const { world, player } = mountPlayer();
     player.setHealth((previous) => previous - 30);
-    assert.equal(player.health, 70);
+    player.setHealth((previous) => previous - 30);
+    world.flush();
+    assert.equal(player.health, 40);
+  });
+
+  it("with a plain value, last write wins, as in React's `setN(n + 1); setN(n + 1)`", () => {
+    const { world, player } = mountPlayer();
+    player.setHealth(player.health - 10);
+    player.setHealth(player.health - 10);
+    world.flush();
+    assert.equal(player.health, 90);
   });
 
   it("do not mark the object dirty when the value is unchanged", () => {
