@@ -119,7 +119,9 @@ ignored):
   comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
   `import { Name } from "./Name.tsx"` (named imports only: no default,
-  namespace, `as` or `type` forms). Components take no props yet.
+  namespace, `as` or `type` forms). A component takes props through a
+  destructured parameter annotated with a props type declared in the same
+  file, and a parent passes them as attributes; see "Props and callbacks".
 * Expressions: number/string/boolean/null literals, state reads, unary
   `! - +`, binary arithmetic / comparison / logical, `?:`, parentheses.
 
@@ -137,8 +139,12 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
   (`this.health`), and dependency analysis is a tree walk, not a string scan.
 * `StateId` and `ElementId` are branded strings so they cannot be mixed up with
   arbitrary names.
-* Props are `StaticProp` (no state dependencies, evaluated once) or
-  `DynamicProp` (carries its `dependencies: StateId[]`, re-evaluated on render).
+* Props are `StaticProp` (no dependencies, evaluated once), `DynamicProp`
+  (carries its `dependencies`, re-evaluated on render) or, on a component
+  element, `CallbackProp` (an inline function, created once). A dependency is
+  a state slot of this component or one of its props
+  (`{ kind: "State" | "Prop" }`), so JSX that reads a prop updates when the
+  parent changes it.
 * Children are `StaticChild` (instantiated once, never recreated) or
   `ConditionalChild` (created/destroyed when `condition` flips). The wrapper
   is the extension point for `KeyedListChild` later.
@@ -162,7 +168,7 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 | ~~`useUpdate`, `useInput`, `onCollisionEnter`~~ | done: `OnUpdate` / `OnInput` / `OnCollisionEnter` hooks carrying a `FunctionIR` (IR kinds are named after the runtime methods they override); see "Handlers" |
 | event props (`<Collider onCollisionEnter={…}>`) | `PropIR` variant for a callback on an intrinsic (M4) |
 | ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
-| props between components | `ComponentIR.props: PropDeclIR[]`; `ExprIR` variant `PropRead`; `ComponentRef` `Local` accepts props |
+| ~~props between components~~ | done: `ComponentIR.props: PropDeclIR[]` and `propsType`, `IRModule.typeDeclarations`, `ExprIR` `PropRead`, `CalleeIR` `Prop`, `PropIR` `CallbackProp`, `DependencyIR`; see "Props and callbacks" |
 | keyed lists | `ChildIR` variant `KeyedListChild { items, key, element }` |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
 
@@ -337,6 +343,102 @@ a derived `const` would be evaluated at render and then go stale, because
 changing a ref never renders. That is `RGE1304`. Use state for anything JSX
 depends on.
 
+## Props and callbacks
+
+A parent passes values and callbacks to a local or imported component. A changed
+value updates the existing child instance in place; the child is never recreated.
+
+```tsx
+interface EnemyProps {
+  speed: number;
+  tint?: "red" | "blue";
+  onDefeated?: () => void;
+}
+
+function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
+  useUpdate(() => { if (hp <= 0) onDefeated?.(); });
+  return <Entity name="Enemy"><Sprite image={tint === "red" ? "red.png" : "blue.png"} /></Entity>;
+}
+
+function Level() {
+  const [score, setScore] = useState(0);
+  return (
+    <Entity name="Level">
+      <Enemy speed={score > 10 ? 2 : 1} onDefeated={() => setScore((score) => score + 1)} transform={{ x: 40 }} />
+    </Entity>
+  );
+}
+```
+
+**Declaring props.** One parameter, destructured, annotated with the name of
+an `interface` or `type` object type in the same file (`RGE1208` otherwise: no
+rest, renaming, generics or `extends`). Defaults in the destructuring make a
+prop optional and must be constants. `key`, `ref`, `transform` and `children`
+are reserved and cannot be prop names. The declaration is copied into the
+generated module as written (exported), so the type-check validates it. Each
+member is also described structurally (`PropDeclIR`: name, optional, default,
+role, and a `PropTypeIR` of number/string/boolean, literal unions, arrays,
+function or source text) so a scene schema (M6) needs no type checker.
+
+**Value or callback** is decided by the type: a function type or method
+signature is a callback, anything else a value. A value reads as `this.props.x`
+(`PropRead`). A callback is only called (`onDefeated?.()`, `CalleeIR` `Prop`)
+or forwarded whole (`onDone={onDone}`); reading it as a value, or calling a
+value, is `RGE1301`.
+
+**The child's class** extends `Entity<EnemyProps>`, so `this.props` is
+available to field initialisers, which run right after `super()` returns:
+
+```ts
+export class Enemy extends Entity<EnemyProps> {
+  constructor(props: EnemyProps) {
+    super({ name: "Enemy" }, props, { tint: "red" });   // props and defaults, copied by the runtime
+    …
+  }
+  updateProps(next: Partial<EnemyProps>): void {
+    if (this.applyProps(next, { tint: "red" })) this.markDirty();   // === per key; an undefined update restores the default
+  }
+}
+```
+
+When every prop is optional the constructor parameter defaults to `{}`, so a
+parent may write `<Badge />`.
+
+**The parent** builds the child with every value prop (static or dynamic) and
+its callbacks in the constructor call, and re-sends only the dynamic ones, in
+one call, from `render()`:
+
+```ts
+readonly enemy: Enemy = new Enemy({ speed: (this.score > 10) ? 2 : 1, onDefeated: () => { this.setScore(…); } });
+…
+this.enemy.updateProps({ speed: (this.score > 10) ? 2 : 1 });
+```
+
+A changed prop marks the child dirty, and it renders in the same `World.flush()`
+as the parent: one render each, same instance. A callback is an arrow created
+once in the field initialiser, so it reads state through `this` and never goes
+stale; it is therefore never re-sent. Its parameters are unannotated
+(`Contextual`), so TypeScript types them from the child's props type, which the
+parent (compiling one file at a time) cannot see. A function passed to a
+built-in, `key` and `children` are errors (`RGE1203`, `RGE1202`).
+
+**Reads.** A prop may be read in JSX, conditions, derived values, handlers,
+`transform` fields, and the initial value of `useState` / `useRef` (read once,
+at construction, as in React); a `useState` initial that is a primitive prop
+takes its type from the prop's declaration. State and refs are unchanged.
+
+**Placement.** `transform` on a component element sets the child's
+`placement`, which composes under the child's own `transform`
+(`world = parent × placement × transform`). `<Mover transform={{ x: 200 }} />`
+starts at 200 and moves from there; nothing can conflict, because the parent
+and the child write different transforms. `global` works at either level. The
+attribute is reserved like `key`, so the component's props type never declares
+it; the JSX types accept it on every element.
+
+Not yet: collision callbacks as `<Collider>` props, fragment and non-Entity
+roots, arrow-function components, and the non-destructured `props` form (M4b);
+`children` (M8).
+
 ## Code generation
 
 Generated output for the example above (abridged):
@@ -419,7 +521,10 @@ tag to `Intrinsic`, `Local` or `Imported { name, module }` (name clashes between
 the three are `RGE1206`). The generator imports each name once per module and
 rewrites the specifier to the generated file (`./WarningIcon.tsx` →
 `./WarningIcon.ts`). The CLI compiles every file in a directory and type-checks
-all outputs together, so a broken cross-file reference is caught there.
+all outputs together, so a broken cross-file reference is caught there. A
+parent needs nothing about an imported child's props: it passes what it writes,
+and the project type-check validates it against the child's own props type (a
+missing or mistyped prop is `TS2741` / `TS2322` in the generated parent).
 Cross-file static cycles are not detected yet (the `RGE1205` check is per file).
 
 ## Runtime (mock)

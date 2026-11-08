@@ -1,6 +1,7 @@
 {
   "kind": "Module",
   "sourceFile": "packages/example/src/Mover.tsx",
+  "typeDeclarations": [],
   "components": [
     {
       "kind": "Component",
@@ -108,6 +109,8 @@
         }
       ],
       "refs": [],
+      "props": [],
+      "propsType": null,
       "root": {
         "kind": "HostElement",
         "component": {
@@ -133,7 +136,10 @@
               "state": "Mover.x"
             },
             "dependencies": [
-              "Mover.x"
+              {
+                "kind": "State",
+                "state": "Mover.x"
+              }
             ]
           },
           {
@@ -184,7 +190,10 @@
                     }
                   },
                   "dependencies": [
-                    "Mover.x"
+                    {
+                      "kind": "State",
+                      "state": "Mover.x"
+                    }
                   ]
                 }
               ],

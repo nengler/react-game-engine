@@ -55,7 +55,20 @@ export interface SourceSpan {
 export interface IRModule {
   readonly kind: "Module";
   readonly sourceFile: string;
+  /**
+   * Top-level `interface` / `type` declarations (a component's props type),
+   * copied into the generated module as written, so the type-check validates them.
+   */
+  readonly typeDeclarations: readonly TypeDeclarationIR[];
   readonly components: readonly ComponentIR[];
+}
+
+/** A source `interface Name { … }` or `type Name = { … }`, kept as text. */
+export interface TypeDeclarationIR {
+  readonly kind: "TypeDeclaration";
+  readonly name: string;
+  /** The declaration's source text, without `export`. */
+  readonly text: string;
 }
 
 export interface ComponentIR {
@@ -68,6 +81,10 @@ export interface ComponentIR {
   readonly state: readonly StateIR[];
   /** `useRef` values: mutable fields that never cause a render. */
   readonly refs: readonly RefIR[];
+  /** Declared props, from the destructured parameter. Empty for a component without props. */
+  readonly props: readonly PropDeclIR[];
+  /** The name of the props type (`EnemyProps`), or null for a component without props. */
+  readonly propsType: string | null;
   /** The root `<Entity>`: describes the component instance itself. */
   readonly root: HostElementIR;
 }
@@ -148,7 +165,16 @@ export function isHandlerHook(hook: HookIR): hook is HandlerHookIR {
 export type ValueType = "number" | "string" | "boolean";
 
 /** The types the IR can name. `ValueType` is the subset usable for state. */
-export type TypeIR = PrimitiveTypeIR | NamedTypeIR;
+export type TypeIR = PrimitiveTypeIR | NamedTypeIR | ContextualTypeIR;
+
+/**
+ * No annotation: the parameter's type comes from where the function is used.
+ * A callback passed to a child component is contextually typed by the child's
+ * props type, which the parent (compiling one file at a time) cannot see.
+ */
+export interface ContextualTypeIR {
+  readonly kind: "Contextual";
+}
 
 export interface PrimitiveTypeIR {
   readonly kind: "Primitive";
@@ -326,7 +352,7 @@ export interface StaticChildIR {
 export interface ConditionalChildIR {
   readonly kind: "ConditionalChild";
   readonly condition: ExprIR;
-  readonly dependencies: readonly StateId[];
+  readonly dependencies: readonly DependencyIR[];
   readonly element: ElementIR;
 }
 
@@ -334,11 +360,63 @@ export interface ConditionalChildIR {
 // Props
 // ---------------------------------------------------------------------------
 
-/** Future: EventHandlerProp (onInput, callbacks between components). */
-export type PropIR = StaticPropIR | DynamicPropIR;
+export type PropIR = ValuePropIR | CallbackPropIR;
+
+/** A prop that is a value: static (evaluated once) or dynamic (re-evaluated on render). */
+export type ValuePropIR = StaticPropIR | DynamicPropIR;
 
 /** A `transform` field; `name` is one of `TRANSFORM_FIELDS`. */
-export type TransformPropIR = PropIR & { readonly name: TransformField };
+export type TransformPropIR = ValuePropIR & { readonly name: TransformField };
+
+/**
+ * What a dynamic value depends on, so a render is only needed when it can
+ * have changed: a state slot of this component, or one of its props (which
+ * the parent updates through `updateProps`).
+ */
+export type DependencyIR =
+  | { readonly kind: "State"; readonly state: StateId }
+  | { readonly kind: "Prop"; readonly name: string };
+
+/**
+ * A callback passed to a child component: `onDefeated={() => setScore(…)}`.
+ * Created once with the child, inline in its constructor call, so it is
+ * contextually typed by the child's props type and reads state through
+ * `this` (never stale). It is therefore never "dynamic".
+ */
+export interface CallbackPropIR {
+  readonly kind: "CallbackProp";
+  readonly name: string;
+  /** Parameters are `Contextual`: their types come from the child. */
+  readonly handler: FunctionIR;
+}
+
+// -- declared props (the receiving side) --------------------------------------
+
+/** A prop a component declares in its destructured parameter. */
+export interface PropDeclIR {
+  readonly kind: "PropDecl";
+  readonly name: string;
+  /** `?` in the props type, or a default in the destructuring. */
+  readonly optional: boolean;
+  /** `= 1` in the destructuring; must not read state or other props. */
+  readonly defaultValue: ExprIR | null;
+  /** A function type is a callback (called, never read); anything else is a value. */
+  readonly role: "value" | "callback";
+  readonly type: PropTypeIR;
+}
+
+/**
+ * A prop's type as the compiler understands it: enough for a scene schema
+ * (M6) without asking the TypeScript checker. Type-checking itself uses the
+ * copied source text, so anything not representable here is `SourceText`
+ * (such a prop is "code-only": data cannot set it).
+ */
+export type PropTypeIR =
+  | { readonly kind: "Primitive"; readonly name: ValueType }
+  | { readonly kind: "Literals"; readonly values: readonly (string | number)[] }
+  | { readonly kind: "Array"; readonly element: PropTypeIR }
+  | { readonly kind: "Function" }
+  | { readonly kind: "SourceText"; readonly text: string };
 
 /** Evaluated once at construction. */
 export interface StaticPropIR {
@@ -352,7 +430,7 @@ export interface DynamicPropIR {
   readonly kind: "DynamicProp";
   readonly name: string;
   readonly value: ExprIR;
-  readonly dependencies: readonly StateId[];
+  readonly dependencies: readonly DependencyIR[];
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +446,7 @@ export type ExprIR =
   | LocalReadIR
   | ParamReadIR
   | PropertyReadIR
+  | PropReadIR
   | RefReadIR
   | CallIR
   | TemplateLiteralIR
@@ -420,6 +499,12 @@ export interface PropertyReadIR {
   readonly name: string;
 }
 
+/** A declared prop's current value: `this.props.speed`. A callback prop is only read when forwarded as a whole attribute value (`onX={onX}`). */
+export interface PropReadIR {
+  readonly kind: "PropRead";
+  readonly name: string;
+}
+
 /** `r.current`: the ref's current value. Only valid inside handlers (a JSX read would never update). */
 export interface RefReadIR {
   readonly kind: "RefRead";
@@ -435,7 +520,9 @@ export interface CallIR {
 
 export type CalleeIR =
   | { readonly kind: "Function"; readonly name: string }
-  | { readonly kind: "Method"; readonly receiver: ParamReadIR; readonly name: string };
+  | { readonly kind: "Method"; readonly receiver: ParamReadIR; readonly name: string }
+  /** A callback prop: `onDefeated()` or `onDefeated?.()`. Argument counts and types are left to the type-check. */
+  | { readonly kind: "Prop"; readonly name: string; readonly optional: boolean };
 
 export interface TemplateLiteralIR {
   readonly kind: "TemplateLiteral";
@@ -491,6 +578,7 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "LocalRead":
     case "ParamRead":
     case "RefRead":
+    case "PropRead":
       return [];
     case "PropertyRead":
       return [e.object];
@@ -515,11 +603,20 @@ export function walkExpr(expr: ExprIR, visit: (e: ExprIR) => void): void {
   for (const child of childExpressions(expr)) walkExpr(child, visit);
 }
 
-/** All state slots an expression reads, in first-read order, without duplicates. */
-export function collectDependencies(expr: ExprIR): StateId[] {
-  const out: StateId[] = [];
+/** All state slots and props an expression reads, in first-read order, without duplicates. */
+export function collectDependencies(expr: ExprIR): DependencyIR[] {
+  const out: DependencyIR[] = [];
+  const add = (d: DependencyIR): void => {
+    if (!out.some((o) => o.kind === d.kind && (o.kind === "State" ? o.state === (d as typeof o).state : o.name === (d as typeof o).name))) out.push(d);
+  };
   walkExpr(expr, (e) => {
-    if (e.kind === "StateRead" && !out.includes(e.state)) out.push(e.state);
+    if (e.kind === "StateRead") add({ kind: "State", state: e.state });
+    else if (e.kind === "PropRead") add({ kind: "Prop", name: e.name });
   });
   return out;
+}
+
+/** Only the state slots an expression reads (what a `useState` initial value may not touch). */
+export function stateReads(expr: ExprIR): StateId[] {
+  return collectDependencies(expr).flatMap((d) => (d.kind === "State" ? [d.state] : []));
 }

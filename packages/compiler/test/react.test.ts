@@ -45,7 +45,7 @@ describe("React idioms", () => {
     const sprite = compiled.ir.components[0]!.root.children[0]!.element;
     const image = sprite.props[0]!;
     assert.ok(image.kind === "DynamicProp", "a const derived from state is dynamic where it is used");
-    assert.deepEqual(image.dependencies, ["Status.health"]);
+    assert.deepEqual(image.dependencies, [{ kind: "State", state: "Status.health" }]);
     assert.deepEqual(typeCheck(compiled), []);
 
     const { Status } = await load<{ Status: new () => StatusInstance }>(compiled);

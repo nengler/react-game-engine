@@ -1,6 +1,7 @@
 {
   "kind": "Module",
   "sourceFile": "packages/example/src/Player.tsx",
+  "typeDeclarations": [],
   "components": [
     {
       "kind": "Component",
@@ -39,6 +40,8 @@
         }
       ],
       "refs": [],
+      "props": [],
+      "propsType": null,
       "root": {
         "kind": "HostElement",
         "component": {
@@ -95,7 +98,10 @@
                     }
                   },
                   "dependencies": [
-                    "Player.health"
+                    {
+                      "kind": "State",
+                      "state": "Player.health"
+                    }
                   ]
                 }
               ],
@@ -164,7 +170,10 @@
               }
             },
             "dependencies": [
-              "Player.health"
+              {
+                "kind": "State",
+                "state": "Player.health"
+              }
             ],
             "element": {
               "kind": "Element",

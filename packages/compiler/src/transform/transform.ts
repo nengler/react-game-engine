@@ -15,16 +15,25 @@ import {
   isObjectLiteralExpression,
   isPropertyAssignment,
   isShorthandPropertyAssignment,
+  isArrowFunction,
+  isFunctionTypeNode,
+  isParenthesizedTypeNode,
+  isArrayTypeNode,
+  isUnionTypeNode,
+  isLiteralTypeNode,
+  isTypeLiteralNode,
+  isInterfaceDeclaration,
   isParenthesizedExpression,
   isPrefixUnaryExpression,
   isStringLiteral,
   isNoSubstitutionTemplateLiteral,
 } from "typescript/ast/is";
-import { AUTHORING_HOOKS, unwrapParens, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
+import { AUTHORING_HOOKS, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
   collectDependencies,
+  stateReads,
   elementId,
   refId,
   stateId,
@@ -34,6 +43,10 @@ import {
   type RefIR,
   type TransformField,
   type TransformPropIR,
+  type PropDeclIR,
+  type PropTypeIR,
+  type CallbackPropIR,
+  type TypeDeclarationIR,
   type BinaryOperator,
   type ChildIR,
   type ComponentIR,
@@ -126,15 +139,18 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   // Hooks, built-in elements and runtime functions must be imported, as in React. Each missing name is reported once per file.
   const authoring: AuthoringImports = { names: new Set(analysis.authoringImports.map((i) => i.name)), reported: new Set() };
 
+  const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
+  const typeDeclarations: TypeDeclarationIR[] = analysis.typeDeclarations.map((t) => ({ kind: "TypeDeclaration", name: t.name, text: t.text }));
+
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
-    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, diagnostics).lower();
+    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics).lower();
     if (lowered) components.push(lowered);
   }
 
   checkStaticCycles(components, diagnostics);
 
-  return { module: { kind: "Module", sourceFile: analysis.fileName, components }, diagnostics };
+  return { module: { kind: "Module", sourceFile: analysis.fileName, typeDeclarations, components }, diagnostics };
 }
 
 const HANDLER_KIND = {
@@ -148,6 +164,23 @@ interface AuthoringImports {
   readonly names: ReadonlySet<string>;
   /** Names already reported as missing, so each is reported once. */
   readonly reported: Set<string>;
+}
+
+/** Names a component cannot declare as props: the framework reads them off the element. */
+const RESERVED_PROP_NAMES: ReadonlySet<string> = new Set(["key", "ref", "transform", "children"]);
+
+function unwrapTypeParens(node: Node): Node {
+  let current = node;
+  while (isParenthesizedTypeNode(current)) current = current.type;
+  return current;
+}
+
+/** The value of a string or number literal type (`"fast"`, `3`), else null. */
+function literalValue(node: Node): string | number | null {
+  if (!isLiteralTypeNode(node)) return null;
+  if (isStringLiteral(node.literal)) return node.literal.text;
+  if (isNumericLiteral(node.literal)) return Number(node.literal.text);
+  return null;
 }
 
 /** Attributes the compiler handles itself; they never become props. */
@@ -170,6 +203,10 @@ class ComponentLowering implements LoweringContext {
   readonly #imported: ReadonlyMap<string, string>;
   readonly #hostIntrinsic: string;
   readonly #authoring: AuthoringImports;
+  readonly #typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>;
+  #propDecls: readonly PropDeclIR[] = [];
+  /** True while lowering the value of `onX={onX}`, where a callback prop may be forwarded whole. */
+  #allowCallbackRead = false;
   readonly #diagnostics: CompilerDiagnostic[];
   #errorCount = 0;
   /** Greater than zero while lowering a handler body: the only place `ref.current` is allowed. */
@@ -184,8 +221,10 @@ class ComponentLowering implements LoweringContext {
     locals: ReadonlySet<string>,
     imported: ReadonlyMap<string, string>,
     authoring: AuthoringImports,
+    typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>,
     diagnostics: CompilerDiagnostic[],
   ) {
+    this.#typeDecls = typeDecls;
     this.#authoring = authoring;
     this.#component = component;
     this.componentName = component.name;
@@ -202,10 +241,146 @@ class ComponentLowering implements LoweringContext {
 
   lower(): ComponentIR | null {
     const name = this.#component.name;
+    const props = this.#lowerPropDecls();
+    this.#propDecls = props;
     const { hooks, state } = this.#lowerHooks();
     const root = this.#lowerRoot(this.#component.jsx);
     if (!root || this.#errorCount > 0) return null;
-    return { kind: "Component", name, span: this.#span(this.#component.declaration), hooks, state, refs: this.#refs, root };
+    return {
+      kind: "Component",
+      name,
+      span: this.#span(this.#component.declaration),
+      hooks,
+      state,
+      refs: this.#refs,
+      props,
+      propsType: this.#component.props?.typeName ?? null,
+      root,
+    };
+  }
+
+  /**
+   * Resolve the props parameter against the props type declared in this file,
+   * declare each destructured prop in scope, and describe every member of the
+   * type (destructured or not) for the prefab registry.
+   */
+  #lowerPropDecls(): PropDeclIR[] {
+    const analysis = this.#component.props;
+    if (!analysis) return [];
+    const code = DiagnosticCode.InvalidProps;
+    const decl = this.#typeDecls.get(analysis.typeName);
+    if (!decl) {
+      this.#error(code, `Props type '${analysis.typeName}' is not declared in this file (declare an \`interface ${analysis.typeName} { … }\`).`, analysis.typeNode);
+      return [];
+    }
+    const members = this.#propMembers(decl);
+    if (!members) return [];
+
+    const bindings = new Map(analysis.bindings.map((b) => [b.name, b] as const));
+    for (const binding of analysis.bindings) {
+      if (!members.has(binding.name)) {
+        this.#error(code, `'${binding.name}' is not a prop of ${analysis.typeName}.`, binding.node);
+      }
+    }
+
+    const out: PropDeclIR[] = [];
+    for (const [name, member] of members) {
+      if (RESERVED_PROP_NAMES.has(name)) {
+        this.#error(code, `'${name}' is reserved by the framework and cannot be a prop name.`, member.node);
+        continue;
+      }
+      const binding = bindings.get(name);
+      let defaultValue: ExprIR | null = null;
+      if (binding?.defaultValue) {
+        if (member.role === "callback") {
+          this.#error(code, `Callback prop '${name}' cannot have a default value; call it with \`${name}?.()\` instead.`, binding.node);
+        } else {
+          defaultValue = this.#lowerExpression(binding.defaultValue);
+          if (defaultValue && collectDependencies(defaultValue).length > 0) {
+            this.#error(code, `The default for '${name}' must be a constant: it cannot read state or other props.`, binding.defaultValue);
+            defaultValue = null;
+          }
+        }
+      }
+      out.push({ kind: "PropDecl", name, optional: member.optional || binding?.defaultValue != null, defaultValue, role: member.role, type: member.type });
+      if (binding) {
+        if (this.#componentScope.hasOwn(name)) {
+          this.#error(code, `'${name}' is already declared in this component.`, binding.node);
+        } else {
+          this.#componentScope.declare(name, { kind: "prop", name, role: member.role });
+        }
+      }
+    }
+    return out;
+  }
+
+  /** The members of a props type: an `interface` or a `type` alias of an object type, with plain named members. */
+  #propMembers(decl: TypeDeclarationAnalysis): Map<string, { optional: boolean; role: "value" | "callback"; type: PropTypeIR; node: Node }> | null {
+    const code = DiagnosticCode.InvalidProps;
+    const node = decl.node;
+    let elements: readonly Node[];
+    if (isInterfaceDeclaration(node)) {
+      if (node.heritageClauses && node.heritageClauses.length > 0) {
+        this.#error(code, `Props type '${decl.name}' cannot extend another type: list the props in one interface.`, node);
+        return null;
+      }
+      elements = node.members;
+    } else if (isTypeLiteralNode(node.type)) {
+      elements = node.type.members;
+    } else {
+      this.#error(code, `Props type '${decl.name}' must be an object type: \`type ${decl.name} = { … }\`.`, node);
+      return null;
+    }
+    const out = new Map<string, { optional: boolean; role: "value" | "callback"; type: PropTypeIR; node: Node }>();
+    for (const element of elements) {
+      const member = element as unknown as { kind: SyntaxKind; name?: Node; type?: Node; postfixToken?: Node };
+      const isProperty = member.kind === SyntaxKind.PropertySignature;
+      const isMethod = member.kind === SyntaxKind.MethodSignature;
+      if ((!isProperty && !isMethod) || !member.name || !isIdentifier(member.name)) {
+        this.#error(code, `Props type '${decl.name}': members must be plain \`name: type\` or \`name(): void\`.`, element);
+        continue;
+      }
+      const optional = member.postfixToken?.kind === SyntaxKind.QuestionToken;
+      const typeNode = member.type ? unwrapTypeParens(member.type) : null;
+      const role = isMethod || (typeNode !== null && isFunctionTypeNode(typeNode)) ? "callback" : "value";
+      const type: PropTypeIR = role === "callback" ? { kind: "Function" } : this.#propType(typeNode);
+      out.set(member.name.text, { optional, role, type, node: element });
+    }
+    return out;
+  }
+
+  /** A prop type as the compiler understands it; anything else is carried as source text. */
+  #propType(node: Node | null): PropTypeIR {
+    if (node === null) return { kind: "SourceText", text: "unknown" };
+    const t = unwrapTypeParens(node);
+    switch (t.kind) {
+      case SyntaxKind.NumberKeyword: return { kind: "Primitive", name: "number" };
+      case SyntaxKind.StringKeyword: return { kind: "Primitive", name: "string" };
+      case SyntaxKind.BooleanKeyword: return { kind: "Primitive", name: "boolean" };
+    }
+    if (isArrayTypeNode(t)) {
+      const element = this.#propType(t.elementType);
+      return element.kind === "SourceText" ? { kind: "SourceText", text: t.getText(this.#sourceFile) } : { kind: "Array", element };
+    }
+    const literals = isUnionTypeNode(t) ? t.types.map((u) => literalValue(u)) : [literalValue(t)];
+    if (literals.every((v) => v !== null)) return { kind: "Literals", values: literals as (string | number)[] };
+    return { kind: "SourceText", text: t.getText(this.#sourceFile) };
+  }
+
+  /**
+   * `onDefeated={() => setScore(…)}`, passed to a child component. The
+   * handler runs like any other (state through `this`, refs allowed), but its
+   * parameters are not annotated: the child's props type provides them.
+   */
+  #lowerCallback(name: string, fn: Node & { kind: SyntaxKind.ArrowFunction }): CallbackPropIR | null {
+    this.#functionDepth++;
+    const handler = lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
+      paramTypes: "contextual",
+      returns: "void",
+      what: `${name} callback`,
+    });
+    this.#functionDepth--;
+    return handler && { kind: "CallbackProp", name, handler };
   }
 
   #lowerHooks(): { hooks: HookIR[]; state: StateIR[] } {
@@ -260,8 +435,8 @@ class ComponentLowering implements LoweringContext {
           // then reject any state reads.
           const initialValue = this.#lowerExpression(hook.initializer);
           if (!initialValue) continue;
-          if (collectDependencies(initialValue).length > 0) {
-            this.#error(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state.", hook.initializer);
+          if (stateReads(initialValue).length > 0) {
+            this.#error(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state (it may read props).", hook.initializer);
             continue;
           }
           const type = this.#valueType(hook.typeArgument, initialValue, hook.call, "useState", DiagnosticCode.UnsupportedStateType);
@@ -291,8 +466,8 @@ class ComponentLowering implements LoweringContext {
     if (!this.#checkHandleName(hook.name, code, hook.declaration.name)) return;
     const initialValue = this.#lowerExpression(hook.arguments[0]!);
     if (!initialValue) return;
-    if (collectDependencies(initialValue).length > 0) {
-      this.#error(code, "useRef's initial value must not read state; it is evaluated once.", hook.arguments[0]!);
+    if (stateReads(initialValue).length > 0) {
+      this.#error(code, "useRef's initial value must not read state; it is evaluated once (it may read props).", hook.arguments[0]!);
       return;
     }
     const type = this.#valueType(hook.typeArgument, initialValue, hook.call, "useRef", code);
@@ -323,11 +498,18 @@ class ComponentLowering implements LoweringContext {
           return null;
       }
     }
-    const inferred = inferLiteralType(initial);
+    const inferred = inferLiteralType(initial) ?? this.#inferFromProp(initial);
     if (!inferred) {
-      this.#error(code, `Cannot infer the type; use a number/string/boolean literal or \`${hook}<T>(...)\`.`, at);
+      this.#error(code, `Cannot infer the type; use a number/string/boolean literal, a prop, or \`${hook}<T>(...)\`.`, at);
     }
     return inferred;
+  }
+
+  /** `useState(start)`: the type of a primitive prop, from its declaration in the props type. */
+  #inferFromProp(expr: ExprIR): ValueType | null {
+    if (expr.kind !== "PropRead") return null;
+    const decl = this.#propDecls.find((p) => p.name === expr.name);
+    return decl?.role === "value" && decl.type.kind === "Primitive" ? decl.type.name : null;
   }
 
   #lowerRoot(jsx: JsxRoot): HostElementIR | null {
@@ -339,7 +521,7 @@ class ComponentLowering implements LoweringContext {
     }
     this.#requireImport(tag.text, tag);
     const props = this.#lowerProps(opening.attributes);
-    const transform = this.#lowerTransform(opening.attributes, tag.text, true);
+    const transform = this.#lowerTransform(opening.attributes, tag.text, false);
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, []) : [];
     return {
       kind: "HostElement",
@@ -370,16 +552,12 @@ class ComponentLowering implements LoweringContext {
       return null;
     }
 
-    const props = this.#lowerProps(opening.attributes);
-    const transform = this.#lowerTransform(opening.attributes, tag.text, component.kind === "Intrinsic");
+    const isComponent = component.kind !== "Intrinsic";
+    const props = this.#lowerProps(opening.attributes, isComponent);
+    const transform = this.#lowerTransform(opening.attributes, tag.text, isComponent);
     const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, path) : [];
-    if (component.kind !== "Intrinsic") {
-      if (props.length > 0) {
-        this.#error(DiagnosticCode.LocalComponentProps, `Passing props to component <${tag.text}> is not supported yet.`, opening.attributes);
-      }
-      if (children.length > 0) {
-        this.#error(DiagnosticCode.LocalComponentProps, `Passing children to component <${tag.text}> is not supported yet.`, jsx);
-      }
+    if (isComponent && children.length > 0) {
+      this.#error(DiagnosticCode.UnsupportedJsxChild, `Passing children to component <${tag.text}> is not supported yet.`, jsx);
     }
 
     return {
@@ -398,18 +576,14 @@ class ComponentLowering implements LoweringContext {
    * `transform={{ x, y: 0, rotation: angle }}`: each field becomes a static or
    * dynamic prop on the element's runtime transform, so moving is `setX(...)`.
    * Every intrinsic the manifest lists in `transformIntrinsics` takes it. On
-   * a component element it would be placement by the parent, which arrives
-   * with props (M4).
+   * a component element it is placement by the parent: it sets the child's
+   * `placement`, which composes under the child's own `transform`.
    */
-  #lowerTransform(attributes: JsxAttributes, tag: string, intrinsic: boolean): TransformPropIR[] {
+  #lowerTransform(attributes: JsxAttributes, tag: string, isComponent: boolean): TransformPropIR[] {
     const attribute = findAttribute(attributes, "transform");
     if (!attribute) return [];
     const code = DiagnosticCode.InvalidTransformAttribute;
-    if (!intrinsic) {
-      this.#error(code, `Placing component <${tag}> with \`transform\` is not supported yet (it arrives with props); set the transform on its root <${this.#hostIntrinsic}> instead.`, attribute);
-      return [];
-    }
-    if (!this.#manifest.transformIntrinsics.includes(tag)) {
+    if (!isComponent && !this.#manifest.transformIntrinsics.includes(tag)) {
       this.#error(code, `<${tag}> cannot be placed with \`transform\` (it is not in the runtime's transformIntrinsics). Wrap it in an <${this.#hostIntrinsic}> to position it.`, attribute);
       return [];
     }
@@ -450,8 +624,13 @@ class ComponentLowering implements LoweringContext {
     return out;
   }
 
-  /** Plain props. `transform` is lowered separately but still counts for duplicate detection; `ref` is rejected. */
-  #lowerProps(attributes: JsxAttributes): PropIR[] {
+  /**
+   * Props of an element. `transform` is lowered separately but still counts
+   * for duplicate detection; `ref` is rejected. On a component element
+   * (`toComponent`) an arrow function is a callback prop; on an intrinsic it
+   * is an error.
+   */
+  #lowerProps(attributes: JsxAttributes, toComponent = false): PropIR[] {
     const props: PropIR[] = [];
     const seen = new Set<string>();
     for (const attribute of attributes.properties) {
@@ -466,6 +645,10 @@ class ComponentLowering implements LoweringContext {
       }
       seen.add(name);
       if (SPECIAL_ATTRIBUTES.has(name)) continue;
+      if (name === "key" || name === "children") {
+        this.#error(DiagnosticCode.UnsupportedAttribute, name === "key" ? "`key` is for items of a list, which arrives with keyed lists." : "`children` cannot be passed yet.", attribute);
+        continue;
+      }
       if (name === "ref") {
         this.#error(DiagnosticCode.InvalidUseRef, "Elements cannot be referenced: refs hold values (`const timer = useRef(0)`), and what is on screen is driven by state and props.", attribute);
         continue;
@@ -474,8 +657,25 @@ class ComponentLowering implements LoweringContext {
       let value: ExprIR | null;
       if (!init) value = { kind: "BooleanLiteral", value: true };
       else if (isStringLiteral(init)) value = { kind: "StringLiteral", value: init.text };
-      else if (isJsxExpression(init) && init.expression && !init.dotDotDotToken) value = this.#lowerExpression(init.expression);
-      else {
+      else if (isJsxExpression(init) && init.expression && !init.dotDotDotToken) {
+        const expression = unwrapParens(init.expression);
+        if (isArrowFunction(expression)) {
+          if (!toComponent) {
+            this.#error(DiagnosticCode.UnsupportedAttribute, `'${name}' is a function: callbacks can only be passed to components.`, attribute);
+            continue;
+          }
+          const callback = this.#lowerCallback(name, expression);
+          if (callback) props.push(callback);
+          continue;
+        }
+        // `onX={onX}` forwards a callback prop whole.
+        this.#allowCallbackRead = toComponent && isIdentifier(expression);
+        try {
+          value = this.#lowerExpression(init.expression);
+        } finally {
+          this.#allowCallbackRead = false;
+        }
+      } else {
         this.#error(DiagnosticCode.UnsupportedAttribute, `Unsupported value for attribute '${name}'.`, init);
         continue;
       }
@@ -567,6 +767,12 @@ class ComponentLowering implements LoweringContext {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
+        case "prop":
+          if (binding.role === "callback" && !this.#allowCallbackRead) {
+            this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a callback prop: call it (\`${node.text}?.()\`) or forward it whole (\`onX={${node.text}}\`).`, node);
+            return null;
+          }
+          return { kind: "PropRead", name: binding.name };
         // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
         // in a handler it reads the current state, like recomputing it there.
         case "derived": return binding.value;
@@ -657,6 +863,23 @@ class ComponentLowering implements LoweringContext {
   /** `Math.max(...)`, `clamp(...)`, or `param.method(...)` on a runtime handle parameter. */
   #lowerCall(node: CallExpression): ExprIR | null {
     const callee = node.expression;
+    // A callback prop: `onDefeated()` or `onDefeated?.()`. Arguments are not counted here; the type-check does that.
+    if (isIdentifier(callee)) {
+      const binding = this.scope.get(callee.text);
+      if (binding?.kind === "prop") {
+        if (binding.role !== "callback") {
+          this.#error(DiagnosticCode.UnsupportedExpression, `Prop '${callee.text}' is not a function, so it cannot be called.`, callee);
+          return null;
+        }
+        const args: ExprIR[] = [];
+        for (const argument of node.arguments) {
+          const lowered = this.#lowerExpression(argument);
+          if (!lowered) return null;
+          args.push(lowered);
+        }
+        return { kind: "Call", callee: { kind: "Prop", name: binding.name, optional: node.questionDotToken !== undefined }, args };
+      }
+    }
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
     if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
       const name = `Math.${callee.name.text}`;

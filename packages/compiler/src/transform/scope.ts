@@ -4,6 +4,8 @@ export type Binding =
   | { readonly kind: "state"; readonly id: StateId }
   | { readonly kind: "setter"; readonly state: StateId; readonly name: string }
   | { readonly kind: "ref"; readonly id: RefId; readonly name: string }
+  /** A declared prop in scope as a plain name. A value reads `this.props.x`; a callback is only called (or forwarded whole). */
+  | { readonly kind: "prop"; readonly name: string; readonly role: "value" | "callback" }
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
   | { readonly kind: "local"; readonly id: LocalId; readonly name: string }

@@ -43,8 +43,12 @@ export interface LoweringContext {
 }
 
 export interface FunctionOptions {
-  /** Types of the parameters the caller will pass; the function may declare a prefix of them. */
-  readonly paramTypes: readonly TypeIR[];
+  /**
+   * Types of the parameters the caller will pass; the function may declare a
+   * prefix of them. `"contextual"`: any number of parameters, none annotated
+   * (a callback passed to a child, typed by the child's props type).
+   */
+  readonly paramTypes: readonly TypeIR[] | "contextual";
   /** `void`: handlers (`return;` only). `value`: updaters (`return expr;` required). */
   readonly returns: "void" | "value";
   /** What to call the function in diagnostics. */
@@ -58,7 +62,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
   ctx.scope = scope;
   try {
     const params: ParamIR[] = [];
-    if (fn.parameters.length > options.paramTypes.length) {
+    if (options.paramTypes !== "contextual" && fn.parameters.length > options.paramTypes.length) {
       ctx.error(DiagnosticCode.InvalidHandler, `${options.what} takes at most ${options.paramTypes.length} parameter(s).`, fn.parameters[options.paramTypes.length]!);
       return null;
     }
@@ -70,7 +74,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
       const name = param.name.text;
       if (!checkFreshName(ctx, name, param)) return null;
       const id = localId(ctx.componentName, name, ctx.nextSerial());
-      const type = options.paramTypes[index]!;
+      const type: TypeIR = options.paramTypes === "contextual" ? { kind: "Contextual" } : options.paramTypes[index]!;
       scope.declare(name, { kind: "param", id, name, type });
       params.push({ id, name, type });
     }

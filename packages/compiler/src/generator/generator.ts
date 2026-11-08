@@ -7,6 +7,7 @@ import {
   type ExprIR,
   type IRModule,
   type PropIR,
+  type ParamIR,
   type FunctionIR,
   type HandlerHookIR,
   type RefId,
@@ -47,6 +48,10 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
   for (const [specifier, names] of collectComponentImports(module)) {
     w.line(`import { ${names.join(", ")} } from ${JSON.stringify(specifier)};`);
   }
+  for (const declaration of module.typeDeclarations) {
+    w.blank();
+    w.line(`export ${declaration.text}`);
+  }
   for (const component of module.components) {
     w.blank();
     new ComponentGenerator(component, w).emit();
@@ -65,7 +70,11 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
     walkExpr(expr, (e) => {
       if (e.kind === "Call" && e.callee.kind === "Function" && runtimeFunctions.has(e.callee.name)) values.add(e.callee.name);
     });
-  const visitProps = (props: readonly PropIR[]): void => props.forEach((p) => visitExpr(p.value));
+  const visitProps = (props: readonly PropIR[]): void =>
+    props.forEach((p) => {
+      if (p.kind === "CallbackProp") visitFunction(p.handler);
+      else visitExpr(p.value);
+    });
   const visitChildren = (children: readonly ChildIR[]): void => {
     for (const child of children) {
       if (child.element.component.kind === "Intrinsic") values.add(child.element.component.name);
@@ -140,7 +149,9 @@ class ComponentGenerator {
     const w = this.#w;
     const hasRender = this.#hostHasDynamicProps() || this.#childrenNeedRender(c.root.children);
 
-    w.block(`export class ${c.name} extends ${c.root.component.name}`, () => {
+    // A component with props passes them (and its defaults) up to the runtime host, which owns `this.props`.
+    const extendsClause = c.propsType ? `${c.root.component.name}<${c.propsType}>` : c.root.component.name;
+    w.block(`export class ${c.name} extends ${extendsClause}`, () => {
       // Persistent state.
       for (const s of c.state) {
         w.line(`${s.name}: ${s.type} = ${this.#expr(s.initialValue, true)};`);
@@ -155,16 +166,29 @@ class ComponentGenerator {
       this.#emitElementFields(c.root.children, "persistent");
 
       w.blank();
-      w.block("constructor()", () => {
+      const defaults = c.props.filter((p) => p.defaultValue !== null);
+      const defaultsObject = defaults.length > 0 ? `{ ${defaults.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.defaultValue!, true)}`).join(", ")} }` : null;
+      // Every prop optional: the parent may omit the object entirely.
+      const constructorParams = c.propsType ? `props: ${c.propsType}${c.props.every((p) => p.optional) ? " = {}" : ""}` : "";
+      w.block(`constructor(${constructorParams})`, () => {
         const staticHostProps = c.root.props.filter((p) => p.kind === "StaticProp");
-        w.line(staticHostProps.length > 0 ? `super(${this.#propsObject(staticHostProps)});` : "super();");
-        this.#emitStaticTransform(c.root.transform, "this");
+        const host = staticHostProps.length > 0 ? this.#propsObject(staticHostProps) : "{}";
+        if (c.propsType) w.line(`super(${host}, props${defaultsObject ? `, ${defaultsObject}` : ""});`);
+        else w.line(staticHostProps.length > 0 ? `super(${host});` : "super();");
+        this.#emitStaticTransform(c.root.transform, "this", "transform");
         this.#emitStaticWiring(c.root.children, "this");
         if (hasRender) {
           w.line("this.render();");
           w.line("this.commitStructure();");
         }
       });
+
+      if (c.propsType) {
+        w.blank();
+        w.block(`updateProps(next: Partial<${c.propsType}>): void`, () => {
+          w.line(`if (this.applyProps(next${defaultsObject ? `, ${defaultsObject}` : ""})) this.markDirty();`);
+        });
+      }
 
       for (const hook of c.hooks) {
         switch (hook.kind) {
@@ -206,7 +230,7 @@ class ComponentGenerator {
           for (const prop of c.root.props) {
             if (prop.kind === "DynamicProp") w.line(`${access("this", prop.name)} = ${this.#expr(prop.value, true)};`);
           }
-          this.#emitDynamicTransform(c.root.transform, "this");
+          this.#emitDynamicTransform(c.root.transform, "this", "transform");
           this.#emitChildUpdates(c.root.children, "this", "persistent");
         });
       }
@@ -234,7 +258,7 @@ class ComponentGenerator {
         w.block(`override ${signature.method}(${this.#params(handler)}): void`, () => this.#stmts(handler.body));
         continue;
       }
-      const canonical = signature.params.map((p) => `${p.name}: ${typeText(p.type)}`).join(", ");
+      const canonical = signature.params.map((p) => annotated(p.name, p.type)).join(", ");
       w.block(`override ${signature.method}(${canonical}): void`, () => {
         hooks.forEach((hook, i) => {
           const args = signature.params.slice(0, hook.handler.params.length).map((p) => p.name).join(", ");
@@ -249,7 +273,7 @@ class ComponentGenerator {
   }
 
   #params(fn: FunctionIR): string {
-    return fn.params.map((p) => `${p.name}: ${typeText(p.type)}`).join(", ");
+    return fn.params.map(param).join(", ");
   }
 
   #hasSetter(state: StateId): boolean {
@@ -264,7 +288,7 @@ class ComponentGenerator {
   }
 
   #updater(fn: FunctionIR): string {
-    const params = fn.params.map((p) => `${p.name}: ${typeText(p.type)}`).join(", ");
+    const params = fn.params.map(param).join(", ");
     const only = fn.body.length === 1 ? fn.body[0]! : null;
     if (only?.kind === "Return" && only.value) return `(${params}) => ${this.#expr(only.value, true)}`;
     const inner = new CodeWriter();
@@ -336,7 +360,7 @@ class ComponentGenerator {
     for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
-      this.#emitStaticTransform(child.element.transform, ref);
+      this.#emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
       this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
       this.#emitStaticWiring(child.element.children, ref);
     }
@@ -366,7 +390,7 @@ class ComponentGenerator {
           w.open(`if (${this.#expr(child.condition, true)}) {`);
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.#construct(el)};`);
-            this.#emitStaticTransform(el.transform, ref);
+            this.#emitStaticTransform(el.transform, ref, transformTarget(el));
             this.#emitMountStatics(el.children, ref);
             w.line(`${parentRef}.queueAddChild(${ref}${slotArgument(children, index)});`);
           });
@@ -385,10 +409,14 @@ class ComponentGenerator {
   }
 
   #emitElementUpdates(el: ElementIR, ref: string, presence: Presence): void {
-    for (const prop of el.props) {
-      if (prop.kind === "DynamicProp") this.#w.line(`${access(ref, prop.name)} = ${this.#expr(prop.value, true)};`);
+    const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
+    if (el.component.kind === "Intrinsic") {
+      for (const prop of dynamic) this.#w.line(`${access(ref, prop.name)} = ${this.#expr(prop.value, true)};`);
+    } else if (dynamic.length > 0) {
+      // A component takes all its changed props in one call, which marks it dirty once.
+      this.#w.line(`${ref}.updateProps(${this.#propsObject(dynamic)});`);
     }
-    this.#emitDynamicTransform(el.transform, ref);
+    this.#emitDynamicTransform(el.transform, ref, transformTarget(el));
     this.#emitChildUpdates(el.children, ref, presence);
   }
 
@@ -398,23 +426,23 @@ class ComponentGenerator {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
       this.#w.line(`${ref} = ${this.#construct(child.element)};`);
-      this.#emitStaticTransform(child.element.transform, ref);
+      this.#emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
       this.#w.line(`${parentRef}.addChild(${ref}${slotArgument(children, index)});`);
       this.#emitMountStatics(child.element.children, ref);
     }
   }
 
   /** Transform fields that never change are set once, right after the element is constructed. */
-  #emitStaticTransform(transform: readonly PropIR[], ref: string): void {
+  #emitStaticTransform(transform: readonly PropIR[], ref: string, target: "transform" | "placement"): void {
     for (const p of transform) {
-      if (p.kind === "StaticProp") this.#w.line(`${ref}.transform.${p.name} = ${this.#expr(p.value, true)};`);
+      if (p.kind === "StaticProp") this.#w.line(`${ref}.${target}.${p.name} = ${this.#expr(p.value, true)};`);
     }
   }
 
   /** Transform fields that read state are re-applied on render, like any dynamic prop. */
-  #emitDynamicTransform(transform: readonly PropIR[], ref: string): void {
+  #emitDynamicTransform(transform: readonly PropIR[], ref: string, target: "transform" | "placement"): void {
     for (const p of transform) {
-      if (p.kind === "DynamicProp") this.#w.line(`${ref}.transform.${p.name} = ${this.#expr(p.value, true)};`);
+      if (p.kind === "DynamicProp") this.#w.line(`${ref}.${target}.${p.name} = ${this.#expr(p.value, true)};`);
     }
   }
 
@@ -436,7 +464,9 @@ class ComponentGenerator {
     switch (el.component.kind) {
       case "Local":
       case "Imported":
-        return `new ${el.component.name}()`;
+        // Every value prop (static or dynamic) goes in at construction, with the callbacks; dynamic ones are
+        // re-sent through `updateProps` on render.
+        return el.props.length > 0 ? `new ${el.component.name}(${this.#propsObject(el.props)})` : `new ${el.component.name}()`;
       case "Intrinsic":
         return el.props.length > 0 ? `new ${el.component.name}(${this.#propsObject(el.props)})` : `new ${el.component.name}()`;
       default:
@@ -445,7 +475,20 @@ class ComponentGenerator {
   }
 
   #propsObject(props: readonly PropIR[]): string {
-    return `{ ${props.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`).join(", ")} }`;
+    return `{ ${props.map((p) => `${propertyKey(p.name)}: ${p.kind === "CallbackProp" ? this.#callback(p.handler) : this.#expr(p.value, true)}`).join(", ")} }`;
+  }
+
+  /** A callback passed to a child: an arrow with unannotated parameters, typed by the child's props type. */
+  #callback(fn: FunctionIR): string {
+    const params = fn.params.map(param).join(", ");
+    const inner = new CodeWriter();
+    const outer = this.#w;
+    this.#w = inner;
+    this.#stmts(fn.body);
+    this.#w = outer;
+    const lines = inner.toString().trimEnd().split("\n");
+    if (lines.length === 1) return `(${params}) => { ${lines[0]} }`;
+    return `(${params}) => {\n${lines.map((l) => `  ${l}`).join("\n")}\n}`;
   }
 
   /** A ref's name is its field. */
@@ -473,10 +516,16 @@ class ComponentGenerator {
       case "LocalRead": return e.name;
       case "ParamRead": return e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
+      case "PropRead": return `this.props.${e.name}`;
       case "RefRead": return `this.${this.#refField(e.ref)}`;
       case "Call": {
         const args = e.args.map((a) => this.#expr(a, true)).join(", ");
-        return e.callee.kind === "Function" ? `${e.callee.name}(${args})` : `${e.callee.receiver.name}.${e.callee.name}(${args})`;
+        switch (e.callee.kind) {
+          case "Function": return `${e.callee.name}(${args})`;
+          case "Method": return `${e.callee.receiver.name}.${e.callee.name}(${args})`;
+          case "Prop": return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
+          default: return assertNever(e.callee, "callee");
+        }
       }
       case "TemplateLiteral":
         return "`" + e.quasis.map((q, i) => escapeTemplate(q) + (i < e.expressions.length ? `\${${this.#expr(e.expressions[i]!, true)}}` : "")).join("") + "`";
@@ -488,8 +537,18 @@ class ComponentGenerator {
   }
 }
 
-function typeText(type: TypeIR): string {
-  return type.name;
+/** A function parameter as written in generated code; a contextual one has no annotation. */
+function param(p: ParamIR): string {
+  return annotated(p.name, p.type);
+}
+
+function annotated(name: string, type: TypeIR): string {
+  return type.kind === "Contextual" ? name : `${name}: ${type.name}`;
+}
+
+/** A transform attribute on a component element places it (`placement`); on a built-in it sets the object's own `transform`. */
+function transformTarget(el: ElementIR): "transform" | "placement" {
+  return el.component.kind === "Intrinsic" ? "transform" : "placement";
 }
 
 function escapeTemplate(text: string): string {

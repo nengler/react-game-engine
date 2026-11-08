@@ -7,11 +7,13 @@ import {
   type Expression,
   type FunctionDeclaration,
   type ImportDeclaration,
+  type InterfaceDeclaration,
   type JsxElement,
   type JsxSelfClosingElement,
   type Node,
   type SourceFile,
   type Statement,
+  type TypeAliasDeclaration,
   type VariableDeclaration,
 } from "typescript/ast";
 import {
@@ -22,7 +24,11 @@ import {
   isFunctionDeclaration,
   isIdentifier,
   isImportDeclaration,
+  isInterfaceDeclaration,
   isNamedImports,
+  isObjectBindingPattern,
+  isTypeAliasDeclaration,
+  isTypeReferenceNode,
   isStringLiteral,
   isJsxElement,
   isJsxSelfClosingElement,
@@ -46,6 +52,8 @@ export interface SourceAnalysis {
   readonly imports: readonly ImportAnalysis[];
   /** Hooks, built-in elements and runtime functions imported from the authoring module. Validated in the transform, which has the runtime manifest. */
   readonly authoringImports: readonly ImportAnalysis[];
+  /** Top-level `interface` / `type` declarations, which a component's props type names. */
+  readonly typeDeclarations: readonly TypeDeclarationAnalysis[];
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
@@ -59,12 +67,36 @@ export interface ImportAnalysis {
 
 export type JsxRoot = JsxElement | JsxSelfClosingElement;
 
+/** `interface EnemyProps { … }` or `type EnemyProps = { … }`. The transform reads its members for the props. */
+export interface TypeDeclarationAnalysis {
+  readonly name: string;
+  readonly node: InterfaceDeclaration | TypeAliasDeclaration;
+  /** The declaration as written, without `export`. */
+  readonly text: string;
+}
+
+/** A component's destructured props parameter: `function Enemy({ speed = 1, onDefeated }: EnemyProps)`. */
+export interface PropsAnalysis {
+  /** The name of the props type, resolved against the file's declarations in the transform. */
+  readonly typeName: string;
+  readonly typeNode: Node;
+  readonly bindings: readonly PropBindingAnalysis[];
+}
+
+export interface PropBindingAnalysis {
+  readonly name: string;
+  readonly defaultValue: Expression | null;
+  readonly node: Node;
+}
+
 export interface ComponentAnalysis {
   readonly name: string;
   readonly declaration: FunctionDeclaration;
   readonly exported: boolean;
   /** Hook calls at the top level of the component, in source order. */
   readonly hooks: readonly HookCallAnalysis[];
+  /** The destructured props parameter, or null for a component without props. */
+  readonly props: PropsAnalysis | null;
   /** The JSX expression returned by the component. */
   readonly jsx: JsxRoot;
   /** Every element tag referenced in the returned JSX, in first-use order. */
@@ -139,6 +171,7 @@ export function analyzeSourceFile(
   const components: ComponentAnalysis[] = [];
   const imports: ImportAnalysis[] = [];
   const authoringImports: ImportAnalysis[] = [];
+  const typeDeclarations: TypeDeclarationAnalysis[] = [];
   const span = (node: Node) => spanOf(node, sourceFile, fileName);
 
   for (const statement of sourceFile.statements) {
@@ -161,6 +194,14 @@ export function analyzeSourceFile(
       }
       continue;
     }
+    if (isInterfaceDeclaration(statement) || isTypeAliasDeclaration(statement)) {
+      if (statement.typeParameters && statement.typeParameters.length > 0) {
+        diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `Type '${statement.name.text}': generic props types are not supported.`, span(statement)));
+        continue;
+      }
+      typeDeclarations.push({ name: statement.name.text, node: statement, text: statement.getText(sourceFile).replace(/^export\s+/, "") });
+      continue;
+    }
     if (isFunctionDeclaration(statement) && statement.name && /^[A-Z]/.test(statement.name.text)) {
       const component = analyzeComponent(statement, statement.name.text, span, diagnostics);
       if (component) components.push(component);
@@ -169,13 +210,13 @@ export function analyzeSourceFile(
     diagnostics.push(
       error(
         DiagnosticCode.UnsupportedSyntax,
-        "Only imports and component function declarations (capitalised `function Name() {}`) are supported at the top level.",
+        "Only imports, `interface` / `type` declarations and component function declarations (capitalised `function Name() {}`) are supported at the top level.",
         span(statement),
       ),
     );
   }
 
-  return { fileName, sourceFile, components, imports, authoringImports, diagnostics };
+  return { fileName, sourceFile, components, imports, authoringImports, typeDeclarations, diagnostics };
 }
 
 /** `import { A, B } from "module"`: named imports only, no default, namespace, `type` or `as` forms. */
@@ -212,6 +253,45 @@ function analyzeNamedImport(
   }
 }
 
+/**
+ * A component takes at most one parameter: destructured, annotated with the
+ * name of a props type declared in the same file, defaults allowed.
+ * `function Enemy({ speed = 1, onDefeated }: EnemyProps)`.
+ */
+function analyzeProps(
+  declaration: FunctionDeclaration,
+  name: string,
+  span: (node: Node) => ReturnType<typeof spanOf>,
+  diagnostics: CompilerDiagnostic[],
+): PropsAnalysis | null {
+  const invalid = (message: string, at: Node): null => {
+    diagnostics.push(error(DiagnosticCode.InvalidProps, `Component '${name}': ${message}`, span(at)));
+    return null;
+  };
+  const [param, ...extra] = declaration.parameters;
+  if (!param) return null;
+  if (extra.length > 0) return invalid("a component takes one props parameter.", extra[0]!);
+  if (param.dotDotDotToken || param.initializer || param.questionToken) {
+    return invalid("the props parameter must be a plain destructuring, without a rest, default or `?`.", param);
+  }
+  if (!isObjectBindingPattern(param.name)) {
+    return invalid("destructure the props in the parameter: `function Enemy({ speed }: EnemyProps)`.", param.name);
+  }
+  const type = param.type;
+  if (!type || !isTypeReferenceNode(type) || !isIdentifier(type.typeName) || type.typeArguments) {
+    return invalid("annotate the props parameter with the name of a props type declared in this file: `({ speed }: EnemyProps)`.", type ?? param);
+  }
+  const bindings: PropBindingAnalysis[] = [];
+  for (const element of param.name.elements) {
+    if (element.dotDotDotToken || element.propertyName || !element.name || !isIdentifier(element.name)) {
+      invalid("props are destructured by plain name: no rest (`...rest`), renaming (`a: b`) or nesting.", element);
+      continue;
+    }
+    bindings.push({ name: element.name.text, defaultValue: element.initializer ?? null, node: element });
+  }
+  return { typeName: type.typeName.text, typeNode: type, bindings };
+}
+
 function analyzeComponent(
   declaration: FunctionDeclaration,
   name: string,
@@ -223,11 +303,7 @@ function analyzeComponent(
     diagnostics.push(error(DiagnosticCode.InvalidComponentBody, `Component '${name}' has no body.`, span(declaration)));
     return null;
   }
-  if (declaration.parameters.length > 0) {
-    diagnostics.push(
-      error(DiagnosticCode.UnsupportedSyntax, `Component '${name}': props are not supported yet.`, span(declaration.parameters[0]!)),
-    );
-  }
+  const props = analyzeProps(declaration, name, span, diagnostics);
 
   const hooks: HookCallAnalysis[] = [];
   const acceptedHookCalls = new Set<CallExpression>();
@@ -339,6 +415,7 @@ function analyzeComponent(
     declaration,
     exported: (declaration.modifierFlags & ModifierFlags.Export) !== 0,
     hooks,
+    props,
     jsx: root,
     jsxTags,
   };

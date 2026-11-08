@@ -1,20 +1,233 @@
 {
   "kind": "Module",
   "sourceFile": "packages/example/src/Level.tsx",
+  "typeDeclarations": [
+    {
+      "kind": "TypeDeclaration",
+      "name": "EnemyProps",
+      "text": "interface EnemyProps {\n  speed: number;\n  tint?: \"red\" | \"blue\";\n  onDefeated?: () => void;\n}"
+    }
+  ],
   "components": [
     {
       "kind": "Component",
       "name": "Enemy",
       "span": {
         "fileName": "packages/example/src/Level.tsx",
-        "start": 72,
-        "end": 225,
-        "line": 3,
+        "start": 186,
+        "end": 662,
+        "line": 9,
         "column": 1
       },
-      "hooks": [],
-      "state": [],
-      "refs": [],
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Enemy.hp",
+          "setterName": "setHp",
+          "span": {
+            "fileName": "packages/example/src/Level.tsx",
+            "start": 260,
+            "end": 285,
+            "line": 10,
+            "column": 9
+          }
+        },
+        {
+          "kind": "OnUpdate",
+          "handler": {
+            "kind": "Function",
+            "params": [
+              {
+                "id": "Enemy.dt#1",
+                "name": "dt",
+                "type": {
+                  "kind": "Primitive",
+                  "name": "number"
+                }
+              }
+            ],
+            "body": [
+              {
+                "kind": "SetState",
+                "state": "Enemy.hp",
+                "updater": {
+                  "kind": "Function",
+                  "params": [
+                    {
+                      "id": "Enemy.hp#2",
+                      "name": "hp",
+                      "type": {
+                        "kind": "Primitive",
+                        "name": "number"
+                      }
+                    }
+                  ],
+                  "body": [
+                    {
+                      "kind": "Return",
+                      "value": {
+                        "kind": "Binary",
+                        "operator": "-",
+                        "left": {
+                          "kind": "ParamRead",
+                          "param": "Enemy.hp#2",
+                          "name": "hp"
+                        },
+                        "right": {
+                          "kind": "Binary",
+                          "operator": "*",
+                          "left": {
+                            "kind": "ParamRead",
+                            "param": "Enemy.dt#1",
+                            "name": "dt"
+                          },
+                          "right": {
+                            "kind": "PropRead",
+                            "name": "speed"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "If",
+                "test": {
+                  "kind": "Binary",
+                  "operator": "&&",
+                  "left": {
+                    "kind": "Binary",
+                    "operator": "<=",
+                    "left": {
+                      "kind": "StateRead",
+                      "state": "Enemy.hp"
+                    },
+                    "right": {
+                      "kind": "NumberLiteral",
+                      "value": 0
+                    }
+                  },
+                  "right": {
+                    "kind": "Unary",
+                    "operator": "!",
+                    "operand": {
+                      "kind": "RefRead",
+                      "ref": "Enemy.reported"
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "kind": "Assign",
+                    "target": {
+                      "kind": "RefCurrent",
+                      "ref": "Enemy.reported"
+                    },
+                    "operator": "=",
+                    "value": {
+                      "kind": "BooleanLiteral",
+                      "value": true
+                    }
+                  },
+                  {
+                    "kind": "ExpressionStatement",
+                    "expression": {
+                      "kind": "Call",
+                      "callee": {
+                        "kind": "Prop",
+                        "name": "onDefeated",
+                        "optional": true
+                      },
+                      "args": []
+                    }
+                  }
+                ],
+                "else": []
+              }
+            ]
+          },
+          "span": {
+            "fileName": "packages/example/src/Level.tsx",
+            "start": 324,
+            "end": 484,
+            "line": 13,
+            "column": 3
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Enemy.hp",
+          "name": "hp",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 3
+          }
+        }
+      ],
+      "refs": [
+        {
+          "kind": "Ref",
+          "id": "Enemy.reported",
+          "name": "reported",
+          "type": "boolean",
+          "initialValue": {
+            "kind": "BooleanLiteral",
+            "value": false
+          },
+          "span": {
+            "fileName": "packages/example/src/Level.tsx",
+            "start": 295,
+            "end": 319,
+            "line": 11,
+            "column": 9
+          }
+        }
+      ],
+      "props": [
+        {
+          "kind": "PropDecl",
+          "name": "speed",
+          "optional": false,
+          "defaultValue": null,
+          "role": "value",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          }
+        },
+        {
+          "kind": "PropDecl",
+          "name": "tint",
+          "optional": true,
+          "defaultValue": {
+            "kind": "StringLiteral",
+            "value": "red"
+          },
+          "role": "value",
+          "type": {
+            "kind": "Literals",
+            "values": [
+              "red",
+              "blue"
+            ]
+          }
+        },
+        {
+          "kind": "PropDecl",
+          "name": "onDefeated",
+          "optional": true,
+          "defaultValue": null,
+          "role": "callback",
+          "type": {
+            "kind": "Function"
+          }
+        }
+      ],
+      "propsType": "EnemyProps",
       "root": {
         "kind": "HostElement",
         "component": {
@@ -45,21 +258,46 @@
               },
               "props": [
                 {
-                  "kind": "StaticProp",
+                  "kind": "DynamicProp",
                   "name": "image",
                   "value": {
-                    "kind": "StringLiteral",
-                    "value": "enemy.png"
-                  }
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": "===",
+                      "left": {
+                        "kind": "PropRead",
+                        "name": "tint"
+                      },
+                      "right": {
+                        "kind": "StringLiteral",
+                        "value": "red"
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "StringLiteral",
+                      "value": "enemy-red.png"
+                    },
+                    "whenFalse": {
+                      "kind": "StringLiteral",
+                      "value": "enemy-blue.png"
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "Prop",
+                      "name": "tint"
+                    }
+                  ]
                 }
               ],
               "transform": [],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 134,
-                "end": 162,
-                "line": 6,
+                "start": 529,
+                "end": 599,
+                "line": 23,
                 "column": 7
               }
             }
@@ -96,9 +334,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 169,
-                "end": 204,
-                "line": 7,
+                "start": 606,
+                "end": 641,
+                "line": 24,
                 "column": 7
               }
             }
@@ -106,9 +344,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Level.tsx",
-          "start": 106,
-          "end": 218,
-          "line": 5,
+          "start": 501,
+          "end": 655,
+          "line": 22,
           "column": 5
         }
       }
@@ -118,9 +356,9 @@
       "name": "Level",
       "span": {
         "fileName": "packages/example/src/Level.tsx",
-        "start": 227,
-        "end": 660,
-        "line": 12,
+        "start": 664,
+        "end": 1360,
+        "line": 29,
         "column": 1
       },
       "hooks": [
@@ -130,9 +368,21 @@
           "setterName": "setWave",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 254,
-            "end": 283,
-            "line": 13,
+            "start": 691,
+            "end": 720,
+            "line": 30,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Level.score",
+          "setterName": "setScore",
+          "span": {
+            "fileName": "packages/example/src/Level.tsx",
+            "start": 730,
+            "end": 761,
+            "line": 31,
             "column": 9
           }
         },
@@ -142,9 +392,9 @@
           "setterName": "setBossVisible",
           "span": {
             "fileName": "packages/example/src/Level.tsx",
-            "start": 293,
-            "end": 340,
-            "line": 14,
+            "start": 771,
+            "end": 818,
+            "line": 32,
             "column": 9
           }
         }
@@ -162,6 +412,16 @@
         },
         {
           "kind": "State",
+          "id": "Level.score",
+          "name": "score",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          }
+        },
+        {
+          "kind": "State",
           "id": "Level.bossVisible",
           "name": "bossVisible",
           "type": "boolean",
@@ -172,6 +432,8 @@
         }
       ],
       "refs": [],
+      "props": [],
+      "propsType": null,
       "root": {
         "kind": "HostElement",
         "component": {
@@ -200,14 +462,83 @@
                 "kind": "Local",
                 "name": "Enemy"
               },
-              "props": [],
-              "transform": [],
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "speed",
+                  "value": {
+                    "kind": "StateRead",
+                    "state": "Level.wave"
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Level.wave"
+                    }
+                  ]
+                },
+                {
+                  "kind": "CallbackProp",
+                  "name": "onDefeated",
+                  "handler": {
+                    "kind": "Function",
+                    "params": [],
+                    "body": [
+                      {
+                        "kind": "SetState",
+                        "state": "Level.score",
+                        "updater": {
+                          "kind": "Function",
+                          "params": [
+                            {
+                              "id": "Level.score#1",
+                              "name": "score",
+                              "type": {
+                                "kind": "Primitive",
+                                "name": "number"
+                              }
+                            }
+                          ],
+                          "body": [
+                            {
+                              "kind": "Return",
+                              "value": {
+                                "kind": "Binary",
+                                "operator": "+",
+                                "left": {
+                                  "kind": "ParamRead",
+                                  "param": "Level.score#1",
+                                  "name": "score"
+                                },
+                                "right": {
+                                  "kind": "NumberLiteral",
+                                  "value": 1
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 40
+                  }
+                }
+              ],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 385,
-                "end": 394,
-                "line": 17,
+                "start": 863,
+                "end": 957,
+                "line": 35,
                 "column": 7
               }
             }
@@ -222,14 +553,99 @@
                 "kind": "Local",
                 "name": "Enemy"
               },
-              "props": [],
-              "transform": [],
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "speed",
+                  "value": {
+                    "kind": "Binary",
+                    "operator": "*",
+                    "left": {
+                      "kind": "StateRead",
+                      "state": "Level.wave"
+                    },
+                    "right": {
+                      "kind": "NumberLiteral",
+                      "value": 2
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Level.wave"
+                    }
+                  ]
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "tint",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "blue"
+                  }
+                },
+                {
+                  "kind": "CallbackProp",
+                  "name": "onDefeated",
+                  "handler": {
+                    "kind": "Function",
+                    "params": [],
+                    "body": [
+                      {
+                        "kind": "SetState",
+                        "state": "Level.score",
+                        "updater": {
+                          "kind": "Function",
+                          "params": [
+                            {
+                              "id": "Level.score#2",
+                              "name": "score",
+                              "type": {
+                                "kind": "Primitive",
+                                "name": "number"
+                              }
+                            }
+                          ],
+                          "body": [
+                            {
+                              "kind": "Return",
+                              "value": {
+                                "kind": "Binary",
+                                "operator": "+",
+                                "left": {
+                                  "kind": "ParamRead",
+                                  "param": "Level.score#2",
+                                  "name": "score"
+                                },
+                                "right": {
+                                  "kind": "NumberLiteral",
+                                  "value": 5
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 80
+                  }
+                }
+              ],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 401,
-                "end": 410,
-                "line": 18,
+                "start": 964,
+                "end": 1074,
+                "line": 36,
                 "column": 7
               }
             }
@@ -249,7 +665,10 @@
               }
             },
             "dependencies": [
-              "Level.wave"
+              {
+                "kind": "State",
+                "state": "Level.wave"
+              }
             ],
             "element": {
               "kind": "Element",
@@ -259,14 +678,38 @@
                 "kind": "Local",
                 "name": "Enemy"
               },
-              "props": [],
-              "transform": [],
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "speed",
+                  "value": {
+                    "kind": "StateRead",
+                    "state": "Level.wave"
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Level.wave"
+                    }
+                  ]
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 120
+                  }
+                }
+              ],
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 431,
-                "end": 440,
-                "line": 19,
+                "start": 1095,
+                "end": 1140,
+                "line": 37,
                 "column": 21
               }
             }
@@ -278,7 +721,10 @@
               "state": "Level.bossVisible"
             },
             "dependencies": [
-              "Level.bossVisible"
+              {
+                "kind": "State",
+                "state": "Level.bossVisible"
+              }
             ],
             "element": {
               "kind": "Element",
@@ -338,7 +784,10 @@
                           }
                         },
                         "dependencies": [
-                          "Level.wave"
+                          {
+                            "kind": "State",
+                            "state": "Level.wave"
+                          }
                         ]
                       }
                     ],
@@ -346,9 +795,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 505,
-                      "end": 566,
-                      "line": 22,
+                      "start": 1205,
+                      "end": 1266,
+                      "line": 40,
                       "column": 11
                     }
                   }
@@ -385,9 +834,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 577,
-                      "end": 612,
-                      "line": 23,
+                      "start": 1277,
+                      "end": 1312,
+                      "line": 41,
                       "column": 11
                     }
                   }
@@ -395,9 +844,9 @@
               ],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 474,
-                "end": 630,
-                "line": 21,
+                "start": 1174,
+                "end": 1330,
+                "line": 39,
                 "column": 9
               }
             }
@@ -405,9 +854,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Level.tsx",
-          "start": 357,
-          "end": 653,
-          "line": 16,
+          "start": 835,
+          "end": 1353,
+          "line": 34,
           "column": 5
         }
       }

@@ -96,7 +96,7 @@ describe("M3: IR shape", () => {
     );
     const x = c.root.transform[0]!;
     assert.ok(x.kind === "DynamicProp" && x.value.kind === "StateRead");
-    assert.deepEqual(x.dependencies, ["Runner.x"]);
+    assert.deepEqual(x.dependencies, [{ kind: "State", state: "Runner.x" }]);
     assert.ok(!c.root.props.some((p) => p.name === "transform"), "transform is not a prop");
     const shadow = c.root.children[2]!.element;
     assert.deepEqual(shadow.transform.map((p) => [p.name, p.kind]), [["y", "StaticProp"]]);
@@ -289,7 +289,6 @@ function C() {
       "<Entity transform=\"x\" />",
       "<Entity transform={{ ...other }} />",
       "<Entity transform={{ [\"x\"]: 1 }} />",
-      "<Child transform={{ x: 1 }} />",
     ]) {
       assert.ok(jsxCodes(jsx).includes(DiagnosticCode.InvalidTransformAttribute), jsx);
     }

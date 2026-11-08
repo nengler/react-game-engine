@@ -223,13 +223,9 @@ function Player() {
     assert.ok(dup.some((d) => d.code === DiagnosticCode.DuplicateComponent));
   });
 
-  it("still reports an unimported component as unknown, and props on imported components as unsupported", () => {
+  it("still reports an unimported component as unknown", () => {
     const unknown = compileProjectErrors({ "P.tsx": `function P() { return <Entity name="P"><WarningIcon /></Entity>; }` });
     assert.deepEqual(unknown.map((d) => d.code), [DiagnosticCode.UnknownComponent]);
-    const props = compileProjectErrors({
-      "P.tsx": `import { WarningIcon } from "./WarningIcon.tsx";\nfunction P() { return <Entity name="P"><WarningIcon size={2} /></Entity>; }`,
-    });
-    assert.deepEqual(props.map((d) => d.code), [DiagnosticCode.LocalComponentProps]);
   });
 
   it("rejects imports it would otherwise drop silently", () => {
