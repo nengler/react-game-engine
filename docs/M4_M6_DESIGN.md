@@ -1,82 +1,10 @@
-# M3 review and M4–M6 investigation
+# M4–M6 design notes
 
-Written 2026-11-08 and updated after M3 merged (#7). Part 1 reviews M3 and describes the follow-up changes in this PR, including replacing `useTransform` with a `transform` attribute. Part 2 is a runtime fix that M5 needs, also in this PR. Part 3 works out how to build M4, M5 and M6 in this codebase.
+Build-level design for the next three feature milestones: props and callbacks (M4), keyed lists (M5), and prefabs and scenes (M6). It was worked out against the code as of 2026-11-08. [PHASE2_PLAN.md](PHASE2_PLAN.md) owns status, order and decisions; [DESIGN.md](DESIGN.md) describes what exists. Where this document and the plan's M4–M6 sections differ in detail, this document is newer and wins; the table at the end lists the differences.
 
-**Guiding principle.** Authoring should feel as close to ideal React as possible. What is on screen, including position, is a function of state and props. Hooks and special attributes follow React's conventions (`useState`, `useRef`, `ref`, `key`). The compiler does the work of making that efficient, so authors do not hand-write imperative, engine-specific APIs. Where this document disagrees with [PHASE2_PLAN.md](PHASE2_PLAN.md), it says so and gives the reason. Changes to settled decisions are listed together in [Proposed plan changes](#proposed-plan-changes).
+Guiding rule: authoring should feel as close to ideal React as possible, so the author-facing syntax follows React's (props as a destructured parameter, `key` on list items, callbacks as props) and the compiler does the work of making it efficient.
 
-## 1. M3 review and follow-up
-
-### Change in this PR: `useTransform` is replaced by a `transform` attribute
-
-M3 shipped a non-reactive `const t = useTransform({...})` handle that handlers wrote to imperatively (`t.x += 60 * dt`). That is fast, but it is not React. Position lived outside state, JSX could not read it (`RGE1304`), and authors had to learn a second, engine-specific way to change what is on screen. Position is now ordinary state, set with an attribute:
-
-```tsx
-function Mover() {
-  const [x, setX] = useState(0);
-  useUpdate((dt) => setX((previous) => previous + 60 * dt));
-  return <Entity name="Mover" transform={{ x, y: 0 }}><Sprite image={x > 100 ? "run.png" : "idle.png"} /></Entity>;
-}
-```
-
-- **IR.**
-  - `ElementIR.transform` and `HostElementIR.transform` are `TransformPropIR[]`: the existing `StaticProp`/`DynamicProp`, restricted to `x`, `y`, `rotation`, `scaleX` and `scaleY`.
-  - Removed: `UseTransformHookIR`, `TransformRead`, the `TransformField` assign target, and `TransformId`. `Assign` now writes ref properties only.
-- **Codegen.**
-  - Static fields are set once, right after the element is constructed (before a child is attached).
-  - Dynamic fields are re-applied in `render()`.
-  - The `transform` object is never replaced.
-- **Relative by default.**
-  - Every runtime object has a transform, relative to its parent's. It moves, turns and scales with its parent.
-  - `global: true` (default `false`) puts it in world space. It can come from state.
-  - `GameObject.worldTransform()` resolves the hierarchy. It is what a renderer reads.
-- **Where it is allowed.**
-  - Any built-in element listed in the manifest's `transformIntrinsics` (today `<Entity>`, `<Sprite>` and `<Collider>`): the root or a child.
-  - A built-in left out of that list is `RGE1207`.
-  - Not on component elements yet. That is placement by the parent, designed in 3.1g.
-  - Malformed objects (spreads, computed keys, unknown or duplicate fields) are `RGE1207`.
-- **Removal.** `useTransform` now reports `RGE1102` with a pointer to the attribute. `RGE1105` is retired, not reused.
-- **Cost.** A per-frame move is a per-frame state change: one render per tick, however many setters ran. `render()` re-evaluates all dynamic props. Every `DynamicProp` already carries `dependencies`, so the optimisation, if it is ever needed, is to re-evaluate only the props whose state changed (a dirty bit per state slot). Authors would not change anything.
-
-### Status of the earlier review points
-
-| # | Point | Status |
-| --- | --- | --- |
-| 1 | A ref property write can fight a JSX prop set from state | Fixed with `RGE1404`, then made moot: refs no longer point at elements (values only, decided after the React API review), so `RGE1404` is retired |
-| 2 | Ref nullability must follow the element's presence | Handled in #7; moot now that refs hold values |
-| 3 | `ref` must not become a prop; `ref` on the root | `ref={…}` on any element is now `RGE1106`: refs hold values |
-| 4 | Ref names vs automatic field names | Handled in #7: ref names are claimed before the JSX is lowered, and refs still compile to named fields |
-| 5 | `elementProperties` can drift from the runtime | Moot: the table is removed along with element refs |
-| 6 | Transform units | **Fixed in this PR**: pixels, y down, rotation in radians, documented in `Transform.ts` and DESIGN.md |
-| 7 | `useTransform` initial values | No longer applies: the hook is gone. Transform fields are any expression, including state |
-| 8 | DESIGN.md out of date | Handled in #7, then rewritten in this PR for the attribute |
-
-## 2. Fix shipped with this document: children keep source order
-
-**The bug, confirmed on `main`.** A conditional child mounted after construction was appended to the end of its parent:
-
-```tsx
-<Entity><Sprite image="a" />{show && <Sprite image="b" />}<Sprite image="c" /></Entity>
-// children after show → true:  a, c, b   (expected a, b, c)
-```
-
-Child order is draw order, so this already affects what is drawn today. The plan scheduled ordered inserts for M5, but M5's acceptance test "static siblings before and after the list keep their positions" depends on them, and the bug exists for conditionals now.
-
-**The fix.**
-
-- `GameObject.addChild(child, slot?)` and `queueAddChild(child, slot?)` take an optional *slot*: the child's index in its parent's JSX children. A child is inserted after every sibling whose slot is lower or equal. A child without a slot uses `Infinity`, so it is appended.
-- The generator passes slots only for parents that have a conditional child. Output for components with only static children is unchanged.
-- Children added from outside the component (`World.mount`, M6 scene children) carry no slot, so they stay after the component's own children.
-
-Tests:
-
-- `packages/runtime/test/order.test.ts` covers the runtime rule.
-- A behaviour test in `behavior.test.ts` mounts, unmounts and remounts conditionals between static siblings, including a nested conditional.
-
-**How M5 extends it.** A keyed list takes one slot and orders its items inside that slot (see 3.2).
-
-## 3. How to build M4–M6
-
-### 3.1 M4: props and callbacks
+## M4: props and callbacks
 
 #### a. Top-level `interface` and `type` declarations (analyzer)
 
@@ -141,7 +69,6 @@ Today a prop or condition is dynamic only if it reads **state** (`collectDepende
   - Callback values on intrinsics.
   - `children`.
   - `key` outside a list (reserved for M5).
-  - `ref` used as a prop name.
   - Retire `RGE1204` with a "Retired" comment, as was done for `RGE1403`.
 
 #### g. `transform` on component elements: placement composes with the child's own transform
@@ -160,7 +87,7 @@ What this gives:
 
 - Nothing can conflict, and no cross-file check is needed.
 - A component's own movement is relative to where it was placed, which is what a spawn point means: `<Mover transform={{ x: 200 }} />` starts at 200 and moves from there.
-- It reads exactly like React. Like `key` and `ref`, `transform` is a reserved attribute on component elements, not a prop the component declares.
+- It reads exactly like React. Like `key`, `transform` is a reserved attribute on component elements, not a prop the component declares.
 
 On intrinsic `<Entity>` children nothing changes: there is no separate "own" transform to compose with, so the attribute writes `transform`.
 
@@ -171,7 +98,7 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 - **M4a:** type declarations, `PropDeclIR`, `PropRead`, dependencies, and the runtime `Entity<P>`.
 - **M4b:** parent-side props, callbacks, and `updateProps`.
 
-### 3.2 M5: keyed dynamic lists
+## M5: keyed dynamic lists
 
 **The plan underestimates one part: handlers cannot build arrays.** Handler code allows literals, state and parameter reads, arithmetic, and allowlisted calls. There is no array or object literal, no spread, and no `filter`/`map`. Because a setter only re-renders when it receives a *new* array (an `===` check), `const [enemies, setEnemies] = useState<EnemyData[]>([])` could only ever be filled from props. Split the milestone:
 
@@ -190,18 +117,18 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 - **IR.** `{ source: ExprIR; item: ParamIR; index: ParamIR | null; key: ExprIR; element: ElementIR; dependencies }`, as in the plan. The source is a state or prop read. The item's member reads are `MemberRead`, so the type-check validates them.
 - **Restrictions**, each a diagnostic:
   - a single element with `key`
-  - no children, conditionals or `ref` inside the callback
-  - the source is a state or prop.
+  - no children or conditionals inside the callback
+  - the source is a state or prop, optionally followed by `.filter(…)` (filtering in JSX is common; the filter callback is a non-escaping arrow, as in M5a).
 - **Generated code.** Fields `enemyItems: Map<string | number, Enemy>` and `#enemyOrder: (string | number)[]`. `render()` does the following:
   1. Loops `for (const e of this.enemies)`, so `e` is typed from the array with no annotation.
   2. Computes the key. A duplicate key throws, always: there is no separate development build, and the check costs one `Map` lookup.
   3. For an existing key, calls `updateProps` (or assigns the props directly on an intrinsic).
   4. For a new key, constructs the item and calls `queueAddChild(item, slot, order)`.
   5. Afterwards, queues removal for keys that are gone, and calls `queueReorder` only if the key sequence differs from `#enemyOrder`.
-- **Runtime.** Extend part 2's slot to `(slot, order)`: `addChild(child, slot, order = 0)` sorts by slot, then by order. `queueReorder(slot, children)` reassigns the order values and re-sorts that slot's range when it commits. Static siblings before and after the list keep their positions, because they have different slots.
+- **Runtime.** Extend the child slot (see "Children keep source order" in [DESIGN.md](DESIGN.md)) to `(slot, order)`: `addChild(child, slot, order = 0)` sorts by slot, then by order. `queueReorder(slot, children)` reassigns the order values and re-sorts that slot's range when it commits. Static siblings before and after the list keep their positions, because they have different slots.
 - **Docs.** Document immutable updates, as the plan already says. An optional development mode could `Object.freeze` array state in the setter.
 
-### 3.3 M6: prefabs and scenes
+## M6: prefabs and scenes
 
 **Prefab registry**
 
@@ -212,7 +139,7 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
   ```
 
   Using `ConstructorParameters` means the props interface does not have to be exported or imported. Components without props get `create: () => new X()`.
-- `props` is generated from `PropDeclIR` and `PropTypeIR` (see 3.1b), with fields `{ name, type, optional, default }`. Callback props are left out. `SourceText` props are listed with `settable: false`.
+- `props` is generated from `PropDeclIR` and `PropTypeIR` (M4 §b), with fields `{ name, type, optional, default }`. Callback props are left out. `SourceText` props are listed with `settable: false`.
 
 **CLI**
 
@@ -230,8 +157,8 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 **Runtime `loadScene(world, scene, prefabs)`**
 
 1. For each entity: `create(props)`.
-2. Copy `transform` fields onto `object.placement` (3.1g). The component's own state-driven `transform` composes on top, so a placed `Mover` still moves relative to its spawn point.
-3. Mount: top-level entities with `world.mount`; `children` with `parent.addChild(child)` and no slot, so they come after the prefab's own children (see part 2).
+2. Copy `transform` fields onto `object.placement` (M4 §g). The component's own state-driven `transform` composes on top, so a placed `Mover` still moves relative to its spawn point.
+3. Mount: top-level entities with `world.mount`; `children` with `parent.addChild(child)` and no slot, so they come after the prefab's own children (unslotted children append; see DESIGN.md).
 4. Return `Map<id, GameObject>`. Hot reload and editors can key on that map, so no new `GameObject` field is needed.
 
 The runtime stays a mock: no rendering or asset loading.
@@ -249,19 +176,15 @@ The runtime stays a mock: no rendering or asset loading.
 
 **The equivalence test** the plan asks for: build the same level from TSX and from JSON, and compare the trees by tag, props and transform.
 
-## Proposed plan changes
+## Where this differs from the plan's M4–M6 sections
 
 | Change | Where | Reason |
 | --- | --- | --- |
-| Children keep source order via slots (**done in this PR**) | Runtime, generator | A live draw-order bug, and a prerequisite for M5 |
 | `Entity<P>` with `props` set through `super` | M4 runtime | Field initialisers run before the constructor body, and parameter properties are not erasable |
 | `DependencyIR` includes props | M4 IR | Without it, prop-derived child props are static and never update |
 | Callback props inline, with `Contextual` parameter types | M4 codegen | Imported children's callback types are not visible to a per-file compiler |
 | Structured `PropTypeIR` alongside the copied text | M4 IR, used by M6 | Lets M6 build a data schema without the TypeScript checker; unrepresentable types become code-only props |
-| Split M5 into M5a (records and arrays in handlers) and M5b (keyed list) | Plan | Array state cannot be updated with today's handler language |
-| `(slot, order)` child ordering and `queueReorder` in place of `queueInsertChild` / `queueMoveChild` | M5 runtime | Extends part 2's slot instead of adding a second ordering mechanism |
-| Registry types via `ConstructorParameters<typeof X>[0]` | M6 codegen | Props interfaces do not need to be exported |
-| Transform units: radians, y down (**done in this PR**) | M3 docs | Needed for M6's Tiled conversion and for renderers |
-| Position is state via `transform={{ x, y }}`; `useTransform` removed (**done in this PR**) | M3 | Authoring should read like React; position is no longer a second, imperative channel |
 | `transform` on a component element writes `placement`, which composes with the child's own `transform` | M4 runtime, M6 | Parent placement and the child's own movement never conflict, and scenes place any prefab the same way |
-| Dependency-scoped `render()` (re-evaluate only props whose state changed) | Later, if profiling asks for it | State-driven per-frame movement re-runs the whole render each tick |
+| Split M5 into M5a (records and arrays in handlers) and M5b (keyed list) | M5 | Array state cannot be updated with today's handler language |
+| `(slot, order)` child ordering and `queueReorder` in place of `queueInsertChild` / `queueMoveChild` | M5 runtime | Extends the existing child slot instead of adding a second ordering mechanism |
+| Registry types via `ConstructorParameters<typeof X>[0]` | M6 codegen | Props interfaces do not need to be exported |

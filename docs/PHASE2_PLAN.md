@@ -1,6 +1,6 @@
 # Phase 2 implementation plan
 
-Snapshot of the plan as of 2026-11-07. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes. It is split into seven milestones (M0–M6), each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). A review of M3 and a worked-out approach for M4–M6, including proposed changes to this plan, is in [PHASE2_M3_REVIEW_M4_M6.md](PHASE2_M3_REVIEW_M4_M6.md). How close the current and planned authoring API is to React, and the open decisions that follow from it, is in [REACT_API_REVIEW.md](REACT_API_REVIEW.md).
+Snapshot of the plan as of 2026-11-08. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes, plus the authoring types and built-in elements that grew out of the design. It is split into milestones, each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). Build-level design for M4–M6: [M4_M6_DESIGN.md](M4_M6_DESIGN.md).
 
 ## Status
 
@@ -25,7 +25,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M14 `<Pointer>` | Not started | n/a | Needs M4 (callback props). Clickable hit area; `transformIntrinsics` |
 | M15 `useSound` | Not started | n/a | Needs M1 and the hook machinery from M3. A handle called in handlers; no transform, because sounds are not placed |
 
-Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 after the [React API review](REACT_API_REVIEW.md); M10–M15 were added the same day for the built-in elements and the sound hook.
+Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 after a review of the authoring API against React; M10–M15 were added the same day for the built-in elements and the sound hook.
 
 ## Decisions (settled)
 
@@ -47,6 +47,8 @@ Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 afte
 ## Ground rules
 
 Every milestone keeps the slice's architecture intact; a change that breaks one of these rules needs a design note first.
+
+- **Feel like ideal React.** A component is a function of state and props, hooks follow React's conventions, and imports, `key`, and callbacks-as-props look like React's. "Ideal" means React's model, not its accidents (stale closures, dependency arrays). A feature that makes authors learn an engine-specific API where a React one exists needs a design note first.
 
 - **IR first.** Each feature starts as new variants in `packages/compiler/src/ir/types.ts`. Code is generated only from IR, never from the AST.
 - **Exhaustive unions.** Add the variant, then let `assertNever` failures show every place that must handle it. Never add a `default:` that silently passes.
@@ -172,6 +174,8 @@ function Player() {
 
 ## M4 — Props and callbacks between components (~1.5 weeks, needs M1)
 
+Detailed design, which supersedes the details below where they differ: [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m4-props-and-callbacks).
+
 A parent passes values and callbacks to a local or imported component; a changed value updates the existing child instance in place.
 
 ```tsx
@@ -205,13 +209,15 @@ Remove diagnostic RGE1204 (props on local components). `children` as a prop stay
 
 **Acceptance tests**: parent state change updates the child's prop and renders the child once; the child keeps its identity; callback invoked from the child's `onCollisionEnter` updates parent state; missing required prop fails the type-check; defaults apply.
 
-**Also in M4** (from the [React API review](REACT_API_REVIEW.md)):
+**Also in M4:**
 
 - **Collision events as props**: `<Collider width={16} onCollisionEnter={(other) => …} />` replaces the `onCollisionEnter` hook. The runtime calls the collider's own callback, so a component with several colliders knows which one was hit. The hook reports `RGE1102` with the new form.
 - **Fragment and non-Entity roots**: `return <>…</>` lowers to an implicit container (the host `Entity`, no props). `return <Sprite image="coin.png" />` makes the generated class extend `Sprite` itself, with no container. JSX children under the root are allowed only if that element type accepts children (a manifest list). Every intrinsic already has a transform (#8), so such a component can be placed like any other.
 - **Component forms**: `const Enemy = (props: EnemyProps) => …` and `export default function Enemy`, plus default imports (`import Enemy from "./Enemy.tsx"`).
 
 ## M5 — Keyed dynamic lists (~1.5 weeks, needs M4)
+
+Detailed design, which supersedes the details below where they differ: [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m5-keyed-dynamic-lists).
 
 One component per item of an array state, keyed so each item keeps its instance across updates.
 
@@ -234,12 +240,14 @@ function Level() {
 
 - One field per list: `enemyItems: Map<string | number, Enemy> = new Map()`.
 - `render()` walks the source once: an existing key calls `updateProps`; a new key constructs and queues an insert; keys no longer present queue a removal. Duplicate keys throw in development builds.
-- Order matters for draw order. Children already carry a source *slot* (`addChild(child, slot)`), so a conditional mounts between its siblings. Lists extend this to `(slot, order)` with a `queueReorder` emitted only when the key order actually changed (proposed in [PHASE2_M3_REVIEW_M4_M6.md](PHASE2_M3_REVIEW_M4_M6.md) in place of `queueInsertChild` / `queueMoveChild`).
+- Order matters for draw order. Children already carry a source *slot* (`addChild(child, slot)`), so a conditional mounts between its siblings. Lists extend this to `(slot, order)` with a `queueReorder` emitted only when the key order actually changed (designed in [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m5-keyed-dynamic-lists) in place of `queueInsertChild` / `queueMoveChild`).
 - Change detection relies on immutable updates (`setEnemies([...enemies, e])`): the setter's `===` check means mutating the array in place does nothing. Document this; do not deep-compare.
 
 **Acceptance tests**: add, remove, reorder and update by key; an unchanged item keeps its identity and is not re-rendered; static siblings before and after the list keep their positions; duplicate key error; each restriction has a diagnostic.
 
 ## M6 — Prefabs and scene/map integration (~2 weeks, needs M3 + M4)
+
+Detailed design, which supersedes the details below where they differ: [M4_M6_DESIGN.md](M4_M6_DESIGN.md#m6-prefabs-and-scenes).
 
 Lets data files, not only TSX, place components in a world: a prefab is a compiled component plus a machine-readable description of its props.
 
@@ -375,6 +383,18 @@ function Hero() {
 - **Runtime:** a mock `Sound` records plays; there is no audio backend (the ground rule stays).
 - **IR:** a `SoundHookIR { id, name, path }` and a `PlaySound` expression statement, lowered like `SetState` and dispatched to the sound's runtime handle.
 - **Tests:** a call in a handler records one play; calling it in JSX is rejected; two `useSound` bindings of the same path are independent.
+
+## Later (not scheduled)
+
+Ideas that came out of reviewing the API against React. None blocks a milestone.
+
+| Idea | Notes |
+| --- | --- |
+| Custom hooks (`function useHealth(max) { … }`) | Inline them at compile time. They are ordinary functions whose hooks follow the same top-level rule, so inlining fits "hooks are compiler intrinsics". |
+| Context (`createContext` / `useContext`) | After M4, for sharing state down the tree without passing props. |
+| Spread props (`{...rest}`) | M4 reports a clear diagnostic. Reconsider if props grow large. |
+| Lists with conditionals inside the `.map` callback | M5 restricts the callback to a single keyed element; lift once the basics are in. |
+| Dependency-scoped `render()` | Re-evaluate only the props whose state changed. State-driven per-frame movement re-runs the whole render each tick; every `DynamicProp` already records its dependencies, so authors would not change anything. Do it if profiling asks. |
 
 ## Other risks
 
