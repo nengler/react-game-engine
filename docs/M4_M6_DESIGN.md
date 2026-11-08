@@ -106,7 +106,7 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 
 **M5a: records and arrays in handler code.**
 
-*Status.* Implemented on `claude/pensive-faraday-lnmtga`, described in [DESIGN.md](DESIGN.md#arrays-and-records). It differs from the sketch below in four ways: object literals take spreads (`{ ...e, hp: e.hp - 1 }` is the usual record update, and it costs nothing to generate); the allowlist also has `every`, `findIndex`, `includes` and `indexOf`; array-method callbacks must be expression-bodied (a block could set state while the array is walked); and the arrow is its own `ExprIR` `Arrow { params, body }` rather than a `FunctionIR`, since it is a single expression. State initialised from an array prop also infers its type from the prop.
+*Status.* Shipped in #12, described in [DESIGN.md](DESIGN.md#arrays-and-records). It differs from the sketch below in four ways: object literals take spreads (`{ ...e, hp: e.hp - 1 }` is the usual record update, and it costs nothing to generate); the allowlist also has `every`, `findIndex`, `includes` and `indexOf`; array-method callbacks must be expression-bodied (a block could set state while the array is walked); and the arrow is its own `ExprIR` `Arrow { params, body }` rather than a `FunctionIR`, since it is a single expression. State initialised from an array prop also infers its type from the prop.
 
 - New `ExprIR` variants:
   - `ArrayLiteral` with spread elements
