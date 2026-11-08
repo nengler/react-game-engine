@@ -120,8 +120,9 @@ ignored):
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
   There is no `ref={…}` on elements. See "Transforms and refs".
-* Hooks: top-level `useInput((input) => ...)` and `useUpdate((dt) => ...)`
-  statements; each may appear several times and runs in source order.
+* Hooks: top-level `useInput((input) => ...)`, `useUpdate((dt) => ...)`,
+  `useMount(() => ...)` and `useUnmount(() => ...)` statements; each may
+  appear several times and runs in source order.
   `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
   `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
 * Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`; the list
@@ -258,6 +259,47 @@ collider's callback and not the component's, a component with several colliders
 (a hitbox and a shield) knows which one was hit. Dispatch only; renders happen
 in the next `tick`.
 
+## Mount and unmount
+
+`useMount(() => …)` and `useUnmount(() => …)` (M9) are handler hooks like
+`useUpdate`, lowered to a `FunctionIR` with no parameters (`OnMountHookIR`,
+`OnUnmountHookIR`; the overrides are `onMount()` and `onUnmount()`). There is
+no `useEffect` and no cleanup function to return: reacting to a state change
+is done where the state changes.
+
+```tsx
+function Banner({ text, onDone }: BannerProps) {
+  const [shown, setShown] = useState(false);
+  useMount(() => setShown(true));        // once, when it joins the world
+  useUnmount(() => onDone?.());          // once, when it leaves
+  return <Sprite image={shown ? `banner-${text}.png` : "banner-hidden.png"} />;
+}
+```
+
+**When.** A component mounts when it is attached to a `World` (`World.mount`,
+a parent's `addChild`, or a queued add committing: a condition turning on, a
+list item added, children passed to a component) and unmounts when it is
+detached (a condition turning off, an item removed, an enclosing component
+leaving). Constructing an object does not mount it, so a component never put
+in a world runs neither. Its first render has already committed, since the
+constructor runs it. Each hook runs once per stay in a world.
+
+**Order.** For a subtree, mounting is children first (a parent's `useMount`
+sees its children mounted) and unmounting is parent first (the parent's
+`useUnmount` runs while its children are still attached). Each object is still
+in its world when its own hook runs.
+
+**State.** `useMount` may set state: the setter schedules a render, which runs
+in the same `World.flush()` that mounted it. `useUnmount` may not (`RGE1402`):
+the component is going away, so the update could never render. It may read
+state, write refs, and call callback props, which is how the parent finds out
+(`onDone?.()`). A callback created for a list item can still read its item
+there (see "Keyed lists").
+
+**Rules.** Top-level only, imported from the authoring module (`RGE1005`),
+one arrow function with no parameters (`RGE1401`), several of a kind allowed
+and run in source order.
+
 Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
 not JSX event props. Element-level events are callback props on the element
 (`<Collider onCollisionEnter>`, later `<Pointer onPress>`).
@@ -379,7 +421,8 @@ index are `DynamicProp`s with an `Item` dependency; `dependencies` are what
 
 **Generated code.** Fields `enemyItems: Map<string | number, Enemy>` (public,
 by key) and `#enemyOrder` (the key order of the last render), plus
-`#enemyRecords` (each key's current item) when a callback reads the item.
+`#enemyRecords` (a `{ current }` holder per key, the key's current item) when
+a callback reads the item.
 `render()` handles the list in its own block, with `$`-prefixed temporaries
 (author names may not start with `$`):
 
@@ -397,13 +440,15 @@ by key) and `#enemyOrder` (the key order of the last render), plus
     const $key = $keys[$n]!;
     let $item = this.enemyItems.get($key);
     if ($item === undefined) {                      // 2. a new key: construct, queue at (slot, position)
-      $item = new Enemy({ speed: e.speed, onDefeated: () => { this.remove(this.#enemyRecords.get($key)!.id); } });
+      const $rec = { current: e };
+      $item = new Enemy({ speed: e.speed, onDefeated: () => { this.remove($rec.current.id); } });
       this.enemyItems.set($key, $item);
+      this.#enemyRecords.set($key, $rec);
       $parent.queueAddChild($item, 1, $n);
     } else {                                        // 3. an existing key: update in place
+      this.#enemyRecords.get($key)!.current = e;
       $item.updateProps({ speed: e.speed });
     }
-    this.#enemyRecords.set($key, e);
   }
   for (const [$key, $item] of this.enemyItems) {    // 4. keys that are gone
     if (!$seen.has($key)) { $parent.queueRemoveChild($item); this.enemyItems.delete($key); this.#enemyRecords.delete($key); }
@@ -419,10 +464,12 @@ by key) and `#enemyOrder` (the key order of the last render), plus
   dynamic props; `applyProps` compares with `===`, so an item whose values did
   not change is not marked dirty and does not render.
 * **Callbacks see the current item.** A callback prop is created once, with
-  the item's first value. Inside it, item reads are looked up by the item's
-  key in `#enemyRecords`, which every render refreshes, so after
-  `setEnemies` replaces a record under the same key the callback reads the
-  new one (as of the last render, like any state read).
+  the item's first value. Inside it, item reads go through a `{ current }`
+  holder (`$rec.current`) that every render refreshes, so after `setEnemies`
+  replaces a record under the same key the callback reads the new one (as of
+  the last render, like any state read). The callback keeps its holder after
+  the item is removed, so `useUnmount` can still call it (it runs when the
+  removal commits, after the render that dropped the key).
 * **In a conditional subtree** the list's fields are emptied when the subtree
   unmounts, so it is built afresh when it mounts again.
 * **Immutable updates** are what make the list re-render: see "Arrays and

@@ -1,5 +1,6 @@
 import { useState, useRef, useUpdate, Entity, Sprite, Collider } from "@rge/runtime/jsx";
 import Coin, { Trail } from "./Coin.tsx";
+import { Banner } from "./Banner.tsx";
 import { Panel } from "./Panel.tsx";
 
 interface EnemyProps {
@@ -76,6 +77,7 @@ function Level() {
         <Entity name="Boss">
           <Sprite image={wave > 5 ? "boss-enraged.png" : "boss.png"} />
           <Collider width={64} height={64} />
+          <Banner text="boss" onDone={() => setWave((wave) => wave + 1)} />
         </Entity>
       )}
     </Entity>

@@ -181,6 +181,8 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
 const HANDLER_KIND = {
   useUpdate: "OnUpdate",
   useInput: "OnInput",
+  useMount: "OnMount",
+  useUnmount: "OnUnmount",
 } as const;
 
 /** Names imported from the authoring module, shared by every component of a file. */
@@ -244,6 +246,8 @@ class ComponentLowering implements LoweringContext {
   #errorCount = 0;
   /** Greater than zero while lowering a handler body: the only place `ref.current` is allowed. */
   #functionDepth = 0;
+  /** Greater than zero while lowering a `useUnmount` handler, where state cannot be set. */
+  #settersForbidden = 0;
   /** The props type declares `children: Child`. */
   #declaredChildren = false;
   /** A `{children}` slot has been lowered (there may be one). */
@@ -453,15 +457,20 @@ class ComponentLowering implements LoweringContext {
       if (hook.kind !== "const") this.#requireImport(hook.kind, hook.call);
       switch (hook.kind) {
         case "useUpdate":
-        case "useInput": {
+        case "useInput":
+        case "useMount":
+        case "useUnmount": {
           const kind = HANDLER_KIND[hook.kind];
           const signature = HANDLER_SIGNATURES[kind];
           this.#functionDepth++;
+          // The component is going away: it can no longer render, so there is nothing for a setter to do.
+          if (hook.kind === "useUnmount") this.#settersForbidden++;
           const handler = lowerFunction(this, hook.handler, {
             paramTypes: signature.params.map((p) => p.type),
             returns: "void",
             what: `${hook.kind} handler`,
           });
+          if (hook.kind === "useUnmount") this.#settersForbidden--;
           this.#functionDepth--;
           if (handler) hooks.push({ kind, handler, span: this.#span(hook.statement) });
           break;
@@ -1511,6 +1520,10 @@ class ComponentLowering implements LoweringContext {
 
   isCallableName(name: string): boolean {
     return name === "Math" || this.#manifest.functions[name] !== undefined;
+  }
+
+  canSetState(): boolean {
+    return this.#settersForbidden === 0;
   }
 
   nextSerial(): number {

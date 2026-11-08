@@ -303,6 +303,8 @@ class ComponentGenerator {
           }
           case "OnUpdate":
           case "OnInput":
+          case "OnMount":
+          case "OnUnmount":
             break; // emitted below, grouped by kind
           default:
             assertNever(hook, "hook");
@@ -444,7 +446,7 @@ class ComponentGenerator {
         // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
         this.#w.line(`readonly ${el.fieldName}Items: Map<string | number, ${type}> = new Map();`);
         this.#w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
-        if (this.#listNeedsRecords(child)) this.#w.line(`#${el.fieldName}Records: Map<string | number, ${this.#listItemType(child)}> = new Map();`);
+        if (this.#listNeedsRecords(child)) this.#w.line(`#${el.fieldName}Records: Map<string | number, { current: ${this.#listItemType(child)} }> = new Map();`);
         continue;
       }
       const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
@@ -563,7 +565,10 @@ class ComponentGenerator {
       w.line(`const $key = $keys[${position}]!;`);
       w.line(`let $item = ${items}.get($key);`);
       w.open("if ($item === undefined) {");
-      this.#itemLookup = records ? { id: list.item.id, text: `${records}.get($key)!` } : null;
+      // A callback is created once, with the item's first value. It reads the item's current value through this
+      // holder, which every render refreshes, and which it keeps after the item is removed (an unmount hook may call it).
+      if (records) w.line(`const $rec = { current: ${item} };`);
+      this.#itemLookup = records ? { id: list.item.id, text: "$rec.current" } : null;
       try {
         w.line(`$item = ${this.#construct(el)};`);
       } finally {
@@ -571,15 +576,16 @@ class ComponentGenerator {
       }
       this.#emitStaticTransform(el.transform, "$item", target);
       w.line(`${items}.set($key, $item);`);
+      if (records) w.line(`${records}.set($key, $rec);`);
       w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, ${position})` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
-      if (el.props.some((p) => p.kind === "DynamicProp")) {
+      if (records || el.props.some((p) => p.kind === "DynamicProp")) {
         w.close();
         w.open("} else {");
+        if (records) w.line(`${records}.get($key)!.current = ${item};`);
         this.#emitPropUpdates(el, "$item");
       }
       w.close("}");
       this.#emitDynamicTransform(el.transform, "$item", target);
-      if (records) w.line(`${records}.set($key, ${item});`);
     });
     w.block(`for (const [$key, $item] of ${items})`, () => {
       w.block("if (!$seen.has($key))", () => {

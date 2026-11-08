@@ -70,6 +70,8 @@ export class GameObject<P extends object = {}> {
   #slot = Infinity;
   /** Position within the slot: the item's index in a keyed list (see `queueReorder`); 0 otherwise. */
   #order = 0;
+  /** `onMount` has run and `onUnmount` has not: each runs once per stay in a World. */
+  #mounted = false;
 
   /**
    * Where children passed by a parent (`<Panel><Button /></Panel>`) mount: a
@@ -234,6 +236,21 @@ export class GameObject<P extends object = {}> {
 
   onUpdate(_dt: number): void {}
 
+  /**
+   * Runs once when this object joins a World, after its whole subtree has
+   * (children first, so a parent's `onMount` sees them mounted). Its first
+   * render has already committed: the constructor runs it. Setting state here
+   * schedules a render in the same `flush`.
+   */
+  onMount(): void {}
+
+  /**
+   * Runs once when this object leaves its World, while it is still attached;
+   * a parent runs before its children. Anything it schedules on itself is
+   * dropped (the object is going away), so it is for telling other objects.
+   */
+  onUnmount(): void {}
+
   /** Recompute dynamic props and conditional children. Generated code overrides this. */
   render(): void {}
 
@@ -243,9 +260,17 @@ export class GameObject<P extends object = {}> {
     if (this.#dirty) world.scheduleRender(this);
     if (this.#pending.length > 0) world.scheduleCommit(this);
     for (const child of this.children) child.attachToWorld(world);
+    if (!this.#mounted) {
+      this.#mounted = true;
+      this.onMount();
+    }
   }
 
   detachFromWorld(): void {
+    if (this.#mounted) {
+      this.#mounted = false;
+      this.onUnmount();
+    }
     this.world?.unregisterObject(this);
     this.world = null;
     for (const child of this.children) child.detachFromWorld();

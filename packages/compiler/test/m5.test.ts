@@ -519,7 +519,7 @@ describe("M5b: generated code", () => {
     const { code } = compile(PACK, "Pack.tsx");
     assert.match(code, /readonly enemyItems: Map<string \| number, Enemy> = new Map\(\);/);
     assert.match(code, /#enemyOrder: \(string \| number\)\[\] = \[\];/);
-    assert.match(code, /#enemyRecords: Map<string \| number, Pack\["enemies"\]\[number\]> = new Map\(\);/, "a callback reads the item");
+    assert.match(code, /#enemyRecords: Map<string \| number, \{ current: Pack\["enemies"\]\[number\] \}> = new Map\(\);/, "a callback reads the item");
     assert.doesNotMatch(code, /#sprite3Records/, "no callback reads the item: no records");
   });
 
@@ -534,10 +534,13 @@ describe("M5b: generated code", () => {
     assert.match(code, /this\.addChild\(this\.sprite2, 2\);/, "static siblings get slots");
   });
 
-  it("reads the current item inside a callback, by key", () => {
+  it("reads the current item inside a callback, through a holder the item keeps", () => {
     const { code } = compile(PACK, "Pack.tsx");
-    assert.match(code, /this\.setDefeated\(`\$\{this\.#enemyRecords\.get\(\$key\)!\.id\}@\$\{this\.#enemyRecords\.get\(\$key\)!\.speed\}`\);/);
-    assert.match(code, /this\.enemies\.filter\(\(x\) => x\.id !== this\.#enemyRecords\.get\(\$key\)!\.id\)/);
+    assert.match(code, /const \$rec = \{ current: e \};/);
+    assert.match(code, /this\.#enemyRecords\.set\(\$key, \$rec\);/);
+    assert.match(code, /this\.#enemyRecords\.get\(\$key\)!\.current = e;/, "refreshed on every render");
+    assert.match(code, /this\.setDefeated\(`\$\{\$rec\.current\.id\}@\$\{\$rec\.current\.speed\}`\);/);
+    assert.match(code, /this\.enemies\.filter\(\(x\) => x\.id !== \$rec\.current\.id\)/);
   });
 
   it("empties a list when its conditional subtree unmounts", () => {

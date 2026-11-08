@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { GameObject } from "../src/index.ts";
+import { GameObject, World } from "../src/index.ts";
 
 describe("child slots", () => {
   it("insert a slotted child after siblings with a lower or equal slot", () => {
@@ -123,5 +123,90 @@ describe("passed children", () => {
 
   it("throw a clear error when the component does not render {children}", () => {
     assert.throws(() => new GameObject().attachPassedChild(new GameObject(), 0), /does not render \{children\}/);
+  });
+});
+
+describe("mount and unmount", () => {
+  /** Records its own mount and unmount in a shared log. */
+  class Logged extends GameObject {
+    readonly label: string;
+    readonly log: string[];
+    constructor(label: string, log: string[]) {
+      super();
+      this.label = label;
+      this.log = log;
+    }
+    override onMount(): void {
+      this.log.push(`mount ${this.label}`);
+    }
+    override onUnmount(): void {
+      this.log.push(`unmount ${this.label}${this.world ? "" : " (detached)"}`);
+    }
+  }
+
+  it("mounts a subtree children first, once, when it joins a world", () => {
+    const log: string[] = [];
+    const [parent, a, b] = [new Logged("parent", log), new Logged("a", log), new Logged("b", log)];
+    parent.addChild(a);
+    parent.addChild(b);
+    assert.deepEqual(log, [], "nothing runs before there is a world");
+    const world = new World();
+    world.mount(parent);
+    assert.deepEqual(log, ["mount a", "mount b", "mount parent"]);
+    world.root.removeChild(parent);
+    log.length = 0;
+    world.mount(parent);
+    assert.deepEqual(log, ["mount a", "mount b", "mount parent"], "a new stay in a world mounts again");
+  });
+
+  it("unmounts a subtree parent first, each object while still in the world", () => {
+    const log: string[] = [];
+    const [parent, child] = [new Logged("parent", log), new Logged("child", log)];
+    parent.addChild(child);
+    const world = new World();
+    world.mount(parent);
+    log.length = 0;
+    world.root.removeChild(parent);
+    assert.deepEqual(log, ["unmount parent", "unmount child"], "neither was detached yet when its own hook ran");
+    assert.equal(parent.world, null);
+    assert.equal(child.world, null);
+  });
+
+  it("mounts a child added later, and unmounts one removed through the queue", () => {
+    const log: string[] = [];
+    const [parent, late] = [new Logged("parent", log), new Logged("late", log)];
+    const world = new World();
+    world.mount(parent);
+    log.length = 0;
+    parent.queueAddChild(late);
+    world.flush();
+    assert.deepEqual(log, ["mount late"]);
+    parent.queueRemoveChild(late);
+    world.flush();
+    assert.deepEqual(log, ["mount late", "unmount late"]);
+  });
+
+  it("does not run unmount for an object that never mounted", () => {
+    const log: string[] = [];
+    const [parent, child] = [new Logged("parent", log), new Logged("child", log)];
+    parent.addChild(child);
+    parent.removeChild(child);
+    assert.deepEqual(log, []);
+  });
+
+  it("renders state set in onMount in the same flush", () => {
+    let renders = 0;
+    class Eager extends GameObject {
+      override onMount(): void {
+        this.markDirty();
+      }
+      override render(): void {
+        renders++;
+      }
+    }
+    const world = new World();
+    world.mount(new Eager());
+    assert.equal(world.flush(), 1);
+    assert.equal(renders, 1);
   });
 });

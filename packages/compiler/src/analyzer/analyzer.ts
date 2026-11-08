@@ -147,9 +147,9 @@ export interface UseRefCallAnalysis {
   readonly declaration: VariableDeclaration;
 }
 
-/** `useUpdate(() => ...)` / `useInput(...)` as a top-level statement. */
+/** `useUpdate(() => ...)`, `useInput(...)`, `useMount(...)` or `useUnmount(...)` as a top-level statement. */
 export interface HandlerCallAnalysis {
-  readonly kind: "useUpdate" | "useInput";
+  readonly kind: "useUpdate" | "useInput" | "useMount" | "useUnmount";
   readonly handler: ArrowFunction;
   readonly call: CallExpression;
   readonly statement: Statement;
@@ -166,8 +166,8 @@ export interface UseStateCallAnalysis {
 }
 
 const HOOK_NAME = /^use[A-Z0-9]/;
-const KNOWN_HOOKS = new Set(["useState", "useRef", "useUpdate", "useInput"]);
-const HANDLER_HOOKS = new Set(["useUpdate", "useInput"]);
+const KNOWN_HOOKS = new Set(["useState", "useRef", "useUpdate", "useInput", "useMount", "useUnmount"]);
+const HANDLER_HOOKS = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS, ...HANDLER_HOOKS].filter((name, i, all) => all.indexOf(name) === i);
 /** Hooks that were renamed or replaced, reported with what to write instead. */
@@ -466,7 +466,7 @@ function analyzeComponent(
     diagnostics.push(
       error(
         DiagnosticCode.InvalidComponentBody,
-        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const name = expression\` (derived values), handler statements (\`useUpdate(...)\`, \`useInput(...)\`) and a final \`return\` are supported.`,
+        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const name = expression\` (derived values), handler statements (\`useUpdate(...)\`, \`useInput(...)\`, \`useMount(...)\`, \`useUnmount(...)\`) and a final \`return\` are supported.`,
         span(statement),
       ),
     );
@@ -611,7 +611,7 @@ type HandlerMatch =
   | { readonly kind: "ok"; readonly hook: HandlerCallAnalysis }
   | { readonly kind: "invalid"; readonly code: DiagnosticCode; readonly message: string; readonly call: CallExpression | null };
 
-/** Recognises `useUpdate(arrow)` and `useInput(arrow)`; null if the statement is not a call to one of them. */
+/** Recognises `useUpdate(arrow)`, `useInput(arrow)`, `useMount(arrow)` and `useUnmount(arrow)`; null if the statement is not a call to one of them. */
 function matchHandlerStatement(statement: Statement): HandlerMatch | null {
   if (!isExpressionStatement(statement)) return null;
   const call = unwrapParens(statement.expression);

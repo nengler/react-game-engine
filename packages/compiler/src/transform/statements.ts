@@ -35,6 +35,8 @@ export interface LoweringContext {
   /** Resolves `r.current.prop`; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
   lowerAssignTarget(node: Expression): AssignTargetIR | null;
   stateType(state: StateId): TypeIR;
+  /** False in a `useUnmount` handler: the component is going away, so a state update could never render. */
+  canSetState(): boolean;
   nextSerial(): number;
   /** Names handler code may never rebind, because the call allowlist refers to them (`Math`, runtime functions). */
   isCallableName(name: string): boolean;
@@ -193,7 +195,17 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (isBinaryExpression(call) && ASSIGNMENT_TOKENS.has(call.operatorToken.kind)) return lowerAssignment(ctx, call);
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
-    if (callee?.kind === "setter") return lowerSetState(ctx, call.arguments, callee.state, call);
+    if (callee?.kind === "setter") {
+      if (!ctx.canSetState()) {
+        ctx.error(
+          DiagnosticCode.UnsupportedStatement,
+          `\`${call.expression.text}\` cannot be called in \`useUnmount\`: the component is going away, so the update could never render. Tell the parent with a callback prop (\`onGone?.()\`), or write a ref.`,
+          call,
+        );
+        return null;
+      }
+      return lowerSetState(ctx, call.arguments, callee.state, call);
+    }
   }
   const lowered = ctx.lowerExpression(call);
   if (!lowered) return null;
