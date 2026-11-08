@@ -39,6 +39,16 @@ export class TsxParser {
     };
   }
 
+  /** Parse a JSON file (a scene) into the same kind of AST, so diagnostics can point at a value's line and column. */
+  parseJson(fileName: string, text: string): ParsedSource {
+    const retained: RetainedSourceFile = this.api.createSourceFile(fileName, text, { scriptKind: ScriptKind.JSON });
+    return {
+      fileName,
+      sourceFile: retained.sourceFile,
+      dispose: () => retained.dispose(),
+    };
+  }
+
   close(): void {
     if (this.#ownsApi) this.api.close();
   }

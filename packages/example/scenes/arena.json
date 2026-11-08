@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "entities": [
+    {
+      "id": "hud",
+      "prefab": "Panel",
+      "props": { "title": "hud" },
+      "transform": { "x": 8, "y": 8 },
+      "children": [{ "id": "hud-coin", "prefab": "Coin", "props": { "value": 3 }, "transform": { "x": 4 } }]
+    },
+    { "id": "grunt", "prefab": "Enemy", "props": { "speed": 1.5 }, "transform": { "x": 120, "y": 40 } },
+    { "id": "brute", "prefab": "Enemy", "props": { "speed": 0.5, "tint": "blue" }, "transform": { "x": 200, "y": 40, "rotation": 0.2 } }
+  ]
+}

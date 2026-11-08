@@ -123,6 +123,7 @@ describe("IR construction", () => {
           props: [],
           propsType: null,
           isDefaultExport: false,
+          isExported: false,
           acceptsChildren: false,
           state: [
             {
@@ -180,6 +181,7 @@ describe("IR construction", () => {
           props: [],
           propsType: null,
           isDefaultExport: false,
+          isExported: false,
           acceptsChildren: false,
           hooks: [],
           state: [],

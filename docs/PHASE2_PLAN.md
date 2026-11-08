@@ -18,8 +18,8 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M8 Children | Done | #14 | `children: Child` and `{children}` in the receiver, elements between the tags in the parent (static, conditional, or a sole list). The parent owns and updates what it passes; the receiver only says where it mounts. Forwarding `{children}` and children on list items are not supported yet |
 | M5a Arrays and records in handlers | Done | #12 | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
 | M5b Keyed lists | In review | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
-| M9 Mount and unmount hooks | In review | #15 | `useMount` (may set state; renders in the same flush) and `useUnmount` (no setters; refs and callback props). Mount is children first, unmount parent first. Also fixes list-item callbacks that read the item during an unmount |
-| M6 Prefabs and scenes | Not started | n/a | Needs M3 and M4 |
+| M9 Mount and unmount hooks | Done | #15 | `useMount` (may set state; renders in the same flush) and `useUnmount` (no setters; refs and callback props). Mount is children first, unmount parent first. Also fixes list-item callbacks that read the item during an unmount |
+| M6 Prefabs and scenes | In review | #16 | Per-module `prefabs` registry, project `prefabs.ts` / `prefabs.json`, `rge-compile --scenes` (validation with line, column and JSON path; `RGE15xx`), `loadScene`, a Tiled `.tmj` importer. Also closes M0's gap: cross-file static cycles are now detected |
 | M10 `<Text>` | Not started | n/a | Needs M7. HUD and labels; `transformIntrinsics` |
 | M11 `<Shape>` | Not started | n/a | Needs M7. Rectangles and circles for debugging and prototypes; `transformIntrinsics` |
 | M12 `<Camera>` | Not started | n/a | Needs M4 (to follow a target through a prop). The view transform is its own `transform`; `transformIntrinsics` |
@@ -492,12 +492,14 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M6 Prefabs and scenes
 
-- [ ] New IR variants added in `ir/types.ts`, with every `assertNever` site handled
-- [ ] Analyzer recognises the new syntax; every unsupported form has a diagnostic and a test
-- [ ] `docs/DESIGN.md` updated: authoring rules, IR table, generated-code example
-- [ ] At least one example in `packages/example/src` uses the feature; `npm run example` regenerated and committed
-- [ ] Tests cover the IR shape, the generated code shape, the type-check, and runtime behaviour (identity preserved, one render per change)
-- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+- [x] IR: `ComponentIR.isExported` (no new expression or child variants, so no new `assertNever` sites); new diagnostics `RGE1501`–`RGE1509`
+- [x] Registry generated for every exported component; `prefabs.ts` and `prefabs.json` written by the CLI; duplicate exported names and cross-file cycles are diagnostics
+- [x] Scene validation reports unknown prefab, unknown prop, missing prop, wrong type, non-settable prop, duplicate id, bad shape and bad JSON, each with file, line, column and JSON path (a test per form)
+- [x] Runtime `loadScene` (placement, children and slots, mount once, ids map); Tiled importer for object layers
+- [x] `docs/DESIGN.md` updated ("Prefabs and scenes", cross-file cycles)
+- [x] The example exports `Enemy` and has `scenes/arena.json` and `scenes/map.tmj`; `npm run example` validates them and the regenerated output (registry, schema, imported scene) is committed
+- [x] Tests cover the registry and schema, constant defaults, project checks, validation, the importer, `loadScene`, the TSX-versus-scene equivalence and the CLI (`m6.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M7 Authoring types
 

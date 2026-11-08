@@ -126,6 +126,7 @@
       ],
       "propsType": "BannerProps",
       "isDefaultExport": false,
+      "isExported": true,
       "acceptsChildren": false,
       "root": {
         "kind": "HostElement",

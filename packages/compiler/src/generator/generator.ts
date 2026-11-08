@@ -22,6 +22,7 @@ import {
   functionReadsParam,
 } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
+import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
 import { CodeWriter } from "./writer.ts";
 
 export interface GeneratorOptions {
@@ -66,7 +67,38 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
       w.line(`export default ${component.name};`);
     }
   }
+  emitPrefabs(module, w);
   return w.toString();
+}
+
+/**
+ * `export const prefabs = { Enemy: { create, props } }` for the exported
+ * components: the data a scene needs to place them. `ConstructorParameters`
+ * types `create`, so the props interface need not be exported.
+ */
+function emitPrefabs(module: IRModule, w: CodeWriter): void {
+  const exported = exportedComponents(module);
+  if (exported.length === 0) return;
+  const schemas = new Map(moduleSchemas(module).map((s) => [s.name, s] as const));
+  w.blank();
+  w.open("export const prefabs = {");
+  for (const component of exported) {
+    w.open(`${component.name}: {`);
+    w.line(
+      component.propsType
+        ? `create: (props: ConstructorParameters<typeof ${component.name}>[0]) => new ${component.name}(props),`
+        : `create: () => new ${component.name}(),`,
+    );
+    const props = schemas.get(component.name)!.props;
+    if (props.length === 0) w.line("props: [],");
+    else {
+      w.open("props: [");
+      for (const prop of props) w.line(`${JSON.stringify(prop)},`);
+      w.close("],");
+    }
+    w.close("},");
+  }
+  w.close("} satisfies Record<string, PrefabDefinition>;");
 }
 
 /** Runtime values (intrinsic classes, helper functions) and types the module's output refers to. */
@@ -116,6 +148,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
       }
     }
   };
+  if (exportedComponents(module).length > 0) types.add("PrefabDefinition");
   for (const c of module.components) {
     if (c.acceptsChildren) types.add("Child");
     values.add(c.root.component.name);

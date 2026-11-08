@@ -83,6 +83,11 @@ export class GameObject<P extends object = {}> {
   protected passedChildrenHost: GameObject | null = null;
   protected passedChildrenSlot = Infinity;
 
+  /** Whether this component renders `{children}`: a scene (or a parent) may pass it children. */
+  get acceptsPassedChildren(): boolean {
+    return this.passedChildrenHost !== null;
+  }
+
   /** Immediately attach a passed child, at `order` among the passed children (the slot of `{children}` is fixed). */
   attachPassedChild(child: GameObject, order: number): void {
     this.#passedHost().addChild(child, this.passedChildrenSlot, order);

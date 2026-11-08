@@ -136,6 +136,8 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 
 ## M6: prefabs and scenes
 
+*Status.* Implemented on `claude/pensive-faraday-lnmtga`, described in [DESIGN.md](DESIGN.md#prefabs-and-scenes). It follows the design below, with these additions: `ComponentIR.isExported` (so the registry covers `export default` too); a scene child goes to the `{children}` slot of a component that renders one (`GameObject.acceptsPassedChildren`) instead of always being appended; `loadScene` builds the whole tree before mounting, so each object mounts once (M9); scene diagnostics are `RGE1501`–`RGE1509`; scene validation is skipped when the project itself has errors; a Tiled tile object's bottom-left anchor is moved to the entity's top left along the object's rotated up axis; an object with no class is skipped with a warning; the CLI imports `.tmj` files found in the `--scenes` directory.
+
 **Prefab registry**
 
 - For each *exported* component, emit:

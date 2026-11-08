@@ -9,7 +9,7 @@ interface EnemyProps {
   onDefeated?: () => void;
 }
 
-function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
+export function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
   const [hp, setHp] = useState(3);
   const reported = useRef(false);
 

@@ -40,6 +40,20 @@ export const DiagnosticCode = {
   DuplicateHandler: "RGE1403",
   /** Retired: refs no longer point at elements, so there are no ref property writes to conflict with JSX. */
   ConflictingRefWrite: "RGE1404",
+  /** A scene file that is not valid JSON. */
+  SceneSyntax: "RGE1501",
+  /** A scene (or its entity, `transform`, version) that is not in the scene format. */
+  SceneShape: "RGE1502",
+  UnknownPrefab: "RGE1503",
+  UnknownPrefabProp: "RGE1504",
+  MissingPrefabProp: "RGE1505",
+  /** A scene value of the wrong type for its prop or transform field. */
+  WrongPropType: "RGE1506",
+  /** A prop data cannot set: a callback, or a type the compiler cannot describe as data. */
+  PropNotSettable: "RGE1507",
+  DuplicateSceneId: "RGE1508",
+  /** A Tiled map the importer cannot read, or an object or property it cannot turn into a scene entity. */
+  TiledImport: "RGE1509",
   GeneratedTypeError: "RGE9001",
   /** A TypeScript error in the authored TSX itself (wrong prop, wrong type, undefined name). */
   SourceTypeError: "RGE9002",

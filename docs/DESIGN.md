@@ -184,6 +184,7 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 | ~~transforms, refs~~ | done: `ElementIR.transform` / `HostElementIR.transform`, `ComponentIR.refs` (values), `Assign` to `RefCurrent`, `RefRead`; see "Transforms and refs" |
 | ~~props between components~~ | done: `ComponentIR.props: PropDeclIR[]` and `propsType`, `IRModule.typeDeclarations`, `ExprIR` `PropRead`, `CalleeIR` `Prop`, `PropIR` `CallbackProp`, `DependencyIR`; see "Props and callbacks" |
 | ~~arrays and records in handlers (M5a)~~ | done: `TypeIR` `Array` / `SourceType` for state, `ExprIR` `ArrayLiteral`, `ObjectLiteral`, `MemberRead`, `Arrow`, `CalleeIR` `ArrayMethod`; see "Arrays and records" |
+| ~~prefabs / scenes (M6)~~ | done: `ComponentIR.isExported`, a generated `prefabs` registry per module, project-level `prefabs.ts` / `prefabs.json`, scene validation (`RGE15xx`), `loadScene` in the runtime, a Tiled importer; see "Prefabs and scenes" |
 | ~~children (M8)~~ | done: `ChildIR` `ChildrenSlot`, `ComponentIR.acceptsChildren`, `ElementIR.children` on a component element are the children passed to it; runtime `attachPassedChild` and friends; see "Children" |
 | ~~keyed lists (M5b)~~ | done: `ChildIR` `KeyedListChild { source, item, index, key, element, dependencies }`, `DependencyIR` `Item`; runtime `(slot, order)` and `queueReorder`; see "Keyed lists" |
 | prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
@@ -587,6 +588,95 @@ reset, so remounting builds them afresh.
 "Keyed lists"). The parent never needs the receiver's slot index, so a
 component from another file works.
 
+## Prefabs and scenes
+
+A prefab is an exported component plus a description of its props, so data
+files (not only TSX) can place components in a world (M6). Three pieces:
+
+* **Registry.** Every module that exports a component gets, after its classes
+  (`ComponentIR.isExported`: `export function`, or the default export):
+
+  ```ts
+  export const prefabs = {
+    Enemy: {
+      create: (props: ConstructorParameters<typeof Enemy>[0]) => new Enemy(props),
+      props: [
+        {"name":"speed","type":{"kind":"Primitive","name":"number"},"optional":false,"settable":true},
+        {"name":"tint","type":{"kind":"Literals","values":["red","blue"]},"optional":true,"settable":true,"default":"red"},
+      ],
+    },
+  } satisfies Record<string, PrefabDefinition>;
+  ```
+
+  `ConstructorParameters` types `create`, so the props interface need not be
+  exported; a component without props gets `create: () => new X()`. `props` is
+  built from `PropDeclIR` / `PropTypeIR`: value props only (a callback cannot
+  come from data, and `children` is passed, not set). A prop whose type the
+  compiler cannot describe as data (`SourceText`) is listed with
+  `settable: false`: it is code-only. A default is included when it is a
+  constant the compiler can evaluate (`constantValue`).
+* **Project outputs.** Next to the per-file outputs, the CLI writes
+  `prefabs.ts` (every module's `prefabs`, merged, for `loadScene`) and
+  `prefabs.json` (`{ version, prefabs: { Name: { module, props } } }`, for
+  editors and validators). It also checks the whole project: an exported name
+  used in two files is `RGE1206` (scenes refer to prefabs by name), and a
+  static cycle through several files is `RGE1205`.
+* **Scenes.** JSON: `{ "version": 1, "entities": [{ "id", "prefab", "props"?,
+  "transform"?, "children"? }] }`. `id` is author-assigned, unique in the
+  scene and stable across edits (for diffing and hot reload). `transform` is
+  `x`, `y`, `rotation` (radians), `scaleX`, `scaleY`, `global`.
+
+**Validation.** `rge-compile <src> <out> --scenes <dir>` validates every
+`.json` in the directory against the compiled prefabs, after the project
+compiles (a broken project would only produce unknown-prefab noise). The scene
+is parsed into an AST (the JSON `ScriptKind`), so every diagnostic carries the
+file, line and column of the offending value, and its JSON path in the message
+(`entities[1].props.speed: Expected a number, got the string "fast"`):
+
+| Code | Meaning |
+| --- | --- |
+| `RGE1501` | not valid JSON (with the parser's position) |
+| `RGE1502` | not the scene format: version, missing or unknown keys, wrong container, no `id` or `prefab` |
+| `RGE1503` | unknown prefab (lists the known ones) |
+| `RGE1504` | unknown prop (says callbacks cannot be set) |
+| `RGE1505` | missing required prop |
+| `RGE1506` | wrong type: a prop value, an array element, a literal not in the union, a transform field |
+| `RGE1507` | a prop data cannot express |
+| `RGE1508` | duplicate `id` (nested entities included) |
+| `RGE1509` | Tiled import: an unreadable map, or an object or property it cannot turn into an entity |
+
+A problem does not stop the walk, so one run reports them all.
+
+**Tiled.** A `.tmj` in the scenes directory is imported to
+`<out>/scenes/<name>.scene.json`, which is then validated like any scene
+(positions in those diagnostics point at the generated file). Object layers
+only; tile layers are a renderer concern. Each object becomes an entity whose
+prefab is its `class` (older Tiled: `type`) and whose props are its custom
+properties (`bool`, `int`, `float`, `string`, `file`, `color`; `object` and
+`class` properties are `RGE1509`). Ids are `"<layer name>/<object id>"`, stable
+across edits in Tiled; group layers flatten. `rotation` is converted from
+degrees to radians. A tile object (one with a `gid`) is anchored at its bottom
+left in Tiled, an entity at its top left, so the importer moves the anchor
+along the object's own rotated up axis. An object with no class is skipped
+with a warning. Properties inherited from Tiled object templates are not
+resolved.
+
+**Runtime.** `loadScene(world, scene, prefabs)` builds each entity with
+`create(props)`, copies `transform` onto its **`placement`** (so the component's
+own state-driven `transform` composes on top: a placed `Mover` still moves
+relative to its spawn point), and gives it its `children` *before* anything is
+mounted, so every object mounts once, children first. A child goes to the
+`{children}` slot of a component that renders one (`acceptsPassedChildren`),
+and is otherwise appended after the component's own children. It returns a
+`Map` of every object, nested ones included, by scene id; an editor or hot
+reload can key on that. It checks only that a prefab exists and an id is not
+repeated: validating props is a build step, so the runtime stays small.
+
+**Two ways to the same tree.** A scene is data; a component that composes
+prefabs is code. Both build the same objects, and a test compares the tree a
+scene builds with the one the equivalent TSX builds (type, props, placement,
+transform, children).
+
 ## Transforms and refs
 
 Components should read like React: what is on screen, position included, is a
@@ -928,7 +1018,10 @@ all outputs together, so a broken cross-file reference is caught there. A
 parent needs nothing about an imported child's props: it passes what it writes,
 and the project type-check validates it against the child's own props type (a
 missing or mistyped prop is `TS2741` / `TS2322` in the generated parent).
-Cross-file static cycles are not detected yet (the `RGE1205` check is per file).
+Static cycles through several files (`A` contains `B` contains `A`) are found
+by the CLI's whole-project check, which follows imports (`RGE1205`); the
+transform still reports the ones inside a file. Only static containment
+counts: a component that mounts the other conditionally is fine.
 
 ## Runtime (mock)
 
