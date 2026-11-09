@@ -298,6 +298,61 @@ describe("CollisionTracker against every-pair testing", () => {
     }
     assert.ok(totalPairs > 200, `the scenes should produce plenty of contacts to compare, not ${totalPairs}`);
   });
+
+  it("keeps reporting the same contacts when it runs out of ids and renumbers, while colliders come and go", () => {
+    const next = random(7);
+    const reports = (log: string[]) => ({ reportCollision: (a: GameObject, b: GameObject) => void log.push(`${(a as Collider).width}|${(b as Collider).width}`) }) as unknown as World;
+    const roomy = new CollisionTracker();
+    const tight = new CollisionTracker(12); // renumbers every few frames
+    const expected: string[] = [];
+    const actual: string[] = [];
+    let live: ColliderEntry[] = [];
+    let made = 0;
+    for (let frame = 0; frame < 200; frame++) {
+      // Drop some colliders and make new ones, so ids keep being handed out; widths name them in the log.
+      live = live.filter(() => next() > 0.3);
+      while (live.length < 6) {
+        const collider = new Collider({ width: 10 + made++ / 1000, height: 10 });
+        new Entity().addChild(collider); // each has its own parent, so the same-parent rule does not apply
+        live.push({ collider, world: { ...IDENTITY } });
+      }
+      live = live.map((entry) => ({ collider: entry.collider, world: { ...IDENTITY, x: Math.floor(next() * 4) * 8, y: 0 } }));
+      roomy.update(reports(expected), live);
+      tight.update(reports(actual), live);
+    }
+    assert.ok(expected.length > 100, `the frames should produce plenty of contacts, not ${expected.length}`);
+    assert.deepEqual(actual, expected);
+  });
+
+  it("still reports each contact once when ids grow past the compact range (more than 2^15)", () => {
+    const log: string[] = [];
+    const world = { reportCollision: (a: GameObject, b: GameObject) => void log.push(`${(a as Collider).width}|${(b as Collider).width}`) } as unknown as World;
+    const tracker = new CollisionTracker();
+    const spread = (count: number, first: number): ColliderEntry[] =>
+      Array.from({ length: count }, (_, i) => {
+        const collider = new Collider({ width: first + i, height: 1 });
+        new Entity().addChild(collider);
+        return { collider, world: { ...IDENTITY, x: i * 1e6, y: 0 } }; // wider apart than any is wide
+      });
+    tracker.update(world, spread(17000, 1)); // ids 0 .. 16999, nothing touching
+    const late = spread(17000, 100000); // ids 17000 .. 33999: the last ones are past 2^15
+    const a = late[16998] as ColliderEntry;
+    const b = late[16999] as ColliderEntry;
+    const low = late[0] as ColliderEntry; // id 17000, paired with one past 2^15
+    const frame = (touchingLow: boolean): ColliderEntry[] => [
+      ...late.slice(1, 16998),
+      { collider: low.collider, world: { ...IDENTITY, x: touchingLow ? -1e9 + 5 : -1e9 + 5e5 } },
+      { collider: a.collider, world: { ...IDENTITY, x: -1e9 } },
+      { collider: b.collider, world: { ...IDENTITY, x: -1e9 + 10 } },
+    ];
+    tracker.update(world, frame(true));
+    tracker.update(world, frame(true));
+    const [lowId, aId, bId] = [100000, 100000 + 16998, 100000 + 16999];
+    assert.deepEqual(log, [`${lowId}|${aId}`, `${lowId}|${bId}`, `${aId}|${bId}`], "each pair once, while it lasts");
+    tracker.update(world, frame(false));
+    tracker.update(world, frame(true));
+    assert.deepEqual(log.slice(3), [`${lowId}|${aId}`, `${lowId}|${bId}`], "the pairs that parted and met again are reported again; the one that stayed is not");
+  });
 });
 
 describe("collisions in the frame loop", () => {

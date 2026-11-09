@@ -38,7 +38,9 @@ export function walkTree(root: GameObject, visit: (object: GameObject, world: Wo
   const world = composeTransforms(composeTransforms(parentSpace, root.placement), root.transform);
   visit(root, world);
   const childSpace = root instanceof Camera ? parentSpace : world;
-  for (const child of root.children) walkTree(child, visit, childSpace);
+  // Indexed, not `for…of`: QuickJS makes an iterator object for every `for…of`, and this runs for every object every frame.
+  const children = root.children;
+  for (let i = 0; i < children.length; i++) walkTree(children[i] as GameObject, visit, childSpace);
 }
 
 /** A growable frame of draw records (see `native/include/rge.h`) and the strings its text records refer to. */
@@ -144,6 +146,33 @@ export interface BuiltFrame {
 }
 
 const IDENTITY_VIEW: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+
+const KIND_NONE = 0;
+const KIND_SPRITE = 1;
+const KIND_SHAPE = 2;
+const KIND_TEXT = 3;
+const KIND_CAMERA = 4;
+const KIND_POINTER = 5;
+const KIND_COLLIDER = 6;
+/** What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven times per object. */
+const KINDS = new Map<Function, number>();
+
+function kindOf(object: GameObject): number {
+  let kind = KINDS.get(object.constructor);
+  if (kind === undefined) {
+    kind =
+      object instanceof Sprite || object instanceof AnimatedSprite ? KIND_SPRITE
+      : object instanceof Shape ? KIND_SHAPE
+      : object instanceof Text ? KIND_TEXT
+      : object instanceof Camera ? KIND_CAMERA
+      : object instanceof Pointer ? KIND_POINTER
+      : object instanceof Collider ? KIND_COLLIDER
+      : KIND_NONE;
+    KINDS.set(object.constructor, kind);
+  }
+  return kind;
+}
+
 /** The size of the square drawn where a texture could not be loaded. */
 const MISSING_TEXTURE_SIZE = 16;
 
@@ -176,21 +205,32 @@ export class FrameBuilder {
     const colliders: ColliderEntry[] = [];
 
     walkTree(root, (object, world) => {
-      if (object instanceof Sprite || object instanceof AnimatedSprite) {
-        this.#sprite(object.image, world);
-      } else if (object instanceof Shape) {
-        const color = this.#color(object.color);
-        if (object.kind === "circle") list.ellipse(world, object.width, object.height, color);
-        else list.rect(world, object.width, object.height, color);
-      } else if (object instanceof Text) {
-        if (object.text !== "") list.text(world, object.text, object.size, this.#color(object.color));
-      } else if (object instanceof Camera) {
-        if (camera === null) camera = object;
-        else this.#warner.once("camera", "More than one <Camera> is mounted: only the first one in draw order is used.");
-      } else if (object instanceof Pointer) {
-        pointers.push(object);
-      } else if (object instanceof Collider) {
-        colliders.push({ collider: object, world });
+      switch (kindOf(object)) {
+        case KIND_SPRITE:
+          this.#sprite((object as Sprite | AnimatedSprite).image, world);
+          break;
+        case KIND_SHAPE: {
+          const shape = object as Shape;
+          const color = this.#color(shape.color);
+          if (shape.kind === "circle") list.ellipse(world, shape.width, shape.height, color);
+          else list.rect(world, shape.width, shape.height, color);
+          break;
+        }
+        case KIND_TEXT: {
+          const text = object as Text;
+          if (text.text !== "") list.text(world, text.text, text.size, this.#color(text.color));
+          break;
+        }
+        case KIND_CAMERA:
+          if (camera === null) camera = object as Camera;
+          else this.#warner.once("camera", "More than one <Camera> is mounted: only the first one in draw order is used.");
+          break;
+        case KIND_POINTER:
+          pointers.push(object as Pointer);
+          break;
+        case KIND_COLLIDER:
+          colliders.push({ collider: object as Collider, world });
+          break;
       }
     });
 
