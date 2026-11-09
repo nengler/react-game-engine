@@ -14,7 +14,7 @@
  * those prefabs, and imports every Tiled map (.tmj) to
  * `<outDir>/scenes/<name>.scene.json` and validates that.
  */
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import {
   Compiler,
@@ -35,17 +35,35 @@ function main(argv: readonly string[]): number {
   let runtimeModule: string | undefined;
   let check = true;
   let scenesDir: string | undefined;
+  const usage = "usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
-    if (arg === "--runtime") runtimeModule = argv[++i];
-    else if (arg === "--scenes") scenesDir = argv[++i];
-    else if (arg === "--no-check") check = false;
-    else positional.push(arg);
+    if (arg === "--runtime" || arg === "--scenes") {
+      // A flag with no value would otherwise be accepted and silently do nothing: CI would pass without checking scenes.
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith("--")) {
+        console.error(`${arg} needs a value.\n${usage}`);
+        return 2;
+      }
+      i++;
+      if (arg === "--runtime") runtimeModule = value;
+      else scenesDir = value;
+    } else if (arg === "--no-check") check = false;
+    else if (arg.startsWith("--")) {
+      console.error(`unknown option ${arg}\n${usage}`);
+      return 2;
+    } else positional.push(arg);
   }
   const [srcDir, outDir] = positional;
   if (!srcDir || !outDir) {
-    console.error("usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]");
+    console.error(usage);
     return 2;
+  }
+  for (const [what, dir] of [["source", srcDir], ...(scenesDir === undefined ? [] : [["scenes", scenesDir]])] as const) {
+    if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+      console.error(`The ${what} directory '${dir}' does not exist or is not a directory.`);
+      return 2;
+    }
   }
 
   const compiler = new Compiler(runtimeModule ? { runtimeModule } : {});
@@ -78,7 +96,11 @@ function main(argv: readonly string[]): number {
       console.log(`compiled ${name} -> ${outPath}`);
     }
     diagnostics.push(...checkProject(modules));
-    if (modules.length > 0) {
+    // The registry and schema describe the whole project. With a file that failed to compile they would silently leave a
+    // component out (and a stale one from an earlier run would be left as it was), so they are only written when all compiled.
+    const complete = modules.length === sourceNames.length;
+    if (!complete && modules.length > 0) console.error("skipped prefabs.ts and prefabs.json: not every file compiled, so they would be missing a component");
+    if (complete && modules.length > 0) {
       const registryPath = resolve(outDir, "prefabs.ts");
       const registry = prefabsIndexSource(modules);
       writeFileSync(registryPath, registry);

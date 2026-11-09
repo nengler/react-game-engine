@@ -15,7 +15,7 @@ export class Transform {
   rotation = 0;
   scaleX = 1;
   scaleY = 1;
-  /** World space instead of relative to the nearest ancestor Entity. */
+  /** World space: ignores the parent (and, for `transform`, the placement), so this is where the object is. */
   global = false;
 }
 

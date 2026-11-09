@@ -115,7 +115,8 @@ ignored):
   `RGE1005` (reported once per name per file, naming the import line to
   add). `Math` is a global and needs none.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
-  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`; the root or a child),
+  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`,
+  `<AnimatedSprite>`; the root or a child),
   relative to its parent unless
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
@@ -126,7 +127,7 @@ ignored):
   `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
   `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
 * Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`, `Text`,
-  `Shape`, `Camera`; the list comes from the runtime manifest), components declared in the same file, or
+  `Shape`, `Camera`, `AnimatedSprite`; the list comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
   `import { Name } from "./Name.tsx"` or `import Name from "./Name.tsx"` (the
   default export, under any local name; no namespace, `as` or `type` forms). A component takes props through a
@@ -618,9 +619,15 @@ files (not only TSX) can place components in a world (M6). Three pieces:
 * **Project outputs.** Next to the per-file outputs, the CLI writes
   `prefabs.ts` (every module's `prefabs`, merged, for `loadScene`) and
   `prefabs.json` (`{ version, prefabs: { Name: { module, props } } }`, for
-  editors and validators). It also checks the whole project: an exported name
-  used in two files is `RGE1206` (scenes refer to prefabs by name), and a
-  static cycle through several files is `RGE1205`.
+  editors and validators). Both are written only when every file compiled: with a
+  failure they would silently leave a component out, so the CLI skips them and
+  says so (the files that did compile are still written, as before). It also
+  checks the whole project: an exported name used in two files is `RGE1206`
+  (scenes refer to prefabs by name), and a static cycle through several files is
+  `RGE1205`. A flag that needs a value (`--scenes`, `--runtime`) without one, an
+  unknown option, and a source or scenes directory that does not exist are usage
+  errors (exit 2), not silent no-ops: CI must not pass without having checked the
+  scenes it was told to check.
 * **Scenes.** JSON: `{ "version": 1, "entities": [{ "id", "prefab", "props"?,
   "transform"?, "children"? }] }`. `id` is author-assigned, unique in the
   scene and stable across edits (for diffing and hot reload). `transform` is
@@ -658,8 +665,9 @@ across edits in Tiled; group layers flatten. `rotation` is converted from
 degrees to radians. A tile object (one with a `gid`) is anchored at its bottom
 left in Tiled, an entity at its top left, so the importer moves the anchor
 along the object's own rotated up axis. An object with no class is skipped
-with a warning. Properties inherited from Tiled object templates are not
-resolved.
+with a warning. Not handled: Tiled's `visible` flag (a hidden object is still an
+entity), tile flip flags in a `gid`, whether an `int` property is whole, and
+properties inherited from object templates.
 
 **Runtime.** `loadScene(world, scene, prefabs)` builds each entity with
 `create(props)`, copies `transform` onto its **`placement`** (so the component's
@@ -826,6 +834,56 @@ which is a design decision rather than a Camera feature.
 **As a root.** A component may be a `Camera`
 (`const View = ({ zoom }) => <Camera zoom={zoom} />`): the class extends
 `Camera`, and `zoom` and `follow` become names a state, ref or prop may not use.
+
+## AnimatedSprite
+
+`<AnimatedSprite>` (M13) is a sprite that cycles through a list of images:
+
+```tsx
+<AnimatedSprite frames={running ? ["run1.png", "run2.png", "run3.png"] : ["idle1.png"]} fps={8} playing={running} />
+```
+
+**Runtime.** `AnimatedSprite extends GameObject` with `frames`, `fps` (default
+10), `playing` (default true), and the current `frame` index and `elapsed`
+time. A renderer reads `image`, the current frame, as it reads a `Sprite`'s. It
+advances in its own `onUpdate(dt)`, which the `World` calls every tick because
+the class overrides it (the existing registration rule); it loops, carries the
+remainder of a step, and takes several frames from one long `dt`. A non-positive
+or non-finite `fps`, and an empty `frames`, freeze it rather than throw, since
+this runs inside `World.tick`. **Playing is not state**: advancing a frame
+re-renders nothing, so an animation costs no renders.
+
+**Frames.** `frames` is an array prop. The array literals M5a added make it
+writable in source, and it follows the usual rule: a fixed list is built once
+(a `StaticProp`), a list that reads state or props is re-assigned in `render()`
+(a `DynamicProp`). A dynamic list is a *new array every render*, so `frames` is
+an accessor that compares contents: **different contents restart at the first
+frame** (and clear the carried time); **equal contents change nothing**, so an
+unrelated state change that makes the component render again does not restart the
+animation. It keeps its own copy, so mutating the caller's array later changes
+nothing. `playing={false}` freezes on the current frame, saves up no time, and
+resumes from there.
+
+**A built-in that implements a hook.** This is the first built-in with an
+`onUpdate` of its own, which exposed a hazard: a component *rooted* at an
+`AnimatedSprite` that writes its own `useUpdate` generates `override
+onUpdate(dt)`, which would replace the sprite's and silently stop the animation.
+The manifest's `intrinsicHooks` (`{ AnimatedSprite: ["onUpdate"] }`) lists the
+hooks a built-in implements itself, and the generated override calls `super`
+first, with the hook's own parameters:
+
+```ts
+override onUpdate(dt: number): void {
+  super.onUpdate(dt);          // the sprite advances its frame
+  this.#onUpdate0();           // then the component's own handlers, in order
+}
+```
+
+A hook the root does not implement is generated as before (no `super`, no
+churn in existing output), and a runtime test checks the list is exactly the hooks
+the intrinsic classes override, so a new one cannot be forgotten. A component
+rooted at the sprite also cannot name state `frames`, `fps`, `playing`, `frame`,
+`elapsed` or `image`.
 
 ## Transforms and refs
 
@@ -1154,7 +1212,8 @@ parameters may have (`InputState`, `GameObject`) with their readable members,
 the runtime functions handler code may call (`clamp`), and which built-ins take
 their JSX text as a prop (`textContent`), which of their props take one of a
 fixed set of strings (`intrinsicLiterals`), and which members exist for code that
-is not compiled and cannot be set from JSX (`intrinsicRuntimeOnly`). The compiler takes
+is not compiled and cannot be set from JSX (`intrinsicRuntimeOnly`), and which hooks they implement
+themselves (`intrinsicHooks`, so a component rooted at one calls `super`). The compiler takes
 it as `CompilerConfig.manifest` (default: the runtime's own), so adding an
 intrinsic or a handle type is a runtime-only edit. A runtime test fails if a
 member inherited from `Entity` is missing from `reservedMembers`. The `Math.*`

@@ -80,6 +80,7 @@ export class Compiler {
         runtimeModule: this.#runtimeModule,
         runtimeFunctions: new Set(Object.keys(this.#manifest.functions)),
         requiredHostProps: this.#manifest.intrinsicRequired,
+        intrinsicHooks: this.#manifest.intrinsicHooks,
       });
       return { ok: true, fileName, ir: transformed.module, code, diagnostics };
     });

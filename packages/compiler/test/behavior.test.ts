@@ -5,7 +5,7 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Collider, Entity, GameObject, Sprite, World } from "@rge/runtime";
-import { cleanOutput, closeCompiler, compile, load } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, load, sameOrder } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -120,7 +120,7 @@ describe("generated component instances", () => {
     const player = new Player();
     assert.ok(player.sprite instanceof Sprite);
     assert.ok(player.collider instanceof Collider);
-    assert.deepEqual(player.children, [player.sprite, player.collider]);
+    sameOrder(player.children, [player.sprite, player.collider]);
     assert.equal(player.sprite.parent, player);
     assert.equal(player.sprite.image, "normal.png");
     assert.equal(player.collider.width, 16);
@@ -243,7 +243,7 @@ describe("conditional children", () => {
     assert.equal(warning.parent, null);
     assert.equal(warning.world, null);
     // Static children are untouched by structural changes.
-    assert.deepEqual(player.children, [player.sprite, player.collider]);
+    sameOrder(player.children, [player.sprite, player.collider]);
   });
 
   it("are applied as queued structural changes after rendering", () => {
@@ -271,7 +271,7 @@ describe("conditional children", () => {
     );
     const low = new Low();
     assert.ok(low.warningIcon);
-    assert.deepEqual(low.children, [low.warningIcon]);
+    sameOrder(low.children, [low.warningIcon]);
   });
 });
 
@@ -281,7 +281,7 @@ describe("nested components", () => {
     assert.ok(level.enemy instanceof Enemy);
     assert.ok(level.enemy2 instanceof Enemy);
     assert.notEqual(level.enemy, level.enemy2);
-    assert.deepEqual(level.children, [level.enemy, level.enemy2]);
+    sameOrder(level.children, [level.enemy, level.enemy2]);
     assert.equal(level.enemy.name, "Enemy");
     const [sprite, collider] = level.enemy.children;
     assert.ok(sprite instanceof Sprite && collider instanceof Collider);
@@ -297,12 +297,12 @@ describe("nested components", () => {
     level.setWave(3);
     world.flush();
     assert.ok(level.enemy3 instanceof Enemy);
-    assert.deepEqual(level.children, [level.enemy, level.enemy2, level.enemy3]);
+    sameOrder(level.children, [level.enemy, level.enemy2, level.enemy3]);
 
     level.setWave(2);
     world.flush();
     assert.equal(level.enemy3, null);
-    assert.deepEqual(level.children, [level.enemy, level.enemy2]);
+    sameOrder(level.children, [level.enemy, level.enemy2]);
   });
 
   it("mount a conditional child between its source siblings, not at the end (draw order)", async () => {
@@ -358,7 +358,7 @@ describe("nested components", () => {
     const boss = level.entity;
     assert.ok(boss && boss.name === "Boss");
     assert.ok(level.children.includes(boss));
-    assert.deepEqual(boss.children, [level.sprite, level.collider]);
+    sameOrder(boss.children, [level.sprite, level.collider]);
     const bossSprite = level.sprite;
     assert.equal(bossSprite?.image, "boss.png");
 

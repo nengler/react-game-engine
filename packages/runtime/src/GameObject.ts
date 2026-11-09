@@ -185,7 +185,7 @@ export class GameObject<P extends object = {}> {
     this.#pending = [];
     for (const op of ops) {
       if (op.kind === "add") {
-        this.addChild(op.child, op.slot);
+        this.addChild(op.child, op.slot, op.order);
         // A child that queued its own changes while it had no parent (nested conditionals)
         // is now attached; settle it too, so a subtree is complete without a World.
         if (op.child.hasPendingStructure) op.child.commitStructure();

@@ -32,6 +32,14 @@ export interface RuntimeManifest {
    */
   readonly intrinsicMembers: Readonly<Record<string, readonly string[]>>;
   /**
+   * Hooks (`onInput`, `onUpdate`, `onMount`, `onUnmount`) an intrinsic
+   * implements itself, by intrinsic (`AnimatedSprite.onUpdate` advances its
+   * frame). A component rooted at one that writes the same hook overrides it, so
+   * the generated override calls `super` first. A runtime test checks the list
+   * is exactly the hooks the classes override.
+   */
+  readonly intrinsicHooks: Readonly<Record<string, readonly string[]>>;
+  /**
    * Members of an intrinsic that exist for code that is not compiled and cannot
    * be set from JSX (`Camera.follow`), by intrinsic then name, each with the
    * reason, which the compiler shows when an attribute names one. They stay in
@@ -87,7 +95,7 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera"],
+  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity"],
   textContent: { Text: "text" },
@@ -98,6 +106,7 @@ export const runtimeManifest: RuntimeManifest = {
     Text: ["text", "size", "color"],
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "follow", "viewTransform", "worldToView", "viewToWorld"],
+    AnimatedSprite: ["fps", "playing", "frame", "elapsed", "frames", "image"],
   },
   intrinsicRequired: {
     Entity: [],
@@ -106,6 +115,10 @@ export const runtimeManifest: RuntimeManifest = {
     Text: ["text"],
     Shape: ["kind", "width", "height"],
     Camera: [],
+    AnimatedSprite: ["frames"],
+  },
+  intrinsicHooks: {
+    AnimatedSprite: ["onUpdate"],
   },
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },
@@ -132,7 +145,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },

@@ -913,6 +913,66 @@ describe("M8: runtime behaviour", () => {
   });
 });
 
+describe("M8: conditional passed children keep their place among static ones", () => {
+  const SOURCE = `
+import { type Child, Entity, Sprite, useState } from "@rge/runtime/jsx";
+interface BoxProps { children: Child }
+function Box({ children }: BoxProps) { return <Entity name="Box"><Entity name="Slot">{children}</Entity></Entity>; }
+function Host() {
+  const [x, setX] = useState(false);
+  const [y, setY] = useState(false);
+  return (
+    <Entity name="Host">
+      <Box>
+        {x && <Sprite image="A" />}
+        <Sprite image="B" />
+        {y && <Sprite image="C" />}
+      </Box>
+    </Entity>
+  );
+}`;
+  interface HostInstance extends Entity {
+    setX(value: boolean): void;
+    setY(value: boolean): void;
+    readonly box: Entity;
+  }
+  let Host: new () => HostInstance;
+  before(async () => {
+    ({ Host } = await load<{ Host: typeof Host }>(compile(SOURCE, "Host.tsx")));
+  });
+  const images = (host: HostInstance): string[] => (host.box.children[0] as Entity).children.map((c) => (c as Sprite).image);
+
+  it("puts a later one after the static sibling, and an earlier one before it, whichever turns on first", () => {
+    for (const order of ["xy", "yx"]) {
+      const world = new World();
+      const host = new Host();
+      world.mount(host);
+      assert.deepEqual(images(host), ["B"]);
+      for (const which of order) {
+        if (which === "x") host.setX(true);
+        else host.setY(true);
+        world.flush();
+      }
+      assert.deepEqual(images(host), ["A", "B", "C"], `turned on in the order ${order}`);
+    }
+  });
+
+  it("keeps the others in place as one turns off and on", () => {
+    const world = new World();
+    const host = new Host();
+    world.mount(host);
+    host.setX(true);
+    host.setY(true);
+    world.flush();
+    host.setX(false);
+    world.flush();
+    assert.deepEqual(images(host), ["B", "C"]);
+    host.setX(true);
+    world.flush();
+    assert.deepEqual(images(host), ["A", "B", "C"]);
+  });
+});
+
 describe("M8: a list as the children", () => {
   const LIST = `
 import { type Child, Entity, Sprite, Collider, useState } from "@rge/runtime/jsx";
