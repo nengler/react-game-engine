@@ -1033,8 +1033,9 @@ not state: it happens at once, not at the next render, and marks nothing
 dirty. Because it would play on every render, the function may only be called
 as a statement in a handler: in JSX, a derived `const`, an expression, as a
 value (`onCollisionEnter={play}`) or with arguments it is `RGE1305`. Sounds
-are not placed, so they do not take `transform`. The mock `Sound` has no audio
-backend: `play()` only counts calls in `plays`, so game logic can be tested.
+are not placed, so they do not take `transform`. `Sound` has no
+audio of its own: `play()` counts calls in `plays`, so game logic can be tested, and reports to the
+`SoundSink` a player installs with `setSoundSink` (see "Player").
 Options such as `volume` come later.
 
 ## Props and callbacks
@@ -1303,3 +1304,67 @@ backend; the compiler only knows what the manifest tells it.
 `commitStructure()` also settles children it has just attached, so a freshly
 constructed object whose nested conditions are true has its whole subtree
 attached without a `World`.
+
+## Player
+
+`@rge/player` (Phase 3, [NATIVE_PLAN.md](NATIVE_PLAN.md)) is the pure-TypeScript half of the native
+player. It draws nothing itself: it turns the object tree into one flat buffer of draw records per
+frame, hands it to a `Backend` (a window, or a test recorder) and feeds the backend's input back to the
+game. It imports nothing from Node, so it also runs in the embedded JavaScript engine of the shipped
+executable. The record layout and the input buffers are `native/include/rge.h`; `protocol.ts` mirrors
+it and a test keeps them equal.
+
+```ts
+run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new Level() });
+```
+
+**A frame** (`createPlayer(...).step()`), in a fixed order:
+
+1. A new **left press** goes to the topmost `Pointer` that was under the mouse in the frame last
+   drawn (`world.reportPress`). One press, one pointer; if the topmost misses, the one below is tried.
+2. `world.tick(dt, input)`: `useInput`, `useUpdate`, renders, structure (as in "Handlers"). `dt` is
+   what the backend measured, clamped to `[0, 0.1]` seconds so a stall cannot teleport things; the
+   first frame's `dt` is 0.
+3. The tree is walked once (`walkTree`, depth first) into draw records. The walk composes world
+   transforms on the way down and treats a `Camera` as transparent to its children, exactly as
+   `GameObject.worldTransform()` and `childSpace()` do, and a test holds the two equal over a real tree.
+4. The backend draws and presents the frame, then writes the next frame's input.
+   `step()` returns false once that input says the window was closed (the frame is still drawn).
+
+**What is drawn.**
+
+* *Order:* tree order, a parent before its children, children in their order (source order, then
+  keyed-list order). Later is on top. There is no `z`.
+* *Origin:* top-left, for `Sprite`, `AnimatedSprite`, `Shape` and `Text`, rotated and scaled about it.
+  A negative scale flips.
+* `Sprite` and `AnimatedSprite` draw `image` (the current frame) from `<assets>/<image>`; an empty
+  image draws nothing. `Shape` draws a rectangle, or an ellipse filling its `width × height` box.
+  `Text` draws one line with the default font at `size` pixels; empty text draws nothing.
+  `Entity`, `Collider`, `Pointer` and `Camera` draw nothing.
+* *Colours* are CSS: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `rgb()`/`rgba()`, the named colours and
+  `transparent`.
+* *Never throws for art:* a texture that will not load is drawn as a magenta 16×16 square, and a
+  colour that cannot be read is magenta, each with one warning. Each texture is loaded once.
+
+**The camera.** The first `Camera` in draw order is the view (a second one is ignored, with one
+warning). The point it follows (the middle of its children, or where it is) lands on the centre of the window. With no camera the world
+origin is the window's top-left corner. An unusable camera (zoom 0) is dropped for the frame, with one
+warning.
+
+**Input.** `input.pressed/down/released(key)` read the backend's key flags. Keys are `"A"`–`"Z"`,
+`"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`,
+`"Alt"`, `"ArrowUp"`/`"ArrowDown"`/`"ArrowLeft"`/`"ArrowRight"`, `"F1"`–`"F12"` and the mouse buttons
+`"MouseLeft"`, `"MouseRight"`, `"MouseMiddle"`; any other name is never pressed and warns once.
+`input.pointerX/pointerY` are the mouse **in world space**: the window position taken back through the
+view of the frame last drawn, so a handler never needs the camera. A pointer or collider mounted this
+frame is not clickable until it has been drawn once.
+
+**Sound.** `Sound` reports to a `SoundSink` (`setSoundSink`, one at a time). The player installs one
+that loads each file through the backend once (when a component creates its `Sound`, so it is ready by
+the time it plays) and plays by handle. A sound that cannot be loaded warns once and is silent; the
+runtime still counts the play. Closing the player removes the sink.
+
+**Hosts.** A game's entry file calls `run(hostBackend(), config)`. A host sets
+`globalThis.__rgeBackend` before it loads the game, so the same file runs under Node and under the
+native executable. `RecordingBackend` is the backend for tests: it keeps every frame decoded and plays
+scripted input back one frame at a time.

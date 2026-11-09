@@ -11,8 +11,8 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
 | N0 Design and protocol | In review | `claude/confident-feynman-1ryujz` | This document |
-| N1 Draw list (`@rge/player`, pure TS) | In review | #26 | `FrameBuilder` + `walkTree` in `draw.ts`; `native/include/rge.h` is committed here (complete, including the full key table); goldens are JSON files in `test/golden/` (`UPDATE_GOLDEN=1` rewrites them, numbers rounded to 1e-9) rather than `node:test` snapshots, which are still experimental |
-| N2 Input, sound and the frame loop (pure TS) | Not started | | Includes the runtime's sound sink |
+| N1 Draw list (`@rge/player`, pure TS) | Done | #26 | `FrameBuilder` + `walkTree` in `draw.ts`; `native/include/rge.h` is committed here (complete, including the full key table); goldens are JSON files in `test/golden/` (`UPDATE_GOLDEN=1` rewrites them, numbers rounded to 1e-9) rather than `node:test` snapshots, which are still experimental |
+| N2 Input, sound and the frame loop (pure TS) | In review | #27 | Also added: `PlayerConfig.warn` (where warnings go; tests use it), `getSoundSink()` (so a closing player removes only its own sink), `PlayerInput` (the `InputState` with `worldPoint`, `screenX/Y`, `dt`, `quit`), `RecordingBackend`'s `missingSounds`. The press is dispatched only for a *new* left press and only to pointers drawn in the previous frame |
 | N3 `librge` (C + raylib) and the Node dev host | Not started | | First pixels |
 | N4 Demo game and headless CI | Not started | | |
 | N5 Collisions (pure TS) | Not started | | Independent of N3; can run alongside |
@@ -490,14 +490,14 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 
 ### N2 Input, sound and the frame loop
 
-- [ ] `InputState` from buffers, with unknown-key warnings
-- [ ] World-space `pointerX/Y`, tested through cameras
-- [ ] Press dispatch, topmost first
-- [ ] Runtime `setSoundSink`, tested with and without a sink
-- [ ] `createPlayer` / `run` frame order and `dt` clamp, tested with `RecordingBackend`
-- [ ] `hostBackend()`
-- [ ] `docs/DESIGN.md` "Player" section
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] `InputState` from buffers, with unknown-key warnings
+- [x] World-space `pointerX/Y`, tested through cameras
+- [x] Press dispatch, topmost first
+- [x] Runtime `setSoundSink`, tested with and without a sink
+- [x] `createPlayer` / `run` frame order and `dt` clamp, tested with `RecordingBackend`
+- [x] `hostBackend()`
+- [x] `docs/DESIGN.md` "Player" section
+- [x] `npm test` and `npm run typecheck` pass
 
 ### N3 `librge` and the Node dev host
 
