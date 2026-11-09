@@ -1,0 +1,105 @@
+[
+  {
+    "op": "view",
+    "a": 1,
+    "b": 0,
+    "c": 0,
+    "d": 1,
+    "e": 160,
+    "f": 120
+  },
+  {
+    "op": "rect",
+    "x": 160,
+    "y": 80,
+    "rotation": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "width": 48,
+    "height": 16,
+    "color": "#808080ff"
+  },
+  {
+    "op": "sprite",
+    "x": 160,
+    "y": 0,
+    "rotation": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "texture": "assets/panel-hud.png"
+  },
+  {
+    "op": "sprite",
+    "x": 160,
+    "y": 16,
+    "rotation": 5,
+    "scaleX": 1,
+    "scaleY": 1,
+    "texture": "assets/gold-coin.png"
+  },
+  {
+    "op": "sprite",
+    "x": 200,
+    "y": 36,
+    "rotation": 5,
+    "scaleX": 1,
+    "scaleY": 1,
+    "texture": "assets/coin.png"
+  },
+  {
+    "op": "sprite",
+    "x": 216,
+    "y": 36,
+    "rotation": 5,
+    "scaleX": 1,
+    "scaleY": 1,
+    "texture": "assets/coin.png"
+  },
+  {
+    "op": "sprite",
+    "x": 232,
+    "y": 36,
+    "rotation": 20,
+    "scaleX": 1,
+    "scaleY": 1,
+    "texture": "assets/coin.png"
+  },
+  {
+    "op": "text",
+    "x": 160,
+    "y": 56,
+    "rotation": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "text": "Score: 6 (wave 1)",
+    "size": 12,
+    "color": "#ffd700ff"
+  },
+  {
+    "op": "sprite",
+    "x": 0,
+    "y": 0,
+    "rotation": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "texture": "assets/boss.png"
+  },
+  {
+    "op": "sprite",
+    "x": 0,
+    "y": 0,
+    "rotation": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "texture": "assets/boss-3.png"
+  },
+  {
+    "op": "sprite",
+    "x": 0,
+    "y": 0,
+    "rotation": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "texture": "assets/banner-boss.png"
+  }
+]

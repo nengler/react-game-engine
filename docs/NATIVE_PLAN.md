@@ -11,7 +11,7 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
 | N0 Design and protocol | In review | `claude/confident-feynman-1ryujz` | This document |
-| N1 Draw list (`@rge/player`, pure TS) | Not started | | |
+| N1 Draw list (`@rge/player`, pure TS) | In review | #26 | `FrameBuilder` + `walkTree` in `draw.ts`; `native/include/rge.h` is committed here (complete, including the full key table); goldens are JSON files in `test/golden/` (`UPDATE_GOLDEN=1` rewrites them, numbers rounded to 1e-9) rather than `node:test` snapshots, which are still experimental |
 | N2 Input, sound and the frame loop (pure TS) | Not started | | Includes the runtime's sound sink |
 | N3 `librge` (C + raylib) and the Node dev host | Not started | | First pixels |
 | N4 Demo game and headless CI | Not started | | |
@@ -315,7 +315,7 @@ The player installs a sink that loads through the backend (cached by path) and p
 
 **Host-agnostic entry (`host.ts`).** A game's entry file is `run(hostBackend(), { … })`. `hostBackend()` returns `globalThis.__rgeBackend` and throws a clear error if no host installed one. The Node launcher installs it and then imports the entry; the Rust host installs it before evaluating the bundle. So one entry file runs under both hosts, and the bundle never contains koffi.
 
-**`RecordingBackend`.** It keeps every frame's records (copied), texts and clear colour, plus every texture and sound load and every play. Tests script input frame by frame (`backend.queueInput({ keys: ["Space"], mouse: { x, y }, dt })`). It decodes records into readable objects for assertions (`{ op: "rect", x, y, …, color: "#ff0000ff" }`).
+**`RecordingBackend`.** It keeps every frame's records (copied), texts and clear colour, plus every texture and sound load and every play. Tests script input frame by frame (`backend.queueInput({ pressed: ["Space"], down: ["A"], released: ["MouseLeft"], mouse: { x, y }, dt })`; `pressed` also sets down). It decodes records into readable objects for assertions (`{ op: "rect", x, y, …, color: "#ff0000ff" }`).
 
 ### `packages/player-node` (`@rge/player-node`, Node dev host)
 
@@ -480,13 +480,13 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 
 ### N1 Draw list
 
-- [ ] `@rge/player` package scaffolded and covered by `npm test` and `npm run typecheck`
-- [ ] `protocol.ts` with the header-parity test (and `native/include/rge.h` committed as above, if N3 has not landed yet)
-- [ ] Portability test: no `node:` imports in `@rge/player` or `@rge/runtime`
-- [ ] `color.ts` with tests
-- [ ] `Backend` and `RecordingBackend`
-- [ ] Tree walk with the parity test, camera view, missing-texture fallback, and golden draw lists for `Level` and `Hero`
-- [ ] `npm test` and `npm run typecheck` pass on Node 22.18+
+- [x] `@rge/player` package scaffolded and covered by `npm test` and `npm run typecheck`
+- [x] `protocol.ts` with the header-parity test (and `native/include/rge.h` committed as above, if N3 has not landed yet)
+- [x] Portability test: no `node:` imports in `@rge/player` or `@rge/runtime`
+- [x] `color.ts` with tests
+- [x] `Backend` and `RecordingBackend`
+- [x] Tree walk with the parity test, camera view, missing-texture fallback, and golden draw lists for `Level` and `Hero`
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### N2 Input, sound and the frame loop
 

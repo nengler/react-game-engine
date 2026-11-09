@@ -49,6 +49,7 @@ packages/
               the built-ins (Entity, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer),
               Sound (a mock that records plays), `loadScene`, and `runtimeManifest`
               (what the compiler is told about the runtime)
+  player/     (Phase 3) the native player's pure-TypeScript half: object tree → draw records, `Backend`, a recording backend for tests
   example/    example components and their committed generated output
 ```
 
