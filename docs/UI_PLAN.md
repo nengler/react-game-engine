@@ -1,19 +1,19 @@
 # react-game-engine: UI layout plan
 
-As of 2026-11-09. A proposal, written to sit next to priority 3 in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md) (the screen-space HUD layer). Nothing here is built yet. Push back on any decision below before work starts, as [DESIGN.md](DESIGN.md) asks.
+As of 2026-11-09, revised the same day after studying Clay's layout algorithm (see "The model: Clay"). U1 and C1 are built; the rest is a proposal, written to sit next to priority 3 in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md) (the screen-space HUD layer). Push back on any decision below before work starts, as [DESIGN.md](DESIGN.md) asks.
 
 The plan has two parts that are designed together:
 
-1. **Layout** (milestones U0–U4): a `<Flex>` built-in that places its children in a row or a column, as CSS flexbox does.
-2. **A fixed game resolution** (milestones C1–C3, [Part 2](#part-2-a-fixed-game-resolution-screen)): a `<Screen width={320} height={180}>` at the root, so the game is drawn at 320 × 180 whatever size the window is, and scaled up to fit.
+1. **Layout** (milestones U0–U5): a `<Flex>` built-in that places its children in a row or a column, with the props of CSS flexbox and the sizing algorithm of Clay.
+2. **A fixed game resolution** (milestones C1–C3, [Part 2](#part-2-a-fixed-game-resolution-screen)): a `<Screen width={320} height={180}>` inside the game's `<Game>` root, so the game is drawn at 320 × 180 whatever size the window is, and scaled up to fit.
 
-They meet at one point: everything that today means "the window" (the size `<Hud>` and `Flex fill` take, the point the camera centres on, the mouse position) means the game's own 320 × 180 area once a `<Screen>` exists (called "the canvas" below: the surface the game is drawn on before it is scaled into the window). A HUD designed for 320 × 180 then looks the same in a 640 × 360 window as in a full-screen 4K one.
+They meet at one point: everything that today means "the window" (the box `<Hud>` gives layout, the point the camera centres on, the mouse position) means the game's own 320 × 180 area once a `<Screen>` exists (called "the canvas" below: the surface the game is drawn on before it is scaled into the window). A HUD designed for 320 × 180 then looks the same in a 640 × 360 window as in a full-screen 4K one.
 
 ## Summary of part 1
 
 Games need UI: a score in a corner, a health bar, a pause menu, a row of buttons. Today every one of those is placed by hand with `transform={{ x, y }}`. The demo's click button is a `Shape`, a `Pointer` and a `Text`, each given its own coordinates, and the label is centred by guessing (`x: 92` inside a box at `x: 80`). Change the label and the guess is wrong.
 
-This plan adds **layout**: a `<Flex>` built-in that places its children in a row or a column, the way CSS flexbox does.
+This plan adds **layout**: a `<Flex>` built-in that places its children in a row or a column.
 
 ```tsx
 <Flex direction="row" alignItems="center" gap={8} padding={12} background="#0008">
@@ -22,46 +22,73 @@ This plan adds **layout**: a `<Flex>` built-in that places its children in a row
 </Flex>
 ```
 
-It takes the props a web developer expects (`direction`, `alignItems`, `justifyContent`, `gap`, `padding`), with CSS's meanings. It is a container, like `<Entity>`, and it works anywhere in the tree, in the world or on priority 3's `<Hud>`. In practice almost all of it will live on the screen, which is why it goes alongside priority 3.
+It takes the props a web developer expects (`direction`, `alignItems`, `justifyContent`, `gap`, `padding`), with CSS's meanings, and sizes boxes the way Clay does: each axis is `"fit"` (the default), `"grow"`, a fixed number of pixels, or a percentage of the parent, with optional minimum and maximum sizes. It is a container, like `<Entity>`, and it works anywhere in the tree, in the world or on priority 3's `<Hud>`. In practice almost all of it will live on the HUD, which is why it goes alongside priority 3.
 
 What has to exist first, and why priority 3 comes before or with this:
 
-- **Sizes.** Layout needs to know how big each child is. `Shape`, `Pointer` and `Collider` already have `width` and `height`. A `Text` and a `Sprite` do not: the size of text depends on the font, and the size of a sprite on the image file. Both are known only to librge. So the native library must answer two new questions, "how wide is this text at this size?" and "how big is this texture?", which is an ABI change. Priority 3 already bumps the ABI to version 2 for `<Hud>`; these two functions should go into the **same** version 2, so the ABI moves once.
-- **A screen to lay out on.** A HUD laid out in world space still drifts with the camera. `<Hud>` gives layout a fixed box: the window.
+- **Sizes.** Layout needs to know how big each child is. `Shape`, `Pointer` and `Collider` already have `width` and `height`. A `Text` and a `Sprite` do not: the size of text depends on the font, and the size of a sprite on the image file. Both are known only to librge. So the native library must answer two new questions, "how big is this text at this size?" and "how big is this texture?", which is an ABI change. Priority 3 already bumps the ABI to version 2 for `<Hud>`; these functions go into the **same** version 2, so the ABI moves once.
+- **A box to lay out in.** A HUD laid out in world space still drifts with the camera. `<Hud>` gives layout a fixed box: the canvas (or the window, with no `<Screen>`).
 
-So the order is: priority 3 (with the two measuring functions added to ABI v2), then this plan's milestones U1–U4. U1 can start alongside priority 3, because it does not touch the ABI.
+So the order is: priority 3 (with U0's additions in ABI v2), then U2–U5. U1 is done.
 
 | Milestone | What | Size (estimate) |
 | --- | --- | --- |
-| U0 | ABI v2 also carries `rge_measure_text` and `rge_texture_size` (done as part of priority 3) | \~1–2 days on top of priority 3 |
-| U1 | A layout offset on every object, and a measuring interface in the player | \~2–3 days |
-| U2 | `<Flex>`: the built-in, the layout algorithm, `background` | \~1 week |
-| U3 | Sizing to the window (`fill`), `grow`, and the demo's HUD rewritten with it | \~3–4 days |
-| U4 | Polish: text alignment inside a fixed width, pixel snapping, a `Flex` that is pressable | \~3–4 days |
+| U0 | ABI v2 also carries `rge_measure_text` (width and line height), `rge_texture_size`, and a scissor record (done as part of priority 3) | \~2 days on top of priority 3 |
+| U1 | A layout offset on every object, and a measuring interface in the player | **Done** |
+| U2 | `<Flex>`: the built-in, the sizing modes, the four passes, alignment, `background` | \~1–1.5 weeks |
+| U3 | The HUD box, shrinking to minimum sizes, and the demo's HUD rewritten with it | \~3–4 days |
+| U4 | Polish: pixel snapping, text alignment inside a box, `<Flex onPress>` | \~3–4 days |
+| U5 | Floating boxes: anchored to a point of their parent, outside the flow (tooltips, corner badges, HUD corners) | \~3–4 days |
 
 Sizes are rough, for one engineer, in the style of the other plans.
+
+## The model: Clay
+
+The layout algorithm follows Clay (C Layout, by Nic Barker: [github.com/nicbarker/clay](https://github.com/nicbarker/clay)), a single-header flexbox-like layout library whose author explains it in the video "How Clay's UI Layout Algorithm Works". This plan was revised from Clay's own README and `clay.h` (the layout passes are `Clay__CloseElement`, `Clay__SizeContainersAlongAxis` and `Clay__CalculateFinalLayout`); the video itself could not be fetched from the cloud machine the plan was written on. What it takes from Clay:
+
+- **Sizing is per axis, with four modes.** `fit` (the default) is the size of the children plus padding and gaps; `grow` takes free space in the parent; `fixed` is a number; `percent` is a share of the parent's inner size. `fit` and `grow` take a minimum and a maximum. This replaces the earlier draft's `width`/`height`/`fill`/weighted `grow`.
+- **Widths are settled before heights.** Fit sizes are computed bottom-up, then widths top-down, then heights bottom-up and top-down again, then positions. Text wrapping slots in between widths and heights, because a wrapped text's height depends on its width; ordering the passes this way from the start means wrapping can be added later without redesigning anything.
+- **Grow is not weighted.** Free space goes to the smallest growing child first, until it matches the next smallest, and so on, each child stopping at its maximum. Equal growing siblings end up equal, which is what a row of buttons wants.
+- **Overflow shrinks, down to minimums.** When children do not fit, the largest shrinkable child gives way first, down to its minimum size (by default, its own content's minimum). Leaves never shrink.
+- **Floating boxes are separate.** A floating box is laid out like any other but attached to a point of its parent with an offset, takes no space, and draws above according to `z`. That is how tooltips, badges and HUD corners are placed (U5).
+- **No allocation per frame.** Clay lays out thousands of elements in microseconds with no `malloc`. Under QuickJS the equivalent is no new objects per node per frame: layout keeps its numbers in fields on the `Flex` objects and in arrays reused between frames.
+
+It keeps the CSS vocabulary already decided (`direction`, `alignItems`, `justifyContent`, `gap`, `padding`): Clay's alignment is start, centre or end on each axis, which `alignItems` and `justifyContent` cover, and `justifyContent`'s `space-*` values only add ways to share free space.
 
 ## What an author writes
 
 ### The props
 
-| Prop | Values | Default | Meaning (as in CSS) |
+| Prop | Values | Default | Meaning |
 | --- | --- | --- | --- |
 | `direction` | `"row"`, `"column"` | `"row"` | The main axis: children go left to right, or top to bottom |
-| `alignItems` | `"start"`, `"center"`, `"end"`, `"stretch"` | `"stretch"` | Where children sit on the cross axis |
+| `alignItems` | `"start"`, `"center"`, `"end"`, `"stretch"` | `"stretch"` | Where children sit on the cross axis. `stretch` makes a child `Flex` whose cross size is `"fit"` take the whole cross size, as in CSS; anything else keeps its size and sits at the start |
 | `justifyContent` | `"start"`, `"center"`, `"end"`, `"space-between"`, `"space-around"`, `"space-evenly"` | `"start"` | How children and free space share the main axis |
 | `gap` | pixels | `0` | Space between neighbouring children |
 | `padding` | pixels | `0` | Space inside the edge, on all four sides |
 | `paddingX`, `paddingY` | pixels | `padding` | Left and right, or top and bottom; override `padding` |
 | `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft` | pixels | the axis value | One side; overrides the two above |
-| `width`, `height` | pixels | the size of the content | A fixed size for the box |
-| `fill` | boolean | `false` | Take the whole box of the parent (the window, under `<Hud>`) |
-| `grow` | number | `0` | Inside another `Flex`: take this share of the free main-axis space |
+| `width`, `height` | `"fit"`, `"grow"`, a number, or a percentage such as `"50%"` | `"fit"` | How big the box is on that axis (see "Sizing") |
+| `minWidth`, `maxWidth`, `minHeight`, `maxHeight` | pixels | none | Bounds for `"fit"` and `"grow"` |
 | `background` | a CSS colour | none | Draw a filled rectangle behind the children, the size of the box |
+| `onPress` | a callback | none | Pressable over the laid-out box (U4) |
 
 Every one is a plain string, number or boolean, so each is a field on the object, set in place by `render()` like `Shape.width` is. There are no object-valued props (`padding={{ x: 8 }}`): an object would be allocated on every render, which the performance work in priority 4 is trying to remove, and the compiler today only special-cases `transform` as an object. That is why padding is spelled out as separate props.
 
 The keyword props (`direction`, `alignItems`, `justifyContent`) go in the manifest's `intrinsicLiterals`, exactly like `<Shape kind>`. A typo is a compile error with the choices and a suggestion. CSS also spells `start` as `flex-start`, so that typo gets its own hint: `<Flex alignItems> must be one of "start", "center", "end", "stretch", not 'flex-start' (did you mean "start"?)`.
+
+### Sizing
+
+| Value | The box is | Like |
+| --- | --- | --- |
+| `"fit"` (default) | As big as its children, plus padding and gaps, clamped to `min`/`max` | CSS `auto`, Clay `CLAY_SIZING_FIT` |
+| `"grow"` | Its fit size, plus a share of the parent's free space on that axis, up to `max`; across the parent's main axis, the parent's whole inner size | CSS `flex: 1` / `align-self: stretch`, Clay `CLAY_SIZING_GROW` |
+| `120` | Exactly 120 pixels | Clay `CLAY_SIZING_FIXED` |
+| `"50%"` | Half the parent's inner size on that axis (minus its gaps, on the main axis) | Clay `CLAY_SIZING_PERCENT` |
+
+`width` and `height` mix numbers and keywords, which `intrinsicLiterals` cannot express today: it rejects any literal not in its list, numbers included. So the compiler gains one check, a "sizing" kind of prop in the manifest that accepts a number literal, `"fit"`, `"grow"`, or a string literal of the form `"<number>%"` between 0 and 100, with the usual did-you-mean for a near miss (`"grwo"`). Any other expression is left to the type-check, whose type is `number | "fit" | "grow" | `${number}%``.
+
+A spacer is `<Flex width="grow" />` in a row (`height="grow"` in a column): a fit-sized empty box that takes the free space, as `flex: 1` on an empty `div` does in CSS.
 
 ### An example HUD
 
@@ -76,11 +103,11 @@ export function PlayerHud({ coins, health }: { coins: number; health: number }) 
   const [paused, setPaused] = useState(false);
   return (
     <Hud>
-      <Flex fill direction="column" justifyContent="space-between" padding={16}>
+      <Flex width="grow" height="grow" direction="column" justifyContent="space-between" padding={16}>
         <Flex direction="row" alignItems="center" gap={8}>
           <Sprite image="coin.png" />
           <Text size={20}>{coins}</Text>
-          <Flex grow={1} />
+          <Flex width="grow" />
           <HealthBar value={health} />
         </Flex>
         <Flex direction="row" justifyContent="center">
@@ -92,129 +119,144 @@ export function PlayerHud({ coins, health }: { coins: number; health: number }) 
 }
 ```
 
-The component is called `PlayerHud`, not `Hud`, because `Hud` is the built-in: the compiler rejects a component that takes a built-in's name ("Component 'Hud' conflicts with a runtime intrinsic"). Adding `Hud`, `Screen` and `Flex` as built-ins takes those three names away from games, so the work renames the two places that use one today: the `Hud` component in `packages/compiler/test/m10.test.ts` and the `Hud` example in DESIGN.md's "Children" section.
+The outer column grows to the HUD's box. The top row needs no `width`: the column's default `alignItems="stretch"` makes it as wide as the column, and its spacer pushes the health bar to the right edge.
 
-`<Flex grow={1} />` is a spacer, as `flex: 1` on an empty `div` is in CSS.
+The component is called `PlayerHud`, not `Hud`, because `Hud` is the built-in: the compiler rejects a component that takes a built-in's name ("Component 'Hud' conflicts with a runtime intrinsic"). Adding `Hud` and `Flex` as built-ins takes those names away from games, so the work renames the places that use one today: the demo's `Hud` component (`packages/demo/src/Hud.tsx`), the `Hud` test components in `packages/compiler/test/m10.test.ts` and `gamestate.test.ts`, and the `Hud` example in DESIGN.md's "Children" section.
 
 A button is an ordinary component. This one takes a `label` string; a `Panel` that wraps `{children}` in a `Flex` works too, since `{children}` may sit inside any container built-in (the manifest's `containerIntrinsics`, which `Flex` joins).
 
 ```tsx
 export function Button({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Entity>
-      <Flex paddingX={16} paddingY={8} background="slategray" alignItems="center">
-        <Text>{label}</Text>
-      </Flex>
-      {/* Until U4's pressable Flex, a Pointer is sized by hand. */}
-      <Pointer width={96} height={32} onPress={onPress} />
-    </Entity>
+    <Flex paddingX={16} paddingY={8} background="slategray" alignItems="center" onPress={onPress}>
+      <Text>{label}</Text>
+    </Flex>
   );
 }
 ```
 
-The `Pointer` here still has a hand-picked size, which is exactly the problem layout is meant to remove. U4 proposes `onPress` on `Flex` itself, so the pressable area is the laid-out box.
+The pressable area is the laid-out box (U4), so the button needs no hand-sized `Pointer`, and it grows with its label.
 
 ### Rules an author can rely on
 
 - **Children are laid out in tree order.** That is the order of `children`, which already follows the JSX: a conditional child that turns on takes its position among its siblings, and a keyed list keeps its items' order. When a conditional child turns off, the ones after it close up, as they would in the DOM.
 - **A child's own `transform` does not move its slot; it moves the child within it.** This is CSS's rule for `transform` and `position: relative`: layout decides where the box goes, and `transform={{ y: -4 }}` nudges it from there without pushing its neighbours. So a button can bounce on press, or a HUD element can slide in, without disturbing the row. Rotation and scale work the same way: they do not change the space a child takes.
-- **Leaves keep their size.** `alignItems="stretch"` and `grow` resize only a child that is itself a `Flex`; a `Shape`, `Sprite` or `Text` keeps the size its own props give it, as an element with a fixed width does in CSS. Resizing a `Shape` from layout would fight its `render()`, which sets `width` every time it runs. To stretch a coloured box, use a `Flex` with a `background`.
-- **Layout runs every frame, before drawing.** What a handler reads from `worldTransform()` (or a `Pointer` hit-tests against) is where the object was drawn last frame. That matches the player's existing rule that a press uses last frame's pointers.
+- **Leaves keep their size.** `grow`, `stretch`, percentages and shrinking resize only a child that is itself a `Flex`; a `Shape`, `Sprite` or `Text` keeps the size its own props give it, as an element with a fixed width does in CSS. Resizing a `Shape` from layout would fight its `render()`, which sets `width` every time it runs. To stretch a coloured box, use a `Flex` with a `background`.
+- **Overflow is visible.** When children cannot shrink enough, they overflow the box, as in CSS without `overflow: hidden`. Clipping will use the scissor record U0 adds.
+- **Layout runs every frame, before drawing.** What a handler reads from `worldTransform()` (or a `Pointer` hit-tests against) is where the object was drawn last frame. That matches the player's existing rule that a press uses last frame's pointers, and Clay's: its hover test also uses the previous layout's boxes.
 
 ## How each kind of child is measured
 
-Layout asks each child for a box: a width and a height, and where its top-left corner is relative to its origin. Every drawable built-in already uses its top-left corner as its origin, which keeps this simple.
+Layout asks each child for a box: a width and a height, and where its top-left corner is relative to its origin. Every drawable built-in already uses its top-left corner as its origin, which keeps this simple. A leaf's minimum size is its size: leaves never shrink.
 
 | Child | Box |
 | --- | --- |
 | `Shape`, `Pointer`, `Collider` | `width` × `height` |
-| `Text` | `measureText(text, size)` × `size`, from librge (raylib's `MeasureText`) |
+| `Text` | The measured width × the measured line height, from librge (raylib's `MeasureTextEx`, which is what `DrawTextEx` draws). One line until wrapping exists |
 | `Sprite` | The texture's size, from librge. A texture that failed to load is the 16 × 16 magenta square that is drawn instead |
 | `AnimatedSprite` | The size of its first frame, so the layout does not jitter if frames differ |
-| `Flex` | Its laid-out size: content plus padding, or its `width`/`height`/`fill`/`grow` size |
-| `Entity` or a component | The bounding box of its children, each at its own `transform` position, ignoring rotation. The demo's button (a 96 × 32 `Shape` with a `Text` inside it) is 96 × 32 |
+| `Flex` | Its sizing on each axis (see "Sizing"), worked out by the passes below |
+| `Entity` or a component | The bounding box of its children, each at its own `transform` position, ignoring rotation. A `Flex` inside it counts at its fit size. The demo's old button (a 96 × 32 `Shape` with a `Text` inside it) is 96 × 32 |
 | `Camera` | Nothing; a warning once, because a camera inside a layout is almost certainly a mistake |
-| `Hud` or `Screen` (inside a `Flex`) | A compile error: a HUD layer goes directly inside the root, and `Screen` is the root |
+| `Hud`, `Screen` or `Game` (inside a `Flex`) | A compile error: a HUD layer goes directly inside the game's root, and `Screen` and `Game` are the root |
 
 The `Entity` rule is what makes ordinary components work as layout children with no extra annotation. If the bounding box starts above or left of the origin (a sprite drawn centred on its position, say), layout shifts the child so the box, not the origin, sits in the slot.
+
+## The layout algorithm
+
+A **layout root** is a `Flex` whose parent is not a `Flex`. Its available box is the `<Hud>`'s (the canvas, or the window with no `<Screen>`) when it grows on an axis, and otherwise its own fit, fixed or percentage size; a percentage of a non-`Flex` parent is a percentage of the HUD box. Everything below one layout root is laid out together, in five passes over its `Flex` subtree, Clay's order:
+
+1. **Fit sizes, bottom-up.** Each box's fit size on both axes: along its direction, the sum of its children's sizes plus gaps and padding; across it, the largest child plus padding. Its minimum size is worked out the same way from its children's minimums. Both are clamped to `min…`/`max…`; a percentage child counts as 0 here.
+2. **Widths, top-down.** For each box, from the root down, on the x axis:
+   - percentage children take their share of the inner width (minus gaps, when the box is a row);
+   - in a **row**: the free width is the inner width minus the children's widths and gaps. If it is positive and some children grow, it goes to the narrowest growing child until it is as wide as the next narrowest, then to both, and so on, each stopping at its `maxWidth`. If it is negative, the widest shrinkable child (a `Flex` that is `"fit"` or `"grow"`) gives way first, until it is as narrow as the next widest, each stopping at its minimum width;
+   - in a **column**: a growing child (or a fit child under `alignItems="stretch"`) takes the inner width; every child is clamped between its minimum width and the inner width.
+3. **Text wrapping** would go here, using the final widths. Not in this plan (see the table at the end); the slot is what makes it cheap to add.
+4. **Heights.** Fit heights are recomputed bottom-up (a wrapped text, later, is taller than it was), then the same top-down pass runs on the y axis, with rows and columns swapped.
+5. **Positions, top-down.** Each box starts its children inside its padding. Along its direction, the free space left after the sizes is shared by `justifyContent`; across it, each child is placed by `alignItems`. Each child's `layoutX`/`layoutY` is written, and advances the next by its size plus the gap. Offsets are rounded to whole pixels (U4).
+
+The free-space sharing in step 2 is Clay's: unweighted, smallest first. It makes equal growing siblings equal, it never grows a child past its maximum, and it hands what a capped child could not take to the others.
 
 ## How it fits the engine
 
 ### Where the position goes: a layout offset
 
-`GameObject` already composes two transforms: `placement`, set by the parent's `transform` attribute on a component element, and `transform`, the object's own. Layout must not write into either. Writing into `transform` would fight `render()`, and writing into `placement` would erase what the parent set.
+**Built in U1.** `GameObject` already composes two transforms: `placement`, set by the parent's `transform` attribute on a component element, and `transform`, the object's own. Layout must not write into either. Writing into `transform` would fight `render()`, and writing into `placement` would erase what the parent set.
 
-So layout gets its own slot: two numbers, `layoutX` and `layoutY`, on every `GameObject`, composed first.
+So layout has its own slot: two numbers, `layoutX` and `layoutY`, on every `GameObject`, composed first.
 
 ```
 world = parent × layout × placement × transform
 ```
 
-They are zero for anything not inside a `Flex`, which keeps the existing fast path in `composeTransforms` (an identity step returns the parent unchanged). `worldTransform()` and the player's `walkTree` both gain the step; `test/draw.test.ts` already checks those two agree over a real tree, and it will catch one being updated without the other. Only x and y: layout never rotates or scales anything.
-
-`layoutX` and `layoutY` join `reservedMembers` in the manifest, so a component's state cannot take those names.
+They are zero for anything not inside a `Flex`. `worldTransform()` and the player's `walkTree` both apply them, and `test/draw.test.ts` checks the two agree. Only x and y: layout never rotates or scales anything. `layoutX` and `layoutY` are in `reservedMembers`, so a component's state cannot take those names.
 
 ### Where layout runs: inside the frame builder's walk
 
-The player's `FrameBuilder.build` already walks the tree once per frame, a parent before its children. Layout fits in that walk without a second pass:
+The player's `FrameBuilder.build` walks the tree once per frame, a parent before its children. Layout fits in that walk:
 
-1. When the walk reaches a `Flex`, it measures each child (recursing into nested `Flex`es and components for their sizes), then writes each child's `layoutX`/`layoutY`, and the assigned size of any child `Flex` that is stretched or grown.
-2. It emits the `background` rectangle, if any, then continues into the children, whose world transforms now include their layout offsets.
-3. A nested `Flex` reached later in the same walk lays out its own children inside the size its parent assigned it.
+1. When the walk reaches a layout root, it runs the five passes over that root's `Flex` subtree, measuring leaves through the measurer, and writes every child's `layoutX`/`layoutY` and every `Flex`'s final size.
+2. It emits each `background` rectangle as it reaches its `Flex`, then continues into the children, whose world transforms now include their layout offsets.
 
 A game with no `Flex` pays nothing beyond one more `kindOf` case. A HUD is tens of objects, so laying it out every frame is cheap. Caching layout for an unchanged subtree can come later if a menu with hundreds of items ever shows up in the bench.
 
-The algorithm lives in a new `packages/player/src/layout.ts`, as a function of a `Flex`, its children, and a measurer. It needs no window, so it is unit-tested like the collision tracker is.
+The algorithm lives in a new `packages/player/src/layout.ts`, as a function of a layout root and a measurer. It needs no window, so it is unit-tested like the collision tracker is. Following Clay's "no allocation" rule, a `Flex` keeps its working numbers (fit size, minimum size, final size) in fields that the passes overwrite, and the passes reuse arrays kept between frames, so laying out allocates nothing per node. `FrameBuilder.measure()` (U1) returns a new `{ width, height }` today; U2 changes it to write into fields or a reused result, for the same reason.
 
-### The measurer, and the ABI change
+### The measurer, and the ABI change (U0)
 
-The runtime stays backend-free (a Phase 3 ground rule), and only the backend can measure text and textures. So the player gets a measuring interface, implemented by each backend:
+The runtime stays backend-free (a Phase 3 ground rule), and only the backend can measure text and textures. U1 gave the player an optional measuring interface on `Backend`, implemented by the recording backend and estimated for the others. U0 makes it real, with a change from the first draft: text measures its **height** too, because a line's height is not exactly its font size, and the layout needs both.
 
 ```ts
 // packages/player/src/backend.ts
 interface Backend {
   …
-  /** The width in pixels of `text` drawn at `size` with the default font. */
-  measureText(text: string, size: number): number;
+  /** The size in pixels of one line of `text` drawn at `size` with the default font: its width and line height. */
+  measureText?(text: string, size: number): { width: number; height: number };
   /** The size in pixels of a loaded texture (a handle from `loadTexture`). */
-  textureSize(handle: number): { width: number; height: number };
+  textureSize?(handle: number): { width: number; height: number };
 }
 ```
 
 In `native/include/rge.h`, as part of ABI v2:
 
 ```c
-float   rge_measure_text(const char *text, float size);            /* raylib MeasureText */
-void    rge_texture_size(int32_t handle, int32_t *width, int32_t *height); /* 0 × 0 for -1 */
+void rge_measure_text(const char *text, float size, float *out); /* out[0] width, out[1] line height: raylib MeasureTextEx, as DrawTextEx draws */
+void rge_texture_size(int32_t handle, int32_t *width, int32_t *height); /* 0 × 0 for -1 */
 ```
 
-Each one needs: the header, `protocol.ts` (the parity test reads the header), librge's implementation and `smoke.c`, the Node host's koffi binding, the Rust host's `ffi.rs` and its QuickJS binding in `backend.rs`, and the recording backend. The recording backend measures deterministically (for instance, `0.6 × size` per character) so layout tests have stable numbers without a window.
+`rge_measure_text` measures any string, so it also serves wrapping later: Clay wraps by measuring each word once, caching the widths, and adding them up against the available width, and the player can do the same in TypeScript with this one call.
 
-`FrameBuilder` caches both answers: texture sizes per handle, forever; text widths per `(text, size)`, cleared now and then so a running timer does not grow the cache without end. A changing score costs one native call per new value, not one per frame.
+Each function needs: the header, `protocol.ts` (the parity test reads the header), librge's implementation and `smoke.c`, the Node host's koffi binding, the Rust host's `ffi.rs` and its QuickJS binding in `backend.rs`, and the recording backend. `FrameBuilder` caches both answers (U1 already does): texture sizes per handle; text sizes per `(text, size)`, cleared after 1,024 strings so a running timer does not grow the cache without end. A changing score costs one native call per new value, not one per frame.
 
-Measuring text in librge, rather than in TypeScript with a table of glyph widths, keeps the measured width equal to what is drawn, and keeps it right when real fonts arrive (the "Fonts, text measuring and alignment" row in NEXT_PRIORITIES' "Not now" table, which this plan pulls in).
+**A scissor record (decided: in ABI v2).** Clay's renderer needs only rectangles, borders, text, images and scissor regions. This engine's records already cover rectangles, text and images. A scissor (clip) record is what scroll containers, and `overflow: hidden`-style boxes, need:
+
+```
+RGE_OP_SCISSOR      op, x, y, width, height   (window pixels; the player maps the box through the view)
+RGE_OP_SCISSOR_END  op
+```
+
+It is small in librge (raylib's `BeginScissorMode`/`EndScissorMode`), and putting it in ABI v2 avoids a version 3 just for it. Nothing in U2–U5 uses it yet; the first user would be a scrolling list. Borders and rounded corners (Clay's other render commands) wait for a real menu design (see the table at the end).
 
 ### What the compiler needs
 
-Almost nothing, because the compiler is driven by the runtime manifest. `Flex` is added to `intrinsics`, `containerIntrinsics`, `transformIntrinsics`, `intrinsicMembers` and `intrinsicLiterals`, and `@rge/runtime/jsx` exports its props type. The runtime test that checks `intrinsicMembers` against the class catches a field left out. `<Flex>{children}</Flex>` in a receiving component works because `{children}` is allowed inside any container intrinsic.
+Little, because the compiler is driven by the runtime manifest. `Flex` is added to `intrinsics`, `containerIntrinsics`, `transformIntrinsics`, `intrinsicMembers`, `intrinsicLiterals` and `intrinsicCallbacks` (`onPress`), and `@rge/runtime/jsx` exports its props type. The runtime test that checks `intrinsicMembers` against the class catches a field left out. `<Flex>{children}</Flex>` in a receiving component works because `{children}` is allowed inside any container intrinsic.
 
-The one compiler addition is the `flex-start` hint above, a special case in the existing literal-choice diagnostic.
+The compiler additions are the sizing check (see "Sizing") and the `flex-start` hint, both in the existing literal-choice diagnostic.
 
 ### `<Hud>` and layout together
 
-`<Hud>` (priority 3) is drawn through an identity view in window pixels. For layout it also defines a box: the window, `width` × `height` from the input buffer, read every frame, so a resized window lays out again. A `Flex fill` directly under `<Hud>` takes that box. That is how a HUD pins things to corners and edges: a full-window column with `justifyContent="space-between"`, holding rows with spacers.
+`<Hud>` (priority 3) is drawn through a view in canvas pixels that ignores the camera. For layout it also defines a box: the canvas, or with no `<Screen>` the window, read every frame, so a resized window lays out again. A `Flex` with `width="grow" height="grow"` directly under `<Hud>` takes that box. That is one way to pin things to corners and edges: a full-HUD column with `justifyContent="space-between"`, holding rows with spacers. U5's floating boxes are the other, and lighter for a single corner.
 
-Pointers inside a laid-out `<Hud>` need nothing new. A `Pointer` hit-tests through `worldTransform()`, which includes the layout offset, and priority 3 already has screen pointers hit-tested in window coordinates.
+Pointers inside a laid-out `<Hud>` need nothing new. A `Pointer` hit-tests through `worldTransform()`, which includes the layout offset, and priority 3 already has HUD pointers hit-tested in canvas coordinates.
 
 ## Why write the algorithm, not use a library
 
-Yoga (the flexbox engine React Native uses) was the obvious alternative. It is rejected for now:
+Two libraries were considered:
 
-- Yoga ships as C++ or as WebAssembly. QuickJS-ng has no WebAssembly, and linking C++ into librge breaks its "C + raylib, the C side does no maths" rule from NATIVE_PLAN.
-- The subset a game HUD needs (one line, no wrapping, fixed-size leaves, `grow` on containers) is a few hundred lines of TypeScript, and stays readable and steppable in the debugger.
-- Byte-identical output between Node and QuickJS is easy to keep with one pure TypeScript function. A native layout engine would make that a second thing to verify.
+- **Yoga** (the flexbox engine React Native uses) ships as C++ or as WebAssembly. QuickJS-ng has no WebAssembly, and linking C++ into librge breaks its "C + raylib, the C side does no maths" rule from NATIVE_PLAN.
+- **Clay** is a single C header with no dependencies, so it would link into librge. But it would put layout maths on the C side, it lays out its own element tree rather than the engine's `GameObject`s, and byte-identical output between Node and QuickJS is easy to keep with one pure TypeScript function, while a native layout engine would be a second thing to verify.
 
-If games later need wrapping, `min`/`max` sizes, or absolute positioning inside a `Flex`, those are additions to the same function. Yoga can be reconsidered if the subset grows past what is reasonable to maintain.
+So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI needs (rows and columns, the four sizing modes, alignment, floating boxes), and keeps Clay as the reference: when a question comes up about an edge case (a percentage child in a fit parent, shrinking below a minimum), Clay's answer is the default one.
 
 ## Milestones
 
@@ -222,9 +264,10 @@ If games later need wrapping, `min`/`max` sizes, or absolute positioning inside 
 
 **Done when**
 
-- [ ] `rge_measure_text` and `rge_texture_size` are in `rge.h` as part of ABI v2, and `protocol.ts` and the header-parity test agree
+- [ ] `rge_measure_text` (width and line height) and `rge_texture_size` are in `rge.h` as part of ABI v2, and `protocol.ts` and the header-parity test agree
 - [ ] `smoke.c` measures a string and a loaded texture
-- [ ] Both hosts and the recording backend implement `measureText` and `textureSize`
+- [ ] Both hosts and the recording backend implement `measureText` and `textureSize`, and `FrameBuilder` uses the measured line height
+- [ ] `RGE_OP_SCISSOR`/`RGE_OP_SCISSOR_END` are in `rge.h`, `smoke.c` checks a clipped rectangle, and the recording backend decodes them
 - [ ] The parity test still passes byte for byte
 
 ### U1: the layout offset and the measurer
@@ -241,19 +284,22 @@ If games later need wrapping, `min`/`max` sizes, or absolute positioning inside 
 
 **Done when**
 
-- [ ] `Flex` is a runtime class with the props above, and in the manifest; the compiler accepts it with no compiler edit beyond the `flex-start` hint
-- [ ] `layout.ts` covers every `direction` × `alignItems` × `justifyContent` combination, `gap` and every padding prop, tested with a fake measurer against hand-computed positions
+- [ ] `Flex` is a runtime class with the props above, and in the manifest; the compiler adds only the sizing check and the `flex-start` hint
+- [ ] `layout.ts` runs the five passes; each sizing mode (`"fit"`, `"grow"`, fixed, percentage) and each bound is tested on both axes, with a fake measurer, against hand-computed sizes
+- [ ] Growing children share free space smallest first and stop at their maximum, and what a capped child cannot take goes to the others (tests taken from Clay's behaviour)
+- [ ] Every `direction` × `alignItems` × `justifyContent` combination, `gap` and every padding prop place children where hand-computed positions say
 - [ ] Nested `Flex`es, and component and `Entity` children sized by their bounding box, are tested
 - [ ] A child's own `transform` moves it within its slot without moving its neighbours (a test)
 - [ ] `background` draws a rectangle behind the children; a recording test and a pixel test show it
 - [ ] Conditional children and keyed lists inside a `Flex` reflow when they change
+- [ ] Laying out allocates no object per node per frame (a test counts, or the bench shows no growth in garbage collection)
 
-### U3: the window, `grow`, and the demo
+### U3: the HUD box, shrinking, and the demo
 
 **Done when**
 
-- [ ] `fill` under `<Hud>` takes the window, and a resize lays out again (a recording test with two window sizes)
-- [ ] `grow` shares free space by weight; `stretch` sizes a child `Flex` on the cross axis
+- [ ] A `Flex` growing under `<Hud>` takes the HUD's box, and a resize lays out again (a recording test with two window sizes)
+- [ ] Children that overflow a row or column shrink largest first, down to their minimum sizes; leaves never shrink, and what still does not fit overflows
 - [ ] The demo's click counter and button are a `Flex` row inside `<Hud>`, with the label centred by layout instead of by a guessed `x`
 - [ ] The parity run covers the demo's HUD under QuickJS
 
@@ -261,30 +307,52 @@ If games later need wrapping, `min`/`max` sizes, or absolute positioning inside 
 
 **Done when**
 
-- [ ] Layout positions are rounded to whole pixels (see the open decisions), so centred text is not blurry
-- [ ] `<Text align="center">` inside a fixed width: the second half of "text measuring and alignment"
-- [ ] `<Flex onPress>` is pressable over its laid-out box, so a button no longer needs a hand-sized `Pointer`
+- [ ] Layout positions are rounded to whole pixels, so centred text is not blurry
+- [ ] `<Text align="center">` inside a box: the second half of "text measuring and alignment"
+- [ ] `<Flex onPress>` is pressable over its laid-out box, and the demo's button uses it
 - [ ] DESIGN.md has a "Layout" section and README shows the HUD example
+
+### U5: floating boxes
+
+A floating `Flex` is laid out like any other (it fits its children, it can grow to its parent's size) but takes no space in its parent and does not move its siblings. It is attached by one of its nine points (`"top-left"` … `"bottom-right"`) to one of its parent's nine points, plus an offset, and drawn above its neighbours by `z` (already built). The proposed props:
+
+```tsx
+<Flex float anchor="top-right" to="top-right" offsetX={-8} offsetY={8}>   {/* a badge in a button's corner */}
+```
+
+**Done when**
+
+- [ ] `float`, `anchor`, `to`, `offsetX`, `offsetY` on `Flex`, the two anchors checked as literals
+- [ ] A floating box takes no space and is placed at its anchor (tests for all nine points), including under a `<Hud>`, where its parent's box is the HUD's
+- [ ] A floating box's pointers are pressed before what it covers, through `z`
 
 ## Decisions
 
-All four were decided on 2026-11-09:
+Decided on 2026-11-09:
 
 1. ~~**Default `direction`.**~~ `"row"`, as in CSS.
 2. ~~**Pixel snapping.**~~ Layout offsets are rounded to whole pixels by default, so centred text is not blurry. No switch until someone asks for one.
 3. ~~**Name.**~~ `Flex`. `Row` and `Column` may come later as TSX components on top of it.
 4. ~~**Whether `onPress` belongs on `Flex`.**~~ Yes: `<Flex onPress>` is pressable over its laid-out box (U4), so a button needs no hand-sized `Pointer`.
+5. ~~**How layout sizes things.**~~ Clay's algorithm, with the CSS prop names kept (see "The model: Clay").
+
+Also decided on 2026-11-09, each as recommended:
+
+6. ~~**One prop per axis, or separate props.**~~ One prop: `width={120}`, `width="grow"`, `width="50%"`, as in CSS and Clay, with the compiler's sizing check. Separate props (`growX`, `percentX`) were the alternative.
+7. ~~**Grow weights.**~~ Clay's way only: growing siblings share free space equally, smallest first. A `growWeight` prop can come if a game asks for one.
+8. ~~**Scissor in ABI v2.**~~ Yes: `RGE_OP_SCISSOR` and `RGE_OP_SCISSOR_END` go into ABI v2 with U0, so clipping needs no ABI v3 later.
+9. ~~**Floating props (U5).**~~ Props on `Flex` (`float`, `anchor`, `to`, `offsetX`, `offsetY`), so a floating box is still a `Flex` with all its sizing; no separate `<Float>` built-in.
 
 ## Not in this plan, and what would pull it in
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| Wrapping (`flex-wrap`) | A HUD row rarely wraps | An inventory grid; or a separate `Grid` built-in |
-| `min`/`max` sizes, `shrink` | Nothing overflows in a fixed HUD | Text long enough to overflow its box |
-| Absolute children inside a `Flex` | `transform` already offsets within a slot | A badge pinned to a button's corner that must not take space |
-| Percentage sizes (`width="50%"`) | `grow` covers sharing space | A layout `grow` cannot express |
-| Borders and rounded corners on `background` | Needs a new draw op (rounded rectangle, outline) | The first real menu design |
-| Scrolling containers | Needs clipping (a scissor op in the ABI) | A long settings menu or a chat log |
+| Text wrapping inside a box | One-line text covers a HUD; the passes already leave its slot (pass 3), and `rge_measure_text` already measures words | A dialogue box, or any text longer than its box |
+| Wrapping rows (`flex-wrap`) | A HUD row rarely wraps | An inventory grid; or a separate `Grid` built-in |
+| Aspect-ratio boxes | Nothing in a HUD needs one | A portrait or a minimap frame that must keep its shape while growing |
+| Borders and rounded corners on `background` | Needs new draw records (outline, rounded rectangle), as Clay's renderer has | The first real menu design |
+| Scrolling containers | Needs scroll state, on top of the scissor record U0 adds | A long settings menu or a chat log |
+| Layout transitions (animating size and position changes) | Clay has them; a game can animate `transform` today | A menu that should slide or resize smoothly |
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |
 | Focus and keyboard or gamepad navigation between buttons | Needs gamepads first (a "Not now" item in NEXT_PRIORITIES) | A console-style menu |
 
@@ -297,20 +365,24 @@ Today a game is drawn at the window's size, one game pixel to one window pixel. 
 This part adds a root built-in that separates the two sizes:
 
 ```tsx
-export default function Game() {
+export default function Main() {
   return (
-    <Screen width={320} height={180} fit="integer" border="black">
-      <World />
-      <Hud>
-        <PlayerHud />
-      </Hud>
-    </Screen>
+    <Game title="My game" width={1280} height={720}>
+      <Screen width={320} height={180} fit="integer" border="black">
+        <World />
+        <Hud>
+          <PlayerHud />
+        </Hud>
+      </Screen>
+    </Game>
   );
 }
 ```
 
-- **The game size** is the `<Screen>`'s `width` and `height`: 320 × 180. Everything inside is written in those units: transforms, the camera's view, `<Hud>`, `Flex fill`, the mouse position. The game never needs to know the window's size.
-- **The screen size** is the window's: the starting size in `PlayerConfig` (`width: 1280, height: 720`), and then whatever the player resizes it to, or the monitor's size when full screen comes. The player scales the canvas to fit it each frame, and fills the leftover space with `border`.
+`<Game>` (#37) is the optional root that carries the game's configuration, the window among it; `<Screen>` is its only child.
+
+- **The game size** is the `<Screen>`'s `width` and `height`: 320 × 180. Everything inside is written in those units: transforms, the camera's view, `<Hud>` and the layout inside it, the mouse position. The game never needs to know the window's size.
+- **The window size** is `<Game width height>` (1280 × 720 here; else `PlayerConfig`, else 640 × 360) to start, and then whatever the player resizes it to, or the monitor's size when full screen comes. The player scales the canvas to fit it each frame, and fills the leftover space with `border`.
 
 | Milestone | What | Size (estimate) |
 | --- | --- | --- |
@@ -324,12 +396,12 @@ C1 can be done before priority 3, because it needs no ABI change. C2 goes in ABI
 
 | | Game size | Window size |
 | --- | --- | --- |
-| Set by | `<Screen width height>` in the game's TSX | `PlayerConfig.width`/`height` to start; the window's real size after that |
+| Set by | `<Screen width height>` in the game's TSX | `<Game width height>` (else `PlayerConfig`, else 640 × 360) to start; the window's real size after that |
 | Changes when | The game changes the props (a settings menu could) | The player resizes the window, or goes full screen |
-| What uses it | Everything inside the game: transforms, the camera, `<Hud>`, `Flex fill`, `input.pointerX` | Only the player: to scale the canvas and place the borders, and to map the mouse back |
+| What uses it | Everything inside the game: transforms, the camera, `<Hud>` and its layout, `input.pointerX` | Only the player: to scale the canvas and place the borders, and to map the mouse back |
 | Without a `<Screen>` | The same as the window size, as today | |
 
-**Why the window's size is not on `<Screen>`.** (Update: the player now builds the root *before* the window opens, so that an optional `<Game>` root can configure the window. The window's size is `<Game width height>` (or `PlayerConfig`), never the `<Screen>`'s, whose size is the resolution it is drawn at; sounds made in constructors are recorded and preloaded once the window is open.) The window's size is the host's business: the user resizes it, and a packaged game might save it between runs. So the game says what resolution it is drawn at, and the window is whatever it is. One small change helps: `PlayerConfig.width`/`height` become optional, and when they are left out with a `<Screen>` at the root, the window opens at 3 × the canvas (960 × 540 for 320 × 180). The window opens at that size, since the root is already built.
+**Why two components, `<Game>` and `<Screen>`.** They hold different sizes. `<Game width height>` is the window the game opens, which the user can then resize; `<Screen width height>` is the resolution the game is drawn at, whatever the window does. The player builds the root before it opens the window (#37), so it reads `<Game>`'s settings first; sounds made in constructors are recorded and preloaded once the window is open. Because the root is built first, the window can also default from the `<Screen>`: when neither `<Game>` nor `PlayerConfig` gives a size, the window could open at 3 × the canvas (960 × 540 for 320 × 180). That default is not built yet (C3).
 
 ## Props
 
@@ -340,7 +412,7 @@ C1 can be done before priority 3, because it needs no ABI change. C2 goes in ABI
 | `pixelPerfect` | boolean | `true` | Draw at the game's resolution and scale the finished frame up (chunky), or draw at the window's resolution through a scale (smooth) |
 | `border` | a CSS colour | `"black"` | The bars around the canvas when it does not fill the window |
 
-The canvas's own background is the existing `PlayerConfig.background`: inside the canvas it is the clear colour, and outside it, `border`.
+The canvas's own background is `<Game background>` (else `PlayerConfig.background`): inside the canvas it is the clear colour, and outside it, `border`.
 
 ### `fit`: how the canvas is scaled
 
@@ -354,7 +426,7 @@ For a 320 × 180 canvas in a window of a given size:
 
 The canvas is centred, and the bars are drawn in `border`. `"integer"` falls back to `"contain"` when the window is smaller than the canvas (a scale below 1), so the game is never cut off.
 
-A later fourth mode, `"expand"`, keeps the height at 180 game pixels and widens the canvas to the window's shape (320 × 180 at 16:9, 384 × 180 at a 21:9 monitor), so there are no bars and a wide screen shows more of the world. It is in C3, because then the game size is no longer fixed, and `Flex fill` and the HUD must cope with a canvas width that changes.
+A later fourth mode, `"expand"`, keeps the height at 180 game pixels and widens the canvas to the window's shape (320 × 180 at 16:9, 384 × 180 at a 21:9 monitor), so there are no bars and a wide screen shows more of the world. It is in C3, because then the game size is no longer fixed, and the HUD's layout must cope with a canvas width that changes.
 
 ### `pixelPerfect`: two ways to draw
 
@@ -372,9 +444,9 @@ Most pixel-art games want `true`. Games with drawn or vector art, or with lots o
 
 ### The runtime: a container built-in that must be the root
 
-`Screen` is a runtime class with the fields above, a container like `Entity` and `Camera`, added to the manifest in the same places `Flex` is. A component whose root element is `<Screen>` extends `Screen` (that is how components work already), so the player finds it once per frame at the root of the tree (as built in C1: the root it is given, or that root's only child, since a `World` keeps what it mounted under a bare root object). Reading its fields every frame means a game can change its resolution or `fit` from state, for example in a settings menu.
+`Screen` is a runtime class with the fields above, a container like `Entity` and `Camera`, added to the manifest in the same places `Flex` is. A component whose root element is `<Screen>` extends `Screen` (that is how components work already), so the player finds it once per frame at the root of the tree: the root it is given, or that root's only child (a `World` keeps what it mounted under a bare root object), or, through either, a `<Game>`'s only child (#37). Reading its fields every frame means a game can change its resolution or `fit` from state, for example in a settings menu.
 
-A `<Screen>` anywhere but the root has nothing sensible to mean, so it draws its children as an `Entity` would, with a warning once: "A `<Screen>` only works as the root of the game." The compiler cannot catch this on its own, because whether a component ends up at the root depends on another file (`PlayerConfig.root`).
+A `<Screen>` anywhere but the root (or directly inside a `<Game>` root) has nothing sensible to mean, so it draws its children as an `Entity` would, with a warning once: "A `<Screen>` only sets the game's resolution as the root of the game." The compiler cannot catch this on its own, because whether a component ends up at the root depends on another file (`PlayerConfig.root`).
 
 `Screen` does not move its children: it has no transform of its own to apply, and a `transform` on it is rejected (it is left out of `transformIntrinsics`), like a sound would be.
 
@@ -388,7 +460,7 @@ All the work is in the player, in TypeScript, keeping NATIVE_PLAN's "the C side 
 It then uses them in four places:
 
 1. **The camera's view.** `#view` centres the followed point on the canvas's centre (160, 90), not the window's. Today it adds `width / 2` and `height / 2` of the window; with a canvas, it adds the canvas's.
-2. **`<Hud>`.** Its view is the identity in canvas units (so a HUD at `x: 8` is 8 game pixels in), and its layout box for `Flex fill` is 320 × 180.
+2. **`<Hud>`.** Its view is the identity in canvas units (so a HUD at `x: 8` is 8 game pixels in), and its layout box, which a growing `Flex` takes, is 320 × 180.
 3. **Drawing.** With `pixelPerfect={false}`, each `RGE_OP_VIEW` record is multiplied by the canvas-to-window map (`a, b, c, d` by the scale; `e, f` scaled, then offset by `dest`). Then the bars are drawn as up to four rectangle records. C1 places them in world space through the inverse of that one view, since ABI v1 allows only one view record; after priority 3 they can go through a last identity view in window pixels instead. With `pixelPerfect={true}`, the views stay in canvas units, and the frame starts with the new `RGE_OP_CANVAS` record instead (next section).
 4. **The mouse.** `PlayerInput` takes the window position back through the same map: `canvasX = (mouseX − dest.x) / scale`. `input.pointerX` (world) and the press dispatch (`Pointer`s) start from that point. Handlers never see the window's size (`InputState` has none), so it stays the player's business. A press in the border bars is outside the canvas and reaches no `Pointer`.
 
@@ -415,7 +487,7 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 ### Where things interact
 
 - **Camera zoom** still works inside the canvas: `zoom={2}` on a 320 × 180 canvas shows 160 × 90 of the world, drawn at 320 × 180, then scaled to the window.
-- **`Flex` under `<Hud>`** lays out in game pixels. A 16 px padding is 16 game pixels, which is 64 screen pixels at ×4. That is the point: the HUD scales with the game.
+- **`Flex` under `<Hud>`** lays out in game pixels: a `Flex` growing under it takes the 320 × 180 box. A 16 px padding is 16 game pixels, which is 64 screen pixels at ×4. That is the point: the HUD scales with the game.
 - **Text measuring** (U0) is in game pixels too. With `pixelPerfect={true}`, text at size 8 is 8 game pixels tall, as drawn.
 - **Pixel snapping** (U4) rounds layout offsets to whole game pixels, which with `pixelPerfect={true}` is exactly the grid things are drawn on.
 - **High DPI** ("Not now" in NEXT_PRIORITIES) gets easier: the canvas is already a "logical resolution", so a Retina window only changes the window side of the map.
@@ -459,20 +531,20 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 
 **Done when**
 
-- [ ] The demo runs on a `<Screen>` (320 × 180 or 640 × 360), and its HUD (from U3) is laid out in canvas units
-- [ ] `fit="expand"` widens the canvas to the window's shape; `Flex fill` and the camera follow the changing width
-- [ ] `PlayerConfig.width`/`height` are optional with a root `<Screen>`, and the window opens at 3 × the canvas
-- [ ] A full-screen toggle exists (a `PlayerConfig` key, or `useWindow().setFullscreen()`; see the decisions)
+- [ ] The demo's `<Game>` holds a `<Screen>` (320 × 180 or 640 × 360), and its HUD (from U3) is laid out in canvas units
+- [ ] `fit="expand"` widens the canvas to the window's shape; the HUD's layout and the camera follow the changing width
+- [ ] When neither `<Game>` nor `PlayerConfig` sets the window's size, the window opens at 3 × the `<Screen>` (#37 left this open)
+- [ ] A full-screen toggle exists (a key set on `<Game>` or in `PlayerConfig`, or `useWindow().setFullscreen()`; see the decisions)
 
 ## Decisions
 
 Decided on 2026-11-09:
 
 - ~~**Default for `pixelPerfect`.**~~ `true`.
-- ~~**Full screen.**~~ In, as part of C3. Unless decided otherwise, it is a key the player handles (F11 or Alt+Enter, configurable in `PlayerConfig`); a `useWindow()` hook for a settings menu would need its own design note under the "hooks are compiler intrinsics" rule.
+- ~~**Full screen.**~~ In, as part of C3. Unless decided otherwise, it is a key the player handles (F11 or Alt+Enter, configurable as a `<Game>` prop or in `PlayerConfig`); a `useWindow()` hook for a settings menu would need its own design note under the "hooks are compiler intrinsics" rule.
 
 - ~~**One component or two.**~~ Two, renamed: the sized root is `<Screen width height>` (called `Canvas` in earlier drafts), and priority 3's camera-ignoring layer is `<Hud>` (called `Screen` in earlier drafts). They do different jobs: the root sets the game's resolution and how it is scaled into the window, and there is one; `<Hud>` is a layer inside it that does not move with the camera, and there may be several. They cannot be one component, because the world must be inside the sized root but outside the camera-ignoring layer.
-- ~~**Where the window's starting size lives.**~~ In `PlayerConfig`, as an optional `width`/`height`, because the window opens before any component exists. Left out, the window opens at 3 × the game's size.
+- ~~**Where the window's starting size lives.**~~ On the `<Game>` root (#37): `<Game width height>`, else `PlayerConfig`, else 640 × 360. The player builds the root before the window opens, so it can read it. `<Game>` holds the `<Screen>`, which keeps the resolution.
 
 ## Not in this part, and what would pull it in
 
