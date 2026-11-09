@@ -262,12 +262,14 @@ If games later need wrapping, `min`/`max` sizes, or absolute positioning inside 
 - [ ] `<Flex onPress>` is pressable over its laid-out box, so a button no longer needs a hand-sized `Pointer`
 - [ ] DESIGN.md has a "Layout" section and README shows the HUD example
 
-## Decisions needed before work starts
+## Decisions
 
-1. **Default `direction`.** CSS's default is `"row"`, which this plan uses to keep the "feel like ideal React" rule. React Native chose `"column"`, and game menus are often columns. Recommendation: `"row"`, because the web is what most authors know.
-2. **Pixel snapping.** Centring often lands on half pixels, which makes raylib's default font blurry. Rounding each layout offset to a whole pixel fixes that, at the cost of a pixel of drift in nested centring. Recommendation: round by default; offer no switch until someone asks for one.
-3. **Name.** `Flex` reads like CSS and says what it does. An alternative is a pair, `Row` and `Column`, which is shorter in JSX but hides that they are the same thing. Recommendation: `Flex`, with `Row` and `Column` possible later as components written in TSX on top of it.
-4. **Whether `onPress` belongs on `Flex` (U4).** It is the most convenient way to make a button, but it makes `Flex` both a layout box and a hit area. The alternative is a `Pointer` that sizes itself to its parent's box (`<Pointer fill />`). Recommendation: decide after U3, once real HUD code shows which reads better.
+All four were decided on 2026-11-09:
+
+1. ~~**Default `direction`.**~~ `"row"`, as in CSS.
+2. ~~**Pixel snapping.**~~ Layout offsets are rounded to whole pixels by default, so centred text is not blurry. No switch until someone asks for one.
+3. ~~**Name.**~~ `Flex`. `Row` and `Column` may come later as TSX components on top of it.
+4. ~~**Whether `onPress` belongs on `Flex`.**~~ Yes: `<Flex onPress>` is pressable over its laid-out box (U4), so a button needs no hand-sized `Pointer`.
 
 ## Not in this plan, and what would pull it in
 
@@ -450,12 +452,28 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 - [ ] `PlayerConfig.width`/`height` are optional with a root `<Canvas>`, and the window opens at 3 × the canvas
 - [ ] A full-screen toggle exists (a `PlayerConfig` key, or `useWindow().setFullscreen()`; see the decisions)
 
-## Decisions needed before work starts
+## Decisions
 
-1. **Name.** `Canvas` says "the surface the game is drawn on". Alternatives: `Viewport` (but the camera is already described as the viewport in DESIGN.md), `Stage`, `Game` (clashes with the demo's own `Game` component and likely many others). Recommendation: `Canvas`.
-2. **Root component or `PlayerConfig` option.** The same thing could be `PlayerConfig.canvas: { width: 320, height: 180 }`. That is simpler for the player, because the size is known before the window opens. A component keeps the game's look with the game's code, can change from state, and reads as the frame of the whole game in the TSX. Recommendation: the component, as asked, with the window's size staying in the config.
-3. **Default for `pixelPerfect`.** `true` suits the 320 × 180 pixel-art case this was asked for. `false` is the safer default for anything else, because text stays sharp. Recommendation: `true`, since choosing a small fixed resolution usually means pixel art.
-4. **Full screen.** A key the player handles itself (Alt+Enter or F11, set in `PlayerConfig`), or a hook the game calls (`useWindow()`). A hook is a new intrinsic and needs a design note under the "hooks are compiler intrinsics" rule. Recommendation: the config key in C3, and a hook only when a settings menu needs it.
+Decided on 2026-11-09:
+
+- ~~**Default for `pixelPerfect`.**~~ `true`.
+- ~~**Full screen.**~~ In, as part of C3. Unless decided otherwise, it is a key the player handles (F11 or Alt+Enter, configurable in `PlayerConfig`); a `useWindow()` hook for a settings menu would need its own design note under the "hooks are compiler intrinsics" rule.
+
+Still open:
+
+1. **One component or two: `<Canvas>` and `<Screen>`.** They do different jobs. `<Canvas>` is the whole game: its resolution and how it is scaled into the window. There is one, at the root. `<Screen>` (priority 3) is a layer inside the game that ignores the camera: the HUD. There may be several, and they sit inside the canvas, beside the world. They cannot be one component, because the world (which moves with the camera) must be inside the sized root but outside the camera-ignoring layer. What *can* change is the names. Since "screen" reads naturally as "the thing with a size", an alternative is to call the root `<Screen width={320} height={180}>` and rename priority 3's HUD layer to `<Hud>` (or `<Overlay>`):
+
+   ```tsx
+   <Screen width={320} height={180}>   {/* the game's resolution, scaled to the window */}
+     <World />                          {/* moves with the camera */}
+     <Hud>                              {/* does not */}
+       <Flex fill padding={8}>…</Flex>
+     </Hud>
+   </Screen>
+   ```
+
+   Recommendation: this renaming. It matches how the root was first described ("a base component like Screen with a size"), and `Hud` says what the layer is for.
+2. **Where the window's starting size lives.** Two sizes exist: the game's (320 × 180, on the root component) and the window's (say 1280 × 720). The game's size belongs in the TSX. The window's starting size is still needed before any component exists, because the player opens the window first and builds the game after, so `PlayerConfig` keeps an optional `width`/`height`. When left out, the window opens at 3 × the game's size. Recommendation: this, and nothing to decide unless you want the window size set somewhere else.
 
 ## Not in this part, and what would pull it in
 
