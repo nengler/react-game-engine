@@ -7,7 +7,7 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Entity, GameObject, Sprite, World, loadScene, type PrefabRegistry, type Scene } from "@rge/runtime";
@@ -23,7 +23,7 @@ import {
   type ExprIR,
   type ProjectModule,
 } from "../src/index.ts";
-import { OUTPUT_ROOT, cleanOutput, closeCompiler, compile, compileProject, getCompiler, load, typeCheck } from "./helpers.ts";
+import { OUTPUT_ROOT, cleanOutput, closeCompiler, compile, compileProject, getCompiler, load, sameOrder, typeCheck } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -430,7 +430,7 @@ describe("M6: loadScene", () => {
     const w = new World();
     const ids = loadScene(w, { version: 1, entities: [{ id: "f", prefab: "Frame", props: { title: "t" }, children: [{ id: "m", prefab: "Marker" }] }] }, world.prefabs);
     const content = ids.get("f")!.children[1]!;
-    assert.deepEqual(content.children, [ids.get("m")], "inside Content, not after it");
+    sameOrder(content.children, [ids.get("m")], "inside Content, not after it");
   });
 
   it("appends children after the own children of a component that does not render {children}", () => {
@@ -513,6 +513,51 @@ describe("M6: the CLI", () => {
     const { status, output } = run(FILES, { "map.tmj": JSON.stringify({ type: "map", layers: [{ type: "objectgroup", name: "Units", objects: [{ id: 1, class: "Enemy", x: 0, y: 0 }] }] }) });
     assert.equal(status, 1);
     assert.match(output, /map\.scene\.json:\d+:\d+ - error RGE1505: entities\[0\]: Enemy needs the prop 'speed'/);
+  });
+
+  /** Runs the CLI with exactly these arguments after the source and output directories. */
+  function runWith(files: Record<string, string>, extra: (dir: string) => string[], scenes: Record<string, string> = {}) {
+    const dir = join(OUTPUT_ROOT, `m6-cli-${process.pid}`, `w${++counter}`);
+    mkdirSync(join(dir, "src"), { recursive: true });
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, "src", name), text);
+    for (const [name, text] of Object.entries(scenes)) {
+      mkdirSync(join(dir, "scenes"), { recursive: true });
+      writeFileSync(join(dir, "scenes", name), text);
+    }
+    const result = spawnSync(process.execPath, [cli, join(dir, "src"), join(dir, "out"), ...extra(dir)], { encoding: "utf8" });
+    return { status: result.status, output: `${result.stdout}${result.stderr}`, out: join(dir, "out") };
+  }
+
+  it("refuses a flag with no value, instead of silently skipping what it was for", () => {
+    for (const flag of ["--scenes", "--runtime"]) {
+      const { status, output } = runWith(FILES, () => [flag]);
+      assert.equal(status, 2, flag);
+      assert.match(output, new RegExp(`${flag} needs a value`));
+    }
+    const followedByFlag = runWith(FILES, () => ["--scenes", "--no-check"]);
+    assert.equal(followedByFlag.status, 2, "the next argument is another flag, not a value");
+  });
+
+  it("refuses an unknown option, and a scenes or source directory that does not exist", () => {
+    const unknown = runWith(FILES, () => ["--sceens", "x"]);
+    assert.equal(unknown.status, 2);
+    assert.match(unknown.output, /unknown option --sceens/);
+    const missing = runWith(FILES, (dir) => ["--scenes", join(dir, "nope")]);
+    assert.equal(missing.status, 2);
+    assert.match(missing.output, /The scenes directory '.*nope' does not exist/);
+    assert.doesNotMatch(missing.output, /at .*\.ts:\d+/, "a message, not a stack trace");
+  });
+
+  it("writes prefabs.ts and prefabs.json only when every file compiled, so they are never missing a component", () => {
+    const broken = { ...FILES, "Broken.tsx": `import { Entity } from "@rge/runtime/jsx";\nexport function Broken() { return <Entity name="b">{oops}</Entity>; }` };
+    const partial = runWith(broken, () => ["--no-check"]);
+    assert.equal(partial.status, 1);
+    assert.match(partial.output, /skipped prefabs\.ts and prefabs\.json: not every file compiled/);
+    assert.equal(existsSync(join(partial.out, "prefabs.ts")), false);
+    assert.equal(existsSync(join(partial.out, "prefabs.json")), false);
+    assert.equal(existsSync(join(partial.out, "Enemy.ts")), true, "the file that compiled is still written, as before");
+    const whole = runWith(FILES, () => ["--no-check"]);
+    assert.equal(existsSync(join(whole.out, "prefabs.ts")), true);
   });
 
   it("fails duplicate exported names, and does not validate scenes against a broken project", () => {

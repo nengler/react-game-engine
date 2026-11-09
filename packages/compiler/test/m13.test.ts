@@ -39,6 +39,12 @@ function Flame({ fps }: FlameProps) {
   return <AnimatedSprite frames={["f1.png", "f2.png"]} fps={fps} />;
 }
 
+interface LoopProps {
+  frames: string[];
+}
+
+const Loop = ({ frames }: LoopProps) => <AnimatedSprite frames={frames} fps={2} />;
+
 function Twice() {
   const ticks = useRef(0);
   useUpdate((dt) => {
@@ -65,13 +71,17 @@ interface FlameInstance extends AnimatedSprite {
 interface TwiceInstance extends AnimatedSprite {
   ticks: number;
 }
+interface LoopInstance extends AnimatedSprite {
+  updateProps(next: { frames: string[] }): void;
+}
 
 let Walker: new () => WalkerInstance;
 let Flame: new (props: { fps: number }) => FlameInstance;
 let Twice: new () => TwiceInstance;
+let Loop: new (props: { frames: string[] }) => LoopInstance;
 
 before(async () => {
-  ({ Walker, Flame, Twice } = await load<{ Walker: typeof Walker; Flame: typeof Flame; Twice: typeof Twice }>(compile(SOURCE, "Anim.tsx")));
+  ({ Walker, Flame, Twice, Loop } = await load<{ Walker: typeof Walker; Flame: typeof Flame; Twice: typeof Twice; Loop: typeof Loop }>(compile(SOURCE, "Anim.tsx")));
 });
 
 describe("M13: IR and generated code", () => {
@@ -211,6 +221,22 @@ describe("M13: runtime behaviour", () => {
     assert.equal(flame.image, "f1.png", "and the sprite advanced two frames, back to the first");
     world.tick(0.1);
     assert.equal(flame.image, "f2.png");
+  });
+
+  it("works as a root whose frames come from a prop: the required prop is a placeholder until the first render", () => {
+    assert.match(compile(SOURCE, "Anim.tsx").code, /super\(\{ fps: 2, frames: undefined as never \}, props\);/);
+    const world = new World();
+    const loop = new Loop({ frames: ["a.png", "b.png"] });
+    world.mount(loop);
+    assert.deepEqual([loop.image, loop.frames], ["a.png", ["a.png", "b.png"]]);
+    world.tick(0.5);
+    assert.equal(loop.image, "b.png");
+    loop.updateProps({ frames: ["a.png", "b.png"] });
+    world.flush();
+    assert.equal(loop.image, "b.png", "equal frames from the parent do not restart it");
+    loop.updateProps({ frames: ["x.png", "y.png"] });
+    world.flush();
+    assert.deepEqual([loop.image, loop.frame], ["x.png", 0], "different frames do");
   });
 
   it("follows a prop that changes its fps", () => {

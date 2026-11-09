@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -126,4 +127,14 @@ export function compileProjectErrors(sources: Readonly<Record<string, string>>):
 export function elementOf(child: ChildIR): ElementIR {
   if (child.kind === "ChildrenSlot") throw new Error("expected a child with an element, found the {children} slot");
   return child.element;
+}
+
+/**
+ * Same objects in the same order, by identity. `assert.deepEqual` cannot be used on
+ * runtime objects: two fresh ones with equal fields are structurally identical, so it
+ * accepts any permutation.
+ */
+export function sameOrder(actual: readonly unknown[], expected: readonly unknown[], message = ""): void {
+  assert.equal(actual.length, expected.length, `${message} length`);
+  actual.forEach((item, i) => assert.equal(item, expected[i], `${message} position ${i}`));
 }

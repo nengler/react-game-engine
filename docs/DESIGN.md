@@ -619,9 +619,15 @@ files (not only TSX) can place components in a world (M6). Three pieces:
 * **Project outputs.** Next to the per-file outputs, the CLI writes
   `prefabs.ts` (every module's `prefabs`, merged, for `loadScene`) and
   `prefabs.json` (`{ version, prefabs: { Name: { module, props } } }`, for
-  editors and validators). It also checks the whole project: an exported name
-  used in two files is `RGE1206` (scenes refer to prefabs by name), and a
-  static cycle through several files is `RGE1205`.
+  editors and validators). Both are written only when every file compiled: with a
+  failure they would silently leave a component out, so the CLI skips them and
+  says so (the files that did compile are still written, as before). It also
+  checks the whole project: an exported name used in two files is `RGE1206`
+  (scenes refer to prefabs by name), and a static cycle through several files is
+  `RGE1205`. A flag that needs a value (`--scenes`, `--runtime`) without one, an
+  unknown option, and a source or scenes directory that does not exist are usage
+  errors (exit 2), not silent no-ops: CI must not pass without having checked the
+  scenes it was told to check.
 * **Scenes.** JSON: `{ "version": 1, "entities": [{ "id", "prefab", "props"?,
   "transform"?, "children"? }] }`. `id` is author-assigned, unique in the
   scene and stable across edits (for diffing and hot reload). `transform` is
@@ -659,8 +665,9 @@ across edits in Tiled; group layers flatten. `rotation` is converted from
 degrees to radians. A tile object (one with a `gid`) is anchored at its bottom
 left in Tiled, an entity at its top left, so the importer moves the anchor
 along the object's own rotated up axis. An object with no class is skipped
-with a warning. Properties inherited from Tiled object templates are not
-resolved.
+with a warning. Not handled: Tiled's `visible` flag (a hidden object is still an
+entity), tile flip flags in a `gid`, whether an `int` property is whole, and
+properties inherited from object templates.
 
 **Runtime.** `loadScene(world, scene, prefabs)` builds each entity with
 `create(props)`, copies `transform` onto its **`placement`** (so the component's

@@ -35,7 +35,9 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> {
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: AnimatedSpriteProps, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
-    this.#frames = [...hostProps.frames];
+    // `frames` is required, but a component rooted at one whose frames vary gets `undefined` here (the generated
+    // `super()` runs before state exists) and its real value in the first render.
+    this.#frames = [...(hostProps.frames ?? [])];
     this.fps = hostProps.fps ?? DEFAULT_FPS;
     this.playing = hostProps.playing ?? true;
   }
@@ -44,7 +46,8 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> {
     return this.#frames;
   }
 
-  set frames(next: readonly string[]) {
+  set frames(value: readonly string[] | undefined) {
+    const next = value ?? [];
     if (next.length === this.#frames.length && next.every((image, i) => image === this.#frames[i])) return;
     this.#frames = [...next];
     this.frame = 0;

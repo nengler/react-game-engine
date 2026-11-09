@@ -2,6 +2,15 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { GameObject, World } from "../src/index.ts";
 
+/**
+ * Same objects in the same order, by identity. `assert.deepEqual` is no use here:
+ * two fresh `GameObject`s are structurally identical, so it accepts any permutation.
+ */
+function sameOrder(actual: readonly unknown[], expected: readonly unknown[], message = ""): void {
+  assert.equal(actual.length, expected.length, `${message} length`);
+  actual.forEach((item, i) => assert.equal(item, expected[i], `${message} position ${i}`));
+}
+
 describe("child slots", () => {
   it("insert a slotted child after siblings with a lower or equal slot", () => {
     const parent = new GameObject();
@@ -9,7 +18,7 @@ describe("child slots", () => {
     parent.addChild(a, 0);
     parent.addChild(c, 2);
     parent.addChild(b, 1);
-    assert.deepEqual(parent.children, [a, b, c]);
+    sameOrder(parent.children, [a, b, c]);
   });
 
   it("append unslotted children after every slotted one", () => {
@@ -19,7 +28,7 @@ describe("child slots", () => {
     parent.addChild(external);
     parent.queueAddChild(b, 1);
     parent.commitStructure();
-    assert.deepEqual(parent.children, [a, b, external]);
+    sameOrder(parent.children, [a, b, external]);
   });
 
   it("forget the slot when a child is removed", () => {
@@ -43,7 +52,7 @@ describe("keyed list order", () => {
     parent.addChild(c, 1, 2);
     parent.addChild(a, 1, 0);
     parent.addChild(b, 1, 1);
-    assert.deepEqual(parent.children, [before, a, b, c, after]);
+    sameOrder(parent.children, [before, a, b, c, after]);
   });
 
   it("reorders one slot at commit, leaving the other slots alone", () => {
@@ -57,7 +66,7 @@ describe("keyed list order", () => {
     parent.queueAddChild(c, 1, 2);
     parent.queueReorder(1, [c, b, a]);
     parent.commitStructure();
-    assert.deepEqual(parent.children, [before, c, b, a, after, external]);
+    sameOrder(parent.children, [before, c, b, a, after, external]);
   });
 
   it("applies removals before a reorder, and a new item lands at its order", () => {
@@ -70,7 +79,32 @@ describe("keyed list order", () => {
     parent.queueAddChild(x, 0, 1);
     parent.queueReorder(0, [a, x, c]);
     parent.commitStructure();
-    assert.deepEqual(parent.children, [a, x, c]);
+    sameOrder(parent.children, [a, x, c]);
+  });
+
+  it("keeps the order of a queued add, with no reorder queued after it", () => {
+    const parent = new GameObject();
+    const [a, b, c] = [new GameObject(), new GameObject(), new GameObject()];
+    parent.addChild(b, 0, 1);
+    parent.queueAddChild(c, 0, 2);
+    parent.queueAddChild(a, 0, 0);
+    parent.commitStructure();
+    sameOrder(parent.children, [a, b, c]);
+  });
+
+  it("keeps the order of a queued add among its slot's neighbours, in different commits", () => {
+    const parent = new GameObject();
+    const [first, middle, last] = [new GameObject(), new GameObject(), new GameObject()];
+    const [before, after] = [new GameObject(), new GameObject()];
+    parent.addChild(before, 0);
+    parent.addChild(middle, 1, 1);
+    parent.addChild(after, 2);
+    parent.queueAddChild(last, 1, 2);
+    parent.commitStructure();
+    sameOrder(parent.children, [before, middle, last, after], "a later sibling lands after");
+    parent.queueAddChild(first, 1, 0);
+    parent.commitStructure();
+    sameOrder(parent.children, [before, first, middle, last, after], "an earlier sibling lands before");
   });
 
   it("forgets the order when a child is removed", () => {
@@ -82,7 +116,7 @@ describe("keyed list order", () => {
     const first = new GameObject();
     other.addChild(child, 0);
     other.addChild(first, 0, 0);
-    assert.deepEqual(other.children, [child, first], "equal (slot, order): insertion order");
+    sameOrder(other.children, [child, first], "equal (slot, order): insertion order");
   });
 });
 
@@ -106,7 +140,19 @@ describe("passed children", () => {
     p.attachPassedChild(a, 0);
     p.queueAttachPassedChild(b, 1);
     body.commitStructure();
-    assert.deepEqual(body.children, [header, a, b, c, footer]);
+    sameOrder(body.children, [header, a, b, c, footer]);
+  });
+
+  it("mount a conditional passed child between static ones that surround it, whichever condition turns on first", () => {
+    const { panel: p, body, header, footer } = panel();
+    const [a, b, c] = [new GameObject(), new GameObject(), new GameObject()]; // {x && <A />}<B />{y && <C />}
+    p.attachPassedChild(b, 1);
+    p.queueAttachPassedChild(c, 2);
+    body.commitStructure();
+    sameOrder(body.children, [header, b, c, footer], "C after the static B");
+    p.queueAttachPassedChild(a, 0);
+    body.commitStructure();
+    sameOrder(body.children, [header, a, b, c, footer], "A before it");
   });
 
   it("detach and reorder through the component", () => {
@@ -118,7 +164,7 @@ describe("passed children", () => {
     p.queueDetachPassedChild(b);
     p.queueReorderPassedChildren([c, a]);
     body.commitStructure();
-    assert.deepEqual(body.children, [header, c, a, footer]);
+    sameOrder(body.children, [header, c, a, footer]);
   });
 
   it("throw a clear error when the component does not render {children}", () => {
