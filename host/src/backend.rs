@@ -87,8 +87,13 @@ fn frame<'js>(
     if input_len < ffi::RGE_IN_LEN {
         return Err(Exception::throw_type(&ctx, &format!("The input buffer needs {} entries, not {input_len}.", ffi::RGE_IN_LEN)));
     }
-    if keys_len < key_count {
-        return Err(Exception::throw_type(&ctx, &format!("The keys buffer needs {key_count} entries, not {keys_len}.")));
+    // Exactly: a longer buffer means the game was built with more keys than this librge knows, so names past the
+    // end of librge's table would silently never be pressed (the Node host checks the same thing at load).
+    if keys_len != key_count {
+        return Err(Exception::throw_type(
+            &ctx,
+            &format!("The keys buffer has {keys_len} entries, but librge has {key_count} keys: rge.h and protocol.ts have drifted apart."),
+        ));
     }
     // Never read past what the array holds, whatever length the caller claims.
     let length = (length.max(0) as usize).min(records_len);

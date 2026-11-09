@@ -6,6 +6,7 @@
 #include <string.h>
 #include "raylib.h"
 #include "rge.h"
+#include "internal.h"
 
 #define W 64
 #define H 48
@@ -164,6 +165,14 @@ int main(void) {
   expect(5, 5, C_RED, "records before a truncated record");
   reset(); frame();
   expect(5, 5, CLEAR, "no records at all");
+  /* Values no cast may take (UB in C): a NaN op stops the frame, a NaN texture or string index draws nothing,
+   * and a NaN colour is magenta. */
+  reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 10, 10, C_RED); push(NAN); push(1); frame();
+  expect(5, 5, C_RED, "records before a NaN op");
+  reset(); view(1, 0, 0, 1, 0, 0); sprite(20, 10, 1, 1, 0); rec[len - 1] = NAN; text(4, 4, 0, 20, WHITE_RGBA); rec[len - 3] = 1e300; frame();
+  expect(24, 14, CLEAR, "a NaN texture handle draws nothing");
+  reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 10, 10, C_RED); rec[len - 1] = NAN; frame();
+  expect(5, 5, 0xff00ffffu, "a NaN colour is magenta");
 
   /* Input: the window size is reported, nothing asks to quit, key flags use only the three bits. */
   reset(); view(1, 0, 0, 1, 0, 0); frame();
@@ -171,6 +180,21 @@ int main(void) {
   CHECK(input[RGE_IN_QUIT] == 0, "quit");
   CHECK(input[RGE_IN_DT] >= 0, "dt");
   for (int i = 0; i < rge_key_count(); i++) CHECK((keys[i] & ~(RGE_KEY_DOWN | RGE_KEY_PRESSED | RGE_KEY_RELEASED)) == 0, "key %d flags %d", i, keys[i]);
+
+  /* Shift, Control and Alt read both sides as one key: holding one side and pressing the other is not a new press,
+   * and letting go of one side while the other is held is not a release. */
+  {
+    const uint8_t up = 0, down = RGE_KEY_DOWN, pressed = RGE_KEY_DOWN | RGE_KEY_PRESSED, released = RGE_KEY_RELEASED;
+    CHECK(keys_combine(up, up) == 0, "both up");
+    CHECK(keys_combine(pressed, up) == pressed, "left pressed");
+    CHECK(keys_combine(up, pressed) == pressed, "right pressed");
+    CHECK(keys_combine(pressed, pressed) == pressed, "both pressed in the same frame: one press");
+    CHECK(keys_combine(down, pressed) == down, "right pressed while left is held: still down, not pressed again");
+    CHECK(keys_combine(released, down) == down, "left released while right is held: still down, not released");
+    CHECK(keys_combine(released, up) == released, "the last one released");
+    CHECK(keys_combine(released, released) == released, "both released in the same frame: one release");
+    CHECK(keys_combine(released, pressed) == down, "one side let go as the other went down: held throughout");
+  }
 
   /* Sounds: a missing file is -1, and playing a bad handle is harmless. */
   CHECK(rge_load_sound("does-not-exist.wav") == -1, "missing sound is -1");
