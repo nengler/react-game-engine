@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, GameObject, Sprite, World } from "../src/index.ts";
+import { Entity, GameObject, Sprite, Text, World } from "../src/index.ts";
 
 function close(actual: number, expected: number): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≈ ${expected}`);
@@ -73,5 +73,21 @@ describe("transform hierarchy", () => {
     pinned.addChild(grandchild);
     assert.equal(pinned.worldTransform().x, 5);
     assert.equal(grandchild.worldTransform().x, 6);
+  });
+});
+
+describe("Text", () => {
+  it("holds what a renderer draws, with defaults", () => {
+    const plain = new Text({ text: "Score: 3" });
+    assert.deepEqual([plain.text, plain.size, plain.color], ["Score: 3", 16, "white"]);
+    const styled = new Text({ text: "x", size: 24, color: "red" });
+    assert.deepEqual([styled.size, styled.color], [24, "red"]);
+  });
+
+  it("can be placed like any object", () => {
+    const text = new Text({ text: "x" });
+    text.transform.x = 8;
+    text.transform.y = 4;
+    assert.deepEqual([text.worldTransform().x, text.worldTransform().y], [8, 4]);
   });
 });

@@ -19,8 +19,8 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M5a Arrays and records in handlers | Done | #12 | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
 | M5b Keyed lists | In review | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
 | M9 Mount and unmount hooks | Done | #15 | `useMount` (may set state; renders in the same flush) and `useUnmount` (no setters; refs and callback props). Mount is children first, unmount parent first. Also fixes list-item callbacks that read the item during an unmount |
-| M6 Prefabs and scenes | In review | #16 | Per-module `prefabs` registry, project `prefabs.ts` / `prefabs.json`, `rge-compile --scenes` (validation with line, column and JSON path; `RGE15xx`), `loadScene`, a Tiled `.tmj` importer. Also closes M0's gap: cross-file static cycles are now detected |
-| M10 `<Text>` | Not started | n/a | Needs M7. HUD and labels; `transformIntrinsics` |
+| M6 Prefabs and scenes | Done | #16 | Per-module `prefabs` registry, project `prefabs.ts` / `prefabs.json`, `rge-compile --scenes` (validation with line, column and JSON path; `RGE15xx`), `loadScene`, a Tiled `.tmj` importer. Also closes M0's gap: cross-file static cycles are now detected |
+| M10 `<Text>` | In review | #17 | `<Text size color>Score: {score}</Text>` or `text={…}`: both are one `text` prop (a template when text and expressions mix), updated in place. Needs the new manifest entry `textContent`, which says which built-ins take JSX text |
 | M11 `<Shape>` | Not started | n/a | Needs M7. Rectangles and circles for debugging and prototypes; `transformIntrinsics` |
 | M12 `<Camera>` | Not started | n/a | Needs M4 (to follow a target through a prop). The view transform is its own `transform`; `transformIntrinsics` |
 | M13 `<AnimatedSprite>` | Not started | n/a | Needs M5a (frame lists). Sprite-sheet playback; `transformIntrinsics` |
@@ -314,7 +314,8 @@ A text element for HUDs, labels and menus. It is the first built-in whose conten
 
 - **Runtime:** `Text extends GameObject` with `text`, `size`, `color` as fields. The mock records what it would draw; there is no font rendering.
 - **Compiler:** text children are not supported elsewhere, so the content is a `text` prop, not JSX text. A template or string expression is a `DynamicProp` like any other.
-- **Manifest:** added to `intrinsics` and `transformIntrinsics`.
+- **Manifest:** added to `intrinsics` and `transformIntrinsics`, plus a new `textContent` entry (`{ Text: "text" }`) naming the prop an intrinsic's JSX text becomes.
+- **Authoring:** the example above and `text={…}` are the same thing; the content is the text between the tags or the `text` prop, not both. Implemented as described in [DESIGN.md](DESIGN.md#text).
 - **Tests:** the text updates in place when state changes; the element keeps its identity; `text` type-checks as `string`.
 
 ## M11 — `<Shape>` (~2–3 days, needs M7)
@@ -532,12 +533,12 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M10 `<Text>`
 
-- [ ] New runtime class and manifest entries (`intrinsics`, `transformIntrinsics`)
-- [ ] Analyzer and transform accept the element; unsupported forms have diagnostics and tests
-- [ ] `docs/DESIGN.md` updated: built-in list
-- [ ] At least one example uses it; `npm run example` regenerated and committed
-- [ ] Tests cover the IR shape, generated code, type-check, and in-place update
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] New runtime class and manifest entries (`intrinsics`, `transformIntrinsics`, `intrinsicMembers`, `intrinsicRequired`, and the new `textContent`)
+- [x] Transform accepts the element in both content forms; unsupported forms have diagnostics and tests (elements inside, both forms, no content, HTML entities, missing import, reserved field names)
+- [x] `docs/DESIGN.md` updated ("Text", the built-in list, the manifest)
+- [x] `Level.tsx` shows a score readout in its HUD panel; `npm run example` regenerated and committed
+- [x] Tests cover the IR shape, React's whitespace rules, the generated code, both type-checks, and in-place update with one render (`m10.test.ts`, the manifest and transform tests)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M11 `<Shape>`
 

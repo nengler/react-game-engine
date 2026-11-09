@@ -12,6 +12,7 @@ import type { InputState } from "./input.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
+import type { TextProps } from "./components/Text.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
@@ -93,4 +94,20 @@ export function Sprite(_props: SpriteProps): JSX.Element {
 /** A hit area for collisions. */
 export function Collider(_props: ColliderProps): JSX.Element {
   return compileTimeOnly("Collider");
+}
+
+/** What a `<Text>` may hold between its tags: text and `{expressions}` of strings or numbers. */
+export type TextChild = string | number;
+
+/**
+ * The content is either the `text` prop or the element's text, never both:
+ * `<Text size={12}>Score: {score}</Text>` and `<Text text="Score" />` are the
+ * same thing. Elements cannot be children of a `<Text>`.
+ */
+export type TextAttributes = Omit<TextProps, "text"> &
+  ({ text: string; children?: never } | { text?: never; children: TextChild | readonly TextChild[] });
+
+/** A line of text (a label, a HUD readout). */
+export function Text(_props: TextAttributes): JSX.Element {
+  return compileTimeOnly("Text");
 }

@@ -218,6 +218,31 @@ function literalValue(node: Node): string | number | null {
   return null;
 }
 
+/** `&amp;`, `&#38;`: JSX decodes these, and the compiler does not, so it asks for the character itself. */
+const HTML_ENTITY = /&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/;
+
+/**
+ * JSX text with React's whitespace rules: each line is trimmed (the first line
+ * only at its end, the last only at its start), blank lines are dropped, and
+ * the lines are joined with one space. So `<Text>\n  Score: {score}\n</Text>`
+ * is `Score: ` and the expression, and `{a} {b}` keeps its space.
+ */
+export function cleanJsxText(text: string): string {
+  const lines = text.split(/\r\n|\n|\r/);
+  let lastNonEmpty = 0;
+  lines.forEach((line, i) => {
+    if (/[^ \t]/.test(line)) lastNonEmpty = i;
+  });
+  let out = "";
+  lines.forEach((line, i) => {
+    let trimmed = line.replace(/\t/g, " ");
+    if (i !== 0) trimmed = trimmed.replace(/^ +/, "");
+    if (i !== lines.length - 1) trimmed = trimmed.replace(/ +$/, "");
+    if (trimmed !== "") out += i === lastNonEmpty ? trimmed : trimmed + " ";
+  });
+  return out;
+}
+
 /** Attributes the compiler handles itself; they never become props. */
 const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["transform"]);
 
@@ -682,7 +707,10 @@ class ComponentLowering implements LoweringContext {
     this.#requireImport(tag.text, tag);
     const props = this.#lowerProps(opening.attributes, tag.text, false);
     const transform = this.#lowerTransform(opening.attributes, tag.text, false);
-    const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, [], { slot: true, passed: false }) : [];
+    const textProp = this.#manifest.textContent[tag.text];
+    let children: ChildIR[] = [];
+    if (textProp !== undefined) props.push(...this.#lowerTextContent(isJsxElement(jsx) ? jsx.children : [], textProp, props, tag.text, jsx));
+    else if (isJsxElement(jsx)) children = this.#lowerChildren(jsx.children, [], { slot: true, passed: false });
     this.#checkContainer(tag.text, children.length, jsx);
     return {
       kind: "HostElement",
@@ -692,6 +720,73 @@ class ComponentLowering implements LoweringContext {
       children,
       span: this.#span(jsx),
     };
+  }
+
+  /**
+   * The text content of a built-in like `<Text>`: its JSX text and `{expressions}`
+   * become one string prop (`text`), a template literal when they mix, so
+   * `<Text>Score: {score}</Text>` and `<Text text={`Score: ${score}`} />` are the
+   * same thing and update the same way. The element may use one form or the other.
+   * Returns the prop to add (none when the content is the attribute or is empty).
+   */
+  #lowerTextContent(children: readonly JsxChild[], prop: string, props: readonly PropIR[], tag: string, at: Node): PropIR[] {
+    const code = DiagnosticCode.UnsupportedJsxChild;
+    const quasis: string[] = [""];
+    const expressions: ExprIR[] = [];
+    let ok = true;
+    let any = false;
+    for (const child of children) {
+      if (isJsxText(child)) {
+        if (HTML_ENTITY.test(child.text)) {
+          this.#error(code, `<${tag}> text cannot contain HTML entities like \`&amp;\`: write the character itself, or an expression such as {"&"}.`, child);
+          ok = false;
+          continue;
+        }
+        const text = cleanJsxText(child.text);
+        if (text !== "") any = true;
+        quasis[quasis.length - 1] += text;
+      } else if (isJsxExpression(child)) {
+        if (!child.expression) continue; // `{/* comment */}`
+        if (child.dotDotDotToken) {
+          this.#error(code, `<${tag}> cannot spread children.`, child);
+          ok = false;
+          continue;
+        }
+        const value = this.#lowerExpression(child.expression);
+        if (!value) {
+          ok = false;
+          continue;
+        }
+        any = true;
+        // A literal is just text; anything else is interpolated (a number becomes its digits).
+        if (value.kind === "StringLiteral") quasis[quasis.length - 1] += value.value;
+        else if (value.kind === "NumberLiteral") quasis[quasis.length - 1] += String(value.value);
+        else {
+          expressions.push(value);
+          quasis.push("");
+        }
+      } else {
+        this.#error(code, `<${tag}> holds text, not elements: put elements next to it, inside an <${this.#hostIntrinsic}>.`, child);
+        ok = false;
+      }
+    }
+    if (!ok) return [];
+    const given = props.some((p) => p.name === prop);
+    if (given && any) {
+      this.#error(DiagnosticCode.UnsupportedAttribute, `<${tag}> takes its content as text between its tags or as \`${prop}\`, not both.`, at);
+      return [];
+    }
+    if (given) return [];
+    if (!any) {
+      this.#error(DiagnosticCode.UnsupportedJsxChild, `<${tag}> needs content: text between its tags (\`<${tag}>Score: {score}</${tag}>\`) or a \`${prop}\` prop.`, at);
+      return [];
+    }
+    // `{`Score: ${score}`}` alone is already a template: use it as it is.
+    const only = expressions.length === 1 && quasis.every((q) => q === "") ? expressions[0]! : null;
+    const value: ExprIR =
+      expressions.length === 0 ? { kind: "StringLiteral", value: quasis[0]! } : only && only.kind === "TemplateLiteral" ? only : { kind: "TemplateLiteral", quasis, expressions };
+    const dependencies = collectDependencies(value);
+    return [dependencies.length > 0 ? { kind: "DynamicProp", name: prop, value, dependencies } : { kind: "StaticProp", name: prop, value }];
   }
 
   /** Only a container (`<Entity>`) may hold JSX children; other built-ins are leaves. */
@@ -848,7 +943,10 @@ class ComponentLowering implements LoweringContext {
     const transform = this.#lowerTransform(opening.attributes, tag.text, isComponent);
     // On a component, the children are passed to it: the block is lowered here (this component owns them) but mounts
     // at the receiver's slot. A built-in keeps them.
-    const children = isJsxElement(jsx) ? this.#lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent }) : [];
+    const textProp = isComponent ? undefined : this.#manifest.textContent[tag.text];
+    let children: ChildIR[] = [];
+    if (textProp !== undefined) props.push(...this.#lowerTextContent(isJsxElement(jsx) ? jsx.children : [], textProp, props, tag.text, jsx));
+    else if (isJsxElement(jsx)) children = this.#lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent });
     if (isComponent && children.some((c) => c.kind === "KeyedListChild") && children.length > 1) {
       this.#error(
         DiagnosticCode.InvalidList,

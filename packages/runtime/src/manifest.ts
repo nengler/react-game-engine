@@ -17,6 +17,12 @@ export interface RuntimeManifest {
   /** Intrinsics whose JSX may contain children. Others (a `Sprite`, a `Collider`) are leaves. */
   readonly containerIntrinsics: readonly string[];
   /**
+   * Intrinsics whose JSX text and expression children are one string prop
+   * (`<Text>Score: {score}</Text>` sets `text`), by intrinsic, naming the prop.
+   * They are not containers: elements cannot be their children.
+   */
+  readonly textContent: Readonly<Record<string, string>>;
+  /**
    * The fields each intrinsic defines on itself, beyond `GameObject`'s. A
    * component rooted at one extends it, so its state, refs and props may not
    * reuse these names. A runtime test checks each is a real field.
@@ -64,18 +70,21 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider"],
+  intrinsics: ["Entity", "Sprite", "Collider", "Text"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity"],
+  textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
     Sprite: ["image"],
     Collider: ["width", "height", "onCollisionEnter"],
+    Text: ["text", "size", "color"],
   },
   intrinsicRequired: {
     Entity: [],
     Sprite: ["image"],
     Collider: ["width", "height"],
+    Text: ["text"],
   },
   intrinsicCallbacks: {
     Collider: { onCollisionEnter: [{ name: "other", type: "GameObject" }] },
@@ -93,7 +102,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },

@@ -115,7 +115,7 @@ ignored):
   `RGE1005` (reported once per name per file, naming the import line to
   add). `Math` is a global and needs none.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
-  element (`<Entity>`, `<Sprite>`, `<Collider>`; the root or a child),
+  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`; the root or a child),
   relative to its parent unless
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
@@ -125,8 +125,8 @@ ignored):
   appear several times and runs in source order.
   `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
   `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
-* Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`; the list
-  comes from the runtime manifest), components declared in the same file, or
+* Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`, `Text`;
+  the list comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
   `import { Name } from "./Name.tsx"` or `import Name from "./Name.tsx"` (the
   default export, under any local name; no namespace, `as` or `type` forms). A component takes props through a
@@ -677,6 +677,51 @@ prefabs is code. Both build the same objects, and a test compares the tree a
 scene builds with the one the equivalent TSX builds (type, props, placement,
 transform, children).
 
+## Text
+
+`<Text>` (M10) is a leaf built-in for HUDs, labels and menus. Its content is
+the text between its tags or its `text` prop, which are the same thing:
+
+```tsx
+<Text size={12} color="gold" transform={{ x: 8, y: 8 }}>Score: {score}</Text>
+<Text text={`Score: ${score}`} size={12} />
+```
+
+**Runtime.** `Text extends GameObject` with `text`, `size` (default 16) and
+`color` (default `"white"`) as fields. The mock draws nothing: a renderer reads
+the fields and `worldTransform()`. It is listed in the manifest's `intrinsics`
+and `transformIntrinsics`, requires `text` (`intrinsicRequired`), and names the
+prop its children become in the new `textContent` entry (`{ Text: "text" }`),
+which is what makes an intrinsic take JSX text instead of elements.
+
+**Compiler.** JSX text is not supported anywhere else, so the transform folds
+a `Text`'s children into one string prop (`#lowerTextContent`): text and
+`{expressions}` become a `TemplateLiteral`, a `StaticProp` when nothing in it
+varies and a `DynamicProp` (with its dependencies) when it reads state or
+props. A lone `{`template`}` is used as it is; string and number literals fold
+into the surrounding text; comments are ignored. Whitespace follows React: each
+line is trimmed, blank lines are dropped and lines join with one space, so
+whitespace containing a line break disappears (`{n}` then `points` on the next
+line is `5points`; write `{n}{" "}` or keep them on one line for a space).
+HTML entities (`&amp;`) are `RGE1202`, since JSX would decode them and the
+compiler does not. Elements inside a `Text`, both forms at once, and neither
+form are errors (`RGE1202`, `RGE1203`, `RGE1202`). The generator needs
+nothing special: the content is an ordinary prop, so
+`this.text.text = \`Score: ${this.score}\`` is a plain assignment in
+`render()`, the `Text` keeps its identity, and a change costs the component's
+one render.
+
+**Authoring types.** `Text` takes either `text: string` or `children: string |
+number | (string | number)[]` (`TextAttributes`), so the source type-check
+rejects a `<Text />`, both forms, an element child, a boolean child and a
+non-string `text`.
+
+**As a root.** A component may be a `Text`
+(`const Badge = ({ points }) => <Text>+{points}</Text>`): the class extends
+`Text`, `text` is a required constructor prop that a dynamic root gets a
+placeholder for (as `Sprite.image` does), and `text`, `size` and `color` become
+names a state, ref or prop may not use.
+
 ## Transforms and refs
 
 Components should read like React: what is on screen, position included, is a
@@ -1001,7 +1046,8 @@ that says what the runtime provides: the intrinsic tag names, the host
 intrinsic generated classes extend, the member names of that class that
 generated fields must not shadow (`reservedMembers`), the handle types handler
 parameters may have (`InputState`, `GameObject`) with their readable members,
-and the runtime functions handler code may call (`clamp`). The compiler takes
+the runtime functions handler code may call (`clamp`), and which built-ins take
+their JSX text as a prop (`textContent`). The compiler takes
 it as `CompilerConfig.manifest` (default: the runtime's own), so adding an
 intrinsic or a handle type is a runtime-only edit. A runtime test fails if a
 member inherited from `Entity` is missing from `reservedMembers`. The `Math.*`
