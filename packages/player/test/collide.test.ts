@@ -220,6 +220,86 @@ describe("CollisionTracker", () => {
   });
 });
 
+describe("CollisionTracker against every-pair testing", () => {
+  /** A small deterministic generator, so a failure can be repeated. */
+  function random(seed: number): () => number {
+    let state = seed >>> 0;
+    return () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return state / 2 ** 32;
+    };
+  }
+
+  it("reports exactly the pairs, and the order, that testing every pair would, over many random scenes and frames", () => {
+    let totalPairs = 0;
+    for (let seed = 1; seed <= 25; seed++) {
+      const next = random(seed);
+      const world = new World();
+      const parents: Entity[] = [];
+      const colliders: Collider[] = [];
+      const reported: string[] = [];
+      const count = 5 + Math.floor(next() * 40);
+      // A few parents hold several colliders each (so the same-parent rule matters); boxes are scaled, flipped, turned and sometimes empty.
+      for (let i = 0; i < count; i++) {
+        if (parents.length === 0 || next() < 0.6) {
+          const parent = new Entity({ name: `p${parents.length}` });
+          parents.push(parent);
+          world.mount(parent);
+        }
+        const parent = parents[parents.length - 1] as Entity;
+        const index = colliders.length;
+        const collider = new Collider({ width: next() < 0.05 ? 0 : 4 + next() * 30, height: 4 + next() * 30, onCollisionEnter: (other) => reported.push(`${index}>${colliders.indexOf(other as Collider)}`) });
+        collider.transform.x = next() * 120;
+        collider.transform.y = next() * 120;
+        if (next() < 0.3) collider.transform.rotation = next() * 6.28;
+        if (next() < 0.2) collider.transform.scaleX = -0.5 - next();
+        if (next() < 0.2) collider.transform.scaleY = 0.5 + next() * 2;
+        parent.addChild(collider);
+        colliders.push(collider);
+      }
+
+      const tracker = new CollisionTracker();
+      let touching = new Set<string>();
+      for (let frame = 0; frame < 6; frame++) {
+        const entries = collidersOf(world);
+        // Every pair, in draw order: the definition the sweep must agree with.
+        const now = new Set<string>();
+        const expected: string[] = [];
+        for (let i = 0; i < entries.length; i++) {
+          for (let j = i + 1; j < entries.length; j++) {
+            const a = entries[i] as ColliderEntry;
+            const b = entries[j] as ColliderEntry;
+            if (a.collider.parent === b.collider.parent) continue;
+            const boxA = colliderBounds(a.collider.width, a.collider.height, a.world);
+            const boxB = colliderBounds(b.collider.width, b.collider.height, b.world);
+            if (boxA === null || boxB === null || !boundsOverlap(boxA, boxB)) continue;
+            const key = `${colliders.indexOf(a.collider)}>${colliders.indexOf(b.collider)}`;
+            now.add(key);
+            if (!touching.has(key)) expected.push(key);
+          }
+        }
+        touching = now;
+        reported.length = 0;
+        const count = tracker.update(world, entries);
+        // reportCollision tells both sides; keep one line per pair: the earlier collider's.
+        const pairs = reported.filter((line) => {
+          const [from, to] = line.split(">").map(Number) as [number, number];
+          return entries.findIndex((e) => colliders.indexOf(e.collider) === from) < entries.findIndex((e) => colliders.indexOf(e.collider) === to);
+        });
+        totalPairs += expected.length;
+        assert.equal(count, expected.length, `seed ${seed} frame ${frame}: how many`);
+        assert.deepEqual(pairs, expected, `seed ${seed} frame ${frame}: which, and in what order`);
+        // Move things so pairs start and stop touching between frames.
+        for (const collider of colliders) {
+          collider.transform.x += (next() - 0.5) * 40;
+          collider.transform.y += (next() - 0.5) * 40;
+        }
+      }
+    }
+    assert.ok(totalPairs > 200, `the scenes should produce plenty of contacts to compare, not ${totalPairs}`);
+  });
+});
+
 describe("collisions in the frame loop", () => {
   const WINDOW = { width: 200, height: 100, title: "test" };
 

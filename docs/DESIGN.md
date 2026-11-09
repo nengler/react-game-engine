@@ -1369,9 +1369,9 @@ upright box around it (a quarter turn is exact). Boxes that only share an edge d
 with no area (zero or negative size, zero scale) never collides. A pair that keeps overlapping is reported
 once; one that separates and touches again is reported again; a collider that leaves the world is forgotten,
 so one that returns already touching is a new contact. **Colliders with the same parent never collide with each
-other**, so a component with a hitbox and a shield does not hit itself. Every pair is tested, which costs about
-2.7 ms a frame for 1,000 colliders in Node (12 ms for 2,000); a sweep over x is the first optimisation. There is
-no physics: nothing is pushed apart, and `other` has no readable members in handler code yet.
+other**, so a component with a hitbox and a shield does not hit itself. Pairs are found with a sweep over x, which keeps it cheap
+(about 1.5 ms a frame for 2,000 colliders in Node and 38 ms in the embedded interpreter; testing every pair cost
+465 ms there). There is no physics: nothing is pushed apart, and `other` has no readable members in handler code yet.
 
 **Sound.** `Sound` reports to a `SoundSink` (`setSoundSink`, one at a time). The player installs one
 that loads each file through the backend once (when a component creates its `Sound`, so it is ready by
@@ -1379,6 +1379,17 @@ the time it plays) and plays by handle. A sound that cannot be loaded warns once
 runtime still counts the play. Closing the player removes the sink.
 
 **Hosts.** A game's entry file calls `run(hostBackend(), config)`. A host sets
-`globalThis.__rgeBackend` before it loads the game, so the same file runs under Node and under the
-native executable. `RecordingBackend` is the backend for tests: it keeps every frame decoded and plays
-scripted input back one frame at a time.
+`globalThis.__rgeBackend` before it loads the game, so the same file runs under every host:
+
+* **Node** (`@rge/player-node`, for development): koffi loads `librge`; `npm run play:demo`.
+* **The Rust host** (`host/`, what ships): QuickJS-ng (an interpreter: no JIT, so it can go where a JIT is
+  banned) embedded with rquickjs, with `librge` and raylib linked in statically. `npm run bundle` turns the
+  entry into one ES module (esbuild, `platform: neutral`, ES2022) and refuses one that imports from Node or
+  koffi; `rge-host game.js [--root <dir>]` runs it, resolving the game's relative `assets/` against the root.
+  With no arguments it runs the `game.js` next to the executable in that folder, which is how
+  `npm run package` ships a game: `dist/<name>/` holds the executable, `game.js` and `assets/`. The host
+  provides `console` (QuickJS has none) and the backend; nothing else of Node is needed. An uncaught
+  exception prints its stack and exits with status 1.
+* **`RecordingBackend`** is the backend for tests: it keeps every frame decoded and plays scripted input back
+  one frame at a time. The demo's 60-frame parity script runs under Node and under the Rust host and the two
+  outputs must be byte-identical.

@@ -74,3 +74,43 @@ jobs:
         env:
           RGE_REQUIRE_NATIVE: "1"
           RGE_NATIVE_LIB: ${{ github.workspace }}/native/build/librge.so
+      - name: Build the Rust host (OpenGL window)
+        run: npm run host:build
+      - name: Package the demo and run it under a virtual display
+        run: |
+          npm run package
+          cd /tmp
+          # The game runs until its window closes, so stopping it after five seconds (status 124) is the pass.
+          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
+
+  # The shipping host: Rust + QuickJS-ng, linked statically against librge on raylib's software renderer.
+  # The parity test plays the demo for 60 scripted frames under Node and under the host and requires
+  # byte-identical output; the bench prints script frame time under both (informational).
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.18"
+          cache: npm
+      - run: npm ci
+      - name: Build the host (software renderer)
+        run: npm run host:build:headless
+      - name: Parity with Node, and host behaviour
+        run: node --test --test-concurrency=1 "packages/demo/test/*.test.ts"
+        env:
+          RGE_HOST_BIN: ${{ github.workspace }}/host/target/release/rge-host
+          RGE_REQUIRE_HOST: "1"
+      - name: Script frame time under Node and under the host
+        run: |
+          npm run bundle -- packages/player/bench/frame.ts host/dist/bench.js
+          echo "--- Node ---"
+          node packages/player/bench/frame.ts
+          echo "--- QuickJS-ng (rge-host) ---"
+          host/target/release/rge-host host/dist/bench.js
+      - name: Package the demo and run it
+        run: |
+          npm run package -- --headless
+          cd /tmp
+          timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124

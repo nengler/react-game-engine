@@ -15,8 +15,8 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 | N2 Input, sound and the frame loop (pure TS) | In review | #27 | Also added: `PlayerConfig.warn` (where warnings go; tests use it), `getSoundSink()` (so a closing player removes only its own sink), `PlayerInput` (the `InputState` with `worldPoint`, `screenX/Y`, `dt`, `quit`), `RecordingBackend`'s `missingSounds`. The press is dispatched only for a *new* left press and only to pointers drawn in the previous frame |
 | N3 `librge` (C + raylib) and the Node dev host | Done | #28 | First pixels. Built and tested in the cloud container on both raylib platforms: `Memory` (software renderer, no system libraries; the CI `native` job) and `Desktop` (GLFW + Mesa under Xvfb; the `native-desktop` job). Still needs a person at a real display: how the window feels, real keyboard and mouse input, and audio (a hidden window has no audio device, so sounds are loaded but silent) |
 | N4 Demo game and headless CI | Done | #29 | The headless C smoke test and the Node-host tests already ran in CI from N3; N4 adds the demo and runs it in those jobs: scripted-input tests through `RecordingBackend` (movement, camera, clicks, sound, the missing frame) and a 60-frame pixel check through the real library. Replaces N3's hello stand-in. Not yet seen by a person in a real window |
-| N5 Collisions (pure TS) | In review | #30 | `CollisionTracker` in `collide.ts`, called once per frame by the player. Added a rule the plan did not have: colliders with the same parent never collide with each other (a hitbox and a shield must not hit each other, and handler code cannot read `other` to filter it out). Measured cost is in the doc comment |
-| N6 Rust host with QuickJS-ng | Not started | | The shipping executable |
+| N5 Collisions (pure TS) | Done | #30 | `CollisionTracker` in `collide.ts`, called once per frame by the player. Added a rule the plan did not have: colliders with the same parent never collide with each other (a hitbox and a shield must not hit each other, and handler code cannot read `other` to filter it out). Measured cost is in the doc comment |
+| N6 Rust host with QuickJS-ng | In review | PR pending | The shipping executable. Built and tested in the cloud container: the demo runs under QuickJS-ng with output byte-identical to Node over 60 scripted frames; the packaged folder runs from another directory. Differences from the plan: `--root <dir>` instead of `--assets <dir>` (the game's relative paths resolve against it); with no arguments the host runs `game.js` next to the executable. Measuring found that all-pairs collisions were ~45x slower under QuickJS (465 ms a frame for 2,000 colliders), so N5's tracker now sweeps over x (38 ms). Not yet seen by a person in a real window |
 
 ## Goals
 
@@ -423,7 +423,7 @@ The ABI, the interfaces, the decisions, and the ground-rule change. Also points 
 | --- | --- | --- |
 | Box per collider: top-left origin, `width × scaleX` by `height × scaleY`, rotated by the world rotation. Use the axis-aligned bounds of the four corners (an approximation for rotated colliders, documented) | `src/collide.ts` | Unit tests for moved, scaled and rotated colliders |
 | Enter events: a pair that overlaps this frame and did not last frame calls `world.reportCollision(a, b)` once. A pair is forgotten when it stops overlapping or either side leaves the world. Colliders with the same parent never collide with each other | `src/collide.ts`, `src/loop.ts` | Two `Hero`s walking into each other report exactly once; separating and touching again reports again |
-| O(n²) over colliders is fine to start. Note the count at which it shows up in a profile | | Comment in `collide.ts`: about 2.7 ms a frame for 1,000 colliders, 12 ms for 2,000, 59 ms for 4,000 (Node) |
+| O(n²) over colliders is fine to start. Note the count at which it shows up in a profile | | Comment in `collide.ts`: about 2.7 ms a frame for 1,000 colliders, 12 ms for 2,000, 59 ms for 4,000 (Node). N6 replaced the every-pair loop with a sweep over x after measuring 465 ms for 2,000 under QuickJS; see "Performance baseline (N6)" |
 | `Collider` doc comment states the top-left origin | `runtime/src/components/Collider.ts` | |
 
 ### N6: Rust host with QuickJS-ng (~1–1.5 weeks)
@@ -431,10 +431,30 @@ The ABI, the interfaces, the decisions, and the ground-rule change. Also points 
 | Work item | Where | Done when |
 | --- | --- | --- |
 | esbuild bundle script | root `package.json` (`npm run bundle`) | `host/dist/game.js` is one ESM file with no `node:` or koffi imports |
-| `host/` crate: build script, console, backend, CLI | `host/` | `cargo run --release -- host/dist/game.js --assets packages/demo/assets` plays the demo identically to the Node host |
+| `host/` crate: build script, console, backend, CLI | `host/` | `rge-host game.js --root packages/demo` plays the demo identically to the Node host (`--root` is the folder the game's relative `assets/` is resolved against) |
 | Parity check | `host/tests` or a script | The same 60 scripted frames under Node and under the Rust host produce identical decoded draw lists. Record them from each host with a debug flag that dumps records |
-| Performance baseline | `docs/NATIVE_PLAN.md` | Measure frame time for 500, 2,000 and 5,000 sprites under QuickJS and Node, and record the numbers here. A target to aim for, not a promise: 2,000 objects at 60 fps on a mid-range laptop under QuickJS. If it misses, the first fixes are caching world transforms for subtrees that did not change, and dependency-scoped `render()` (Phase 2 "Later") |
+| Performance baseline | `docs/NATIVE_PLAN.md` | Measure frame time for 500, 2,000 and 5,000 sprites under QuickJS and Node, and record the numbers here. A target to aim for, not a promise: 2,000 objects at 60 fps on a mid-range laptop under QuickJS. If it misses, the first fixes are caching world transforms for subtrees that did not change, and dependency-scoped `render()` (Phase 2 "Later"). **Recorded below, under "Performance baseline (N6)"** |
 | Release folder | `npm run package` | Produces `dist/<game>/` with the executable, `game.js` and `assets/` for the current platform |
+
+### Performance baseline (N6)
+
+Script time per frame, from `packages/player/bench/frame.ts`: `createPlayer(...).step()` with `n` entities that move every frame (an `onUpdate` each) and are drawn as rectangles, against a backend that draws nothing. So it measures the engine (hooks, renders, tree walk, draw list, collisions) and not the GPU. Run on a 4-core 2.1 GHz Xeon cloud VM, which is slower than a typical laptop; Node 22 (V8 with JIT) against the Rust host (QuickJS-ng, an interpreter, no JIT).
+
+| Scene | Node | QuickJS-ng |
+| --- | --- | --- |
+| 500 moving rects | 0.15 ms | 2.8 ms |
+| 2,000 moving rects | 0.38 ms | 10.2 ms |
+| 5,000 moving rects | 1.5 ms | 34 ms |
+| 500 moving rects, each with a collider | 0.47 ms | 6.4 ms |
+| 2,000 moving rects, each with a collider | 1.5 ms | 38 ms |
+| *2,000 with colliders, before the sweep (every pair tested)* | *10.5 ms* | *465 ms* |
+
+What it says:
+
+- **The target is met on script time for 2,000 objects**: 10 ms of a 16.7 ms frame on this slow VM, leaving the rest for drawing. 5,000 is not (34 ms, about 30 fps). QuickJS is 20 to 70 times slower than V8 here, as expected without a JIT.
+- **This is the worst case**: every object runs an update and changes its transform every frame. A scene where most things stand still pays much less, because only objects that override a hook are visited.
+- **Collisions were the one real cliff**, and it showed only in the interpreter: testing every pair cost 465 ms a frame for 2,000 colliders. The tracker now sorts by left edge and sweeps (12x faster there). A scene where most colliders share the same columns degrades back towards every pair.
+- **If more is needed**, the first fixes are the ones the plan named: cache world transforms for subtrees that did not change, and dependency-scoped `render()`.
 
 ## Later (not scheduled)
 
@@ -526,8 +546,8 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 
 ### N6 Rust host
 
-- [ ] `npm run bundle` produces one ESM file with no `node:` or koffi imports
-- [ ] `host/` builds and links `librge` statically on Linux and macOS
-- [ ] The demo plays identically under the Rust host (decoded draw-list parity over 60 scripted frames)
-- [ ] Performance baseline recorded in this document
-- [ ] `npm run package` produces a runnable folder
+- [x] `npm run bundle` produces one ESM file with no `node:` or koffi imports
+- [x] `host/` builds and links `librge` statically on Linux (macOS and Windows link lists are written from raylib's own and unverified)
+- [x] The demo plays identically under the Rust host (decoded draw-list parity over 60 scripted frames)
+- [x] Performance baseline recorded in this document
+- [x] `npm run package` produces a runnable folder
