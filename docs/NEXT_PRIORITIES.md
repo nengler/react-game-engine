@@ -37,6 +37,8 @@ Every Phase 3 milestone was built and tested only in a Linux cloud container, ag
 
 ## 2. Collisions that gameplay can use
 
+**Done 2026-11-09.** `other` is a `Contact` with `tag` and `owner` (both were chosen, see "What `other` exposes" in `DESIGN.md`), `<Collider>` takes `layer` and `hits`, and `onCollisionExit` exists. The demo has a coin (picked up, counted) and spikes (the player turns red while on them), and the parity run exercises both under QuickJS. The collision bench is unchanged: 2,000 colliders about 21 ms, a pile of 300 about 29 ms under QuickJS, before and after. The text below is the proposal as written.
+
 `onCollisionEnter(other)` fires correctly, but handler code can read nothing on `other`: the compiler's handle type for a `GameObject` is empty. So a player cannot tell a coin it should collect from an enemy that should hurt it. This is listed as "Later" in the Phase 2 plan, pending a decision on what a collider exposes. Almost every game needs it, so it moves up.
 
 **Proposal**
@@ -47,11 +49,11 @@ Every Phase 3 milestone was built and tested only in a Linux cloud container, ag
 
 **Done when**
 
-- [ ] The tag design is settled in `DESIGN.md` (see the open decisions below)
-- [ ] `other.tag` reads in handler code, with a compiler test and a diagnostic for an unknown member
-- [ ] Layers and `hits` filter pairs, tested against every-pair testing like the existing randomised test
-- [ ] `onCollisionExit` fires once when a pair separates, and when either collider leaves the world
-- [ ] The demo (or a second small demo) collects one thing and is hurt by another
+- [x] The tag design is settled in `DESIGN.md` (see the open decisions below)
+- [x] `other.tag` reads in handler code, with a compiler test and a diagnostic for an unknown member
+- [x] Layers and `hits` filter pairs, tested against every-pair testing like the existing randomised test
+- [x] `onCollisionExit` fires once when a pair separates, and when either collider leaves the world
+- [x] The demo (or a second small demo) collects one thing and is hurt by another
 
 ## 3. A screen-space HUD layer and draw order
 
@@ -139,7 +141,7 @@ flowchart LR
 
 **Decisions needed before work starts**
 
-1. **What `other` exposes (priority 2).** A `tag` string on the collider is the proposal. The alternative is the owning prefab's name, which needs no new prop but cannot tell two colliders on one prefab apart.
+1. ~~**What `other` exposes (priority 2).**~~ Decided 2026-11-09: both `other.tag` and `other.owner` (the owning entity's name).
 2. **How a moved transform is detected (priority 4).** Setters with a version counter are exact but change `Transform` from plain fields; comparing against last frame keeps the fields but costs a check per object.
 3. **Whether ABI v2 also takes the `z` sort key (priority 3).** Sorting in TypeScript keeps the record format unchanged, which is the plan's existing choice.
 4. **Who plays the demo on macOS and Windows (priority 1).** This needs a person with each machine; no CI job can replace it.

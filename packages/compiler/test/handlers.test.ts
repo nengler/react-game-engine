@@ -432,7 +432,6 @@ function Fighter() {
     world.mount(b);
     world.reportCollision(a, b);
     assert.deepEqual(seen, ["a saw b", "a saw b", "b saw a"]);
-    assert.doesNotThrow(() => world.reportCollision(new Entity(), a), "a non-collider has no callback");
   });
 
   it("reports the old onCollisionEnter hook with where it went", () => {

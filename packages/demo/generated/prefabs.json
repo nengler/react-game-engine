@@ -5,6 +5,10 @@
       "module": "packages/demo/src/Beacon.tsx",
       "props": []
     },
+    "Coin": {
+      "module": "packages/demo/src/Coin.tsx",
+      "props": []
+    },
     "Game": {
       "module": "packages/demo/src/Game.tsx",
       "props": []
@@ -15,6 +19,10 @@
     },
     "Player": {
       "module": "packages/demo/src/Player.tsx",
+      "props": []
+    },
+    "Spikes": {
+      "module": "packages/demo/src/Spikes.tsx",
       "props": []
     }
   }

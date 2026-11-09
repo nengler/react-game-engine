@@ -51,9 +51,19 @@ export class World {
    * callback is called with the other collider. Dispatch only: renders happen
    * in the next `tick`.
    */
-  reportCollision(a: GameObject, b: GameObject): void {
-    if (a instanceof Collider && a.world === this) a.onCollisionEnter?.(b);
-    if (b instanceof Collider && b.world === this) b.onCollisionEnter?.(a);
+  reportCollision(a: Collider, b: Collider): void {
+    if (a.world === this) a.onCollisionEnter?.(b);
+    if (b.world === this) b.onCollisionEnter?.(a);
+  }
+
+  /**
+   * Report that two colliders stopped touching, because they moved apart or because one of them left the world or
+   * lost its area. Each collider's own `onCollisionExit` callback is called with the other, but only for a collider
+   * that is still mounted in this world (one that left is gone, and hears nothing). Dispatch only.
+   */
+  reportCollisionExit(a: Collider, b: Collider): void {
+    if (a.world === this) a.onCollisionExit?.(b);
+    if (b.world === this) b.onCollisionExit?.(a);
   }
 
   /**

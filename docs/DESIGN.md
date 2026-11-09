@@ -292,8 +292,10 @@ frame start receiving hooks next frame and detached ones are skipped.
 `onCollisionEnter` callback (the `<Collider onCollisionEnter>` prop) is called
 with the other collider, if it is mounted in this world. Because it is the
 collider's callback and not the component's, a component with several colliders
-(a hitbox and a shield) knows which one was hit. Dispatch only; renders happen
-in the next `tick`.
+(a hitbox and a shield) knows which one was hit. `world.reportCollisionExit(a, b)`
+is the same for `onCollisionExit`, when a pair stops touching. Dispatch only;
+renders happen in the next `tick`. What a handler can read on `other` is
+decided in "Collider callbacks" below.
 
 **Presses**: like collisions, the mock has no input device. An input system calls
 `world.reportPress(pointer, x, y)` with a world-space point; the pointer's own
@@ -1207,7 +1209,7 @@ like any component. Details:
   state exists, so when such a root prop is dynamic it gets `undefined as never`
   there and its real value in the first `render()`, which the constructor runs.
 * The class gains the root's own fields, so a state, ref or prop may not take
-  those names (`image` for a Sprite root, `width`/`height`/`onCollisionEnter`
+  those names (`image` for a Sprite root, `width`/`height`/`tag`/`layer`/`hits`/`onCollisionEnter`/`onCollisionExit`/`owner`/`hitsLayer`
   for a Collider root, `width`/`height`/`onPress`/`contains` for a Pointer root, `name` for an Entity root; the other
   built-ins' sections list theirs): the manifest's `intrinsicMembers`, `RGE1103`.
 * Only containers (the manifest's `containerIntrinsics`, today `Entity` and `Camera`) may
@@ -1219,14 +1221,38 @@ like any component. Details:
 
 **Collider callbacks.** `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`
 is a callback prop on a built-in, which the manifest lists in
-`intrinsicCallbacks` along with its parameters (`other: GameObject`, a handle
-type). It lowers to the same `CallbackProp` a component receives, with
+`intrinsicCallbacks` along with its parameters (`other: Contact`, a handle
+type; see below). It lowers to the same `CallbackProp` a component receives, with
 annotated rather than contextual parameters, and the runtime calls the
 collider's own callback (see "Collisions"). On a child element it is created in
 the field initialiser. On a root it is assigned after `super()`
 (`this.onCollisionEnter = …`), because an arrow that uses `this` cannot be made
 inside the call to `super`. A function on any other built-in, or an unknown
 callback name, is `RGE1203`.
+
+**What `other` exposes** (decided 2026-11-09). `other` is a `Contact`: handler
+code may read `other.tag` and `other.owner`, both strings, and nothing else
+(`'Contact' has no readable property 'width'`, `RGE1301`). The compiler checks
+the comparison like any other string.
+
+* `tag` is the `tag` prop of the other `<Collider>` (`""` when it has none).
+  It tells two colliders on one prefab apart, which the owner cannot.
+* `owner` is the `name` of the nearest `<Entity name>` at or above the other
+  collider, or, when none is named, its class name. It needs no prop, so a game
+  can start with it, but renaming an entity changes game logic.
+* A `<Collider>` also takes `layer` (a string, default `""`) and `hits` (a list
+  of layers, default: every layer). A pair is tested only when **each** side's
+  `hits` allows the other's `layer`, so a bullet that hits only enemies ignores
+  other bullets, and an enemy that left `hits` out still cannot touch a bullet
+  that does not hit enemies. Filtering happens in the tracker before a pair is
+  recorded, so a skipped pair costs no callbacks and no exit events.
+* `onCollisionExit(other)` takes the same `Contact`. It fires once when a pair
+  stops touching, because the boxes moved apart, a collider left the world, a
+  collider lost its area, or the two layers stopped matching. The collider that
+  itself left the world is not called (it is gone); the one still mounted is.
+  Exits are reported before enters in the same frame.
+* The members are the manifest's `Contact` handle type, `intrinsicMembers.Collider`
+  lists the new fields, and the runtime's manifest test keeps both honest.
 
 ## Code generation
 
@@ -1400,10 +1426,13 @@ with the other. A collider is the box `width × height` with its **top-left corn
 upright box around it (a quarter turn is exact). Boxes that only share an edge do not touch, and a collider
 with no area (zero or negative size, zero scale) never collides. A pair that keeps overlapping is reported
 once; one that separates and touches again is reported again; a collider that leaves the world is forgotten,
-so one that returns already touching is a new contact. **Colliders with the same parent never collide with each
+so one that returns already touching is a new contact (and its old partner hears `onCollisionExit`). **Colliders with the same parent never collide with each
 other**, so a component with a hitbox and a shield does not hit itself. Pairs are found with a sweep over x, which keeps it cheap
 (a whole frame with 2,000 moving colliders is about 0.9 ms in Node and 16 ms in the embedded interpreter; testing
-every pair cost 465 ms there). There is no physics: nothing is pushed apart, and `other` has no readable members in handler code yet.
+every pair cost 465 ms there). A pair is skipped unless each collider's `hits` allows the other's `layer`. When a pair that touched last frame does not now,
+`world.reportCollisionExit(a, b)` is called (before the frame's enters): the tracker keeps last frame's colliders by id for that, one
+array entry per collider, because a `Map` entry per touching pair doubled the cost of a pile of 300 colliders under QuickJS. There is no
+physics: nothing is pushed apart, and a handler reads `other.tag` and `other.owner` only.
 
 **Sound.** `Sound` reports to a `SoundSink` (`setSoundSink`, one at a time). The player installs one
 that loads each file through the backend once (when a component creates its `Sound`, so it is ready by

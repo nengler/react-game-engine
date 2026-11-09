@@ -106,17 +106,48 @@ function pairOf(key: number | string): [number, number] {
   return [Math.floor(plain / SMALL_ID), plain % SMALL_ID];
 }
 
+/** Two colliders that were touching last frame, kept so their exit can be reported after one has left the list. */
+type Pair = readonly [Collider, Collider];
+
+/**
+ * Colliders by id. Ids are kept below `SMALL_ID`, so an array indexed by id does for them (a `Map` refilled every frame
+ * cost 8 ms for 2,000 colliders under QuickJS); the few above it, in a game with that many colliders, go in a `Map`.
+ */
+class ById {
+  #small: (Collider | undefined)[] = [];
+  #large: Map<number, Collider> | undefined;
+
+  set(id: number, collider: Collider): void {
+    if (id < SMALL_ID) this.#small[id] = collider;
+    else (this.#large ??= new Map()).set(id, collider);
+  }
+
+  get(id: number): Collider | undefined {
+    return id < SMALL_ID ? this.#small[id] : this.#large?.get(id);
+  }
+
+  clear(): void {
+    this.#small.length = 0;
+    this.#large?.clear();
+  }
+}
+
 /**
  * Finds the moment two colliders start touching and reports it with `world.reportCollision(a, b)`: the
- * collider's own `onCollisionEnter` is called with the other collider, on both sides. It is *enter* only: a
- * pair that keeps overlapping is not reported again, and a pair that separates and touches again is.
+ * collider's own `onCollisionEnter` is called with the other collider, on both sides. A pair that keeps
+ * overlapping is not reported again, and a pair that separates and touches again is.
+ *
+ * It also finds the moment a pair stops touching and reports it with `world.reportCollisionExit(a, b)` (each
+ * collider's `onCollisionExit`). That happens when the boxes move apart, and also when one collider leaves the
+ * world or loses its area, since it is no longer in the frame's list. Exits are reported before enters.
  *
  * Call `update` once per frame with the colliders the frame's tree walk found (`BuiltFrame.colliders`); the
- * player does. A pair is forgotten as soon as it is not overlapping in a frame, which includes a collider
- * leaving the world (it is no longer in the list), so one that comes back already touching is a new contact.
+ * player does. A pair is forgotten as soon as it is not overlapping in a frame, so one that comes back already
+ * touching is a new contact.
  *
  * **Colliders with the same parent never collide with each other**, so a component with several colliders (a
- * hitbox and a shield) does not hit itself. Everything else does.
+ * hitbox and a shield) does not hit itself. A pair is also skipped unless each collider's `hits` allows the
+ * other's `layer` (see `ColliderProps.hits`). Everything else collides.
  *
  * Reports run after the frame's renders, so what a callback changes is rendered by the next tick.
  *
@@ -132,18 +163,31 @@ export class CollisionTracker {
   #touching = new Set<number | string>();
   /** This frame's pairs, being collected; swapped with `#touching` at the end of `update` and reused. */
   #now = new Set<number | string>();
+  /**
+   * Last frame's colliders by id, so a pair that ended can be turned back into colliders for its exit (its key holds
+   * only ids, and one of them may have left the list). One entry per collider, not per pair: a `Map` entry per touching
+   * pair was twice as slow as a `Set` in a pile under QuickJS.
+   */
+  #byId = new ById();
+  #byIdNow = new ById();
   // Reused between frames: this frame's boxes (minX, minY, maxX, maxY each), their colliders and ids.
   #bounds = new Float64Array(256);
   #colliders: Collider[] = [];
   #boxIds: number[] = [];
+  // Each box's layer and hits, read once per frame so the pair loop does no method calls (a pile tests thousands of pairs).
+  #layers: string[] = [];
+  #hits: (readonly string[] | undefined)[] = [];
   #order: number[] = [];
+
+  /** Pairs `#renumber` could not carry over because a collider left; their exit is reported by the `update` that renumbered. */
+  #lost: Pair[] | undefined;
 
   /** `compactAt` is for tests: renumber ids once they reach it (default 2^15, the most that make int32 pair keys). */
   constructor(compactAt: number = SMALL_ID) {
     this.#compactAt = Math.min(compactAt, SMALL_ID);
   }
 
-  /** Compare this frame's colliders with last frame's contacts and report the new ones. Returns how many were reported. */
+  /** Compare this frame's colliders with last frame's contacts and report new contacts and ended ones. Returns how many contacts started (exits are not counted). */
   update(world: World, colliders: readonly ColliderEntry[]): number {
     // Keep ids small, so pair keys stay int32. Only when it pays: not every frame when there are simply that many colliders.
     if (this.#nextId + colliders.length > this.#compactAt && this.#nextId > 2 * colliders.length) this.#renumber(colliders);
@@ -152,15 +196,25 @@ export class CollisionTracker {
     const bounds = this.#bounds;
     const boxColliders = this.#colliders;
     const ids = this.#boxIds;
+    const layers = this.#layers;
+    const hitsOf = this.#hits;
     let count = 0;
+    const byIdNow = this.#byIdNow;
+    byIdNow.clear();
     for (const { collider, world: transform } of colliders) {
       if (!writeBounds(collider.width, collider.height, transform, bounds, count * 4)) continue;
       boxColliders[count] = collider;
-      ids[count] = this.#id(collider);
+      const id = this.#id(collider);
+      ids[count] = id;
+      layers[count] = collider.layer;
+      hitsOf[count] = collider.hits;
+      byIdNow.set(id, collider);
       count++;
     }
     boxColliders.length = count;
     ids.length = count;
+    layers.length = count;
+    hitsOf.length = count;
 
     // Sweep over x: with the boxes sorted by their left edge, a box can only touch the ones after it that start
     // before it ends, so each inner loop stops at the first box that starts past `maxX`. Those boxes overlap in x
@@ -174,26 +228,56 @@ export class CollisionTracker {
     now.clear();
     const touching = this.#touching;
     const started: [number, number][] = [];
+    let kept = 0; // pairs that touched last frame and still do
     for (let s = 0; s < count; s++) {
       const p = order[s] as number;
       const minY = bounds[p * 4 + 1] as number;
       const maxX = bounds[p * 4 + 2] as number;
       const maxY = bounds[p * 4 + 3] as number;
       const parent = (boxColliders[p] as Collider).parent;
+      const layerP = layers[p] as string;
+      const hitsP = hitsOf[p];
       const idP = ids[p] as number;
       for (let t = s + 1; t < count; t++) {
         const q = order[t] as number;
         if ((bounds[q * 4] as number) >= maxX) break;
         if (!(minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
-        if (parent === (boxColliders[q] as Collider).parent) continue;
+        const other = boxColliders[q] as Collider;
+        if (parent === other.parent) continue;
+        const hitsQ = hitsOf[q];
+        if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
         const idQ = ids[q] as number;
         const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
         now.add(key);
-        if (!touching.has(key)) started.push(p < q ? [p, q] : [q, p]);
+        if (touching.has(key)) kept++;
+        else started.push(p < q ? [p, q] : [q, p]);
       }
+    }
+    // Pairs that touched last frame and do not now. Collected before the swap; reported below, ahead of the enters.
+    let ended: Pair[] | undefined = this.#lost;
+    this.#lost = undefined;
+    // Nothing ended when every pair of last frame was kept: the common case, and it spares a scan of the whole set.
+    for (const key of kept === touching.size ? [] : touching) {
+      if (now.has(key)) continue;
+      const [low, high] = pairOf(key);
+      const a = this.#byId.get(low);
+      const b = this.#byId.get(high);
+      if (a && b) (ended ??= []).push([a, b]);
     }
     this.#now = touching;
     this.#touching = now;
+    this.#byIdNow = this.#byId;
+    this.#byId = byIdNow;
+
+    // Exits first, then enters. Both orders are deterministic: exits by collider id (creation order, the best a
+    // collider that is gone still has), enters in draw order (the list's order).
+    if (ended) {
+      const idOf = (c: Collider): number => this.#ids.get(c) ?? 0;
+      const ordered = ended
+        .map(([a, b]) => (idOf(a) <= idOf(b) ? ([a, b] as const) : ([b, a] as const)))
+        .sort((x, y) => idOf(x[0]) - idOf(y[0]) || idOf(x[1]) - idOf(y[1]));
+      for (const [a, b] of ordered) world.reportCollisionExit(a, b);
+    }
 
     // In draw order (the list's order), earlier collider first, so reports are deterministic whatever the sweep found
     // first. The colliders are read out before any callback runs, since a callback may add colliders of its own.
@@ -206,9 +290,10 @@ export class CollisionTracker {
   /**
    * Ids are never reused while they are in use, so a game that keeps creating colliders keeps handing out bigger
    * ones. Now and then, give this frame's colliders fresh ids from 0 and carry last frame's contacts between them
-   * over. Contacts with a collider that is not in this frame are dropped, as `update` would drop them.
+   * over; a contact with a collider that is not in this frame is reported as ended, with the next exits.
    */
   #renumber(colliders: readonly ColliderEntry[]): void {
+    const before = this.#byId;
     const ids = new WeakMap<Collider, number>();
     const renamed = new Map<number, number>();
     let next = 0;
@@ -219,12 +304,25 @@ export class CollisionTracker {
       const old = this.#ids.get(collider);
       if (old !== undefined) renamed.set(old, id);
     }
+    // A contact with a collider that is not in this frame ended, as `update` would find; `#lost` keeps it for its exit.
     const touching = new Set<number | string>();
     for (const key of this.#touching) {
       const [oldLow, oldHigh] = pairOf(key);
       const low = renamed.get(oldLow);
       const high = renamed.get(oldHigh);
-      if (low !== undefined && high !== undefined) touching.add(low < high ? pairKey(low, high) : pairKey(high, low));
+      if (low !== undefined && high !== undefined) {
+        touching.add(low < high ? pairKey(low, high) : pairKey(high, low));
+      } else {
+        const a = before.get(oldLow);
+        const b = before.get(oldHigh);
+        if (a && b) (this.#lost ??= []).push([a, b]);
+      }
+    }
+    // Last frame's colliders under their new ids; `update` fills it in again for this frame straight after.
+    this.#byId = new ById();
+    for (const [old, id] of renamed) {
+      const collider = before.get(old);
+      if (collider) this.#byId.set(id, collider);
     }
     this.#ids = ids;
     this.#nextId = next;
