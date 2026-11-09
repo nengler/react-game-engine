@@ -61,18 +61,19 @@ Everything is drawn through the camera, so a score or a health bar placed in the
 
 **Proposal**
 
-- A `<Screen>` built-in. Its subtree is drawn after the world, through an identity view, in window pixels. The player emits a second `RGE_OP_VIEW` before it.
+- A `<Hud>` built-in. Its subtree is drawn after the world, through an identity view, in window pixels. The player emits a second `RGE_OP_VIEW` before it.
 - librge today refuses a second view record ("malformed draw records"), so this is an ABI change: allow a later `RGE_OP_VIEW` to replace the current view, and bump `RGE_ABI_VERSION` to 2. Both hosts already check the version at load.
-- A `<Pointer>` inside `<Screen>` is hit-tested in window coordinates, so HUD buttons work while the camera moves.
+- A `<Pointer>` inside `<Hud>` is hit-tested in window coordinates, so HUD buttons work while the camera moves.
 - A `z` prop: a sort key applied in TypeScript to the draw list before it is sent, stable within equal keys. It stays inside the current record format.
+- UI layout (`<Flex alignItems="center" gap={8}>`) builds on this layer, and a sized root `<Screen width={320} height={180}>` gives the game a fixed resolution scaled to the window; see [UI_PLAN.md](UI_PLAN.md). It needs two measuring functions (`rge_measure_text`, `rge_texture_size`), which should go into the same ABI v2 so the version moves once.
 
 **Done when**
 
 - [ ] `rge.h`, `protocol.ts` and the header-parity test agree on ABI v2; `smoke.c` checks a second view
-- [ ] `<Screen>` children stay fixed while the camera moves (a recording test and a pixel test)
+- [ ] `<Hud>` children stay fixed while the camera moves (a recording test and a pixel test)
 - [ ] A HUD pointer receives presses through a moving, zoomed camera
 - [ ] `z` reorders records, and equal keys keep tree order
-- [ ] The demo's click counter moves into a `<Screen>`
+- [ ] The demo's click counter moves into a `<Hud>`
 
 ## 4. Performance pass two
 
@@ -127,7 +128,7 @@ Start priorities 1 and 2 together: they touch different code (CI and build scrip
 ```mermaid
 flowchart LR
   subgraph platform["Platform and rendering"]
-    P1["1. Hardware and CI<br/>macOS, Windows, real window"] -->|ABI v2 tested on 3 OSes| P3["3. HUD layer and z<br/>ABI v2, Screen, z prop"]
+    P1["1. Hardware and CI<br/>macOS, Windows, real window"] -->|ABI v2 tested on 3 OSes| P3["3. HUD layer and z<br/>ABI v2, Hud, z prop"]
     P3 -->|errors drawn on the HUD| P5["5. Developer loop<br/>errors in window, reload"]
   end
   subgraph gameplay["Gameplay"]
