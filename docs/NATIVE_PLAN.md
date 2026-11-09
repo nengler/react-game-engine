@@ -13,8 +13,8 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 | N0 Design and protocol | In review | `claude/confident-feynman-1ryujz` | This document |
 | N1 Draw list (`@rge/player`, pure TS) | Done | #26 | `FrameBuilder` + `walkTree` in `draw.ts`; `native/include/rge.h` is committed here (complete, including the full key table); goldens are JSON files in `test/golden/` (`UPDATE_GOLDEN=1` rewrites them, numbers rounded to 1e-9) rather than `node:test` snapshots, which are still experimental |
 | N2 Input, sound and the frame loop (pure TS) | In review | #27 | Also added: `PlayerConfig.warn` (where warnings go; tests use it), `getSoundSink()` (so a closing player removes only its own sink), `PlayerInput` (the `InputState` with `worldPoint`, `screenX/Y`, `dt`, `quit`), `RecordingBackend`'s `missingSounds`. The press is dispatched only for a *new* left press and only to pointers drawn in the previous frame |
-| N3 `librge` (C + raylib) and the Node dev host | Not started | | First pixels |
-| N4 Demo game and headless CI | Not started | | |
+| N3 `librge` (C + raylib) and the Node dev host | In review | PR pending | First pixels. Built and tested in the cloud container on both raylib platforms: `Memory` (software renderer, no system libraries; the CI `native` job) and `Desktop` (GLFW + Mesa under Xvfb; the `native-desktop` job). Still needs a person at a real display: how the window feels, real keyboard and mouse input, and audio (a hidden window has no audio device, so sounds are loaded but silent) |
+| N4 Demo game and headless CI | Not started | | The headless C smoke test and the Node-host tests against the real library already run in CI (N3's `native` and `native-desktop` jobs), so what is left is the demo game and a pixel check of it |
 | N5 Collisions (pure TS) | Not started | | Independent of N3; can run alongside |
 | N6 Rust host with QuickJS-ng | Not started | | The shipping executable |
 
@@ -202,6 +202,8 @@ Notes for the C implementer (N3):
 - **In `rge_frame`:** `BeginDrawing`, `ClearBackground`, the records, `EndDrawing` (raylib swaps and polls input here), then fill `input` from `GetFrameTime`, `GetScreenWidth/Height`, `GetMousePosition`, `GetMouseWheelMove` and `WindowShouldClose`, and fill `keys` from `IsKeyDown/Pressed/Released` and `IsMouseButtonDown/Pressed/Released`. `"Shift"` is down when either shift is (the same for Control and Alt).
 - **Handles** index into growable arrays of `Texture2D` and `Sound`. Unload everything in `rge_close`. TypeScript caches by path, so C never sees a path twice.
 - **An unknown op or a short buffer**: log once at `LOG_ERROR` and stop drawing that frame. Never read past `recordsLength`.
+- **Hidden windows** (`RGE_OPEN_HIDDEN`) have no audio device (so no ALSA noise on machines without a sound card; sounds still load and are silent) and keep each frame for `rge_read_pixels`.
+- **raylib 6.0's software renderer reads the framebuffer back top row first and as BGRA**, whatever format is requested, and `LoadImageFromScreen` flips it again. `capture_frame` reads it raw and swaps red and blue under `GRAPHICS_API_OPENGL_SOFTWARE`, and uses `LoadImageFromScreen` on OpenGL. The smoke test checks both orientations and channels.
 
 ## Pieces and interfaces
 
@@ -335,7 +337,7 @@ native/
   test/smoke.c     opens hidden, draws a red rect, checks the pixel; a flipped sprite; a translated view
 ```
 
-Build: `cmake -S native -B native/build && cmake --build native/build`, wrapped as `npm run native:build`. On Linux, raylib's desktop build needs the X11 and GL development packages (`libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev`). Confirm the list against raylib's Linux build instructions for 6.0.
+Build: `npm run native:build` (a real window; `native/build`) or `npm run native:build:headless` (raylib's software renderer, `-DRGE_PLATFORM=Memory`; `native/build-headless`: no window, no GPU, no system libraries, no keyboard or mouse, so it is what tests and CI use). `npm run native:test` builds and runs the C smoke test on the headless build. On Linux, raylib's desktop build needs the X11 and GL development packages (`libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev`). Confirm the list against raylib's Linux build instructions for 6.0.
 
 ### `host/` (Rust)
 
@@ -369,7 +371,7 @@ flowchart LR
   N4 --> N6
 ```
 
-N1 and N3 can run in parallel because the ABI is fixed above. N1, N2 and N5 can be done and tested entirely in this repo's cloud environment, which has no display. N3, N4 and N6 need a machine that can build C (and, for N6, Rust), and to see a window, a desktop.
+N1 and N3 can run in parallel because the ABI is fixed above. The cloud environment has a C toolchain, CMake, Rust, Xvfb and (after `apt-get update`) the X11 and Mesa packages, so every milestone can be built and pixel-tested there, on raylib's software renderer or on the real OpenGL path against a virtual display. What it cannot show is a real display: window feel, real keyboard and mouse input, and audio need a person at a desktop.
 
 ### N0: design and protocol (this document)
 
@@ -464,6 +466,7 @@ The ABI, the interfaces, the decisions, and the ground-rule change. Also points 
 | koffi typed-array passing differs from what is assumed | N3 | Verify against the installed koffi version's documentation; the binding is one file |
 | raylib 6.0's headless options differ from what this plan assumes | N4 | Fall back to `xvfb-run` with llvmpipe, a known-good setup |
 | The default font looks poor at large sizes | N4 | Accept for v1; fonts are "Later" |
+| raylib's software renderer reads pixels back flipped and BGRA (found in N3) | N3, N4 | `capture_frame` corrects it; pixel tests cover colour and orientation on both platforms |
 | A JavaScript exception mid-frame leaves the window frozen | N3, N6 | Both hosts print the stack and exit with status 1. In-window error display is "Later" |
 
 ## Handoff checklist
@@ -501,11 +504,11 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 
 ### N3 `librge` and the Node dev host
 
-- [ ] CMake build with raylib pinned to 6.0; `npm run native:build`
-- [ ] `rge.c`, `assets.c`, `keys.c` implementing every function in `rge.h`
-- [ ] `smoke.c`: pixel check, flipped sprite, translated view
-- [ ] koffi binding with ABI version and key-count checks
-- [ ] `play.ts` opens a window
+- [x] CMake build with raylib pinned to 6.0; `npm run native:build` (built and tested on Linux only: macOS and Windows are unverified)
+- [x] `rge.c`, `assets.c`, `keys.c` implementing every function in `rge.h`
+- [x] `smoke.c`: pixel check, flipped sprite, translated view
+- [x] koffi binding with ABI version and key-count checks
+- [x] `play.ts` opens a window (run under Xvfb; a person should check it on a real display)
 
 ### N4 Demo game and headless CI
 
