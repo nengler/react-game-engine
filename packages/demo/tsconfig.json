@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@rge/runtime",
+    "noUnusedLocals": false,
+    "noEmit": true
+  },
+  "include": ["src"]
+}

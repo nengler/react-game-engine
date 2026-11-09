@@ -1,0 +1,508 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/demo/src/Game.tsx",
+  "typeDeclarations": [],
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Game",
+      "span": {
+        "fileName": "packages/demo/src/Game.tsx",
+        "start": 516,
+        "end": 1434,
+        "line": 11,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Game.clicks",
+          "setterName": "setClicks",
+          "span": {
+            "fileName": "packages/demo/src/Game.tsx",
+            "start": 557,
+            "end": 590,
+            "line": 12,
+            "column": 9
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Game.clicks",
+          "name": "clicks",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          }
+        }
+      ],
+      "refs": [],
+      "sounds": [
+        {
+          "kind": "Sound",
+          "id": "Game.playClick",
+          "name": "playClick",
+          "path": "click.wav",
+          "span": {
+            "fileName": "packages/demo/src/Game.tsx",
+            "start": 600,
+            "end": 633,
+            "line": 13,
+            "column": 9
+          }
+        }
+      ],
+      "props": [],
+      "propsType": null,
+      "isDefaultExport": true,
+      "isExported": true,
+      "acceptsChildren": false,
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Game"
+            }
+          }
+        ],
+        "transform": [],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/0",
+              "fieldName": "ground",
+              "component": {
+                "kind": "Imported",
+                "name": "Ground",
+                "module": "./Ground.tsx",
+                "isDefault": false
+              },
+              "props": [],
+              "transform": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 678,
+                "end": 688,
+                "line": 17,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/1",
+              "fieldName": "beacon",
+              "component": {
+                "kind": "Imported",
+                "name": "Beacon",
+                "module": "./Beacon.tsx",
+                "isDefault": false
+              },
+              "props": [],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "Unary",
+                    "operator": "-",
+                    "operand": {
+                      "kind": "NumberLiteral",
+                      "value": 120
+                    }
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "Unary",
+                    "operator": "-",
+                    "operand": {
+                      "kind": "NumberLiteral",
+                      "value": 60
+                    }
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 695,
+                "end": 737,
+                "line": 18,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/2",
+              "fieldName": "shape",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Shape"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "kind",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "rect"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 96
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 32
+                  }
+                },
+                {
+                  "kind": "DynamicProp",
+                  "name": "color",
+                  "value": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": ">=",
+                      "left": {
+                        "kind": "StateRead",
+                        "state": "Game.clicks"
+                      },
+                      "right": {
+                        "kind": "NumberLiteral",
+                        "value": 3
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "StringLiteral",
+                      "value": "seagreen"
+                    },
+                    "whenFalse": {
+                      "kind": "StringLiteral",
+                      "value": "slategray"
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Game.clicks"
+                    }
+                  ]
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 80
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "Unary",
+                    "operator": "-",
+                    "operand": {
+                      "kind": "NumberLiteral",
+                      "value": 40
+                    }
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 848,
+                "end": 969,
+                "line": 20,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/3",
+              "fieldName": "pointer",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Pointer"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 96
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 32
+                  }
+                },
+                {
+                  "kind": "CallbackProp",
+                  "name": "onPress",
+                  "handler": {
+                    "kind": "Function",
+                    "params": [],
+                    "body": [
+                      {
+                        "kind": "PlaySound",
+                        "sound": "Game.playClick"
+                      },
+                      {
+                        "kind": "SetState",
+                        "state": "Game.clicks",
+                        "updater": {
+                          "kind": "Function",
+                          "params": [
+                            {
+                              "id": "Game.clicks#1",
+                              "name": "clicks",
+                              "type": {
+                                "kind": "Primitive",
+                                "name": "number"
+                              }
+                            }
+                          ],
+                          "body": [
+                            {
+                              "kind": "Return",
+                              "value": {
+                                "kind": "Binary",
+                                "operator": "+",
+                                "left": {
+                                  "kind": "ParamRead",
+                                  "param": "Game.clicks#1",
+                                  "name": "clicks"
+                                },
+                                "right": {
+                                  "kind": "NumberLiteral",
+                                  "value": 1
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 80
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "Unary",
+                    "operator": "-",
+                    "operand": {
+                      "kind": "NumberLiteral",
+                      "value": 40
+                    }
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 976,
+                "end": 1174,
+                "line": 21,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/4",
+              "fieldName": "text",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Text"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "size",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "color",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "white"
+                  }
+                },
+                {
+                  "kind": "DynamicProp",
+                  "name": "text",
+                  "value": {
+                    "kind": "TemplateLiteral",
+                    "quasis": [
+                      "Clicks: ",
+                      ""
+                    ],
+                    "expressions": [
+                      {
+                        "kind": "StateRead",
+                        "state": "Game.clicks"
+                      }
+                    ]
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Game.clicks"
+                    }
+                  ]
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 92
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "Unary",
+                    "operator": "-",
+                    "operand": {
+                      "kind": "NumberLiteral",
+                      "value": 32
+                    }
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 1181,
+                "end": 1280,
+                "line": 30,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/5",
+              "fieldName": "camera",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Camera"
+              },
+              "props": [],
+              "transform": [],
+              "children": [
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Game/5/0",
+                    "fieldName": "player",
+                    "component": {
+                      "kind": "Imported",
+                      "name": "Player",
+                      "module": "./Player.tsx",
+                      "isDefault": false
+                    },
+                    "props": [],
+                    "transform": [],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/demo/src/Game.tsx",
+                      "start": 1387,
+                      "end": 1397,
+                      "line": 35,
+                      "column": 9
+                    }
+                  }
+                }
+              ],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 1370,
+                "end": 1413,
+                "line": 34,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/demo/src/Game.tsx",
+          "start": 651,
+          "end": 1427,
+          "line": 16,
+          "column": 5
+        }
+      }
+    }
+  ]
+}
