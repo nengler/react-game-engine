@@ -32,6 +32,8 @@ export interface GeneratorOptions {
   readonly runtimeFunctions: ReadonlySet<string>;
   /** Props each built-in's constructor requires (the runtime manifest's `intrinsicRequired`). */
   readonly requiredHostProps: Readonly<Record<string, readonly string[]>>;
+  /** Hooks each built-in implements itself (the runtime manifest's `intrinsicHooks`): a component rooted at one calls `super` first. */
+  readonly intrinsicHooks: Readonly<Record<string, readonly string[]>>;
 }
 
 /**
@@ -61,7 +63,7 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
   }
   for (const component of module.components) {
     w.blank();
-    new ComponentGenerator(component, w, options.requiredHostProps).emit();
+    new ComponentGenerator(component, w, options.requiredHostProps, options.intrinsicHooks).emit();
     if (component.isDefaultExport) {
       w.blank();
       w.line(`export default ${component.name};`);
@@ -234,6 +236,7 @@ type Presence = "persistent" | "conditional";
 class ComponentGenerator {
   readonly #c: ComponentIR;
   readonly #requiredHostProps: Readonly<Record<string, readonly string[]>>;
+  readonly #intrinsicHooks: Readonly<Record<string, readonly string[]>>;
   #w: CodeWriter;
   readonly #stateById: ReadonlyMap<StateId, StateIR>;
   /**
@@ -245,8 +248,14 @@ class ComponentGenerator {
   /** Greater than zero while emitting a callback prop's body. */
   #callbackDepth = 0;
 
-  constructor(component: ComponentIR, writer: CodeWriter, requiredHostProps: Readonly<Record<string, readonly string[]>>) {
+  constructor(
+    component: ComponentIR,
+    writer: CodeWriter,
+    requiredHostProps: Readonly<Record<string, readonly string[]>>,
+    intrinsicHooks: Readonly<Record<string, readonly string[]>>,
+  ) {
     this.#requiredHostProps = requiredHostProps;
+    this.#intrinsicHooks = intrinsicHooks;
     this.#c = component;
     this.#w = writer;
     this.#stateById = new Map(component.state.map((s) => [s.id, s]));
@@ -382,14 +391,18 @@ class ComponentGenerator {
     }
     for (const [kind, hooks] of byKind) {
       const signature = HANDLER_SIGNATURES[kind];
+      // The root built-in may implement this hook itself (an AnimatedSprite advances its frame in `onUpdate`).
+      // Overriding it would silently stop that, so the override calls `super` first, with the hook's own parameters.
+      const callsSuper = (this.#intrinsicHooks[this.#c.root.component.name] ?? []).includes(signature.method);
       w.blank();
-      if (hooks.length === 1) {
+      if (hooks.length === 1 && !callsSuper) {
         const handler = hooks[0]!.handler;
         w.block(`override ${signature.method}(${this.#params(handler)}): void`, () => this.#stmts(handler.body));
         continue;
       }
       const canonical = signature.params.map((p) => annotated(p.name, p.type)).join(", ");
       w.block(`override ${signature.method}(${canonical}): void`, () => {
+        if (callsSuper) w.line(`super.${signature.method}(${signature.params.map((p) => p.name).join(", ")});`);
         hooks.forEach((hook, i) => {
           const args = signature.params.slice(0, hook.handler.params.length).map((p) => p.name).join(", ");
           w.line(`this.#${signature.method}${i}(${args});`);

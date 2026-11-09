@@ -1,4 +1,4 @@
-import { useState, useRef, useUpdate, Camera, Entity, Sprite, Collider, Shape, Text } from "@rge/runtime/jsx";
+import { useState, useRef, useUpdate, AnimatedSprite, Camera, Entity, Sprite, Collider, Shape, Text } from "@rge/runtime/jsx";
 import Coin, { Trail } from "./Coin.tsx";
 import { Banner } from "./Banner.tsx";
 import { Panel } from "./Panel.tsx";
@@ -83,6 +83,8 @@ function Level() {
         <Entity name="Boss">
           <Sprite image={wave > 5 ? "boss-enraged.png" : "boss.png"} />
           <Collider width={64} height={64} />
+          {/* Cycles its frames; a different list (from wave 9) restarts it, an equal one does not. */}
+          <AnimatedSprite frames={wave > 8 ? ["boss-rage-1.png", "boss-rage-2.png"] : ["boss-1.png", "boss-2.png", "boss-3.png"]} fps={6} />
           <Banner text="boss" onDone={() => setWave((wave) => wave + 1)} />
         </Entity>
       )}

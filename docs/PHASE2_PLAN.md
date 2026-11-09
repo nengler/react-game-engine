@@ -22,8 +22,8 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M6 Prefabs and scenes | Done | #16 | Per-module `prefabs` registry, project `prefabs.ts` / `prefabs.json`, `rge-compile --scenes` (validation with line, column and JSON path; `RGE15xx`), `loadScene`, a Tiled `.tmj` importer. Also closes M0's gap: cross-file static cycles are now detected |
 | M10 `<Text>` | Done | #17 | `<Text size color>Score: {score}</Text>` or `text={…}`: both are one `text` prop (a template when text and expressions mix), updated in place. Needs the new manifest entry `textContent`, which says which built-ins take JSX text |
 | M11 `<Shape>` | Done | #18 | `<Shape kind="rect" \| "circle" width height color>`. A literal `kind` is checked against the manifest's new `intrinsicLiterals` (`RGE1210`, with a did-you-mean); other expressions are left to the type-check, so a state-driven kind works |
-| M12 `<Camera>` | In review | #19 | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`; a camera follows what it is nested in. `follow={hero}` is not expressible in TSX (nothing can name another object, and M4 did not define a way), so `follow` is a runtime field for code that is not compiled |
-| M13 `<AnimatedSprite>` | Not started | n/a | Needs M5a (frame lists). Sprite-sheet playback; `transformIntrinsics` |
+| M12 `<Camera>` | Done | #19 | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`; a camera follows what it is nested in. `follow={hero}` is not expressible in TSX (nothing can name another object, and M4 did not define a way), so `follow` is a runtime field for code that is not compiled |
+| M13 `<AnimatedSprite>` | In progress | `claude/pensive-faraday-lnmtga` | `frames` (a fixed list is built once, a varying one is re-assigned and restarts the animation only when its contents differ), `fps`, `playing`. Advancing is not state: no renders. The first built-in with its own `onUpdate`, so a component rooted at it calls `super` first (the manifest's new `intrinsicHooks`) |
 | M14 `<Pointer>` | Not started | n/a | Needs M4 (callback props). Clickable hit area; `transformIntrinsics` |
 | M15 `useSound` | Not started | n/a | Needs M1 and the hook machinery from M3. A handle called in handlers; no transform, because sounds are not placed |
 
@@ -356,10 +356,10 @@ const [running, setRunning] = useState(false);
 <AnimatedSprite frames={["run1.png", "run2.png", "run3.png"]} fps={8} playing={running} />
 ```
 
-- **Runtime:** `AnimatedSprite extends GameObject`; it advances its frame in `update(dt)`, which the World calls for every object that overrides it (the existing registration rule).
+- **Runtime:** `AnimatedSprite extends GameObject`; it advances its frame in `onUpdate(dt)` (the hook is called `onUpdate`, not `update`), which the World calls for every object that overrides it (the existing registration rule). This is the first built-in that implements a hook, so a component rooted at one that writes its own `useUpdate` must not replace it: the generated override calls `super` first, driven by a new manifest entry, `intrinsicHooks`. Implemented as described in [DESIGN.md](DESIGN.md#animatedsprite).
 - **Compiler:** `frames` is a string-array prop; it is evaluated once when it is static and read per render when dynamic.
-- **Manifest:** `intrinsics` and `transformIntrinsics`.
-- **Tests:** the frame advances at `fps`; `playing={false}` freezes it; changing `frames` restarts at frame 0.
+- **Manifest:** `intrinsics` and `transformIntrinsics`, plus `intrinsicHooks`.
+- **Tests:** the frame advances at `fps`; `playing={false}` freezes it; changing `frames` restarts at frame 0, while a re-render with equal contents does not (a dynamic prop is a new array every render).
 
 ## M14 — `<Pointer>` (~1 week, needs M4)
 
@@ -560,12 +560,12 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M13 `<AnimatedSprite>`
 
-- [ ] Runtime `AnimatedSprite` with frame advance in `update(dt)`; manifest entries
-- [ ] `frames` string-array prop, static and dynamic
-- [ ] `docs/DESIGN.md` updated
-- [ ] At least one example uses it; `npm run example` regenerated and committed
-- [ ] Tests cover fps, `playing`, and restart on frame change
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] New runtime class and manifest entries (`intrinsics`, `transformIntrinsics`, `intrinsicMembers`, `intrinsicRequired`, and the new `intrinsicHooks`)
+- [x] Transform accepts the element (a fixed `frames` list is static, a varying one dynamic); the hazard of a component rooted at it overriding `onUpdate` is handled by the generator calling `super` first, driven by the manifest
+- [x] `docs/DESIGN.md` updated ("AnimatedSprite", the built-in lists, the manifest)
+- [x] `Level.tsx`'s boss cycles frames; `npm run example` regenerated and committed
+- [x] Tests cover the frame advance at `fps`, looping, freezing and resuming, a restart on different frames and none on equal ones, no renders, the IR, generated code and both type-checks, a component rooted at the sprite with its own handlers, and that the `super` call is manifest-driven (`animated.test.ts`, `m13.test.ts`, the manifest tests)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M14 `<Pointer>`
 

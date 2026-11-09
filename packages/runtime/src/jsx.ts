@@ -15,6 +15,7 @@ import type { ColliderProps } from "./components/Collider.ts";
 import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
 import type { CameraProps } from "./components/Camera.ts";
+import type { AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
@@ -125,4 +126,12 @@ export function Shape(_props: ShapeProps): JSX.Element {
  */
 export function Camera(_props: CameraProps): JSX.Element {
   return compileTimeOnly("Camera");
+}
+
+/**
+ * A sprite that cycles through `frames` at `fps`. `playing={false}` freezes it; a
+ * different `frames` restarts it. Playing costs no renders.
+ */
+export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
+  return compileTimeOnly("AnimatedSprite");
 }

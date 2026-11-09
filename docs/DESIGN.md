@@ -115,7 +115,8 @@ ignored):
   `RGE1005` (reported once per name per file, naming the import line to
   add). `Math` is a global and needs none.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
-  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`; the root or a child),
+  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`,
+  `<AnimatedSprite>`; the root or a child),
   relative to its parent unless
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
@@ -126,7 +127,7 @@ ignored):
   `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
   `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
 * Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`, `Text`,
-  `Shape`, `Camera`; the list comes from the runtime manifest), components declared in the same file, or
+  `Shape`, `Camera`, `AnimatedSprite`; the list comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
   `import { Name } from "./Name.tsx"` or `import Name from "./Name.tsx"` (the
   default export, under any local name; no namespace, `as` or `type` forms). A component takes props through a
@@ -827,6 +828,56 @@ which is a design decision rather than a Camera feature.
 (`const View = ({ zoom }) => <Camera zoom={zoom} />`): the class extends
 `Camera`, and `zoom` and `follow` become names a state, ref or prop may not use.
 
+## AnimatedSprite
+
+`<AnimatedSprite>` (M13) is a sprite that cycles through a list of images:
+
+```tsx
+<AnimatedSprite frames={running ? ["run1.png", "run2.png", "run3.png"] : ["idle1.png"]} fps={8} playing={running} />
+```
+
+**Runtime.** `AnimatedSprite extends GameObject` with `frames`, `fps` (default
+10), `playing` (default true), and the current `frame` index and `elapsed`
+time. A renderer reads `image`, the current frame, as it reads a `Sprite`'s. It
+advances in its own `onUpdate(dt)`, which the `World` calls every tick because
+the class overrides it (the existing registration rule); it loops, carries the
+remainder of a step, and takes several frames from one long `dt`. A non-positive
+or non-finite `fps`, and an empty `frames`, freeze it rather than throw, since
+this runs inside `World.tick`. **Playing is not state**: advancing a frame
+re-renders nothing, so an animation costs no renders.
+
+**Frames.** `frames` is an array prop. The array literals M5a added make it
+writable in source, and it follows the usual rule: a fixed list is built once
+(a `StaticProp`), a list that reads state or props is re-assigned in `render()`
+(a `DynamicProp`). A dynamic list is a *new array every render*, so `frames` is
+an accessor that compares contents: **different contents restart at the first
+frame** (and clear the carried time); **equal contents change nothing**, so an
+unrelated state change that makes the component render again does not restart the
+animation. It keeps its own copy, so mutating the caller's array later changes
+nothing. `playing={false}` freezes on the current frame, saves up no time, and
+resumes from there.
+
+**A built-in that implements a hook.** This is the first built-in with an
+`onUpdate` of its own, which exposed a hazard: a component *rooted* at an
+`AnimatedSprite` that writes its own `useUpdate` generates `override
+onUpdate(dt)`, which would replace the sprite's and silently stop the animation.
+The manifest's `intrinsicHooks` (`{ AnimatedSprite: ["onUpdate"] }`) lists the
+hooks a built-in implements itself, and the generated override calls `super`
+first, with the hook's own parameters:
+
+```ts
+override onUpdate(dt: number): void {
+  super.onUpdate(dt);          // the sprite advances its frame
+  this.#onUpdate0();           // then the component's own handlers, in order
+}
+```
+
+A hook the root does not implement is generated as before (no `super`, no
+churn in existing output), and a runtime test checks the list is exactly the hooks
+the intrinsic classes override, so a new one cannot be forgotten. A component
+rooted at the sprite also cannot name state `frames`, `fps`, `playing`, `frame`,
+`elapsed` or `image`.
+
 ## Transforms and refs
 
 Components should read like React: what is on screen, position included, is a
@@ -1154,7 +1205,8 @@ parameters may have (`InputState`, `GameObject`) with their readable members,
 the runtime functions handler code may call (`clamp`), and which built-ins take
 their JSX text as a prop (`textContent`), which of their props take one of a
 fixed set of strings (`intrinsicLiterals`), and which members exist for code that
-is not compiled and cannot be set from JSX (`intrinsicRuntimeOnly`). The compiler takes
+is not compiled and cannot be set from JSX (`intrinsicRuntimeOnly`), and which hooks they implement
+themselves (`intrinsicHooks`, so a component rooted at one calls `super`). The compiler takes
 it as `CompilerConfig.manifest` (default: the runtime's own), so adding an
 intrinsic or a handle type is a runtime-only edit. A runtime test fails if a
 member inherited from `Entity` is missing from `reservedMembers`. The `Math.*`
