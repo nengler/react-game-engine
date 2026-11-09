@@ -115,7 +115,7 @@ ignored):
   `RGE1005` (reported once per name per file, naming the import line to
   add). `Math` is a global and needs none.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
-  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`; the root or a child),
+  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`; the root or a child),
   relative to its parent unless
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
@@ -126,7 +126,7 @@ ignored):
   `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
   `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
 * Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`, `Text`,
-  `Shape`; the list comes from the runtime manifest), components declared in the same file, or
+  `Shape`, `Camera`; the list comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
   `import { Name } from "./Name.tsx"` or `import Name from "./Name.tsx"` (the
   default export, under any local name; no namespace, `as` or `type` forms). A component takes props through a
@@ -765,6 +765,58 @@ restricting another built-in's prop is a manifest edit (a test does it to
 the class extends `Shape`, the required props that vary get the usual
 constructor placeholders, and `kind`, `width`, `height` and `color` become names
 a state, ref or prop may not use.
+
+## Camera
+
+`<Camera>` (M12) is the viewport. Its own transform is the view, and `zoom`
+(default 1, must be positive) magnifies:
+
+```tsx
+<Camera zoom={wave > 5 ? 2 : 1} transform={{ x: 160, y: 120 }} />
+```
+
+**The view.** A renderer draws the world through the inverse of the camera's
+world transform, so moving the camera pans the view, turning it turns the view
+the other way, and scaling it up shows more of the world; `zoom` then magnifies.
+`viewTransform()` returns that map as a canvas-style matrix (`x' = a·x + c·y +
+e`, `y' = b·x + d·y + f`), and `worldToView` / `viewToWorld` apply it and its
+inverse (the second turns a click into a world position). The point the camera
+is at lands on the centre of the viewport: the renderer knows the viewport's
+size, the camera does not. Moving a camera never changes any object's
+`worldTransform()`: the view is applied on top of the world, not into it.
+Reading the view with a zoom that is not positive, or a scale of 0, throws a
+`RangeError` (it would divide by zero); assigning one does not, since a prop
+that varies with state can pass through such a value.
+
+**Following something.** Put the camera inside it:
+
+```tsx
+<Entity name="Hero" transform={{ x }}>
+  <Sprite image="hero.png" />
+  <Camera zoom={2} />
+</Entity>
+```
+
+Transforms nest, so the view moves with the hero, with no new mechanism, and
+the camera's own `transform` is an offset from the hero.
+
+**What cannot be written.** The plan sketched `<Camera follow={hero} />`, which
+needs a way for a component to name another object. Nothing does: element refs
+were removed in M3 (refs hold values only), state holds data and not objects, and
+M4 did not define one. So `follow` is not an authored prop (`CameraProps` has
+only `zoom`, and the source type-check rejects it). It exists on the runtime
+`Camera` for code that is not compiled (a game loop, a scene loader):
+`camera.follow = hero` puts the camera at the target's world position plus the
+camera's own `transform.x` and `.y`, with the camera's own rotation, scale and
+zoom. Other ways to the same view from TSX: nest the camera in the target, or
+lift the target's position into a parent's state and pass it down
+(`<Camera transform={{ x: heroX, y: heroY }} />`). If following arbitrary
+objects from TSX matters, it needs an object-reference mechanism of its own,
+which is a design decision rather than a Camera feature.
+
+**As a root.** A component may be a `Camera`
+(`const View = ({ zoom }) => <Camera zoom={zoom} />`): the class extends
+`Camera`, and `zoom` and `follow` become names a state, ref or prop may not use.
 
 ## Transforms and refs
 

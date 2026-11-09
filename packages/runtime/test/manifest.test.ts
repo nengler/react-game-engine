@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Collider, Entity, GameObject, SHAPE_KINDS, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
+import { Camera, Collider, Entity, GameObject, SHAPE_KINDS, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
 
 /** Every instance field and prototype member a generated subclass of `host` would inherit, excluding Object.prototype. */
 function inheritedMembers(host: object): Set<string> {
@@ -36,6 +36,7 @@ describe("runtime manifest", () => {
       Collider: new Collider({ width: 1, height: 1 }),
       Text: new Text({ text: "" }),
       Shape: new Shape({ kind: "rect", width: 1, height: 1 }),
+      Camera: new Camera(),
     };
     const base = new Entity();
     for (const tag of runtimeManifest.intrinsics) {
@@ -84,7 +85,7 @@ describe("runtime manifest", () => {
 
   it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
-    const classes: Record<string, unknown> = { Entity, Sprite, Collider, Text, Shape };
+    const classes: Record<string, unknown> = { Entity, Sprite, Collider, Text, Shape, Camera };
     for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
   });
 });

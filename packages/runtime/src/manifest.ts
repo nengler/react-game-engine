@@ -79,7 +79,7 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape"],
+  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity"],
   textContent: { Text: "text" },
@@ -89,6 +89,7 @@ export const runtimeManifest: RuntimeManifest = {
     Collider: ["width", "height", "onCollisionEnter"],
     Text: ["text", "size", "color"],
     Shape: ["kind", "width", "height", "color"],
+    Camera: ["zoom", "follow"],
   },
   intrinsicRequired: {
     Entity: [],
@@ -96,6 +97,7 @@ export const runtimeManifest: RuntimeManifest = {
     Collider: ["width", "height"],
     Text: ["text"],
     Shape: ["kind", "width", "height"],
+    Camera: [],
   },
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },
@@ -116,7 +118,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },

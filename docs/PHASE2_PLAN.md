@@ -17,12 +17,12 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M4b Roots and component forms | Done | #11 | `<Collider onCollisionEnter>` replaces the hook (a per-collider callback), fragment and non-Entity roots, arrow-function and default-export components, the `props` object form, `useState` type inference over expressions. Completes M4 |
 | M8 Children | Done | #14 | `children: Child` and `{children}` in the receiver, elements between the tags in the parent (static, conditional, or a sole list). The parent owns and updates what it passes; the receiver only says where it mounts. Forwarding `{children}` and children on list items are not supported yet |
 | M5a Arrays and records in handlers | Done | #12 | Array and record state (`useState<EnemyData[]>([])`), array and object literals with spreads, member reads, the non-mutating array methods with inline arrow callbacks. Object spread is in (the design deferred it) |
-| M5b Keyed lists | In review | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
+| M5b Keyed lists | Done | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
 | M9 Mount and unmount hooks | Done | #15 | `useMount` (may set state; renders in the same flush) and `useUnmount` (no setters; refs and callback props). Mount is children first, unmount parent first. Also fixes list-item callbacks that read the item during an unmount |
 | M6 Prefabs and scenes | Done | #16 | Per-module `prefabs` registry, project `prefabs.ts` / `prefabs.json`, `rge-compile --scenes` (validation with line, column and JSON path; `RGE15xx`), `loadScene`, a Tiled `.tmj` importer. Also closes M0's gap: cross-file static cycles are now detected |
 | M10 `<Text>` | Done | #17 | `<Text size color>Score: {score}</Text>` or `text={…}`: both are one `text` prop (a template when text and expressions mix), updated in place. Needs the new manifest entry `textContent`, which says which built-ins take JSX text |
-| M11 `<Shape>` | In review | #18 | `<Shape kind="rect" \| "circle" width height color>`. A literal `kind` is checked against the manifest's new `intrinsicLiterals` (`RGE1210`, with a did-you-mean); other expressions are left to the type-check, so a state-driven kind works |
-| M12 `<Camera>` | Not started | n/a | Needs M4 (to follow a target through a prop). The view transform is its own `transform`; `transformIntrinsics` |
+| M11 `<Shape>` | Done | #18 | `<Shape kind="rect" \| "circle" width height color>`. A literal `kind` is checked against the manifest's new `intrinsicLiterals` (`RGE1210`, with a did-you-mean); other expressions are left to the type-check, so a state-driven kind works |
+| M12 `<Camera>` | In progress | `claude/pensive-faraday-lnmtga` | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`; a camera follows what it is nested in. `follow={hero}` is not expressible in TSX (nothing can name another object, and M4 did not define a way), so `follow` is a runtime field for code that is not compiled |
 | M13 `<AnimatedSprite>` | Not started | n/a | Needs M5a (frame lists). Sprite-sheet playback; `transformIntrinsics` |
 | M14 `<Pointer>` | Not started | n/a | Needs M4 (callback props). Clickable hit area; `transformIntrinsics` |
 | M15 `useSound` | Not started | n/a | Needs M1 and the hook machinery from M3. A handle called in handlers; no transform, because sounds are not placed |
@@ -342,8 +342,8 @@ function Level() {
 }
 ```
 
-- **Following a target** needs a prop that takes another object, so it waits for M4's callback and prop machinery. `follow` is an object prop, not a ref (refs hold values only). The mock resolves the target's `worldTransform()` each frame. The exact way a component names one of its own children to pass it on is decided in M4.
-- **Runtime:** `Camera extends GameObject` with `zoom`; `Camera.viewTransform()` returns the inverse of `worldTransform()` composed with zoom.
+- **Following a target** needs a prop that takes another object, so it waits for M4's callback and prop machinery. `follow` is an object prop, not a ref (refs hold values only). The mock resolves the target's `worldTransform()` each frame. The exact way a component names one of its own children to pass it on is decided in M4. *Outcome:* M4 did not define one, so `follow={hero}` cannot be written; see [DESIGN.md](DESIGN.md#camera). A camera follows what it is nested in, and `follow` is a runtime field for code that is not compiled.
+- **Runtime:** `Camera extends GameObject` with `zoom`; `Camera.viewTransform()` returns the inverse of `worldTransform()` composed with zoom (as a canvas-style matrix, since the inverse of a scaled and rotated transform is not itself a scale-then-rotate transform), with `worldToView` and `viewToWorld`.
 - **Manifest:** `intrinsics` and `transformIntrinsics`, since the camera's own position is its view.
 - **Tests:** moving the camera changes the view transform without changing any object's world transform; following a target keeps the view on it after the target moves.
 
@@ -551,12 +551,12 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M12 `<Camera>`
 
-- [ ] Runtime `Camera` with `zoom` and `viewTransform()`; manifest entries
-- [ ] `follow` prop lowered through M4's prop machinery
-- [ ] `docs/DESIGN.md` updated
-- [ ] At least one example uses it; `npm run example` regenerated and committed
-- [ ] Tests cover view-only moves and following a target
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Runtime `Camera` with `zoom`, `viewTransform()`, `worldToView` and `viewToWorld`; manifest entries (`intrinsics`, `transformIntrinsics`, `intrinsicMembers`)
+- [ ] ~~`follow` prop lowered through M4's prop machinery~~ not expressible: nothing in a component can name another object. Replaced by following through nesting, plus a runtime `follow` field for code that is not compiled (see the note in the section above)
+- [x] `docs/DESIGN.md` updated ("Camera", the built-in lists)
+- [x] `Level.tsx` has a camera that zooms in at wave 6; `npm run example` regenerated and committed
+- [x] Tests cover view-only moves, following by nesting and by `follow`, conversions and their inverse, errors, and the compiled forms (`camera.test.ts`, `m12.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M13 `<AnimatedSprite>`
 

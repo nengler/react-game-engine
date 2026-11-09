@@ -1,4 +1,4 @@
-import { useState, useRef, useUpdate, Entity, Sprite, Collider, Shape, Text } from "@rge/runtime/jsx";
+import { useState, useRef, useUpdate, Camera, Entity, Sprite, Collider, Shape, Text } from "@rge/runtime/jsx";
 import Coin, { Trail } from "./Coin.tsx";
 import { Banner } from "./Banner.tsx";
 import { Panel } from "./Panel.tsx";
@@ -56,6 +56,8 @@ function Level() {
   const bossVisible = defeats.some((d) => d.tint === "blue") && defeats.length >= 2;
   return (
     <Entity name="Level">
+      {/* The view: centred on this point, and zoomed in from wave 6. */}
+      <Camera zoom={wave > 5 ? 2 : 1} transform={{ x: 160, y: 120 }} />
       {spawns.map((s) => (
         <Enemy
           key={s.id}

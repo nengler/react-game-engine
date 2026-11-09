@@ -14,6 +14,7 @@ import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
 import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
+import type { CameraProps } from "./components/Camera.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
@@ -116,4 +117,12 @@ export function Text(_props: TextAttributes): JSX.Element {
 /** A filled rectangle or circle, for debugging colliders and prototyping before art exists. */
 export function Shape(_props: ShapeProps): JSX.Element {
   return compileTimeOnly("Shape");
+}
+
+/**
+ * The viewport. Its `transform` is the view (moving it pans, `zoom` magnifies).
+ * To follow something, put the camera inside it: `<Entity name="Hero"><Camera /></Entity>`.
+ */
+export function Camera(_props: CameraProps): JSX.Element {
+  return compileTimeOnly("Camera");
 }
