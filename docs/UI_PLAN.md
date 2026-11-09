@@ -2,7 +2,14 @@
 
 As of 2026-11-09. A proposal, written to sit next to priority 3 in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md) (the screen-space HUD layer). Nothing here is built yet. Push back on any decision below before work starts, as [DESIGN.md](DESIGN.md) asks.
 
-## Summary
+The plan has two parts that are designed together:
+
+1. **Layout** (milestones U0–U4): a `<Flex>` built-in that places its children in a row or a column, as CSS flexbox does.
+2. **A fixed game resolution** (milestones C1–C3, [Part 2](#part-2-a-fixed-game-resolution-canvas)): a `<Canvas width={320} height={180}>` at the root, so the game is drawn at 320 × 180 whatever size the window is, and scaled up to fit.
+
+They meet at one point: everything that today means "the window" (the size `<Screen>` and `Flex fill` take, the point the camera centres on, the mouse position) means "the canvas" once a `<Canvas>` exists. A HUD designed for 320 × 180 then looks the same in a 640 × 360 window as in a full-screen 4K one.
+
+## Summary of part 1
 
 Games need UI: a score in a corner, a health bar, a pause menu, a row of buttons. Today every one of those is placed by hand with `transform={{ x, y }}`. The demo's click button is a `Shape`, a `Pointer` and a `Text`, each given its own coordinates, and the label is centred by guessing (`x: 92` inside a box at `x: 80`). Change the label and the guess is wrong.
 
@@ -274,3 +281,187 @@ If games later need wrapping, `min`/`max` sizes, or absolute positioning inside 
 | Scrolling containers | Needs clipping (a scissor op in the ABI) | A long settings menu or a chat log |
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |
 | Focus and keyboard or gamepad navigation between buttons | Needs gamepads first (a "Not now" item in NEXT_PRIORITIES) | A console-style menu |
+
+# Part 2: a fixed game resolution (`<Canvas>`)
+
+## Summary
+
+Today a game is drawn at the window's size, one game pixel to one window pixel. A pixel-art game at 320 × 180 in a 1280 × 720 window is drawn in the top-left quarter. A resized window shows more of the world, not a bigger one. HUD positions written for one window size are wrong at another.
+
+This part adds a root built-in that separates the two sizes:
+
+```tsx
+export default function Game() {
+  return (
+    <Canvas width={320} height={180} fit="integer" border="black">
+      <World />
+      <Screen>
+        <Hud />
+      </Screen>
+    </Canvas>
+  );
+}
+```
+
+- **The game size** is the `<Canvas>`'s `width` and `height`: 320 × 180. Everything inside is written in those units: transforms, the camera's view, `<Screen>`, `Flex fill`, the mouse position. The game never needs to know the window's size.
+- **The screen size** is the window's: the starting size in `PlayerConfig` (`width: 1280, height: 720`), and then whatever the player resizes it to, or the monitor's size when full screen comes. The player scales the canvas to fit it each frame, and fills the leftover space with `border`.
+
+| Milestone | What | Size (estimate) |
+| --- | --- | --- |
+| C1 | `<Canvas>` with `pixelPerfect={false}`: drawn at window resolution through a scale. No ABI change | \~3–4 days |
+| C2 | `pixelPerfect`: drawn into a 320 × 180 texture, then scaled up. One ABI op, in ABI v2 | \~3–4 days |
+| C3 | The demo on a canvas; `fit="expand"`; full screen on a key | \~2–3 days |
+
+C1 can be done before priority 3, because it needs no ABI change. C2 goes in ABI v2 with priority 3's `<Screen>` and U0's measuring functions, so the version still moves only once.
+
+## The two sizes
+
+| | Game size | Screen size |
+| --- | --- | --- |
+| Set by | `<Canvas width height>` in the game's TSX | `PlayerConfig.width`/`height` to start; the window's real size after that |
+| Changes when | The game changes the props (a settings menu could) | The player resizes the window, or goes full screen |
+| What uses it | Everything inside the game: transforms, the camera, `<Screen>`, `Flex fill`, `input.pointerX`, `input.width`/`height` | Only the player: to scale the canvas and place the borders, and to map the mouse back |
+| Without a `<Canvas>` | The same as the screen size, as today | |
+
+**Why the window's size stays in `PlayerConfig`, not on `<Canvas>`.** The window opens before the root is built (`config.root()` runs once the window and sounds are ready, so sounds created in constructors preload). The player cannot know a `<Canvas>`'s props until after the window exists. The window's size is also the host's business: the user resizes it, and a packaged game might save it between runs. So the game says what resolution it is drawn at, and the window is whatever it is. One small change helps: `PlayerConfig.width`/`height` become optional, and when they are left out with a `<Canvas>` at the root, the window opens at 3 × the canvas (960 × 540 for 320 × 180). The window is resized to that once the root is built.
+
+## Props
+
+| Prop | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `width`, `height` | pixels | required | The game's resolution |
+| `fit` | `"integer"`, `"contain"`, `"stretch"` | `"integer"` | How the canvas is scaled into the window (below) |
+| `pixelPerfect` | boolean | `true` | Draw at the game's resolution and scale the finished frame up (chunky), or draw at the window's resolution through a scale (smooth) |
+| `border` | a CSS colour | `"black"` | The bars around the canvas when it does not fill the window |
+
+The canvas's own background is the existing `PlayerConfig.background`: inside the canvas it is the clear colour, and outside it, `border`.
+
+### `fit`: how the canvas is scaled
+
+For a 320 × 180 canvas in a window of a given size:
+
+| `fit` | Scale | 1280 × 720 window | 1000 × 600 window | Use |
+| --- | --- | --- | --- | --- |
+| `"integer"` | The largest whole number that fits | ×4, no bars | ×3 (960 × 540), bars of 20 px left and right, 30 px top and bottom | Pixel art: every game pixel is the same number of screen pixels, so nothing shimmers |
+| `"contain"` | The largest scale that fits, any number | ×4 | ×3.125 (1000 × 562.5), bars top and bottom | Smooth art, or pixel art where filling the window matters more |
+| `"stretch"` | Each axis on its own | ×4 | ×3.125 by ×3.33: distorted, no bars | Rarely; for completeness |
+
+The canvas is centred, and the bars are drawn in `border`. `"integer"` falls back to `"contain"` when the window is smaller than the canvas (a scale below 1), so the game is never cut off.
+
+A later fourth mode, `"expand"`, keeps the height at 180 game pixels and widens the canvas to the window's shape (320 × 180 at 16:9, 384 × 180 at a 21:9 monitor), so there are no bars and a wide screen shows more of the world. It is in C3, because then the game size is no longer fixed, and `Flex fill` and the HUD must cope with a canvas width that changes.
+
+### `pixelPerfect`: two ways to draw
+
+| | `pixelPerfect={true}` (default) | `pixelPerfect={false}` |
+| --- | --- | --- |
+| How | Every record is drawn into a 320 × 180 texture, which is then drawn scaled up into the window with nearest-neighbour filtering | Every record is drawn straight into the window, through a view that scales by the fit's factor |
+| A sprite turned 10° | Stays made of big, square game pixels | Is turned smoothly at the window's resolution, so its pixels become small diamonds ("mixels") |
+| Moving half a pixel | Snaps to the next game pixel | Moves smoothly at screen resolution |
+| Text | At 320 × 180, raylib's default font is big and blocky | Sharp at any size |
+| Needs | A new draw op in ABI v2, and a render texture in librge | Nothing new in the ABI: it is only a different view matrix |
+
+Most pixel-art games want `true`. Games with drawn or vector art, or with lots of small text, want `false`. A HUD with sharp text over chunky pixel art (drawing `<Screen>` at window resolution over a pixel-perfect world) is a reasonable later option; see "Not in this plan".
+
+## How it fits the engine
+
+### The runtime: a container built-in that must be the root
+
+`Canvas` is a runtime class with the fields above, a container like `Entity` and `Camera`, added to the manifest in the same places `Flex` is. A component whose root element is `<Canvas>` extends `Canvas` (that is how components work already), so the player finds it by checking `world.root instanceof Canvas` once per frame. Reading its fields every frame means a game can change its resolution or `fit` from state, for example in a settings menu.
+
+A `<Canvas>` anywhere but the root has nothing sensible to mean, so it draws its children as an `Entity` would, with a warning once: "A `<Canvas>` only works as the root of the game." The compiler cannot catch this on its own, because whether a component ends up at the root depends on another file (`PlayerConfig.root`).
+
+`Canvas` does not move its children: it has no transform of its own to apply, and a `transform` on it is rejected (it is left out of `transformIntrinsics`), like a sound would be.
+
+### The player: one canvas-to-window map
+
+All the work is in the player, in TypeScript, keeping NATIVE_PLAN's "the C side does no maths" rule. Each frame, `FrameBuilder.build` works out, from the canvas's props and the window's size:
+
+- `scale` (or `scaleX` and `scaleY` for `"stretch"`), and
+- `dest`: the rectangle in the window the canvas is drawn into.
+
+It then uses them in four places:
+
+1. **The camera's view.** `#view` centres the followed point on the canvas's centre (160, 90), not the window's. Today it adds `width / 2` and `height / 2` of the window; with a canvas, it adds the canvas's.
+2. **`<Screen>`.** Its view is the identity in canvas units (so a HUD at `x: 8` is 8 game pixels in), and its layout box for `Flex fill` is 320 × 180.
+3. **Drawing.** With `pixelPerfect={false}`, each `RGE_OP_VIEW` record is multiplied by the canvas-to-window map (`a, b, c, d` by the scale; `e, f` scaled, then offset by `dest`). Then the bars are drawn as up to four rectangle records, through a last identity view in window pixels. That uses priority 3's "a later view replaces the current one" rule. With `pixelPerfect={true}`, the views stay in canvas units, and the frame starts with the new `RGE_OP_CANVAS` record instead (next section).
+4. **The mouse.** `PlayerInput` takes the window position back through the same map: `canvasX = (mouseX − dest.x) / scale`. `input.pointerX` (world) and the press dispatch (`Pointer`s) start from that point. `input.width`/`height` report the canvas's size, which is what game code means by "the screen". The window's size stays available to the player only. A press in the border bars is outside the canvas and reaches no `Pointer`.
+
+Without a `<Canvas>`, the map is the identity and `dest` is the whole window, so everything behaves exactly as today. That is the test that C1 changes nothing for existing games: every recording test still passes untouched.
+
+### The ABI (C2 only): `RGE_OP_CANVAS`
+
+`pixelPerfect` needs librge to draw into an off-screen texture and then draw that texture into the window. raylib does both (`LoadRenderTexture`, `BeginTextureMode`, `DrawTexturePro`). The proposal is a new record, which must be the first in a frame when present:
+
+```
+RGE_OP_CANVAS   op, width, height, destX, destY, destW, destH, borderColor
+```
+
+When librge sees it:
+
+1. It makes sure it has a render texture of `width` × `height`, with point filtering, (re)creating it only when the size changes.
+2. It draws every following record into that texture, cleared to the frame's clear colour.
+3. It clears the window to `borderColor` and draws the texture into `dest`, flipped the right way up (raylib render textures are upside down).
+
+The player computes `dest`, so librge does no layout maths: it only copies a rectangle where it is told. Both hosts pass records through without reading them, so neither host changes. The work is in `rge.h`, `protocol.ts` (and its parity test), `rge.c`, `smoke.c` (draw a 32 × 18 canvas into a 128 × 72 hidden window and check a pixel is 4 × 4), and the recording backend's decoder.
+
+This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` and U0's two measuring functions. All three should land together.
+
+### Where things interact
+
+- **Camera zoom** still works inside the canvas: `zoom={2}` on a 320 × 180 canvas shows 160 × 90 of the world, drawn at 320 × 180, then scaled to the window.
+- **`Flex` under `<Screen>`** lays out in game pixels. A 16 px padding is 16 game pixels, which is 64 screen pixels at ×4. That is the point: the HUD scales with the game.
+- **Text measuring** (U0) is in game pixels too. With `pixelPerfect={true}`, text at size 8 is 8 game pixels tall, as drawn.
+- **Pixel snapping** (U4) rounds layout offsets to whole game pixels, which with `pixelPerfect={true}` is exactly the grid things are drawn on.
+- **High DPI** ("Not now" in NEXT_PRIORITIES) gets easier: the canvas is already a "logical resolution", so a Retina window only changes the window side of the map.
+- **Collisions** are in world units and are untouched.
+
+## Milestones
+
+### C1: `<Canvas>`, drawn smooth
+
+**Done when**
+
+- [ ] `Canvas` is a runtime class and in the manifest; `<Canvas transform>` is a compile error
+- [ ] `fit` is checked at compile time, like `<Shape kind>`
+- [ ] The player computes scale and `dest` for each `fit`, tested at several window sizes, including one smaller than the canvas
+- [ ] The camera centres on the canvas's centre; `<Screen>` (once priority 3 lands) is in canvas units
+- [ ] The mouse maps back through the canvas: a `Pointer` is pressed in the right place in a resized, letterboxed window, and a press in the bars hits nothing
+- [ ] `input.width`/`height` report the canvas's size
+- [ ] Bars are drawn in `border`; a pixel test checks one
+- [ ] A game with no `<Canvas>` produces byte-identical records to today (the existing recording tests pass unchanged)
+- [ ] A `<Canvas>` that is not the root warns once and behaves as an `Entity`
+
+### C2: `pixelPerfect`
+
+**Done when**
+
+- [ ] `RGE_OP_CANVAS` is in `rge.h` (ABI v2) and `protocol.ts`, and the header-parity test agrees
+- [ ] librge draws into a render texture, recreated only when the size changes, and scales it with point filtering
+- [ ] `smoke.c` checks that one canvas pixel becomes a 4 × 4 block of window pixels
+- [ ] A turned sprite stays on the game's pixel grid (a pixel test)
+- [ ] The parity test passes byte for byte under both hosts
+
+### C3: the demo, `expand` and full screen
+
+**Done when**
+
+- [ ] The demo runs on a `<Canvas>` (320 × 180 or 640 × 360), and its HUD (from U3) is laid out in canvas units
+- [ ] `fit="expand"` widens the canvas to the window's shape; `Flex fill` and the camera follow the changing width
+- [ ] `PlayerConfig.width`/`height` are optional with a root `<Canvas>`, and the window opens at 3 × the canvas
+- [ ] A full-screen toggle exists (a `PlayerConfig` key, or `useWindow().setFullscreen()`; see the decisions)
+
+## Decisions needed before work starts
+
+1. **Name.** `Canvas` says "the surface the game is drawn on". Alternatives: `Viewport` (but the camera is already described as the viewport in DESIGN.md), `Stage`, `Game` (clashes with the demo's own `Game` component and likely many others). Recommendation: `Canvas`.
+2. **Root component or `PlayerConfig` option.** The same thing could be `PlayerConfig.canvas: { width: 320, height: 180 }`. That is simpler for the player, because the size is known before the window opens. A component keeps the game's look with the game's code, can change from state, and reads as the frame of the whole game in the TSX. Recommendation: the component, as asked, with the window's size staying in the config.
+3. **Default for `pixelPerfect`.** `true` suits the 320 × 180 pixel-art case this was asked for. `false` is the safer default for anything else, because text stays sharp. Recommendation: `true`, since choosing a small fixed resolution usually means pixel art.
+4. **Full screen.** A key the player handles itself (Alt+Enter or F11, set in `PlayerConfig`), or a hook the game calls (`useWindow()`). A hook is a new intrinsic and needs a design note under the "hooks are compiler intrinsics" rule. Recommendation: the config key in C3, and a hook only when a settings menu needs it.
+
+## Not in this part, and what would pull it in
+
+| Item | Why it waits | What would pull it in |
+| --- | --- | --- |
+| A sharp HUD over a pixel-perfect world (`<Screen pixelPerfect={false}>`) | Two render paths in one frame; it needs `<Screen>` and C2 both working first | Small text in a pixel-art HUD that is hard to read |
+| Several canvases (split screen, a minimap) | Needs render targets as a general feature, not one canvas | A local multiplayer or minimap game |
+| Post-processing (CRT filter, palette shaders) | Needs shaders in the ABI | An art direction that asks for it |
+| Sub-pixel camera smoothing in `pixelPerfect` mode (drawing one pixel larger and offsetting the blit) | A refinement; slow pans may look a little steppy without it | A slow-scrolling game where the camera's steps show |
