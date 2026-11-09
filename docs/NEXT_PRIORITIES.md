@@ -146,14 +146,18 @@ flowchart LR
 
 ## Not now, and what would pull it in
 
-The rest of the backlog waits because nothing above depends on it, or because no game has asked for it yet. Each row names what would move it up.
+The rest of the backlog (the player's and the compiler's) waits because nothing above depends on it, or because no game has asked for it yet. Each row names what would move it up.
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
 | Sprite sheets, tint, opacity, pivot on `Sprite` | The demo needs none; each is a record field plus a prop | The first game with real art (likely right after priority 3) |
 | Fonts, text measuring and alignment | The default font works for a demo | A HUD (priority 3) that needs centred or right-aligned text |
-| Sound volume, looping music, overlapping plays | `useSound` covers one-shot effects | Any game with background music |
+| Sound volume, looping music, overlapping plays, a build-time asset check | `useSound` takes one literal path and covers one-shot effects | Any game with background music |
 | Web backend (canvas) | Records map directly onto canvas calls, so it stays cheap to add later | Wanting a shareable browser build |
 | Gamepads, high DPI, fixed timestep | Each slots into the ABI without rework | A controller game, a blurry Retina window, or physics |
 | One-file executable, prebuilt librge, macOS signing | Packaging as a folder works | Handing a build to people outside the team |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
+| Custom hooks (`function useHealth(max) { … }`) | Inlining them at compile time fits "hooks are compiler intrinsics", but no game needs them yet | Repeated hook logic across components |
+| Context (`createContext` / `useContext`) | Props cover today's trees | Deep trees passing the same prop down many levels |
+| Spread props, conditionals inside a list's `.map`, forwarding `{children}`, children on list items | Each is rejected today with a clear diagnostic | An author hitting one of those diagnostics in a real game |
+| Tiled importer gaps (`visible`, tile flip flags, whole-number `int` checks, template properties) | The importer covers the example maps | A map that uses them |
