@@ -90,16 +90,6 @@ describe("runtime manifest", () => {
     }
   });
 
-  it("keeps runtime-only members among the members, with a reason", () => {
-    for (const [tag, members] of Object.entries(runtimeManifest.intrinsicRuntimeOnly)) {
-      assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
-      for (const [name, reason] of Object.entries(members)) {
-        assert.ok(runtimeManifest.intrinsicMembers[tag]?.includes(name), `${tag}.${name} must be a member, so its name stays reserved`);
-        assert.ok(reason.length > 0, `${tag}.${name} needs a reason`);
-      }
-    }
-  });
-
   it("lists only intrinsics as transformable, including the host", () => {
     for (const tag of runtimeManifest.transformIntrinsics) assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
     assert.ok(runtimeManifest.transformIntrinsics.includes(runtimeManifest.hostIntrinsic));

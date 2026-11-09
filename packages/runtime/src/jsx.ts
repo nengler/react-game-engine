@@ -121,10 +121,11 @@ export function Shape(_props: ShapeProps): JSX.Element {
 }
 
 /**
- * The viewport. Its `transform` is the view (moving it pans, `zoom` magnifies).
- * To follow something, put the camera inside it: `<Entity name="Hero"><Camera /></Entity>`.
+ * The viewport. Its `transform` is the view (moving it pans, `zoom` magnifies),
+ * and it follows its children: `<Camera><Player /></Camera>` keeps the view on
+ * the player. With no children it stays where it is.
  */
-export function Camera(_props: CameraProps): JSX.Element {
+export function Camera(_props: CameraProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Camera");
 }
 

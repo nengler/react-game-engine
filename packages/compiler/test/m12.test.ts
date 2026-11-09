@@ -1,7 +1,6 @@
 /**
- * M12: `<Camera>`. The viewport: its own transform is the view, and `zoom`
- * magnifies. It follows something by being inside it (transforms nest); the
- * runtime also has a `follow` field for code that is not compiled.
+ * M12: `<Camera>`. The viewport: its own transform is the view, `zoom`
+ * magnifies, and it follows its children: `<Camera><Player /></Camera>`.
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -21,6 +20,46 @@ function Level() {
     <Entity name="Level">
       <Camera zoom={wave > 5 ? 2 : 1} transform={{ x: 160, y: 120 }} />
       <Sprite image="bg.png" />
+    </Entity>
+  );
+}
+
+function Player() {
+  const [x, setX] = useState(0);
+  useUpdate((dt) => setX((x) => x + dt * 10));
+  return (
+    <Entity name="Player" transform={{ x }}>
+      <Sprite image="player.png" />
+    </Entity>
+  );
+}
+
+function Game() {
+  const [pet, setPet] = useState(false);
+  return (
+    <Entity name="Game">
+      <Camera zoom={2}>
+        <Player />
+        {pet && <Sprite image="pet.png" transform={{ x: 100 }} />}
+      </Camera>
+    </Entity>
+  );
+}
+
+interface Unit {
+  id: string;
+  x: number;
+}
+
+function Swarm() {
+  const [units, setUnits] = useState<Unit[]>([]);
+  return (
+    <Entity name="Swarm">
+      <Camera>
+        {units.map((u) => (
+          <Entity key={u.id} name={u.id} transform={{ x: u.x }} />
+        ))}
+      </Camera>
     </Entity>
   );
 }
@@ -48,6 +87,17 @@ interface LevelInstance extends Entity {
   readonly camera: Camera;
   readonly sprite: Sprite;
 }
+interface PlayerInstance extends Entity {}
+interface GameInstance extends Entity {
+  setPet(value: boolean): void;
+  readonly camera: Camera;
+  readonly player: PlayerInstance;
+  sprite: Sprite | null;
+}
+interface SwarmInstance extends Entity {
+  setUnits(value: { id: string; x: number }[]): void;
+  readonly camera: Camera;
+}
 interface HeroInstance extends Entity {
   readonly camera: Camera;
 }
@@ -56,17 +106,23 @@ interface ViewInstance extends Camera {
 }
 
 let Level: new () => LevelInstance;
+let Game: new () => GameInstance;
+let Swarm: new () => SwarmInstance;
 let Hero: new () => HeroInstance;
 let View: new (props: { zoom: number }) => ViewInstance;
 
 before(async () => {
-  ({ Level, Hero, View } = await load<{ Level: typeof Level; Hero: typeof Hero; View: typeof View }>(compile(SOURCE, "Cam.tsx")));
+  ({ Level, Game, Swarm, Hero, View } = await load<{ Level: typeof Level; Game: typeof Game; Swarm: typeof Swarm; Hero: typeof Hero; View: typeof View }>(
+    compile(SOURCE, "Cam.tsx"),
+  ));
 });
 
 describe("M12: IR and generated code", () => {
   const compiled = compile(SOURCE, "Cam.tsx");
   const level = compiled.ir.components.find((c) => c.name === "Level")!;
   const camera = elementOf(level.root.children[0]!);
+  const game = compiled.ir.components.find((c) => c.name === "Game")!;
+  const wrapper = elementOf(game.root.children[0]!);
 
   it("makes zoom a dynamic prop over the state it reads, and the view's placement a static transform", () => {
     const zoom = camera.props.find((p) => p.name === "zoom")!;
@@ -75,10 +131,20 @@ describe("M12: IR and generated code", () => {
     assert.deepEqual(camera.transform.map((t) => [t.name, t.kind]), [["x", "StaticProp"], ["y", "StaticProp"]]);
   });
 
+  it("holds the children a camera follows as its own children", () => {
+    assert.deepEqual(wrapper.component, { kind: "Intrinsic", name: "Camera" });
+    assert.deepEqual(wrapper.children.map((c) => c.kind), ["StaticChild", "ConditionalChild"]);
+  });
+
   it("builds the camera and updates zoom in place", () => {
     assert.match(compiled.code, /readonly camera: Camera = new Camera\(\{ zoom: \(this\.wave > 5\) \? 2 : 1 \}\);/);
     assert.match(compiled.code, /this\.camera\.zoom = \(this\.wave > 5\) \? 2 : 1;/);
     assert.match(compiled.code, /this\.camera\.transform\.x = 160;/);
+  });
+
+  it("attaches the followed children to the camera, and mounts a conditional one there too", () => {
+    assert.match(compiled.code, /this\.camera\.addChild\(this\.player, 0\);/);
+    assert.match(compiled.code, /this\.camera\.queueAddChild\(this\.sprite, 1\);/);
   });
 
   it("makes a Camera-rooted component a Camera", () => {
@@ -100,37 +166,22 @@ describe("M12: authored source type-checks", () => {
       },
     ]);
 
-  it("accepts a zoom and a placement, and a camera with neither", () => {
+  it("accepts a zoom, a placement, and children to follow", () => {
     assert.deepEqual(check(`<Camera />`), []);
     assert.deepEqual(check(`<Camera zoom={n} transform={{ x: 10 }} />`), []);
+    assert.deepEqual(check(`<Camera zoom={2}><Entity name="player" /></Camera>`), []);
+    assert.deepEqual(check(`<Camera>{n > 0 && <Entity name="player" />}</Camera>`), []);
   });
 
-  it("rejects what the camera cannot be given: a follow target, a non-number zoom", () => {
-    assert.ok(check(`<Camera follow={n} />`).length > 0, "follow is not an authored prop");
+  it("rejects what a camera cannot be given: a follow prop, a non-number zoom, text", () => {
+    assert.ok(check(`<Camera follow={n} />`).length > 0, "there is no follow prop: wrap the target instead");
     assert.ok(check(`<Camera zoom="2" />`).length > 0);
+    assert.ok(check(`<Camera>player</Camera>`).length > 0);
   });
 
-  it("explains why follow cannot be written, and what to do instead, whatever it is given", () => {
-    for (const value of [`{hero}`, `{1}`, `"hero"`, ``]) {
-      const errors = compileErrors(`function C() { return <Entity name="C"><Camera follow${value ? `=${value}` : ""} /></Entity>; }`);
-      assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedAttribute], value);
-      assert.match(errors[0]!.message, /<Camera follow> cannot be set from JSX: nothing in a component can name another object, so a camera follows what it is inside/);
-    }
-  });
-
-  it("also rejects it on a camera that is a component's root", () => {
-    assert.deepEqual(compileErrors(`function C() { return <Camera follow={x} />; }`).map((d) => d.code), [DiagnosticCode.UnsupportedAttribute]);
-  });
-
-  it("keeps the runtime-only and method names reserved for a component rooted at a camera", () => {
-    for (const name of ["follow", "zoom", "viewTransform", "worldToView", "viewToWorld"]) {
-      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Camera />; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
-    }
-  });
-
-  it("does not apply to a component that merely has a prop with that name", () => {
-    assert.doesNotThrow(() => compile(`interface P { follow: number }\nfunction Child({ follow }: P) { return <Entity name="c" />; }\nfunction C() { return <Entity name="C"><Child follow={1} /></Entity>; }`));
+  it("reports a follow attribute at compile time, since nothing names it", () => {
+    const codes = compileErrors(`function C() { return <Entity name="C"><Camera follow={hero} /></Entity>; }`).map((d) => d.code);
+    assert.deepEqual(codes, [DiagnosticCode.UnknownIdentifier]);
   });
 });
 
@@ -148,7 +199,7 @@ describe("M12: runtime behaviour", () => {
     assert.deepEqual([camera.worldToView(161, 120).x, camera.worldToView(161, 120).y], [2, 0], "centred on its placement, magnified");
   });
 
-  it("pans without moving anything in the world", () => {
+  it("with no children, is where it is and pans without moving anything in the world", () => {
     const level = new Level();
     const sprite = level.sprite.worldTransform();
     assert.deepEqual(level.camera.worldToView(160, 120), { x: 0, y: 0 });
@@ -157,15 +208,54 @@ describe("M12: runtime behaviour", () => {
     assert.deepEqual(level.camera.worldToView(500, 120), { x: 0, y: 0 });
   });
 
-  it("follows the entity it is inside as that entity's state moves it", () => {
+  it("follows its child as the child's own state moves it", () => {
+    const world = new World();
+    const game = new Game();
+    world.mount(game);
+    assert.deepEqual(game.camera.worldToView(0, 0), { x: 0, y: 0 });
+    world.tick(3);
+    assert.equal(game.player.transform.x, 30);
+    assert.equal(game.player.worldTransform().x, 30, "the camera did not move the player, or zoom it");
+    assert.deepEqual(game.camera.worldToView(30, 0), { x: 0, y: 0 }, "the view is on the player");
+    assert.deepEqual(game.camera.worldToView(31, 0), { x: 2, y: 0 }, "and zoomed in");
+  });
+
+  it("centres on the middle of its children when a conditional one appears and leaves", () => {
+    const world = new World();
+    const game = new Game();
+    world.mount(game);
+    world.tick(1); // the player is at 10
+    game.setPet(true);
+    world.flush();
+    assert.equal(game.camera.children.length, 2, "the pet is a child of the camera");
+    assert.equal(game.sprite!.worldTransform().x, 100, "placed in the camera's parent's space");
+    const view = game.camera.worldToView(55, 0); // (10 + 100) / 2
+    assert.ok(Math.abs(view.x) < 1e-9 && Math.abs(view.y) < 1e-9, `${JSON.stringify(view)}`);
+    game.setPet(false);
+    world.flush();
+    assert.deepEqual(game.camera.worldToView(10, 0), { x: 0, y: 0 }, "back on the player");
+  });
+
+  it("follows the middle of a list of children as it grows and shrinks", () => {
+    const world = new World();
+    const swarm = new Swarm();
+    world.mount(swarm);
+    assert.deepEqual(swarm.camera.worldToView(0, 0), { x: 0, y: 0 }, "no children: where it is");
+    swarm.setUnits([{ id: "a", x: 0 }, { id: "b", x: 100 }]);
+    world.flush();
+    assert.deepEqual(swarm.camera.worldToView(50, 0), { x: 0, y: 0 });
+    swarm.setUnits([{ id: "b", x: 100 }, { id: "c", x: 300 }]);
+    world.flush();
+    assert.deepEqual(swarm.camera.worldToView(200, 0), { x: 0, y: 0 });
+  });
+
+  it("still follows the entity it is inside, by nesting, when it has no children of its own", () => {
     const world = new World();
     const hero = new Hero();
     world.mount(hero);
-    assert.deepEqual(hero.camera.worldToView(0, 0), { x: 0, y: 0 });
     world.tick(3);
-    assert.equal(hero.transform.x, 30);
-    assert.deepEqual(hero.camera.worldToView(30, 0), { x: 0, y: 0 }, "the view is on the hero");
-    assert.deepEqual(hero.camera.worldToView(31, 0), { x: 2, y: 0 }, "and zoomed in");
+    assert.deepEqual(hero.camera.worldToView(30, 0), { x: 0, y: 0 });
+    assert.deepEqual(hero.camera.worldToView(31, 0), { x: 2, y: 0 });
   });
 
   it("is a Camera when it is a component's root, and follows its props", () => {
@@ -183,5 +273,71 @@ describe("M12: runtime behaviour", () => {
     const view = new View({ zoom: 0 });
     assert.equal(view.zoom, 0);
     assert.throws(() => view.viewTransform(), /zoom must be a positive number/);
+  });
+});
+
+describe("M12: a camera rig passes what it follows through {children}", () => {
+  const RIG = `
+import { type Child, Camera, Entity, Sprite, useState, useUpdate } from "@rge/runtime/jsx";
+
+interface RigProps {
+  children: Child;
+}
+
+function Rig({ children }: RigProps) {
+  return <Camera zoom={3}>{children}</Camera>;
+}
+
+function Runner() {
+  const [x, setX] = useState(0);
+  useUpdate((dt) => setX((x) => x + dt * 4));
+  return <Entity name="Runner" transform={{ x }}><Sprite image="runner.png" /></Entity>;
+}
+
+function Stage() {
+  return (
+    <Entity name="Stage">
+      <Rig>
+        <Runner />
+      </Rig>
+    </Entity>
+  );
+}`;
+  interface StageInstance extends Entity {
+    readonly rig: Camera;
+    readonly runner: Entity;
+  }
+  let Stage: new () => StageInstance;
+  before(async () => {
+    ({ Stage } = await load<{ Stage: typeof Stage }>(compile(RIG, "Stage.tsx")));
+  });
+
+  it("type-checks the generated module", () => {
+    assert.deepEqual(typeCheck(compile(RIG, "Stage.tsx")), []);
+  });
+
+  it("follows the child a parent passes in", () => {
+    const world = new World();
+    const stage = new Stage();
+    world.mount(stage);
+    assert.ok(stage.rig instanceof Camera);
+    assert.equal(stage.runner.parent, stage.rig, "the passed child is mounted in the camera");
+    world.tick(5);
+    assert.equal(stage.runner.transform.x, 20);
+    assert.deepEqual(stage.rig.worldToView(20, 0), { x: 0, y: 0 });
+    assert.deepEqual(stage.rig.worldToView(21, 0), { x: 3, y: 0 }, "at the rig's zoom");
+  });
+});
+
+describe("M12: diagnostics", () => {
+  it("keeps the camera's own names reserved for a component rooted at one", () => {
+    for (const name of ["zoom", "viewTransform", "worldToView", "viewToWorld", "childSpace"]) {
+      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Camera />; }`).map((d) => d.code);
+      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+    }
+  });
+
+  it("does not apply to a component that merely has a prop called follow", () => {
+    assert.doesNotThrow(() => compile(`interface P { follow: number }\nfunction Child({ follow }: P) { return <Entity name="c" />; }\nfunction C() { return <Entity name="C"><Child follow={1} /></Entity>; }`));
   });
 });

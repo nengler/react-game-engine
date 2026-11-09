@@ -22,7 +22,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M6 Prefabs and scenes | Done | #16 | Per-module `prefabs` registry, project `prefabs.ts` / `prefabs.json`, `rge-compile --scenes` (validation with line, column and JSON path; `RGE15xx`), `loadScene`, a Tiled `.tmj` importer. Also closes M0's gap: cross-file static cycles are now detected |
 | M10 `<Text>` | Done | #17 | `<Text size color>Score: {score}</Text>` or `text={…}`: both are one `text` prop (a template when text and expressions mix), updated in place. Needs the new manifest entry `textContent`, which says which built-ins take JSX text |
 | M11 `<Shape>` | Done | #18 | `<Shape kind="rect" \| "circle" width height color>`. A literal `kind` is checked against the manifest's new `intrinsicLiterals` (`RGE1210`, with a did-you-mean); other expressions are left to the type-check, so a state-driven kind works |
-| M12 `<Camera>` | Done | #19 | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`; a camera follows what it is nested in. `follow={hero}` is not expressible in TSX (nothing can name another object, and M4 did not define a way), so `follow` is a runtime field for code that is not compiled |
+| M12 `<Camera>` | Done | #19, then the follow-its-children redesign | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`. A camera follows its children: `<Camera><Player /></Camera>` (the middle of their positions when there are several), and is transparent to their transforms (`GameObject.childSpace()`). This replaced the plan's `follow={hero}`, which nothing in a component could express |
 | M13 `<AnimatedSprite>` | In review | #20 | `frames` (a fixed list is built once, a varying one is re-assigned and restarts the animation only when its contents differ), `fps`, `playing`. Advancing is not state: no renders. The first built-in with its own `onUpdate`, so a component rooted at it calls `super` first (the manifest's new `intrinsicHooks`) |
 | M14 `<Pointer>` | Not started | n/a | Needs M4 (callback props). Clickable hit area; `transformIntrinsics` |
 | M15 `useSound` | Not started | n/a | Needs M1 and the hook machinery from M3. A handle called in handlers; no transform, because sounds are not placed |
@@ -335,17 +335,20 @@ The viewport. A camera's `transform` is the view: a renderer draws the world thr
 function Level() {
   return (
     <Entity>
-      <Camera zoom={2} follow={hero} />
-      <Hero />
+      <Camera zoom={2}>
+        <Hero />
+      </Camera>
     </Entity>
   );
 }
 ```
 
-- **Following a target** needs a prop that takes another object, so it waits for M4's callback and prop machinery. `follow` is an object prop, not a ref (refs hold values only). The mock resolves the target's `worldTransform()` each frame. The exact way a component names one of its own children to pass it on is decided in M4. *Outcome:* M4 did not define one, so `follow={hero}` cannot be written; see [DESIGN.md](DESIGN.md#camera). A camera follows what it is nested in, and `follow` is a runtime field for code that is not compiled.
+*Revised.* The first sketch was `<Camera zoom={2} follow={hero} />`. It needed a way for a component to name another object, which the language does not have, so the camera **follows its children** instead (see below and [DESIGN.md](DESIGN.md#camera)).
+
+- **Following a target** is done by wrapping it: the camera is a container (`containerIntrinsics`) and centres on its children, on the middle of their world positions when there are several. The camera is transparent to its children (`GameObject.childSpace()`; the camera overrides it to return its parent's), so following a child never moves it, and the camera's own `transform` is an offset from the followed point. A camera with no children is where its transform puts it, and one nested *inside* an entity moves with it by ordinary transform nesting.
 - **Runtime:** `Camera extends GameObject` with `zoom`; `Camera.viewTransform()` returns the inverse of `worldTransform()` composed with zoom (as a canvas-style matrix, since the inverse of a scaled and rotated transform is not itself a scale-then-rotate transform), with `worldToView` and `viewToWorld`.
-- **Manifest:** `intrinsics` and `transformIntrinsics`, since the camera's own position is its view.
-- **Tests:** moving the camera changes the view transform without changing any object's world transform; following a target keeps the view on it after the target moves.
+- **Manifest:** `intrinsics`, `transformIntrinsics` and `containerIntrinsics`, since the camera's own position is its view and it holds the children it follows.
+- **Tests:** moving the camera changes the view transform without changing any object's world transform; the view stays on a child after it moves; several, conditional and listed children; children are not moved by the camera.
 
 ## M13 — `<AnimatedSprite>` (~1 week, needs M5a)
 
@@ -551,11 +554,11 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M12 `<Camera>`
 
-- [x] Runtime `Camera` with `zoom`, `viewTransform()`, `worldToView` and `viewToWorld`; manifest entries (`intrinsics`, `transformIntrinsics`, `intrinsicMembers`)
-- [ ] ~~`follow` prop lowered through M4's prop machinery~~ not expressible: nothing in a component can name another object. Replaced by following through nesting, plus a runtime `follow` field for code that is not compiled, and a clear `RGE1203` for `follow` in JSX via the manifest's new `intrinsicRuntimeOnly` (see the note in the section above)
+- [x] Runtime `Camera` with `zoom`, `viewTransform()`, `worldToView` and `viewToWorld`; manifest entries (`intrinsics`, `transformIntrinsics`, `containerIntrinsics`, `intrinsicMembers`)
+- [x] Follows its children (replacing the unwritable `follow={hero}`): centres on the middle of their world positions; transparent to their transforms through `GameObject.childSpace()`; its own `transform` is an offset from the followed point
 - [x] `docs/DESIGN.md` updated ("Camera", the built-in lists)
-- [x] `Level.tsx` has a camera that zooms in at wave 6; `npm run example` regenerated and committed
-- [x] Tests cover view-only moves, following by nesting and by `follow`, conversions and their inverse, errors, and the compiled forms (`camera.test.ts`, `m12.test.ts`)
+- [x] `Level.tsx` wraps its third enemy in a camera that zooms in at wave 6; `npm run example` regenerated and committed
+- [x] Tests cover view-only moves, following one, several, conditional and listed children, children not being moved, the offset in a scaled parent, a camera rig through `{children}`, conversions and their inverse, errors, and the compiled forms (`camera.test.ts`, `m12.test.ts`)
 - [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M13 `<AnimatedSprite>`

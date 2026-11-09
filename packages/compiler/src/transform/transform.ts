@@ -1079,11 +1079,6 @@ class ComponentLowering implements LoweringContext {
         this.#error(DiagnosticCode.InvalidUseRef, "Elements cannot be referenced: refs hold values (`const timer = useRef(0)`), and what is on screen is driven by state and props.", attribute);
         continue;
       }
-      const runtimeOnly = toComponent ? undefined : this.#manifest.intrinsicRuntimeOnly[tag]?.[name];
-      if (runtimeOnly !== undefined) {
-        this.#error(DiagnosticCode.UnsupportedAttribute, `<${tag} ${name}> cannot be set from JSX: ${runtimeOnly}`, attribute);
-        continue;
-      }
       const init = attribute.initializer;
       let value: ExprIR | null;
       if (!init) value = { kind: "BooleanLiteral", value: true };

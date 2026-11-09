@@ -211,8 +211,17 @@ export class GameObject<P extends object = {}> {
    * placement ignores the parent; a `global` transform ignores both.
    */
   worldTransform(): WorldTransform {
-    const parent = this.parent === null ? IDENTITY_TRANSFORM : this.parent.worldTransform();
+    const parent = this.parent === null ? IDENTITY_TRANSFORM : this.parent.childSpace();
     return composeTransforms(composeTransforms(parent, this.placement), this.transform);
+  }
+
+  /**
+   * The space this object's children are placed in: its own world transform.
+   * An object that is transparent to its children overrides it (a `Camera`
+   * follows its children, so they must not move with it).
+   */
+  childSpace(): WorldTransform {
+    return this.worldTransform();
   }
 
   /** Request a render pass for this object. */

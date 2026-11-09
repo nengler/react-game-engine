@@ -96,41 +96,84 @@ describe("Camera view", () => {
   });
 });
 
-describe("Camera follow", () => {
-  it("tracks a target set from code, with the camera's own x and y as an offset", () => {
-    const target = new Entity();
-    target.transform.x = 300;
-    target.transform.y = 200;
+describe("Camera children", () => {
+  it("centres the view on its child and keeps it there as the child moves", () => {
     const camera = new Camera();
-    camera.transform.x = 5;
-    camera.follow = target;
-    assert.deepEqual(viewOf(camera, 305, 200), [0, 0]);
-    target.transform.x = 400;
-    assert.deepEqual(viewOf(camera, 405, 200), [0, 0], "the view stays on the target after it moves");
+    const player = new Entity();
+    player.transform.x = 300;
+    player.transform.y = 200;
+    camera.addChild(player);
+    assert.deepEqual(viewOf(camera, 300, 200), [0, 0]);
+    player.transform.x = 400;
+    assert.deepEqual(viewOf(camera, 400, 200), [0, 0], "the view stays on the player after it moves");
+    assert.deepEqual(viewOf(camera, 410, 200), [10, 0]);
   });
 
-  it("uses the target's world position, wherever it is in the tree", () => {
-    const outer = new Entity();
-    outer.transform.x = 1000;
-    const target = new Entity();
-    target.transform.x = 50;
-    outer.addChild(target);
-    const camera = new Camera();
-    camera.follow = target;
-    assert.deepEqual(viewOf(camera, 1050, 0), [0, 0]);
+  it("does not move its children: they are placed in its parent's space, as if it were not there", () => {
+    const camera = new Camera({ zoom: 3 });
+    camera.transform.x = 500;
+    camera.transform.rotation = 1;
+    camera.transform.scaleX = 4;
+    camera.placement.y = 70;
+    const player = new Entity();
+    player.transform.x = 10;
+    camera.addChild(player);
+    const at = player.worldTransform();
+    assert.deepEqual([at.x, at.y, at.rotation, at.scaleX], [10, 0, 0, 1], "exactly its own transform");
   });
 
-  it("goes back to its own position when the target is cleared", () => {
-    const target = new Entity();
-    target.transform.x = 300;
+  it("places its children in the space of its parent, scale and rotation included", () => {
+    const parent = new Entity();
+    parent.transform.x = 100;
+    parent.transform.scaleX = 2;
+    parent.transform.scaleY = 2;
+    const camera = new Camera();
+    const player = new Entity();
+    player.transform.x = 10;
+    camera.addChild(player);
+    parent.addChild(camera);
+    assert.equal(player.worldTransform().x, 120, "100 + 10 × 2, as if the player were the parent's own child");
+    assert.deepEqual(viewOf(camera, 120, 0), [0, 0]);
+  });
+
+  it("centres on the middle of several children", () => {
+    const camera = new Camera();
+    const [a, b, c] = [new Entity(), new Entity(), new Entity()];
+    b.transform.x = 100;
+    b.transform.y = 40;
+    c.transform.x = 20;
+    c.transform.y = 20;
+    camera.addChild(a);
+    camera.addChild(b);
+    camera.addChild(c);
+    const middle = camera.viewToWorld(0, 0);
+    close(middle.x, 40);
+    close(middle.y, 20);
+  });
+
+  it("is where it is, as before, with no children, and goes back when the last one leaves", () => {
     const camera = new Camera();
     camera.transform.x = 10;
-    camera.follow = target;
-    camera.follow = null;
+    assert.deepEqual(viewOf(camera, 10, 0), [0, 0]);
+    const player = new Entity();
+    player.transform.x = 300;
+    camera.addChild(player);
+    assert.deepEqual(viewOf(camera, 310, 0), [0, 0], "its own x is an offset from the player now");
+    camera.removeChild(player);
     assert.deepEqual(viewOf(camera, 10, 0), [0, 0]);
   });
 
-  it("keeps a nested camera's offset in its parent's space, so toggling follow does not make the view jump", () => {
+  it("uses its own transform as an offset from the followed point", () => {
+    const camera = new Camera();
+    camera.transform.x = 5;
+    camera.transform.y = -8;
+    const player = new Entity();
+    player.transform.x = 300;
+    camera.addChild(player);
+    assert.deepEqual(viewOf(camera, 305, -8), [0, 0]);
+  });
+
+  it("keeps the offset in its parent's space, so adding a child at the parent's own position changes nothing", () => {
     const parent = new Entity();
     parent.transform.x = 100;
     parent.transform.scaleX = 2;
@@ -138,36 +181,71 @@ describe("Camera follow", () => {
     const camera = new Camera();
     camera.transform.x = 10; // 20 world units from the parent, because the parent is scaled
     parent.addChild(camera);
-    assert.deepEqual(viewOf(camera, 120, 0), [0, 0], "not following: at the parent plus the scaled offset");
-    const target = new Entity();
-    target.transform.x = 500;
-    camera.follow = target;
+    assert.deepEqual(viewOf(camera, 120, 0), [0, 0], "no children: at the parent plus the scaled offset");
+    const atParent = new Entity();
+    camera.addChild(atParent);
+    assert.deepEqual(viewOf(camera, 120, 0), [0, 0], "a child at the parent's position: the same view");
+    atParent.transform.x = 200; // 400 world units on
     const [x, y] = viewOf(camera, 520, 0);
-    close(x, 0, "following: at the target plus the same scaled offset");
+    close(x, 0, "following a child 400 away, with the same scaled offset");
     close(y, 0);
-    camera.follow = parent;
-    assert.deepEqual(viewOf(camera, 120, 0), [0, 0], "following its own parent changes nothing");
   });
 
-  it("measures the offset of a global camera from the origin", () => {
+  it("measures the offset of a global camera from the origin, while its children stay in its parent's space", () => {
     const parent = new Entity();
     parent.transform.x = 900;
     const camera = new Camera();
-    camera.transform.global = true;
+    camera.transform.global = true; // the camera's own transform ignores the parent...
     camera.transform.x = 5;
     parent.addChild(camera);
-    const target = new Entity();
-    target.transform.x = 300;
-    camera.follow = target;
-    assert.deepEqual(viewOf(camera, 305, 0), [0, 0]);
+    const player = new Entity();
+    player.transform.x = 300;
+    camera.addChild(player);
+    assert.equal(player.worldTransform().x, 1200, "...but its children are still placed in the parent's space");
+    assert.deepEqual(viewOf(camera, 1205, 0), [0, 0], "the player at 1200, plus the camera's offset of 5");
   });
 
-  it("keeps the camera's own rotation and zoom while following", () => {
-    const target = new Entity();
-    target.transform.x = 100;
+  it("keeps its own rotation and zoom while following", () => {
     const camera = new Camera({ zoom: 2 });
-    camera.follow = target;
+    const player = new Entity();
+    player.transform.x = 100;
+    camera.addChild(player);
     assert.deepEqual(viewOf(camera, 101, 0), [2, 0]);
+    camera.transform.rotation = Math.PI / 2;
+    const [x, y] = viewOf(camera, 100, 10);
+    close(x, 20, "a point below the player is to the right, magnified");
+    close(y, 0);
+  });
+
+  it("follows a grandchild's world position through its child, which is placed in the same space", () => {
+    const camera = new Camera();
+    const group = new Entity();
+    group.transform.x = 50;
+    const player = new Entity();
+    player.transform.x = 25;
+    group.addChild(player);
+    camera.addChild(group);
+    assert.deepEqual(viewOf(camera, 50, 0), [0, 0], "it follows its child, the group, not what is inside it");
+  });
+
+  it("is transparent through nested cameras", () => {
+    const outer = new Camera();
+    outer.transform.x = 7;
+    const inner = new Camera();
+    const player = new Entity();
+    player.transform.x = 40;
+    inner.addChild(player);
+    outer.addChild(inner);
+    assert.equal(player.worldTransform().x, 40);
+  });
+
+  it("leaves every other object placing its children in its own space", () => {
+    const entity = new Entity();
+    const child = new Entity();
+    entity.transform.x = 9;
+    entity.addChild(child);
+    assert.equal(entity.childSpace().x, 9, "an ordinary object places its children in its own space");
+    assert.equal(child.worldTransform().x, 9);
   });
 });
 

@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import { IDENTITY_TRANSFORM, type WorldTransform } from "../Transform.ts";
 
 export interface CameraProps {
   /** Magnification of the view: 2 draws everything twice as large. Must be positive. Default 1. */
@@ -35,29 +36,45 @@ export interface Point {
  * Moving a camera never changes any object's `worldTransform()`: the view is
  * applied on top of the world, not into it.
  *
- * To follow something, make the camera its child (`<Entity><Camera /></Entity>`):
- * transforms nest, so the view moves with it. Code that is not compiled
- * (a game loop, a scene loader) can instead set `follow`.
+ * **A camera follows its children**: `<Camera><Player /></Camera>` keeps the view
+ * on the player as it moves. With several children it centres on the middle of
+ * their positions. The camera is transparent to its children's transforms (see
+ * `childSpace`): they are placed in the camera's parent's space, as if the
+ * camera were not there, which is what lets it follow them without moving them.
+ * Its own `transform` is then an offset from the followed point; with no
+ * children it is where the camera is.
  */
 export class Camera<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 
   zoom: number;
-  /**
-   * An object the camera tracks, set from code (it cannot be written in JSX:
-   * nothing in a component names another object). While set, the camera's
-   * anchor (its parent's position, or the origin when it has none or is
-   * `global`) is moved to the target's world position. The camera keeps its own
-   * offset from that anchor, transformed as usual by its parent, so toggling
-   * `follow` never makes the view jump by more than the move to the target; its
-   * rotation and scale are its own.
-   */
-  follow: GameObject | null = null;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: CameraProps = {}, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
     this.zoom = hostProps.zoom ?? DEFAULT_ZOOM;
+  }
+
+  /**
+   * A camera does not move its children: they are placed in its parent's space
+   * (or the world's), as if it were not there. Otherwise following them would be
+   * circular, since a child's position would depend on a camera that depends on it.
+   */
+  override childSpace(): WorldTransform {
+    return this.parent === null ? IDENTITY_TRANSFORM : this.parent.childSpace();
+  }
+
+  /** The middle of the children's world positions, or null with no children. */
+  #childrenCentre(): Point | null {
+    if (this.children.length === 0) return null;
+    let x = 0;
+    let y = 0;
+    for (const child of this.children) {
+      const at = child.worldTransform();
+      x += at.x;
+      y += at.y;
+    }
+    return { x: x / this.children.length, y: y / this.children.length };
   }
 
   /**
@@ -72,9 +89,12 @@ export class Camera<P extends object = {}> extends GameObject<P> {
     if (world.scaleX === 0 || world.scaleY === 0) throw new RangeError("A camera cannot have a scale of 0: it would see nothing.");
     let x = world.x;
     let y = world.y;
-    if (this.follow !== null) {
-      const target = this.follow.worldTransform();
-      const anchor = this.transform.global || this.parent === null ? { x: 0, y: 0 } : this.parent.worldTransform();
+    const target = this.#childrenCentre();
+    if (target !== null) {
+      // Move the camera's anchor (its parent's position, or the origin when it has none or is `global`) to the
+      // children's centre. The camera keeps its own offset from the anchor, transformed as usual by its parent,
+      // so the offset means the same thing with or without children.
+      const anchor = this.transform.global || this.parent === null ? { x: 0, y: 0 } : this.parent.childSpace();
       x += target.x - anchor.x;
       y += target.y - anchor.y;
     }

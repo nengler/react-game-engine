@@ -79,6 +79,7 @@ export class Level extends Entity {
   readonly enemyItems: Map<string | number, Enemy> = new Map();
   #enemyOrder: (string | number)[] = [];
   #enemyRecords: Map<string | number, { current: Level["spawns"][number] }> = new Map();
+  readonly camera: Camera = new Camera({ zoom: (this.wave > 5) ? 2 : 1 });
   enemy2: Enemy | null = null;
   readonly panel: Panel = new Panel({ title: "hud" });
   readonly coin: Coin = new Coin({ value: this.score });
@@ -89,10 +90,10 @@ export class Level extends Entity {
   collider: Collider | null = null;
   animatedSprite: AnimatedSprite | null = null;
   banner: Banner | null = null;
-  readonly camera: Camera = new Camera({ zoom: (this.wave > 5) ? 2 : 1 });
 
   constructor() {
     super({ name: "Level" });
+    this.addChild(this.camera, 1);
     this.panel.placement.x = 160;
     this.addChild(this.panel, 2);
     this.panel.attachPassedChild(this.coin, 0);
@@ -101,9 +102,6 @@ export class Level extends Entity {
     this.panel.attachPassedChild(this.trail, 1);
     this.text.transform.y = 40;
     this.panel.attachPassedChild(this.text, 2);
-    this.camera.transform.x = 160;
-    this.camera.transform.y = 120;
-    this.addChild(this.camera, 4);
     this.render();
     this.commitStructure();
   }
@@ -184,15 +182,16 @@ export class Level extends Entity {
         this.#enemyOrder = $keys;
       }
     }
+    this.camera.zoom = (this.wave > 5) ? 2 : 1;
     if (this.wave >= 3) {
       if (this.enemy2 === null) {
         this.enemy2 = new Enemy({ speed: this.wave });
         this.enemy2.placement.x = 120;
-        this.queueAddChild(this.enemy2, 1);
+        this.camera.queueAddChild(this.enemy2, 0);
       }
       this.enemy2.updateProps({ speed: this.wave });
     } else if (this.enemy2 !== null) {
-      this.queueRemoveChild(this.enemy2);
+      this.camera.queueRemoveChild(this.enemy2);
       this.enemy2 = null;
     }
     this.coin.updateProps({ value: this.score });
@@ -226,7 +225,6 @@ export class Level extends Entity {
       this.animatedSprite = null;
       this.banner = null;
     }
-    this.camera.zoom = (this.wave > 5) ? 2 : 1;
   }
 }
 
