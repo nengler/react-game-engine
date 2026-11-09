@@ -70,7 +70,8 @@ function Level() {
           }}
         />
       ))}
-      {wave >= 3 && <Enemy speed={wave} transform={{ x: 120 }} />}
+      {/* The camera follows its children: once the third enemy arrives the view centres on it, and zooms in from wave 6. */}
+      <Camera zoom={wave > 5 ? 2 : 1}>{wave >= 3 && <Enemy speed={wave} transform={{ x: 120 }} />}</Camera>
       <Panel title="hud" transform={{ x: 160 }}>
         <Coin value={score} />
         <Trail value={wave} transform={{ x: 40, y: 20 }} />
@@ -88,8 +89,6 @@ function Level() {
           <Banner text="boss" onDone={() => setWave((wave) => wave + 1)} />
         </Entity>
       )}
-      {/* The view: centred on this point, and zoomed in from wave 6. */}
-      <Camera zoom={wave > 5 ? 2 : 1} transform={{ x: 160, y: 120 }} />
     </Entity>
   );
 }

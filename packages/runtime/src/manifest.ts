@@ -40,13 +40,6 @@ export interface RuntimeManifest {
    */
   readonly intrinsicHooks: Readonly<Record<string, readonly string[]>>;
   /**
-   * Members of an intrinsic that exist for code that is not compiled and cannot
-   * be set from JSX (`Camera.follow`), by intrinsic then name, each with the
-   * reason, which the compiler shows when an attribute names one. They stay in
-   * `intrinsicMembers`, so a component rooted at the intrinsic cannot reuse the name.
-   */
-  readonly intrinsicRuntimeOnly: Readonly<Record<string, Readonly<Record<string, string>>>>;
-  /**
    * Props each intrinsic's constructor requires. A component rooted at one
    * must pass them to `super()`, before any state exists, so a dynamic value
    * gets a placeholder there and its real value in the first `render()`.
@@ -97,7 +90,7 @@ export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
   intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity"],
+  containerIntrinsics: ["Entity", "Camera"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -105,7 +98,7 @@ export const runtimeManifest: RuntimeManifest = {
     Collider: ["width", "height", "onCollisionEnter"],
     Text: ["text", "size", "color"],
     Shape: ["kind", "width", "height", "color"],
-    Camera: ["zoom", "follow", "viewTransform", "worldToView", "viewToWorld"],
+    Camera: ["zoom", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: ["fps", "playing", "frame", "elapsed", "frames", "image"],
   },
   intrinsicRequired: {
@@ -123,12 +116,6 @@ export const runtimeManifest: RuntimeManifest = {
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },
   },
-  intrinsicRuntimeOnly: {
-    Camera: {
-      follow:
-        "nothing in a component can name another object, so a camera follows what it is inside: put the <Camera /> in the entity to follow. Code that is not compiled can set camera.follow.",
-    },
-  },
   intrinsicCallbacks: {
     Collider: { onCollisionEnter: [{ name: "other", type: "GameObject" }] },
   },
@@ -137,7 +124,7 @@ export const runtimeManifest: RuntimeManifest = {
     // `updateProps` is generated into every component that has props, so a field may not take the name.
     "name", "props", "applyProps", "updateProps", "transform", "placement", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure",
-    "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure",
+    "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "runRender", "commitState", "render",
     "onInput", "onUpdate", "onMount", "onUnmount",

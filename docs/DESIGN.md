@@ -665,7 +665,8 @@ across edits in Tiled; group layers flatten. `rotation` is converted from
 degrees to radians. A tile object (one with a `gid`) is anchored at its bottom
 left in Tiled, an entity at its top left, so the importer moves the anchor
 along the object's own rotated up axis. An object with no class is skipped
-with a warning. Not handled: Tiled's `visible` flag (a hidden object is still an
+with a warning. A layer's `offsetx` / `offsety`, and those of every group it is in,
+shift its objects, because Tiled shows them there. Not handled: Tiled's `visible` flag (a hidden object is still an
 entity), tile flip flags in a `gid`, whether an `int` property is whole, and
 properties inherited from object templates.
 
@@ -776,11 +777,13 @@ a state, ref or prop may not use.
 
 ## Camera
 
-`<Camera>` (M12) is the viewport. Its own transform is the view, and `zoom`
-(default 1, must be positive) magnifies:
+`<Camera>` (M12) is the viewport. Its own transform is the view, `zoom`
+(default 1, must be positive) magnifies, and **it follows its children**:
 
 ```tsx
-<Camera zoom={wave > 5 ? 2 : 1} transform={{ x: 160, y: 120 }} />
+<Camera zoom={wave > 5 ? 2 : 1}>
+  <Player />
+</Camera>
 ```
 
 **The view.** A renderer draws the world through the inverse of the camera's
@@ -801,39 +804,45 @@ the renderer. `viewTransform()` recomputes from the tree each call, so it is
 never stale; a renderer should fetch it once per frame and apply it to
 everything, rather than call `worldToView` per point.
 
-**Following something.** Put the camera inside it:
+**Following its children.** The camera is a container (`containerIntrinsics`),
+and the view is centred on its children: on the player in `<Camera><Player
+/></Camera>`, wherever the player's own state moves it. With several children it
+centres on the middle of their world positions; conditional children and a
+list (`<Camera>{units.map(…)}</Camera>`) work as anywhere, and the view moves as
+they come and go. This replaces what the plan sketched, `<Camera follow={hero} />`:
+that needed a way for a component to name another object, which nothing in the
+language provides (element refs were removed in M3 and state holds data, not
+objects), and wrapping the target says the same thing with nothing new.
 
-```tsx
-<Entity name="Hero" transform={{ x }}>
-  <Sprite image="hero.png" />
-  <Camera zoom={2} />
-</Entity>
-```
+**The camera is transparent to its children.** Following a child that the camera
+also moves would be circular (the child's position would depend on a camera that
+depends on it), so the camera does not move its children: they are placed in the
+camera's *parent's* space, exactly as if the camera were not there. This is one
+runtime hook, `GameObject.childSpace()` (the space an object's children are
+placed in; its own world transform by default), which `worldTransform()` uses
+and `Camera` overrides. So `<Entity transform={{ x: 100 }}><Camera><Player
+transform={{ x: 10 }} /></Camera></Entity>` puts the player at 110, and the
+camera's own `transform`, `placement`, `zoom` and `global` never touch it.
 
-Transforms nest, so the view moves with the hero, with no new mechanism, and
-the camera's own `transform` is an offset from the hero.
+**The camera's own transform** is an offset from the followed point: the
+camera's anchor (its parent's position, or the origin when it has no parent or is
+`global`) moves to the children's centre, and the camera keeps its own offset from
+that anchor, transformed as usual by its parent. So the offset means the same
+thing with or without children, and adding a child at the parent's own position
+changes nothing. The camera's rotation, scale and zoom stay its own. With no
+children it is simply where its transform puts it, as before, and a camera
+*inside* an entity (`<Entity><Camera /></Entity>`) still moves with it by
+ordinary transform nesting.
 
-**What cannot be written.** The plan sketched `<Camera follow={hero} />`, which
-needs a way for a component to name another object. Nothing does: element refs
-were removed in M3 (refs hold values only), state holds data and not objects, and
-M4 did not define one. So `follow` is not an authored prop: `CameraProps` has
-only `zoom`, the source type-check rejects it, and the compiler says why
-(`RGE1203`, from the manifest's `intrinsicRuntimeOnly`, which any intrinsic can
-use for a member that exists for code that is not compiled). It exists on the
-runtime `Camera` for such code (a game loop, a scene loader): `camera.follow =
-hero` moves the camera's *anchor* (its parent's position, or the origin when it
-has no parent or is `global`) to the target's world position. The camera keeps
-its own offset from that anchor, transformed as usual by its parent, so a nested
-camera does not jump when `follow` is toggled, and following its own parent
-changes nothing. Its rotation, scale and zoom stay its own. Other ways to the same view from TSX: nest the camera in the target, or
-lift the target's position into a parent's state and pass it down
-(`<Camera transform={{ x: heroX, y: heroY }} />`). If following arbitrary
-objects from TSX matters, it needs an object-reference mechanism of its own,
-which is a design decision rather than a Camera feature.
+**Through `{children}`.** A component can wrap its children in a camera
+(`const Rig = ({ children }) => <Camera zoom={3}>{children}</Camera>`), and
+`<Rig><Runner /></Rig>` follows the runner: passed children mount in the camera
+(M8).
 
 **As a root.** A component may be a `Camera`
 (`const View = ({ zoom }) => <Camera zoom={zoom} />`): the class extends
-`Camera`, and `zoom` and `follow` become names a state, ref or prop may not use.
+`Camera`, and `zoom`, `viewTransform`, `worldToView`, `viewToWorld` and
+`childSpace` become names a state, ref or prop may not use.
 
 ## AnimatedSprite
 
@@ -1211,8 +1220,7 @@ generated fields must not shadow (`reservedMembers`), the handle types handler
 parameters may have (`InputState`, `GameObject`) with their readable members,
 the runtime functions handler code may call (`clamp`), and which built-ins take
 their JSX text as a prop (`textContent`), which of their props take one of a
-fixed set of strings (`intrinsicLiterals`), and which members exist for code that
-is not compiled and cannot be set from JSX (`intrinsicRuntimeOnly`), and which hooks they implement
+fixed set of strings (`intrinsicLiterals`), and which hooks they implement
 themselves (`intrinsicHooks`, so a component rooted at one calls `super`). The compiler takes
 it as `CompilerConfig.manifest` (default: the runtime's own), so adding an
 intrinsic or a handle type is a runtime-only edit. A runtime test fails if a
