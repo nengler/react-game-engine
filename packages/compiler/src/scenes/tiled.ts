@@ -29,6 +29,9 @@ interface TiledObject {
 interface TiledLayer {
   readonly type?: unknown;
   readonly name?: unknown;
+  /** Pixels the layer (and, for a group, everything in it) is shifted by. */
+  readonly offsetx?: unknown;
+  readonly offsety?: unknown;
   readonly objects?: unknown;
   readonly layers?: unknown;
 }
@@ -64,17 +67,20 @@ export function importTiled(fileName: string, text: string): TiledImport {
     return { scene: { version: SCENE_VERSION, entities }, diagnostics };
   }
 
-  const visit = (layers: readonly TiledLayer[]): void => {
+  // A layer's offset shifts its objects, and a group's shifts everything inside it: Tiled shows them there, so the entity goes there.
+  const visit = (layers: readonly TiledLayer[], dx: number, dy: number): void => {
     for (const layer of layers) {
-      if (layer.type === "group" && Array.isArray(layer.layers)) visit(layer.layers as TiledLayer[]); // groups flatten
+      const x = dx + (typeof layer.offsetx === "number" ? layer.offsetx : 0);
+      const y = dy + (typeof layer.offsety === "number" ? layer.offsety : 0);
+      if (layer.type === "group" && Array.isArray(layer.layers)) visit(layer.layers as TiledLayer[], x, y); // groups flatten
       else if (layer.type === "objectgroup" && Array.isArray(layer.objects)) {
         const layerName = typeof layer.name === "string" ? layer.name : "layer";
-        for (const object of layer.objects as TiledObject[]) importObject(layerName, object);
+        for (const object of layer.objects as TiledObject[]) importObject(layerName, object, x, y);
       }
     }
   };
 
-  const importObject = (layerName: string, object: TiledObject): void => {
+  const importObject = (layerName: string, object: TiledObject, dx: number, dy: number): void => {
     const label = `layer '${layerName}', object ${String(object.id)}${typeof object.name === "string" && object.name ? ` ('${object.name}')` : ""}`;
     // `class` is where Tiled 1.9 and later keep what older versions called `type`.
     const prefab = typeof object.class === "string" && object.class !== "" ? object.class : typeof object.type === "string" ? object.type : "";
@@ -87,8 +93,8 @@ export function importTiled(fileName: string, text: string): TiledImport {
       return;
     }
     const rotation = typeof object.rotation === "number" ? (object.rotation * Math.PI) / 180 : 0; // degrees clockwise → radians
-    let x = object.x;
-    let y = object.y;
+    let x = object.x + dx;
+    let y = object.y + dy;
     // A tile object is anchored at its bottom left; an entity's origin is its top left. Move the anchor along the
     // object's own (rotated) up axis, so a rotated tile lands where Tiled shows it.
     if (typeof object.gid === "number" && typeof object.height === "number") {
@@ -120,6 +126,6 @@ export function importTiled(fileName: string, text: string): TiledImport {
     });
   };
 
-  visit(map.layers as TiledLayer[]);
+  visit(map.layers as TiledLayer[], 0, 0);
   return { scene: { version: SCENE_VERSION, entities }, diagnostics };
 }

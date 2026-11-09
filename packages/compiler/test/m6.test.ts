@@ -363,6 +363,28 @@ describe("M6: the Tiled importer", () => {
     assert.deepEqual([turned.transform.x, turned.transform.y], [116, 100]);
   });
 
+  it("shifts objects by their layer's offset, and by every enclosing group's", () => {
+    const { scene } = importTiled(
+      "m.tmj",
+      map([
+        { type: "group", name: "Outer", offsetx: 100, offsety: 10, layers: [
+          { type: "group", name: "Inner", offsetx: 20, layers: [{ type: "objectgroup", name: "Deep", offsetx: 3, offsety: 4, objects: [{ id: 1, class: "Marker", x: 1, y: 2 }] }] },
+          { type: "objectgroup", name: "Sibling", objects: [{ id: 2, class: "Marker", x: 1, y: 2 }] },
+        ] },
+        { type: "objectgroup", name: "Plain", objects: [{ id: 3, class: "Marker", x: 1, y: 2 }] },
+      ]),
+    );
+    const at = (id: string) => scene.entities.find((e) => e.id === id)!.transform;
+    assert.deepEqual(at("Deep/1"), { x: 1 + 100 + 20 + 3, y: 2 + 10 + 0 + 4 });
+    assert.deepEqual(at("Sibling/2"), { x: 1 + 100, y: 2 + 10 }, "the group's offset, not its sibling's");
+    assert.deepEqual(at("Plain/3"), { x: 1, y: 2 }, "nothing outside the group is shifted");
+  });
+
+  it("applies an offset to a tile object's anchor too", () => {
+    const { scene } = importTiled("m.tmj", map([{ type: "objectgroup", name: "T", offsetx: 50, offsety: 50, objects: [{ id: 1, class: "Marker", gid: 5, x: 100, y: 100, height: 16 }] }]));
+    assert.deepEqual(scene.entities[0]!.transform, { x: 150, y: 134 });
+  });
+
   it("skips an object with no class, with a warning, and reports property types it cannot hold", () => {
     const { scene, diagnostics } = importTiled("m.tmj", map([objects({ id: 1, name: "spawn", x: 0, y: 0 }, { id: 2, class: "Enemy", x: 0, y: 0, properties: [{ name: "target", type: "object", value: 3 }, { name: "speed", type: "float", value: "fast" }] })]));
     assert.deepEqual(scene.entities.map((e) => e.id), ["Things/2"], "the skipped object is not an entity");

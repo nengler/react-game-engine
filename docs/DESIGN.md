@@ -665,7 +665,8 @@ across edits in Tiled; group layers flatten. `rotation` is converted from
 degrees to radians. A tile object (one with a `gid`) is anchored at its bottom
 left in Tiled, an entity at its top left, so the importer moves the anchor
 along the object's own rotated up axis. An object with no class is skipped
-with a warning. Not handled: Tiled's `visible` flag (a hidden object is still an
+with a warning. A layer's `offsetx` / `offsety`, and those of every group it is in,
+shift its objects, because Tiled shows them there. Not handled: Tiled's `visible` flag (a hidden object is still an
 entity), tile flip flags in a `gid`, whether an `int` property is whole, and
 properties inherited from object templates.
 
