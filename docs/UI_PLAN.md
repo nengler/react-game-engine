@@ -33,7 +33,7 @@ So the order is: priority 3 (with U0's additions in ABI v2), then U2–U5. U1 is
 
 | Milestone | What | Size (estimate) |
 | --- | --- | --- |
-| U0 | ABI v2 also carries `rge_measure_text` (width and line height), `rge_texture_size`, and, if decided, a scissor record (done as part of priority 3) | \~2 days on top of priority 3 |
+| U0 | ABI v2 also carries `rge_measure_text` (width and line height), `rge_texture_size`, and a scissor record (done as part of priority 3) | \~2 days on top of priority 3 |
 | U1 | A layout offset on every object, and a measuring interface in the player | **Done** |
 | U2 | `<Flex>`: the built-in, the sizing modes, the four passes, alignment, `background` | \~1–1.5 weeks |
 | U3 | The HUD box, shrinking to minimum sizes, and the demo's HUD rewritten with it | \~3–4 days |
@@ -142,7 +142,7 @@ The pressable area is the laid-out box (U4), so the button needs no hand-sized `
 - **Children are laid out in tree order.** That is the order of `children`, which already follows the JSX: a conditional child that turns on takes its position among its siblings, and a keyed list keeps its items' order. When a conditional child turns off, the ones after it close up, as they would in the DOM.
 - **A child's own `transform` does not move its slot; it moves the child within it.** This is CSS's rule for `transform` and `position: relative`: layout decides where the box goes, and `transform={{ y: -4 }}` nudges it from there without pushing its neighbours. So a button can bounce on press, or a HUD element can slide in, without disturbing the row. Rotation and scale work the same way: they do not change the space a child takes.
 - **Leaves keep their size.** `grow`, `stretch`, percentages and shrinking resize only a child that is itself a `Flex`; a `Shape`, `Sprite` or `Text` keeps the size its own props give it, as an element with a fixed width does in CSS. Resizing a `Shape` from layout would fight its `render()`, which sets `width` every time it runs. To stretch a coloured box, use a `Flex` with a `background`.
-- **Overflow is visible.** When children cannot shrink enough, they overflow the box, as in CSS without `overflow: hidden`. Clipping needs a scissor record (U0's decision).
+- **Overflow is visible.** When children cannot shrink enough, they overflow the box, as in CSS without `overflow: hidden`. Clipping will use the scissor record U0 adds.
 - **Layout runs every frame, before drawing.** What a handler reads from `worldTransform()` (or a `Pointer` hit-tests against) is where the object was drawn last frame. That matches the player's existing rule that a press uses last frame's pointers, and Clay's: its hover test also uses the previous layout's boxes.
 
 ## How each kind of child is measured
@@ -228,7 +228,7 @@ void rge_texture_size(int32_t handle, int32_t *width, int32_t *height); /* 0 × 
 
 Each function needs: the header, `protocol.ts` (the parity test reads the header), librge's implementation and `smoke.c`, the Node host's koffi binding, the Rust host's `ffi.rs` and its QuickJS binding in `backend.rs`, and the recording backend. `FrameBuilder` caches both answers (U1 already does): texture sizes per handle; text sizes per `(text, size)`, cleared after 1,024 strings so a running timer does not grow the cache without end. A changing score costs one native call per new value, not one per frame.
 
-**A scissor record (a decision).** Clay's renderer needs only rectangles, borders, text, images and scissor regions. This engine's records already cover rectangles, text and images. A scissor (clip) record is what scroll containers, and `overflow: hidden`-style boxes, need:
+**A scissor record (decided: in ABI v2).** Clay's renderer needs only rectangles, borders, text, images and scissor regions. This engine's records already cover rectangles, text and images. A scissor (clip) record is what scroll containers, and `overflow: hidden`-style boxes, need:
 
 ```
 RGE_OP_SCISSOR      op, x, y, width, height   (window pixels; the player maps the box through the view)
@@ -267,7 +267,7 @@ So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI
 - [ ] `rge_measure_text` (width and line height) and `rge_texture_size` are in `rge.h` as part of ABI v2, and `protocol.ts` and the header-parity test agree
 - [ ] `smoke.c` measures a string and a loaded texture
 - [ ] Both hosts and the recording backend implement `measureText` and `textureSize`, and `FrameBuilder` uses the measured line height
-- [ ] If decided: `RGE_OP_SCISSOR`/`RGE_OP_SCISSOR_END` in `rge.h`, `smoke.c` checks a clipped rectangle, and the recording backend decodes them
+- [ ] `RGE_OP_SCISSOR`/`RGE_OP_SCISSOR_END` are in `rge.h`, `smoke.c` checks a clipped rectangle, and the recording backend decodes them
 - [ ] The parity test still passes byte for byte
 
 ### U1: the layout offset and the measurer
@@ -336,12 +336,12 @@ Decided on 2026-11-09:
 4. ~~**Whether `onPress` belongs on `Flex`.**~~ Yes: `<Flex onPress>` is pressable over its laid-out box (U4), so a button needs no hand-sized `Pointer`.
 5. ~~**How layout sizes things.**~~ Clay's algorithm, with the CSS prop names kept (see "The model: Clay").
 
-Still open:
+Also decided on 2026-11-09, each as recommended:
 
-6. **One prop per axis, or separate props.** `width={120}`, `width="grow"`, `width="50%"` in one prop reads like CSS and Clay, but needs the compiler's sizing check. The alternative is separate props (`width`, `growX`, `percentX`), each a plain number or boolean, with no compiler change. Recommendation: one prop, as above.
-7. **Grow weights.** Clay grows equally, smallest first; CSS's `flex-grow: 2` takes twice the share. Recommendation: Clay's way only, and a `growWeight` prop if a game asks for one.
-8. **Scissor in ABI v2.** Recommendation: yes. It is small now, and later it would need ABI v3.
-9. **Floating props (U5).** `float`/`anchor`/`to`/`offsetX`/`offsetY` as above, or a separate `<Float>` built-in. Recommendation: props on `Flex`, so a floating box is still a `Flex` with all its sizing.
+6. ~~**One prop per axis, or separate props.**~~ One prop: `width={120}`, `width="grow"`, `width="50%"`, as in CSS and Clay, with the compiler's sizing check. Separate props (`growX`, `percentX`) were the alternative.
+7. ~~**Grow weights.**~~ Clay's way only: growing siblings share free space equally, smallest first. A `growWeight` prop can come if a game asks for one.
+8. ~~**Scissor in ABI v2.**~~ Yes: `RGE_OP_SCISSOR` and `RGE_OP_SCISSOR_END` go into ABI v2 with U0, so clipping needs no ABI v3 later.
+9. ~~**Floating props (U5).**~~ Props on `Flex` (`float`, `anchor`, `to`, `offsetX`, `offsetY`), so a floating box is still a `Flex` with all its sizing; no separate `<Float>` built-in.
 
 ## Not in this plan, and what would pull it in
 
@@ -351,7 +351,7 @@ Still open:
 | Wrapping rows (`flex-wrap`) | A HUD row rarely wraps | An inventory grid; or a separate `Grid` built-in |
 | Aspect-ratio boxes | Nothing in a HUD needs one | A portrait or a minimap frame that must keep its shape while growing |
 | Borders and rounded corners on `background` | Needs new draw records (outline, rounded rectangle), as Clay's renderer has | The first real menu design |
-| Scrolling containers | Needs the scissor record (decision 8) and scroll state | A long settings menu or a chat log |
+| Scrolling containers | Needs scroll state, on top of the scissor record U0 adds | A long settings menu or a chat log |
 | Layout transitions (animating size and position changes) | Clay has them; a game can animate `transform` today | A menu that should slide or resize smoothly |
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |
 | Focus and keyboard or gamepad navigation between buttons | Needs gamepads first (a "Not now" item in NEXT_PRIORITIES) | A console-style menu |
