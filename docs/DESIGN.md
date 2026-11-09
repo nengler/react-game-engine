@@ -27,7 +27,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs |
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | React's snapshot semantics: reads see the value from the last render; setters queue, updaters chain on the pending value, and `commitState()` applies them just before the render. Every handler in a frame sees the same state (decided 2026-11-08) |
-| Global state | One nested store, Zustand-style: `GameState.ts` is real code, `export const useGame = createGameState({ coins: 0, player: { hp: 10 } })`. A component uses a leaf **exactly as `useState`**: `const [hp, setHp] = useGame((s) => s.player.hp)`, with a plain-path selector the compiler checks and subscribes to. Same updater form, same snapshot semantics. No actions. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
+| Global state | One nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
 | Refs | Refs hold values only (`const timer = useRef(0)`; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) |
@@ -1076,54 +1076,74 @@ Options such as `volume` come later.
 ## Global state (`createGameState`)
 
 `useState` is one component's own state. The **game state** belongs to the game: a score, hit points, a mute switch,
-shared by every component that uses it. It is one nested object, created once, and a component uses a leaf of it
-**exactly as it uses `useState`**: a value and a setter, with the same updater form and the same snapshot semantics
-(decided 2026-11-09). A selector names the leaf, in the style of Zustand.
+shared by every component. It is one nested object, shaped like a **Zustand store**: you read it with a selector that
+returns the value, and you change it with actions that call `set` (decided 2026-11-09, after two attempts that
+were not Zustand's own way).
 
 ```ts
 // GameState.ts, in the source directory. An ordinary module: the game runs it.
 import { createGameState } from "@rge/runtime";
 
-export const useGame = createGameState({ coins: 0, player: { hp: 10, name: "Ada" } });
+interface State {
+  coins: number;
+  player: { hp: number; name: string };
+  collect: () => void;
+  hurt: () => void;
+}
+
+export const useGame = createGameState<State>()((set, get) => ({
+  coins: 0,
+  player: { hp: 10, name: "Ada" },
+  collect: () => set((s) => ({ coins: s.coins + 1 })),
+  hurt: () => set((s) => ({ player: { ...s.player, hp: s.player.hp - 1 } })),
+}));
 ```
 
 ```tsx
-// Hud.tsx: reads                    // Player.tsx: writes, reads nothing
+// Hud.tsx: access                    // Player.tsx: update
 import { useGame } from "./GameState.ts";
-const [hp] = useGame((s) => s.player.hp);         const [, setHp] = useGame((s) => s.player.hp);
-                                                  useUpdate(() => { if (hit) setHp((h) => h - 1); });
+const hp = useGame((s) => s.player.hp);          const hurt = useGame((s) => s.hurt);
+                                                  useUpdate(() => { if (hit) hurt(); });
 ```
 
+**Access.** `const hp = useGame((s) => s.player.hp)` returns the value, exactly as in Zustand. A component imports the
+store (`import { useGame } from "./GameState.ts"`; the only thing it may import from a relative `.ts` module,
+`RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. The selector must be a **plain path**
+from its parameter: that is all the compiler resolves, and it is what makes subscriptions exact. A component reads
+**leaves**: a path that names an object is an error, and a typo is `RGE1108` with the nearest key at the level it
+went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`). `hp` then behaves as `useState` state
+does: a snapshot of the last render, usable in JSX and handlers, with the leaf's type.
+
+**Update.** The way Zustand updates is `set`, inside the store: `set(partial)` or `set((state) => partial)`, and, as in
+Zustand, the partial is **shallow-merged**, so a nested object is replaced as a whole (spread the rest, as `hurt`
+does). A component picks an action with a selector, `const hurt = useGame((s) => s.hurt)`, and calls it as a statement
+in a handler, like a sound's play function: not in JSX or a derived value (it would run on every render), not in a
+state updater, not as a value. The compiler lowers `hurt(1)` to `useGame.getState().hurt(1)`, so TypeScript checks the
+arguments in the generated code as well as in your source. The action's body is plain TypeScript that the game runs;
+the compiler never lowers it. `get` is Zustand's too. `useGame.getState()` and `useGame.setState(partial | updater)`
+exist, as in Zustand, for code that is not a compiled component (tests, tools).
+
 **The schema is real code.** `GameState.ts` is imported by the generated files and runs in the game, under Node and
-under QuickJS, so TypeScript infers every type from it: what a selector returns and what the setter accepts. There
-is no separate declaration to keep in step. The compiler also *reads* it (it never runs it) to know the state tree.
-For that, the argument of `createGameState` must be an object literal whose leaves are number, string or boolean
-literals (a negative number is fine), nested as deep as you like; keys have no dots. Anything else is `RGE1109`.
-Arrays are not supported yet.
+under QuickJS, so TypeScript infers every type from it, and there is no separate declaration to keep in step. Both
+`createGameState<State>()(creator)` (as Zustand recommends with TypeScript) and `createGameState(creator)` work. The
+compiler also *reads* it (it never runs it) to know the state tree and the action names. For that, the creator must be
+an arrow function or function that returns an object literal, whose entries are number, string or boolean literals
+(a negative number is fine; a leaf's type is its literal's, so `0` is a `number`), nested objects of those, and, at the
+top level, functions (the actions). Anything else is `RGE1109`. Arrays are not supported yet. Keys have no dots.
 
-**The hook.** A component imports the store (`import { useGame } from "./GameState.ts"`; the only thing it may import
-from a relative `.ts` module, `RGE1108` otherwise) and calls it at the top level, destructured like `useState`:
-`const [hp, setHp] = useGame((s) => s.player.hp)`. The selector must be a **plain path** from its parameter: that is
-all the compiler resolves, and it is what makes subscriptions exact. It checks the path against the state tree, and a
-typo is `RGE1108` with the nearest key at the level it went wrong (`'player.hpp' … did you mean "player.hp"? 'player'
-has: hp, name`). A path that names an object is an error too: a component uses **leaves**, so it re-renders only when
-a leaf it reads changes. Either name may be left out (`const [, setHp] = …`) but not both. The setter takes a value or
-an updater (`setHp(5)`, `setHp((h) => h - 1)`), may be called in any handler, and is an error in `useUnmount` and
-when names collide, as for `useState`.
-
-**Semantics are `useState`'s.** Reads are a snapshot of the last render: a handler sees the same value all frame,
-whatever another component sets. A write takes effect in the store at once (a component built later in the frame
-starts from it, and updaters chain on the latest value) and marks every mounted component that reads that leaf dirty;
-they copy the new value into their own field in `commitState`, in the same flush, so a HUD shows a coin on the frame it
-was picked up. A write that does not change the value renders nothing. A component joins the subscribers when it joins
-a world and leaves when it leaves, and is refreshed once on joining, so it cannot miss a change made between its
-construction and its mounting. A component that only sets (`[, setHp]`) is **write-only**: it keeps no copy and is not
-told when the leaf changes, so it does not re-render for it.
+**Semantics.** Every `set` compares the old and new state leaf by leaf (a function is not a leaf) and marks dirty every
+mounted component that reads a leaf that changed, and only those: a replaced `player` object does not re-render the
+reader of `player.name` when only `hp` differs. Those components copy the new value into their own field in
+`commitState`, in the same flush, so a HUD shows a coin on the frame it was picked up, while every handler in that
+frame still saw the old snapshot. A `set` that changes no leaf renders nothing. A component joins the subscribers when it
+joins a world and leaves when it leaves, and is refreshed once on joining, so it cannot miss a change made between its
+construction and its mounting. A component that only binds actions reads nothing, so it keeps no copy and is never
+told of a change.
 
 **Where it lives.** `createGameState` makes a `GameStore` (also `useGame.store`); calling `useGame(...)` itself is
 compile-time only and throws, like the authoring hooks. `createPlayer` calls `resetGameState()`, which puts every store
-in the process back to its initial values, so each game starts fresh; tests that build components without a player call
-it between cases. Generated output for a reader and a setter:
+in the process back to the state its creator returned, so each game starts fresh; tests that build components without a
+player call it between cases. Generated output for a reader and an action:
 
 ```ts
 import { useGame } from "../src/GameState.ts";          // relative to the generated file; the CLI computes it
@@ -1131,20 +1151,18 @@ export class Hud extends Text {
   hp: number = useGame.store.get<number>("player.hp");
   override readonly gameStateStore = useGame.store;
   override readonly gameStateKeys: readonly string[] = ["player.hp"];
-  setHp(value: number | ((previous: number) => number)): void { useGame.store.set<number>("player.hp", value); }
   override commitState(): void { this.hp = useGame.store.get<number>("player.hp"); }
   …
 }
+// in a handler:  useGame.getState().hurt();
 ```
 
-The IR marks such a state `globalKey` (the dotted path), plus `writeOnly` when only the setter is bound. Handler
-statements are the same `SetState` as for `useState`. `gameStateStore` and `gameStateKeys` are reserved member names,
-like the other `GameObject` fields.
+The IR marks such a state `globalKey` (the dotted path) and has a `CallAction` statement. `gameStateStore` and
+`gameStateKeys` are reserved member names, like the other `GameObject` fields.
 
-**Not yet.** Named actions that bundle several writes (a possible addition: setters cover everything, but a rule like
-"hurt the player" is repeated at each call site), save and restore of the store, arrays and records in the state,
-derived values, and more than one store per project (one store per process, one `createGameState` call per project;
-the player resets it at start).
+**Not yet.** Zustand's `subscribe`, middleware and `replace`; `setState` inside a compiled handler (writes go through
+actions, which keeps what the compiler must understand small); save and restore of the store; arrays in the state;
+and more than one store per project (one store per process, one `createGameState` call per project).
 
 ## Props and callbacks
 

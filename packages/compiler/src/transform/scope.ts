@@ -6,6 +6,8 @@ export type Binding =
   | { readonly kind: "ref"; readonly id: RefId; readonly name: string }
   /** A `useSound` function: only called, as a statement in a handler. */
   | { readonly kind: "sound"; readonly id: SoundId; readonly name: string }
+  /** A game-state action (`const collect = useGame((s) => s.collect)`): only called, as a statement in a handler. */
+  | { readonly kind: "action"; readonly name: string; readonly action: string }
   /** A declared prop in scope as a plain name. A value reads `this.props.x`; a callback is only called (or forwarded whole). */
   | { readonly kind: "prop"; readonly name: string; readonly role: "value" | "callback" }
   /** The whole props object of `function Enemy(props: EnemyProps)`: only read as `props.speed` or called as `props.onDefeated?.()`. */

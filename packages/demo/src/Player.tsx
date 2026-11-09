@@ -8,9 +8,9 @@ import { useGame } from "./GameState.ts";
 export function Player() {
   const [x, setX] = useState(0);
   const [y, setY] = useState(0);
-  // Setters for two leaves of the game's state. The player only sets them, so a change never re-renders it.
-  const [, setCoins] = useGame((s) => s.stats.coins);
-  const [, setHits] = useGame((s) => s.stats.hits);
+  // Actions of the game's state: the player calls them and reads nothing, so a change never re-renders it.
+  const collect = useGame((s) => s.collect);
+  const hit = useGame((s) => s.hit);
   const [hurt, setHurt] = useState(false);
   // The direction held this frame: refs hold values that must not cause a render.
   const moveX = useRef(0);
@@ -36,10 +36,10 @@ export function Player() {
         layer="player"
         onCollisionEnter={(other) => {
           if (other.tag === "coin") {
-            setCoins((n) => n + 1);
+            collect();
           } else if (other.tag === "spikes") {
             setHurt(true);
-            setHits((n) => n + 1);
+            hit();
           }
         }}
         onCollisionExit={(other) => {

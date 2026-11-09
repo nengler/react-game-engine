@@ -1,15 +1,24 @@
 import { createGameState } from "@rge/runtime";
 
-/**
- * The game's state, in one place: a nested object. A component picks one leaf with a selector and gets a value and a
- * setter, exactly as `useState` gives them: `const [coins, setCoins] = useGame((s) => s.stats.coins)`. The compiler
- * reads this file to check those selectors; generated code imports it.
- */
-export const useGame = createGameState({
+interface State {
   stats: {
     /** Coins picked up. */
-    coins: 0,
+    coins: number;
     /** Times the player has touched the spikes. */
-    hits: 0,
-  },
-});
+    hits: number;
+  };
+  collect: () => void;
+  hit: () => void;
+}
+
+/**
+ * The game's state, in one place, shaped like a Zustand store: the state, and actions that call `set`. A component reads
+ * one leaf with a selector that returns the value, `useGame((s) => s.stats.coins)`, and picks an action the same way,
+ * `useGame((s) => s.collect)`, to call in a handler. The compiler reads this file to check those selectors; generated
+ * code imports it. As in Zustand, `set` merges shallowly, so a nested object is replaced whole.
+ */
+export const useGame = createGameState<State>()((set) => ({
+  stats: { coins: 0, hits: 0 },
+  collect: () => set((s) => ({ stats: { ...s.stats, coins: s.stats.coins + 1 } })),
+  hit: () => set((s) => ({ stats: { ...s.stats, hits: s.stats.hits + 1 } })),
+}));

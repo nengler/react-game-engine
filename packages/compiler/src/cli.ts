@@ -10,7 +10,7 @@
  * `prefabs.json` (their props, as data) to outDir, and checks across files:
  * exported names are unique and no component statically contains itself.
  *
- * A `GameState.ts` in srcDir (`export const useGame = createGameState({ state, actions })`) is the game's
+ * A `GameState.ts` in srcDir (`export const useGame = createGameState<State>()((set) => ({ … }))`) is the game's
  * global state: components import it and read it with selectors, `useGame((s) => s.player.hp)`. The compiler
  * reads the file to check those selectors; generated code imports it from where it is.
  *
@@ -84,7 +84,7 @@ function main(argv: readonly string[]): number {
         // Generated files import the store from where it is: the path from the output directory to the source file.
         const fromOutput = relative(resolve(outDir), statePath).split(sep).join("/");
         compiler.setGameState({ ...schema, importFrom: fromOutput.startsWith(".") ? fromOutput : `./${fromOutput}` });
-        console.log(`read GameState.ts (${schema.name})`);
+        console.log(`read GameState.ts (${schema.actions.length} action${schema.actions.length === 1 ? "" : "s"})`);
       }
     }
     const sourceNames = readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort();

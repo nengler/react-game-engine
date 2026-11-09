@@ -33,11 +33,11 @@ describe("createPlayer", () => {
   });
 
   it("starts every game from the initial game state, whatever an earlier game left", () => {
-    const { store } = createGameState({ coins: 0 });
-    store.set("coins", 1);
-    assert.equal(store.get("coins"), 1);
+    const useGame = createGameState<{ coins: number }>()(() => ({ coins: 0 }));
+    useGame.setState({ coins: 1 });
+    assert.equal(useGame.getState().coins, 1);
     const { player: p } = player(() => new Entity());
-    assert.equal(store.get("coins"), 0, "a new player resets every game state to its initial values");
+    assert.equal(useGame.getState().coins, 0, "a new player resets every game state to its initial values");
     p.close();
   });
 

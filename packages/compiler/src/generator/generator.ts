@@ -158,6 +158,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
         case "SetState": if ("updater" in stmt) visitFunction(stmt.updater); else visitExpr(stmt.value); break;
         case "Assign": visitExpr(stmt.value); break;
         case "PlaySound": break;
+        case "CallAction": usage.store = true; stmt.args.forEach(visitExpr); break;
         default: assertNever(stmt, "statement");
       }
     }
@@ -294,7 +295,6 @@ class ComponentGenerator {
     w.block(`export class ${c.name} extends ${extendsClause}`, () => {
       // Persistent state.
       for (const s of c.state) {
-        if (s.writeOnly === true) continue;
         if (s.globalKey !== undefined) {
           // A snapshot of the game's value (the store is the truth); refreshed in `commitState` when the leaf changes.
           w.line(`${s.name}: ${typeText(s.type)} = ${this.#storeName}.store.get<${typeText(s.type)}>(${JSON.stringify(s.globalKey)});`);
@@ -305,7 +305,7 @@ class ComponentGenerator {
         if (this.#hasSetter(s.id)) w.line(`${pending(s)}: ${typeText(s.type)} = this.${s.name};`);
       }
       // The paths it reads: the runtime tells it when one changes (see `GameObject.gameStateKeys`).
-      const globals = c.state.filter((s) => s.globalKey !== undefined && s.writeOnly !== true);
+      const globals = c.state.filter((s) => s.globalKey !== undefined);
       if (globals.length > 0) {
         w.line(`override readonly gameStateStore = ${this.#storeName}.store;`);
         w.line(`override readonly gameStateKeys: readonly string[] = [${[...new Set(globals.map((s) => JSON.stringify(s.globalKey)))].join(", ")}];`);
@@ -371,13 +371,6 @@ class ComponentGenerator {
             const s = this.#state(hook.state);
             const type = typeText(s.type);
             w.blank();
-            if (s.globalKey !== undefined) {
-              // Writes the leaf in the game's store at once and marks every component that reads it (this one too) dirty.
-              w.block(`${hook.setterName}(value: ${type} | ((previous: ${type}) => ${type})): void`, () => {
-                w.line(`${this.#storeName}.store.set<${type}>(${JSON.stringify(s.globalKey)}, value);`);
-              });
-              break;
-            }
             // React semantics: reads see the value from the last render; updaters chain on the pending value.
             w.block(`${hook.setterName}(value: ${type} | ((previous: ${type}) => ${type})): void`, () => {
               w.line(`const next = typeof value === "function" ? value(${pendingRef(s)}) : value;`);
@@ -398,7 +391,7 @@ class ComponentGenerator {
       }
 
       const settable = c.state.filter((s) => s.globalKey === undefined && this.#hasSetter(s.id));
-      const shared = c.state.filter((s) => s.globalKey !== undefined && s.writeOnly !== true);
+      const shared = c.state.filter((s) => s.globalKey !== undefined);
       if (settable.length > 0 || shared.length > 0) {
         w.blank();
         w.block("override commitState(): void", () => {
@@ -503,6 +496,9 @@ class ComponentGenerator {
           break;
         case "PlaySound":
           w.line(`this.${this.#soundField(stmt.sound)}.play();`);
+          break;
+        case "CallAction":
+          w.line(`${this.#storeName}.getState().${stmt.action}(${stmt.args.map((a) => this.#expr(a, true)).join(", ")});`);
           break;
         case "Assign": {
           const target = `this.${this.#refField(stmt.target.ref)}`;

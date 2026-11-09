@@ -1,18 +1,23 @@
 import { SyntaxKind } from "typescript/ast";
 import {
+  isArrowFunction,
   isAsExpression,
+  isBlock,
   isCallExpression,
+  isFunctionExpression,
   isIdentifier,
+  isMethodDeclaration,
   isNumericLiteral,
   isObjectLiteralExpression,
   isParenthesizedExpression,
   isPrefixUnaryExpression,
   isPropertyAssignment,
+  isReturnStatement,
   isSatisfiesExpression,
   isStringLiteral,
   isVariableStatement,
 } from "typescript/ast/is";
-import type { Expression, ObjectLiteralExpression, SourceFile } from "typescript/ast";
+import type { CallExpression, Expression, ObjectLiteralExpression, SourceFile } from "typescript/ast";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import type { ValueType } from "../ir/types.ts";
 import { spanOf, type TsxParser } from "../parser/parser.ts";
@@ -41,6 +46,8 @@ export interface GameStateDefinition {
   /** What generated code writes in its `import … from`: the module, relative to the generated file (`../src/GameState.ts`). */
   readonly importFrom: string;
   readonly tree: GameStateNode;
+  /** Names of the actions. */
+  readonly actions: readonly string[];
 }
 
 export interface GameStateSchemaResult {
@@ -49,19 +56,21 @@ export interface GameStateSchemaResult {
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
-const SHAPE = "GameState.ts must contain `export const useGame = createGameState({ coins: 0, player: { hp: 10 } });`";
+const SHAPE = "GameState.ts must contain `export const useGame = createGameState<State>()((set) => ({ coins: 0, player: { hp: 10 }, collect: () => set((s) => ({ coins: s.coins + 1 })) }));`";
 
 /**
- * Reads `GameState.ts`. The argument of `createGameState` is an object literal, nested as deep as you like, whose
- * leaves are number, string or boolean literals (a negative number is fine); a leaf's type is its literal's (`0` is a
- * `number`). Anything else is `RGE1109`, saying what to write instead. Arrays are not supported yet.
+ * Reads `GameState.ts`: `createGameState(creator)` or `createGameState<State>()(creator)`, exported under a name
+ * components import. The creator is an arrow or function whose result is an object literal: the state. Its leaves are
+ * number, string or boolean literals (a negative number is fine; a leaf's type is its literal's: `0` is a `number`),
+ * objects of those nested as deep as you like, and, at the top level, functions: the actions. Anything else is
+ * `RGE1109`, saying what to write instead. Arrays are not supported yet.
  */
 export function parseGameState(parser: TsxParser, fileName: string, text: string): GameStateSchemaResult {
   const parsed = parser.parse(fileName, text);
   try {
     const sourceFile = parsed.sourceFile;
     const diagnostics: CompilerDiagnostic[] = [];
-    const fail = (message: string, node: { getStart(sf: SourceFile): number; getEnd(): number }): void => {
+    const fail: Fail = (message, node) => {
       diagnostics.push(error(DiagnosticCode.InvalidGameStateSchema, message, spanOf(node as never, sourceFile, fileName)));
     };
     let result: Omit<GameStateDefinition, "importFrom"> | null = null;
@@ -70,7 +79,8 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
       if (!isVariableStatement(statement)) continue;
       for (const declaration of statement.declarationList.declarations) {
         const init = declaration.initializer ? unwrap(declaration.initializer) : undefined;
-        if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "createGameState") continue;
+        const creatorCall = init && isCallExpression(init) ? creatorOf(init) : undefined;
+        if (!creatorCall) continue;
         found++;
         if (found > 1) {
           fail("A project has one game state: `createGameState` is called more than once.", declaration);
@@ -81,14 +91,15 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
           fail(`${SHAPE}: export it, under a name (\`useGame\`) components import.`, declaration);
           continue;
         }
-        const config = init.arguments[0] ? unwrap(init.arguments[0]) : undefined;
-        if (!config || !isObjectLiteralExpression(config)) {
-          fail(`${SHAPE}.`, init);
+        const object = stateObject(creatorCall);
+        if (!object) {
+          fail(`The creator must be an arrow function (or function) that returns the state as an object literal: \`(set) => ({ coins: 0, … })\`. ${SHAPE}`, creatorCall);
           continue;
         }
         const before = diagnostics.length;
-        const tree = readNode(config, fail);
-        if (diagnostics.length === before) result = { name: declaration.name.text, tree };
+        const actions: string[] = [];
+        const tree = readNode(object, fail, actions);
+        if (diagnostics.length === before) result = { name: declaration.name.text, tree, actions };
       }
     }
     if (found === 0) diagnostics.push(error(DiagnosticCode.InvalidGameStateSchema, `${SHAPE}.`, { fileName, start: 0, end: 0, line: 1, column: 1 }));
@@ -100,30 +111,61 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
 
 type Fail = (message: string, node: { getStart(sf: SourceFile): number; getEnd(): number }) => void;
 
-function readNode(object: ObjectLiteralExpression, fail: Fail): GameStateNode {
+/** The creator argument of `createGameState(creator)` or `createGameState<State>()(creator)`; undefined if the call is neither. */
+function creatorOf(call: CallExpression): Expression | undefined {
+  const callee = unwrap(call.expression);
+  if (isIdentifier(callee) && callee.text === "createGameState") return call.arguments[0] ? unwrap(call.arguments[0]) : undefined;
+  if (isCallExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "createGameState" && callee.arguments.length === 0) {
+    return call.arguments[0] ? unwrap(call.arguments[0]) : undefined;
+  }
+  return undefined;
+}
+
+/** The object literal a creator returns: an arrow's expression body, or the one `return` of a block. */
+function stateObject(creator: Expression): ObjectLiteralExpression | null {
+  if (!isArrowFunction(creator) && !isFunctionExpression(creator)) return null;
+  const body = creator.body;
+  if (!body) return null;
+  if (!isBlock(body)) {
+    const expression = unwrap(body);
+    return isObjectLiteralExpression(expression) ? expression : null;
+  }
+  const returns = body.statements.filter(isReturnStatement);
+  const only = body.statements.length === 1 ? returns[0] : undefined;
+  const expression = only?.expression ? unwrap(only.expression) : undefined;
+  return expression && isObjectLiteralExpression(expression) ? expression : null;
+}
+
+function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[] | null): GameStateNode {
   const children: Record<string, GameStateLeaf | GameStateNode> = {};
   for (const p of object.properties) {
-    if (!isPropertyAssignment(p) || !(isIdentifier(p.name) || isStringLiteral(p.name))) {
-      fail("Each state entry is `key: value`: no spreads, methods, shorthand or computed keys.", p);
+    const named = (isPropertyAssignment(p) || isMethodDeclaration(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
+    if (named === null) {
+      fail("Each state entry is `key: value` or an action `name() {}`: no spreads, shorthand or computed keys.", p);
       continue;
     }
-    const key = p.name.text;
+    const key = named;
     if (key.includes(".")) {
       fail(`'${key}': a state key cannot contain a dot (paths are written with dots).`, p);
       continue;
     }
-    if (Object.hasOwn(children, key)) {
+    if (Object.hasOwn(children, key) || actions?.includes(key)) {
       fail(`'${key}' is declared twice.`, p);
       continue;
     }
-    const value = unwrap(p.initializer);
+    const value = isPropertyAssignment(p) ? unwrap(p.initializer) : null;
+    if (value === null || isArrowFunction(value) || isFunctionExpression(value)) {
+      if (actions === null) fail(`'${key}' is a function inside a nested object: actions live at the top level of the state, next to the objects.`, p);
+      else actions.push(key);
+      continue;
+    }
     if (isObjectLiteralExpression(value)) {
-      children[key] = readNode(value, fail);
+      children[key] = readNode(value, fail, null);
       continue;
     }
     const leaf = literalLeaf(value);
     if (!leaf) {
-      fail(`'${key}' must start as a number, string or boolean literal, or an object of them (arrays are not supported yet).`, p.initializer);
+      fail(`'${key}' must start as a number, string or boolean literal, an object of them, or be an action function (arrays are not supported yet).`, (isPropertyAssignment(p) ? p.initializer : p) as never);
       continue;
     }
     children[key] = leaf;

@@ -126,19 +126,17 @@ export interface ComponentAnalysis {
 }
 
 /**
- * `const [hp, setHp] = useGame((s) => s.player.hp)`: one leaf of the game state, read and written like `useState`.
- * The selector is a plain property path: that is all the compiler resolves.
+ * `const hp = useGame((s) => s.player.hp)`: a read of one path of the game state, or (`useGame((s) => s.collect)`) a
+ * binding of one action. The selector is a plain property path: that is all the compiler resolves.
  */
 export interface UseStoreCallAnalysis {
   readonly kind: "useStore";
   /** The imported store the call is made on (`useGame`). */
   readonly storeName: string;
-  /** The bound value; null for `const [, setHp] = …`, which reads nothing. */
-  readonly valueName: string | null;
-  readonly setterName: string | null;
+  readonly valueName: string;
   /** The selector's path: `["player", "hp"]`. */
   readonly path: readonly string[];
-  /** The selector, for diagnostics. */
+  /** The selector's parameter, and the path's node, for diagnostics. */
   readonly selector: Node;
   readonly call: CallExpression;
   readonly declaration: VariableDeclaration;
@@ -534,7 +532,7 @@ function analyzeComponent(
     if (!isIdentifier(callee) || !(HOOK_NAME.test(callee.text) || storeNames.has(callee.text))) return;
     if (storeNames.has(callee.text)) {
       diagnostics.push(
-        error(DiagnosticCode.HookNotAtTopLevel, `'${callee.text}' (the game state) must be called at the top level of a component: \`const [hp, setHp] = ${callee.text}((s) => s.player.hp);\`.`, span(node)),
+        error(DiagnosticCode.HookNotAtTopLevel, `'${callee.text}' (the game state) must be called at the top level of a component: \`const hp = ${callee.text}((s) => s.player.hp);\`.`, span(node)),
       );
     } else if (callee.text === "useTransform") {
       diagnostics.push(
@@ -646,7 +644,7 @@ type StoreMatch =
   | { readonly kind: "ok"; readonly hook: UseStoreCallAnalysis }
   | { readonly kind: "invalid"; readonly message: string; readonly call: CallExpression };
 
-/** Recognises `const [hp, setHp] = useGame((s) => s.player.hp)` on an imported store; null if the statement is not a call of one. */
+/** Recognises `const hp = useGame((s) => s.player.hp)` on an imported store; null if the statement is not a call of one. */
 function matchStoreStatement(statement: Statement, storeNames: ReadonlySet<string>): StoreMatch | null {
   if (storeNames.size === 0 || !isVariableStatement(statement)) return null;
   const list = statement.declarationList;
@@ -656,21 +654,9 @@ function matchStoreStatement(statement: Statement, storeNames: ReadonlySet<strin
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || !storeNames.has(init.expression.text)) return null;
   const storeName = init.expression.text;
   const invalid = (message: string): StoreMatch => ({ kind: "invalid", message, call: init });
-  const example = `const [hp, setHp] = ${storeName}((s) => s.player.hp);`;
+  const example = `const hp = ${storeName}((s) => s.player.hp);`;
   if ((list.flags & NodeFlags.Const) === 0) return invalid(`${storeName}(…) must be bound with \`const\`: \`${example}\``);
-  if (!isArrayBindingPattern(declaration.name) || declaration.name.elements.length < 1 || declaration.name.elements.length > 2) {
-    return invalid(`${storeName}(…) is destructured like useState, binding one or two names: \`${example}\``);
-  }
-  const names: (string | null)[] = [];
-  for (const element of declaration.name.elements) {
-    if (!element.name && !element.dotDotDotToken && !element.initializer) {
-      names.push(null); // hole: `const [, setHp] = ...`
-      continue;
-    }
-    if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) return invalid(`${storeName}(…) destructuring must bind plain identifiers: \`${example}\``);
-    names.push(element.name.text);
-  }
-  if (!names[0] && !names[1]) return invalid(`${storeName}(…) must bind the value, the setter, or both.`);
+  if (!isIdentifier(declaration.name)) return invalid(`${storeName}(…) binds one plain name: \`${example}\``);
   const selector = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
   if (init.arguments.length !== 1 || !selector || !isArrowFunction(selector) || selector.parameters.length !== 1 || !isIdentifier(selector.parameters[0]!.name) || init.typeArguments?.length) {
     return invalid(`${storeName} takes one selector, an arrow with one parameter: \`${example}\``);
@@ -685,7 +671,7 @@ function matchStoreStatement(statement: Statement, storeNames: ReadonlySet<strin
   if (!isIdentifier(at) || (at as { text: string }).text !== parameter || path.length === 0) {
     return invalid(`The selector must be a plain path from its parameter, like \`(${parameter}) => ${parameter}.player.hp\`: the compiler subscribes the component to exactly that path.`);
   }
-  return { kind: "ok", hook: { kind: "useStore", storeName, valueName: names[0] ?? null, setterName: names[1] ?? null, path, selector, call: init, declaration } };
+  return { kind: "ok", hook: { kind: "useStore", storeName, valueName: declaration.name.text, path, selector, call: init, declaration } };
 }
 
 type HandleMatch =
