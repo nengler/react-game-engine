@@ -25,7 +25,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M12 `<Camera>` | Done | #19, #21 | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`. A camera follows its children: `<Camera><Player /></Camera>` (the middle of their positions when there are several), and is transparent to their transforms (`GameObject.childSpace()`). This replaced the plan's `follow={hero}`, which nothing in a component could express |
 | M13 `<AnimatedSprite>` | Done | #20 | `frames` (a fixed list is built once, a varying one is re-assigned and restarts the animation only when its contents differ), `fps`, `playing`. Advancing is not state: no renders. The first built-in with its own `onUpdate`, so a component rooted at it calls `super` first (the manifest's new `intrinsicHooks`) |
 | M14 `<Pointer>` | Done | #22 | `<Pointer width height onPress>`: a hit area, origin top-left. `world.reportPress(pointer, x, y)` tests the point against the pointer's world transform (position, rotation, scale) and size, calls `onPress`, and returns whether it hit. A zero-scale pointer is never hit |
-| M15 `useSound` | In review | n/a | `const playHit = useSound("hit.wav")`, then `playHit()` as a statement in a handler. The path is a literal; one binding per call; no transform. `SoundIR` and a `PlaySound` statement; the mock `Sound` records plays. A call anywhere else is `RGE1305`; a bad path or binding is `RGE1107` |
+| M15 `useSound` | Done | #23 | `const playHit = useSound("hit.wav")`, then `playHit()` as a statement in a handler. The path is a literal; one binding per call; no transform. `SoundIR` and a `PlaySound` statement; the mock `Sound` records plays. A call anywhere else is `RGE1305`; a bad path or binding is `RGE1107` |
 
 Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 after a review of the authoring API against React; M10–M15 were added the same day for the built-in elements and the sound hook.
 
@@ -59,7 +59,7 @@ Every milestone keeps the slice's architecture intact; a change that breaks one 
 - **TypeScript 7.1 only through the two adapters.** Only `parser/parser.ts` and `typecheck/typecheck.ts` import `typescript/sync`. Verify any new API against the installed `.d.ts` before use.
 - **Unsupported means a diagnostic.** Never silently drop syntax. Diagnostic codes in `diagnostics.ts` are append-only.
 - **Generated code must type-check.** Every feature adds a test that runs generated output through `typeCheckFiles` and one that imports and runs it against the runtime.
-- **Runtime stays a mock.** No rendering, physics or input backend; the runtime gets only the hooks the compiler's output calls.
+- **Runtime stays a mock.** No rendering, physics or input backend; the runtime gets only the hooks the compiler's output calls. (Phase 3 relaxes this to "runtime stays backend-free": drawing, input and audio live in `@rge/player` and native hosts, and the runtime only gains hooks such as a sound sink. See [NATIVE_PLAN.md](NATIVE_PLAN.md#ground-rules).)
 
 ## Sequencing
 
