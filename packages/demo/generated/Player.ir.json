@@ -8,9 +8,9 @@
       "name": "Player",
       "span": {
         "fileName": "packages/demo/src/Player.tsx",
-        "start": 383,
-        "end": 1819,
-        "line": 7,
+        "start": 411,
+        "end": 1902,
+        "line": 8,
         "column": 1
       },
       "hooks": [
@@ -20,9 +20,9 @@
           "setterName": "setX",
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 418,
-            "end": 441,
-            "line": 8,
+            "start": 446,
+            "end": 469,
+            "line": 9,
             "column": 9
           }
         },
@@ -32,21 +32,9 @@
           "setterName": "setY",
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 451,
-            "end": 474,
-            "line": 9,
-            "column": 9
-          }
-        },
-        {
-          "kind": "UseState",
-          "state": "Player.coins#2",
-          "setterName": "setCoins",
-          "span": {
-            "fileName": "packages/demo/src/Player.tsx",
-            "start": 579,
-            "end": 615,
-            "line": 11,
+            "start": 479,
+            "end": 502,
+            "line": 10,
             "column": 9
           }
         },
@@ -56,9 +44,9 @@
           "setterName": "setHurt",
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 625,
-            "end": 658,
-            "line": 12,
+            "start": 702,
+            "end": 735,
+            "line": 14,
             "column": 9
           }
         },
@@ -309,9 +297,9 @@
           },
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 800,
-            "end": 1084,
-            "line": 17,
+            "start": 877,
+            "end": 1161,
+            "line": 19,
             "column": 3
           }
         },
@@ -438,9 +426,9 @@
           },
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 1088,
-            "end": 1207,
-            "line": 22,
+            "start": 1165,
+            "end": 1284,
+            "line": 24,
             "column": 3
           }
         }
@@ -474,21 +462,6 @@
         },
         {
           "kind": "State",
-          "id": "Player.coins#2",
-          "name": "coins$write2",
-          "type": {
-            "kind": "Primitive",
-            "name": "number"
-          },
-          "initialValue": {
-            "kind": "NumberLiteral",
-            "value": 0
-          },
-          "globalKey": "coins",
-          "writeOnly": true
-        },
-        {
-          "kind": "State",
           "id": "Player.hurt",
           "name": "hurt",
           "type": {
@@ -513,9 +486,9 @@
           },
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 751,
-            "end": 768,
-            "line": 14,
+            "start": 828,
+            "end": 845,
+            "line": 16,
             "column": 9
           }
         },
@@ -530,9 +503,9 @@
           },
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 778,
-            "end": 795,
-            "line": 15,
+            "start": 855,
+            "end": 872,
+            "line": 17,
             "column": 9
           }
         }
@@ -655,9 +628,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Player.tsx",
-                "start": 1274,
-                "end": 1351,
-                "line": 29,
+                "start": 1351,
+                "end": 1428,
+                "line": 31,
                 "column": 7
               }
             }
@@ -742,39 +715,9 @@
                         },
                         "then": [
                           {
-                            "kind": "SetState",
-                            "state": "Player.coins#2",
-                            "updater": {
-                              "kind": "Function",
-                              "params": [
-                                {
-                                  "id": "Player.n#6",
-                                  "name": "n",
-                                  "type": {
-                                    "kind": "Primitive",
-                                    "name": "number"
-                                  }
-                                }
-                              ],
-                              "body": [
-                                {
-                                  "kind": "Return",
-                                  "value": {
-                                    "kind": "Binary",
-                                    "operator": "+",
-                                    "left": {
-                                      "kind": "ParamRead",
-                                      "param": "Player.n#6",
-                                      "name": "n"
-                                    },
-                                    "right": {
-                                      "kind": "NumberLiteral",
-                                      "value": 1
-                                    }
-                                  }
-                                }
-                              ]
-                            }
+                            "kind": "CallAction",
+                            "action": "collect",
+                            "args": []
                           }
                         ],
                         "else": [
@@ -805,6 +748,11 @@
                                   "kind": "BooleanLiteral",
                                   "value": true
                                 }
+                              },
+                              {
+                                "kind": "CallAction",
+                                "action": "hit",
+                                "args": []
                               }
                             ],
                             "else": []
@@ -821,7 +769,7 @@
                     "kind": "Function",
                     "params": [
                       {
-                        "id": "Player.other#7",
+                        "id": "Player.other#6",
                         "name": "other",
                         "type": {
                           "kind": "Named",
@@ -839,7 +787,7 @@
                             "kind": "PropertyRead",
                             "object": {
                               "kind": "ParamRead",
-                              "param": "Player.other#7",
+                              "param": "Player.other#6",
                               "name": "other"
                             },
                             "name": "tag"
@@ -869,9 +817,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Player.tsx",
-                "start": 1358,
-                "end": 1798,
-                "line": 30,
+                "start": 1435,
+                "end": 1881,
+                "line": 32,
                 "column": 7
               }
             }
@@ -879,9 +827,9 @@
         ],
         "span": {
           "fileName": "packages/demo/src/Player.tsx",
-          "start": 1224,
-          "end": 1812,
-          "line": 28,
+          "start": 1301,
+          "end": 1895,
+          "line": 30,
           "column": 5
         }
       }

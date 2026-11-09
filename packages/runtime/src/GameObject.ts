@@ -1,4 +1,4 @@
-import { getGameStateStore, type GameStateStore } from "./GameState.ts";
+import type { GameStore } from "./GameState.ts";
 import type { InputState } from "./input.ts";
 import { IDENTITY_TRANSFORM, Transform, composeTransforms, type WorldTransform } from "./Transform.ts";
 import type { World } from "./World.ts";
@@ -41,9 +41,10 @@ export class GameObject<P extends object = {}> {
   props: P;
   parent: GameObject | null = null;
   /**
-   * The game-state keys this object reads (`useGameState`). Generated code overrides it. While the object is in a
-   * world it is told when one changes, and re-renders.
+   * The game state this object reads from (`useGame(s => …)`), and the dotted paths it reads. Generated code overrides
+   * both. While the object is in a world it is told when one of those paths changes, and re-renders.
    */
+  readonly gameStateStore: GameStore | null = null;
   readonly gameStateKeys: readonly string[] = NO_KEYS;
   readonly children: GameObject[] = [];
   world: World | null = null;
@@ -78,7 +79,6 @@ export class GameObject<P extends object = {}> {
   #order = 0;
   /** `onMount` has run and `onUnmount` has not: each runs once per stay in a World. */
   #mounted = false;
-  #gameState: GameStateStore | null = null;
 
   /**
    * Where children passed by a parent (`<Panel><Button /></Panel>`) mount: a
@@ -284,9 +284,8 @@ export class GameObject<P extends object = {}> {
   attachToWorld(world: World): void {
     this.world = world;
     world.registerObject(this);
-    if (this.gameStateKeys.length > 0) {
-      this.#gameState = getGameStateStore();
-      this.#gameState.subscribe(this, this.gameStateKeys);
+    if (this.gameStateStore && this.gameStateKeys.length > 0) {
+      this.gameStateStore.subscribe(this, this.gameStateKeys);
       // It may have been built before a change it missed (it was not subscribed): refresh it once.
       this.markDirty();
     }
@@ -300,8 +299,7 @@ export class GameObject<P extends object = {}> {
   }
 
   detachFromWorld(): void {
-    this.#gameState?.unsubscribe(this, this.gameStateKeys);
-    this.#gameState = null;
+    this.gameStateStore?.unsubscribe(this, this.gameStateKeys);
     if (this.#mounted) {
       this.#mounted = false;
       this.onUnmount();

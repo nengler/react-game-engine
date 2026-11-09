@@ -8,9 +8,9 @@
       "name": "Hud",
       "span": {
         "fileName": "packages/demo/src/Hud.tsx",
-        "start": 169,
-        "end": 319,
-        "line": 4,
+        "start": 219,
+        "end": 375,
+        "line": 5,
         "column": 1
       },
       "hooks": [
@@ -20,9 +20,9 @@
           "setterName": null,
           "span": {
             "fileName": "packages/demo/src/Hud.tsx",
-            "start": 201,
-            "end": 232,
-            "line": 5,
+            "start": 251,
+            "end": 288,
+            "line": 6,
             "column": 9
           }
         }
@@ -40,7 +40,7 @@
             "kind": "NumberLiteral",
             "value": 0
           },
-          "globalKey": "coins"
+          "globalKey": "stats.coins"
         }
       ],
       "refs": [],
@@ -101,9 +101,9 @@
         "children": [],
         "span": {
           "fileName": "packages/demo/src/Hud.tsx",
-          "start": 250,
-          "end": 312,
-          "line": 8,
+          "start": 306,
+          "end": 368,
+          "line": 9,
           "column": 5
         }
       }

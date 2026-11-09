@@ -39,6 +39,7 @@ import {
   isJsxElement,
   isJsxSelfClosingElement,
   isParenthesizedExpression,
+  isPropertyAccessExpression,
   isReturnStatement,
   isVariableStatement,
 } from "typescript/ast/is";
@@ -58,6 +59,8 @@ export interface SourceAnalysis {
   readonly imports: readonly ImportAnalysis[];
   /** Hooks, built-in elements and runtime functions imported from the authoring module. Validated in the transform, which has the runtime manifest. */
   readonly authoringImports: readonly ImportAnalysis[];
+  /** Names imported from a relative `.ts` module: the project's game state (`import { useGame } from "./GameState.ts"`). Checked in the transform. */
+  readonly storeImports: readonly ImportAnalysis[];
   /** Top-level `interface` / `type` declarations, which a component's props type names. */
   readonly typeDeclarations: readonly TypeDeclarationAnalysis[];
   readonly diagnostics: readonly CompilerDiagnostic[];
@@ -122,8 +125,25 @@ export interface ComponentAnalysis {
   readonly jsxTags: readonly string[];
 }
 
+/**
+ * `const hp = useGame((s) => s.player.hp)`: a read of one path of the game state, or (`useGame((s) => s.collect)`) a
+ * binding of one action. The selector is a plain property path: that is all the compiler resolves.
+ */
+export interface UseStoreCallAnalysis {
+  readonly kind: "useStore";
+  /** The imported store the call is made on (`useGame`). */
+  readonly storeName: string;
+  readonly valueName: string;
+  /** The selector's path: `["player", "hp"]`. */
+  readonly path: readonly string[];
+  /** The selector's parameter, and the path's node, for diagnostics. */
+  readonly selector: Node;
+  readonly call: CallExpression;
+  readonly declaration: VariableDeclaration;
+}
+
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStateCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis;
+export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis;
 
 /**
  * `const hurt = health < 25;` in the component body: a value derived from
@@ -164,13 +184,9 @@ export interface HandlerCallAnalysis {
   readonly statement: Statement;
 }
 
-/** `useState(initial)`, or `useGameState("key")` (then `globalKey` is the key and `initializer` is null). */
 export interface UseStateCallAnalysis {
   readonly kind: "useState";
-  /** The schema key of a `useGameState` call; null for a local `useState`. */
-  readonly globalKey: string | null;
-  /** The bound value; null only for `const [, setCoins] = useGameState("coins")`, which reads nothing. */
-  readonly valueName: string | null;
+  readonly valueName: string;
   readonly setterName: string | null;
   readonly initializer: Expression | null;
   readonly typeArgument: Node | null;
@@ -179,7 +195,7 @@ export interface UseStateCallAnalysis {
 }
 
 const HOOK_NAME = /^use[A-Z0-9]/;
-const KNOWN_HOOKS = new Set(["useState", "useGameState", "useRef", "useSound", "useUpdate", "useInput", "useMount", "useUnmount"]);
+const KNOWN_HOOKS = new Set(["useState", "useRef", "useSound", "useUpdate", "useInput", "useMount", "useUnmount"]);
 const HANDLER_HOOKS = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS, ...HANDLER_HOOKS].filter((name, i, all) => all.indexOf(name) === i);
@@ -206,10 +222,18 @@ export function analyzeSourceFile(
   const components: ComponentAnalysis[] = [];
   const imports: ImportAnalysis[] = [];
   const authoringImports: ImportAnalysis[] = [];
+  const storeImports: ImportAnalysis[] = [];
   const typeDeclarations: TypeDeclarationAnalysis[] = [];
   const defaultExports: { name: string; node: Node }[] = [];
   const span = (node: Node) => spanOf(node, sourceFile, fileName);
 
+  // The names a relative `.ts` import binds, known before any component is read (imports may follow the components in source).
+  const storeNames = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || !/^\.\.?\/.*\.ts$/.test(statement.moduleSpecifier.text)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && isNamedImports(bindings)) for (const element of bindings.elements) storeNames.add(element.name.text);
+  }
   for (const statement of sourceFile.statements) {
     if (isImportDeclaration(statement)) {
       // Two kinds of import are understood: components from relative `.tsx` files, and hooks, built-ins and
@@ -217,13 +241,15 @@ export function analyzeSourceFile(
       const specifier = isStringLiteral(statement.moduleSpecifier) ? statement.moduleSpecifier.text : null;
       if (specifier !== null && /^\.\.?\/.*\.tsx$/.test(specifier)) {
         analyzeNamedImport(statement, specifier, imports, diagnostics, span, "Component imports", `import { Name } from "${specifier}"`, true);
+      } else if (specifier !== null && /^\.\.?\/.*\.ts$/.test(specifier)) {
+        analyzeNamedImport(statement, specifier, storeImports, diagnostics, span, "Game state imports", `import { useGame } from "${specifier}"`, false);
       } else if (specifier !== null && specifier === authoringModule) {
         analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity, type Child } from "${specifier}"`, false, true);
       } else {
         diagnostics.push(
           error(
             DiagnosticCode.UnsupportedSyntax,
-            `Import of ${specifier === null ? "this module" : `"${specifier}"`} is not supported: component source imports components from "./Name.tsx"${authoringModule ? ` and hooks and built-in elements from "${authoringModule}"` : ""}.`,
+            `Import of ${specifier === null ? "this module" : `"${specifier}"`} is not supported: component source imports components from "./Name.tsx", the game state from "./GameState.ts"${authoringModule ? ` and hooks and built-in elements from "${authoringModule}"` : ""}.`,
             span(statement),
           ),
         );
@@ -244,6 +270,7 @@ export function analyzeSourceFile(
         { name: statement.name.text, node: statement, parameters: statement.parameters, body: statement.body, exported: (statement.modifierFlags & ModifierFlags.Export) !== 0, isDefault },
         span,
         diagnostics,
+        storeNames,
       );
       if (component) components.push(component);
       continue;
@@ -265,6 +292,7 @@ export function analyzeSourceFile(
           { name: declaration.name.text, node: declaration, parameters: arrow.parameters, body: arrow.body, exported: (statement.modifierFlags & ModifierFlags.Export) !== 0, isDefault: false },
           span,
           diagnostics,
+          storeNames,
         );
         if (component) components.push(component);
         continue;
@@ -300,7 +328,7 @@ export function analyzeSourceFile(
     }
   }
 
-  return { fileName, sourceFile, components: resolved, imports, authoringImports, typeDeclarations, diagnostics };
+  return { fileName, sourceFile, components: resolved, imports, authoringImports, storeImports, typeDeclarations, diagnostics };
 }
 
 /** What the analyzer reads from a component, whether it is a function declaration or an arrow assigned to a `const`. */
@@ -406,6 +434,7 @@ function analyzeComponent(
   fn: ComponentFunction,
   span: (node: Node) => ReturnType<typeof spanOf>,
   diagnostics: CompilerDiagnostic[],
+  storeNames: ReadonlySet<string>,
 ): ComponentAnalysis | null {
   const { name, node: declaration, body } = fn;
   if (!body) {
@@ -435,6 +464,17 @@ function analyzeComponent(
         jsx = returned;
       } else {
         diagnostics.push(error(DiagnosticCode.InvalidComponentBody, mustReturn, span(statement)));
+      }
+      return;
+    }
+    const store = matchStoreStatement(statement, storeNames);
+    if (store) {
+      if (store.kind === "ok") {
+        hooks.push(store.hook);
+        acceptedHookCalls.add(store.hook.call);
+      } else {
+        diagnostics.push(error(DiagnosticCode.InvalidUseState, store.message, span(statement)));
+        acceptedHookCalls.add(store.call);
       }
       return;
     }
@@ -489,8 +529,12 @@ function analyzeComponent(
   visit(body, (node) => {
     if (!isCallExpression(node) || acceptedHookCalls.has(node)) return;
     const callee = node.expression;
-    if (!isIdentifier(callee) || !HOOK_NAME.test(callee.text)) return;
-    if (callee.text === "useTransform") {
+    if (!isIdentifier(callee) || !(HOOK_NAME.test(callee.text) || storeNames.has(callee.text))) return;
+    if (storeNames.has(callee.text)) {
+      diagnostics.push(
+        error(DiagnosticCode.HookNotAtTopLevel, `'${callee.text}' (the game state) must be called at the top level of a component: \`const hp = ${callee.text}((s) => s.player.hp);\`.`, span(node)),
+      );
+    } else if (callee.text === "useTransform") {
       diagnostics.push(
         error(
           DiagnosticCode.UnknownHook,
@@ -539,29 +583,23 @@ type UseStateMatch =
   | { readonly kind: "ok"; readonly hook: UseStateCallAnalysis }
   | { readonly kind: "invalid"; readonly message: string; readonly call: CallExpression };
 
-/**
- * Recognises `const [value, setValue] = useState(init)` and `const [value, setValue] = useGameState("key")`; returns
- * null if the statement is neither call at all.
- */
+/** Recognises `const [value, setValue] = useState(init)`; returns null if the statement is not a useState call at all. */
 function matchUseStateStatement(statement: Statement): UseStateMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
   if (list.declarations.length !== 1) return null;
   const declaration = list.declarations[0]!;
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
-  if (!init || !isCallExpression(init) || !isIdentifier(init.expression)) return null;
-  const hookName = init.expression.text;
-  if (hookName !== "useState" && hookName !== "useGameState") return null;
-  const global = hookName === "useGameState";
+  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useState") return null;
 
   const invalid = (message: string): UseStateMatch => ({ kind: "invalid", message, call: init });
-  if ((list.flags & NodeFlags.Const) === 0) return invalid(`${hookName} must be bound with \`const\`.`);
+  if ((list.flags & NodeFlags.Const) === 0) return invalid("useState must be bound with `const`.");
   if (!isArrayBindingPattern(declaration.name)) {
-    return invalid(`${hookName} must be destructured: \`const [value, setValue] = ${global ? 'useGameState("key")' : "useState(initial)"}\`.`);
+    return invalid("useState must be destructured: `const [value, setValue] = useState(initial)`.");
   }
   const elements = declaration.name.elements;
   if (elements.length < 1 || elements.length > 2) {
-    return invalid(`${hookName} destructuring must bind one or two names: \`[value, setValue]\`.`);
+    return invalid("useState destructuring must bind one or two names: `[value, setValue]`.");
   }
   const names: (string | null)[] = [];
   for (const element of elements) {
@@ -570,29 +608,21 @@ function matchUseStateStatement(statement: Statement): UseStateMatch | null {
       continue;
     }
     if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) {
-      return invalid(`${hookName} destructuring must bind plain identifiers.`);
+      return invalid("useState destructuring must bind plain identifiers.");
     }
     names.push(element.name.text);
   }
   const valueName = names[0];
-  if (!valueName && !(global && names[1])) return invalid(global ? "useGameState must bind the value, the setter, or both." : "useState must bind the state value.");
-  let globalKey: string | null = null;
-  if (global) {
-    const key = init.arguments[0];
-    if (init.arguments.length !== 1 || !key || !isStringLiteral(key) || init.typeArguments?.length) {
-      return invalid('useGameState takes one argument, the key as a string literal: `const [coins, setCoins] = useGameState("coins")`. Its type and initial value come from GameState.ts.');
-    }
-    globalKey = key.text;
-  } else if (init.arguments.length > 1) return invalid("useState takes at most one argument.");
+  if (!valueName) return invalid("useState must bind the state value.");
+  if (init.arguments.length > 1) return invalid("useState takes at most one argument.");
 
   return {
     kind: "ok",
     hook: {
       kind: "useState",
-      globalKey,
-      valueName: valueName ?? null,
+      valueName,
       setterName: names[1] ?? null,
-      initializer: global ? null : init.arguments[0] ?? null,
+      initializer: init.arguments[0] ?? null,
       typeArgument: init.typeArguments?.[0] ?? null,
       call: init,
       declaration,
@@ -608,6 +638,40 @@ function matchRenderConst(statement: Statement): RenderConstAnalysis | null {
   const declaration = list.declarations[0]!;
   if (!isIdentifier(declaration.name) || !declaration.initializer) return null;
   return { kind: "const", name: declaration.name.text, initializer: declaration.initializer, declaration };
+}
+
+type StoreMatch =
+  | { readonly kind: "ok"; readonly hook: UseStoreCallAnalysis }
+  | { readonly kind: "invalid"; readonly message: string; readonly call: CallExpression };
+
+/** Recognises `const hp = useGame((s) => s.player.hp)` on an imported store; null if the statement is not a call of one. */
+function matchStoreStatement(statement: Statement, storeNames: ReadonlySet<string>): StoreMatch | null {
+  if (storeNames.size === 0 || !isVariableStatement(statement)) return null;
+  const list = statement.declarationList;
+  if (list.declarations.length !== 1) return null;
+  const declaration = list.declarations[0]!;
+  const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
+  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || !storeNames.has(init.expression.text)) return null;
+  const storeName = init.expression.text;
+  const invalid = (message: string): StoreMatch => ({ kind: "invalid", message, call: init });
+  const example = `const hp = ${storeName}((s) => s.player.hp);`;
+  if ((list.flags & NodeFlags.Const) === 0) return invalid(`${storeName}(…) must be bound with \`const\`: \`${example}\``);
+  if (!isIdentifier(declaration.name)) return invalid(`${storeName}(…) binds one plain name: \`${example}\``);
+  const selector = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
+  if (init.arguments.length !== 1 || !selector || !isArrowFunction(selector) || selector.parameters.length !== 1 || !isIdentifier(selector.parameters[0]!.name) || init.typeArguments?.length) {
+    return invalid(`${storeName} takes one selector, an arrow with one parameter: \`${example}\``);
+  }
+  const parameter = (selector.parameters[0]!.name as { text: string }).text;
+  const path: string[] = [];
+  let at: Node = isBlock(selector.body) ? selector.body : unwrapParens(selector.body);
+  while (isPropertyAccessExpression(at)) {
+    path.unshift(at.name.text);
+    at = unwrapParens(at.expression);
+  }
+  if (!isIdentifier(at) || (at as { text: string }).text !== parameter || path.length === 0) {
+    return invalid(`The selector must be a plain path from its parameter, like \`(${parameter}) => ${parameter}.player.hp\`: the compiler subscribes the component to exactly that path.`);
+  }
+  return { kind: "ok", hook: { kind: "useStore", storeName, valueName: declaration.name.text, path, selector, call: init, declaration } };
 }
 
 type HandleMatch =

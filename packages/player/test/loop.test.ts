@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Collider, Entity, GameObject, Pointer, Shape, Sound, World, getSoundSink, readGameState, setGameState, type InputState } from "@rge/runtime";
+import { Camera, Collider, Entity, GameObject, Pointer, Shape, Sound, World, createGameState, getSoundSink, type InputState } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
 import { createPlayer, MAX_DT, run, type PlayerConfig } from "../src/loop.ts";
 import { RecordingBackend } from "../src/recording.ts";
@@ -33,9 +33,11 @@ describe("createPlayer", () => {
   });
 
   it("starts every game from the initial game state, whatever an earlier game left", () => {
-    setGameState("coins", 0, 42);
+    const { store } = createGameState({ state: { coins: 0 }, actions: { collect(s) { s.coins += 1; } } });
+    store.run("collect");
+    assert.equal(store.get("coins"), 1);
     const { player: p } = player(() => new Entity());
-    assert.equal(readGameState("coins", 0), 0, "a new player begins with an empty store, so keys take their initial values");
+    assert.equal(store.get("coins"), 0, "a new player resets every game state to its initial values");
     p.close();
   });
 

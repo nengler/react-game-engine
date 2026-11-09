@@ -210,6 +210,19 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
       }
       return { kind: "PlaySound", sound: callee.id };
     }
+    if (callee?.kind === "action") {
+      if (!ctx.canPlaySound()) {
+        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler, next to the setter call.`, call);
+        return null;
+      }
+      const args: ExprIR[] = [];
+      for (const argument of call.arguments) {
+        const lowered = ctx.lowerExpression(argument);
+        if (!lowered) return null;
+        args.push(lowered);
+      }
+      return { kind: "CallAction", action: callee.action, args };
+    }
     if (callee?.kind === "setter") {
       if (!ctx.canSetState()) {
         ctx.error(

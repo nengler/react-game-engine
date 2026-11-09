@@ -1,8 +1,28 @@
+import { createGameState } from "@rge/runtime";
+
 /**
- * The game's global state: every key `useGameState("key")` may name, with its starting value. The compiler reads this
- * file (it is never imported), so each value must be a number, string or boolean literal.
+ * The game's state, in one place: a nested object, and the actions that change it. Components import `useGame` and
+ * read one leaf with a selector (`useGame((s) => s.stats.coins)`), or bind an action to call in a handler
+ * (`useGame((s) => s.collect)`). The compiler reads this file to check those selectors; generated code imports it.
+ *
+ * An action is written as if it mutates its state: the store runs it on a copy, so a component re-renders only for
+ * the leaves it actually changed.
  */
-export const gameState = {
-  /** Coins picked up. Set by the player, shown by the HUD. */
-  coins: 0,
-};
+export const useGame = createGameState({
+  state: {
+    stats: {
+      /** Coins picked up. */
+      coins: 0,
+      /** Times the player has touched the spikes. */
+      hits: 0,
+    },
+  },
+  actions: {
+    collect(s) {
+      s.stats.coins += 1;
+    },
+    hit(s) {
+      s.stats.hits += 1;
+    },
+  },
+});
