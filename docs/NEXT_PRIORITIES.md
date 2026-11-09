@@ -4,13 +4,13 @@ As of 2026-11-09. Written after the post-N6 review; see [NATIVE_PLAN.md](NATIVE_
 
 ## Summary
 
-Phase 3 is done: a compiled game runs in a native window under Node and as a QuickJS-ng executable, with byte-identical output between the two. The post-N6 review fixed three performance cliffs and five bugs. What it cannot yet do is ship to someone else, or support a game whose logic depends on *what* it hit. The next five priorities, in order:
+Phase 3 is done: a compiled game runs in a native window under Node and as a QuickJS-ng executable, with byte-identical output between the two. The post-N6 review fixed three performance cliffs and five bugs. Since then, collisions that gameplay can use (#34), a fixed game resolution, a layout offset and `z` draw order (#36), and a Zustand-style game state with a `<Game>` root that carries the window's settings (#37) have landed, and the UI work is planned in [UI_PLAN.md](UI_PLAN.md) (#35, #38). **The order to work in is in "Order of work" below**; the five priorities, as first ranked:
 
 | # | Priority | Why now | Size (estimate) |
 | --- | --- | --- | --- |
 | 1 | Verify on real hardware; cache CI builds | Nobody has played it in a real window; every CI job rebuilds raylib from source | \~2–3 days |
-| 2 | Collisions gameplay can use: readable `other`, layers, exit events | A handler cannot tell a coin from an enemy, which blocks almost any game | \~1–1.5 weeks |
-| 3 | A screen-space HUD layer (ABI v2) and a `z` draw order (done) | A score drawn in the world moves with the camera; `z` is in, the HUD layer is not | \~1 week, `z` done |
+| 2 | Collisions gameplay can use: readable `other`, layers, exit events (**done**, #34) | A handler could not tell a coin from an enemy, which blocked almost any game | Done |
+| 3 | ABI v2 with a HUD layer, plus `z` draw order (`z` **done**, #36) | A score drawn in the world moves with the camera; layout and `pixelPerfect` need the same ABI change | \~1–1.5 weeks, `z` done |
 | 4 | Performance pass two: dependency-scoped `render()`, cached transforms, a collision grid | 2,000 state-driven objects with colliders still take 18 ms of a 16.7 ms frame under QuickJS | \~1.5–2 weeks |
 | 5 | Developer loop: errors in the window, scenes as an entry point, hot reload | A crash today closes the window and prints to a terminal the player may not see | \~1.5 weeks |
 
@@ -59,15 +59,16 @@ Everything is drawn through the camera, so a score or a health bar placed in the
 
 **Proposal**
 
-- A `<Hud>` built-in. Its subtree is drawn after the world, through an identity view, in window pixels. The player emits a second `RGE_OP_VIEW` before it.
+- A `<Hud>` built-in. Its subtree is drawn after the world through a view that ignores the camera: in canvas pixels under a `<Screen>`, in window pixels without one. The player emits a second `RGE_OP_VIEW` before it. The demo's own `Hud` component, and the `Hud` test components in the compiler's tests, are renamed, since a component cannot share a built-in's name.
 - librge today refuses a second view record ("malformed draw records"), so this is an ABI change: allow a later `RGE_OP_VIEW` to replace the current view, and bump `RGE_ABI_VERSION` to 2. Both hosts already check the version at load.
-- A `<Pointer>` inside `<Hud>` is hit-tested in window coordinates, so HUD buttons work while the camera moves.
+- A `<Pointer>` inside `<Hud>` is hit-tested in the HUD's coordinates, so HUD buttons work while the camera moves.
 - A `z` draw order: **done 2026-11-09**, as a `transform` field (`transform={{ z: 2 }}`) rather than a prop, because `z` is a common prop name that an attribute would reserve on every component. It is relative to the parent like `x` and `y`, sorted in TypeScript (stable, tree order among equals) so the record format is unchanged, and pointers follow it. See "What is drawn" in `DESIGN.md`. Cost: about 10% of the tree walk in the bench scenes under QuickJS, which priority 4's `Transform` setters would remove for games that never use it.
-- UI layout (`<Flex alignItems="center" gap={8}>`, sized with Clay's algorithm) builds on this layer, and a `<Screen width={320} height={180}>` inside the `<Game>` root gives the game a fixed resolution scaled to the window; see [UI_PLAN.md](UI_PLAN.md). It needs two measuring functions (`rge_measure_text`, returning width and line height, and `rge_texture_size`), and a scissor record for clipping, all of which should go into the same ABI v2 so the version moves once.
+- UI layout (`<Flex alignItems="center" gap={8}>`, sized with Clay's algorithm) builds on this layer, and a `<Screen width={320} height={180}>` inside the `<Game>` root gives the game a fixed resolution scaled to the window; see [UI_PLAN.md](UI_PLAN.md). ABI v2 therefore carries four things, landing together so the version moves once: the second view record (`<Hud>`); `rge_measure_text` (width and line height) and `rge_texture_size` (UI_PLAN's U0); a scissor record for clipping (U0); and `RGE_OP_CANVAS`, the render texture that makes `<Screen pixelPerfect>` real (UI_PLAN's C2).
 
 **Done when**
 
 - [ ] `rge.h`, `protocol.ts` and the header-parity test agree on ABI v2; `smoke.c` checks a second view
+- [ ] ABI v2 also has the measuring functions, the scissor record and `RGE_OP_CANVAS`, each with the checks in UI_PLAN's U0 and C2
 - [ ] `<Hud>` children stay fixed while the camera moves (a recording test and a pixel test)
 - [ ] A HUD pointer receives presses through a moving, zoomed camera
 - [x] `z` reorders records, and equal keys keep tree order
@@ -119,26 +120,34 @@ When a handler throws, both hosts print the stack and exit with status 1. That i
 - [ ] Editing a component while `npm run play:demo` runs updates it in place, keeping its state
 - [ ] An unknown key name is a compile error with a suggestion
 
-## Sequencing and open decisions
+## Order of work
 
-Priorities 1 and 2 touch different code (CI and build scripts; the compiler and the collision tracker). Priority 3 changes the ABI and no longer waits for anything: it is tested by the Linux CI that exists. In-window errors wait for the HUD layer they draw on.
+Decided 2026-11-09. This merges the priorities above with the milestones in [UI_PLAN.md](UI_PLAN.md) (U0–U5 for layout, C1–C3 for the fixed resolution). Done so far: priority 2 (#34), C1, U1 and `z` (#36), the game state and the `<Game>` root (#37).
+
+1. **ABI v2, as one change** (priority 3, U0, and C2's native half): the second view record, the measuring functions, the scissor record and `RGE_OP_CANVAS`, in `rge.h`, librge, both hosts and the recording backend.
+2. **The player's side of ABI v2:** the `<Hud>` built-in (with the renames), and `pixelPerfect` (the rest of C2). The demo's click counter moves into a `<Hud>`. This finishes priority 3.
+3. **U2, `<Flex>`:** the sizing modes, Clay's passes, alignment, `background`.
+4. **U3:** the HUD's box, shrinking to minimum sizes, and the demo's HUD rebuilt with `<Flex>`.
+5. **U4:** whole-pixel rounding, text alignment, `<Flex onPress>`.
+6. **C3:** the demo at a fixed resolution, `fit="expand"`, full screen, and the 3× window default.
+7. **U5:** floating boxes.
+8. **Priority 4, the performance pass**, starting with its open decision (how a moved transform is detected), which also decides whether a game that never sets `z` can skip its cost.
+9. **Priority 5, the developer loop:** errors are drawn on the `<Hud>`, so it comes after step 2 at the earliest.
+
+**Priority 1 fits anywhere**, because it is small and touches nothing above: CI caching can go in at any time, and the Linux playtest is most useful after step 4, so it covers the new HUD and layout.
+
+Why this order: everything visual (the HUD, layout, `pixelPerfect`) needs the same ABI change, so it comes first and lands once; `<Flex>` needs the HUD's box and real text sizes, so it follows; the demo's resolution change (C3) waits until its HUD is laid out, so it is done once; performance and the developer loop are independent of the UI, and the developer loop's in-window errors need the HUD.
 
 ```mermaid
 flowchart LR
-  subgraph platform["Platform and rendering"]
-    P1["1. Hardware and CI<br/>real window, CI caching"]
-    P3["3. HUD layer and z<br/>ABI v2, Hud, z prop"] -->|errors drawn on the HUD| P5["5. Developer loop<br/>errors in window, reload"]
-  end
-  subgraph gameplay["Gameplay"]
-    P2["2. Gameplay collisions<br/>other.tag, layers, exit"]
-  end
-  subgraph performance["Performance"]
-    P4["4. Performance pass<br/>render, transforms, grid"]
-  end
-  P2 -->|layers cut collision pairs| P4
+  A["1. ABI v2<br/>view, measuring, scissor, canvas"] --> B["2. Hud and pixelPerfect<br/>(finishes priority 3)"]
+  B --> U2["3. U2: Flex"] --> U3["4. U3: HUD box, shrinking, demo HUD"] --> U4["5. U4: polish, onPress"] --> C3["6. C3: demo resolution, full screen"] --> U5["7. U5: floating boxes"]
+  U5 --> P4["8. Priority 4: performance"] --> P5["9. Priority 5: developer loop"]
+  B -.->|errors drawn on the HUD| P5
+  P1["Priority 1: CI caching any time;<br/>playtest after step 4"] -.-> U3
 ```
 
-**Decisions needed before work starts**
+## Open decisions
 
 1. ~~**What `other` exposes (priority 2).**~~ Decided 2026-11-09: both `other.tag` and `other.owner` (the owning entity's name).
 2. **How a moved transform is detected (priority 4).** Setters with a version counter are exact but change `Transform` from plain fields; comparing against last frame keeps the fields but costs a check per object.
@@ -151,7 +160,7 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
 | Sprite sheets, tint, opacity, pivot on `Sprite` | The demo needs none; each is a record field plus a prop | The first game with real art (likely right after priority 3) |
-| Fonts, text measuring and alignment | The default font works for a demo | A HUD (priority 3) that needs centred or right-aligned text |
+| Fonts | The default font works for a demo; text measuring (U0) and alignment (U4) are now in [UI_PLAN.md](UI_PLAN.md) | A game whose look needs its own typeface |
 | Sound volume, looping music, overlapping plays, a build-time asset check | `useSound` takes one literal path and covers one-shot effects | Any game with background music |
 | Web backend (canvas) | Records map directly onto canvas calls, so it stays cheap to add later | Wanting a shareable browser build |
 | Gamepads, high DPI, fixed timestep | Each slots into the ABI without rework | A controller game, a blurry Retina window, or physics |

@@ -29,7 +29,7 @@ What has to exist first, and why priority 3 comes before or with this:
 - **Sizes.** Layout needs to know how big each child is. `Shape`, `Pointer` and `Collider` already have `width` and `height`. A `Text` and a `Sprite` do not: the size of text depends on the font, and the size of a sprite on the image file. Both are known only to librge. So the native library must answer two new questions, "how big is this text at this size?" and "how big is this texture?", which is an ABI change. Priority 3 already bumps the ABI to version 2 for `<Hud>`; these functions go into the **same** version 2, so the ABI moves once.
 - **A box to lay out in.** A HUD laid out in world space still drifts with the camera. `<Hud>` gives layout a fixed box: the canvas (or the window, with no `<Screen>`).
 
-So the order is: priority 3 (with U0's additions in ABI v2), then U2–U5. U1 is done.
+So the order is: priority 3 (with U0's additions in ABI v2), then U2–U5. U1 is done. The full order, interleaving these milestones with C2, C3 and the other priorities, is "Order of work" in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md#order-of-work).
 
 | Milestone | What | Size (estimate) |
 | --- | --- | --- |
