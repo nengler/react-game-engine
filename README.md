@@ -8,7 +8,9 @@ children are persistent instances, updated in place when state changes.
 This repository contains the **compiler** (the first vertical slice plus every
 Phase 2 milestone, M0–M15), a minimal mock runtime, and an example. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture, the IR,
 and the design decisions, and [docs/PHASE2_PLAN.md](docs/PHASE2_PLAN.md) for
-the roadmap and current milestone status.
+the roadmap and current milestone status. The next phase, a native player built on
+raylib (window, drawing, input, sound) with a Rust + QuickJS-ng shipping host, is
+planned in [docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md).
 
 ```tsx
 import { useState, Entity, Sprite, Collider } from "@rge/runtime/jsx";

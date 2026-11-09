@@ -61,7 +61,7 @@ Every milestone keeps the slice's architecture intact; a change that breaks one 
 - **TypeScript 7.1 only through the two adapters.** Only `parser/parser.ts` and `typecheck/typecheck.ts` import `typescript/sync`. Verify any new API against the installed `.d.ts` before use.
 - **Unsupported means a diagnostic.** Never silently drop syntax. Diagnostic codes in `diagnostics.ts` are append-only.
 - **Generated code must type-check.** Every feature adds a test that runs generated output through `typeCheckFiles` and one that imports and runs it against the runtime.
-- **Runtime stays a mock.** No rendering, physics or input backend; the runtime gets only the hooks the compiler's output calls.
+- **Runtime stays a mock.** No rendering, physics or input backend; the runtime gets only the hooks the compiler's output calls. (Phase 3 relaxes this to "runtime stays backend-free": drawing, input and audio live in `@rge/player` and native hosts, and the runtime only gains hooks such as a sound sink. See [NATIVE_PLAN.md](NATIVE_PLAN.md#ground-rules).)
 
 ## Sequencing
 
