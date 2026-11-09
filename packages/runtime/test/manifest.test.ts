@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Collider, Entity, GameObject, Sprite, runtimeManifest } from "../src/index.ts";
+import { Collider, Entity, GameObject, Sprite, Text, runtimeManifest } from "../src/index.ts";
 
 /** Every instance field and prototype member a generated subclass of `host` would inherit, excluding Object.prototype. */
 function inheritedMembers(host: object): Set<string> {
@@ -34,6 +34,7 @@ describe("runtime manifest", () => {
       Entity: new Entity(),
       Sprite: new Sprite({ image: "a" }),
       Collider: new Collider({ width: 1, height: 1 }),
+      Text: new Text({ text: "" }),
     };
     const base = new Entity();
     for (const tag of runtimeManifest.intrinsics) {
@@ -55,6 +56,15 @@ describe("runtime manifest", () => {
     }
   });
 
+  it("names, for text content, an intrinsic that is a leaf and a prop it really has", () => {
+    for (const [tag, prop] of Object.entries(runtimeManifest.textContent)) {
+      assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
+      assert.ok(!runtimeManifest.containerIntrinsics.includes(tag), `${tag} holds text, not elements`);
+      assert.ok(runtimeManifest.intrinsicMembers[tag]?.includes(prop), `${tag}.${prop} must be one of its members`);
+      assert.ok(runtimeManifest.intrinsicRequired[tag]?.includes(prop), `${tag}.${prop} is the content, so it is required`);
+    }
+  });
+
   it("lists only intrinsics as transformable, including the host", () => {
     for (const tag of runtimeManifest.transformIntrinsics) assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
     assert.ok(runtimeManifest.transformIntrinsics.includes(runtimeManifest.hostIntrinsic));
@@ -62,7 +72,7 @@ describe("runtime manifest", () => {
 
   it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
-    const classes: Record<string, unknown> = { Entity, Sprite, Collider };
+    const classes: Record<string, unknown> = { Entity, Sprite, Collider, Text };
     for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
   });
 });

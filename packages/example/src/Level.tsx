@@ -1,4 +1,4 @@
-import { useState, useRef, useUpdate, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { useState, useRef, useUpdate, Entity, Sprite, Collider, Text } from "@rge/runtime/jsx";
 import Coin, { Trail } from "./Coin.tsx";
 import { Banner } from "./Banner.tsx";
 import { Panel } from "./Panel.tsx";
@@ -72,6 +72,10 @@ function Level() {
       <Panel title="hud" transform={{ x: 160 }}>
         <Coin value={score} />
         <Trail value={wave} transform={{ x: 40, y: 20 }} />
+        {/* Text between the tags is the `text` prop: it follows `score` like any other value. */}
+        <Text size={12} color={score >= 5 ? "gold" : "white"} transform={{ y: 40 }}>
+          Score: {score} (wave {wave})
+        </Text>
       </Panel>
       {bossVisible && (
         <Entity name="Boss">
