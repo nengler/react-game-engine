@@ -13,6 +13,7 @@ import type { EntityProps } from "./components/Entity.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
 import type { TextProps } from "./components/Text.ts";
+import type { ShapeProps } from "./components/Shape.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
@@ -110,4 +111,9 @@ export type TextAttributes = Omit<TextProps, "text"> &
 /** A line of text (a label, a HUD readout). */
 export function Text(_props: TextAttributes): JSX.Element {
   return compileTimeOnly("Text");
+}
+
+/** A filled rectangle or circle, for debugging colliders and prototyping before art exists. */
+export function Shape(_props: ShapeProps): JSX.Element {
+  return compileTimeOnly("Shape");
 }

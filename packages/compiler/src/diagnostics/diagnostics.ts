@@ -29,6 +29,8 @@ export const DiagnosticCode = {
   InvalidProps: "RGE1208",
   /** A keyed list (`{items.map((e) => <X key={e.id} />)}`) that is not in the supported form, or a key on an element outside one. */
   InvalidList: "RGE1209",
+  /** A literal for a built-in's prop that is not one of the values it allows (`<Shape kind="oval">`). */
+  InvalidPropValue: "RGE1210",
   UnsupportedExpression: "RGE1301",
   UnknownIdentifier: "RGE1302",
   NonConstantInitialState: "RGE1303",

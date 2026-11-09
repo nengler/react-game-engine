@@ -218,6 +218,31 @@ function literalValue(node: Node): string | number | null {
   return null;
 }
 
+/**
+ * The closest of `choices` to `word`, if it is plausibly what was meant: one
+ * is the start of the other (`rectangle` for `rect`), or they are at most 2
+ * edits apart (and fewer than the word's length). Case is ignored.
+ */
+function nearest(word: string, choices: readonly string[]): string | null {
+  const distance = (a: string, b: string): number => {
+    let row = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      const next = [i];
+      for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j]! + 1, next[j - 1]! + 1, row[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+      row = next;
+    }
+    return row[b.length]!;
+  };
+  let best: { choice: string; d: number } | null = null;
+  const lower = word.toLowerCase();
+  for (const choice of choices) {
+    const prefix = lower.length >= 3 && (lower.startsWith(choice.toLowerCase()) || choice.toLowerCase().startsWith(lower));
+    const d = prefix ? 0 : distance(lower, choice.toLowerCase());
+    if (d <= 2 && d < word.length && (!best || d < best.d)) best = { choice, d };
+  }
+  return best?.choice ?? null;
+}
+
 /** `&amp;`, `&#38;`: JSX decodes these, and the compiler does not, so it asks for the character itself. */
 const HTML_ENTITY = /&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/;
 
@@ -1082,10 +1107,32 @@ class ComponentLowering implements LoweringContext {
         continue;
       }
       if (!value) continue;
+      if (!toComponent && !this.#checkLiteralChoice(tag, name, value, attribute)) continue;
       const dependencies = collectDependencies(value);
       props.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
     }
     return props;
+  }
+
+  /**
+   * A built-in prop that takes one of a fixed set of strings (the manifest's
+   * `intrinsicLiterals`, such as `<Shape kind>`): a literal is checked here,
+   * with the choices (and the nearest one, for a typo) in the message. Any other
+   * expression is left to the type-check, so `kind={big ? "rect" : "circle"}` works.
+   */
+  #checkLiteralChoice(tag: string, name: string, value: ExprIR, at: Node): boolean {
+    const allowed = this.#manifest.intrinsicLiterals[tag]?.[name];
+    if (!allowed) return true;
+    if (value.kind === "StringLiteral" && allowed.includes(value.value)) return true;
+    if (value.kind !== "StringLiteral" && value.kind !== "NumberLiteral" && value.kind !== "BooleanLiteral" && value.kind !== "NullLiteral") return true;
+    const given = value.kind === "StringLiteral" ? `'${value.value}'` : value.kind === "NullLiteral" ? "null" : String(value.value);
+    const near = value.kind === "StringLiteral" ? nearest(value.value, allowed) : null;
+    this.#error(
+      DiagnosticCode.InvalidPropValue,
+      `<${tag} ${name}> must be one of ${allowed.map((v) => `"${v}"`).join(", ")}, not ${given}${near ? ` (did you mean "${near}"?)` : ""}.`,
+      at,
+    );
+    return false;
   }
 
   /**

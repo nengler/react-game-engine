@@ -1,4 +1,4 @@
-import { useState, useRef, useUpdate, Entity, Sprite, Collider, Text } from "@rge/runtime/jsx";
+import { useState, useRef, useUpdate, Entity, Sprite, Collider, Shape, Text } from "@rge/runtime/jsx";
 import Coin, { Trail } from "./Coin.tsx";
 import { Banner } from "./Banner.tsx";
 import { Panel } from "./Panel.tsx";
@@ -25,6 +25,8 @@ export function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
     <Entity name="Enemy">
       <Sprite image={tint === "red" ? "enemy-red.png" : "enemy-blue.png"} />
       <Collider width={20} height={20} />
+      {/* A shape shows the collider's bounds while there is no art for it. */}
+      <Shape kind="rect" width={20} height={20} color={hp <= 0 ? "gray" : "rgba(255, 0, 0, 0.3)"} />
     </Entity>
   );
 }

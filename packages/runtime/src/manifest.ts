@@ -1,3 +1,5 @@
+import { SHAPE_KINDS } from "./components/Shape.ts";
+
 /**
  * Everything the compiler needs to know about this runtime, in one place.
  * The compiler takes a manifest as config, so adding an intrinsic or a handle
@@ -35,6 +37,13 @@ export interface RuntimeManifest {
    */
   readonly intrinsicRequired: Readonly<Record<string, readonly string[]>>;
   /**
+   * Props of an intrinsic that take one of a fixed set of string values
+   * (`<Shape kind="rect">`), by intrinsic then prop name. The compiler checks a
+   * literal against the set and says what the choices are; any other
+   * expression is left to the type-check.
+   */
+  readonly intrinsicLiterals: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>>;
+  /**
    * Callback props an intrinsic accepts, by intrinsic then prop name, with
    * the parameters its callback receives (a runtime handle type each).
    */
@@ -70,7 +79,7 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider", "Text"],
+  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity"],
   textContent: { Text: "text" },
@@ -79,12 +88,17 @@ export const runtimeManifest: RuntimeManifest = {
     Sprite: ["image"],
     Collider: ["width", "height", "onCollisionEnter"],
     Text: ["text", "size", "color"],
+    Shape: ["kind", "width", "height", "color"],
   },
   intrinsicRequired: {
     Entity: [],
     Sprite: ["image"],
     Collider: ["width", "height"],
     Text: ["text"],
+    Shape: ["kind", "width", "height"],
+  },
+  intrinsicLiterals: {
+    Shape: { kind: SHAPE_KINDS },
   },
   intrinsicCallbacks: {
     Collider: { onCollisionEnter: [{ name: "other", type: "GameObject" }] },
@@ -102,7 +116,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },
