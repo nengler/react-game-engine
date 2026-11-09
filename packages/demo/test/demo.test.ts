@@ -45,9 +45,11 @@ function close(actual: number, expected: number, what: string): void {
   assert.ok(Math.abs(actual - expected) < 1e-6, `${what}: ${actual} ≈ ${expected}`);
 }
 
-const player = (run: Run): Rect => run.backend.lastFrame.records.filter((r): r is Rect => r.op === "rect" && r.color === "#ffd700ff").at(-1) as Rect;
+const player = (run: Run): Rect => run.backend.lastFrame.records.filter((r): r is Rect => r.op === "rect" && (r.color === "#ffd700ff" || r.color === "#ff6347ff")).at(-1) as Rect;
 const button = (run: Run): Rect => run.backend.lastFrame.records.find((r): r is Rect => r.op === "rect" && r.width === 96) as Rect;
-const texts = (run: Run): string[] => run.backend.lastFrame.records.flatMap((r) => (r.op === "text" ? [r.text] : []));
+const texts = (run: Run): string[] => run.backend.lastFrame.records.flatMap((r) => (r.op === "text" && r.text.startsWith("Clicks") ? [r.text] : []));
+const coinsText = (run: Run): string[] => run.backend.lastFrame.records.flatMap((r) => (r.op === "text" && r.text.startsWith("Coins") ? [r.text] : []));
+const coin = (run: Run): DecodedRecord | undefined => run.backend.lastFrame.records.find((r) => r.op === "ellipse" && r.width === 16);
 
 /** Where a world point is on the screen in the last frame. */
 function onScreen(run: Run, x: number, y: number): { x: number; y: number } {
@@ -60,7 +62,7 @@ const MOVE_RIGHT: InputFrame = { dt: 0.1, down: ["ArrowRight"] };
 const IDLE: InputFrame = { dt: 0.1 };
 
 describe("demo: the first frame", () => {
-  it("draws the ground, the beacon, the button, its label and the player, in tree order, with the player in the middle", () => {
+  it("draws the ground, the beacon, the spikes, the coin, the button, its label and the player, in tree order, with the player in the middle", () => {
     const run = play([], 1);
     assert.deepEqual(summary(run.backend.lastFrame.records), [
       ["view", 320, 180],
@@ -70,9 +72,12 @@ describe("demo: the first frame", () => {
       ["ellipse", 260, -70, 28, 28, "#3a2b50ff"],
       ["sprite", "assets/beacon-2.png", 140, 120],
       ["sprite", "assets/beacon-1.png", -120, -60],
+      ["rect", 84, 10, 24, 24, "#8b1e2dff"],
+      ["ellipse", 60, 8, 16, 16, "#e8a317ff"],
       ["rect", 80, -40, 96, 32, "#708090ff"],
       ["text", "Clicks: 0", 92, -32, 16, "#ffffffff"],
       ["rect", 0, 0, 24, 24, "#ffd700ff"],
+      ["text", "Coins: 0", 0, -16, 12, "#ffffffff"],
     ]);
     assert.deepEqual(run.warnings, []);
     assert.equal(run.backend.lastFrame.clearColor, "#10131cff");
@@ -143,6 +148,32 @@ describe("demo: the button", () => {
   });
 });
 
+describe("demo: collisions", () => {
+  const LEFT: InputFrame = { dt: 0.1, down: ["ArrowLeft"] };
+  // Each MOVE_RIGHT frame moves the player 14 px, starting with the first step. The coin is at x 60 and the spikes
+  // at x 84 (the player is 24 wide), so the player touches the coin from x 42 and the spikes from x 70.
+
+  it("picks up the coin on touching it, and only once", () => {
+    const before = play([MOVE_RIGHT, MOVE_RIGHT], 3); // x = 28: short of the coin
+    assert.ok(coin(before), "the coin is there");
+    assert.deepEqual(coinsText(before), ["Coins: 0"]);
+    const run = play([MOVE_RIGHT, MOVE_RIGHT, MOVE_RIGHT, IDLE, IDLE], 5); // x = 42 touches it
+    assert.equal(coin(run), undefined, "the coin vanished");
+    assert.deepEqual(coinsText(run), ["Coins: 1"]);
+    close(player(run).x, 42, "the player stopped at the coin");
+    assert.equal(player(run).color, "#ffd700ff", "and is not hurt by it");
+  });
+
+  it("turns the player red while it overlaps the spikes, and back when it leaves", () => {
+    const onto = play([MOVE_RIGHT, MOVE_RIGHT, MOVE_RIGHT, MOVE_RIGHT, MOVE_RIGHT, IDLE, IDLE], 7); // x = 70: over the spikes
+    assert.equal(player(onto).color, "#ff6347ff", "tomato");
+    const off = play([MOVE_RIGHT, MOVE_RIGHT, MOVE_RIGHT, MOVE_RIGHT, MOVE_RIGHT, LEFT, LEFT, LEFT, LEFT, LEFT, IDLE], 11); // back to x = 0
+    close(player(off).x, 0, "walked back");
+    assert.equal(player(off).color, "#ffd700ff", "gold again, once the exit event fired");
+    assert.deepEqual(coinsText(off), ["Coins: 1"], "the coin was collected on the way, and not again on the way back");
+  });
+});
+
 describe("demo: the beacon", () => {
   it("cycles its frames and shows the magenta placeholder for the missing one, warning once", () => {
     // 4 fps is a frame every 0.25s; the player gives each step 0.1s (a longer step is clamped, see MAX_DT), so a
@@ -169,7 +200,7 @@ describe("demo: a minute of play", () => {
   it("runs 60 idle frames, keeping every element drawn and warning only about the missing frame", () => {
     const run = play([], 60);
     assert.equal(run.backend.frames.length, 60);
-    for (const frame of run.backend.frames) assert.equal(frame.records.length, 10);
+    for (const frame of run.backend.frames) assert.equal(frame.records.length, 13);
     assert.equal(run.warnings.length, 1);
     assert.match(run.warnings[0] as string, /beacon-gone/);
   });

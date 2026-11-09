@@ -1,0 +1,285 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/demo/src/Coin.tsx",
+  "typeDeclarations": [],
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Coin",
+      "span": {
+        "fileName": "packages/demo/src/Coin.tsx",
+        "start": 299,
+        "end": 821,
+        "line": 7,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Coin.taken",
+          "setterName": "setTaken",
+          "span": {
+            "fileName": "packages/demo/src/Coin.tsx",
+            "start": 332,
+            "end": 367,
+            "line": 8,
+            "column": 9
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Coin.taken",
+          "name": "taken",
+          "type": {
+            "kind": "Primitive",
+            "name": "boolean"
+          },
+          "initialValue": {
+            "kind": "BooleanLiteral",
+            "value": false
+          }
+        }
+      ],
+      "refs": [],
+      "sounds": [],
+      "props": [],
+      "propsType": null,
+      "isDefaultExport": false,
+      "isExported": true,
+      "acceptsChildren": false,
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Coin"
+            }
+          }
+        ],
+        "transform": [],
+        "children": [
+          {
+            "kind": "ConditionalChild",
+            "condition": {
+              "kind": "Unary",
+              "operator": "!",
+              "operand": {
+                "kind": "StateRead",
+                "state": "Coin.taken"
+              }
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Coin.taken"
+              }
+            ],
+            "element": {
+              "kind": "Element",
+              "id": "Coin/0",
+              "fieldName": "shape",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Shape"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "kind",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "circle"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "color",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "#e8a317"
+                  }
+                }
+              ],
+              "transform": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Coin.tsx",
+                "start": 423,
+                "end": 485,
+                "line": 12,
+                "column": 18
+              }
+            }
+          },
+          {
+            "kind": "ConditionalChild",
+            "condition": {
+              "kind": "Unary",
+              "operator": "!",
+              "operand": {
+                "kind": "StateRead",
+                "state": "Coin.taken"
+              }
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Coin.taken"
+              }
+            ],
+            "element": {
+              "kind": "Element",
+              "id": "Coin/1",
+              "fieldName": "collider",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Collider"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 16
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "tag",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "coin"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "layer",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "item"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "hits",
+                  "value": {
+                    "kind": "ArrayLiteral",
+                    "elements": [
+                      {
+                        "spread": false,
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "player"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "kind": "CallbackProp",
+                  "name": "onCollisionEnter",
+                  "handler": {
+                    "kind": "Function",
+                    "params": [
+                      {
+                        "id": "Coin.other#1",
+                        "name": "other",
+                        "type": {
+                          "kind": "Named",
+                          "name": "Contact"
+                        }
+                      }
+                    ],
+                    "body": [
+                      {
+                        "kind": "If",
+                        "test": {
+                          "kind": "Binary",
+                          "operator": "===",
+                          "left": {
+                            "kind": "PropertyRead",
+                            "object": {
+                              "kind": "ParamRead",
+                              "param": "Coin.other#1",
+                              "name": "other"
+                            },
+                            "name": "owner"
+                          },
+                          "right": {
+                            "kind": "StringLiteral",
+                            "value": "Player"
+                          }
+                        },
+                        "then": [
+                          {
+                            "kind": "SetState",
+                            "state": "Coin.taken",
+                            "value": {
+                              "kind": "BooleanLiteral",
+                              "value": true
+                            }
+                          }
+                        ],
+                        "else": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "transform": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Coin.tsx",
+                "start": 514,
+                "end": 791,
+                "line": 14,
+                "column": 9
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/demo/src/Coin.tsx",
+          "start": 385,
+          "end": 814,
+          "line": 11,
+          "column": 5
+        }
+      }
+    }
+  ]
+}

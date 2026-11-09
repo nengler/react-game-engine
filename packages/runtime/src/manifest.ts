@@ -95,7 +95,7 @@ export const runtimeManifest: RuntimeManifest = {
   intrinsicMembers: {
     Entity: ["name"],
     Sprite: ["image"],
-    Collider: ["width", "height", "onCollisionEnter"],
+    Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
     Text: ["text", "size", "color"],
     Shape: ["kind", "width", "height", "color"],
@@ -119,7 +119,10 @@ export const runtimeManifest: RuntimeManifest = {
     Shape: { kind: SHAPE_KINDS },
   },
   intrinsicCallbacks: {
-    Collider: { onCollisionEnter: [{ name: "other", type: "GameObject" }] },
+    Collider: {
+      onCollisionEnter: [{ name: "other", type: "Contact" }],
+      onCollisionExit: [{ name: "other", type: "Contact" }],
+    },
     Pointer: { onPress: [] },
   },
   reservedMembers: [
@@ -141,7 +144,7 @@ export const runtimeManifest: RuntimeManifest = {
       methods: { pressed: 1, down: 1, released: 1 },
       properties: ["pointerX", "pointerY"],
     },
-    GameObject: { methods: {}, properties: [] },
+    Contact: { methods: {}, properties: ["tag", "owner"] },
   },
   functions: { clamp: 3 },
 };

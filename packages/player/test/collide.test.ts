@@ -101,7 +101,7 @@ function collidersOf(world: World): ColliderEntry[] {
 function actor(name: string, x: number, log: string[], size = 10): { entity: Entity; collider: Collider } {
   const entity = new Entity({ name });
   entity.transform.x = x;
-  const collider = new Collider({ width: size, height: size, onCollisionEnter: (other) => log.push(`${name} met ${(other.parent as Entity).name}`) });
+  const collider = new Collider({ width: size, height: size, onCollisionEnter: (other) => log.push(`${name} met ${other.owner}`) });
   entity.addChild(collider);
   return { entity, collider };
 }
@@ -186,14 +186,14 @@ describe("CollisionTracker", () => {
     const log: string[] = [];
     const flat = new Entity();
     flat.addChild(new Collider({ width: 0, height: 10, onCollisionEnter: () => log.push("flat") }));
-    const silent = new Entity();
+    const silent = new Entity({ name: "silent" });
     silent.addChild(new Collider({ width: 10, height: 10 }));
     world.mount(flat);
     world.mount(silent);
     world.mount(actor("a", 0, log).entity);
     const tracker = new CollisionTracker();
     assert.equal(tracker.update(world, collidersOf(world)), 1, "only the silent one and a overlap");
-    assert.deepEqual(log, ["a met "], "a was told; the silent one's missing callback is fine");
+    assert.deepEqual(log, ["a met silent"], "a was told; the silent one's missing callback is fine");
   });
 
   it("reports every pair among three overlapping colliders, in draw order", () => {
@@ -213,7 +213,8 @@ describe("CollisionTracker", () => {
     world.mount(b.entity);
     a.collider.onCollisionEnter = (other) => {
       log.push("a met b");
-      (other.parent as GameObject).parent?.removeChild(other.parent as GameObject);
+      const body = (other as Collider).parent as GameObject;
+      body.parent?.removeChild(body);
     };
     assert.equal(new CollisionTracker().update(world, collidersOf(world)), 1);
     assert.deepEqual(log, ["a met b"], "b left the world, so b's callback is skipped");
@@ -238,6 +239,8 @@ describe("CollisionTracker against every-pair testing", () => {
       const parents: Entity[] = [];
       const colliders: Collider[] = [];
       const reported: string[] = [];
+      const exited: string[] = [];
+      const layers = ["a", "b", "c"];
       const count = 5 + Math.floor(next() * 40);
       // A few parents hold several colliders each (so the same-parent rule matters); boxes are scaled, flipped, turned and sometimes empty.
       for (let i = 0; i < count; i++) {
@@ -248,7 +251,13 @@ describe("CollisionTracker against every-pair testing", () => {
         }
         const parent = parents[parents.length - 1] as Entity;
         const index = colliders.length;
-        const collider = new Collider({ width: next() < 0.05 ? 0 : 4 + next() * 30, height: 4 + next() * 30, onCollisionEnter: (other) => reported.push(`${index}>${colliders.indexOf(other as Collider)}`) });
+        const collider = new Collider({ width: next() < 0.05 ? 0 : 4 + next() * 30, height: 4 + next() * 30,
+          layer: layers[Math.floor(next() * 3)] as string,
+          // Often no list (touches everything); otherwise a random subset, sometimes empty.
+          hits: next() < 0.5 ? undefined : layers.filter(() => next() < 0.6),
+          onCollisionEnter: (other) => reported.push(`${index}>${colliders.indexOf(other as Collider)}`),
+          onCollisionExit: (other) => exited.push(`${Math.min(index, colliders.indexOf(other as Collider))}>${Math.max(index, colliders.indexOf(other as Collider))}`),
+        });
         collider.transform.x = next() * 120;
         collider.transform.y = next() * 120;
         if (next() < 0.3) collider.transform.rotation = next() * 6.28;
@@ -270,6 +279,7 @@ describe("CollisionTracker against every-pair testing", () => {
             const a = entries[i] as ColliderEntry;
             const b = entries[j] as ColliderEntry;
             if (a.collider.parent === b.collider.parent) continue;
+            if (!a.collider.hitsLayer(b.collider.layer) || !b.collider.hitsLayer(a.collider.layer)) continue;
             const boxA = colliderBounds(a.collider.width, a.collider.height, a.world);
             const boxB = colliderBounds(b.collider.width, b.collider.height, b.world);
             if (boxA === null || boxB === null || !boundsOverlap(boxA, boxB)) continue;
@@ -278,8 +288,12 @@ describe("CollisionTracker against every-pair testing", () => {
             if (!touching.has(key)) expected.push(key);
           }
         }
+        // Pairs that touched last frame and do not now; keys are `from>to` in draw order, so normalise to collider indexes.
+        const normal = (key: string): string => key.split(">").map(Number).sort((x, y) => x - y).join(">");
+        const wantExits = [...touching].filter((key) => !now.has(key)).map(normal).sort();
         touching = now;
         reported.length = 0;
+        exited.length = 0;
         const count = tracker.update(world, entries);
         // reportCollision tells both sides; keep one line per pair: the earlier collider's.
         const pairs = reported.filter((line) => {
@@ -289,6 +303,9 @@ describe("CollisionTracker against every-pair testing", () => {
         totalPairs += expected.length;
         assert.equal(count, expected.length, `seed ${seed} frame ${frame}: how many`);
         assert.deepEqual(pairs, expected, `seed ${seed} frame ${frame}: which, and in what order`);
+        // Each exit is told to both sides: one line per side, so every key appears twice.
+        assert.deepEqual([...new Set(exited)].sort(), wantExits, `seed ${seed} frame ${frame}: which pairs ended`);
+        assert.equal(exited.length, wantExits.length * 2, `seed ${seed} frame ${frame}: each exit reaches both sides once`);
         // Move things so pairs start and stop touching between frames.
         for (const collider of colliders) {
           collider.transform.x += (next() - 0.5) * 40;
@@ -301,7 +318,7 @@ describe("CollisionTracker against every-pair testing", () => {
 
   it("keeps reporting the same contacts when it runs out of ids and renumbers, while colliders come and go", () => {
     const next = random(7);
-    const reports = (log: string[]) => ({ reportCollision: (a: GameObject, b: GameObject) => void log.push(`${(a as Collider).width}|${(b as Collider).width}`) }) as unknown as World;
+    const reports = (log: string[]) => ({ reportCollision: (a: Collider, b: Collider) => void log.push(`${a.width}|${b.width}`), reportCollisionExit: () => {} }) as unknown as World;
     const roomy = new CollisionTracker();
     const tight = new CollisionTracker(12); // renumbers every few frames
     const expected: string[] = [];
@@ -326,7 +343,7 @@ describe("CollisionTracker against every-pair testing", () => {
 
   it("still reports each contact once when ids grow past the compact range (more than 2^15)", () => {
     const log: string[] = [];
-    const world = { reportCollision: (a: GameObject, b: GameObject) => void log.push(`${(a as Collider).width}|${(b as Collider).width}`) } as unknown as World;
+    const world = { reportCollision: (a: Collider, b: Collider) => void log.push(`${a.width}|${b.width}`), reportCollisionExit: () => {} } as unknown as World;
     const tracker = new CollisionTracker();
     const spread = (count: number, first: number): ColliderEntry[] =>
       Array.from({ length: count }, (_, i) => {
@@ -412,5 +429,108 @@ describe("collisions in the frame loop", () => {
     for (let i = 0; i < 5; i++) player.step();
     assert.deepEqual(backend.plays, []);
     player.close();
+  });
+});
+
+describe("CollisionTracker: layers and exits", () => {
+  /** Two colliders in their own named entities: `a` at x = 0 and `b` at x = 5, size 10, so they overlap. */
+  function pair(a: ConstructorParameters<typeof Collider>[0], b: ConstructorParameters<typeof Collider>[0]): { world: World; a: Collider; b: Collider; ea: Entity; eb: Entity } {
+    const world = new World();
+    const ea = new Entity({ name: "ea" });
+    const eb = new Entity({ name: "eb" });
+    eb.transform.x = 5;
+    const ca = new Collider(a);
+    const cb = new Collider(b);
+    ea.addChild(ca);
+    eb.addChild(cb);
+    world.mount(ea);
+    world.mount(eb);
+    return { world, a: ca, b: cb, ea, eb };
+  }
+  const box = { width: 10, height: 10 };
+
+  it("gives a handler the other collider's tag and its owner's name", () => {
+    const seen: string[] = [];
+    const { world } = pair({ ...box, tag: "coin", onCollisionEnter: (o) => seen.push(`a: ${o.tag}/${o.owner}`) }, { ...box, tag: "player", onCollisionEnter: (o) => seen.push(`b: ${o.tag}/${o.owner}`) });
+    new CollisionTracker().update(world, collidersOf(world));
+    assert.deepEqual(seen, ["a: player/eb", "b: coin/ea"]);
+    const bare = new Collider(box);
+    assert.equal(bare.tag, "", "no tag reads as the empty string");
+    assert.equal(bare.owner, "Collider", "no named entity above it: its class name");
+  });
+
+  it("skips a pair unless each side's hits allows the other's layer", () => {
+    const touches = (a: object, b: object): number => {
+      const { world } = pair({ ...box, ...a }, { ...box, ...b });
+      return new CollisionTracker().update(world, collidersOf(world));
+    };
+    assert.equal(touches({}, {}), 1, "no layers, no hits: everything touches");
+    assert.equal(touches({ layer: "bullet", hits: ["enemy"] }, { layer: "bullet", hits: ["enemy"] }), 0, "bullets ignore bullets");
+    assert.equal(touches({ layer: "bullet", hits: ["enemy"] }, { layer: "enemy" }), 1, "a bullet hits an enemy");
+    assert.equal(touches({ layer: "bullet", hits: ["enemy"] }, { layer: "ground" }), 0, "the ground does not stop it, by its own hits");
+    assert.equal(touches({ layer: "bullet" }, { layer: "ground", hits: ["player"] }), 0, "the other side's hits count too");
+    assert.equal(touches({ hits: [] }, {}), 0, "an empty hits list touches nothing");
+  });
+
+  it("reports an exit once when a pair moves apart, to both sides, and not again", () => {
+    const log: string[] = [];
+    const { world, eb } = pair(
+      { ...box, onCollisionEnter: (o) => log.push(`a in ${o.owner}`), onCollisionExit: (o) => log.push(`a out ${o.owner}`) },
+      { ...box, onCollisionEnter: (o) => log.push(`b in ${o.owner}`), onCollisionExit: (o) => log.push(`b out ${o.owner}`) },
+    );
+    const tracker = new CollisionTracker();
+    tracker.update(world, collidersOf(world));
+    tracker.update(world, collidersOf(world));
+    assert.deepEqual(log, ["a in eb", "b in ea"], "staying together reports nothing more");
+    eb.transform.x = 50;
+    assert.equal(tracker.update(world, collidersOf(world)), 0, "an exit is not an enter");
+    assert.deepEqual(log.slice(2), ["a out eb", "b out ea"]);
+    tracker.update(world, collidersOf(world));
+    assert.equal(log.length, 4, "once");
+    eb.transform.x = 5;
+    tracker.update(world, collidersOf(world));
+    assert.deepEqual(log.slice(4), ["a in eb", "b in ea"], "touching again is a new contact");
+  });
+
+  it("reports an exit when one collider leaves the world, to the one still mounted only", () => {
+    const log: string[] = [];
+    const { world, eb } = pair({ ...box, onCollisionExit: (o) => log.push(`a out ${o.owner}`) }, { ...box, onCollisionExit: () => log.push("b out") });
+    const tracker = new CollisionTracker();
+    tracker.update(world, collidersOf(world));
+    eb.parent?.removeChild(eb);
+    tracker.update(world, collidersOf(world));
+    assert.deepEqual(log, ["a out eb"], "b is gone, so it hears nothing");
+  });
+
+  it("reports an exit when a collider loses its area, and when layers stop matching", () => {
+    const log: string[] = [];
+    const { world, a, b } = pair({ ...box, onCollisionExit: () => log.push("a out") }, { ...box });
+    const tracker = new CollisionTracker();
+    tracker.update(world, collidersOf(world));
+    b.width = 0;
+    tracker.update(world, collidersOf(world));
+    assert.deepEqual(log, ["a out"]);
+    b.width = 10;
+    tracker.update(world, collidersOf(world));
+    a.hits = [];
+    tracker.update(world, collidersOf(world));
+    assert.deepEqual(log, ["a out", "a out"]);
+  });
+
+  it("reports exits before enters in a frame, and keeps exits that renumbering would have dropped", () => {
+    const log: string[] = [];
+    const world = { reportCollision: (a: Collider) => void log.push(`in ${a.width}`), reportCollisionExit: (a: Collider) => void log.push(`out ${a.width}`) } as unknown as World;
+    const tracker = new CollisionTracker(4);
+    const collider = (width: number, x: number): ColliderEntry => {
+      const c = new Collider({ width, height: 10 });
+      new Entity().addChild(c); // its own parent: colliders that share one never collide
+      return { collider: c, world: { ...IDENTITY, x } };
+    };
+    const [p, q] = [collider(10, 0), collider(11, 5)];
+    tracker.update(world, [p, q]);
+    // Both leave; two fresh colliders arrive, enough of them to force a renumber (compactAt 4).
+    const fresh = [collider(12, 0), collider(13, 5), collider(14, 100), collider(15, 200)];
+    tracker.update(world, fresh);
+    assert.deepEqual(log, ["in 10", "out 10", "in 12"], "the old pair's exit comes first, though neither of its colliders is in the list now");
   });
 });

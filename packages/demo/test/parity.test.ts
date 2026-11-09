@@ -30,6 +30,7 @@ describe("parity: the demo under Node", () => {
     assert.equal(run.frames.length, 60);
     assert.deepEqual(run.plays, ["assets/click.wav"], "the miss does not play, the hit does once");
     assert.ok(run.frames.at(-1)?.records.some((r) => r.op === "text" && r.text === "Clicks: 1"), "the click on the button counted");
+    assert.ok(run.frames.at(-1)?.records.some((r) => r.op === "text" && r.text === "Coins: 1"), "the walk picked up the coin, so collisions ran in the parity run too");
     assert.equal(run.warnings.length, 1, "only the missing beacon frame warns");
   });
 });

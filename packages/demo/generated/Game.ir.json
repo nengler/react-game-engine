@@ -8,9 +8,9 @@
       "name": "Game",
       "span": {
         "fileName": "packages/demo/src/Game.tsx",
-        "start": 516,
-        "end": 1434,
-        "line": 11,
+        "start": 688,
+        "end": 1695,
+        "line": 14,
         "column": 1
       },
       "hooks": [
@@ -20,9 +20,9 @@
           "setterName": "setClicks",
           "span": {
             "fileName": "packages/demo/src/Game.tsx",
-            "start": 557,
-            "end": 590,
-            "line": 12,
+            "start": 729,
+            "end": 762,
+            "line": 15,
             "column": 9
           }
         }
@@ -51,9 +51,9 @@
           "path": "click.wav",
           "span": {
             "fileName": "packages/demo/src/Game.tsx",
-            "start": 600,
-            "end": 633,
-            "line": 13,
+            "start": 772,
+            "end": 805,
+            "line": 16,
             "column": 9
           }
         }
@@ -98,9 +98,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 678,
-                "end": 688,
-                "line": 17,
+                "start": 850,
+                "end": 860,
+                "line": 20,
                 "column": 7
               }
             }
@@ -147,9 +147,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 695,
-                "end": 737,
-                "line": 18,
+                "start": 867,
+                "end": 909,
+                "line": 21,
                 "column": 7
               }
             }
@@ -159,6 +159,88 @@
             "element": {
               "kind": "Element",
               "id": "Game/2",
+              "fieldName": "spikes",
+              "component": {
+                "kind": "Imported",
+                "name": "Spikes",
+                "module": "./Spikes.tsx",
+                "isDefault": false
+              },
+              "props": [],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 84
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 10
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 916,
+                "end": 955,
+                "line": 22,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/3",
+              "fieldName": "coin",
+              "component": {
+                "kind": "Imported",
+                "name": "Coin",
+                "module": "./Coin.tsx",
+                "isDefault": false
+              },
+              "props": [],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 60
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 8
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 962,
+                "end": 998,
+                "line": 23,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/4",
               "fieldName": "shape",
               "component": {
                 "kind": "Intrinsic",
@@ -248,9 +330,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 848,
-                "end": 969,
-                "line": 20,
+                "start": 1109,
+                "end": 1230,
+                "line": 25,
                 "column": 7
               }
             }
@@ -259,7 +341,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/3",
+              "id": "Game/5",
               "fieldName": "pointer",
               "component": {
                 "kind": "Intrinsic",
@@ -357,9 +439,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 976,
-                "end": 1174,
-                "line": 21,
+                "start": 1237,
+                "end": 1435,
+                "line": 26,
                 "column": 7
               }
             }
@@ -368,7 +450,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/4",
+              "id": "Game/6",
               "fieldName": "text",
               "component": {
                 "kind": "Intrinsic",
@@ -440,9 +522,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 1181,
-                "end": 1280,
-                "line": 30,
+                "start": 1442,
+                "end": 1541,
+                "line": 35,
                 "column": 7
               }
             }
@@ -451,7 +533,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/5",
+              "id": "Game/7",
               "fieldName": "camera",
               "component": {
                 "kind": "Intrinsic",
@@ -464,7 +546,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Game/5/0",
+                    "id": "Game/7/0",
                     "fieldName": "player",
                     "component": {
                       "kind": "Imported",
@@ -477,9 +559,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/demo/src/Game.tsx",
-                      "start": 1387,
-                      "end": 1397,
-                      "line": 35,
+                      "start": 1648,
+                      "end": 1658,
+                      "line": 40,
                       "column": 9
                     }
                   }
@@ -487,9 +569,9 @@
               ],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 1370,
-                "end": 1413,
-                "line": 34,
+                "start": 1631,
+                "end": 1674,
+                "line": 39,
                 "column": 7
               }
             }
@@ -497,9 +579,9 @@
         ],
         "span": {
           "fileName": "packages/demo/src/Game.tsx",
-          "start": 651,
-          "end": 1427,
-          "line": 16,
+          "start": 823,
+          "end": 1688,
+          "line": 19,
           "column": 5
         }
       }

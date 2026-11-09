@@ -663,19 +663,19 @@ function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }}
 
   it("lets a component be a Collider whose callback is set after super()", async () => {
     const compiled = compile(`function Trap() {
-  const [hits, setHits] = useState(0);
-  return <Collider width={10} height={10} onCollisionEnter={() => setHits((n) => n + 1)} />;
+  const [touches, setTouches] = useState(0);
+  return <Collider width={10} height={10} onCollisionEnter={() => setTouches((n) => n + 1)} />;
 }`);
     assert.match(compiled.code, /export class Trap extends Collider \{/);
-    assert.match(compiled.code, /super\(\{ width: 10, height: 10 \}\);\n\s+this\.onCollisionEnter = \(\) => \{ this\.setHits/, "an arrow that uses `this` cannot be made inside the super() call");
+    assert.match(compiled.code, /super\(\{ width: 10, height: 10 \}\);\n\s+this\.onCollisionEnter = \(\) => \{ this\.setTouches/, "an arrow that uses `this` cannot be made inside the super() call");
     assert.deepEqual(typeCheck(compiled), []);
-    const { Trap } = await load<{ Trap: new () => Collider & { hits: number } }>(compiled);
+    const { Trap } = await load<{ Trap: new () => Collider & { touches: number } }>(compiled);
     const world = new World();
     const trap = new Trap();
     world.mount(trap);
     world.reportCollision(trap, new Collider({ width: 1, height: 1 }));
     world.flush();
-    assert.equal(trap.hits, 1);
+    assert.equal(trap.touches, 1);
   });
 
   it("keeps the root's own fields free of state, refs and props", () => {
@@ -704,9 +704,9 @@ describe("M4b: collider callbacks", () => {
     const collider = elementOf(compiled.ir.components[0]!.root.children[0]!);
     const callback = collider.props.find((p) => p.kind === "CallbackProp");
     assert.ok(callback?.kind === "CallbackProp");
-    assert.deepEqual(callback.handler.params.map((p) => p.type), [{ kind: "Named", name: "GameObject" }]);
-    assert.match(compiled.code, /import \{ Collider, Entity, type GameObject \} from "@rge\/runtime";/);
-    assert.match(compiled.code, /onCollisionEnter: \(other: GameObject\) => \{/);
+    assert.deepEqual(callback.handler.params.map((p) => p.type), [{ kind: "Named", name: "Contact" }]);
+    assert.match(compiled.code, /import \{ Collider, Entity, type Contact \} from "@rge\/runtime";/);
+    assert.match(compiled.code, /onCollisionEnter: \(other: Contact\) => \{/);
     assert.deepEqual(typeCheck(compiled), []);
   });
 
@@ -715,6 +715,25 @@ describe("M4b: collider callbacks", () => {
     assert.deepEqual(run(`<Sprite image="a" onClick={() => {}} />`), [DiagnosticCode.UnsupportedAttribute]);
     assert.deepEqual(run(`<Collider width={1} height={1} onTouch={() => {}} />`), [DiagnosticCode.UnsupportedAttribute]);
     assert.deepEqual(run(`<Collider width={1} height={1} onCollisionEnter={(a, b) => {}} />`), [DiagnosticCode.InvalidHandler]);
+  });
+
+  it("lets a handler read the other collider's tag and owner, and nothing else", () => {
+    const compiled = compile(`function Hero() {
+  const [coins, setCoins] = useState(0);
+  const [hurt, setHurt] = useState(false);
+  return (
+    <Entity name="H">
+      <Collider width={1} height={1} tag="player" layer="player" hits={["coin", "enemy"]}
+        onCollisionEnter={(other) => { if (other.tag === "coin") setCoins(coins + 1); else if (other.owner === "Spikes") setHurt(true); }}
+        onCollisionExit={(other) => { if (other.tag === "enemy") setHurt(false); }} />
+    </Entity>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /onCollisionExit: \(other: Contact\) =>/);
+    assert.match(compiled.code, /tag: "player"/);
+    const unknown = compileErrors(`function A() { return <Entity><Collider width={1} height={1} onCollisionEnter={(other) => { const w = other.width; }} /></Entity>; }`);
+    assert.match(unknown[0]!.message, /'Contact' has no readable property 'width'/);
   });
 
   it("type-checks authored collider callbacks", () => {
