@@ -11,7 +11,7 @@ keyboard and mouse through raylib, under Node during development and as a small 
 QuickJS-ng executable that ships without Node. See [docs/DESIGN.md](docs/DESIGN.md) for the
 architecture, the IR and the design decisions, [docs/PHASE2_PLAN.md](docs/PHASE2_PLAN.md) for
 the compiler's roadmap, and [docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md) for the player's, including
-its performance baseline.
+its performance baseline. What comes next is ranked in [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md).
 
 ```tsx
 import { useState, Entity, Sprite, Collider } from "@rge/runtime/jsx";

@@ -1,6 +1,6 @@
 # Phase 3 plan: the native player
 
-Snapshot of the plan as of 2026-11-09. Phase 2 built the compiler and a mock runtime: generated components run, render and handle input, but nothing draws. Phase 3 puts a compiled game in a native window: it draws, plays sound, reads the keyboard and mouse, and ships as a native executable without Node. This document is both the design note the Phase 2 ground rules ask for (it changes the "runtime stays a mock" rule, see [Ground rules](#ground-rules)) and the milestone plan. Progress is tracked in [Status](#status) and the [Handoff checklist](#handoff-checklist).
+Snapshot of the plan as of 2026-11-09. Phase 2 built the compiler and a mock runtime: generated components run, render and handle input, but nothing draws. Phase 3 puts a compiled game in a native window: it draws, plays sound, reads the keyboard and mouse, and ships as a native executable without Node. This document is both the design note the Phase 2 ground rules ask for (it changes the "runtime stays a mock" rule, see [Ground rules](#ground-rules)) and the milestone plan. Progress is tracked in [Status](#status) and the [Handoff checklist](#handoff-checklist). Phase 3 is complete; the next priorities are in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md).
 
 Read first: [DESIGN.md](DESIGN.md) sections "Transforms and refs", "Camera", "Pointer", "`<AnimatedSprite>`" and "useSound". They define what the player must draw and dispatch. This plan does not change any of them.
 
