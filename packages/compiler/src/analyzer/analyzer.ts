@@ -164,9 +164,13 @@ export interface HandlerCallAnalysis {
   readonly statement: Statement;
 }
 
+/** `useState(initial)`, or `useGameState("key")` (then `globalKey` is the key and `initializer` is null). */
 export interface UseStateCallAnalysis {
   readonly kind: "useState";
-  readonly valueName: string;
+  /** The schema key of a `useGameState` call; null for a local `useState`. */
+  readonly globalKey: string | null;
+  /** The bound value; null only for `const [, setCoins] = useGameState("coins")`, which reads nothing. */
+  readonly valueName: string | null;
   readonly setterName: string | null;
   readonly initializer: Expression | null;
   readonly typeArgument: Node | null;
@@ -175,7 +179,7 @@ export interface UseStateCallAnalysis {
 }
 
 const HOOK_NAME = /^use[A-Z0-9]/;
-const KNOWN_HOOKS = new Set(["useState", "useRef", "useSound", "useUpdate", "useInput", "useMount", "useUnmount"]);
+const KNOWN_HOOKS = new Set(["useState", "useGameState", "useRef", "useSound", "useUpdate", "useInput", "useMount", "useUnmount"]);
 const HANDLER_HOOKS = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS, ...HANDLER_HOOKS].filter((name, i, all) => all.indexOf(name) === i);
@@ -535,23 +539,29 @@ type UseStateMatch =
   | { readonly kind: "ok"; readonly hook: UseStateCallAnalysis }
   | { readonly kind: "invalid"; readonly message: string; readonly call: CallExpression };
 
-/** Recognises `const [value, setValue] = useState(init)`; returns null if the statement is not a useState call at all. */
+/**
+ * Recognises `const [value, setValue] = useState(init)` and `const [value, setValue] = useGameState("key")`; returns
+ * null if the statement is neither call at all.
+ */
 function matchUseStateStatement(statement: Statement): UseStateMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
   if (list.declarations.length !== 1) return null;
   const declaration = list.declarations[0]!;
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
-  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useState") return null;
+  if (!init || !isCallExpression(init) || !isIdentifier(init.expression)) return null;
+  const hookName = init.expression.text;
+  if (hookName !== "useState" && hookName !== "useGameState") return null;
+  const global = hookName === "useGameState";
 
   const invalid = (message: string): UseStateMatch => ({ kind: "invalid", message, call: init });
-  if ((list.flags & NodeFlags.Const) === 0) return invalid("useState must be bound with `const`.");
+  if ((list.flags & NodeFlags.Const) === 0) return invalid(`${hookName} must be bound with \`const\`.`);
   if (!isArrayBindingPattern(declaration.name)) {
-    return invalid("useState must be destructured: `const [value, setValue] = useState(initial)`.");
+    return invalid(`${hookName} must be destructured: \`const [value, setValue] = ${global ? 'useGameState("key")' : "useState(initial)"}\`.`);
   }
   const elements = declaration.name.elements;
   if (elements.length < 1 || elements.length > 2) {
-    return invalid("useState destructuring must bind one or two names: `[value, setValue]`.");
+    return invalid(`${hookName} destructuring must bind one or two names: \`[value, setValue]\`.`);
   }
   const names: (string | null)[] = [];
   for (const element of elements) {
@@ -560,21 +570,29 @@ function matchUseStateStatement(statement: Statement): UseStateMatch | null {
       continue;
     }
     if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) {
-      return invalid("useState destructuring must bind plain identifiers.");
+      return invalid(`${hookName} destructuring must bind plain identifiers.`);
     }
     names.push(element.name.text);
   }
   const valueName = names[0];
-  if (!valueName) return invalid("useState must bind the state value.");
-  if (init.arguments.length > 1) return invalid("useState takes at most one argument.");
+  if (!valueName && !(global && names[1])) return invalid(global ? "useGameState must bind the value, the setter, or both." : "useState must bind the state value.");
+  let globalKey: string | null = null;
+  if (global) {
+    const key = init.arguments[0];
+    if (init.arguments.length !== 1 || !key || !isStringLiteral(key) || init.typeArguments?.length) {
+      return invalid('useGameState takes one argument, the key as a string literal: `const [coins, setCoins] = useGameState("coins")`. Its type and initial value come from GameState.ts.');
+    }
+    globalKey = key.text;
+  } else if (init.arguments.length > 1) return invalid("useState takes at most one argument.");
 
   return {
     kind: "ok",
     hook: {
       kind: "useState",
-      valueName,
+      globalKey,
+      valueName: valueName ?? null,
       setterName: names[1] ?? null,
-      initializer: init.arguments[0] ?? null,
+      initializer: global ? null : init.arguments[0] ?? null,
       typeArgument: init.typeArguments?.[0] ?? null,
       call: init,
       declaration,

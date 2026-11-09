@@ -8,8 +8,8 @@
       "name": "Player",
       "span": {
         "fileName": "packages/demo/src/Player.tsx",
-        "start": 336,
-        "end": 1775,
+        "start": 383,
+        "end": 1819,
         "line": 7,
         "column": 1
       },
@@ -20,8 +20,8 @@
           "setterName": "setX",
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 371,
-            "end": 394,
+            "start": 418,
+            "end": 441,
             "line": 8,
             "column": 9
           }
@@ -32,21 +32,21 @@
           "setterName": "setY",
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 404,
-            "end": 427,
+            "start": 451,
+            "end": 474,
             "line": 9,
             "column": 9
           }
         },
         {
           "kind": "UseState",
-          "state": "Player.coins",
+          "state": "Player.coins#2",
           "setterName": "setCoins",
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 437,
-            "end": 468,
-            "line": 10,
+            "start": 579,
+            "end": 615,
+            "line": 11,
             "column": 9
           }
         },
@@ -56,9 +56,9 @@
           "setterName": "setHurt",
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 478,
-            "end": 511,
-            "line": 11,
+            "start": 625,
+            "end": 658,
+            "line": 12,
             "column": 9
           }
         },
@@ -309,9 +309,9 @@
           },
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 653,
-            "end": 937,
-            "line": 16,
+            "start": 800,
+            "end": 1084,
+            "line": 17,
             "column": 3
           }
         },
@@ -438,9 +438,9 @@
           },
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 941,
-            "end": 1060,
-            "line": 21,
+            "start": 1088,
+            "end": 1207,
+            "line": 22,
             "column": 3
           }
         }
@@ -474,8 +474,8 @@
         },
         {
           "kind": "State",
-          "id": "Player.coins",
-          "name": "coins",
+          "id": "Player.coins#2",
+          "name": "coins$write2",
           "type": {
             "kind": "Primitive",
             "name": "number"
@@ -483,7 +483,9 @@
           "initialValue": {
             "kind": "NumberLiteral",
             "value": 0
-          }
+          },
+          "globalKey": "coins",
+          "writeOnly": true
         },
         {
           "kind": "State",
@@ -511,9 +513,9 @@
           },
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 604,
-            "end": 621,
-            "line": 13,
+            "start": 751,
+            "end": 768,
+            "line": 14,
             "column": 9
           }
         },
@@ -528,9 +530,9 @@
           },
           "span": {
             "fileName": "packages/demo/src/Player.tsx",
-            "start": 631,
-            "end": 648,
-            "line": 14,
+            "start": 778,
+            "end": 795,
+            "line": 15,
             "column": 9
           }
         }
@@ -653,91 +655,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Player.tsx",
-                "start": 1127,
-                "end": 1204,
-                "line": 28,
-                "column": 7
-              }
-            }
-          },
-          {
-            "kind": "StaticChild",
-            "element": {
-              "kind": "Element",
-              "id": "Player/1",
-              "fieldName": "text",
-              "component": {
-                "kind": "Intrinsic",
-                "name": "Text"
-              },
-              "props": [
-                {
-                  "kind": "StaticProp",
-                  "name": "size",
-                  "value": {
-                    "kind": "NumberLiteral",
-                    "value": 12
-                  }
-                },
-                {
-                  "kind": "StaticProp",
-                  "name": "color",
-                  "value": {
-                    "kind": "StringLiteral",
-                    "value": "white"
-                  }
-                },
-                {
-                  "kind": "DynamicProp",
-                  "name": "text",
-                  "value": {
-                    "kind": "TemplateLiteral",
-                    "quasis": [
-                      "Coins: ",
-                      ""
-                    ],
-                    "expressions": [
-                      {
-                        "kind": "StateRead",
-                        "state": "Player.coins"
-                      }
-                    ]
-                  },
-                  "dependencies": [
-                    {
-                      "kind": "State",
-                      "state": "Player.coins"
-                    }
-                  ]
-                }
-              ],
-              "transform": [
-                {
-                  "kind": "StaticProp",
-                  "name": "x",
-                  "value": {
-                    "kind": "NumberLiteral",
-                    "value": 0
-                  }
-                },
-                {
-                  "kind": "StaticProp",
-                  "name": "y",
-                  "value": {
-                    "kind": "Unary",
-                    "operator": "-",
-                    "operand": {
-                      "kind": "NumberLiteral",
-                      "value": 16
-                    }
-                  }
-                }
-              ],
-              "children": [],
-              "span": {
-                "fileName": "packages/demo/src/Player.tsx",
-                "start": 1211,
-                "end": 1307,
+                "start": 1274,
+                "end": 1351,
                 "line": 29,
                 "column": 7
               }
@@ -747,7 +666,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Player/2",
+              "id": "Player/1",
               "fieldName": "collider",
               "component": {
                 "kind": "Intrinsic",
@@ -824,7 +743,7 @@
                         "then": [
                           {
                             "kind": "SetState",
-                            "state": "Player.coins",
+                            "state": "Player.coins#2",
                             "updater": {
                               "kind": "Function",
                               "params": [
@@ -950,9 +869,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Player.tsx",
-                "start": 1314,
-                "end": 1754,
-                "line": 32,
+                "start": 1358,
+                "end": 1798,
+                "line": 30,
                 "column": 7
               }
             }
@@ -960,9 +879,9 @@
         ],
         "span": {
           "fileName": "packages/demo/src/Player.tsx",
-          "start": 1077,
-          "end": 1768,
-          "line": 27,
+          "start": 1224,
+          "end": 1812,
+          "line": 28,
           "column": 5
         }
       }

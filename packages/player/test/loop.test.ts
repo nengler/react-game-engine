@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Collider, Entity, GameObject, Pointer, Shape, Sound, World, getSoundSink, type InputState } from "@rge/runtime";
+import { Camera, Collider, Entity, GameObject, Pointer, Shape, Sound, World, getSoundSink, readGameState, setGameState, type InputState } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
 import { createPlayer, MAX_DT, run, type PlayerConfig } from "../src/loop.ts";
 import { RecordingBackend } from "../src/recording.ts";
@@ -30,6 +30,13 @@ class Probe extends Entity {
 describe("createPlayer", () => {
   afterEach(() => {
     assert.equal(getSoundSink(), null, "every test closes its player");
+  });
+
+  it("starts every game from the initial game state, whatever an earlier game left", () => {
+    setGameState("coins", 0, 42);
+    const { player: p } = player(() => new Entity());
+    assert.equal(readGameState("coins", 0), 0, "a new player begins with an empty store, so keys take their initial values");
+    p.close();
   });
 
   it("opens the window with the config it was given, and nothing else", () => {

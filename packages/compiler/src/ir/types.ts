@@ -358,8 +358,15 @@ export interface StateIR {
   readonly name: string;
   /** A primitive, an array (`useState<EnemyData[]>([])`) or a source type. */
   readonly type: TypeIR;
-  /** Must not depend on any state. */
+  /** Must not depend on any state. For a global, the schema's initial value. */
   readonly initialValue: ExprIR;
+  /**
+   * Set for `useGameState("key")`: the state is the game's global value of that key, not this component's own. The
+   * generated field is a snapshot of it, refreshed on render, and its setter writes the store. Absent for `useState`.
+   */
+  readonly globalKey?: string;
+  /** With `globalKey`: the component only sets it (`const [, setCoins] = …`), so it keeps no snapshot and is not told of changes. */
+  readonly writeOnly?: true;
 }
 
 // ---------------------------------------------------------------------------

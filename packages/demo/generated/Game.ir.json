@@ -8,9 +8,9 @@
       "name": "Game",
       "span": {
         "fileName": "packages/demo/src/Game.tsx",
-        "start": 688,
-        "end": 1695,
-        "line": 14,
+        "start": 721,
+        "end": 1772,
+        "line": 15,
         "column": 1
       },
       "hooks": [
@@ -20,9 +20,9 @@
           "setterName": "setClicks",
           "span": {
             "fileName": "packages/demo/src/Game.tsx",
-            "start": 729,
-            "end": 762,
-            "line": 15,
+            "start": 762,
+            "end": 795,
+            "line": 16,
             "column": 9
           }
         }
@@ -51,9 +51,9 @@
           "path": "click.wav",
           "span": {
             "fileName": "packages/demo/src/Game.tsx",
-            "start": 772,
-            "end": 805,
-            "line": 16,
+            "start": 805,
+            "end": 838,
+            "line": 17,
             "column": 9
           }
         }
@@ -98,9 +98,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 850,
-                "end": 860,
-                "line": 20,
+                "start": 883,
+                "end": 893,
+                "line": 21,
                 "column": 7
               }
             }
@@ -147,9 +147,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 867,
-                "end": 909,
-                "line": 21,
+                "start": 900,
+                "end": 942,
+                "line": 22,
                 "column": 7
               }
             }
@@ -188,9 +188,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 916,
-                "end": 955,
-                "line": 22,
+                "start": 949,
+                "end": 988,
+                "line": 23,
                 "column": 7
               }
             }
@@ -229,9 +229,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 962,
-                "end": 998,
-                "line": 23,
+                "start": 995,
+                "end": 1031,
+                "line": 24,
                 "column": 7
               }
             }
@@ -330,9 +330,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 1109,
-                "end": 1230,
-                "line": 25,
+                "start": 1142,
+                "end": 1263,
+                "line": 26,
                 "column": 7
               }
             }
@@ -439,9 +439,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 1237,
-                "end": 1435,
-                "line": 26,
+                "start": 1270,
+                "end": 1468,
+                "line": 27,
                 "column": 7
               }
             }
@@ -522,9 +522,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 1442,
-                "end": 1541,
-                "line": 35,
+                "start": 1475,
+                "end": 1574,
+                "line": 36,
                 "column": 7
               }
             }
@@ -534,6 +534,51 @@
             "element": {
               "kind": "Element",
               "id": "Game/7",
+              "fieldName": "hud",
+              "component": {
+                "kind": "Imported",
+                "name": "Hud",
+                "module": "./Hud.tsx",
+                "isDefault": false
+              },
+              "props": [],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 92
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "Unary",
+                    "operator": "-",
+                    "operand": {
+                      "kind": "NumberLiteral",
+                      "value": 56
+                    }
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Game.tsx",
+                "start": 1581,
+                "end": 1618,
+                "line": 39,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Game/8",
               "fieldName": "camera",
               "component": {
                 "kind": "Intrinsic",
@@ -546,7 +591,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Game/7/0",
+                    "id": "Game/8/0",
                     "fieldName": "player",
                     "component": {
                       "kind": "Imported",
@@ -559,9 +604,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/demo/src/Game.tsx",
-                      "start": 1648,
-                      "end": 1658,
-                      "line": 40,
+                      "start": 1725,
+                      "end": 1735,
+                      "line": 42,
                       "column": 9
                     }
                   }
@@ -569,9 +614,9 @@
               ],
               "span": {
                 "fileName": "packages/demo/src/Game.tsx",
-                "start": 1631,
-                "end": 1674,
-                "line": 39,
+                "start": 1708,
+                "end": 1751,
+                "line": 41,
                 "column": 7
               }
             }
@@ -579,9 +624,9 @@
         ],
         "span": {
           "fileName": "packages/demo/src/Game.tsx",
-          "start": 823,
-          "end": 1688,
-          "line": 19,
+          "start": 856,
+          "end": 1765,
+          "line": 20,
           "column": 5
         }
       }

@@ -6,5 +6,5 @@
     "noUnusedLocals": false,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src", "generated/GameState.d.ts"]
 }

@@ -1,6 +1,7 @@
 export { GameObject } from "./GameObject.ts";
 export { Transform, composeTransforms, IDENTITY_TRANSFORM, type WorldTransform } from "./Transform.ts";
 export { World } from "./World.ts";
+export { GameStateStore, getGameStateStore, setGameStateStore, resetGameState, readGameState, setGameState, type GameStateValue } from "./GameState.ts";
 export type { Child } from "./jsx-runtime.ts";
 export {
   loadScene,

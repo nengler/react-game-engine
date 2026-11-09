@@ -3,6 +3,7 @@ import { Camera, Entity, Pointer, Shape, Sound, Text, type PrefabDefinition } fr
 import { Beacon } from "./Beacon.ts";
 import { Coin } from "./Coin.ts";
 import { Ground } from "./Ground.ts";
+import { Hud } from "./Hud.ts";
 import { Player } from "./Player.ts";
 import { Spikes } from "./Spikes.ts";
 
@@ -20,6 +21,7 @@ export class Game extends Entity {
     this.setClicks((clicks: number) => clicks + 1);
   } });
   readonly text: Text = new Text({ size: 16, color: "white", text: `Clicks: ${this.clicks}` });
+  readonly hud: Hud = new Hud();
   readonly camera: Camera = new Camera();
   readonly player: Player = new Player();
 
@@ -44,6 +46,9 @@ export class Game extends Entity {
     this.text.transform.x = 92;
     this.text.transform.y = -32;
     this.addChild(this.text);
+    this.hud.placement.x = 92;
+    this.hud.placement.y = -56;
+    this.addChild(this.hud);
     this.addChild(this.camera);
     this.camera.addChild(this.player);
     this.render();

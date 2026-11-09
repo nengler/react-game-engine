@@ -18,6 +18,10 @@ export const DiagnosticCode = {
   InvalidUseRef: "RGE1106",
   /** `useSound` that is not `const play = useSound("file.wav")`: a path that is not a string literal, or a name already taken. */
   InvalidUseSound: "RGE1107",
+  /** `useGameState` with a key the project's `GameState.ts` does not declare, or when there is no such schema. */
+  InvalidGameState: "RGE1108",
+  /** A `GameState.ts` that is not `export const gameState = { key: number | string | boolean literal, … }`. */
+  InvalidGameStateSchema: "RGE1109",
   UnknownComponent: "RGE1201",
   UnsupportedJsxChild: "RGE1202",
   UnsupportedAttribute: "RGE1203",

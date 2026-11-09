@@ -76,8 +76,8 @@ describe("demo: the first frame", () => {
       ["ellipse", 60, 8, 16, 16, "#e8a317ff"],
       ["rect", 80, -40, 96, 32, "#708090ff"],
       ["text", "Clicks: 0", 92, -32, 16, "#ffffffff"],
+      ["text", "Coins: 0", 92, -56, 16, "#ffd700ff"],
       ["rect", 0, 0, 24, 24, "#ffd700ff"],
-      ["text", "Coins: 0", 0, -16, 12, "#ffffffff"],
     ]);
     assert.deepEqual(run.warnings, []);
     assert.equal(run.backend.lastFrame.clearColor, "#10131cff");

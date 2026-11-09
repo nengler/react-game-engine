@@ -1,4 +1,4 @@
-import { World, getSoundSink, setSoundSink, type GameObject, type Pointer, type SoundSink } from "@rge/runtime";
+import { World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pointer, type SoundSink } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -77,6 +77,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   };
 
   setSoundSink(sink);
+  // Each game starts from the game state's initial values, whatever an earlier player in this process left behind.
+  resetGameState();
   try {
     world.mount(config.root());
   } catch (error) {

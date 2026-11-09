@@ -17,6 +17,10 @@
       "module": "packages/demo/src/Ground.tsx",
       "props": []
     },
+    "Hud": {
+      "module": "packages/demo/src/Hud.tsx",
+      "props": []
+    },
     "Player": {
       "module": "packages/demo/src/Player.tsx",
       "props": []

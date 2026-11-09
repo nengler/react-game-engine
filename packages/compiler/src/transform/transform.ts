@@ -34,7 +34,7 @@ import {
   isBlock,
   isReturnStatement,
 } from "typescript/ast/is";
-import { AUTHORING_HOOKS, AUTHORING_TYPES, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis } from "../analyzer/analyzer.ts";
+import { AUTHORING_HOOKS, AUTHORING_TYPES, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStateCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
@@ -86,6 +86,7 @@ import {
   type ValueType,
 } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
+import type { GameStateDefinition } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { MATH_FUNCTIONS } from "./handles.ts";
 import type { RuntimeManifest } from "@rge/runtime";
@@ -95,6 +96,8 @@ import { checkFreshName, lowerFunction, type LoweringContext } from "./statement
 export interface TransformOptions {
   /** What the runtime provides: intrinsic tags, the host class, reserved member names, handle types, functions. */
   readonly manifest: RuntimeManifest;
+  /** The project's global state (`GameState.ts`): the keys `useGameState` may name, with their types and initial values. Absent: none. */
+  readonly gameState?: GameStateDefinition;
 }
 
 export interface TransformResult {
@@ -176,7 +179,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
 
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
-    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics).lower();
+    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, options.gameState).lower();
     if (lowered) components.push(lowered);
   }
 
@@ -315,6 +318,7 @@ class ComponentLowering implements LoweringContext {
   #slotRejected = false;
   readonly #refs: RefIR[] = [];
   readonly #sounds: SoundIR[] = [];
+  readonly #gameState: GameStateDefinition | undefined;
 
   constructor(
     component: ComponentAnalysis,
@@ -326,7 +330,9 @@ class ComponentLowering implements LoweringContext {
     authoring: AuthoringImports,
     typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>,
     diagnostics: CompilerDiagnostic[],
+    gameState: GameStateDefinition | undefined,
   ) {
+    this.#gameState = gameState;
     this.#typeDecls = typeDecls;
     this.#authoring = authoring;
     this.#component = component;
@@ -516,7 +522,7 @@ class ComponentLowering implements LoweringContext {
     const hooks: HookIR[] = [];
     const state: StateIR[] = [];
     for (const hook of this.#component.hooks) {
-      if (hook.kind !== "const") this.#requireImport(hook.kind, hook.call);
+      if (hook.kind !== "const") this.#requireImport(hook.kind === "useState" && hook.globalKey !== null ? "useGameState" : hook.kind, hook.call);
       switch (hook.kind) {
         case "useUpdate":
         case "useInput":
@@ -560,9 +566,14 @@ class ComponentLowering implements LoweringContext {
             this.#error(DiagnosticCode.InvalidUseState, `'${taken}' is already declared in this component.`, hook.declaration);
             continue;
           }
-          if (!this.#claimName(hook.valueName, hook.declaration)) continue;
+          if (hook.valueName !== null && !this.#claimName(hook.valueName, hook.declaration)) continue;
           if (hook.setterName !== null && !this.#claimName(hook.setterName, hook.declaration)) continue;
-          const id = stateId(this.#component.name, hook.valueName);
+          const id = stateId(this.#component.name, hook.valueName ?? `${hook.globalKey}#${hooks.length}`);
+          if (hook.globalKey !== null) {
+            this.#lowerGameState(hook, id, state, hooks);
+            continue;
+          }
+          if (hook.valueName === null) continue; // the analyzer only lets a global be write-only
           if (!hook.initializer) {
             this.#error(DiagnosticCode.InvalidUseState, "useState requires an initial value.", hook.call);
             continue;
@@ -580,13 +591,44 @@ class ComponentLowering implements LoweringContext {
           state.push({ kind: "State", id, name: hook.valueName, type, initialValue });
           this.#stateTypes.set(id, type);
           hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.#span(hook.declaration) });
-          this.#componentScope.declare(hook.valueName, { kind: "state", id });
+          this.#componentScope.declare(hook.valueName as string, { kind: "state", id });
           if (hook.setterName !== null) this.#componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
           break;
         }
       }
     }
     return { hooks, state };
+  }
+
+  /**
+   * `const [coins, setCoins] = useGameState("coins")`: a state whose type and initial value are the schema's, and
+   * whose real value lives in the runtime's game-state store. The key must be in the project's `GameState.ts`.
+   */
+  #lowerGameState(hook: UseStateCallAnalysis, id: StateId, state: StateIR[], hooks: HookIR[]): void {
+    const key = hook.globalKey as string;
+    const schema = this.#gameState;
+    const entry = schema && Object.hasOwn(schema, key) ? schema[key] : undefined;
+    if (!entry) {
+      const known = schema ? Object.keys(schema) : [];
+      const near = nearest(key, known);
+      this.#error(
+        DiagnosticCode.InvalidGameState,
+        schema
+          ? `'${key}' is not in GameState.ts${near ? ` (did you mean "${near}"?)` : ""}. Declared: ${known.length > 0 ? known.map((k) => `"${k}"`).join(", ") : "nothing"}.`
+          : `useGameState("${key}") needs the project's game state: add \`export const gameState = { ${key}: 0 }\` in GameState.ts next to the components.`,
+        hook.call.arguments[0] ?? hook.call,
+      );
+      return;
+    }
+    const initialValue: ExprIR = entry.type === "number" ? { kind: "NumberLiteral", value: entry.initial as number } : entry.type === "string" ? { kind: "StringLiteral", value: entry.initial as string } : { kind: "BooleanLiteral", value: entry.initial as boolean };
+    const type: TypeIR = { kind: "Primitive", name: entry.type };
+    // Write-only: no field to hold a snapshot, but the IR still names one; it is never generated (see `StateIR.writeOnly`).
+    const name = hook.valueName ?? `${key}$write${hooks.length}`;
+    state.push({ kind: "State", id, name, type, initialValue, globalKey: key, ...(hook.valueName === null ? { writeOnly: true as const } : {}) });
+    this.#stateTypes.set(id, type);
+    hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.#span(hook.declaration) });
+    if (hook.valueName !== null) this.#componentScope.declare(hook.valueName, { kind: "state", id });
+    if (hook.setterName !== null) this.#componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
   }
 
   /**

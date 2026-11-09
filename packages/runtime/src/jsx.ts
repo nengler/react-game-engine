@@ -49,6 +49,24 @@ export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>] {
 }
 
 /**
+ * The keys of the game's global state, filled in by the project's `GameState.ts`: the compiler reads its
+ * `export const gameState = { coins: 0 }` and adds `coins: number` here while it checks your components. Nothing is
+ * declared by default, so every key is an error until the schema exists.
+ */
+export interface GameStateSchema {}
+
+/**
+ * Global state: `const [coins, setCoins] = useGameState("coins")` reads and writes one value shared by every
+ * component that asks for the same key, as `useState` does for one component. Reads are a snapshot of the last
+ * render and writes batch into one render per frame, exactly as for `useState`; every component that reads the key
+ * re-renders when it changes. The key must be a string literal that the schema declares. Its type and initial value
+ * are the schema's.
+ */
+export function useGameState<K extends keyof GameStateSchema & string>(_key: K): [GameStateSchema[K], Setter<GameStateSchema[K]>] {
+  return compileTimeOnly("useGameState");
+}
+
+/**
  * A sound, played by calling the returned function in a handler:
  * `const playHit = useSound("hit.wav");` then `playHit();`. The path must be a
  * string literal. Sounds are not placed, so there is no `transform`.

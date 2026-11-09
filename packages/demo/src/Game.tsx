@@ -1,6 +1,7 @@
 import { useSound, useState, Camera, Entity, Pointer, Shape, Text } from "@rge/runtime/jsx";
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
+import { Hud } from "./Hud.tsx";
 import { Ground } from "./Ground.tsx";
 import { Player } from "./Player.tsx";
 import { Spikes } from "./Spikes.tsx";
@@ -35,6 +36,7 @@ export default function Game() {
       <Text size={16} color="white" transform={{ x: 92, y: -32 }}>
         Clicks: {clicks}
       </Text>
+      <Hud transform={{ x: 92, y: -56 }} />
       {/* A camera follows its children, so this keeps the view on the player. */}
       <Camera>
         <Player />

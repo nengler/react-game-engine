@@ -1,3 +1,4 @@
+import { getGameStateStore, type GameStateStore } from "./GameState.ts";
 import type { InputState } from "./input.ts";
 import { IDENTITY_TRANSFORM, Transform, composeTransforms, type WorldTransform } from "./Transform.ts";
 import type { World } from "./World.ts";
@@ -39,6 +40,11 @@ export class GameObject<P extends object = {}> {
   /** The component's props: a private copy, updated in place by `updateProps`. */
   props: P;
   parent: GameObject | null = null;
+  /**
+   * The game-state keys this object reads (`useGameState`). Generated code overrides it. While the object is in a
+   * world it is told when one changes, and re-renders.
+   */
+  readonly gameStateKeys: readonly string[] = NO_KEYS;
   readonly children: GameObject[] = [];
   world: World | null = null;
 
@@ -72,6 +78,7 @@ export class GameObject<P extends object = {}> {
   #order = 0;
   /** `onMount` has run and `onUnmount` has not: each runs once per stay in a World. */
   #mounted = false;
+  #gameState: GameStateStore | null = null;
 
   /**
    * Where children passed by a parent (`<Panel><Button /></Panel>`) mount: a
@@ -277,6 +284,12 @@ export class GameObject<P extends object = {}> {
   attachToWorld(world: World): void {
     this.world = world;
     world.registerObject(this);
+    if (this.gameStateKeys.length > 0) {
+      this.#gameState = getGameStateStore();
+      this.#gameState.subscribe(this, this.gameStateKeys);
+      // It may have been built before a change it missed (it was not subscribed): refresh it once.
+      this.markDirty();
+    }
     if (this.#dirty) world.scheduleRender(this);
     if (this.#pending.length > 0) world.scheduleCommit(this);
     for (const child of this.children) child.attachToWorld(world);
@@ -287,6 +300,8 @@ export class GameObject<P extends object = {}> {
   }
 
   detachFromWorld(): void {
+    this.#gameState?.unsubscribe(this, this.gameStateKeys);
+    this.#gameState = null;
     if (this.#mounted) {
       this.#mounted = false;
       this.onUnmount();
@@ -296,6 +311,8 @@ export class GameObject<P extends object = {}> {
     for (const child of this.children) child.detachFromWorld();
   }
 }
+
+const NO_KEYS: readonly string[] = [];
 
 function definedOnly<T extends object>(value: T | undefined): Partial<T> {
   const out: Partial<T> = {};
