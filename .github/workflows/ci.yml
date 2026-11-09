@@ -22,3 +22,48 @@ jobs:
           npm run example
           git diff --exit-code -- packages/example/generated
           test -z "$(git ls-files --others --exclude-standard -- packages/example/generated)"
+
+  # librge on raylib's software renderer: no window, no GPU, no system libraries. Runs the C smoke
+  # test, then the Node host (koffi) against the real library. RGE_REQUIRE_NATIVE makes a missing
+  # library a failure instead of a skip.
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.18"
+          cache: npm
+      - run: npm ci
+      - name: Build librge (software renderer)
+        run: npm run native:build:headless
+      - name: C smoke test
+        run: ctest --test-dir native/build-headless --output-on-failure
+      - name: Node host against the real library
+        run: node --test "packages/player-node/test/*.test.ts"
+        env:
+          RGE_REQUIRE_NATIVE: "1"
+
+  # The same library on the real OpenGL path (GLFW), against Mesa's software GL on a virtual display.
+  native-desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.18"
+          cache: npm
+      - run: npm ci
+      - name: Install X11, GL and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libgl1-mesa-dri xvfb
+      - name: Build librge (OpenGL window)
+        run: npm run native:build
+      - name: C smoke test
+        run: xvfb-run -a ctest --test-dir native/build --output-on-failure
+      - name: Node host against the real library
+        run: xvfb-run -a node --test "packages/player-node/test/*.test.ts"
+        env:
+          RGE_REQUIRE_NATIVE: "1"
+          RGE_NATIVE_LIB: ${{ github.workspace }}/native/build/librge.so

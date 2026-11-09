@@ -75,7 +75,7 @@
 /* ---------- Window options for rge_open ---------- */
 #define RGE_OPEN_RESIZABLE 1
 #define RGE_OPEN_VSYNC     2
-#define RGE_OPEN_HIDDEN    4  /* no visible window: tests and CI */
+#define RGE_OPEN_HIDDEN    4  /* no visible window and no audio device: tests and CI. Frames are captured for rge_read_pixels */
 #define RGE_OPEN_SMOOTH    8  /* bilinear texture filtering; the default is nearest (pixel art) */
 
 /* ---------- Functions ---------- */
@@ -96,8 +96,9 @@ void rge_frame(uint32_t clearColor,
                const char *text, const int32_t *textOffsets, int32_t textCount,
                double *input, uint8_t *keys);
 
-/* Tests only: copy the last presented frame as RGBA8, top row first. Returns the bytes needed;
- * copies only when capacity is enough. */
+/* Tests only: copy the last presented frame as RGBA8, top row first. Returns the bytes needed
+ * (0 when there is no frame to read); copies only when capacity is enough. Frames are captured only
+ * when the window was opened with RGE_OPEN_HIDDEN, so ordinary windows pay nothing for it. */
 int32_t rge_read_pixels(uint8_t *rgba, int32_t capacity);
 
 #endif

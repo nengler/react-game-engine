@@ -22,6 +22,9 @@
     "packages/runtime/test",
     "packages/player/src",
     "packages/player/test",
+    "packages/player-node/src",
+    "packages/player-node/test",
+    "packages/player-node/demo",
     "packages/example/generated"
   ]
 }

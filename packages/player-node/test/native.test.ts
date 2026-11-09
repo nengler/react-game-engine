@@ -1,0 +1,201 @@
+import { after, describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { crc32, deflateSync } from "node:zlib";
+import { Camera, Entity, Shape, Sprite, Text } from "@rge/runtime";
+import { createPlayer, KEYS, RGE_ABI_VERSION, type PlayerConfig } from "@rge/player";
+import { NodeBackend, checkAbi, createNodeBackend, findNativeLibrary, loadNative, type Pixels } from "../src/index.ts";
+
+/**
+ * These run the real `librge`, on the software renderer when it is the headless build (no window, no
+ * GPU). Without a built library they are skipped, unless RGE_REQUIRE_NATIVE=1 (CI), where that is a failure.
+ */
+const library = findNativeLibrary("headless");
+const required = process.env["RGE_REQUIRE_NATIVE"] === "1";
+const skip = library === null && !required ? "librge is not built (npm run native:build:headless)" : false;
+
+const scratch = mkdtempSync(join(tmpdir(), "rge-node-"));
+after(() => rmSync(scratch, { recursive: true, force: true }));
+
+/** A solid-colour PNG, so sprites can be tested without binary fixtures. */
+function writePng(path: string, size: number, [r, g, b]: [number, number, number]): void {
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const out = Buffer.alloc(12 + data.length);
+    out.writeUInt32BE(data.length, 0);
+    body.copy(out, 4);
+    out.writeUInt32BE(crc32(body), 8 + data.length);
+    return out;
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // RGB
+  const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: size }, () => [r, g, b]).flat())]);
+  const raw = Buffer.concat(Array.from({ length: size }, () => row));
+  writeFileSync(path, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
+}
+
+function pixel(frame: Pixels, x: number, y: number): string {
+  const at = (y * frame.width + x) * 4;
+  return [...frame.rgba.subarray(at, at + 4)].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+
+/** Open a hidden window, draw the tree for two frames, read the pixels back, and close. */
+function render(root: PlayerConfig["root"], options: Partial<PlayerConfig> = {}): Pixels {
+  const backend = createNodeBackend(library);
+  const warnings: string[] = [];
+  const player = createPlayer(backend, { width: 64, height: 48, title: "test", hidden: true, vsync: false, root, warn: (m) => warnings.push(m), ...options });
+  try {
+    player.step();
+    player.step();
+    const frame = backend.readPixels();
+    assert.ok(frame !== null, "a hidden window keeps its frames");
+    assert.deepEqual(warnings, []);
+    return frame;
+  } finally {
+    player.close();
+  }
+}
+
+describe("librge through koffi", { skip }, () => {
+  it("matches the ABI this package was written against", () => {
+    const native = loadNative(library as string);
+    assert.equal(native.abiVersion(), RGE_ABI_VERSION);
+    assert.equal(native.keyCount(), KEYS.length);
+  });
+
+  it("draws a rect where the player put it, over the background", () => {
+    const frame = render(() => {
+      const root = new Entity();
+      const rect = new Shape({ kind: "rect", width: 20, height: 10, color: "red" });
+      rect.transform.x = 10;
+      rect.transform.y = 5;
+      root.addChild(rect);
+      return root;
+    }, { background: "#102030" });
+    assert.equal(frame.width, 64);
+    assert.equal(frame.height, 48);
+    assert.equal(pixel(frame, 15, 8), "ff0000ff", "inside the rect");
+    assert.equal(pixel(frame, 5, 8), "102030ff", "background");
+    assert.equal(pixel(frame, 15, 20), "102030ff", "below the rect: rows are top first");
+  });
+
+  it("draws a circle, rotated and scaled shapes, and text", () => {
+    const frame = render(() => {
+      const root = new Entity();
+      const circle = new Shape({ kind: "circle", width: 20, height: 20, color: "lime" });
+      circle.transform.x = 2;
+      circle.transform.y = 2;
+      root.addChild(circle);
+      const label = new Text({ text: "Hi", size: 20, color: "white" });
+      label.transform.x = 30;
+      label.transform.y = 4;
+      root.addChild(label);
+      return root;
+    });
+    assert.equal(pixel(frame, 12, 12), "00ff00ff", "circle centre");
+    assert.equal(pixel(frame, 3, 3), "000000ff", "circle corner is background");
+    let white = 0;
+    for (let y = 4; y < 28; y++) for (let x = 30; x < 62; x++) if (pixel(frame, x, y) === "ffffffff") white++;
+    assert.ok(white > 10, `text drew ${white} white pixels`);
+  });
+
+  it("puts the camera's point in the middle of the window", () => {
+    const frame = render(() => {
+      const root = new Entity();
+      const camera = new Camera();
+      camera.transform.x = 100;
+      camera.transform.y = 50;
+      root.addChild(camera);
+      const marker = new Shape({ kind: "rect", width: 4, height: 4, color: "blue" });
+      marker.transform.x = 100;
+      marker.transform.y = 50;
+      root.addChild(marker);
+      return root;
+    });
+    assert.equal(pixel(frame, 33, 25), "0000ffff", "marker at the world point the camera is at");
+    assert.equal(pixel(frame, 5, 5), "000000ff");
+  });
+
+  it("loads a texture through the assets folder and flips it with a negative scale", () => {
+    writePng(join(scratch, "red.png"), 8, [255, 0, 0]);
+    const build = (scaleX: number) => () => {
+      const root = new Entity();
+      const sprite = new Sprite({ image: "red.png" });
+      sprite.transform.x = 20;
+      sprite.transform.y = 10;
+      sprite.transform.scaleX = scaleX;
+      root.addChild(sprite);
+      return root;
+    };
+    const plain = render(build(1), { assets: scratch });
+    assert.equal(pixel(plain, 24, 14), "ff0000ff");
+    assert.equal(pixel(plain, 16, 14), "000000ff");
+    const flipped = render(build(-1), { assets: scratch });
+    assert.equal(pixel(flipped, 16, 14), "ff0000ff", "drawn to the left of its origin");
+    assert.equal(pixel(flipped, 24, 14), "000000ff");
+  });
+
+  it("draws a magenta square for a texture that does not exist, with one warning", () => {
+    const backend = createNodeBackend(library);
+    const warnings: string[] = [];
+    const player = createPlayer(backend, {
+      width: 64, height: 48, title: "t", hidden: true, vsync: false, assets: scratch,
+      warn: (m) => warnings.push(m),
+      root: () => {
+        const root = new Entity();
+        root.addChild(new Sprite({ image: "nope.png" }));
+        return root;
+      },
+    });
+    try {
+      player.step();
+      player.step();
+      assert.equal(pixel(backend.readPixels() as Pixels, 5, 5), "ff00ffff");
+      assert.equal(warnings.length, 1);
+    } finally {
+      player.close();
+    }
+  });
+
+  it("reports the window size, and no one asking to quit", () => {
+    const backend = createNodeBackend(library);
+    const player = createPlayer(backend, { width: 80, height: 60, title: "t", hidden: true, vsync: false, root: () => new Entity() });
+    try {
+      assert.equal(player.step(), true);
+    } finally {
+      player.close();
+    }
+  });
+
+  it("refuses to open a second window while one is open, and can open again after close", () => {
+    const first = new NodeBackend(loadNative(library as string));
+    first.open({ width: 16, height: 16, title: "a", hidden: true });
+    assert.throws(() => first.open({ width: 16, height: 16, title: "b", hidden: true }), /librge error/);
+    first.close();
+    first.open({ width: 16, height: 16, title: "c", hidden: true });
+    first.close();
+  });
+});
+
+describe("loading the library", () => {
+  it("explains how to build it when it is missing", () => {
+    assert.throws(() => createNodeBackend(null), /npm run native:build/);
+  });
+
+  it("finds the library named by RGE_NATIVE_LIB, or none when that file is missing", () => {
+    assert.equal(findNativeLibrary("desktop", { RGE_NATIVE_LIB: join(scratch, "missing.so") }), null);
+    writeFileSync(join(scratch, "fake.so"), "");
+    assert.equal(findNativeLibrary("desktop", { RGE_NATIVE_LIB: join(scratch, "fake.so") }), join(scratch, "fake.so"));
+  });
+
+  it("rejects a library whose ABI version or key count differs, naming both", () => {
+    assert.throws(() => checkAbi({ abiVersion: () => RGE_ABI_VERSION + 1, keyCount: () => KEYS.length }), new RegExp(`version ${RGE_ABI_VERSION + 1}.*expects ${RGE_ABI_VERSION}`));
+    assert.throws(() => checkAbi({ abiVersion: () => RGE_ABI_VERSION, keyCount: () => KEYS.length - 1 }), new RegExp(`has ${KEYS.length - 1} keys.*expects ${KEYS.length}`));
+    assert.doesNotThrow(() => checkAbi({ abiVersion: () => RGE_ABI_VERSION, keyCount: () => KEYS.length }));
+  });
+});
