@@ -25,11 +25,19 @@ export interface RuntimeManifest {
    */
   readonly textContent: Readonly<Record<string, string>>;
   /**
-   * The fields each intrinsic defines on itself, beyond `GameObject`'s. A
-   * component rooted at one extends it, so its state, refs and props may not
-   * reuse these names. A runtime test checks each is a real field.
+   * The fields and methods each intrinsic defines on itself, beyond
+   * `GameObject`'s. A component rooted at one extends it, so its state, refs and
+   * props may not reuse these names. A runtime test checks the list is exactly
+   * what the class defines.
    */
   readonly intrinsicMembers: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Members of an intrinsic that exist for code that is not compiled and cannot
+   * be set from JSX (`Camera.follow`), by intrinsic then name, each with the
+   * reason, which the compiler shows when an attribute names one. They stay in
+   * `intrinsicMembers`, so a component rooted at the intrinsic cannot reuse the name.
+   */
+  readonly intrinsicRuntimeOnly: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /**
    * Props each intrinsic's constructor requires. A component rooted at one
    * must pass them to `super()`, before any state exists, so a dynamic value
@@ -79,7 +87,7 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape"],
+  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity"],
   textContent: { Text: "text" },
@@ -89,6 +97,7 @@ export const runtimeManifest: RuntimeManifest = {
     Collider: ["width", "height", "onCollisionEnter"],
     Text: ["text", "size", "color"],
     Shape: ["kind", "width", "height", "color"],
+    Camera: ["zoom", "follow", "viewTransform", "worldToView", "viewToWorld"],
   },
   intrinsicRequired: {
     Entity: [],
@@ -96,9 +105,16 @@ export const runtimeManifest: RuntimeManifest = {
     Collider: ["width", "height"],
     Text: ["text"],
     Shape: ["kind", "width", "height"],
+    Camera: [],
   },
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },
+  },
+  intrinsicRuntimeOnly: {
+    Camera: {
+      follow:
+        "nothing in a component can name another object, so a camera follows what it is inside: put the <Camera /> in the entity to follow. Code that is not compiled can set camera.follow.",
+    },
   },
   intrinsicCallbacks: {
     Collider: { onCollisionEnter: [{ name: "other", type: "GameObject" }] },
@@ -116,7 +132,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },

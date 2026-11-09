@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Collider, Entity, GameObject, SHAPE_KINDS, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
+import { Camera, Collider, Entity, GameObject, SHAPE_KINDS, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
 
 /** Every instance field and prototype member a generated subclass of `host` would inherit, excluding Object.prototype. */
 function inheritedMembers(host: object): Set<string> {
@@ -36,12 +36,15 @@ describe("runtime manifest", () => {
       Collider: new Collider({ width: 1, height: 1 }),
       Text: new Text({ text: "" }),
       Shape: new Shape({ kind: "rect", width: 1, height: 1 }),
+      Camera: new Camera(),
     };
     const base = new Entity();
     for (const tag of runtimeManifest.intrinsics) {
-      const own = Object.keys(instances[tag]!).filter((key) => !(key in base) || key === "name").sort();
+      const instance = instances[tag]!;
+      const fields = Object.keys(instance).filter((key) => !(key in base) || key === "name");
+      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(instance) as object).filter((key) => key !== "constructor" && !(key in base));
       const declared = [...(runtimeManifest.intrinsicMembers[tag] ?? [])].sort();
-      assert.deepEqual(declared, own, `${tag}: intrinsicMembers must list exactly the fields it adds`);
+      assert.deepEqual(declared, [...fields, ...methods].sort(), `${tag}: intrinsicMembers must list exactly the fields and methods it adds`);
     }
     for (const [tag, required] of Object.entries(runtimeManifest.intrinsicRequired)) {
       for (const name of required) assert.ok(runtimeManifest.intrinsicMembers[tag]?.includes(name), `${tag}.${name} is required, so it must be one of the intrinsic's members`);
@@ -77,6 +80,16 @@ describe("runtime manifest", () => {
     assert.deepEqual(runtimeManifest.intrinsicLiterals["Shape"]?.["kind"], [...SHAPE_KINDS]);
   });
 
+  it("keeps runtime-only members among the members, with a reason", () => {
+    for (const [tag, members] of Object.entries(runtimeManifest.intrinsicRuntimeOnly)) {
+      assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
+      for (const [name, reason] of Object.entries(members)) {
+        assert.ok(runtimeManifest.intrinsicMembers[tag]?.includes(name), `${tag}.${name} must be a member, so its name stays reserved`);
+        assert.ok(reason.length > 0, `${tag}.${name} needs a reason`);
+      }
+    }
+  });
+
   it("lists only intrinsics as transformable, including the host", () => {
     for (const tag of runtimeManifest.transformIntrinsics) assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
     assert.ok(runtimeManifest.transformIntrinsics.includes(runtimeManifest.hostIntrinsic));
@@ -84,7 +97,7 @@ describe("runtime manifest", () => {
 
   it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
-    const classes: Record<string, unknown> = { Entity, Sprite, Collider, Text, Shape };
+    const classes: Record<string, unknown> = { Entity, Sprite, Collider, Text, Shape, Camera };
     for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
   });
 });
