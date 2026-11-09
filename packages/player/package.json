@@ -1,0 +1,12 @@
+{
+  "name": "@rge/player",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rge/runtime": "0.0.0"
+  }
+}

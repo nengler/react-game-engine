@@ -20,6 +20,8 @@
     "packages/compiler/test",
     "packages/runtime/src",
     "packages/runtime/test",
+    "packages/player/src",
+    "packages/player/test",
     "packages/example/generated"
   ]
 }
