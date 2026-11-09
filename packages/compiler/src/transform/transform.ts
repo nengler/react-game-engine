@@ -102,6 +102,9 @@ export interface TransformResult {
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
+/** The runtime class generated code constructs for each `useSound`; a component may not take the name. */
+const SOUND_CLASS = "Sound";
+
 const BINARY_OPERATORS: ReadonlyMap<SyntaxKind, BinaryOperator> = new Map([
   [SyntaxKind.PlusToken, "+"], [SyntaxKind.MinusToken, "-"], [SyntaxKind.AsteriskToken, "*"],
   [SyntaxKind.SlashToken, "/"], [SyntaxKind.PercentToken, "%"],
@@ -128,6 +131,8 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   for (const c of analysis.components) {
     if (intrinsics.has(c.name)) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' conflicts with a runtime intrinsic.`, span(c.declaration)));
+    } else if (c.name === SOUND_CLASS) {
+      diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' conflicts with the runtime's ${SOUND_CLASS} class, which generated code imports for useSound.`, span(c.declaration)));
     } else if (locals.has(c.name)) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' is declared more than once.`, span(c.declaration)));
     }
@@ -135,7 +140,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   }
   const imported = new Map<string, { module: string; isDefault: boolean }>();
   for (const i of analysis.imports) {
-    if (intrinsics.has(i.name) || locals.has(i.name) || imported.has(i.name)) {
+    if (intrinsics.has(i.name) || i.name === SOUND_CLASS || locals.has(i.name) || imported.has(i.name)) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Imported component '${i.name}' conflicts with another component or a runtime intrinsic.`, span(i.node)));
     } else {
       imported.set(i.name, { module: i.module, isDefault: i.isDefault });
@@ -300,6 +305,8 @@ class ComponentLowering implements LoweringContext {
   #functionDepth = 0;
   /** Greater than zero while lowering a `useUnmount` handler, where state cannot be set. */
   #settersForbidden = 0;
+  /** Greater than zero while lowering a state updater. */
+  #updaterDepth = 0;
   /** The props type declares `children: Child`. */
   #declaredChildren = false;
   /** A `{children}` slot has been lowered (there may be one). */
@@ -1703,6 +1710,19 @@ class ComponentLowering implements LoweringContext {
 
   canSetState(): boolean {
     return this.#settersForbidden === 0;
+  }
+
+  canPlaySound(): boolean {
+    return this.#updaterDepth === 0;
+  }
+
+  inUpdater<T>(lower: () => T): T {
+    this.#updaterDepth++;
+    try {
+      return lower();
+    } finally {
+      this.#updaterDepth--;
+    }
   }
 
   nextSerial(): number {

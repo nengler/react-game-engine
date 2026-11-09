@@ -37,6 +37,10 @@ export interface LoweringContext {
   stateType(state: StateId): TypeIR;
   /** False in a `useUnmount` handler: the component is going away, so a state update could never render. */
   canSetState(): boolean;
+  /** False in a state updater: it runs inside the setter, whether or not the update changes anything. */
+  canPlaySound(): boolean;
+  /** Lowers a state updater: sounds cannot be played in it. */
+  inUpdater<T>(lower: () => T): T;
   nextSerial(): number;
   /** Names handler code may never rebind, because the call allowlist refers to them (`Math`, runtime functions). */
   isCallableName(name: string): boolean;
@@ -197,7 +201,11 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
     const callee = ctx.scope.get(call.expression.text);
     if (callee?.kind === "sound") {
       if (call.arguments.length !== 0) {
-        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}\` takes no arguments: the sound and its path are fixed where it is declared.`, call);
+        ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes no arguments: the sound and its path are fixed where it is declared.`, call);
+        return null;
+      }
+      if (!ctx.canPlaySound()) {
+        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Play the sound in the handler, next to the setter call.`, call);
         return null;
       }
       return { kind: "PlaySound", sound: callee.id };
@@ -231,7 +239,7 @@ function lowerSetState(ctx: LoweringContext, args: readonly Expression[], state:
   const arg = unwrapParens(args[0]!);
   if (isArrowFunction(arg)) {
     const type = ctx.stateType(state);
-    const updater = lowerFunction(ctx, arg, { paramTypes: [type], returns: "value", what: "State updater" });
+    const updater = ctx.inUpdater(() => lowerFunction(ctx, arg, { paramTypes: [type], returns: "value", what: "State updater" }));
     return updater && { kind: "SetState", state, updater };
   }
   const value = ctx.lowerExpression(arg);

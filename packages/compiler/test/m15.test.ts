@@ -128,9 +128,23 @@ describe("M15: diagnostics", () => {
     assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={() => { const x = play(); }} />`), [DiagnosticCode.SoundOutsideHandler], "a call that is not a statement");
   });
 
-  it("rejects using the function as a value, or giving it arguments", () => {
+  it("rejects using the function as a value", () => {
     assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={play} />`), [DiagnosticCode.SoundOutsideHandler]);
-    assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={() => play(1)} />`), [DiagnosticCode.SoundOutsideHandler]);
+  });
+
+  it("rejects a play inside a state updater, which runs inside the setter", () => {
+    const body = `<Collider width={1} height={1} onCollisionEnter={() => setN((p) => { play(); return p + 1; })} />`;
+    assert.deepEqual(codes(body, `const [n, setN] = useState(0);`), [DiagnosticCode.SoundOutsideHandler]);
+    const fine = compile(`function C() { const play = useSound("a.wav"); const [n, setN] = useState(0); return <Entity name="C"><Collider width={1} height={1} onCollisionEnter={() => { play(); setN((p) => p + 1); }} /></Entity>; }`);
+    assert.deepEqual(typeCheck(fine), [], "next to the setter is fine");
+  });
+
+  it("reports a call with arguments as an unsupported statement", () => {
+    assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={() => play(1)} />`), [DiagnosticCode.UnsupportedStatement]);
+  });
+
+  it("keeps the runtime's Sound class name for itself", () => {
+    assert.deepEqual(compileErrors(`function Sound() { return <Entity name="S" />; }`).map((d) => d.code), [DiagnosticCode.DuplicateComponent]);
   });
 
   it("requires one string literal path", () => {
