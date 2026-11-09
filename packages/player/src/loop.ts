@@ -4,6 +4,7 @@ import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
 import { FrameBuilder } from "./draw.ts";
 import { PlayerInput } from "./input.ts";
+import { onScreen, type ScreenPlacement } from "./screen.ts";
 import { RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
 import { Warner } from "./warn.ts";
 
@@ -34,7 +35,8 @@ const LEFT_BUTTON = KEY_INDEX.get("MouseLeft") as number;
 /**
  * Open the window and build the game. Each `step()` is one frame, in a fixed order:
  *
- * 1. a left press goes to the topmost `Pointer` drawn under the mouse last frame (`world.reportPress`);
+ * 1. a left press goes to the topmost `Pointer` drawn under the mouse last frame (`world.reportPress`), unless it
+ *    landed on the bars around a root `<Screen>`;
  * 2. `world.tick(dt, input)`: `useInput`, `useUpdate`, renders, structure;
  * 3. the tree is walked into draw records (and the camera's view is taken);
  * 4. colliders that started touching are reported (`world.reportCollision`; see `CollisionTracker`), so what
@@ -62,11 +64,18 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const input = new PlayerInput(warner);
   input.values[RGE_IN_WIDTH] = config.width;
   input.values[RGE_IN_HEIGHT] = config.height;
-  const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), assets, warn: config.warn });
+  const builder = new FrameBuilder({
+    loadTexture: (path) => backend.loadTexture(path),
+    measureText: backend.measureText ? (text, size) => backend.measureText!(text, size) : undefined,
+    textureSize: backend.textureSize ? (handle) => backend.textureSize!(handle) : undefined,
+    assets,
+    warn: config.warn,
+  });
   const sink = createSoundSink(backend, assets, warner);
   const world = new World();
   const collisions = new CollisionTracker();
   let pointers: readonly Pointer[] = [];
+  let screen: ScreenPlacement | null = null;
   let closed = false;
 
   const close = (): void => {
@@ -86,6 +95,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
 
   const dispatchPress = (): void => {
     if (((input.keys[LEFT_BUTTON] as number) & RGE_KEY_PRESSED) === 0) return;
+    if (screen !== null && !onScreen(screen, input.screenX, input.screenY)) return;
     const at = input.worldPoint(input.screenX, input.screenY);
     // The last pointer drawn is on top, so it gets the press; one press, one pointer.
     for (let i = pointers.length - 1; i >= 0; i--) if (world.reportPress(pointers[i] as Pointer, at.x, at.y)) return;
@@ -100,6 +110,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
       const built = builder.build(world.root, input.width, input.height);
       pointers = built.pointers;
+      screen = built.screen;
       input.view = built.view;
       collisions.update(world, built.colliders);
       backend.frame(background, built.list.records, built.list.length, built.list.texts, input.values, input.keys);

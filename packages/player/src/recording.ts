@@ -1,5 +1,6 @@
 import type { Backend, WindowConfig } from "./backend.ts";
 import { colorToHex } from "./color.ts";
+import { estimateTextWidth } from "./draw.ts";
 import {
   KEYS,
   KEY_INDEX,
@@ -68,6 +69,8 @@ export interface RecordingOptions {
   readonly missingTextures?: Iterable<string>;
   /** Sound paths that fail to load (handle -1). */
   readonly missingSounds?: Iterable<string>;
+  /** The size `textureSize` reports for a texture path. Default 16 × 16. */
+  readonly textureSizes?: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
 }
 
 /**
@@ -85,15 +88,21 @@ export class RecordingBackend implements Backend {
   readonly soundLoads: string[] = [];
   /** The path of each sound played, in order. */
   readonly plays: string[] = [];
+  /** Every `measureText` call, as `size:text`: the player should measure a string once, not every frame. */
+  readonly textMeasures: string[] = [];
+  /** Every `textureSize` call, by path. */
+  readonly textureSizeQueries: string[] = [];
   readonly #textures: string[] = [];
   readonly #sounds: string[] = [];
   readonly #missing: Set<string>;
   readonly #missingSounds: Set<string>;
+  readonly #textureSizes: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
   readonly #queue: InputFrame[] = [];
 
   constructor(options: RecordingOptions = {}) {
     this.#missing = new Set(options.missingTextures);
     this.#missingSounds = new Set(options.missingSounds);
+    this.#textureSizes = options.textureSizes ?? {};
   }
 
   queueInput(frame: InputFrame): void {
@@ -125,6 +134,19 @@ export class RecordingBackend implements Backend {
     this.soundLoads.push(path);
     if (this.#missingSounds.has(path)) return -1;
     return handleFor(this.#sounds, path);
+  }
+
+  /** The player's own estimate (`estimateTextWidth`), so layout tests have stable numbers without a font. */
+  measureText(text: string, size: number): number {
+    this.textMeasures.push(`${size}:${text}`);
+    return estimateTextWidth(text, size);
+  }
+
+  textureSize(handle: number): { width: number; height: number } {
+    const path = this.#textures[handle];
+    if (path === undefined) throw new Error(`textureSize: no texture has handle ${handle}.`);
+    this.textureSizeQueries.push(path);
+    return { ...(this.#textureSizes[path] ?? { width: 16, height: 16 }) };
   }
 
   playSound(handle: number): void {

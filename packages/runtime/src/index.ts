@@ -1,5 +1,5 @@
 export { GameObject } from "./GameObject.ts";
-export { Transform, composeTransforms, IDENTITY_TRANSFORM, type WorldTransform } from "./Transform.ts";
+export { Transform, composeTransforms, offsetTransform, IDENTITY_TRANSFORM, type WorldTransform } from "./Transform.ts";
 export { World } from "./World.ts";
 export type { Child } from "./jsx-runtime.ts";
 export {
@@ -22,6 +22,7 @@ export { Text, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
 export { AnimatedSprite, type AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
+export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
 export { clamp } from "./math.ts";
 export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";

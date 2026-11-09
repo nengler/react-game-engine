@@ -10,7 +10,7 @@ import type { Transform } from "./Transform.ts";
 import type { World } from "./World.ts";
 
 /** The transform fields a scene may set: the object's `placement`. */
-export type SceneTransform = Partial<Pick<Transform, "x" | "y" | "rotation" | "scaleX" | "scaleY" | "global">>;
+export type SceneTransform = Partial<Pick<Transform, "x" | "y" | "z" | "rotation" | "scaleX" | "scaleY" | "global">>;
 
 /** A value in a scene: JSON. */
 export type SceneValue = null | boolean | number | string | readonly SceneValue[] | { readonly [key: string]: SceneValue };

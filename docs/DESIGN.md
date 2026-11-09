@@ -673,7 +673,7 @@ files (not only TSX) can place components in a world (M6). Three pieces:
 * **Scenes.** JSON: `{ "version": 1, "entities": [{ "id", "prefab", "props"?,
   "transform"?, "children"? }] }`. `id` is author-assigned, unique in the
   scene and stable across edits (for diffing and hot reload). `transform` is
-  `x`, `y`, `rotation` (radians), `scaleX`, `scaleY`, `global`.
+  `x`, `y`, `z` (draw order), `rotation` (radians), `scaleX`, `scaleY`, `global`.
 
 **Validation.** `rge-compile <src> <out> --scenes <dir>` validates every
 `.json` in the directory against the compiled prefabs, after the project
@@ -1000,12 +1000,12 @@ export class Mover extends Entity {
 ```
 
 **The transform attribute**: `transform={{ x, y: 0, rotation: angle }}` is an
-object literal whose keys are transform fields (`x`, `y`, `rotation`,
+object literal whose keys are transform fields (`x`, `y`, `z`, `rotation`,
 `scaleX`, `scaleY`, `global`; plain or shorthand properties). Each field lowers exactly
 like a prop: a field that reads no state is a `StaticProp`, set once right
 after the element is constructed (and, for a child, before it is attached);
 one that reads state is a `DynamicProp`, re-applied in `render()`. Fields not
-listed keep the runtime defaults (`0, 0, 0, 1, 1`, not global). The runtime
+listed keep the runtime defaults (`x`, `y`, `z` and `rotation` 0, scales 1, not global). The runtime
 `transform` object is never replaced. Units: pixels with y down,
 rotation in radians.
 
@@ -1163,6 +1163,13 @@ starts at 200 and moves from there; nothing can conflict, because the parent
 and the child write different transforms. `global` works at either level. The
 attribute is reserved like `key`, so the component's props type never declares
 it; the JSX types accept it on every element.
+
+**Layout offset.** A third writer comes before both: `layoutX` and `layoutY`,
+a position the player's layout pass writes into an object a layout container
+places (`world = parent × layout × placement × transform`). Nothing writes it
+yet; `<Flex>` will (see [UI_PLAN.md](UI_PLAN.md)). Like placement, it cannot
+conflict: layout decides the slot, and the object's own `transform` nudges it
+within the slot, as CSS's `transform` does. Both names are reserved members.
 
 `children` is passed between elements, `<Panel>…</Panel>`: see "Children".
 
@@ -1394,7 +1401,24 @@ run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new 
 **What is drawn.**
 
 * *Order:* tree order, a parent before its children, children in their order (source order, then
-  keyed-list order). Later is on top. There is no `z`.
+  keyed-list order), unless `z` says otherwise. Later is on top. **`z`** is a `transform` field beside `x`
+  and `y` (`<Sprite transform={{ x: 10, z: 2 }} />`; scenes take it too): what has a higher `z` is drawn
+  later, so on top, negative is behind, and 0 is the default. Like position it adds to the parent's
+  (`placement.z + transform.z`, on top of the parent's), so raising a component raises everything in it as
+  one, and `global` cuts the chain (a global `transform` is just its own `z`; a global `placement`
+  ignores the parent's). A camera is transparent to it, as to position. Objects with equal `z` keep
+  tree order, and the order is global across the tree, not within one parent: a child at an effective
+  `z` of 6 is above an unrelated sibling of its parent at 5.5. Pointers follow the same order, so the
+  pointer drawn on top is pressed first. It is not a record field: the format is unchanged. The frame
+  builder notes where `z` changes as it writes records and, if it ever did, sorts them once after the walk
+  (`DrawList.sortByZ`, a stable sort by `(z, record order)`; skipped when they are already in order, as
+  when a HUD sits at the top); the view stays first and a screen's border bars stay last. A `z` that is
+  not a number (NaN) is 0, with one warning; an infinite one is the extreme of the order. Why it is a
+  transform field and not a `z=` attribute: `z` is a common prop name (a coordinate, a layer), and an
+  attribute would reserve it on every component. The cost is a read of two fields per object in the tree
+  walk: about 10% of the script time of the 2,000 and 5,000 moving-rect bench scenes under QuickJS
+  (median of interleaved runs, noisy to about the same size). Priority 4's setters on `Transform` would let
+  a game that never sets `z` skip it.
 * *Origin:* top-left, for `Sprite`, `AnimatedSprite`, `Shape` and `Text`, rotated and scaled about it.
   A negative scale flips.
 * `Sprite` and `AnimatedSprite` draw `image` (the current frame) from `<assets>/<image>`; an empty
@@ -1407,9 +1431,36 @@ run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new 
   colour that cannot be read is magenta, each with one warning. Each texture is loaded once.
 
 **The camera.** The first `Camera` in draw order is the view (a second one is ignored, with one
-warning). The point it follows (the middle of its children, or where it is) lands on the centre of the window. With no camera the world
+warning). The point it follows (the middle of its children, or where it is) lands on the centre of the window
+(of the game's screen, under a `<Screen>`). With no camera the world
 origin is the window's top-left corner. An unusable camera (zoom 0) is dropped for the frame, with one
 warning.
+
+**The game's screen.** A `<Screen width={320} height={180}>` at the root of the game (the object mounted, or the
+root `build` is given) sets the game's resolution: everything inside is in game pixels, and the player scales it
+into the window. `fit` picks the scale: `"integer"` (the default) is the largest whole number that fits, with the
+game's corner on a whole window pixel, falling back to `"contain"` for a window smaller than the game;
+`"contain"` is the largest scale that fits; `"stretch"` fills each axis. The game is centred, and the window
+outside it is covered with `border`. All of it is one view: the camera's view in game pixels, then the
+screen's scale and position (`viewToWindow`), in the first record. The bars are drawn last, as rectangles
+placed in world space by taking each window rectangle back through that view; every view the player makes
+is a scale after a rotation, so its inverse is exactly a record's rotate-then-scale and the bars land on
+whole window pixels however the camera turns. (When the ABI allows a second view, priority 3, they can be
+drawn through a window-space view instead.) A press on the bars reaches no `Pointer`, and
+`input.pointerX/pointerY` come back through the same view, so handlers see game positions. `pixelPerfect`
+(default true) is accepted but, until the library can draw into a texture (ABI v2), the game is drawn at the
+window's resolution either way. A `<Screen>` anywhere else is a plain container, with one warning; one whose
+size is not positive is ignored, with one warning. Without a `<Screen>` the frame is exactly what it was
+before: the game is the window.
+
+**Measuring.** `FrameBuilder.measure(object)` is the size layout will place an object by: a `Shape`'s,
+`Pointer`'s or `Collider`'s `width × height`, a `Text`'s measured width × its `size`, a `Sprite`'s texture size
+(an `AnimatedSprite`'s first frame, so the size does not jitter; a texture that will not load measures as the
+16×16 square drawn instead), and null for containers. It asks the backend's optional `measureText` and
+`textureSize` once per string and once per texture and keeps the answers (text widths up to 1,024 strings,
+then the cache starts again). No native backend has them until ABI v2, so text widths are estimated
+(`estimateTextWidth`: 0.6 × size per character) and textures measure 0 × 0, with one warning;
+`RecordingBackend` implements both deterministically for tests.
 
 **Input.** `input.pressed/down/released(key)` read the backend's key flags. Keys are `"A"`–`"Z"`,
 `"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`,
