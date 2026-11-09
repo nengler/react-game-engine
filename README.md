@@ -5,12 +5,12 @@ Components are written as TSX functions, but there is no React and no virtual
 DOM: a compiler turns each component into an ordinary TypeScript class whose
 children are persistent instances, updated in place when state changes.
 
-This repository contains the **compiler** (the first vertical slice plus every
-Phase 2 milestone, M0–M15), a minimal mock runtime, and an example. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture, the IR,
-and the design decisions, and [docs/PHASE2_PLAN.md](docs/PHASE2_PLAN.md) for
-the roadmap and current milestone status. The next phase, a native player built on
-raylib (window, drawing, input, sound) with a Rust + QuickJS-ng shipping host, is
-planned in [docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md).
+This repository contains the **compiler** (Phase 2, M0–M15), the runtime, and the
+**native player** (Phase 3, N0–N6): a compiled game draws, plays sound and reads the
+keyboard and mouse through raylib, under Node during development and as a small Rust +
+QuickJS-ng executable that ships without Node. See [docs/DESIGN.md](docs/DESIGN.md) for the
+architecture, the IR, the ground rules and the design decisions, and
+[docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md) for the player's design, its ABI and its performance baseline. What comes next is ranked in [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md).
 
 ```tsx
 import { useState, Entity, Sprite, Collider } from "@rge/runtime/jsx";
@@ -65,6 +65,11 @@ npm install
 npm test            # full pipeline tests
 npm run typecheck   # tsc 7.1 over compiler, runtime, tests and generated example
 npm run example     # recompile packages/example/src → packages/example/generated, and check its scenes
+
+# The native player (needs cmake and a C compiler; on Linux, the X11/GL dev packages for a real window)
+npm run native:build    # librge with a real window → native/build
+npm run play:demo       # play the demo under Node
+npm run package         # dist/demo/: the Rust host (needs cargo), game.js and assets/
 ```
 
 Programmatic use:

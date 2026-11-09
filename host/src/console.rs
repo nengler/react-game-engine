@@ -1,6 +1,7 @@
 //! QuickJS has no `console`. The game and the player use `console.warn`; scripts print results with
 //! `console.log`. `log`, `info` and `debug` go to stdout; `warn` and `error` go to stderr.
 use rquickjs::{Ctx, Function, Object, Result as JsResult, Value};
+use std::io::Write;
 
 pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     let console = Object::new(ctx.clone())?;
@@ -13,12 +14,14 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     ctx.globals().set("console", console)
 }
 
+// Not `println!`: it panics when the stream is closed (`rge-host game.js | head`), and a log line must never stop
+// the game. A line that cannot be written is dropped.
 fn to_stdout<'js>(ctx: Ctx<'js>, args: rquickjs::function::Rest<Value<'js>>) {
-    println!("{}", format_args_for_print(&ctx, &args));
+    let _ = writeln!(std::io::stdout(), "{}", format_args_for_print(&ctx, &args));
 }
 
 fn to_stderr<'js>(ctx: Ctx<'js>, args: rquickjs::function::Rest<Value<'js>>) {
-    eprintln!("{}", format_args_for_print(&ctx, &args));
+    let _ = writeln!(std::io::stderr(), "{}", format_args_for_print(&ctx, &args));
 }
 
 /// Strings as they are; an error as its stack; anything else as JSON, or as `String(value)` if it has none.

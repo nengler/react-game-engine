@@ -65,6 +65,17 @@ void rge_close(void) {
   memset(&state, 0, sizeof(state));
 }
 
+/* A record field as an index or an op: -1 unless it is a whole number in range. Casting NaN or an out-of-range
+ * double to an integer is undefined behaviour in C, so a malformed buffer must not reach a plain cast. */
+static int32_t to_index(double value) {
+  return value >= 0.0 && value <= 2147483647.0 ? (int32_t)value : -1;
+}
+
+/* A packed 0xRRGGBBAA colour; anything that is not one is magenta, as the TypeScript side uses for a bad colour. */
+static uint32_t to_color(double value) {
+  return value >= 0.0 && value <= 4294967295.0 ? (uint32_t)value : 0xff00ffffu;
+}
+
 static Color unpack_color(uint32_t rgba) {
   return (Color){ (unsigned char)(rgba >> 24), (unsigned char)(rgba >> 16), (unsigned char)(rgba >> 8), (unsigned char)rgba };
 }
@@ -88,7 +99,7 @@ static void execute_records(const double *records, int32_t length, const char *t
   int32_t at = 0;
   while (at < length) {
     const double *r = records + at;
-    int32_t op = (int32_t)r[0];
+    int32_t op = to_index(r[0]);
     int32_t need = 0;
     switch (op) {
       case RGE_OP_VIEW: need = RGE_OP_VIEW_LEN; break;
@@ -123,7 +134,7 @@ static void execute_records(const double *records, int32_t length, const char *t
       }
       case RGE_OP_SPRITE: {
         Texture2D texture;
-        if (assets_texture((int32_t)r[6], &texture)) {
+        if (assets_texture(to_index(r[6]), &texture)) {
           push_transform(r);
           DrawTexture(texture, 0, 0, WHITE);
           rlPopMatrix();
@@ -132,24 +143,24 @@ static void execute_records(const double *records, int32_t length, const char *t
       }
       case RGE_OP_RECT: {
         push_transform(r);
-        DrawRectangleV((Vector2){ 0.0f, 0.0f }, (Vector2){ (float)r[6], (float)r[7] }, unpack_color((uint32_t)r[8]));
+        DrawRectangleV((Vector2){ 0.0f, 0.0f }, (Vector2){ (float)r[6], (float)r[7] }, unpack_color(to_color(r[8])));
         rlPopMatrix();
         break;
       }
       case RGE_OP_ELLIPSE: {
         push_transform(r);
         float w = (float)r[6], h = (float)r[7];
-        DrawEllipseV((Vector2){ w / 2.0f, h / 2.0f }, w / 2.0f, h / 2.0f, unpack_color((uint32_t)r[8]));
+        DrawEllipseV((Vector2){ w / 2.0f, h / 2.0f }, w / 2.0f, h / 2.0f, unpack_color(to_color(r[8])));
         rlPopMatrix();
         break;
       }
       case RGE_OP_TEXT: {
-        int32_t index = (int32_t)r[6];
+        int32_t index = to_index(r[6]);
         if (index >= 0 && index < text_count && text != NULL && text_offsets != NULL) {
           float size = (float)r[7];
           push_transform(r);
           /* The spacing DrawText uses: a tenth of the size. */
-          DrawTextEx(GetFontDefault(), text + text_offsets[index], (Vector2){ 0.0f, 0.0f }, size, size / 10.0f, unpack_color((uint32_t)r[8]));
+          DrawTextEx(GetFontDefault(), text + text_offsets[index], (Vector2){ 0.0f, 0.0f }, size, size / 10.0f, unpack_color(to_color(r[8])));
           rlPopMatrix();
         }
         break;
@@ -188,7 +199,11 @@ static void capture_frame(void) {
 #else
   Image image = LoadImageFromScreen(); /* flipped to top row first, alpha forced to 255 */
   if (image.data == NULL) return;
-  if (image.format == PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) memcpy(state.pixels, image.data, (size_t)size);
+  /* LoadImageFromScreen sizes the image from the screen size and the DPI scale, which need not be the render size
+   * (a high-DPI display): copy only an image of exactly the size the buffer was made for. */
+  if (image.format == PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 && image.width == width && image.height == height) {
+    memcpy(state.pixels, image.data, (size_t)size);
+  }
   UnloadImage(image);
 #endif
 }

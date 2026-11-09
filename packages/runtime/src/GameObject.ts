@@ -139,9 +139,15 @@ export class GameObject<P extends object = {}> {
     child.parent = this;
     child.#slot = slot;
     child.#order = order;
-    const index = this.children.findIndex((sibling) => sibling.#slot > slot || (sibling.#slot === slot && sibling.#order > order));
-    if (index === -1) this.children.push(child);
-    else this.children.splice(index, 0, child);
+    // Children are sorted, so a child that sorts after the last one (the usual case: building a tree in
+    // source order, or spawning into a list) is appended without a scan; mounting n children stays linear.
+    const last = this.children[this.children.length - 1];
+    if (last === undefined || last.#slot < slot || (last.#slot === slot && last.#order <= order)) {
+      this.children.push(child);
+    } else {
+      const index = this.children.findIndex((sibling) => sibling.#slot > slot || (sibling.#slot === slot && sibling.#order > order));
+      this.children.splice(index, 0, child);
+    }
     if (this.world !== null) child.attachToWorld(this.world);
   }
 

@@ -28,21 +28,28 @@ export interface WorldTransform {
   readonly scaleY: number;
 }
 
-export const IDENTITY_TRANSFORM: WorldTransform = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
+export const IDENTITY_TRANSFORM: WorldTransform = Object.freeze({ x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 });
 
 /**
  * `local` placed inside `parent`: the local position is scaled, then rotated,
  * by the parent and added to the parent's position; rotations add and scales
  * multiply. (Non-uniform parent scale combined with a rotated child would
  * shear in a full affine model; this keeps scale per axis, which is what 2D
- * games almost always want.) A global `local` ignores `parent`.
+ * games almost always want.) A global `local` ignores `parent`. The result
+ * may be `parent` itself (when `local` is the identity), so treat it as read-only.
  */
 export function composeTransforms(parent: WorldTransform, local: Transform | WorldTransform): WorldTransform {
   if ("global" in local && local.global) {
     return { x: local.x, y: local.y, rotation: local.rotation, scaleX: local.scaleX, scaleY: local.scaleY };
   }
+  // Fast paths (a renderer composes twice per object per frame, and most placements are identity and most
+  // parents are upright). For finite numbers both give what the general case gives, up to the sign of a zero.
+  if (local.x === 0 && local.y === 0 && local.rotation === 0 && local.scaleX === 1 && local.scaleY === 1) return parent;
   const sx = local.x * parent.scaleX;
   const sy = local.y * parent.scaleY;
+  if (parent.rotation === 0) {
+    return { x: parent.x + sx, y: parent.y + sy, rotation: parent.rotation + local.rotation, scaleX: parent.scaleX * local.scaleX, scaleY: parent.scaleY * local.scaleY };
+  }
   const cos = Math.cos(parent.rotation);
   const sin = Math.sin(parent.rotation);
   return {

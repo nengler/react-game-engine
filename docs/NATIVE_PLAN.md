@@ -1,6 +1,6 @@
 # Phase 3 plan: the native player
 
-Snapshot of the plan as of 2026-11-09. Phase 2 built the compiler and a mock runtime: generated components run, render and handle input, but nothing draws. Phase 3 puts a compiled game in a native window: it draws, plays sound, reads the keyboard and mouse, and ships as a native executable without Node. This document is both the design note the Phase 2 ground rules ask for (it changes the "runtime stays a mock" rule, see [Ground rules](#ground-rules)) and the milestone plan. Progress is tracked in [Status](#status) and the [Handoff checklist](#handoff-checklist).
+Snapshot of the plan as of 2026-11-09. Phase 2 built the compiler and a mock runtime: generated components run, render and handle input, but nothing draws. Phase 3 puts a compiled game in a native window: it draws, plays sound, reads the keyboard and mouse, and ships as a native executable without Node. This document is both the design note the Phase 2 ground rules ask for (it changes the "runtime stays a mock" rule, see [Ground rules](#ground-rules)) and the milestone plan. Progress is tracked in [Status](#status) and the [Handoff checklist](#handoff-checklist). Phase 3 is complete; the next priorities are in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md).
 
 Read first: [DESIGN.md](DESIGN.md) sections "Transforms and refs", "Camera", "Pointer", "`<AnimatedSprite>`" and "useSound". They define what the player must draw and dispatch. This plan does not change any of them.
 
@@ -10,9 +10,9 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
-| N0 Design and protocol | In review | `claude/confident-feynman-1ryujz` | This document |
+| N0 Design and protocol | Done | #25 | This document |
 | N1 Draw list (`@rge/player`, pure TS) | Done | #26 | `FrameBuilder` + `walkTree` in `draw.ts`; `native/include/rge.h` is committed here (complete, including the full key table); goldens are JSON files in `test/golden/` (`UPDATE_GOLDEN=1` rewrites them, numbers rounded to 1e-9) rather than `node:test` snapshots, which are still experimental |
-| N2 Input, sound and the frame loop (pure TS) | In review | #27 | Also added: `PlayerConfig.warn` (where warnings go; tests use it), `getSoundSink()` (so a closing player removes only its own sink), `PlayerInput` (the `InputState` with `worldPoint`, `screenX/Y`, `dt`, `quit`), `RecordingBackend`'s `missingSounds`. The press is dispatched only for a *new* left press and only to pointers drawn in the previous frame |
+| N2 Input, sound and the frame loop (pure TS) | Done | #27 | Also added: `PlayerConfig.warn` (where warnings go; tests use it), `getSoundSink()` (so a closing player removes only its own sink), `PlayerInput` (the `InputState` with `worldPoint`, `screenX/Y`, `dt`, `quit`), `RecordingBackend`'s `missingSounds`. The press is dispatched only for a *new* left press and only to pointers drawn in the previous frame |
 | N3 `librge` (C + raylib) and the Node dev host | Done | #28 | First pixels. Built and tested in the cloud container on both raylib platforms: `Memory` (software renderer, no system libraries; the CI `native` job) and `Desktop` (GLFW + Mesa under Xvfb; the `native-desktop` job). Still needs a person at a real display: how the window feels, real keyboard and mouse input, and audio (a hidden window has no audio device, so sounds are loaded but silent) |
 | N4 Demo game and headless CI | Done | #29 | The headless C smoke test and the Node-host tests already ran in CI from N3; N4 adds the demo and runs it in those jobs: scripted-input tests through `RecordingBackend` (movement, camera, clicks, sound, the missing frame) and a 60-frame pixel check through the real library. Replaces N3's hello stand-in. Not yet seen by a person in a real window |
 | N5 Collisions (pure TS) | Done | #30 | `CollisionTracker` in `collide.ts`, called once per frame by the player. Added a rule the plan did not have: colliders with the same parent never collide with each other (a hitbox and a shield must not hit each other, and handler code cannot read `other` to filter it out). Measured cost is in the doc comment |
@@ -95,7 +95,7 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 
 ## Ground rules
 
-Phase 2's rules still apply. Two change, and three are added:
+The compiler's rules ([DESIGN.md](DESIGN.md#ground-rules-and-settled-decisions)) still apply. Two change, and three are added:
 
 - **Changed: "Runtime stays a mock" → "Runtime stays backend-free."** `@rge/runtime` never draws, plays or polls anything. It gains only hooks a backend plugs into (the sound sink). Drawing, input and audio live in `@rge/player` and the hosts. The mock tests keep passing unchanged.
 - **Changed: TypeScript-only.** `native/` (C) and `host/` (Rust) are new languages in the repo. Keep them small; logic goes in TypeScript unless it needs the GPU, the OS or audio.
@@ -456,6 +456,28 @@ What it says:
 - **Collisions were the one real cliff**, and it showed only in the interpreter: testing every pair cost 465 ms a frame for 2,000 colliders. The tracker now sorts by left edge and sweeps (12x faster there). A scene where most colliders share the same columns degrades back towards every pair.
 - **If more is needed**, the first fixes are the ones the plan named: cache world transforms for subtrees that did not change, and dependency-scoped `render()`.
 
+### Review after N6 (2026-11-09)
+
+A review of the whole phase found three costs that the baseline did not show, and fixed them. Same VM, same bench (which now also has a state-driven scene, the way compiled components move, and a pile of 300 colliders that all touch); each number is the middle of a few runs, and the VM is noisy to about ±15%.
+
+| Scene | QuickJS-ng before | QuickJS-ng after | Node after |
+| --- | --- | --- | --- |
+| 500 moving rects | 2.2 ms | 1.5 ms | 0.1 ms |
+| 2,000 moving rects | 8.7 ms | 5.0 ms | 0.2 ms |
+| 5,000 moving rects | 24 ms | 14 ms | 0.8 ms |
+| 2,000 rects moved by state | 12 ms | 8.0 ms | 0.6 ms |
+| 500 moving rects, each with a collider | 6.1 ms | 3.7 ms | 0.2 ms |
+| 2,000 moving rects, each with a collider | 32 ms | 16 ms | 0.9 ms |
+| 300 colliders in one pile (44,850 touching pairs) | 37 ms | 24 ms | 4.4 ms (13 ms before) |
+| Mounting 5,000 children under one parent (not in the bench) | 1,000 ms | 45 ms | 18 ms |
+
+- **Mounting was quadratic.** `addChild` scanned the siblings for every child to find its slot, even when it belonged at the end. It now appends without a scan when the child sorts last (building a tree, spawning into a list). 20,000 children took 1.6 s in Node and would have taken most of a minute under QuickJS.
+- **The tree walk** composed two transforms per object with a fresh object and `Math.cos`/`Math.sin` each time, and asked up to seven `instanceof` questions per object. `composeTransforms` now returns the parent for an identity `placement` (most of them) and skips the trigonometry under an upright parent; `FrameBuilder` looks up each class's kind once and walks with indexed loops (QuickJS allocates an iterator for every `for…of`).
+- **Collisions** built a string key per touching pair and a new `Set` every frame. Keys are now small integers, scrambled, because QuickJS-ng hashes an integer by one multiply and keeps the low bits, which in `low * 2^15 + high` come from one id alone (a plain integer key was *slower* than a string there, and a key above int32 ten times slower). Ids are renumbered when they grow past 2^15, so the keys stay small in a game that keeps creating colliders; past that many colliders in one frame they fall back to strings. Boxes go into a reused `Float64Array`.
+- **Still open**: the sweep over x degrades when colliders line up in columns (a grid of platforms; the bench's own grid is such a scene), so a uniform grid is the next step if collisions show up again. The state-driven tick (setters, closures, a full `render()` per moving object) is now the biggest cost after the walk; dependency-scoped `render()` and cached world transforms for still subtrees are the fixes the plan already names.
+
+The review also fixed: `console.log` in the Rust host panicking (and ending the game) when stdout is closed, as with `rge-host game.js | head`; the Rust host accepting a keys buffer longer than librge's table (rge.h and protocol.ts drifting apart, which the Node host already refused); librge casting draw-record doubles straight to integers (undefined behaviour in C for NaN or out-of-range values; a bad op now stops the frame, a bad index draws nothing, a bad colour is magenta); frame capture on the OpenGL path copying a screen image whose size need not match the buffer on a high-DPI display; and Shift, Control and Alt reporting a second press when the other side went down while one was held, and a release while still held.
+
 ## Later (not scheduled)
 
 | Idea | Notes |
@@ -499,7 +521,7 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 
 - [x] This document: goals, architecture, decisions, ABI, interfaces, milestones
 - [x] `PHASE2_PLAN.md` ground rule updated and pointing here; README links here
-- [ ] Reviewed and merged
+- [x] Reviewed and merged
 
 ### N1 Draw list
 
