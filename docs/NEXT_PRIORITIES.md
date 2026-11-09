@@ -65,6 +65,7 @@ Everything is drawn through the camera, so a score or a health bar placed in the
 - librge today refuses a second view record ("malformed draw records"), so this is an ABI change: allow a later `RGE_OP_VIEW` to replace the current view, and bump `RGE_ABI_VERSION` to 2. Both hosts already check the version at load.
 - A `<Pointer>` inside `<Screen>` is hit-tested in window coordinates, so HUD buttons work while the camera moves.
 - A `z` prop: a sort key applied in TypeScript to the draw list before it is sent, stable within equal keys. It stays inside the current record format.
+- UI layout (`<Flex alignItems="center" gap={8}>`) builds on this layer; see [UI_PLAN.md](UI_PLAN.md). It needs two measuring functions (`rge_measure_text`, `rge_texture_size`), which should go into the same ABI v2 so the version moves once.
 
 **Done when**
 
