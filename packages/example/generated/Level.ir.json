@@ -657,79 +657,6 @@
         "transform": [],
         "children": [
           {
-            "kind": "StaticChild",
-            "element": {
-              "kind": "Element",
-              "id": "Level/0",
-              "fieldName": "camera",
-              "component": {
-                "kind": "Intrinsic",
-                "name": "Camera"
-              },
-              "props": [
-                {
-                  "kind": "DynamicProp",
-                  "name": "zoom",
-                  "value": {
-                    "kind": "Conditional",
-                    "test": {
-                      "kind": "Binary",
-                      "operator": ">",
-                      "left": {
-                        "kind": "StateRead",
-                        "state": "Level.wave"
-                      },
-                      "right": {
-                        "kind": "NumberLiteral",
-                        "value": 5
-                      }
-                    },
-                    "whenTrue": {
-                      "kind": "NumberLiteral",
-                      "value": 2
-                    },
-                    "whenFalse": {
-                      "kind": "NumberLiteral",
-                      "value": 1
-                    }
-                  },
-                  "dependencies": [
-                    {
-                      "kind": "State",
-                      "state": "Level.wave"
-                    }
-                  ]
-                }
-              ],
-              "transform": [
-                {
-                  "kind": "StaticProp",
-                  "name": "x",
-                  "value": {
-                    "kind": "NumberLiteral",
-                    "value": 160
-                  }
-                },
-                {
-                  "kind": "StaticProp",
-                  "name": "y",
-                  "value": {
-                    "kind": "NumberLiteral",
-                    "value": 120
-                  }
-                }
-              ],
-              "children": [],
-              "span": {
-                "fileName": "packages/example/src/Level.tsx",
-                "start": 1846,
-                "end": 1911,
-                "line": 60,
-                "column": 7
-              }
-            }
-          },
-          {
             "kind": "KeyedListChild",
             "source": {
               "kind": "StateRead",
@@ -755,7 +682,7 @@
             },
             "element": {
               "kind": "Element",
-              "id": "Level/1",
+              "id": "Level/0",
               "fieldName": "enemy",
               "component": {
                 "kind": "Local",
@@ -1069,9 +996,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 1947,
-                "end": 2425,
-                "line": 62,
+                "start": 1801,
+                "end": 2279,
+                "line": 60,
                 "column": 9
               }
             },
@@ -1104,7 +1031,7 @@
             ],
             "element": {
               "kind": "Element",
-              "id": "Level/2",
+              "id": "Level/1",
               "fieldName": "enemy2",
               "component": {
                 "kind": "Local",
@@ -1139,9 +1066,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 2456,
-                "end": 2501,
-                "line": 75,
+                "start": 2310,
+                "end": 2355,
+                "line": 73,
                 "column": 21
               }
             }
@@ -1150,7 +1077,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Level/3",
+              "id": "Level/2",
               "fieldName": "panel",
               "component": {
                 "kind": "Imported",
@@ -1183,7 +1110,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/3/0",
+                    "id": "Level/2/0",
                     "fieldName": "coin",
                     "component": {
                       "kind": "Imported",
@@ -1211,9 +1138,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 2560,
-                      "end": 2582,
-                      "line": 77,
+                      "start": 2414,
+                      "end": 2436,
+                      "line": 75,
                       "column": 9
                     }
                   }
@@ -1222,7 +1149,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/3/1",
+                    "id": "Level/2/1",
                     "fieldName": "trail",
                     "component": {
                       "kind": "Imported",
@@ -1267,9 +1194,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 2591,
-                      "end": 2642,
-                      "line": 78,
+                      "start": 2445,
+                      "end": 2496,
+                      "line": 76,
                       "column": 9
                     }
                   }
@@ -1278,7 +1205,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/3/2",
+                    "id": "Level/2/2",
                     "fieldName": "text",
                     "component": {
                       "kind": "Intrinsic",
@@ -1372,9 +1299,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 2750,
-                      "end": 2881,
-                      "line": 80,
+                      "start": 2604,
+                      "end": 2735,
+                      "line": 78,
                       "column": 9
                     }
                   }
@@ -1382,9 +1309,9 @@
               ],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 2509,
-                "end": 2896,
-                "line": 76,
+                "start": 2363,
+                "end": 2750,
+                "line": 74,
                 "column": 7
               }
             }
@@ -1463,7 +1390,7 @@
             ],
             "element": {
               "kind": "Element",
-              "id": "Level/4",
+              "id": "Level/3",
               "fieldName": "entity",
               "component": {
                 "kind": "Intrinsic",
@@ -1485,7 +1412,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/4/0",
+                    "id": "Level/3/0",
                     "fieldName": "sprite",
                     "component": {
                       "kind": "Intrinsic",
@@ -1530,9 +1457,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 2960,
-                      "end": 3021,
-                      "line": 86,
+                      "start": 2814,
+                      "end": 2875,
+                      "line": 84,
                       "column": 11
                     }
                   }
@@ -1541,7 +1468,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/4/1",
+                    "id": "Level/3/1",
                     "fieldName": "collider",
                     "component": {
                       "kind": "Intrinsic",
@@ -1569,9 +1496,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 3032,
-                      "end": 3067,
-                      "line": 87,
+                      "start": 2886,
+                      "end": 2921,
+                      "line": 85,
                       "column": 11
                     }
                   }
@@ -1580,7 +1507,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Level/4/2",
+                    "id": "Level/3/2",
                     "fieldName": "banner",
                     "component": {
                       "kind": "Imported",
@@ -1647,9 +1574,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/example/src/Level.tsx",
-                      "start": 3078,
-                      "end": 3143,
-                      "line": 88,
+                      "start": 2932,
+                      "end": 2997,
+                      "line": 86,
                       "column": 11
                     }
                   }
@@ -1657,10 +1584,83 @@
               ],
               "span": {
                 "fileName": "packages/example/src/Level.tsx",
-                "start": 2929,
-                "end": 3161,
-                "line": 85,
+                "start": 2783,
+                "end": 3015,
+                "line": 83,
                 "column": 9
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Level/4",
+              "fieldName": "camera",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Camera"
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "zoom",
+                  "value": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": ">",
+                      "left": {
+                        "kind": "StateRead",
+                        "state": "Level.wave"
+                      },
+                      "right": {
+                        "kind": "NumberLiteral",
+                        "value": 5
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "NumberLiteral",
+                      "value": 2
+                    },
+                    "whenFalse": {
+                      "kind": "NumberLiteral",
+                      "value": 1
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Level.wave"
+                    }
+                  ]
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 160
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 120
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/example/src/Level.tsx",
+                "start": 3105,
+                "end": 3170,
+                "line": 90,
+                "column": 7
               }
             }
           }

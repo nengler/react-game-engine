@@ -76,7 +76,6 @@ export class Level extends Entity {
   #spawnsNext: Spawn[] = this.spawns;
   defeats: Defeat[] = [];
   #defeatsNext: Defeat[] = this.defeats;
-  readonly camera: Camera = new Camera({ zoom: (this.wave > 5) ? 2 : 1 });
   readonly enemyItems: Map<string | number, Enemy> = new Map();
   #enemyOrder: (string | number)[] = [];
   #enemyRecords: Map<string | number, { current: Level["spawns"][number] }> = new Map();
@@ -89,20 +88,21 @@ export class Level extends Entity {
   sprite: Sprite | null = null;
   collider: Collider | null = null;
   banner: Banner | null = null;
+  readonly camera: Camera = new Camera({ zoom: (this.wave > 5) ? 2 : 1 });
 
   constructor() {
     super({ name: "Level" });
-    this.camera.transform.x = 160;
-    this.camera.transform.y = 120;
-    this.addChild(this.camera, 0);
     this.panel.placement.x = 160;
-    this.addChild(this.panel, 3);
+    this.addChild(this.panel, 2);
     this.panel.attachPassedChild(this.coin, 0);
     this.trail.placement.x = 40;
     this.trail.placement.y = 20;
     this.panel.attachPassedChild(this.trail, 1);
     this.text.transform.y = 40;
     this.panel.attachPassedChild(this.text, 2);
+    this.camera.transform.x = 160;
+    this.camera.transform.y = 120;
+    this.addChild(this.camera, 4);
     this.render();
     this.commitStructure();
   }
@@ -143,7 +143,6 @@ export class Level extends Entity {
   }
 
   override render(): void {
-    this.camera.zoom = (this.wave > 5) ? 2 : 1;
     {
       const $parent = this;
       const $list = this.spawns;
@@ -165,7 +164,7 @@ export class Level extends Entity {
           } });
           this.enemyItems.set($key, $item);
           this.#enemyRecords.set($key, $rec);
-          $parent.queueAddChild($item, 1, $n);
+          $parent.queueAddChild($item, 0, $n);
         } else {
           this.#enemyRecords.get($key)!.current = s;
           $item.updateProps({ speed: (s.tint === "blue") ? (this.wave * 2) : this.wave, tint: s.tint });
@@ -180,7 +179,7 @@ export class Level extends Entity {
         }
       }
       if ($keys.length !== this.#enemyOrder.length || $keys.some(($k, $i) => $k !== this.#enemyOrder[$i])) {
-        $parent.queueReorder(1, $keys.map(($k) => this.enemyItems.get($k)!));
+        $parent.queueReorder(0, $keys.map(($k) => this.enemyItems.get($k)!));
         this.#enemyOrder = $keys;
       }
     }
@@ -188,7 +187,7 @@ export class Level extends Entity {
       if (this.enemy2 === null) {
         this.enemy2 = new Enemy({ speed: this.wave });
         this.enemy2.placement.x = 120;
-        this.queueAddChild(this.enemy2, 2);
+        this.queueAddChild(this.enemy2, 1);
       }
       this.enemy2.updateProps({ speed: this.wave });
     } else if (this.enemy2 !== null) {
@@ -208,7 +207,7 @@ export class Level extends Entity {
         this.entity.addChild(this.collider);
         this.banner = new Banner({ text: "boss", onDone: () => { this.setWave((wave: number) => wave + 1); } });
         this.entity.addChild(this.banner);
-        this.queueAddChild(this.entity, 4);
+        this.queueAddChild(this.entity, 3);
       }
       if (this.sprite !== null) {
         this.sprite.image = (this.wave > 5) ? "boss-enraged.png" : "boss.png";
@@ -220,6 +219,7 @@ export class Level extends Entity {
       this.collider = null;
       this.banner = null;
     }
+    this.camera.zoom = (this.wave > 5) ? 2 : 1;
   }
 }
 

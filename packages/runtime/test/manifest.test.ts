@@ -40,9 +40,11 @@ describe("runtime manifest", () => {
     };
     const base = new Entity();
     for (const tag of runtimeManifest.intrinsics) {
-      const own = Object.keys(instances[tag]!).filter((key) => !(key in base) || key === "name").sort();
+      const instance = instances[tag]!;
+      const fields = Object.keys(instance).filter((key) => !(key in base) || key === "name");
+      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(instance) as object).filter((key) => key !== "constructor" && !(key in base));
       const declared = [...(runtimeManifest.intrinsicMembers[tag] ?? [])].sort();
-      assert.deepEqual(declared, own, `${tag}: intrinsicMembers must list exactly the fields it adds`);
+      assert.deepEqual(declared, [...fields, ...methods].sort(), `${tag}: intrinsicMembers must list exactly the fields and methods it adds`);
     }
     for (const [tag, required] of Object.entries(runtimeManifest.intrinsicRequired)) {
       for (const name of required) assert.ok(runtimeManifest.intrinsicMembers[tag]?.includes(name), `${tag}.${name} is required, so it must be one of the intrinsic's members`);
@@ -76,6 +78,16 @@ describe("runtime manifest", () => {
       }
     }
     assert.deepEqual(runtimeManifest.intrinsicLiterals["Shape"]?.["kind"], [...SHAPE_KINDS]);
+  });
+
+  it("keeps runtime-only members among the members, with a reason", () => {
+    for (const [tag, members] of Object.entries(runtimeManifest.intrinsicRuntimeOnly)) {
+      assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
+      for (const [name, reason] of Object.entries(members)) {
+        assert.ok(runtimeManifest.intrinsicMembers[tag]?.includes(name), `${tag}.${name} must be a member, so its name stays reserved`);
+        assert.ok(reason.length > 0, `${tag}.${name} needs a reason`);
+      }
+    }
   });
 
   it("lists only intrinsics as transformable, including the host", () => {

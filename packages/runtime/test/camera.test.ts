@@ -130,6 +130,38 @@ describe("Camera follow", () => {
     assert.deepEqual(viewOf(camera, 10, 0), [0, 0]);
   });
 
+  it("keeps a nested camera's offset in its parent's space, so toggling follow does not make the view jump", () => {
+    const parent = new Entity();
+    parent.transform.x = 100;
+    parent.transform.scaleX = 2;
+    parent.transform.scaleY = 2;
+    const camera = new Camera();
+    camera.transform.x = 10; // 20 world units from the parent, because the parent is scaled
+    parent.addChild(camera);
+    assert.deepEqual(viewOf(camera, 120, 0), [0, 0], "not following: at the parent plus the scaled offset");
+    const target = new Entity();
+    target.transform.x = 500;
+    camera.follow = target;
+    const [x, y] = viewOf(camera, 520, 0);
+    close(x, 0, "following: at the target plus the same scaled offset");
+    close(y, 0);
+    camera.follow = parent;
+    assert.deepEqual(viewOf(camera, 120, 0), [0, 0], "following its own parent changes nothing");
+  });
+
+  it("measures the offset of a global camera from the origin", () => {
+    const parent = new Entity();
+    parent.transform.x = 900;
+    const camera = new Camera();
+    camera.transform.global = true;
+    camera.transform.x = 5;
+    parent.addChild(camera);
+    const target = new Entity();
+    target.transform.x = 300;
+    camera.follow = target;
+    assert.deepEqual(viewOf(camera, 305, 0), [0, 0]);
+  });
+
   it("keeps the camera's own rotation and zoom while following", () => {
     const target = new Entity();
     target.transform.x = 100;
@@ -169,6 +201,20 @@ describe("Camera errors", () => {
   it("rejects a zoom that is not a positive number", () => {
     for (const zoom of [0, -1, NaN, Infinity]) {
       assert.throws(() => new Camera({ zoom }).viewTransform(), /zoom must be a positive number/, String(zoom));
+    }
+  });
+
+  it("rejects a position, rotation or scale that is not finite, which would give a view of NaN", () => {
+    for (const set of [
+      (c: Camera) => (c.transform.x = NaN),
+      (c: Camera) => (c.transform.y = Infinity),
+      (c: Camera) => (c.transform.rotation = NaN),
+      (c: Camera) => (c.transform.scaleX = Infinity),
+      (c: Camera) => (c.transform.scaleY = NaN),
+    ]) {
+      const camera = new Camera();
+      set(camera);
+      assert.throws(() => camera.viewTransform(), /must be a finite number/);
     }
   });
 

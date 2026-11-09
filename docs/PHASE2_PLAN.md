@@ -552,7 +552,7 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 ### M12 `<Camera>`
 
 - [x] Runtime `Camera` with `zoom`, `viewTransform()`, `worldToView` and `viewToWorld`; manifest entries (`intrinsics`, `transformIntrinsics`, `intrinsicMembers`)
-- [ ] ~~`follow` prop lowered through M4's prop machinery~~ not expressible: nothing in a component can name another object. Replaced by following through nesting, plus a runtime `follow` field for code that is not compiled (see the note in the section above)
+- [ ] ~~`follow` prop lowered through M4's prop machinery~~ not expressible: nothing in a component can name another object. Replaced by following through nesting, plus a runtime `follow` field for code that is not compiled, and a clear `RGE1203` for `follow` in JSX via the manifest's new `intrinsicRuntimeOnly` (see the note in the section above)
 - [x] `docs/DESIGN.md` updated ("Camera", the built-in lists)
 - [x] `Level.tsx` has a camera that zooms in at wave 6; `npm run example` regenerated and committed
 - [x] Tests cover view-only moves, following by nesting and by `follow`, conversions and their inverse, errors, and the compiled forms (`camera.test.ts`, `m12.test.ts`)

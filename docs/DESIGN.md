@@ -784,9 +784,14 @@ inverse (the second turns a click into a world position). The point the camera
 is at lands on the centre of the viewport: the renderer knows the viewport's
 size, the camera does not. Moving a camera never changes any object's
 `worldTransform()`: the view is applied on top of the world, not into it.
-Reading the view with a zoom that is not positive, or a scale of 0, throws a
-`RangeError` (it would divide by zero); assigning one does not, since a prop
-that varies with state can pass through such a value.
+Reading the view with a zoom that is not positive, a scale of 0, or a position,
+rotation or scale that is not finite throws a `RangeError` (the view would be
+singular or NaN). Assigning one does not throw: a prop that varies with state can
+pass through such a value, and throwing inside `render()` would abort a flush
+partway through the tree, so the error surfaces where the view is read, which is
+the renderer. `viewTransform()` recomputes from the tree each call, so it is
+never stale; a renderer should fetch it once per frame and apply it to
+everything, rather than call `worldToView` per point.
 
 **Following something.** Put the camera inside it:
 
@@ -803,12 +808,16 @@ the camera's own `transform` is an offset from the hero.
 **What cannot be written.** The plan sketched `<Camera follow={hero} />`, which
 needs a way for a component to name another object. Nothing does: element refs
 were removed in M3 (refs hold values only), state holds data and not objects, and
-M4 did not define one. So `follow` is not an authored prop (`CameraProps` has
-only `zoom`, and the source type-check rejects it). It exists on the runtime
-`Camera` for code that is not compiled (a game loop, a scene loader):
-`camera.follow = hero` puts the camera at the target's world position plus the
-camera's own `transform.x` and `.y`, with the camera's own rotation, scale and
-zoom. Other ways to the same view from TSX: nest the camera in the target, or
+M4 did not define one. So `follow` is not an authored prop: `CameraProps` has
+only `zoom`, the source type-check rejects it, and the compiler says why
+(`RGE1203`, from the manifest's `intrinsicRuntimeOnly`, which any intrinsic can
+use for a member that exists for code that is not compiled). It exists on the
+runtime `Camera` for such code (a game loop, a scene loader): `camera.follow =
+hero` moves the camera's *anchor* (its parent's position, or the origin when it
+has no parent or is `global`) to the target's world position. The camera keeps
+its own offset from that anchor, transformed as usual by its parent, so a nested
+camera does not jump when `follow` is toggled, and following its own parent
+changes nothing. Its rotation, scale and zoom stay its own. Other ways to the same view from TSX: nest the camera in the target, or
 lift the target's position into a parent's state and pass it down
 (`<Camera transform={{ x: heroX, y: heroY }} />`). If following arbitrary
 objects from TSX matters, it needs an object-reference mechanism of its own,
@@ -1143,8 +1152,9 @@ intrinsic generated classes extend, the member names of that class that
 generated fields must not shadow (`reservedMembers`), the handle types handler
 parameters may have (`InputState`, `GameObject`) with their readable members,
 the runtime functions handler code may call (`clamp`), and which built-ins take
-their JSX text as a prop (`textContent`), and which of their props take one of a
-fixed set of strings (`intrinsicLiterals`). The compiler takes
+their JSX text as a prop (`textContent`), which of their props take one of a
+fixed set of strings (`intrinsicLiterals`), and which members exist for code that
+is not compiled and cannot be set from JSX (`intrinsicRuntimeOnly`). The compiler takes
 it as `CompilerConfig.manifest` (default: the runtime's own), so adding an
 intrinsic or a handle type is a runtime-only edit. A runtime test fails if a
 member inherited from `Entity` is missing from `reservedMembers`. The `Math.*`

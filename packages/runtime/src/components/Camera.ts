@@ -45,9 +45,12 @@ export class Camera<P extends object = {}> extends GameObject<P> {
   zoom: number;
   /**
    * An object the camera tracks, set from code (it cannot be written in JSX:
-   * nothing in a component names another object). While set, the camera is at
-   * the target's world position plus the camera's own `transform.x` and `.y`,
-   * which become an offset; its rotation and scale are its own.
+   * nothing in a component names another object). While set, the camera's
+   * anchor (its parent's position, or the origin when it has none or is
+   * `global`) is moved to the target's world position. The camera keeps its own
+   * offset from that anchor, transformed as usual by its parent, so toggling
+   * `follow` never makes the view jump by more than the move to the target; its
+   * rotation and scale are its own.
    */
   follow: GameObject | null = null;
 
@@ -57,7 +60,12 @@ export class Camera<P extends object = {}> extends GameObject<P> {
     this.zoom = hostProps.zoom ?? DEFAULT_ZOOM;
   }
 
-  /** The world → view map: the inverse of the camera's world transform, then `zoom`. */
+  /**
+   * The world → view map: the inverse of the camera's world transform, then
+   * `zoom`. It recomputes from the tree each call, so it is always current; a
+   * renderer drawing many things should fetch it once per frame and apply it to
+   * all of them, rather than call `worldToView` per point.
+   */
   viewTransform(): ViewTransform {
     if (!(this.zoom > 0) || !Number.isFinite(this.zoom)) throw new RangeError(`Camera zoom must be a positive number, not ${this.zoom}.`);
     const world = this.worldTransform();
@@ -66,8 +74,12 @@ export class Camera<P extends object = {}> extends GameObject<P> {
     let y = world.y;
     if (this.follow !== null) {
       const target = this.follow.worldTransform();
-      x = target.x + this.transform.x;
-      y = target.y + this.transform.y;
+      const anchor = this.transform.global || this.parent === null ? { x: 0, y: 0 } : this.parent.worldTransform();
+      x += target.x - anchor.x;
+      y += target.y - anchor.y;
+    }
+    for (const [name, value] of Object.entries({ x, y, rotation: world.rotation, scaleX: world.scaleX, scaleY: world.scaleY })) {
+      if (!Number.isFinite(value)) throw new RangeError(`A camera's ${name} must be a finite number, not ${value}.`);
     }
     // view(p) = zoom · S⁻¹ · R(−θ) · (p − position): undo the camera's translation, rotation, then scale.
     const cos = Math.cos(world.rotation);
@@ -81,7 +93,7 @@ export class Camera<P extends object = {}> extends GameObject<P> {
     return { a, b, c, d, e: 0 - (a * x + c * y), f: 0 - (b * x + d * y) };
   }
 
-  /** Where a world-space point lands in view space (the viewport's centre is the origin). */
+  /** Where a world-space point lands in view space (the viewport's centre is the origin). One point; for many, use `viewTransform()` once. */
   worldToView(x: number, y: number): Point {
     const v = this.viewTransform();
     return { x: v.a * x + v.c * y + v.e, y: v.b * x + v.d * y + v.f };

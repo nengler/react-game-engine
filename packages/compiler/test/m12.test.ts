@@ -110,9 +110,27 @@ describe("M12: authored source type-checks", () => {
     assert.ok(check(`<Camera zoom="2" />`).length > 0);
   });
 
-  it("explains in the compiler that nothing in a component names another object", () => {
-    const codes = compileErrors(`function C() { return <Entity name="C"><Camera follow={hero} /></Entity>; }`).map((d) => d.code);
-    assert.deepEqual(codes, [DiagnosticCode.UnknownIdentifier]);
+  it("explains why follow cannot be written, and what to do instead, whatever it is given", () => {
+    for (const value of [`{hero}`, `{1}`, `"hero"`, ``]) {
+      const errors = compileErrors(`function C() { return <Entity name="C"><Camera follow${value ? `=${value}` : ""} /></Entity>; }`);
+      assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedAttribute], value);
+      assert.match(errors[0]!.message, /<Camera follow> cannot be set from JSX: nothing in a component can name another object, so a camera follows what it is inside/);
+    }
+  });
+
+  it("also rejects it on a camera that is a component's root", () => {
+    assert.deepEqual(compileErrors(`function C() { return <Camera follow={x} />; }`).map((d) => d.code), [DiagnosticCode.UnsupportedAttribute]);
+  });
+
+  it("keeps the runtime-only and method names reserved for a component rooted at a camera", () => {
+    for (const name of ["follow", "zoom", "viewTransform", "worldToView", "viewToWorld"]) {
+      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Camera />; }`).map((d) => d.code);
+      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+    }
+  });
+
+  it("does not apply to a component that merely has a prop with that name", () => {
+    assert.doesNotThrow(() => compile(`interface P { follow: number }\nfunction Child({ follow }: P) { return <Entity name="c" />; }\nfunction C() { return <Entity name="C"><Child follow={1} /></Entity>; }`));
   });
 });
 
