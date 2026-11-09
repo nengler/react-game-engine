@@ -12,6 +12,12 @@ export interface ColliderProps {
   onCollisionEnter?: (other: GameObject) => void;
 }
 
+/**
+ * A box for collisions: `width × height` with its **top-left corner at the object's position**, like a `Sprite`
+ * and a `Shape`, scaled and turned by its world transform. It draws nothing (pair it with a `Shape` to see it).
+ * The runtime only dispatches: finding the moment two colliders start touching is the player's job
+ * (`CollisionTracker` in `@rge/player`), which calls `World.reportCollision`, and that calls `onCollisionEnter`.
+ */
 export class Collider<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 

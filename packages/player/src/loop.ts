@@ -1,6 +1,7 @@
 import { World, getSoundSink, setSoundSink, type GameObject, type Pointer, type SoundSink } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
+import { CollisionTracker } from "./collide.ts";
 import { FrameBuilder } from "./draw.ts";
 import { PlayerInput } from "./input.ts";
 import { RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
@@ -36,7 +37,9 @@ const LEFT_BUTTON = KEY_INDEX.get("MouseLeft") as number;
  * 1. a left press goes to the topmost `Pointer` drawn under the mouse last frame (`world.reportPress`);
  * 2. `world.tick(dt, input)`: `useInput`, `useUpdate`, renders, structure;
  * 3. the tree is walked into draw records (and the camera's view is taken);
- * 4. the backend draws and presents the frame, then writes the next frame's input.
+ * 4. colliders that started touching are reported (`world.reportCollision`; see `CollisionTracker`), so what
+ *    their callbacks change is rendered by the next tick;
+ * 5. the backend draws and presents the frame, then writes the next frame's input.
  *
  * The press uses last frame's pointers because that is what the player was looking at when they
  * clicked, and the input it carries is the state polled at the end of last frame.
@@ -62,6 +65,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), assets, warn: config.warn });
   const sink = createSoundSink(backend, assets, warner);
   const world = new World();
+  const collisions = new CollisionTracker();
   let pointers: readonly Pointer[] = [];
   let closed = false;
 
@@ -97,6 +101,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       const built = builder.build(world.root, input.width, input.height);
       pointers = built.pointers;
       input.view = built.view;
+      collisions.update(world, built.colliders);
       backend.frame(background, built.list.records, built.list.length, built.list.texts, input.values, input.keys);
       return input.values[RGE_IN_QUIT] === 0;
     },
