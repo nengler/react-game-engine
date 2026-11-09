@@ -1,0 +1,16 @@
+[package]
+name = "rge-host"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "The shipping host: QuickJS-ng (rquickjs) running a bundled game, drawing through librge (raylib)."
+
+[features]
+# Build librge on raylib's software renderer: no window, no GPU, no system libraries. For tests and CI.
+headless = []
+
+[dependencies]
+rquickjs = "0.14"
+
+[build-dependencies]
+cmake = "0.1"

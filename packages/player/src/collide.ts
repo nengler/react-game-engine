@@ -47,6 +47,12 @@ export function boundsOverlap(a: Bounds, b: Bounds): boolean {
   return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY;
 }
 
+interface Box {
+  readonly collider: Collider;
+  readonly bounds: Bounds;
+  readonly id: number;
+}
+
 /**
  * Finds the moment two colliders start touching and reports it with `world.reportCollision(a, b)`: the
  * collider's own `onCollisionEnter` is called with the other collider, on both sides. It is *enter* only: a
@@ -61,10 +67,9 @@ export function boundsOverlap(a: Bounds, b: Bounds): boolean {
  *
  * Reports run after the frame's renders, so what a callback changes is rendered by the next tick.
  *
- * Cost: every pair is tested, O(n²) in the number of colliders. Measured in Node, a frame of this costs about
- * 0.5 ms for 250 colliders, 2.7 ms for 1,000, 12 ms for 2,000 and 59 ms for 4,000, and the embedded interpreter
- * (N6) will be slower. If it shows in a profile, sort the boxes by `minX` and stop each inner loop at the first
- * box that starts past `maxX`; the reports then need sorting back into draw order to stay deterministic.
+ * Cost: a sweep over x (see `update`), so a spread-out scene costs about n log n and only boxes that overlap in x
+ * are compared. A scene where most colliders share the same columns degrades towards every pair. Measured: see
+ * `packages/player/bench/frame.ts`, and the numbers in `docs/NATIVE_PLAN.md`.
  */
 export class CollisionTracker {
   readonly #ids = new WeakMap<Collider, number>();
@@ -80,23 +85,31 @@ export class CollisionTracker {
       if (bounds !== null) boxes.push({ collider, bounds, id: this.#idOf(collider) });
     }
 
+    // Sweep over x: with the boxes sorted by their left edge, a box can only touch the ones after it that start
+    // before it ends, so each inner loop stops at the first box that starts past `maxX`. Those boxes overlap in x
+    // by construction, so only y is left to test. (Ties in `minX` keep draw order.)
+    const order = boxes.map((_, index) => index).sort((p, q) => (boxes[p] as Box).bounds.minX - (boxes[q] as Box).bounds.minX || p - q);
     const now = new Set<string>();
-    const started: [Collider, Collider][] = [];
-    for (let i = 0; i < boxes.length; i++) {
-      const a = boxes[i] as (typeof boxes)[number];
-      for (let j = i + 1; j < boxes.length; j++) {
-        const b = boxes[j] as (typeof boxes)[number];
+    const started: [number, number][] = [];
+    for (let s = 0; s < order.length; s++) {
+      const p = order[s] as number;
+      const a = boxes[p] as Box;
+      for (let t = s + 1; t < order.length; t++) {
+        const q = order[t] as number;
+        const b = boxes[q] as Box;
+        if (b.bounds.minX >= a.bounds.maxX) break;
+        if (!(a.bounds.minY < b.bounds.maxY && a.bounds.maxY > b.bounds.minY)) continue;
         if (a.collider.parent === b.collider.parent) continue;
-        if (!boundsOverlap(a.bounds, b.bounds)) continue;
         const key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
         now.add(key);
-        if (!this.#touching.has(key)) started.push([a.collider, b.collider]);
+        if (!this.#touching.has(key)) started.push(p < q ? [p, q] : [q, p]);
       }
     }
     this.#touching = now;
 
-    // In draw order (the list's order), so reports are deterministic.
-    for (const [a, b] of started) world.reportCollision(a, b);
+    // In draw order (the list's order), earlier collider first, so reports are deterministic whatever the sweep found first.
+    started.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+    for (const [p, q] of started) world.reportCollision((boxes[p] as Box).collider, (boxes[q] as Box).collider);
     return started.length;
   }
 
