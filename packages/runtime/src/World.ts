@@ -1,5 +1,6 @@
 import { GameObject } from "./GameObject.ts";
 import { Collider } from "./components/Collider.ts";
+import { Pointer } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 
 /**
@@ -53,6 +54,18 @@ export class World {
   reportCollision(a: GameObject, b: GameObject): void {
     if (a instanceof Collider && a.world === this) a.onCollisionEnter?.(b);
     if (b instanceof Collider && b.world === this) b.onCollisionEnter?.(a);
+  }
+
+  /**
+   * A press at a world-space point: calls the pointer's own `onPress` when the
+   * point is inside its area and it is mounted in this world. Returns whether it
+   * was hit. Dispatch only: renders happen in the next `tick`. Which pointer
+   * to test (and in what order, for overlaps) is the input system's job.
+   */
+  reportPress(pointer: Pointer, x: number, y: number): boolean {
+    if (pointer.world !== this || !pointer.contains(x, y)) return false;
+    pointer.onPress?.();
+    return true;
   }
 
   /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */

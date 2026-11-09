@@ -116,7 +116,7 @@ ignored):
   add). `Math` is a global and needs none.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
   element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`,
-  `<AnimatedSprite>`; the root or a child),
+  `<AnimatedSprite>`, `<Pointer>`; the root or a child),
   relative to its parent unless
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
@@ -127,7 +127,7 @@ ignored):
   `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
   `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
 * Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`, `Text`,
-  `Shape`, `Camera`, `AnimatedSprite`; the list comes from the runtime manifest), components declared in the same file, or
+  `Shape`, `Camera`, `AnimatedSprite`, `Pointer`; the list comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
   `import { Name } from "./Name.tsx"` or `import Name from "./Name.tsx"` (the
   default export, under any local name; no namespace, `as` or `type` forms). A component takes props through a
@@ -298,13 +298,19 @@ state, write refs, and call callback props, which is how the parent finds out
 (`onDone?.()`). A callback created for a list item can still read its item
 there (see "Keyed lists").
 
+**Presses**: like collisions, the mock has no input device. An input system calls
+`world.reportPress(pointer, x, y)` with a world-space point; the pointer's own
+`onPress` is called if the point is inside its area, and the call returns whether
+it hit. Choosing which pointers to test, and in what order for overlaps, is the
+input system's job.
+
 **Rules.** Top-level only, imported from the authoring module (`RGE1005`),
 one arrow function with no parameters (`RGE1401`), several of a kind allowed
 and run in source order.
 
 Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
 not JSX event props. Element-level events are callback props on the element
-(`<Collider onCollisionEnter>`, later `<Pointer onPress>`).
+(`<Collider onCollisionEnter>`, `<Pointer onPress>`).
 
 ## Arrays and records
 
@@ -775,6 +781,28 @@ the class extends `Shape`, the required props that vary get the usual
 constructor placeholders, and `kind`, `width`, `height` and `color` become names
 a state, ref or prop may not use.
 
+## Pointer
+
+`<Pointer>` (M14) is a hit area for presses, positioned with `transform`:
+
+```tsx
+<Shape kind="rect" width={48} height={16} color="gray" />
+<Pointer width={48} height={16} onPress={() => setOpen(!open)} />
+```
+
+`Pointer extends GameObject` with `width`, `height` (both required) and
+`onPress`. It draws nothing, and its origin is the top-left corner. `contains(x, y)`
+takes a world-space point back through the pointer's world position, rotation
+and scale, so a moved, turned or scaled pointer is hit where it is drawn; a zero
+scale is never hit, and neither is an area with no size (`width` or `height` of 0, or not a number), so a button
+that collapses to nothing stops firing. The test assumes the usual composition of scales and rotations; a rotated
+object under a non-uniformly scaled ancestor is sheared by a renderer that applies transforms one by one (see
+`composeTransforms`), and is only approximated. `onPress` takes no parameters, and the manifest says so
+(`intrinsicCallbacks`). It is a leaf.
+
+**Cameras.** `reportPress` takes a **world-space** point. A pointer drawn through a `<Camera>` is on screen where
+the camera's view puts it, so an input system converts a screen point first: `camera.viewToWorld(x, y)`.
+
 ## Camera
 
 `<Camera>` (M12) is the viewport. Its own transform is the view, `zoom`
@@ -1130,12 +1158,14 @@ like any component. Details:
   there and its real value in the first `render()`, which the constructor runs.
 * The class gains the root's own fields, so a state, ref or prop may not take
   those names (`image` for a Sprite root, `width`/`height`/`onCollisionEnter`
-  for a Collider root, `name` for an Entity root): the manifest's
+  for a Collider root, `width`/`height`/`onPress`/`contains` for a Pointer root, `name` for an Entity root): the manifest's
   `intrinsicMembers`, `RGE1103`.
 * Only containers (the manifest's `containerIntrinsics`, today `Entity`) may
-  have JSX children; a child under a `Sprite` or `Collider`, at the root or
+  have JSX children; a child under a leaf such as a `Sprite`, `Collider` or `Pointer`, at the root or
   anywhere, is `RGE1202`. A component as a root (`return <Other />`) is
   `RGE1003`; a fragment nested as a child is `RGE1202`.
+
+**Element callbacks.** `<Pointer onPress={() => …} />` is the same mechanism with no parameters.
 
 **Collider callbacks.** `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`
 is a callback prop on a built-in, which the manifest lists in

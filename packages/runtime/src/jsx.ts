@@ -12,6 +12,7 @@ import type { InputState } from "./input.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
+import type { PointerProps } from "./components/Pointer.ts";
 import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
 import type { CameraProps } from "./components/Camera.ts";
@@ -97,6 +98,11 @@ export function Sprite(_props: SpriteProps): JSX.Element {
 /** A hit area for collisions. */
 export function Collider(_props: ColliderProps): JSX.Element {
   return compileTimeOnly("Collider");
+}
+
+/** A hit area for presses (clicks and taps). */
+export function Pointer(_props: PointerProps): JSX.Element {
+  return compileTimeOnly("Pointer");
 }
 
 /** What a `<Text>` may hold between its tags: text and `{expressions}` of strings or numbers. */

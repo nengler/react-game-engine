@@ -23,8 +23,8 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M10 `<Text>` | Done | #17 | `<Text size color>Score: {score}</Text>` or `text={…}`: both are one `text` prop (a template when text and expressions mix), updated in place. Needs the new manifest entry `textContent`, which says which built-ins take JSX text |
 | M11 `<Shape>` | Done | #18 | `<Shape kind="rect" \| "circle" width height color>`. A literal `kind` is checked against the manifest's new `intrinsicLiterals` (`RGE1210`, with a did-you-mean); other expressions are left to the type-check, so a state-driven kind works |
 | M12 `<Camera>` | Done | #19, #21 | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`. A camera follows its children: `<Camera><Player /></Camera>` (the middle of their positions when there are several), and is transparent to their transforms (`GameObject.childSpace()`). This replaced the plan's `follow={hero}`, which nothing in a component could express |
-| M13 `<AnimatedSprite>` | In review | #20 | `frames` (a fixed list is built once, a varying one is re-assigned and restarts the animation only when its contents differ), `fps`, `playing`. Advancing is not state: no renders. The first built-in with its own `onUpdate`, so a component rooted at it calls `super` first (the manifest's new `intrinsicHooks`) |
-| M14 `<Pointer>` | Not started | n/a | Needs M4 (callback props). Clickable hit area; `transformIntrinsics` |
+| M13 `<AnimatedSprite>` | Done | #20 | `frames` (a fixed list is built once, a varying one is re-assigned and restarts the animation only when its contents differ), `fps`, `playing`. Advancing is not state: no renders. The first built-in with its own `onUpdate`, so a component rooted at it calls `super` first (the manifest's new `intrinsicHooks`) |
+| M14 `<Pointer>` | In review | n/a | `<Pointer width height onPress>`: a hit area, origin top-left. `world.reportPress(pointer, x, y)` tests the point against the pointer's world transform (position, rotation, scale) and size, calls `onPress`, and returns whether it hit. A zero-scale pointer is never hit |
 | M15 `useSound` | Not started | n/a | Needs M1 and the hook machinery from M3. A handle called in handlers; no transform, because sounds are not placed |
 
 Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 after a review of the authoring API against React; M10–M15 were added the same day for the built-in elements and the sound hook.
@@ -572,12 +572,12 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M14 `<Pointer>`
 
-- [ ] Runtime `Pointer` and `world.reportPress`; manifest entries
-- [ ] `onPress` callback prop on an intrinsic
-- [ ] `docs/DESIGN.md` updated
-- [ ] At least one example uses it; `npm run example` regenerated and committed
-- [ ] Tests cover inside and outside presses, and moved or scaled pointers
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] Runtime `Pointer` and `world.reportPress`; manifest entries
+- [x] `onPress` callback prop on an intrinsic
+- [x] `docs/DESIGN.md` updated
+- [x] At least one example uses it; `npm run example` regenerated and committed
+- [x] Tests cover inside and outside presses, and moved, scaled and rotated pointers (`pointer.test.ts`, `m14.test.ts`)
+- [x] `npm test` and `npm run typecheck` pass
 
 ### M15 `useSound`
 
