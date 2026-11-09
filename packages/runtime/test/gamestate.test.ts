@@ -15,28 +15,7 @@ function reader(store: ReturnType<typeof counter>["store"], paths: string[]): En
 }
 
 function counter() {
-  return createGameState({
-    state: { coins: 0, player: { hp: 10, name: "Ada" }, muted: false },
-    actions: {
-      collect(s, n: number) {
-        s.coins += n;
-      },
-      hurt(s) {
-        s.player.hp -= 1;
-      },
-      both(s) {
-        s.coins += 1;
-        s.player.hp -= 1;
-      },
-      same(s) {
-        s.coins = s.coins;
-      },
-      explode(s) {
-        s.coins = -1;
-        throw new Error("explode");
-      },
-    },
-  });
+  return createGameState({ coins: 0, player: { hp: 10, name: "Ada" }, muted: false });
 }
 
 describe("createGameState", () => {
@@ -47,6 +26,7 @@ describe("createGameState", () => {
     assert.equal(store.get("player.name"), "Ada");
     assert.throws(() => store.get("player"), /no value at 'player'/);
     assert.throws(() => store.get("coins.x"), /nothing at 'coins\.x'/);
+    assert.throws(() => store.get("nope"), /no value at 'nope'/);
   });
 
   it("is a compile-time declaration when called", () => {
@@ -54,40 +34,36 @@ describe("createGameState", () => {
     assert.throws(() => (useGame as unknown as () => void)(), /compile-time declaration/);
   });
 
-  it("runs an action on a copy, with its arguments, and keeps the result", () => {
+  it("sets a leaf to a value, or to what an updater makes of the latest value", () => {
     const { store } = counter();
-    store.run("collect", [3]);
-    store.run("collect", [4]);
-    store.run("hurt");
-    assert.deepEqual([store.get("coins"), store.get("player.hp")], [7, 9]);
+    store.set("coins", 5);
+    store.set<number>("coins", (n) => n + 1);
+    store.set<number>("coins", (n) => n * 10);
+    store.set("player.name", "Bo");
+    assert.deepEqual([store.get("coins"), store.get("player.name")], [60, "Bo"]);
   });
 
-  it("drops everything an action did when it throws", () => {
-    const { store } = counter();
-    assert.throws(() => store.run("explode"), /explode/);
-    assert.equal(store.get("coins"), 0);
-  });
-
-  it("tells exactly the readers of the paths an action changed, once each", () => {
+  it("tells exactly the readers of a leaf that changed, once each", () => {
     const { store } = counter();
     const world = new World();
     const root = new Entity();
     const coins = reader(store, ["coins"]);
     const hp = reader(store, ["player.hp"]);
     const both = reader(store, ["coins", "player.hp"]);
-    const name = reader(store, ["player.name"]);
-    for (const object of [coins, hp, both, name]) root.addChild(object);
+    for (const object of [coins, hp, both]) root.addChild(object);
     world.mount(root);
     world.flush();
-    const base = [coins, hp, both, name].map((o) => o.renders);
-    store.run("collect", [1]);
+    const base = [coins, hp, both].map((o) => o.renders);
+    const delta = () => [coins, hp, both].map((o, i) => o.renders - base[i]!);
+    store.set<number>("coins", (n) => n + 1);
+    store.set<number>("coins", (n) => n + 1);
     world.flush();
-    assert.deepEqual([coins, hp, both, name].map((o, i) => o.renders - base[i]!), [1, 0, 1, 0], "only readers of coins");
-    store.run("both");
+    assert.deepEqual(delta(), [1, 0, 1], "readers of coins render once, for two writes");
+    store.set("player.hp", 1);
     world.flush();
-    assert.deepEqual([coins, hp, both, name].map((o, i) => o.renders - base[i]!), [2, 1, 2, 0], "a reader of two changed paths renders once");
-    store.run("same");
-    assert.equal(world.flush(), 0, "an action that changes nothing renders nothing");
+    assert.deepEqual(delta(), [1, 1, 2]);
+    store.set("player.hp", 1);
+    assert.equal(world.flush(), 0, "writing the value it already has renders nothing");
   });
 
   it("stops telling an object that left the world", () => {
@@ -99,11 +75,11 @@ describe("createGameState", () => {
     world.mount(root);
     world.flush();
     root.removeChild(object);
-    store.run("collect", [1]);
+    store.set("coins", 1);
     assert.equal(object.isDirty, false);
   });
 
-  it("goes back to its initial state with resetGameState, telling readers, and keeps its actions", () => {
+  it("goes back to its initial state with resetGameState, telling readers", () => {
     const { store } = counter();
     const world = new World();
     const root = new Entity();
@@ -111,21 +87,19 @@ describe("createGameState", () => {
     root.addChild(object);
     world.mount(root);
     world.flush();
-    store.run("collect", [5]);
+    store.set("coins", 5);
     world.flush();
     const before = object.renders;
     resetGameState();
     assert.equal(store.get("coins"), 0);
     world.flush();
     assert.equal(object.renders, before + 1);
-    store.run("collect", [1]);
-    assert.equal(store.get("coins"), 1);
   });
 
   it("does not let the initial state be changed through what it was created from", () => {
     const initial = { coins: 0 };
-    const { store } = createGameState({ state: initial, actions: { collect(s) { s.coins += 1; } } });
-    store.run("collect");
+    const { store } = createGameState(initial);
+    store.set("coins", 3);
     assert.equal(initial.coins, 0);
   });
 });

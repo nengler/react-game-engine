@@ -84,7 +84,7 @@ function main(argv: readonly string[]): number {
         // Generated files import the store from where it is: the path from the output directory to the source file.
         const fromOutput = relative(resolve(outDir), statePath).split(sep).join("/");
         compiler.setGameState({ ...schema, importFrom: fromOutput.startsWith(".") ? fromOutput : `./${fromOutput}` });
-        console.log(`read GameState.ts (${schema.actions.length} action${schema.actions.length === 1 ? "" : "s"})`);
+        console.log(`read GameState.ts (${schema.name})`);
       }
     }
     const sourceNames = readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort();

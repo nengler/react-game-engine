@@ -14,11 +14,11 @@ export class Player extends Entity {
   readonly shape: Shape = new Shape({ kind: "rect", width: 24, height: 24, color: this.hurt ? "tomato" : "gold" });
   readonly collider: Collider = new Collider({ width: 24, height: 24, tag: "player", layer: "player", onCollisionEnter: (other: Contact) => {
     if (other.tag === "coin") {
-      useGame.store.run("collect", []);
+      this.setCoins((n: number) => n + 1);
     } else {
       if (other.tag === "spikes") {
         this.setHurt(true);
-        useGame.store.run("hit", []);
+        this.setHits((n: number) => n + 1);
       }
     }
   }, onCollisionExit: (other: Contact) => {
@@ -47,6 +47,14 @@ export class Player extends Entity {
     if (next === this.#yNext) return;
     this.#yNext = next;
     this.markDirty();
+  }
+
+  setCoins(value: number | ((previous: number) => number)): void {
+    useGame.store.set<number>("stats.coins", value);
+  }
+
+  setHits(value: number | ((previous: number) => number)): void {
+    useGame.store.set<number>("stats.hits", value);
   }
 
   setHurt(value: boolean | ((previous: boolean) => boolean)): void {

@@ -184,7 +184,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
           DiagnosticCode.InvalidGameState,
           options.gameState
             ? `'${i.name}' is not the game state: the only thing a component may import from "${i.module}" is \`${options.gameState.name}\`, declared by \`createGameState\` in GameState.ts.`
-            : `This project has no game state to import \`${i.name}\` from: add GameState.ts next to the components, \`export const useGame = createGameState({ state: { … }, actions: { … } })\`.`,
+            : `This project has no game state to import \`${i.name}\` from: add GameState.ts next to the components, \`export const useGame = createGameState({ coins: 0 })\`.`,
           span(i.node),
         ),
       );
@@ -619,39 +619,36 @@ class ComponentLowering implements LoweringContext {
   }
 
   /**
-   * `const hp = useGame((s) => s.player.hp)`: a state mirroring one leaf of the game state (a snapshot, refreshed
-   * when the leaf changes), or `const collect = useGame((s) => s.collect)`: an action, called as a statement in a
-   * handler. The path is checked against the state tree `GameState.ts` declares.
+   * `const [hp, setHp] = useGame((s) => s.player.hp)`: a state mirroring one leaf of the game state (a snapshot,
+   * refreshed when the leaf changes) and a setter that writes the leaf, exactly as `useState` would. The path is
+   * checked against the state tree `GameState.ts` declares.
    */
   #lowerStore(hook: UseStoreCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
     const definition = this.#gameState;
-    const at = (node: Node = hook.call): Node => node;
     if (!definition || !this.#storeImports.has(hook.storeName)) return; // already reported where the import was checked
-    if (this.#componentScope.hasOwn(hook.valueName) || !this.#claimName(hook.valueName, hook.declaration)) {
-      if (this.#componentScope.hasOwn(hook.valueName)) this.#error(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component.`, hook.declaration);
+    const taken = [hook.valueName, hook.setterName].find((n) => n !== null && this.#componentScope.hasOwn(n));
+    if (taken) {
+      this.#error(DiagnosticCode.InvalidUseState, `'${taken}' is already declared in this component.`, hook.declaration);
       return;
     }
-    const first = hook.path[0] as string;
-    if (hook.path.length === 1 && definition.actions.includes(first)) {
-      this.#componentScope.declare(hook.valueName, { kind: "action", name: hook.valueName, action: first });
-      return;
-    }
+    if (hook.valueName !== null && !this.#claimName(hook.valueName, hook.declaration)) return;
+    if (hook.setterName !== null && !this.#claimName(hook.setterName, hook.declaration)) return;
     // Walk the state tree; a typo is reported with the nearest key at the level it went wrong.
     let node: GameStateLeaf | GameStateNode = definition.tree;
     const walked: string[] = [];
     for (const key of hook.path) {
       if (node.kind === "leaf") {
-        this.#error(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is a ${node.type}, so it has no '${key}'.`, at(hook.selector));
+        this.#error(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is a ${node.type}, so it has no '${key}'.`, hook.selector);
         return;
       }
       const child: GameStateLeaf | GameStateNode | undefined = Object.hasOwn(node.children, key) ? node.children[key] : undefined;
       if (!child) {
-        const options = [...Object.keys(node.children), ...(walked.length === 0 ? definition.actions : [])];
+        const options = Object.keys(node.children);
         const near = nearest(key, options);
         this.#error(
           DiagnosticCode.InvalidGameState,
           `'${[...walked, key].join(".")}' is not in the game state${near ? ` (did you mean "${[...walked, near].join(".")}"?)` : ""}. ${walked.length === 0 ? "State" : `'${walked.join(".")}' has`}: ${options.length > 0 ? options.join(", ") : "nothing"}.`,
-          at(hook.selector),
+          hook.selector,
         );
         return;
       }
@@ -659,16 +656,19 @@ class ComponentLowering implements LoweringContext {
       node = child;
     }
     if (node.kind === "node") {
-      this.#error(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is an object: select one of its values (${Object.keys(node.children).map((k) => `${walked.join(".")}.${k}`).join(", ")}). A component reads leaves, so it re-renders only when one it uses changes.`, at(hook.selector));
+      this.#error(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is an object: select one of its values (${Object.keys(node.children).map((k) => `${walked.join(".")}.${k}`).join(", ")}). A component reads leaves, so it re-renders only when one it uses changes.`, hook.selector);
       return;
     }
-    const id = stateId(this.#component.name, hook.valueName);
+    const id = stateId(this.#component.name, hook.valueName ?? `${hook.path.join(".")}#${hooks.length}`);
     const initialValue: ExprIR = node.type === "number" ? { kind: "NumberLiteral", value: node.initial as number } : node.type === "string" ? { kind: "StringLiteral", value: node.initial as string } : { kind: "BooleanLiteral", value: node.initial as boolean };
     const type: TypeIR = { kind: "Primitive", name: node.type };
-    state.push({ kind: "State", id, name: hook.valueName, type, initialValue, globalKey: hook.path.join(".") });
+    // Write-only (`const [, setHp] = …`): the IR still names a state, but no field, subscription or snapshot is generated.
+    const name = hook.valueName ?? `${hook.path.join("_")}$write${hooks.length}`;
+    state.push({ kind: "State", id, name, type, initialValue, globalKey: hook.path.join("."), ...(hook.valueName === null ? { writeOnly: true as const } : {}) });
     this.#stateTypes.set(id, type);
-    hooks.push({ kind: "UseState", state: id, setterName: null, span: this.#span(hook.declaration) });
-    this.#componentScope.declare(hook.valueName, { kind: "state", id });
+    hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.#span(hook.declaration) });
+    if (hook.valueName !== null) this.#componentScope.declare(hook.valueName, { kind: "state", id });
+    if (hook.setterName !== null) this.#componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
   }
 
   /**
@@ -1396,9 +1396,6 @@ class ComponentLowering implements LoweringContext {
         case "ref":
           this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a ref; read and write \`${node.text}.current\`.`, node);
           return null;
-        case "action":
-          this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a game-state action: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
-          return null;
         default: return assertNever(binding, "binding");
       }
     }
@@ -1612,10 +1609,6 @@ class ComponentLowering implements LoweringContext {
       const binding = this.scope.get(callee.text);
       if (binding?.kind === "sound") {
         this.#error(DiagnosticCode.SoundOutsideHandler, `'${callee.text}()' plays a sound, so it is only valid as a statement in a handler: in JSX, a derived value or an expression it would play on every render.`, node);
-        return null;
-      }
-      if (binding?.kind === "action") {
-        this.#error(DiagnosticCode.UnsupportedExpression, `'${callee.text}()' is a game-state action, so it is only valid as a statement in a handler: in JSX or a derived value it would run on every render.`, node);
         return null;
       }
       if (binding?.kind === "prop") {

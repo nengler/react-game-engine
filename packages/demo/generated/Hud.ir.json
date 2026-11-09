@@ -8,8 +8,8 @@
       "name": "Hud",
       "span": {
         "fileName": "packages/demo/src/Hud.tsx",
-        "start": 219,
-        "end": 375,
+        "start": 207,
+        "end": 365,
         "line": 5,
         "column": 1
       },
@@ -20,8 +20,8 @@
           "setterName": null,
           "span": {
             "fileName": "packages/demo/src/Hud.tsx",
-            "start": 251,
-            "end": 288,
+            "start": 239,
+            "end": 278,
             "line": 6,
             "column": 9
           }
@@ -101,8 +101,8 @@
         "children": [],
         "span": {
           "fileName": "packages/demo/src/Hud.tsx",
-          "start": 306,
-          "end": 368,
+          "start": 296,
+          "end": 358,
           "line": 9,
           "column": 5
         }

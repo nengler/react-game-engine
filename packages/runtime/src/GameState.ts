@@ -6,82 +6,63 @@ export type GameStateValue = number | string | boolean;
 /** The state tree: objects nested as deep as you like, with primitives at the leaves. */
 export type GameStateTree = { [key: string]: GameStateValue | GameStateTree };
 
-/** An action: written as if it mutates the state it is given; the store runs it on a copy and keeps the result. */
-export type GameStateAction<S> = (state: S, ...args: never[]) => void;
-
-/** An action as a component calls it: without the leading state parameter. */
-export type BoundAction<A> = A extends (state: never, ...rest: infer R) => void ? (...rest: R) => void : never;
-
-/** What `useGame(s => …)` selects from: the state itself, and every action bound. */
-export type GameStateView<S, A> = S & { readonly [K in keyof A]: BoundAction<A[K]> };
+/** A setter, as `useState` returns: a value, or an updater that gets the latest value. */
+export type GameStateSetter<T> = (value: T | ((previous: T) => T)) => void;
 
 /**
- * The game's state: one nested object, and the actions that change it. Create it once, in `GameState.ts`:
+ * The game's state: one nested object, created once in `GameState.ts`:
  *
- *     export const useGame = createGameState({
- *       state: { coins: 0, player: { hp: 10 } },
- *       actions: { hurt(s) { s.player.hp -= 1; }, collect(s, n: number) { s.coins += n; } },
- *     });
+ *     export const useGame = createGameState({ coins: 0, player: { hp: 10, name: "Ada" } });
  *
- * and use it in a component with a selector, as with Zustand: `const hp = useGame((s) => s.player.hp)` reads one
- * leaf, and `const hurt = useGame((s) => s.hurt)` binds an action to call in a handler. Calling `useGame` is
- * compile-time only (the compiler turns the selector into a read of that one path); at run time it is the store,
- * `useGame.store`.
+ * A component reads and writes one leaf with a selector, as it would `useState`:
+ * `const [hp, setHp] = useGame((s) => s.player.hp)`, then `setHp(5)` or `setHp((h) => h - 1)`. Calling `useGame` is
+ * compile-time only (the compiler turns the selector into that one path); at run time it is the store, `useGame.store`.
  */
-export interface GameState<S, A> {
-  <T>(selector: (state: GameStateView<S, A>) => T): T;
+export interface GameState<S> {
+  <T extends GameStateValue>(selector: (state: S) => T): [T, GameStateSetter<T>];
   readonly store: GameStore;
 }
 
 /** Create the game's state. See `GameState`. */
-export function createGameState<S extends GameStateTree, A extends { [name: string]: GameStateAction<S> }>(config: { readonly state: S; readonly actions: A }): GameState<S, A> {
-  const store = new GameStore(config.state, config.actions as unknown as { [name: string]: (state: never, ...args: never[]) => void });
+export function createGameState<S extends GameStateTree>(initial: S): GameState<S> {
+  const store = new GameStore(initial);
   const use = (): never => {
     throw new Error("useGame(selector) is a compile-time declaration: components are compiled by @rge/compiler, not executed.");
   };
-  return Object.assign(use, { store }) as unknown as GameState<S, A>;
+  return Object.assign(use, { store }) as unknown as GameState<S>;
 }
 
 /**
- * The values and the actions behind a `createGameState`. A value is read by its dotted path (`"player.hp"`). An action
- * runs on a copy of the state, so it can be written with plain assignments, and if it throws nothing changes. Every
- * leaf it changed (found by comparing the copy with the state) marks each mounted object that reads that path dirty;
- * those copy the new value into their own field when they next render, so within a frame every handler sees the same
- * snapshot, as with `useState`. An action that changes nothing renders nothing.
+ * The values behind a `createGameState`, by dotted path (`"player.hp"`). A write takes effect in the store at once (a
+ * component built later in the frame starts from it, and updaters chain on the latest value) and marks every mounted
+ * object that reads that path dirty; they copy the new value into their own field when they next render, so within a
+ * frame every handler sees the same snapshot, as with `useState`. A write that changes nothing renders nothing.
  */
 export class GameStore {
   readonly #initial: GameStateTree;
-  readonly #actions: { readonly [name: string]: (state: never, ...args: never[]) => void };
   #state: GameStateTree;
   readonly #subscribers = new Map<string, Set<GameObject>>();
 
-  constructor(initial: GameStateTree, actions: { readonly [name: string]: (state: never, ...args: never[]) => void }) {
+  constructor(initial: GameStateTree) {
     this.#initial = clone(initial);
     this.#state = clone(initial);
-    this.#actions = actions;
     stores.add(this);
   }
 
   /** The latest value at a dotted path. */
   get<T extends GameStateValue>(path: string): T {
-    let at: GameStateValue | GameStateTree | undefined = this.#state;
-    for (const key of path.split(".")) {
-      if (typeof at !== "object") throw new Error(`The game state has nothing at '${path}'.`);
-      at = at[key];
-    }
-    if (at === undefined || typeof at === "object") throw new Error(`The game state has no value at '${path}'.`);
-    return at as T;
+    const [parent, key] = this.#locate(path);
+    return parent[key] as T;
   }
 
-  /** Run an action by name with its arguments (after the state, which the store supplies). */
-  run(name: string, args: readonly unknown[] = []): void {
-    const action = this.#actions[name];
-    if (typeof action !== "function") throw new Error(`The game state has no action '${name}'.`);
-    const draft = clone(this.#state);
-    (action as (state: GameStateTree, ...rest: unknown[]) => void)(draft, ...args);
-    const changed = changedPaths(this.#state, draft, "", []);
-    this.#state = draft;
-    this.#notify(changed);
+  /** Set the leaf at a path to a value, or to what an updater makes of the latest one. Does nothing when it is unchanged. */
+  set<T extends GameStateValue>(path: string, value: T | ((previous: T) => T)): void {
+    const [parent, key] = this.#locate(path);
+    const previous = parent[key] as T;
+    const next = typeof value === "function" ? value(previous) : value;
+    if (next === previous) return;
+    parent[key] = next;
+    this.#notify([path]);
   }
 
   /** Start tracking `object` as a reader of each path. Called when it joins a world. */
@@ -102,6 +83,21 @@ export class GameStore {
     const changed = changedPaths(this.#state, this.#initial, "", []);
     this.#state = clone(this.#initial);
     this.#notify(changed);
+  }
+
+  /** The object holding the leaf at `path`, and the leaf's key. */
+  #locate(path: string): [{ [key: string]: GameStateValue | GameStateTree }, string] {
+    const keys = path.split(".");
+    const last = keys.pop() as string;
+    let at: GameStateTree = this.#state;
+    for (const key of keys) {
+      const next: GameStateValue | GameStateTree | undefined = at[key];
+      if (next === undefined || typeof next !== "object") throw new Error(`The game state has nothing at '${path}'.`);
+      at = next;
+    }
+    const leaf = at[last];
+    if (leaf === undefined || typeof leaf === "object") throw new Error(`The game state has no value at '${path}'.`);
+    return [at, last];
   }
 
   #notify(changed: readonly string[]): void {

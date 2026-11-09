@@ -1,11 +1,8 @@
 import { SyntaxKind } from "typescript/ast";
 import {
-  isArrowFunction,
   isAsExpression,
   isCallExpression,
-  isFunctionExpression,
   isIdentifier,
-  isMethodDeclaration,
   isNumericLiteral,
   isObjectLiteralExpression,
   isParenthesizedExpression,
@@ -44,8 +41,6 @@ export interface GameStateDefinition {
   /** What generated code writes in its `import … from`: the module, relative to the generated file (`../src/GameState.ts`). */
   readonly importFrom: string;
   readonly tree: GameStateNode;
-  /** Names of the actions. */
-  readonly actions: readonly string[];
 }
 
 export interface GameStateSchemaResult {
@@ -54,13 +49,12 @@ export interface GameStateSchemaResult {
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
-const SHAPE = "GameState.ts must contain `export const useGame = createGameState({ state: { coins: 0, player: { hp: 10 } }, actions: { collect(s) { s.coins += 1; } } });`";
+const SHAPE = "GameState.ts must contain `export const useGame = createGameState({ coins: 0, player: { hp: 10 } });`";
 
 /**
- * Reads `GameState.ts`. `state` is an object literal, nested as deep as you like, whose leaves are number, string or
- * boolean literals (a negative number is fine); a leaf's type is its literal's (`0` is a `number`). `actions` is an
- * object literal of functions (methods, arrows or function expressions). Anything else is `RGE1109`, saying what to
- * write instead. Arrays are not supported yet.
+ * Reads `GameState.ts`. The argument of `createGameState` is an object literal, nested as deep as you like, whose
+ * leaves are number, string or boolean literals (a negative number is fine); a leaf's type is its literal's (`0` is a
+ * `number`). Anything else is `RGE1109`, saying what to write instead. Arrays are not supported yet.
  */
 export function parseGameState(parser: TsxParser, fileName: string, text: string): GameStateSchemaResult {
   const parsed = parser.parse(fileName, text);
@@ -92,20 +86,9 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
           fail(`${SHAPE}.`, init);
           continue;
         }
-        const state = property(config, "state");
-        const actions = property(config, "actions");
-        if (!state || !isObjectLiteralExpression(unwrap(state))) {
-          fail("`createGameState` needs `state: { … }`, an object literal.", state ?? config);
-          continue;
-        }
-        if (!actions || !isObjectLiteralExpression(unwrap(actions))) {
-          fail("`createGameState` needs `actions: { … }`, an object literal (it may be empty).", actions ?? config);
-          continue;
-        }
         const before = diagnostics.length;
-        const tree = readNode(unwrap(state) as ObjectLiteralExpression, fail);
-        const names = readActions(unwrap(actions) as ObjectLiteralExpression, tree, fail);
-        if (diagnostics.length === before) result = { name: declaration.name.text, tree, actions: names };
+        const tree = readNode(config, fail);
+        if (diagnostics.length === before) result = { name: declaration.name.text, tree };
       }
     }
     if (found === 0) diagnostics.push(error(DiagnosticCode.InvalidGameStateSchema, `${SHAPE}.`, { fileName, start: 0, end: 0, line: 1, column: 1 }));
@@ -116,13 +99,6 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
 }
 
 type Fail = (message: string, node: { getStart(sf: SourceFile): number; getEnd(): number }) => void;
-
-function property(object: ObjectLiteralExpression, name: string): Expression | undefined {
-  for (const p of object.properties) {
-    if (isPropertyAssignment(p) && (isIdentifier(p.name) || isStringLiteral(p.name)) && p.name.text === name) return p.initializer;
-  }
-  return undefined;
-}
 
 function readNode(object: ObjectLiteralExpression, fail: Fail): GameStateNode {
   const children: Record<string, GameStateLeaf | GameStateNode> = {};
@@ -153,24 +129,6 @@ function readNode(object: ObjectLiteralExpression, fail: Fail): GameStateNode {
     children[key] = leaf;
   }
   return { kind: "node", children };
-}
-
-function readActions(object: ObjectLiteralExpression, tree: GameStateNode, fail: Fail): string[] {
-  const names: string[] = [];
-  for (const p of object.properties) {
-    const isFunction =
-      isMethodDeclaration(p) ||
-      (isPropertyAssignment(p) && (isArrowFunction(unwrap(p.initializer)) || isFunctionExpression(unwrap(p.initializer))));
-    const name = (isMethodDeclaration(p) || isPropertyAssignment(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
-    if (!isFunction || name === null) {
-      fail("Each action is a function: `collect(s) { s.coins += 1; }`, or `collect: (s) => { … }`.", p);
-      continue;
-    }
-    if (names.includes(name)) fail(`Action '${name}' is declared twice.`, p);
-    else if (Object.hasOwn(tree.children, name)) fail(`'${name}' is both a state key and an action: selecting it would be ambiguous.`, p);
-    else names.push(name);
-  }
-  return names;
 }
 
 /** `as const`, `satisfies` and parentheses are fine around a value; they do not change it. */

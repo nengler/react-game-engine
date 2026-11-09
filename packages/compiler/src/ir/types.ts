@@ -280,17 +280,7 @@ export interface FunctionIR {
  * Statements are only valid inside functions. State reads are live: after a
  * `SetState`, later reads in the same function see the new value.
  */
-export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR | AssignStmtIR | PlaySoundStmtIR | CallActionStmtIR;
-
-/**
- * `collect(5)`, where `collect` is a game-state action bound with `const collect = useGame((s) => s.collect)`. It runs
- * the action in the game's store at once, which marks every component that reads what it changed.
- */
-export interface CallActionStmtIR {
-  readonly kind: "CallAction";
-  readonly action: string;
-  readonly args: readonly ExprIR[];
-}
+export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR | AssignStmtIR | PlaySoundStmtIR;
 
 /** `playHit()`, where `playHit` is a `useSound` binding. A play is an effect, not state: it happens at once and renders nothing. */
 export interface PlaySoundStmtIR {
@@ -371,11 +361,13 @@ export interface StateIR {
   /** Must not depend on any state. For a game-state leaf, the value it starts with. */
   readonly initialValue: ExprIR;
   /**
-   * Set for `const hp = useGame((s) => s.player.hp)`: the dotted path (`"player.hp"`) of the game-state leaf this state
-   * mirrors. The generated field is a snapshot of it, refreshed on render; it has no setter (actions change it).
+   * Set for `const [hp, setHp] = useGame((s) => s.player.hp)`: the dotted path (`"player.hp"`) of the game-state leaf
+   * this state mirrors. The generated field is a snapshot of it, refreshed on render, and its setter writes the leaf.
    * Absent for `useState`.
    */
   readonly globalKey?: string;
+  /** With `globalKey`: the component only sets it (`const [, setHp] = …`), so it keeps no snapshot and is not told of changes. */
+  readonly writeOnly?: true;
 }
 
 // ---------------------------------------------------------------------------
@@ -869,7 +861,6 @@ export function walkFunction(fn: FunctionIR, visit: (e: ExprIR) => void): void {
         case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit); else walkExpr(stmt.value, visit); break;
         case "Assign": walkExpr(stmt.value, visit); break;
         case "PlaySound": break;
-        case "CallAction": for (const arg of stmt.args) walkExpr(arg, visit); break;
         default: assertNever(stmt, "statement");
       }
     }
