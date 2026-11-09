@@ -77,7 +77,7 @@ ignored):
 
 * A component is a top-level `function` declaration or `const` arrow function
   with a capitalised name (optionally `export`ed, or the module's default
-  export) whose body is: hooks (`useState`, `useRef`, the handler hooks),
+  export) whose body is: hooks (`useState`, `useRef`, `useSound`, the handler hooks),
   `const name = expression;` derived values, then one `return`. An arrow with
   an expression body (`const Dot = () => <Sprite … />`) is just its return. A derived `const` (`const hurt = health < 25;`) may read
   anything declared above it; it is inlined where it is used, so JSX that uses
@@ -1014,6 +1014,23 @@ screen is driven by state and props, so `ref={…}` on any element is `RGE1106`
 (`RGE1404`, which guarded writes through element refs, is retired). The
 initial value must not read state, and a ref name must not clash with state
 (`RGE1106`).
+
+**useSound** (M15): `const playHit = useSound("hit.wav")` binds a sound, and
+`playHit()` as a statement in a handler (`useUpdate`, `useInput`, `useMount`,
+`onCollisionEnter`, `onPress`, a callback inside an `if`) plays it. It is a
+top-level hook like `useRef`, with one binding per call, so two bindings of the
+same path are independent. The path is a string literal (`RGE1107` otherwise),
+so a missing asset can be reported at build time once there is an asset list.
+`SoundIR { id, name, path }` in `ComponentIR.sounds` compiles to a field
+(`readonly playHit: Sound = new Sound("hit.wav")`), and the call is a
+`PlaySound` statement, emitted as `this.playHit.play()`. Playing is an effect,
+not state: it happens at once, not at the next render, and marks nothing
+dirty. Because it would play on every render, the function may only be called
+as a statement in a handler: in JSX, a derived `const`, an expression, as a
+value (`onCollisionEnter={play}`) or with arguments it is `RGE1305`. Sounds
+are not placed, so they do not take `transform`. The mock `Sound` has no audio
+backend: `play()` only counts calls in `plays`, so game logic can be tested.
+Options such as `volume` come later.
 
 **Reads only in handlers**: `ref.current` in JSX, a `useState` initialiser or
 a derived `const` would be evaluated at render and then go stale, because

@@ -195,6 +195,13 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (isBinaryExpression(call) && ASSIGNMENT_TOKENS.has(call.operatorToken.kind)) return lowerAssignment(ctx, call);
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
+    if (callee?.kind === "sound") {
+      if (call.arguments.length !== 0) {
+        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}\` takes no arguments: the sound and its path are fixed where it is declared.`, call);
+        return null;
+      }
+      return { kind: "PlaySound", sound: callee.id };
+    }
     if (callee?.kind === "setter") {
       if (!ctx.canSetState()) {
         ctx.error(

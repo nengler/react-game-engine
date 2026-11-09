@@ -200,6 +200,7 @@
           }
         }
       ],
+      "sounds": [],
       "props": [
         {
           "kind": "PropDecl",
@@ -633,6 +634,7 @@
         }
       ],
       "refs": [],
+      "sounds": [],
       "props": [],
       "propsType": null,
       "isDefaultExport": false,

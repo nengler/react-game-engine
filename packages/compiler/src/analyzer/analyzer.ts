@@ -123,7 +123,7 @@ export interface ComponentAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStateCallAnalysis | UseRefCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis;
+export type HookCallAnalysis = UseStateCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis;
 
 /**
  * `const hurt = health < 25;` in the component body: a value derived from
@@ -142,6 +142,15 @@ export interface UseRefCallAnalysis {
   readonly kind: "useRef";
   readonly name: string;
   readonly typeArgument: Node | null;
+  readonly arguments: readonly Expression[];
+  readonly call: CallExpression;
+  readonly declaration: VariableDeclaration;
+}
+
+/** `const playHit = useSound("hit.wav")`. */
+export interface UseSoundCallAnalysis {
+  readonly kind: "useSound";
+  readonly name: string;
   readonly arguments: readonly Expression[];
   readonly call: CallExpression;
   readonly declaration: VariableDeclaration;
@@ -166,7 +175,7 @@ export interface UseStateCallAnalysis {
 }
 
 const HOOK_NAME = /^use[A-Z0-9]/;
-const KNOWN_HOOKS = new Set(["useState", "useRef", "useUpdate", "useInput", "useMount", "useUnmount"]);
+const KNOWN_HOOKS = new Set(["useState", "useRef", "useSound", "useUpdate", "useInput", "useMount", "useUnmount"]);
 const HANDLER_HOOKS = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS, ...HANDLER_HOOKS].filter((name, i, all) => all.indexOf(name) === i);
@@ -466,7 +475,7 @@ function analyzeComponent(
     diagnostics.push(
       error(
         DiagnosticCode.InvalidComponentBody,
-        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const name = expression\` (derived values), handler statements (\`useUpdate(...)\`, \`useInput(...)\`, \`useMount(...)\`, \`useUnmount(...)\`) and a final \`return\` are supported.`,
+        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const play = useSound("a.wav")\`, \`const name = expression\` (derived values), handler statements (\`useUpdate(...)\`, \`useInput(...)\`, \`useMount(...)\`, \`useUnmount(...)\`) and a final \`return\` are supported.`,
         span(statement),
       ),
     );
@@ -584,10 +593,10 @@ function matchRenderConst(statement: Statement): RenderConstAnalysis | null {
 }
 
 type HandleMatch =
-  | { readonly kind: "ok"; readonly hook: UseRefCallAnalysis }
-  | { readonly kind: "invalid"; readonly code: typeof DiagnosticCode.InvalidUseRef; readonly message: string; readonly call: CallExpression };
+  | { readonly kind: "ok"; readonly hook: UseRefCallAnalysis | UseSoundCallAnalysis }
+  | { readonly kind: "invalid"; readonly code: typeof DiagnosticCode.InvalidUseRef | typeof DiagnosticCode.InvalidUseSound; readonly message: string; readonly call: CallExpression };
 
-/** Recognises `const r = useRef<T>()`; null if the statement is not one. */
+/** Recognises `const r = useRef<T>()` and `const play = useSound("a.wav")`; null if the statement is not one. */
 function matchHandleStatement(statement: Statement): HandleMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
@@ -596,14 +605,15 @@ function matchHandleStatement(statement: Statement): HandleMatch | null {
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression)) return null;
   const hook = init.expression.text;
-  if (hook !== "useRef") return null;
+  if (hook !== "useRef" && hook !== "useSound") return null;
 
-  const code = DiagnosticCode.InvalidUseRef;
+  const code = hook === "useSound" ? DiagnosticCode.InvalidUseSound : DiagnosticCode.InvalidUseRef;
   const invalid = (message: string): HandleMatch => ({ kind: "invalid", code, message, call: init });
   if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) {
     return invalid(`${hook} must be bound with a plain \`const\` name: \`const handle = ${hook}(...)\`.`);
   }
   const name = declaration.name.text;
+  if (hook === "useSound") return { kind: "ok", hook: { kind: "useSound", name, arguments: init.arguments, call: init, declaration } };
   return { kind: "ok", hook: { kind: "useRef", name, typeArgument: init.typeArguments?.[0] ?? null, arguments: init.arguments, call: init, declaration } };
 }
 

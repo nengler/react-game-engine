@@ -10,6 +10,7 @@ declare const stateIdBrand: unique symbol;
 declare const elementIdBrand: unique symbol;
 declare const localIdBrand: unique symbol;
 declare const refIdBrand: unique symbol;
+declare const soundIdBrand: unique symbol;
 
 /** Identifies a persistent state slot within a component. */
 export type StateId = string & { readonly [stateIdBrand]: true };
@@ -21,6 +22,13 @@ export type LocalId = string & { readonly [localIdBrand]: true };
 
 /** Identifies a `useRef` value within a component. */
 export type RefId = string & { readonly [refIdBrand]: true };
+
+/** Identifies a `useSound` binding within a component. */
+export type SoundId = string & { readonly [soundIdBrand]: true };
+
+export function soundId(component: string, name: string): SoundId {
+  return `${component}.${name}` as SoundId;
+}
 
 export function refId(component: string, name: string): RefId {
   return `${component}.${name}` as RefId;
@@ -81,6 +89,8 @@ export interface ComponentIR {
   readonly state: readonly StateIR[];
   /** `useRef` values: mutable fields that never cause a render. */
   readonly refs: readonly RefIR[];
+  /** `useSound` bindings: a sound each, played by calling its function in a handler. */
+  readonly sounds: readonly SoundIR[];
   /** Declared props, from the destructured parameter. Empty for a component without props. */
   readonly props: readonly PropDeclIR[];
   /** The name of the props type (`EnemyProps`), or null for a component without props. */
@@ -116,6 +126,20 @@ export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnMountHo
  */
 export const TRANSFORM_FIELDS = ["x", "y", "rotation", "scaleX", "scaleY", "global"] as const;
 export type TransformField = (typeof TRANSFORM_FIELDS)[number];
+
+/**
+ * `const playHit = useSound("hit.wav")`: a sound this component can play. The
+ * path is a literal so a missing asset can be reported at build time once
+ * there is an asset list. Calling the binding is only valid in a handler.
+ */
+export interface SoundIR {
+  readonly kind: "Sound";
+  readonly id: SoundId;
+  /** Also the generated field name. */
+  readonly name: string;
+  readonly path: string;
+  readonly span: SourceSpan;
+}
 
 /**
  * `const cooldown = useRef(0)`: a value that persists across frames and
@@ -256,7 +280,13 @@ export interface FunctionIR {
  * Statements are only valid inside functions. State reads are live: after a
  * `SetState`, later reads in the same function see the new value.
  */
-export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR | AssignStmtIR;
+export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR | AssignStmtIR | PlaySoundStmtIR;
+
+/** `playHit()`, where `playHit` is a `useSound` binding. A play is an effect, not state: it happens at once and renders nothing. */
+export interface PlaySoundStmtIR {
+  readonly kind: "PlaySound";
+  readonly sound: SoundId;
+}
 
 export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=";
 
@@ -822,6 +852,7 @@ export function walkFunction(fn: FunctionIR, visit: (e: ExprIR) => void): void {
         case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
         case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit); else walkExpr(stmt.value, visit); break;
         case "Assign": walkExpr(stmt.value, visit); break;
+        case "PlaySound": break;
         default: assertNever(stmt, "statement");
       }
     }

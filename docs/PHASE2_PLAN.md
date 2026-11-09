@@ -24,8 +24,8 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M11 `<Shape>` | Done | #18 | `<Shape kind="rect" \| "circle" width height color>`. A literal `kind` is checked against the manifest's new `intrinsicLiterals` (`RGE1210`, with a did-you-mean); other expressions are left to the type-check, so a state-driven kind works |
 | M12 `<Camera>` | Done | #19, #21 | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`. A camera follows its children: `<Camera><Player /></Camera>` (the middle of their positions when there are several), and is transparent to their transforms (`GameObject.childSpace()`). This replaced the plan's `follow={hero}`, which nothing in a component could express |
 | M13 `<AnimatedSprite>` | Done | #20 | `frames` (a fixed list is built once, a varying one is re-assigned and restarts the animation only when its contents differ), `fps`, `playing`. Advancing is not state: no renders. The first built-in with its own `onUpdate`, so a component rooted at it calls `super` first (the manifest's new `intrinsicHooks`) |
-| M14 `<Pointer>` | In review | n/a | `<Pointer width height onPress>`: a hit area, origin top-left. `world.reportPress(pointer, x, y)` tests the point against the pointer's world transform (position, rotation, scale) and size, calls `onPress`, and returns whether it hit. A zero-scale pointer is never hit |
-| M15 `useSound` | Not started | n/a | Needs M1 and the hook machinery from M3. A handle called in handlers; no transform, because sounds are not placed |
+| M14 `<Pointer>` | Done | #22 | `<Pointer width height onPress>`: a hit area, origin top-left. `world.reportPress(pointer, x, y)` tests the point against the pointer's world transform (position, rotation, scale) and size, calls `onPress`, and returns whether it hit. A zero-scale pointer is never hit |
+| M15 `useSound` | In review | n/a | `const playHit = useSound("hit.wav")`, then `playHit()` as a statement in a handler. The path is a literal; one binding per call; no transform. `SoundIR` and a `PlaySound` statement; the mock `Sound` records plays. A call anywhere else is `RGE1305`; a bad path or binding is `RGE1107` |
 
 Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 after a review of the authoring API against React; M10–M15 were added the same day for the built-in elements and the sound hook.
 
@@ -391,7 +391,7 @@ function Hero() {
 - **Semantics:** `useSound` is a top-level hook like `useRef`, with one binding per call. The returned function may only be called in handlers; calling it in JSX or a derived `const` is a new diagnostic, for the same reason as `RGE1304` (it would run on every render). A call plays immediately; it is an effect, not state, so it does not wait for the next render.
 - **Arguments:** the path is a string literal, so a missing asset can be reported at build time once an asset list exists. Options (`volume`) come later.
 - **Runtime:** a mock `Sound` records plays; there is no audio backend (the ground rule stays).
-- **IR:** a `SoundHookIR { id, name, path }` and a `PlaySound` expression statement, lowered like `SetState` and dispatched to the sound's runtime handle.
+- **IR:** a `SoundIR { id, name, path }` and a `PlaySound` expression statement, lowered like `SetState` and dispatched to the sound's runtime handle.
 - **Tests:** a call in a handler records one play; calling it in JSX is rejected; two `useSound` bindings of the same path are independent.
 
 ## Later (not scheduled)
@@ -581,11 +581,11 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M15 `useSound`
 
-- [ ] `SoundHookIR` and `PlaySound` statement in `ir/types.ts`, with every `assertNever` site handled
-- [ ] Analyzer and transform reject calls outside handlers; every unsupported form has a diagnostic and a test
-- [ ] Runtime mock `Sound` records plays
-- [ ] `docs/DESIGN.md` updated
-- [ ] At least one example uses it; `npm run example` regenerated and committed
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] `SoundIR` and `PlaySound` statement in `ir/types.ts`, with every `assertNever` site handled
+- [x] Analyzer and transform reject calls outside handlers; every unsupported form has a diagnostic and a test (`m15.test.ts`)
+- [x] Runtime mock `Sound` records plays
+- [x] `docs/DESIGN.md` updated
+- [x] At least one example uses it; `npm run example` regenerated and committed
+- [x] `npm test` and `npm run typecheck` pass
 
 Orientation for the implementer: start with `docs/DESIGN.md`, then `packages/compiler/test/behavior.test.ts` (how generated classes behave), then `transform/transform.ts` (where most milestones land). Each milestone fits one PR; M1 and M4 may split into IR-plus-lowering and codegen-plus-runtime PRs.
