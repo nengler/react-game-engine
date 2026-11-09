@@ -101,6 +101,7 @@
         }
       ],
       "refs": [],
+      "sounds": [],
       "props": [
         {
           "kind": "PropDecl",

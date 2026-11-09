@@ -34,7 +34,7 @@ import {
   isBlock,
   isReturnStatement,
 } from "typescript/ast/is";
-import { AUTHORING_HOOKS, AUTHORING_TYPES, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis } from "../analyzer/analyzer.ts";
+import { AUTHORING_HOOKS, AUTHORING_TYPES, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
@@ -54,11 +54,13 @@ import {
   stateReads,
   elementId,
   refId,
+  soundId,
   stateId,
   TRANSFORM_FIELDS,
   type AssignTargetIR,
   type RefId,
   type RefIR,
+  type SoundIR,
   type TransformField,
   type TransformPropIR,
   type PropDeclIR,
@@ -100,6 +102,9 @@ export interface TransformResult {
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
+/** The runtime class generated code constructs for each `useSound`; a component may not take the name. */
+const SOUND_CLASS = "Sound";
+
 const BINARY_OPERATORS: ReadonlyMap<SyntaxKind, BinaryOperator> = new Map([
   [SyntaxKind.PlusToken, "+"], [SyntaxKind.MinusToken, "-"], [SyntaxKind.AsteriskToken, "*"],
   [SyntaxKind.SlashToken, "/"], [SyntaxKind.PercentToken, "%"],
@@ -126,6 +131,8 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   for (const c of analysis.components) {
     if (intrinsics.has(c.name)) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' conflicts with a runtime intrinsic.`, span(c.declaration)));
+    } else if (c.name === SOUND_CLASS) {
+      diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' conflicts with the runtime's ${SOUND_CLASS} class, which generated code imports for useSound.`, span(c.declaration)));
     } else if (locals.has(c.name)) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' is declared more than once.`, span(c.declaration)));
     }
@@ -133,7 +140,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   }
   const imported = new Map<string, { module: string; isDefault: boolean }>();
   for (const i of analysis.imports) {
-    if (intrinsics.has(i.name) || locals.has(i.name) || imported.has(i.name)) {
+    if (intrinsics.has(i.name) || i.name === SOUND_CLASS || locals.has(i.name) || imported.has(i.name)) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Imported component '${i.name}' conflicts with another component or a runtime intrinsic.`, span(i.node)));
     } else {
       imported.set(i.name, { module: i.module, isDefault: i.isDefault });
@@ -298,6 +305,8 @@ class ComponentLowering implements LoweringContext {
   #functionDepth = 0;
   /** Greater than zero while lowering a `useUnmount` handler, where state cannot be set. */
   #settersForbidden = 0;
+  /** Greater than zero while lowering a state updater. */
+  #updaterDepth = 0;
   /** The props type declares `children: Child`. */
   #declaredChildren = false;
   /** A `{children}` slot has been lowered (there may be one). */
@@ -305,6 +314,7 @@ class ComponentLowering implements LoweringContext {
   /** A `{children}` was written where it cannot go (already reported, so the missing slot is not reported again). */
   #slotRejected = false;
   readonly #refs: RefIR[] = [];
+  readonly #sounds: SoundIR[] = [];
 
   constructor(
     component: ComponentAnalysis,
@@ -350,6 +360,7 @@ class ComponentLowering implements LoweringContext {
       hooks,
       state,
       refs: this.#refs,
+      sounds: this.#sounds,
       props,
       propsType: this.#component.props?.typeName ?? null,
       isDefaultExport: this.#component.isDefault,
@@ -529,6 +540,9 @@ class ComponentLowering implements LoweringContext {
         case "useRef":
           this.#lowerUseRef(hook);
           break;
+        case "useSound":
+          this.#lowerUseSound(hook);
+          break;
         case "const": {
           // Lowered now, against what is declared above it (state, refs, earlier consts), outside any handler.
           const value = this.#lowerExpression(hook.initializer);
@@ -599,8 +613,27 @@ class ComponentLowering implements LoweringContext {
     this.#componentScope.declare(hook.name, { kind: "ref", id, name: hook.name });
   }
 
+  /**
+   * `const playHit = useSound("hit.wav")`: the path is a string literal, so a
+   * missing asset can be reported at build time once there is an asset list.
+   * The binding is a function that is only called, as a statement in a handler.
+   */
+  #lowerUseSound(hook: UseSoundCallAnalysis): void {
+    const code = DiagnosticCode.InvalidUseSound;
+    const argument = hook.arguments.length === 1 ? unwrapParens(hook.arguments[0]!) : null;
+    if (!argument || !(isStringLiteral(argument) || isNoSubstitutionTemplateLiteral(argument))) {
+      this.#error(code, "useSound takes one file path, written as a string literal: `const playHit = useSound(\"hit.wav\")`.", hook.call);
+      return;
+    }
+    if (!this.#checkHandleName(hook.name, code, hook.declaration.name)) return;
+    if (!this.#claimName(hook.name, hook.declaration, code)) return;
+    const id = soundId(this.#component.name, hook.name);
+    this.#sounds.push({ kind: "Sound", id, name: hook.name, path: argument.text, span: this.#span(hook.declaration) });
+    this.#componentScope.declare(hook.name, { kind: "sound", id, name: hook.name });
+  }
+
   /** A `useRef` binding must not collide with state, setters or the reserved call names. */
-  #checkHandleName(name: string, code: typeof DiagnosticCode.InvalidUseRef, at: Node): boolean {
+  #checkHandleName(name: string, code: CompilerDiagnostic["code"], at: Node): boolean {
     if (this.#componentScope.has(name) || this.isCallableName(name)) {
       this.#error(code, `'${name}' is already declared in this component (or reserved).`, at);
       return false;
@@ -1275,6 +1308,9 @@ class ComponentLowering implements LoweringContext {
         // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
         // in a handler it reads the current state, like recomputing it there.
         case "derived": return binding.value;
+        case "sound":
+          this.#error(DiagnosticCode.SoundOutsideHandler, `'${node.text}' is a sound: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
+          return null;
         case "ref":
           this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a ref; read and write \`${node.text}.current\`.`, node);
           return null;
@@ -1489,6 +1525,10 @@ class ComponentLowering implements LoweringContext {
     // A callback prop: `onDefeated()` or `onDefeated?.()`. Arguments are not counted here; the type-check does that.
     if (isIdentifier(callee)) {
       const binding = this.scope.get(callee.text);
+      if (binding?.kind === "sound") {
+        this.#error(DiagnosticCode.SoundOutsideHandler, `'${callee.text}()' plays a sound, so it is only valid as a statement in a handler: in JSX, a derived value or an expression it would play on every render.`, node);
+        return null;
+      }
       if (binding?.kind === "prop") {
         if (binding.role !== "callback") {
           this.#error(DiagnosticCode.UnsupportedExpression, `Prop '${callee.text}' is not a function, so it cannot be called.`, callee);
@@ -1670,6 +1710,19 @@ class ComponentLowering implements LoweringContext {
 
   canSetState(): boolean {
     return this.#settersForbidden === 0;
+  }
+
+  canPlaySound(): boolean {
+    return this.#updaterDepth === 0;
+  }
+
+  inUpdater<T>(lower: () => T): T {
+    this.#updaterDepth++;
+    try {
+      return lower();
+    } finally {
+      this.#updaterDepth--;
+    }
   }
 
   nextSerial(): number {

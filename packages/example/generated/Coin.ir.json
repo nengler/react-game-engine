@@ -123,6 +123,7 @@
         }
       ],
       "refs": [],
+      "sounds": [],
       "props": [
         {
           "kind": "PropDecl",
@@ -234,6 +235,7 @@
       "hooks": [],
       "state": [],
       "refs": [],
+      "sounds": [],
       "props": [
         {
           "kind": "PropDecl",

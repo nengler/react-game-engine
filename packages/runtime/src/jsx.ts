@@ -48,6 +48,15 @@ export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>] {
   return compileTimeOnly("useState");
 }
 
+/**
+ * A sound, played by calling the returned function in a handler:
+ * `const playHit = useSound("hit.wav");` then `playHit();`. The path must be a
+ * string literal. Sounds are not placed, so there is no `transform`.
+ */
+export function useSound(_path: string): () => void {
+  return compileTimeOnly("useSound");
+}
+
 /** A value that persists across frames but never renders. Read and write `.current` in handlers only. */
 export function useRef<T extends Primitive>(_initial: T): { current: Widen<T> } {
   return compileTimeOnly("useRef");

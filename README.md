@@ -44,7 +44,7 @@ packages/
     src/diagnostics/  diagnostic codes and formatting
     test/             end-to-end tests
   runtime/    the authoring entry point (`@rge/runtime/jsx`: typed hooks and built-in elements for
-              component source), and the mock GameObject / World (with `tick` / `reportCollision` / `reportPress`), Entity, Sprite, Collider, Pointer,
+              component source), and the mock GameObject / World (with `tick` / `reportCollision` / `reportPress`), Entity, Sprite, Collider, Pointer, Sound (a mock that records plays),
               and `runtimeManifest` (what the compiler is told about the runtime)
   example/    example components and their committed generated output
 ```

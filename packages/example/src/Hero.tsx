@@ -1,8 +1,10 @@
-import { useState, useUpdate, useInput, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { useState, useUpdate, useInput, useSound, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";
 
 function Hero() {
   const [health, setHealth] = useState(100);
   const [poisoned, setPoisoned] = useState(false);
+  // A sound is played by calling the function in a handler; it happens at once and renders nothing.
+  const playHurt = useSound("hurt.wav");
 
   useInput((input) => {
     if (input.pressed("Space")) {
@@ -32,6 +34,7 @@ function Hero() {
         width={16}
         height={24}
         onCollisionEnter={() => {
+          playHurt();
           setHealth((h) => h - 10);
           setPoisoned(true);
         }}

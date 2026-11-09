@@ -8,8 +8,8 @@
       "name": "Hero",
       "span": {
         "fileName": "packages/example/src/Hero.tsx",
-        "start": 100,
-        "end": 903,
+        "start": 110,
+        "end": 1077,
         "line": 3,
         "column": 1
       },
@@ -20,8 +20,8 @@
           "setterName": "setHealth",
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 126,
-            "end": 161,
+            "start": 136,
+            "end": 171,
             "line": 4,
             "column": 9
           }
@@ -32,8 +32,8 @@
           "setterName": "setPoisoned",
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 171,
-            "end": 212,
+            "start": 181,
+            "end": 222,
             "line": 5,
             "column": 9
           }
@@ -97,9 +97,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 217,
-            "end": 332,
-            "line": 7,
+            "start": 369,
+            "end": 484,
+            "line": 9,
             "column": 3
           }
         },
@@ -193,9 +193,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 336,
-            "end": 438,
-            "line": 14,
+            "start": 488,
+            "end": 590,
+            "line": 16,
             "column": 3
           }
         },
@@ -310,9 +310,9 @@
           },
           "span": {
             "fileName": "packages/example/src/Hero.tsx",
-            "start": 442,
-            "end": 605,
-            "line": 20,
+            "start": 594,
+            "end": 757,
+            "line": 22,
             "column": 3
           }
         }
@@ -346,6 +346,21 @@
         }
       ],
       "refs": [],
+      "sounds": [
+        {
+          "kind": "Sound",
+          "id": "Hero.playHurt",
+          "name": "playHurt",
+          "path": "hurt.wav",
+          "span": {
+            "fileName": "packages/example/src/Hero.tsx",
+            "start": 333,
+            "end": 364,
+            "line": 7,
+            "column": 9
+          }
+        }
+      ],
       "props": [],
       "propsType": null,
       "isDefaultExport": false,
@@ -410,9 +425,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
-                "start": 649,
-                "end": 708,
-                "line": 30,
+                "start": 801,
+                "end": 860,
+                "line": 32,
                 "column": 7
               }
             }
@@ -451,6 +466,10 @@
                     "kind": "Function",
                     "params": [],
                     "body": [
+                      {
+                        "kind": "PlaySound",
+                        "sound": "Hero.playHurt"
+                      },
                       {
                         "kind": "SetState",
                         "state": "Hero.health",
@@ -502,9 +521,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/example/src/Hero.tsx",
-                "start": 715,
-                "end": 882,
-                "line": 31,
+                "start": 867,
+                "end": 1056,
+                "line": 33,
                 "column": 7
               }
             }
@@ -512,9 +531,9 @@
         ],
         "span": {
           "fileName": "packages/example/src/Hero.tsx",
-          "start": 622,
-          "end": 896,
-          "line": 29,
+          "start": 774,
+          "end": 1070,
+          "line": 31,
           "column": 5
         }
       }

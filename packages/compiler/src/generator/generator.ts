@@ -11,6 +11,7 @@ import {
   type FunctionIR,
   type HandlerHookIR,
   type RefId,
+  type SoundId,
   isHandlerHook,
   type StatementIR,
   type TypeIR,
@@ -146,6 +147,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
         case "Return": if (stmt.value) visitExpr(stmt.value); break;
         case "SetState": if ("updater" in stmt) visitFunction(stmt.updater); else visitExpr(stmt.value); break;
         case "Assign": visitExpr(stmt.value); break;
+        case "PlaySound": break;
         default: assertNever(stmt, "statement");
       }
     }
@@ -160,6 +162,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
     c.props.forEach((p) => p.defaultValue && visitExpr(p.defaultValue)); // a default may call a runtime function (`speed = clamp(5, 0, 3)`)
     c.state.forEach((s) => visitExpr(s.initialValue));
     c.refs.forEach((r) => visitExpr(r.initialValue));
+    if (c.sounds.length > 0) values.add("Sound");
     for (const hook of c.hooks) if (isHandlerHook(hook)) visitFunction(hook.handler);
   }
   return [...[...values].sort(), ...[...types].sort().map((t) => `type ${t}`)];
@@ -281,6 +284,10 @@ class ComponentGenerator {
       // Refs: plain fields. Reading or writing them never marks anything dirty.
       for (const r of c.refs) {
         w.line(`${r.name}: ${r.type} = ${this.#expr(r.initialValue, true)};`);
+      }
+      // Sounds: one per useSound. Playing is an effect, so nothing is marked dirty.
+      for (const s of c.sounds) {
+        w.line(`readonly ${s.name}: Sound = new Sound(${JSON.stringify(s.path)});`);
       }
       // Persistent children (field initialisers run after state initialisers, so they can read state).
       this.#emitElementFields(c.root.children, "persistent");
@@ -454,6 +461,9 @@ class ComponentGenerator {
           break;
         case "SetState":
           w.line(`this.${this.#setter(stmt.state)}(${"updater" in stmt ? this.#updater(stmt.updater) : this.#expr(stmt.value, true)});`);
+          break;
+        case "PlaySound":
+          w.line(`this.${this.#soundField(stmt.sound)}.play();`);
           break;
         case "Assign": {
           const target = `this.${this.#refField(stmt.target.ref)}`;
@@ -760,6 +770,13 @@ class ComponentGenerator {
     if (lines.length === 1) return `(${params}) => { ${lines[0]} }`;
     const base = JSON.stringify(fn.body).includes("\\n") ? "" : this.#w.indentation;
     return `(${params}) => {\n${lines.map((l) => `${base}  ${l}`).join("\n")}\n${base}}`;
+  }
+
+  /** A sound's name is its field. */
+  #soundField(id: SoundId): string {
+    const sound = this.#c.sounds.find((s) => s.id === id);
+    if (!sound) throw new Error(`Unknown sound ${id} in component ${this.#c.name}`);
+    return sound.name;
   }
 
   /** A ref's name is its field. */
