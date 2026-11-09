@@ -149,8 +149,8 @@ describe("createPlayer", () => {
 
   describe("a <Game> root", () => {
     it("opens the window it asks for, over the player's config, over the defaults, each setting on its own", () => {
-      const game = player(() => new Game({ title: "from game", smooth: true }), { width: 999, height: 111, title: "from config", resizable: false, vsync: false, smooth: false });
-      assert.deepEqual(game.backend.config, { width: 999, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true }, "title and smooth from <Game>; the size and the rest from the player: a <Game> has no size");
+      const game = player(() => new Game({ title: "from game", width: 200, smooth: true }), { width: 999, height: 111, title: "from config", resizable: false, vsync: false, smooth: false });
+      assert.deepEqual(game.backend.config, { width: 200, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true }, "width, title and smooth from <Game>; the rest from the player");
       game.player.close();
       const backend = new RecordingBackend();
       const plain = createPlayer(backend, { root: () => new Entity(), warn: () => {} });
@@ -158,13 +158,13 @@ describe("createPlayer", () => {
       plain.close();
     });
 
-    it("draws with the game's background, and loads from the game's assets folder", () => {
+    it("draws with the window's size and the game's background, and loads from the game's assets folder", () => {
       const backend = new RecordingBackend();
       class Level extends Game {
         readonly shape = new Shape({ kind: "rect", width: 1, height: 1 });
         readonly sound = new Sound("beep.wav");
         constructor() {
-          super({ background: "red", assets: "art" });
+          super({ width: 320, height: 200, background: "red", assets: "art" });
           this.addChild(this.shape);
         }
       }
@@ -177,13 +177,14 @@ describe("createPlayer", () => {
 
     it("finds a <Screen> that is its only child: the game's resolution is scaled into the window", () => {
       const backend = new RecordingBackend();
-      const game = new Game({ title: "x" });
+      const game = new Game({ title: "x", width: 960, height: 540 });
       game.addChild(new Screen({ width: 320, height: 180 }));
-      const p = createPlayer(backend, { width: 640, height: 360, root: () => game });
+      const p = createPlayer(backend, { root: () => game });
+      assert.deepEqual([backend.config?.width, backend.config?.height], [960, 540], "the window is the <Game>'s size");
       p.step();
       const view = backend.lastFrame.records[0];
       assert.ok(view?.op === "view");
-      assert.equal(view.a, 2, "a 320 x 180 screen in a 640 x 360 window is drawn at 2x");
+      assert.equal(view.a, 3, "a 320 x 180 screen in a 960 x 540 window (the <Game>'s) is drawn at 3x");
       p.close();
     });
 

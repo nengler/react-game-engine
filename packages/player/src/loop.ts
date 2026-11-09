@@ -75,8 +75,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   }
   const game = root instanceof Game ? root : null;
   // Each setting: the `<Game>` prop where it is written, else the player's config, else the default.
-  const width = config.width ?? DEFAULT_WINDOW.width;
-  const height = config.height ?? DEFAULT_WINDOW.height;
+  const width = game?.width ?? config.width ?? DEFAULT_WINDOW.width;
+  const height = game?.height ?? config.height ?? DEFAULT_WINDOW.height;
   const assets = game?.assets ?? config.assets ?? "assets";
   const background = resolveBackground(game?.background ?? config.background ?? "black", warner);
 

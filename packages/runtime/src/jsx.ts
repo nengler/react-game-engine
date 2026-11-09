@@ -102,10 +102,11 @@ export function Entity(_props: EntityProps & { children?: Child }): JSX.Element 
 }
 
 /**
- * The root of a game and its configuration: the window (`title`, `resizable`, `vsync`, `smooth`), the `background`, the
- * `assets` folder and the game `state` (`state={useGame}`). A container, like `<Entity>`, and optional: a component
- * whose root is `<Game …>` overrides the defaults, each prop only where it is written. It has no size: put a
- * `<Screen width height>` inside it for the game's resolution. Settings are literals, and it is only ever a component's root.
+ * The root of a game and its configuration: the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`),
+ * the `background`, the `assets` folder and the game `state` (`state={useGame}`). A container, like `<Entity>`, and
+ * optional: a component whose root is `<Game …>` overrides the defaults, each prop only where it is written. Its
+ * `width` and `height` are the window's; put a `<Screen width height>` inside it for the resolution the game is drawn
+ * at. Settings are literals, and it is only ever a component's root.
  */
 export function Game(_props: GameProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Game");

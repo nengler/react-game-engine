@@ -842,17 +842,17 @@ the camera's view puts it, so an input system converts a screen point first: `ca
 
 ## Game
 
-`<Game>` is the root of a game and where its configuration lives (decided 2026-11-09): the window (`title`, `resizable`,
-`vsync`, `smooth`), the `background` colour, the `assets` folder, and the game state. It is a built-in container, an
-`<Entity>` with those props (and `name`), so a component whose root is `<Game …>` extends it, as any component extends
-its root. It has **no size**: the game's resolution is a `<Screen width height>`, and the window's size is the
-player's (`PlayerConfig.width`/`height`):
+`<Game>` is the root of a game and where its configuration lives (decided 2026-11-09): the window (`title`, `width`,
+`height`, `resizable`, `vsync`, `smooth`), the `background` colour, the `assets` folder, and the game state. It is a
+built-in container, an `<Entity>` with those props (and `name`), so a component whose root is `<Game …>` extends it, as
+any component extends its root. **Its `width` and `height` are the window's size; a `<Screen width height>` inside it
+is the game's resolution**, the size everything is drawn at before it is scaled to fit the window:
 
 ```tsx
 // Main.tsx
 export default function Main() {
   return (
-    <Game state={useGame} title="rge demo" background="#10131c" assets="assets">
+    <Game state={useGame} title="rge demo" width={960} height={540} background="#10131c" assets="assets">
       <Screen width={320} height={180}>
         <Ground />
         <Camera><Player /></Camera>
@@ -863,8 +863,8 @@ export default function Main() {
 }
 ```
 ```ts
-// game.ts: the window's size, and the root
-export const gameConfig: PlayerConfig = { width: 960, height: 540, root: () => new Main() };
+// game.ts: nothing but the root
+export const gameConfig: PlayerConfig = { root: () => new Main() };
 ```
 
 **With a `<Screen>`.** Both are roots, so they nest: the `<Screen>` is the `<Game>`'s only child, and the player looks
@@ -876,7 +876,7 @@ the defaults apply. A `<Game>` root overrides them, each prop only where it is w
 `undefined` on the object, which is how the player knows to fall back.
 
 **Literals, and only a root.** The player reads these settings before the tree is built, so each is a literal
-(`title="x"`, `smooth`, `resizable={false}`), never state or props: anything else is `RGE1210`. `<Game>` is only ever a
+(`width={640}`, `smooth`, `resizable={false}`), never state or props: anything else is `RGE1210`. `<Game>` is only ever a
 component's root: as a child it is `RGE1003`. It is not placed, so it takes no `transform`. A prop it does not have is
 `RGE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
 built-in's.
