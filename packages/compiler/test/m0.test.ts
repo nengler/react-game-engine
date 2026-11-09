@@ -230,7 +230,6 @@ function Player() {
     for (const source of [
       `import { useState } from "react";`,
       `import "./style.css";`,
-      `import { helper } from "./helper.ts";`,
       `import * as jsx from "@rge/runtime/jsx";`,
       `import jsx from "@rge/runtime/jsx";`,
       `import { useState as state } from "@rge/runtime/jsx";`,
@@ -239,6 +238,12 @@ function Player() {
       const codes = compileErrors(`import { Entity } from "@rge/runtime/jsx";\n${source}\nfunction S() { return <Entity name="S" />; }`).map((d) => d.code);
       assert.deepEqual(codes, [DiagnosticCode.UnsupportedSyntax], source);
     }
+  });
+
+  it("treats a relative .ts import as the game state, so any other name from one says what to import instead", () => {
+    const [d] = compileErrors(`import { Entity } from "@rge/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" />; }`);
+    assert.equal(d!.code, DiagnosticCode.InvalidGameState);
+    assert.match(d!.message, /no game state to import `helper` from/);
   });
 
   it("accepts `type` only on the authoring module's types, and requires it there", () => {

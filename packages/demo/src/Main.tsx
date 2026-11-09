@@ -1,22 +1,25 @@
-import { useSound, useState, Camera, Entity, Pointer, Shape, Text } from "@rge/runtime/jsx";
+import { useSound, useState, Camera, Game, Pointer, Shape, Text } from "@rge/runtime/jsx";
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
+import { useGame } from "./GameState.ts";
+import { Hud } from "./Hud.tsx";
 import { Ground } from "./Ground.tsx";
 import { Player } from "./Player.tsx";
 import { Spikes } from "./Spikes.tsx";
 
 /**
- * The demo's root. Move the square with the arrow keys or WASD; the camera follows it. Click the grey
+ * The demo's root, and its configuration: the window (its title and size), the background, the assets folder and the
+ * game state are the props of <Game>. Move the square with the arrow keys or WASD; the camera follows it. Click the grey
  * button to count clicks (it turns green at three) and hear a sound. The flickering square on the left is
  * an animation whose third frame is missing on purpose, to show the magenta fallback. Walk onto the coin to pick it
  * up, and onto the red spikes to turn red while you stand on them.
  */
-export default function Game() {
+export default function Main() {
   const [clicks, setClicks] = useState(0);
   const playClick = useSound("click.wav");
 
   return (
-    <Entity name="Game">
+    <Game name="Main" state={useGame} title="rge demo" width={640} height={360} background="#10131c" assets="assets">
       <Ground />
       <Beacon transform={{ x: -120, y: -60 }} />
       <Spikes transform={{ x: 84, y: 10 }} />
@@ -35,10 +38,11 @@ export default function Game() {
       <Text size={16} color="white" transform={{ x: 92, y: -32 }}>
         Clicks: {clicks}
       </Text>
+      <Hud transform={{ x: 92, y: -56 }} />
       {/* A camera follows its children, so this keeps the view on the player. */}
       <Camera>
         <Player />
       </Camera>
-    </Entity>
+    </Game>
   );
 }

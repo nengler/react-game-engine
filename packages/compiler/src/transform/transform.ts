@@ -34,7 +34,7 @@ import {
   isBlock,
   isReturnStatement,
 } from "typescript/ast/is";
-import { AUTHORING_HOOKS, AUTHORING_TYPES, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis } from "../analyzer/analyzer.ts";
+import { AUTHORING_HOOKS, AUTHORING_TYPES, unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis, type JsxRoot, type SourceAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import {
   assertNever,
@@ -86,6 +86,7 @@ import {
   type ValueType,
 } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
+import type { GameStateDefinition, GameStateLeaf, GameStateNode } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { MATH_FUNCTIONS } from "./handles.ts";
 import type { RuntimeManifest } from "@rge/runtime";
@@ -95,12 +96,17 @@ import { checkFreshName, lowerFunction, type LoweringContext } from "./statement
 export interface TransformOptions {
   /** What the runtime provides: intrinsic tags, the host class, reserved member names, handle types, functions. */
   readonly manifest: RuntimeManifest;
+  /** The project's game state (`GameState.ts`): what a selector on the imported store may name. Absent: the project has none. */
+  readonly gameState?: GameStateDefinition;
 }
 
 export interface TransformResult {
   readonly module: IRModule;
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
+
+/** The root element that carries the game's configuration (`<Game title width …>`); it is only ever a component's root. */
+const GAME_TAG = "Game";
 
 /** The runtime class generated code constructs for each `useSound`; a component may not take the name. */
 const SOUND_CLASS = "Sound";
@@ -171,12 +177,29 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   // Hooks, built-in elements and runtime functions must be imported, as in React. Each missing name is reported once per file.
   const authoring: AuthoringImports = { names: new Set(analysis.authoringImports.filter((i) => !i.isTypeOnly).map((i) => i.name)), reported: new Set() };
 
+  // Names imported from a relative `.ts` module must be the project's game state: nothing else from such a module is understood.
+  const storeImports = new Set<string>();
+  for (const i of analysis.storeImports) {
+    if (options.gameState && i.name === options.gameState.name) storeImports.add(i.name);
+    else {
+      diagnostics.push(
+        error(
+          DiagnosticCode.InvalidGameState,
+          options.gameState
+            ? `'${i.name}' is not the game state: the only thing a component may import from "${i.module}" is \`${options.gameState.name}\`, declared by \`createGameState\` in GameState.ts.`
+            : `This project has no game state to import \`${i.name}\` from: add GameState.ts next to the components, \`export const useGame = createGameState<State>()((set) => ({ coins: 0 }))\`.`,
+          span(i.node),
+        ),
+      );
+    }
+  }
+
   const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
   const typeDeclarations: TypeDeclarationIR[] = analysis.typeDeclarations.map((t) => ({ kind: "TypeDeclaration", name: t.name, text: t.text }));
 
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
-    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics).lower();
+    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, options.gameState, storeImports).lower();
     if (lowered) components.push(lowered);
   }
 
@@ -315,6 +338,8 @@ class ComponentLowering implements LoweringContext {
   #slotRejected = false;
   readonly #refs: RefIR[] = [];
   readonly #sounds: SoundIR[] = [];
+  readonly #gameState: GameStateDefinition | undefined;
+  readonly #storeImports: ReadonlySet<string>;
 
   constructor(
     component: ComponentAnalysis,
@@ -326,7 +351,11 @@ class ComponentLowering implements LoweringContext {
     authoring: AuthoringImports,
     typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>,
     diagnostics: CompilerDiagnostic[],
+    gameState: GameStateDefinition | undefined,
+    storeImports: ReadonlySet<string>,
   ) {
+    this.#gameState = gameState;
+    this.#storeImports = storeImports;
     this.#typeDecls = typeDecls;
     this.#authoring = authoring;
     this.#component = component;
@@ -516,8 +545,11 @@ class ComponentLowering implements LoweringContext {
     const hooks: HookIR[] = [];
     const state: StateIR[] = [];
     for (const hook of this.#component.hooks) {
-      if (hook.kind !== "const") this.#requireImport(hook.kind, hook.call);
+      if (hook.kind !== "const" && hook.kind !== "useStore") this.#requireImport(hook.kind, hook.call);
       switch (hook.kind) {
+        case "useStore":
+          this.#lowerStore(hook, state, hooks);
+          break;
         case "useUpdate":
         case "useInput":
         case "useMount":
@@ -587,6 +619,59 @@ class ComponentLowering implements LoweringContext {
       }
     }
     return { hooks, state };
+  }
+
+  /**
+   * `const hp = useGame((s) => s.player.hp)`: a state mirroring one leaf of the game state (a snapshot, refreshed
+   * when the leaf changes), or `const collect = useGame((s) => s.collect)`: an action, called as a statement in a
+   * handler. The path is checked against the state tree `GameState.ts` declares.
+   */
+  #lowerStore(hook: UseStoreCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
+    const definition = this.#gameState;
+    const at = (node: Node = hook.call): Node => node;
+    if (!definition || !this.#storeImports.has(hook.storeName)) return; // already reported where the import was checked
+    if (this.#componentScope.hasOwn(hook.valueName) || !this.#claimName(hook.valueName, hook.declaration)) {
+      if (this.#componentScope.hasOwn(hook.valueName)) this.#error(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component.`, hook.declaration);
+      return;
+    }
+    const first = hook.path[0] as string;
+    if (hook.path.length === 1 && definition.actions.includes(first)) {
+      this.#componentScope.declare(hook.valueName, { kind: "action", name: hook.valueName, action: first });
+      return;
+    }
+    // Walk the state tree; a typo is reported with the nearest key at the level it went wrong.
+    let node: GameStateLeaf | GameStateNode = definition.tree;
+    const walked: string[] = [];
+    for (const key of hook.path) {
+      if (node.kind === "leaf") {
+        this.#error(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is a ${node.type}, so it has no '${key}'.`, at(hook.selector));
+        return;
+      }
+      const child: GameStateLeaf | GameStateNode | undefined = Object.hasOwn(node.children, key) ? node.children[key] : undefined;
+      if (!child) {
+        const options = [...Object.keys(node.children), ...(walked.length === 0 ? definition.actions : [])];
+        const near = nearest(key, options);
+        this.#error(
+          DiagnosticCode.InvalidGameState,
+          `'${[...walked, key].join(".")}' is not in the game state${near ? ` (did you mean "${[...walked, near].join(".")}"?)` : ""}. ${walked.length === 0 ? "State" : `'${walked.join(".")}' has`}: ${options.length > 0 ? options.join(", ") : "nothing"}.`,
+          at(hook.selector),
+        );
+        return;
+      }
+      walked.push(key);
+      node = child;
+    }
+    if (node.kind === "node") {
+      this.#error(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is an object: select one of its values (${Object.keys(node.children).map((k) => `${walked.join(".")}.${k}`).join(", ")}). A component reads leaves, so it re-renders only when one it uses changes.`, at(hook.selector));
+      return;
+    }
+    const id = stateId(this.#component.name, hook.valueName);
+    const initialValue: ExprIR = node.type === "number" ? { kind: "NumberLiteral", value: node.initial as number } : node.type === "string" ? { kind: "StringLiteral", value: node.initial as string } : { kind: "BooleanLiteral", value: node.initial as boolean };
+    const type: TypeIR = { kind: "Primitive", name: node.type };
+    state.push({ kind: "State", id, name: hook.valueName, type, initialValue, globalKey: hook.path.join(".") });
+    this.#stateTypes.set(id, type);
+    hooks.push({ kind: "UseState", state: id, setterName: null, span: this.#span(hook.declaration) });
+    this.#componentScope.declare(hook.valueName, { kind: "state", id });
   }
 
   /**
@@ -996,6 +1081,10 @@ class ComponentLowering implements LoweringContext {
       return null;
     }
 
+    if (component.kind === "Intrinsic" && tag.text === GAME_TAG) {
+      this.#error(DiagnosticCode.RootMustBeEntity, `<${GAME_TAG}> is the root of a component, never a child: it configures the whole game. Make it the root of your main component.`, tag);
+      return null;
+    }
     const isComponent = component.kind !== "Intrinsic";
     const props = this.#lowerProps(opening.attributes, tag.text, isComponent, listItem);
     const transform = this.#lowerTransform(opening.attributes, tag.text, isComponent);
@@ -1113,6 +1202,11 @@ class ComponentLowering implements LoweringContext {
         continue;
       }
       const init = attribute.initializer;
+      if (!toComponent && tag === GAME_TAG) {
+        const setting = this.#lowerGameSetting(name, init, attribute);
+        if (setting) props.push({ kind: "StaticProp", name, value: setting });
+        continue;
+      }
       let value: ExprIR | null;
       if (!init) value = { kind: "BooleanLiteral", value: true };
       else if (isStringLiteral(init)) value = { kind: "StringLiteral", value: init.text };
@@ -1145,6 +1239,52 @@ class ComponentLowering implements LoweringContext {
       props.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
     }
     return props;
+  }
+
+  /**
+   * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`),
+   * and `state={useGame}` is the project's game state, the imported store. Anything else (a state read, an expression)
+   * would not exist yet, so it is `RGE1210`.
+   */
+  #lowerGameSetting(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
+    if (name === "state") {
+      const expression = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
+      if (!expression || !isIdentifier(expression) || !this.#storeImports.has(expression.text)) {
+        this.#error(
+          DiagnosticCode.InvalidGameState,
+          this.#gameState
+            ? `<Game state> is the game state itself: \`state={${this.#gameState.name}}\`, imported from GameState.ts.`
+            : "<Game state> needs the project's game state: add GameState.ts next to the components and import its store.",
+          at,
+        );
+        return null;
+      }
+      return { kind: "StoreRef" };
+    }
+    const allowed = this.#manifest.intrinsicMembers[GAME_TAG] ?? [];
+    if (!allowed.includes(name) || name === "name") {
+      if (name === "name") return this.#gameLiteral(name, init, at);
+      this.#error(DiagnosticCode.UnsupportedAttribute, `<${GAME_TAG}> has no prop '${name}'. Its settings: ${allowed.filter((m) => m !== "name").join(", ")}.`, at);
+      return null;
+    }
+    return this.#gameLiteral(name, init, at);
+  }
+
+  #gameLiteral(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
+    let value: ExprIR | null = null;
+    if (!init) value = { kind: "BooleanLiteral", value: true };
+    else if (isStringLiteral(init)) value = { kind: "StringLiteral", value: init.text };
+    else if (isJsxExpression(init) && init.expression && !init.dotDotDotToken) {
+      const lowered = this.#lowerExpression(init.expression);
+      if (!lowered) return null;
+      value = lowered;
+    }
+    const literal = value && (value.kind === "NumberLiteral" || value.kind === "StringLiteral" || value.kind === "BooleanLiteral" || (value.kind === "Unary" && value.operator === "-" && value.operand.kind === "NumberLiteral"));
+    if (!value || !literal) {
+      this.#error(DiagnosticCode.InvalidPropValue, `<${GAME_TAG} ${name}> must be a literal (a number, string or true/false): the player reads it before the tree is built, so it cannot depend on state or props.`, at);
+      return null;
+    }
+    return value;
   }
 
   /**
@@ -1313,6 +1453,9 @@ class ComponentLowering implements LoweringContext {
           return null;
         case "ref":
           this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a ref; read and write \`${node.text}.current\`.`, node);
+          return null;
+        case "action":
+          this.#error(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a game-state action: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
           return null;
         default: return assertNever(binding, "binding");
       }
@@ -1527,6 +1670,10 @@ class ComponentLowering implements LoweringContext {
       const binding = this.scope.get(callee.text);
       if (binding?.kind === "sound") {
         this.#error(DiagnosticCode.SoundOutsideHandler, `'${callee.text}()' plays a sound, so it is only valid as a statement in a handler: in JSX, a derived value or an expression it would play on every render.`, node);
+        return null;
+      }
+      if (binding?.kind === "action") {
+        this.#error(DiagnosticCode.UnsupportedExpression, `'${callee.text}()' is a game-state action, so it is only valid as a statement in a handler: in JSX or a derived value it would run on every render.`, node);
         return null;
       }
       if (binding?.kind === "prop") {

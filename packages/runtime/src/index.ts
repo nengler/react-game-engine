@@ -1,6 +1,7 @@
 export { GameObject } from "./GameObject.ts";
 export { Transform, composeTransforms, offsetTransform, IDENTITY_TRANSFORM, type WorldTransform } from "./Transform.ts";
 export { World } from "./World.ts";
+export { createGameState, GameStore, resetGameState, type GameState, type GameStateCreator, type GetGameState, type SetGameState, type GameStateValue } from "./GameState.ts";
 export type { Child } from "./jsx-runtime.ts";
 export {
   loadScene,
@@ -14,6 +15,7 @@ export {
   type SceneValue,
 } from "./scene.ts";
 export { Entity, type EntityProps } from "./components/Entity.ts";
+export { Game, type GameProps, type GameStateHandle } from "./components/Game.ts";
 export { Sprite, type SpriteProps } from "./components/Sprite.ts";
 export { Collider, type ColliderProps, type Contact } from "./components/Collider.ts";
 export { Sound, getSoundSink, setSoundSink, type SoundSink } from "./Sound.ts";

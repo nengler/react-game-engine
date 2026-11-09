@@ -14,7 +14,7 @@ after(() => {
 });
 
 const GAME = `
-function Game() {
+function Arena() {
   const [wide, setWide] = useState(false);
   return (
     <Screen width={wide ? 640 : 320} height={180} fit="contain" border="navy">
@@ -37,17 +37,17 @@ interface GameInstance extends Screen {
   readonly shape: Shape;
 }
 
-let Game: new () => GameInstance;
+let Arena: new () => GameInstance;
 let Plain: new () => Screen;
 
 before(async () => {
-  ({ Game, Plain } = await load<{ Game: typeof Game; Plain: typeof Plain }>(compile(GAME, "Game.tsx")));
+  ({ Arena, Plain } = await load<{ Arena: typeof Arena; Plain: typeof Plain }>(compile(GAME, "Game.tsx")));
 });
 
 describe("Screen: a component rooted at one", () => {
   it("is a Screen, with its props and its children", () => {
     const world = new World();
-    const game = new Game();
+    const game = new Arena();
     world.mount(game);
     assert.ok(game instanceof Screen);
     assert.deepEqual([game.width, game.height, game.fit, game.pixelPerfect, game.border], [320, 180, "contain", true, "navy"]);
@@ -57,7 +57,7 @@ describe("Screen: a component rooted at one", () => {
 
   it("changes resolution from state", () => {
     const world = new World();
-    const game = new Game();
+    const game = new Arena();
     world.mount(game);
     game.setWide(true);
     world.flush();

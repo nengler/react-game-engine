@@ -6,6 +6,7 @@ import {
   IDENTITY_TRANSFORM,
   offsetTransform,
   Pointer,
+  Game,
   Screen,
   Shape,
   Sprite,
@@ -298,12 +299,16 @@ function kindOf(object: GameObject): number {
 
 /**
  * The `<Screen>` that sets the game's resolution: `root` itself, or its only child, which is where a `World`
- * keeps the object it mounted (`world.root` is a bare container). Null when the game has none.
+ * keeps the object it mounted (`world.root` is a bare container). Either may be a `<Game>` (the configuration root)
+ * whose only child is the `<Screen>`. Null when the game has none.
  */
 function rootScreen(root: GameObject): Screen | null {
-  if (root instanceof Screen) return root;
   const only = root.children.length === 1 ? root.children[0] : undefined;
-  return only instanceof Screen ? only : null;
+  for (const top of [root, only]) {
+    const inner = top instanceof Game && top.children.length === 1 ? top.children[0] : top;
+    if (inner instanceof Screen) return inner;
+  }
+  return null;
 }
 
 /** The size of the square drawn where a texture could not be loaded. */

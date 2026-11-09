@@ -9,12 +9,16 @@
       "module": "packages/demo/src/Coin.tsx",
       "props": []
     },
-    "Game": {
-      "module": "packages/demo/src/Game.tsx",
-      "props": []
-    },
     "Ground": {
       "module": "packages/demo/src/Ground.tsx",
+      "props": []
+    },
+    "Hud": {
+      "module": "packages/demo/src/Hud.tsx",
+      "props": []
+    },
+    "Main": {
+      "module": "packages/demo/src/Main.tsx",
       "props": []
     },
     "Player": {

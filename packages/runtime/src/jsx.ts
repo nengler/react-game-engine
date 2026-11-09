@@ -10,6 +10,7 @@
  */
 import type { InputState } from "./input.ts";
 import type { EntityProps } from "./components/Entity.ts";
+import type { GameProps } from "./components/Game.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
 import type { PointerProps } from "./components/Pointer.ts";
@@ -98,6 +99,17 @@ export function useUnmount(_handler: () => void): void {
 /** A named container; the usual root of a component. */
 export function Entity(_props: EntityProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Entity");
+}
+
+/**
+ * The root of a game and its configuration: the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`),
+ * the `background`, the `assets` folder and the game `state` (`state={useGame}`). A container, like `<Entity>`, and
+ * optional: a component whose root is `<Game …>` overrides the defaults, each prop only where it is written. Its
+ * `width` and `height` are the window's; put a `<Screen width height>` inside it for the resolution the game is drawn
+ * at. Settings are literals, and it is only ever a component's root.
+ */
+export function Game(_props: GameProps & { children?: Child }): JSX.Element {
+  return compileTimeOnly("Game");
 }
 
 /** Draws an image. */

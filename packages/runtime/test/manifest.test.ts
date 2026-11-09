@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { AnimatedSprite, Camera, Collider, Entity, GameObject, Pointer, SCREEN_FITS, SHAPE_KINDS, Screen, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
+import { AnimatedSprite, Camera, Collider, Entity, Game, GameObject, Pointer, SCREEN_FITS, SHAPE_KINDS, Screen, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
 
 /** Every instance field and prototype member a generated subclass of `host` would inherit, excluding Object.prototype. */
 function inheritedMembers(host: object): Set<string> {
@@ -32,6 +32,7 @@ describe("runtime manifest", () => {
   it("describes each intrinsic's own members, containers and callbacks accurately", () => {
     const instances: Record<string, object> = {
       Entity: new Entity(),
+      Game: new Game(),
       Sprite: new Sprite({ image: "a" }),
       Collider: new Collider({ width: 1, height: 1 }),
       Text: new Text({ text: "" }),
@@ -86,7 +87,7 @@ describe("runtime manifest", () => {
 
   it("lists exactly the hooks each intrinsic implements itself, so a component rooted at it can call super", () => {
     const hooks = ["onInput", "onUpdate", "onMount", "onUnmount"];
-    const classes: Record<string, { prototype: object }> = { Entity, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen };
+    const classes: Record<string, { prototype: object }> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen };
     for (const tag of runtimeManifest.intrinsics) {
       const overridden = hooks.filter((hook) => Object.hasOwn(classes[tag]!.prototype, hook)).sort();
       assert.deepEqual([...(runtimeManifest.intrinsicHooks[tag] ?? [])].sort(), overridden, `${tag}: intrinsicHooks must list the hooks its class overrides`);
@@ -109,7 +110,7 @@ describe("runtime manifest", () => {
 
   it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
-    const classes: Record<string, unknown> = { Entity, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen };
+    const classes: Record<string, unknown> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen };
     for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
   });
 });

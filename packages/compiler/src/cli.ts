@@ -10,12 +10,16 @@
  * `prefabs.json` (their props, as data) to outDir, and checks across files:
  * exported names are unique and no component statically contains itself.
  *
+ * A `GameState.ts` in srcDir (`export const useGame = createGameState<State>()((set) => ({ … }))`) is the game's
+ * global state: components import it and read it with selectors, `useGame((s) => s.player.hp)`. The compiler
+ * reads the file to check those selectors; generated code imports it from where it is.
+ *
  * `--scenes <dir>` validates every scene (.json) in the directory against
  * those prefabs, and imports every Tiled map (.tmj) to
  * `<outDir>/scenes/<name>.scene.json` and validates that.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import {
   Compiler,
   checkProject,
@@ -72,6 +76,17 @@ function main(argv: readonly string[]): number {
   const modules: ProjectModule[] = [];
   try {
     mkdirSync(outDir, { recursive: true });
+    const statePath = resolve(srcDir, "GameState.ts");
+    if (existsSync(statePath)) {
+      const { schema, diagnostics: stateDiagnostics } = compiler.parseGameState(relative(process.cwd(), statePath), readFileSync(statePath, "utf8"));
+      diagnostics.push(...stateDiagnostics);
+      if (schema) {
+        // Generated files import the store from where it is: the path from the output directory to the source file.
+        const fromOutput = relative(resolve(outDir), statePath).split(sep).join("/");
+        compiler.setGameState({ ...schema, importFrom: fromOutput.startsWith(".") ? fromOutput : `./${fromOutput}` });
+        console.log(`read GameState.ts (${schema.actions.length} action${schema.actions.length === 1 ? "" : "s"})`);
+      }
+    }
     const sourceNames = readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort();
     if (check && sourceNames.length > 0) {
       diagnostics.push(

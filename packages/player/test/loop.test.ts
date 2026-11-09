@@ -1,8 +1,8 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Collider, Entity, GameObject, Pointer, Shape, Sound, World, getSoundSink, type InputState } from "@rge/runtime";
+import { Camera, Collider, Entity, Game, GameObject, Pointer, Screen, Shape, Sound, World, createGameState, getSoundSink, type InputState } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
-import { createPlayer, MAX_DT, run, type PlayerConfig } from "../src/loop.ts";
+import { createPlayer, DEFAULT_WINDOW, MAX_DT, run, type PlayerConfig } from "../src/loop.ts";
 import { RecordingBackend } from "../src/recording.ts";
 
 const WINDOW = { width: 800, height: 600, title: "test" };
@@ -30,6 +30,15 @@ class Probe extends Entity {
 describe("createPlayer", () => {
   afterEach(() => {
     assert.equal(getSoundSink(), null, "every test closes its player");
+  });
+
+  it("starts every game from the initial game state, whatever an earlier game left", () => {
+    const useGame = createGameState<{ coins: number }>()(() => ({ coins: 0 }));
+    useGame.setState({ coins: 1 });
+    assert.equal(useGame.getState().coins, 1);
+    const { player: p } = player(() => new Entity());
+    assert.equal(useGame.getState().coins, 0, "a new player resets every game state to its initial values");
+    p.close();
   });
 
   it("opens the window with the config it was given, and nothing else", () => {
@@ -119,11 +128,83 @@ describe("createPlayer", () => {
     assert.throws(() => p.step(), /closed/);
   });
 
-  it("closes the window and unhooks sounds if building the root throws", () => {
+  it("opens no window and unhooks sounds if building the root throws", () => {
     const backend = new RecordingBackend();
     assert.throws(() => createPlayer(backend, { ...WINDOW, root: () => { throw new Error("boom"); } }), /boom/);
+    assert.equal(backend.opened, false, "the root is built before the window opens");
+    assert.equal(getSoundSink(), null);
+  });
+
+  it("closes the window if mounting the root throws", () => {
+    const backend = new RecordingBackend();
+    class Bad extends Entity {
+      override onMount(): void {
+        throw new Error("mount");
+      }
+    }
+    assert.throws(() => createPlayer(backend, { ...WINDOW, root: () => new Bad() }), /mount/);
     assert.equal(backend.closed, true);
     assert.equal(getSoundSink(), null);
+  });
+
+  describe("a <Game> root", () => {
+    it("opens the window it asks for, over the player's config, over the defaults, each setting on its own", () => {
+      const game = player(() => new Game({ title: "from game", width: 200, smooth: true }), { width: 999, height: 111, title: "from config", resizable: false, vsync: false, smooth: false });
+      assert.deepEqual(game.backend.config, { width: 200, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true }, "width, title and smooth from <Game>; the rest from the player");
+      game.player.close();
+      const backend = new RecordingBackend();
+      const plain = createPlayer(backend, { root: () => new Entity(), warn: () => {} });
+      assert.deepEqual([backend.config?.width, backend.config?.height, backend.config?.title], [DEFAULT_WINDOW.width, DEFAULT_WINDOW.height, DEFAULT_WINDOW.title], "no <Game> and no config: the defaults");
+      plain.close();
+    });
+
+    it("draws with the window's size and the game's background, and loads from the game's assets folder", () => {
+      const backend = new RecordingBackend();
+      class Level extends Game {
+        readonly shape = new Shape({ kind: "rect", width: 1, height: 1 });
+        readonly sound = new Sound("beep.wav");
+        constructor() {
+          super({ width: 320, height: 200, background: "red", assets: "art" });
+          this.addChild(this.shape);
+        }
+      }
+      const p = createPlayer(backend, { root: () => new Level() });
+      p.step();
+      assert.equal(backend.lastFrame.clearColor, "#ff0000ff");
+      assert.deepEqual(backend.soundLoads, ["art/beep.wav"], "a sound made while the root is built is preloaded once the window is open, from the game's folder");
+      p.close();
+    });
+
+    it("finds a <Screen> that is its only child: the game's resolution is scaled into the window", () => {
+      const backend = new RecordingBackend();
+      const game = new Game({ title: "x", width: 960, height: 540 });
+      game.addChild(new Screen({ width: 320, height: 180 }));
+      const p = createPlayer(backend, { root: () => game });
+      assert.deepEqual([backend.config?.width, backend.config?.height], [960, 540], "the window is the <Game>'s size");
+      p.step();
+      const view = backend.lastFrame.records[0];
+      assert.ok(view?.op === "view");
+      assert.equal(view.a, 3, "a 320 x 180 screen in a 960 x 540 window (the <Game>'s) is drawn at 3x");
+      p.close();
+    });
+
+    it("builds the root before the window opens, and still preloads its sounds once it is open", () => {
+      const order: string[] = [];
+      const backend = new RecordingBackend();
+      const open = backend.open.bind(backend);
+      backend.open = (config) => {
+        order.push("open");
+        open(config);
+      };
+      const { player: p } = player(() => {
+        order.push("root");
+        void new Sound("a.wav");
+        return new Game({ title: "x" });
+      }, {}, backend);
+      assert.deepEqual(order, ["root", "open"]);
+      assert.deepEqual(backend.soundLoads, ["assets/a.wav"]);
+      p.close();
+    });
   });
 
   it("exposes the world it mounted the root in", () => {

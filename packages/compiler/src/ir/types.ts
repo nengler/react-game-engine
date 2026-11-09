@@ -280,7 +280,17 @@ export interface FunctionIR {
  * Statements are only valid inside functions. State reads are live: after a
  * `SetState`, later reads in the same function see the new value.
  */
-export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR | AssignStmtIR | PlaySoundStmtIR;
+export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR | AssignStmtIR | PlaySoundStmtIR | CallActionStmtIR;
+
+/**
+ * `collect(5)`, where `collect` is a game-state action bound with `const collect = useGame((s) => s.collect)`. It runs
+ * the action in the game's store at once, which marks every component that reads what it changed.
+ */
+export interface CallActionStmtIR {
+  readonly kind: "CallAction";
+  readonly action: string;
+  readonly args: readonly ExprIR[];
+}
 
 /** `playHit()`, where `playHit` is a `useSound` binding. A play is an effect, not state: it happens at once and renders nothing. */
 export interface PlaySoundStmtIR {
@@ -358,8 +368,14 @@ export interface StateIR {
   readonly name: string;
   /** A primitive, an array (`useState<EnemyData[]>([])`) or a source type. */
   readonly type: TypeIR;
-  /** Must not depend on any state. */
+  /** Must not depend on any state. For a game-state leaf, the value it starts with. */
   readonly initialValue: ExprIR;
+  /**
+   * Set for `const hp = useGame((s) => s.player.hp)`: the dotted path (`"player.hp"`) of the game-state leaf this state
+   * mirrors. The generated field is a snapshot of it, refreshed on render; it has no setter (actions change it).
+   * Absent for `useState`.
+   */
+  readonly globalKey?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -563,6 +579,7 @@ export interface DynamicPropIR {
 // ---------------------------------------------------------------------------
 
 export type ExprIR =
+  | StoreRefIR
   | NumberLiteralIR
   | StringLiteralIR
   | BooleanLiteralIR
@@ -582,6 +599,14 @@ export type ExprIR =
   | UnaryExprIR
   | BinaryExprIR
   | ConditionalExprIR;
+
+/**
+ * `state={useGame}` on a `<Game>`: the project's game state itself (the imported store), handed to the runtime. It is
+ * the only place a component uses the store as a value; the generated code writes the imported name.
+ */
+export interface StoreRefIR {
+  readonly kind: "StoreRef";
+}
 
 export interface NumberLiteralIR {
   readonly kind: "NumberLiteral";
@@ -779,6 +804,7 @@ export function assertNever(value: never, what = "value"): never {
 /** Direct sub-expressions of an expression, in evaluation order. */
 export function childExpressions(e: ExprIR): readonly ExprIR[] {
   switch (e.kind) {
+    case "StoreRef":
     case "NumberLiteral":
     case "StringLiteral":
     case "BooleanLiteral":
@@ -853,6 +879,7 @@ export function walkFunction(fn: FunctionIR, visit: (e: ExprIR) => void): void {
         case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit); else walkExpr(stmt.value, visit); break;
         case "Assign": walkExpr(stmt.value, visit); break;
         case "PlaySound": break;
+        case "CallAction": for (const arg of stmt.args) walkExpr(arg, visit); break;
         default: assertNever(stmt, "statement");
       }
     }

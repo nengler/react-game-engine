@@ -89,12 +89,13 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Camera", "Screen"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
+    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "state"],
     Sprite: ["image"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
@@ -106,6 +107,7 @@ export const runtimeManifest: RuntimeManifest = {
   },
   intrinsicRequired: {
     Entity: [],
+    Game: [],
     Sprite: ["image"],
     Collider: ["width", "height"],
     Pointer: ["width", "height"],
@@ -133,7 +135,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
     // `updateProps` is generated into every component that has props, so a field may not take the name.
     "name", "props", "applyProps", "updateProps", "transform", "placement", "layoutX", "layoutY", "worldTransform", "parent", "children", "world",
-    "isDirty", "hasPendingStructure",
+    "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "runRender", "commitState", "render",

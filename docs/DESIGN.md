@@ -27,10 +27,11 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs |
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | React's snapshot semantics: reads see the value from the last render; setters queue, updaters chain on the pending value, and `commitState()` applies them just before the render. Every handler in a frame sees the same state (decided 2026-11-08) |
+| Global state | One nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
 | Refs | Refs hold values only (`const timer = useRef(0)`; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) |
-| Built-in elements | `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
+| Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
 | Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09) |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
@@ -839,6 +840,55 @@ object under a non-uniformly scaled ancestor is sheared by a renderer that appli
 **Cameras.** `reportPress` takes a **world-space** point. A pointer drawn through a `<Camera>` is on screen where
 the camera's view puts it, so an input system converts a screen point first: `camera.viewToWorld(x, y)`.
 
+## Game
+
+`<Game>` is the root of a game and where its configuration lives (decided 2026-11-09): the window (`title`, `width`,
+`height`, `resizable`, `vsync`, `smooth`), the `background` colour, the `assets` folder, and the game state. It is a
+built-in container, an `<Entity>` with those props (and `name`), so a component whose root is `<Game …>` extends it, as
+any component extends its root. **Its `width` and `height` are the window's size; a `<Screen width height>` inside it
+is the game's resolution**, the size everything is drawn at before it is scaled to fit the window:
+
+```tsx
+// Main.tsx
+export default function Main() {
+  return (
+    <Game state={useGame} title="rge demo" width={960} height={540} background="#10131c" assets="assets">
+      <Screen width={320} height={180}>
+        <Ground />
+        <Camera><Player /></Camera>
+        <Hud />
+      </Screen>
+    </Game>
+  );
+}
+```
+```ts
+// game.ts: nothing but the root
+export const gameConfig: PlayerConfig = { root: () => new Main() };
+```
+
+**With a `<Screen>`.** Both are roots, so they nest: the `<Screen>` is the `<Game>`'s only child, and the player looks
+through the `<Game>` for it (`rootScreen`), as it does for a `<Screen>` that is the root itself. Either is optional
+without the other.
+
+**Optional.** A game with an `<Entity>` or fragment root, or any root object, works as before: the player's own config and
+the defaults apply. A `<Game>` root overrides them, each prop only where it is written; a field it does not write is
+`undefined` on the object, which is how the player knows to fall back.
+
+**Literals, and only a root.** The player reads these settings before the tree is built, so each is a literal
+(`width={640}`, `smooth`, `resizable={false}`), never state or props: anything else is `RGE1210`. `<Game>` is only ever a
+component's root: as a child it is `RGE1003`. It is not placed, so it takes no `transform`. A prop it does not have is
+`RGE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
+built-in's.
+
+**`state`.** `state={useGame}` hands over the project's game state, the store imported from `GameState.ts`: the one
+place a component uses the store as a value (the compiler lowers it to a `StoreRef` expression, and the generated class
+passes the imported name to `super`). Anything else is `RGE1108`. It makes the ownership explicit; the player still starts
+every game state in the process from its initial values (`resetGameState`), and components keep reading it with
+selectors, which work with or without a `<Game>`.
+
+A user component cannot be called `Game`: it is an intrinsic like `Entity` (`RGE1206`). The demo's root is `Main`.
+
 ## Camera
 
 `<Camera>` (M12) is the viewport. Its own transform is the view, `zoom`
@@ -1071,6 +1121,97 @@ are not placed, so they do not take `transform`. `Sound` has no
 audio of its own: `play()` counts calls in `plays`, so game logic can be tested, and reports to the
 `SoundSink` a player installs with `setSoundSink` (see "Player").
 Options such as `volume` come later.
+
+## Global state (`createGameState`)
+
+`useState` is one component's own state. The **game state** belongs to the game: a score, hit points, a mute switch,
+shared by every component. It is one nested object, shaped like a **Zustand store**: you read it with a selector that
+returns the value, and you change it with actions that call `set` (decided 2026-11-09, after two attempts that
+were not Zustand's own way).
+
+```ts
+// GameState.ts, in the source directory. An ordinary module: the game runs it.
+import { createGameState } from "@rge/runtime";
+
+interface State {
+  coins: number;
+  player: { hp: number; name: string };
+  collect: () => void;
+  hurt: () => void;
+}
+
+export const useGame = createGameState<State>()((set, get) => ({
+  coins: 0,
+  player: { hp: 10, name: "Ada" },
+  collect: () => set((s) => ({ coins: s.coins + 1 })),
+  hurt: () => set((s) => ({ player: { ...s.player, hp: s.player.hp - 1 } })),
+}));
+```
+
+```tsx
+// Hud.tsx: access                    // Player.tsx: update
+import { useGame } from "./GameState.ts";
+const hp = useGame((s) => s.player.hp);          const hurt = useGame((s) => s.hurt);
+                                                  useUpdate(() => { if (hit) hurt(); });
+```
+
+**Access.** `const hp = useGame((s) => s.player.hp)` returns the value, exactly as in Zustand. A component imports the
+store (`import { useGame } from "./GameState.ts"`; the only thing it may import from a relative `.ts` module,
+`RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. The selector must be a **plain path**
+from its parameter: that is all the compiler resolves, and it is what makes subscriptions exact. A component reads
+**leaves**: a path that names an object is an error, and a typo is `RGE1108` with the nearest key at the level it
+went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`). `hp` then behaves as `useState` state
+does: a snapshot of the last render, usable in JSX and handlers, with the leaf's type.
+
+**Update.** The way Zustand updates is `set`, inside the store: `set(partial)` or `set((state) => partial)`, and, as in
+Zustand, the partial is **shallow-merged**, so a nested object is replaced as a whole (spread the rest, as `hurt`
+does). A component picks an action with a selector, `const hurt = useGame((s) => s.hurt)`, and calls it as a statement
+in a handler, like a sound's play function: not in JSX or a derived value (it would run on every render), not in a
+state updater, not as a value. The compiler lowers `hurt(1)` to `useGame.getState().hurt(1)`, so TypeScript checks the
+arguments in the generated code as well as in your source. The action's body is plain TypeScript that the game runs;
+the compiler never lowers it. `get` is Zustand's too. `useGame.getState()` and `useGame.setState(partial | updater)`
+exist, as in Zustand, for code that is not a compiled component (tests, tools).
+
+**The schema is real code.** `GameState.ts` is imported by the generated files and runs in the game, under Node and
+under QuickJS, so TypeScript infers every type from it, and there is no separate declaration to keep in step. Both
+`createGameState<State>()(creator)` (as Zustand recommends with TypeScript) and `createGameState(creator)` work. The
+compiler also *reads* it (it never runs it) to know the state tree and the action names. For that, the creator must be
+an arrow function or function that returns an object literal, whose entries are number, string or boolean literals
+(a negative number is fine; a leaf's type is its literal's, so `0` is a `number`), nested objects of those, and, at the
+top level, functions (the actions). Anything else is `RGE1109`. Arrays are not supported yet. Keys have no dots.
+
+**Semantics.** Every `set` compares the old and new state leaf by leaf (a function is not a leaf) and marks dirty every
+mounted component that reads a leaf that changed, and only those: a replaced `player` object does not re-render the
+reader of `player.name` when only `hp` differs. Those components copy the new value into their own field in
+`commitState`, in the same flush, so a HUD shows a coin on the frame it was picked up, while every handler in that
+frame still saw the old snapshot. A `set` that changes no leaf renders nothing. A component joins the subscribers when it
+joins a world and leaves when it leaves, and is refreshed once on joining, so it cannot miss a change made between its
+construction and its mounting. A component that only binds actions reads nothing, so it keeps no copy and is never
+told of a change.
+
+**Where it lives.** `createGameState` makes a `GameStore` (also `useGame.store`); calling `useGame(...)` itself is
+compile-time only and throws, like the authoring hooks. `createPlayer` calls `resetGameState()`, which puts every store
+in the process back to the state its creator returned, so each game starts fresh; tests that build components without a
+player call it between cases. Generated output for a reader and an action:
+
+```ts
+import { useGame } from "../src/GameState.ts";          // relative to the generated file; the CLI computes it
+export class Hud extends Text {
+  hp: number = useGame.store.get<number>("player.hp");
+  override readonly gameStateStore = useGame.store;
+  override readonly gameStateKeys: readonly string[] = ["player.hp"];
+  override commitState(): void { this.hp = useGame.store.get<number>("player.hp"); }
+  …
+}
+// in a handler:  useGame.getState().hurt();
+```
+
+The IR marks such a state `globalKey` (the dotted path) and has a `CallAction` statement. `gameStateStore` and
+`gameStateKeys` are reserved member names, like the other `GameObject` fields.
+
+**Not yet.** Zustand's `subscribe`, middleware and `replace`; `setState` inside a compiled handler (writes go through
+actions, which keeps what the compiler must understand small); save and restore of the store; arrays in the state;
+and more than one store per project (one store per process, one `createGameState` call per project).
 
 ## Props and callbacks
 
@@ -1380,8 +1521,16 @@ executable. The record layout and the input buffers are `native/include/rge.h`; 
 it and a test keeps them equal.
 
 ```ts
-run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new Level() });
+run(hostBackend(), { root: () => new Main() });   // a root that is a <Game> carries its own window settings
+run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new Level() });  // any other root, configured here
 ```
+
+**Startup.** The root is built first, with the window still closed, because a root that is a `<Game>` says what window to
+open (see "Game"). Sounds made while it is built only record their paths; once the window is open they are preloaded
+through the backend, so a sound still never hitches on its first play. Then the window opens, the tree is mounted
+and the first frame is drawn. A root that throws opens no window. Each setting is the `<Game>` prop where it is written,
+else the `PlayerConfig` field, else the default (640 × 360, title `"react-game-engine"`, background black, assets
+`"assets"`); `hidden` is the player's alone.
 
 **A frame** (`createPlayer(...).step()`), in a fixed order:
 
