@@ -1,9 +1,22 @@
 name: CI
 
+# Actions minutes are limited, so this workflow tries not to spend them twice:
+# - a change that only touches markdown or docs/ runs nothing (no test reads them);
+# - a new push to a pull request cancels the run still going for the old one;
+# - the native jobs cache their raylib and QuickJS builds, which are most of their time. A cache is keyed on
+#   the compiler versions and the files that decide what gets built, so a toolchain upgrade or a change to
+#   CMakeLists.txt, Cargo.lock or build.rs starts from scratch; a change to the C or Rust sources rebuilds
+#   only those sources.
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -40,6 +53,15 @@ jobs:
           node-version: "22.18"
           cache: npm
       - run: npm ci
+      - name: Note the compiler versions (they key the build cache)
+        id: toolchain
+        run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+      - name: Cache the librge build (raylib is most of it)
+        uses: actions/cache@v4
+        with:
+          path: native/build-headless
+          key: librge-headless-${{ steps.toolchain.outputs.id }}-${{ hashFiles('native/CMakeLists.txt') }}
+          restore-keys: librge-headless-${{ steps.toolchain.outputs.id }}-
       - name: Build librge (software renderer)
         run: npm run native:build:headless
       - name: C smoke test
@@ -63,6 +85,25 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libgl1-mesa-dri xvfb
+      - name: Note the compiler versions (they key the build cache)
+        id: toolchain
+        run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+      - name: Cache the librge build (raylib is most of it)
+        uses: actions/cache@v4
+        with:
+          path: native/build
+          key: librge-desktop-${{ steps.toolchain.outputs.id }}-${{ hashFiles('native/CMakeLists.txt') }}
+          restore-keys: librge-desktop-${{ steps.toolchain.outputs.id }}-
+      - name: Cache cargo and the host build (raylib and QuickJS are most of it)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            host/target
+          key: host-desktop-${{ steps.toolchain.outputs.id }}-${{ hashFiles('host/Cargo.lock', 'host/build.rs', 'native/CMakeLists.txt') }}
+          restore-keys: host-desktop-${{ steps.toolchain.outputs.id }}-
       - name: Build librge (OpenGL window)
         run: npm run native:build
       - name: C smoke test
@@ -95,6 +136,19 @@ jobs:
           node-version: "22.18"
           cache: npm
       - run: npm ci
+      - name: Note the compiler versions (they key the build cache)
+        id: toolchain
+        run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+      - name: Cache cargo and the host build (raylib and QuickJS are most of it)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            host/target
+          key: host-headless-${{ steps.toolchain.outputs.id }}-${{ hashFiles('host/Cargo.lock', 'host/build.rs', 'native/CMakeLists.txt') }}
+          restore-keys: host-headless-${{ steps.toolchain.outputs.id }}-
       - name: Build the host (software renderer)
         run: npm run host:build:headless
       - name: Parity with Node, and host behaviour
