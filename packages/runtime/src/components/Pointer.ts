@@ -30,12 +30,12 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
   /**
    * Whether the world-space point is inside the area as it is drawn: the point
    * is taken back through the pointer's position, rotation and scale, so a moved,
-   * turned or scaled pointer is hit where it appears. An area with no size, or
-   * a zero scale, is never hit.
+   * turned or scaled pointer is hit where it appears. An area with no size (zero,
+   * negative or not a number), or a zero scale, is never hit.
    */
   contains(x: number, y: number): boolean {
     const t = this.worldTransform();
-    if (t.scaleX === 0 || t.scaleY === 0) return false;
+    if (!(this.width > 0 && this.height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
     const dx = x - t.x;
     const dy = y - t.y;
     const cos = Math.cos(t.rotation);

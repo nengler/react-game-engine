@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Pointer, World } from "../src/index.ts";
+import { Camera, Entity, Pointer, World } from "../src/index.ts";
 
 function mounted(options: { x?: number; y?: number; presses?: number[] } = {}) {
   const presses = options.presses ?? [];
@@ -62,6 +62,32 @@ describe("Pointer", () => {
     const other = mounted();
     assert.equal(world.reportPress(other.pointer, 1, 1), false, "mounted in another world");
     assert.deepEqual(other.presses, []);
+  });
+
+  it("is never hit when it has no size, so a button that collapses stops firing", () => {
+    const { world, pointer } = mounted();
+    for (const [w, h] of [[0, 10], [20, 0], [-5, 10], [Number.NaN, 10]] as const) {
+      pointer.width = w;
+      pointer.height = h;
+      assert.equal(world.reportPress(pointer, 0, 0), false, `${w}x${h}`);
+    }
+  });
+
+  it("is pressed at a world point, which a camera's viewToWorld gives for a point on screen", () => {
+    const world = new World();
+    const camera = new Camera({ zoom: 2 });
+    const presses: number[] = [];
+    const pointer = new Pointer({ width: 20, height: 10, onPress: () => presses.push(1) });
+    pointer.transform.x = 100;
+    pointer.transform.y = 100;
+    camera.addChild(pointer);
+    world.mount(camera);
+    // Following the pointer, the camera puts its centre (the origin of view space) at the pointer's origin.
+    const on = camera.viewToWorld(8, 4);
+    assert.equal(world.reportPress(pointer, on.x, on.y), true, "a point on screen over the pointer");
+    const off = camera.viewToWorld(60, 4);
+    assert.equal(world.reportPress(pointer, off.x, off.y), false, "a point on screen beside it");
+    assert.equal(presses.length, 1);
   });
 
   it("only dispatches: a handler that sets state renders in the next flush", () => {
