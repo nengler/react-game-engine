@@ -1,6 +1,6 @@
 # M4–M6 design notes
 
-Build-level design for the next three feature milestones: props and callbacks (M4), keyed lists (M5), and prefabs and scenes (M6). It was worked out against the code as of 2026-11-08. [PHASE2_PLAN.md](PHASE2_PLAN.md) owns status, order and decisions; [DESIGN.md](DESIGN.md) describes what exists. Where this document and the plan's M4–M6 sections differ in detail, this document is newer and wins; the table at the end lists the differences.
+Build-level design for three feature milestones: props and callbacks (M4), keyed lists (M5), and prefabs and scenes (M6). All three have shipped; this document is kept as the record of how they were designed. It was worked out against the code as of 2026-11-08. [PHASE2_PLAN.md](PHASE2_PLAN.md) owns status, order and decisions; [DESIGN.md](DESIGN.md) describes what exists. Where this document and the plan's M4–M6 sections differ in detail, this document is newer and wins; the table at the end lists the differences.
 
 Guiding rule: authoring should feel as close to ideal React as possible, so the author-facing syntax follows React's (props as a destructured parameter, `key` on list items, callbacks as props) and the compiler does the work of making it efficient.
 
@@ -118,7 +118,7 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 
 **M5b: `KeyedListChild`.**
 
-*Status.* Implemented on `claude/pensive-faraday-lnmtga`, described in [DESIGN.md](DESIGN.md#keyed-lists). Additions to the sketch below: props that read the item are dynamic with a new `Item` dependency; item callbacks are created once, so their item reads go through a per-key `{ current }` holder that each render refreshes (`#enemyRecords`; the callback keeps its holder after the item is removed, so `useUnmount` can still call it), and they may not read the index; every key is checked before anything changes, so a duplicate leaves the list intact; a key must read the item (an index-only key is a warning); the reorder is queued whenever the key sequence changes, including adds and removals, since a new item's order may tie with an existing one's until then; generated temporaries are `$`-prefixed, and author names may not start with `$`.
+*Status.* Shipped in #13, described in [DESIGN.md](DESIGN.md#keyed-lists). Additions to the sketch below: props that read the item are dynamic with a new `Item` dependency; item callbacks are created once, so their item reads go through a per-key `{ current }` holder that each render refreshes (`#enemyRecords`; the callback keeps its holder after the item is removed, so `useUnmount` can still call it), and they may not read the index; every key is checked before anything changes, so a duplicate leaves the list intact; a key must read the item (an index-only key is a warning); the reorder is queued whenever the key sequence changes, including adds and removals, since a new item's order may tie with an existing one's until then; generated temporaries are `$`-prefixed, and author names may not start with `$`.
 
 - **IR.** `{ source: ExprIR; item: ParamIR; index: ParamIR | null; key: ExprIR; element: ElementIR; dependencies }`, as in the plan. The source is a state or prop read. The item's member reads are `MemberRead`, so the type-check validates them.
 - **Restrictions**, each a diagnostic:
@@ -136,7 +136,7 @@ The alternative is pure React: no special attribute, and parents pass `x`/`y` pr
 
 ## M6: prefabs and scenes
 
-*Status.* Implemented on `claude/pensive-faraday-lnmtga`, described in [DESIGN.md](DESIGN.md#prefabs-and-scenes). It follows the design below, with these additions: `ComponentIR.isExported` (so the registry covers `export default` too); a scene child goes to the `{children}` slot of a component that renders one (`GameObject.acceptsPassedChildren`) instead of always being appended; `loadScene` builds the whole tree before mounting, so each object mounts once (M9); scene diagnostics are `RGE1501`–`RGE1509`; scene validation is skipped when the project itself has errors; a Tiled tile object's bottom-left anchor is moved to the entity's top left along the object's rotated up axis; an object with no class is skipped with a warning; the CLI imports `.tmj` files found in the `--scenes` directory.
+*Status.* Shipped in #16, described in [DESIGN.md](DESIGN.md#prefabs-and-scenes). It follows the design below, with these additions: `ComponentIR.isExported` (so the registry covers `export default` too); a scene child goes to the `{children}` slot of a component that renders one (`GameObject.acceptsPassedChildren`) instead of always being appended; `loadScene` builds the whole tree before mounting, so each object mounts once (M9); scene diagnostics are `RGE1501`–`RGE1509`; scene validation is skipped when the project itself has errors; a Tiled tile object's bottom-left anchor is moved to the entity's top left along the object's rotated up axis; an object with no class is skipped with a warning; the CLI imports `.tmj` files found in the `--scenes` directory.
 
 **Prefab registry**
 

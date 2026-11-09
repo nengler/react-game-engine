@@ -5,9 +5,8 @@ Components are written as TSX functions, but there is no React and no virtual
 DOM: a compiler turns each component into an ordinary TypeScript class whose
 children are persistent instances, updated in place when state changes.
 
-This repository contains the **compiler** (the first vertical slice, extended
-by the Phase 2 milestones that have landed so far), a minimal mock runtime, and
-an example. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture, the IR,
+This repository contains the **compiler** (the first vertical slice plus every
+Phase 2 milestone, M0–M15), a minimal mock runtime, and an example. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture, the IR,
 and the design decisions, and [docs/PHASE2_PLAN.md](docs/PHASE2_PLAN.md) for
 the roadmap and current milestone status.
 
@@ -44,8 +43,10 @@ packages/
     src/diagnostics/  diagnostic codes and formatting
     test/             end-to-end tests
   runtime/    the authoring entry point (`@rge/runtime/jsx`: typed hooks and built-in elements for
-              component source), and the mock GameObject / World (with `tick` / `reportCollision` / `reportPress`), Entity, Sprite, Collider, Pointer, Sound (a mock that records plays),
-              and `runtimeManifest` (what the compiler is told about the runtime)
+              component source), and the mock GameObject / World (with `tick` / `reportCollision` / `reportPress`),
+              the built-ins (Entity, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer),
+              Sound (a mock that records plays), `loadScene`, and `runtimeManifest`
+              (what the compiler is told about the runtime)
   example/    example components and their committed generated output
 ```
 
@@ -57,7 +58,7 @@ Requires Node.js ≥ 22.18 (TypeScript files run directly via type stripping).
 npm install
 npm test            # full pipeline tests
 npm run typecheck   # tsc 7.1 over compiler, runtime, tests and generated example
-npm run example     # recompile packages/example/src → packages/example/generated
+npm run example     # recompile packages/example/src → packages/example/generated, and check its scenes
 ```
 
 Programmatic use:

@@ -1,8 +1,8 @@
-# Compiler design — first vertical slice
+# Compiler design
 
 This document describes the architecture of the TSX → TypeScript game-object
-compiler, the decisions taken for the first slice, and the alternatives that
-were considered. It is the place to push back on a decision before more code is
+compiler as it stands after Phase 2 (M0–M15), the decisions taken, and the
+alternatives that were considered. It is the place to push back on a decision before more code is
 built on top of it.
 
 ## Pipeline
@@ -72,7 +72,7 @@ function Player() {
 }
 ```
 
-Rules in this slice (anything else is a compiler diagnostic, never silently
+Rules (anything else is a compiler diagnostic, never silently
 ignored):
 
 * A component is a top-level `function` declaration or `const` arrow function
@@ -89,7 +89,7 @@ ignored):
   children of `this`. A fragment `<>…</>` is an implicit container, a bare
   `Entity`. See "Roots and component forms".
 * `useState` is a compiler intrinsic. It must be a top-level `const` array
-  destructuring. Calls anywhere else, or any other `use*` call, are errors.
+  destructuring. Calls anywhere else, or a `use*` call that is not one of the hooks, are errors.
   State type is inferred from the initial literal (`number`/`string`/`boolean`)
   or a prop; an array or record needs its type (`useState<EnemyData[]>([])`,
   with `EnemyData` declared in the file) and is updated immutably. See
@@ -188,7 +188,9 @@ Defined in `packages/compiler/src/ir/types.ts`. Highlights:
 | ~~prefabs / scenes (M6)~~ | done: `ComponentIR.isExported`, a generated `prefabs` registry per module, project-level `prefabs.ts` / `prefabs.json`, scene validation (`RGE15xx`), `loadScene` in the runtime, a Tiled importer; see "Prefabs and scenes" |
 | ~~children (M8)~~ | done: `ChildIR` `ChildrenSlot`, `ComponentIR.acceptsChildren`, `ElementIR.children` on a component element are the children passed to it; runtime `attachPassedChild` and friends; see "Children" |
 | ~~keyed lists (M5b)~~ | done: `ChildIR` `KeyedListChild { source, item, index, key, element, dependencies }`, `DependencyIR` `Item`; runtime `(slot, order)` and `queueReorder`; see "Keyed lists" |
-| prefabs / scenes | consume `IRModule` / `ComponentIR` directly — the IR is already backend-free |
+| ~~mount and unmount (M9)~~ | done: `OnMount` / `OnUnmount` hooks carrying a `FunctionIR`; see "Mount and unmount" |
+| ~~built-in elements (M10–M14)~~ | none: `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>` and `<Pointer>` are runtime classes plus manifest entries (`textContent`, `intrinsicLiterals`, `intrinsicHooks`, `intrinsicCallbacks`); see their sections |
+| ~~`useSound` (M15)~~ | done: `ComponentIR.sounds: SoundIR[]` and a `PlaySound` statement; see "Transforms and refs" |
 
 ## Handlers
 
@@ -261,6 +263,16 @@ collider's callback and not the component's, a component with several colliders
 (a hitbox and a shield) knows which one was hit. Dispatch only; renders happen
 in the next `tick`.
 
+**Presses**: like collisions, the mock has no input device. An input system calls
+`world.reportPress(pointer, x, y)` with a world-space point; the pointer's own
+`onPress` is called if the point is inside its area, and the call returns whether
+it hit. Choosing which pointers to test, and in what order for overlaps, is the
+input system's job.
+
+Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
+not JSX event props. Element-level events are callback props on the element
+(`<Collider onCollisionEnter>`, `<Pointer onPress>`).
+
 ## Mount and unmount
 
 `useMount(() => …)` and `useUnmount(() => …)` (M9) are handler hooks like
@@ -298,19 +310,9 @@ state, write refs, and call callback props, which is how the parent finds out
 (`onDone?.()`). A callback created for a list item can still read its item
 there (see "Keyed lists").
 
-**Presses**: like collisions, the mock has no input device. An input system calls
-`world.reportPress(pointer, x, y)` with a world-space point; the pointer's own
-`onPress` is called if the point is inside its area, and the call returns whether
-it hit. Choosing which pointers to test, and in what order for overlaps, is the
-input system's job.
-
 **Rules.** Top-level only, imported from the authoring module (`RGE1005`),
 one arrow function with no parameters (`RGE1401`), several of a kind allowed
 and run in source order.
-
-Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
-not JSX event props. Element-level events are callback props on the element
-(`<Collider onCollisionEnter>`, `<Pointer onPress>`).
 
 ## Arrays and records
 
@@ -986,12 +988,10 @@ usual. `global` is an ordinary field, so it can come from state
 writes local fields.
 
 Every built-in element the runtime manifest lists in `transformIntrinsics`
-takes the attribute (today all of them: `<Entity>`, `<Sprite>`,
-`<Collider>`); one left out, such as a future sound with no position, gets
-`RGE1207`. On a component element
-(`<Enemy transform={…} />`) it would be placement by the parent, which needs
-a rule for combining it with the child's own root transform, so it arrives
-with props (M4) and is `RGE1207` until then. Malformed objects (spreads,
+takes the attribute (today all eight); one left out gets `RGE1207`. On a
+component element (`<Enemy transform={…} />`) it is placement by the parent,
+which composes with the child's own root transform (see "Placement" under
+"Props and callbacks"). Malformed objects (spreads,
 computed keys, unknown or duplicate fields) are `RGE1207`. `useTransform` was
 removed; calling it reports `RGE1102` with a pointer to the attribute
 (`RGE1105` is retired).
@@ -1015,6 +1015,11 @@ screen is driven by state and props, so `ref={…}` on any element is `RGE1106`
 initial value must not read state, and a ref name must not clash with state
 (`RGE1106`).
 
+**Reads only in handlers**: `ref.current` in JSX, a `useState` initialiser or
+a derived `const` would be evaluated at render and then go stale, because
+changing a ref never renders. That is `RGE1304`. Use state for anything JSX
+depends on.
+
 **useSound** (M15): `const playHit = useSound("hit.wav")` binds a sound, and
 `playHit()` as a statement in a handler (`useUpdate`, `useInput`, `useMount`,
 `onCollisionEnter`, `onPress`, a callback inside an `if`) plays it. It is a
@@ -1031,11 +1036,6 @@ value (`onCollisionEnter={play}`) or with arguments it is `RGE1305`. Sounds
 are not placed, so they do not take `transform`. The mock `Sound` has no audio
 backend: `play()` only counts calls in `plays`, so game logic can be tested.
 Options such as `volume` come later.
-
-**Reads only in handlers**: `ref.current` in JSX, a `useState` initialiser or
-a derived `const` would be evaluated at render and then go stale, because
-changing a ref never renders. That is `RGE1304`. Use state for anything JSX
-depends on.
 
 ## Props and callbacks
 
@@ -1169,15 +1169,15 @@ like any component. Details:
   `Entity` import because the author never wrote it.
 * Every built-in passes `(hostProps, props, defaults)` up to `GameObject`,
   which owns `props` and `applyProps`, so any of them can be a root with props.
-* A built-in constructor may require a prop (`Sprite.image`, `Collider`
+* A built-in constructor may require a prop (for example `Sprite.image`, `Collider`
   `width`/`height`; the manifest's `intrinsicRequired`). `super()` runs before
   state exists, so when such a root prop is dynamic it gets `undefined as never`
   there and its real value in the first `render()`, which the constructor runs.
 * The class gains the root's own fields, so a state, ref or prop may not take
   those names (`image` for a Sprite root, `width`/`height`/`onCollisionEnter`
-  for a Collider root, `width`/`height`/`onPress`/`contains` for a Pointer root, `name` for an Entity root): the manifest's
-  `intrinsicMembers`, `RGE1103`.
-* Only containers (the manifest's `containerIntrinsics`, today `Entity`) may
+  for a Collider root, `width`/`height`/`onPress`/`contains` for a Pointer root, `name` for an Entity root; the other
+  built-ins' sections list theirs): the manifest's `intrinsicMembers`, `RGE1103`.
+* Only containers (the manifest's `containerIntrinsics`, today `Entity` and `Camera`) may
   have JSX children; a child under a leaf such as a `Sprite`, `Collider` or `Pointer`, at the root or
   anywhere, is `RGE1202`. A component as a root (`return <Other />`) is
   `RGE1003`; a fragment nested as a child is `RGE1202`.
@@ -1255,8 +1255,9 @@ Decisions:
   items share the list's slot and are ordered within it (`(slot, order)`, see
   "Keyed lists"). The constructor runs `render()`
   then `commitStructure()` so a freshly constructed object is complete.
-* The generated class extends the runtime `Entity` (not bare `GameObject`)
-  because the root `<Entity>`'s props (e.g. `name`) belong to the instance.
+* The generated class extends the root element's runtime class (`Entity` for
+  an `<Entity>` or fragment root, `Sprite` for a `<Sprite>` root, …), not bare
+  `GameObject`, because the root's props (e.g. `name`) belong to the instance.
 
 ## Runtime manifest
 
@@ -1292,10 +1293,12 @@ counts: a component that mounts the other conditionally is fine.
 
 ## Runtime (mock)
 
-`packages/runtime` is deliberately minimal: `GameObject` (tree, dirty flag,
-queued structure ops), `World` (dirty queue + flush), and three intrinsics
-with public prop fields. It has no rendering backend; the compiler only knows
-what the manifest tells it.
+`packages/runtime` is deliberately minimal: `GameObject` (tree, transforms,
+dirty flag, queued structure ops, passed-children slots, hook methods), `World`
+(dirty queue, `flush`, `tick`, `reportCollision`, `reportPress`), the eight
+intrinsics with public prop fields, the `Sound` mock, `loadScene`, input
+helpers and the manifest. It has no rendering, physics, input or audio
+backend; the compiler only knows what the manifest tells it.
 
 `commitStructure()` also settles children it has just attached, so a freshly
 constructed object whose nested conditions are true has its whole subtree

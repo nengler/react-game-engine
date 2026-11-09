@@ -1,10 +1,10 @@
 # Phase 2 implementation plan
 
-Snapshot of the plan as of 2026-11-08. Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes, plus the authoring types and built-in elements that grew out of the design. It is split into milestones, each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). Build-level design for M4–M6: [M4_M6_DESIGN.md](M4_M6_DESIGN.md).
+Snapshot of the plan as of 2026-11-09. **Every planned milestone (M0–M15) is done**; what remains is in [Later](#later-not-scheduled). Phase 2 adds the features the first slice was designed for: lifecycle hooks, input, transforms, refs, props and callbacks, keyed lists, prefabs and scenes, plus the authoring types and built-in elements that grew out of the design. It is split into milestones, each shippable on its own, each extending the existing IR rather than replacing it. Progress is tracked in [Status](#status) and the per-milestone [Handoff checklist](#handoff-checklist). Architecture of the current code: [DESIGN.md](DESIGN.md). Build-level design for M4–M6: [M4_M6_DESIGN.md](M4_M6_DESIGN.md).
 
 ## Status
 
-Last updated 2026-11-08. **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone moves Not started → In review (PR open) → Done (PR merged); the PR number goes in the third column. Whoever lands the work keeps this table and the milestone's checklist current; for work done by Claude, that is Claude's job, including flipping to Done once the merge is seen.
+Last updated 2026-11-09. **Update this table and the milestone's checklist in the same PR as the work**, so it cannot drift. A milestone moves Not started → In review (PR open) → Done (PR merged); the PR number goes in the third column. Whoever lands the work keeps this table and the milestone's checklist current; for work done by Claude, that is Claude's job, including flipping to Done once the merge is seen.
 
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
@@ -25,7 +25,7 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M12 `<Camera>` | Done | #19, #21 | `zoom` and the view as `viewTransform()` / `worldToView` / `viewToWorld`. A camera follows its children: `<Camera><Player /></Camera>` (the middle of their positions when there are several), and is transparent to their transforms (`GameObject.childSpace()`). This replaced the plan's `follow={hero}`, which nothing in a component could express |
 | M13 `<AnimatedSprite>` | Done | #20 | `frames` (a fixed list is built once, a varying one is re-assigned and restarts the animation only when its contents differ), `fps`, `playing`. Advancing is not state: no renders. The first built-in with its own `onUpdate`, so a component rooted at it calls `super` first (the manifest's new `intrinsicHooks`) |
 | M14 `<Pointer>` | Done | #22 | `<Pointer width height onPress>`: a hit area, origin top-left. `world.reportPress(pointer, x, y)` tests the point against the pointer's world transform (position, rotation, scale) and size, calls `onPress`, and returns whether it hit. A zero-scale pointer is never hit |
-| M15 `useSound` | In review | n/a | `const playHit = useSound("hit.wav")`, then `playHit()` as a statement in a handler. The path is a literal; one binding per call; no transform. `SoundIR` and a `PlaySound` statement; the mock `Sound` records plays. A call anywhere else is `RGE1305`; a bad path or binding is `RGE1107` |
+| M15 `useSound` | Done | #23 | `const playHit = useSound("hit.wav")`, then `playHit()` as a statement in a handler. The path is a literal; one binding per call; no transform. `SoundIR` and a `PlaySound` statement; the mock `Sound` records plays. A call anywhere else is `RGE1305`; a bad path or binding is `RGE1107` |
 
 Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 after a review of the authoring API against React; M10–M15 were added the same day for the built-in elements and the sound hook.
 
@@ -33,8 +33,8 @@ Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 afte
 
 | Decision | Choice | Affects |
 | --- | --- | --- |
-| Prop and list types: copy source type text into output, or query the TS 7.1 checker through the API | Copy source text; revisit if prefab schemas need resolved types (unions, aliases across files) | M4, M5, M6 |
-| Input model | Per-frame `useInput` hook with polled `InputState`; JSX event props can be added later as a `PropIR` variant | M2 |
+| Prop and list types: copy source type text into output, or query the TS 7.1 checker through the API | Copy source text for type-checking, plus a structured `PropTypeIR` (primitives, literal unions, arrays, function, source text) for the prefab schema. A type the compiler cannot describe is a code-only prop (`settable: false`), so the "revisit for prefab schemas" case did not arise and the checker is not queried (settled in M4a/M6) | M4, M5, M6 |
+| Input model | Per-frame `useInput` hook with polled `InputState` for devices. Events that belong to an element are callback props on that element (`<Collider onCollisionEnter>`, `<Pointer onPress>`), lowered to `CallbackProp` with parameter types from the manifest's `intrinsicCallbacks`; no separate event-prop IR variant | M2, M4b, M14 |
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs | M6 |
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) | M2, M4 |
 | State reads in handlers | React's snapshot semantics: reads see the value from the last render; setters queue, updaters chain on the pending value, and `commitState()` applies them just before the render. Every handler in a frame sees the same state (decided 2026-11-08) | M1, M2 |
@@ -42,6 +42,8 @@ Rows are in the order the work is planned. M7–M9 were added on 2026-11-08 afte
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) | M4 |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) | M9 |
 | Built-in elements | Planned set: `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) | M10–M14 |
+| Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) | M12 |
+| Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09) | M5 |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) | M15 |
 | Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) | M7 |
 | Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on any built-in element (decided 2026-11-08; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the attribute). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters | M3, M4, M6 |
@@ -62,6 +64,8 @@ Every milestone keeps the slice's architecture intact; a change that breaks one 
 - **Runtime stays a mock.** No rendering, physics or input backend; the runtime gets only the hooks the compiler's output calls.
 
 ## Sequencing
+
+Historical: this is the M0–M6 critical path as planned. All of it has landed, and M7–M15 were added and finished after it.
 
 Critical path with two engineers: M0 → M1 → M4 → M6, about 5 weeks. M2, M3 and M5 run alongside. M1 is the only milestone everything waits on, so it deserves the most review. Durations are rough estimates for one engineer per milestone.
 
@@ -405,6 +409,12 @@ Ideas that came out of reviewing the API against React. None blocks a milestone.
 | Spread props (`{...rest}`) | M4 reports a clear diagnostic. Reconsider if props grow large. |
 | Lists with conditionals inside the `.map` callback | M5 restricts the callback to a single keyed element; lift once the basics are in. |
 | Dependency-scoped `render()` | Re-evaluate only the props whose state changed. State-driven per-frame movement re-runs the whole render each tick; every `DynamicProp` already records its dependencies, so authors would not change anything. Do it if profiling asks. |
+| Forwarding `{children}` and children on list items | M8 rejects `<Box>{children}</Box>` inside a receiver and children on a keyed-list item, each with a diagnostic. |
+| Readable members on collision `other` | M2/M4b: `other` is a `GameObject` handle with no readable members (`handleTypes.GameObject` is empty), so a handler cannot tell what it hit. Needs a decision on what a collider exposes (a tag, the owning prefab name). |
+| Sound options and an asset list | M15: `useSound` takes only a literal path. `volume` and friends, and a build-time check that the file exists, wait for an asset list. |
+| Tiled importer gaps | M6: the `visible` flag, tile flip flags in a `gid`, whole-number `int` checks, and properties inherited from object templates are not handled. |
+| Hot reload and editor tooling | Out of scope for M6; stable `ElementId`s and scene `id`s are what they will key on. |
+| A real backend | The runtime is a mock by ground rule. A renderer, input and audio backend reading `worldTransform()`, `Camera.viewTransform()` and the built-ins' fields is the step that turns this into a playable engine. |
 
 ## Other risks
 
@@ -412,8 +422,8 @@ Ideas that came out of reviewing the API against React. None blocks a milestone.
 | --- | --- | --- |
 | TypeScript 7.1 is beta (`7.1.0-beta`); the API may change before stable | All | Keep the exact pin; all TS calls stay in `parser.ts` and `typecheck.ts`; re-verify `.d.ts` on each upgrade |
 | Handler language creep: users expect arbitrary JS in handlers | M1–M4 | Allowlist grows only per milestone; every rejection has a clear diagnostic |
-| Draw order for lists needs ordered inserts in the runtime | M5 | Source slots landed for conditionals; extend to `(slot, order)` with `queueReorder`, emitted only on key-order change |
-| Mutating state arrays in place silently does nothing | M5 | Document immutable updates; consider a dev-mode freeze of array state |
+| Draw order for lists needs ordered inserts in the runtime | M5 | Resolved in M5b: `(slot, order)` with `queueReorder`, emitted only on key-order change |
+| Mutating state arrays in place silently does nothing | M5 | Resolved: in-place mutation cannot be written in source (see Decisions); immutable updates are documented |
 | Per-frame cost of visiting every object | M2 | Register only objects that override a hook |
 
 ## Handoff checklist
@@ -586,6 +596,7 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 - [x] Runtime mock `Sound` records plays
 - [x] `docs/DESIGN.md` updated
 - [x] At least one example uses it; `npm run example` regenerated and committed
+- [x] Tests cover the IR, generated code, both type-checks, runtime plays (immediate, no render, independent bindings) and every diagnostic (`m15.test.ts`)
 - [x] `npm test` and `npm run typecheck` pass
 
 Orientation for the implementer: start with `docs/DESIGN.md`, then `packages/compiler/test/behavior.test.ts` (how generated classes behave), then `transform/transform.ts` (where most milestones land). Each milestone fits one PR; M1 and M4 may split into IR-plus-lowering and codegen-plus-runtime PRs.
