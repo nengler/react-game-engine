@@ -34,12 +34,10 @@ fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     match target_os.as_str() {
         "linux" => {
-            if !headless {
-                // What raylib's CMake lists for its X11 + OpenGL build.
-                for lib in ["OpenGL", "GLX", "X11", "Xext", "SM", "ICE", "rt"] {
-                    println!("cargo:rustc-link-lib=dylib={lib}");
-                }
-            }
+            // Nothing for X11 or OpenGL: raylib's GLFW loads those libraries at run time (the built binary needs
+            // only libm, libgcc_s and libc), so a machine that builds this does not need their link libraries.
+            // CMake's own link line for raylib lists libSM and libICE too; they are not used, and a build machine
+            // without their development packages cannot link them.
             for lib in ["m", "pthread", "dl"] {
                 println!("cargo:rustc-link-lib=dylib={lib}");
             }
