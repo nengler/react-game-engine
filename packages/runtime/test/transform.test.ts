@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, GameObject, Sprite, Text, World } from "../src/index.ts";
+import { Entity, GameObject, Shape, Sprite, Text, World } from "../src/index.ts";
 
 function close(actual: number, expected: number): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≈ ${expected}`);
@@ -89,5 +89,24 @@ describe("Text", () => {
     text.transform.x = 8;
     text.transform.y = 4;
     assert.deepEqual([text.worldTransform().x, text.worldTransform().y], [8, 4]);
+  });
+});
+
+describe("Shape", () => {
+  it("holds what a renderer draws, with a default color", () => {
+    const shape = new Shape({ kind: "circle", width: 10, height: 6 });
+    assert.deepEqual([shape.kind, shape.width, shape.height, shape.color], ["circle", 10, 6, "white"]);
+    assert.equal(new Shape({ kind: "rect", width: 1, height: 1, color: "red" }).color, "red");
+  });
+
+  it("follows its parent", () => {
+    const parent = new Entity();
+    parent.transform.x = 100;
+    const shape = new Shape({ kind: "rect", width: 4, height: 4 });
+    shape.transform.x = 10;
+    parent.addChild(shape);
+    assert.equal(shape.worldTransform().x, 110);
+    parent.transform.x = 200;
+    assert.equal(shape.worldTransform().x, 210);
   });
 });

@@ -115,7 +115,7 @@ ignored):
   `RGE1005` (reported once per name per file, naming the import line to
   add). `Math` is a global and needs none.
 * Position is state: `transform={{ x, y: 0, rotation }}` on any built-in
-  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`; the root or a child),
+  element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`; the root or a child),
   relative to its parent unless
   it sets `global: true`. There is no transform hook. Refs hold values:
   `const timer = useRef(0)`, read and written as `timer.current` in handlers.
@@ -125,8 +125,8 @@ ignored):
   appear several times and runs in source order.
   `onUpdate` / `onInput` (renamed) and `onCollisionEnter` (now a prop on
   `<Collider>`) report `RGE1102` with where they went. See "Handlers" below.
-* Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`, `Text`;
-  the list comes from the runtime manifest), components declared in the same file, or
+* Element tags are runtime intrinsics (`Entity`, `Sprite`, `Collider`, `Text`,
+  `Shape`; the list comes from the runtime manifest), components declared in the same file, or
   components imported from another `.tsx` file with
   `import { Name } from "./Name.tsx"` or `import Name from "./Name.tsx"` (the
   default export, under any local name; no namespace, `as` or `type` forms). A component takes props through a
@@ -722,6 +722,50 @@ non-string `text`.
 placeholder for (as `Sprite.image` does), and `text`, `size` and `color` become
 names a state, ref or prop may not use.
 
+## Shape
+
+`<Shape>` (M11) is a filled rectangle or circle, for debugging colliders and
+prototyping before art exists:
+
+```tsx
+<Collider width={20} height={20} />
+<Shape kind="rect" width={20} height={20} color={hp <= 0 ? "gray" : "red"} />
+```
+
+**Runtime.** `Shape extends GameObject` with `kind` (`"rect" | "circle"`),
+`width`, `height` and `color` (default `"white"`) as fields. The mock draws
+nothing: a renderer reads the fields and `worldTransform()`; the origin is the
+top-left corner, as for a `Sprite`, and a circle's `width` and `height` are the
+diameters across (an ellipse when they differ). `kind`, `width` and `height` are
+required (`intrinsicRequired`), and the shape is in `transformIntrinsics`, so
+it follows its parent like any object. Every field updates in place.
+
+**A fixed set of values, from the manifest.** The kinds come from the runtime
+(`SHAPE_KINDS`), and the manifest's `intrinsicLiterals`
+(`{ Shape: { kind: SHAPE_KINDS } }`) tells the compiler which built-in props
+take one of a fixed set of strings. A *literal* for such a prop is checked in
+the transform, so a misspelt kind is a compiler diagnostic that names the
+choices rather than a type error in generated code:
+
+```
+<Shape kind> must be one of "rect", "circle", not 'rectangle' (did you mean "rect"?).   RGE1210
+```
+
+The suggestion appears for a plausible typo: a prefix either way (`rectangle`,
+`circ`) or at most two edits (`circel`), case ignored. A non-string literal
+(`kind={3}`, a bare `kind`) is the same error. Any other expression
+(`kind={big ? "circle" : "rect"}`) is left to the type-check: `ShapeProps` types
+`kind` as the union, so a bad literal inside an expression is `RGE9002` in the
+source and `RGE9001` in generated code. The rule is not specific to `Shape`:
+restricting another built-in's prop is a manifest edit (a test does it to
+`Sprite.image`).
+
+**As a root.** A component may be a `Shape`
+(`const Dot = ({ size }) => <Shape kind="circle" width={size} height={size} />`):
+the class extends `Shape`, the required props that vary get the usual
+constructor placeholders, and `kind`, `width`, `height` and `color` become names
+a state, ref or prop may not use.
+
 ## Transforms and refs
 
 Components should read like React: what is on screen, position included, is a
@@ -1047,7 +1091,8 @@ intrinsic generated classes extend, the member names of that class that
 generated fields must not shadow (`reservedMembers`), the handle types handler
 parameters may have (`InputState`, `GameObject`) with their readable members,
 the runtime functions handler code may call (`clamp`), and which built-ins take
-their JSX text as a prop (`textContent`). The compiler takes
+their JSX text as a prop (`textContent`), and which of their props take one of a
+fixed set of strings (`intrinsicLiterals`). The compiler takes
 it as `CompilerConfig.manifest` (default: the runtime's own), so adding an
 intrinsic or a handle type is a runtime-only edit. A runtime test fails if a
 member inherited from `Entity` is missing from `reservedMembers`. The `Math.*`

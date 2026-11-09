@@ -20,8 +20,8 @@ Last updated 2026-11-08. **Update this table and the milestone's checklist in th
 | M5b Keyed lists | In review | #13 | `KeyedListChild` over a state or prop array (optionally filtered), `(slot, order)` child ordering and `queueReorder`. Duplicate keys throw before anything changes; item callbacks read the current item by key; an index-only key is a warning |
 | M9 Mount and unmount hooks | Done | #15 | `useMount` (may set state; renders in the same flush) and `useUnmount` (no setters; refs and callback props). Mount is children first, unmount parent first. Also fixes list-item callbacks that read the item during an unmount |
 | M6 Prefabs and scenes | Done | #16 | Per-module `prefabs` registry, project `prefabs.ts` / `prefabs.json`, `rge-compile --scenes` (validation with line, column and JSON path; `RGE15xx`), `loadScene`, a Tiled `.tmj` importer. Also closes M0's gap: cross-file static cycles are now detected |
-| M10 `<Text>` | In review | #17 | `<Text size color>Score: {score}</Text>` or `text={…}`: both are one `text` prop (a template when text and expressions mix), updated in place. Needs the new manifest entry `textContent`, which says which built-ins take JSX text |
-| M11 `<Shape>` | Not started | n/a | Needs M7. Rectangles and circles for debugging and prototypes; `transformIntrinsics` |
+| M10 `<Text>` | Done | #17 | `<Text size color>Score: {score}</Text>` or `text={…}`: both are one `text` prop (a template when text and expressions mix), updated in place. Needs the new manifest entry `textContent`, which says which built-ins take JSX text |
+| M11 `<Shape>` | In review | #18 | `<Shape kind="rect" \| "circle" width height color>`. A literal `kind` is checked against the manifest's new `intrinsicLiterals` (`RGE1210`, with a did-you-mean); other expressions are left to the type-check, so a state-driven kind works |
 | M12 `<Camera>` | Not started | n/a | Needs M4 (to follow a target through a prop). The view transform is its own `transform`; `transformIntrinsics` |
 | M13 `<AnimatedSprite>` | Not started | n/a | Needs M5a (frame lists). Sprite-sheet playback; `transformIntrinsics` |
 | M14 `<Pointer>` | Not started | n/a | Needs M4 (callback props). Clickable hit area; `transformIntrinsics` |
@@ -323,7 +323,7 @@ A text element for HUDs, labels and menus. It is the first built-in whose conten
 A primitive shape (`kind: "rect" | "circle"`, `width`, `height`, `color`). It is mainly for debugging colliders and for prototyping before art exists.
 
 - **Runtime:** `Shape extends GameObject`; the mock stores the fields.
-- **Compiler:** `kind` must be a string literal from the allowed set (`rect`, `circle`), checked in the transform against the manifest. A misspelt kind is a new diagnostic (appended to `diagnostics.ts`), not a generated-code type error.
+- **Compiler:** a *literal* `kind` must be one of the allowed set (`rect`, `circle`), checked in the transform against the manifest (a new entry, `intrinsicLiterals`, so the rule is not specific to `Shape`). A misspelt kind is a new diagnostic (`RGE1210`, with a did-you-mean), not a generated-code type error. Other expressions (`kind={big ? "circle" : "rect"}`) are left to the type-check rather than rejected, so a shape can change kind with state. Implemented as described in [DESIGN.md](DESIGN.md#shape).
 - **Manifest:** `intrinsics` and `transformIntrinsics`.
 - **Tests:** a shape placed inside a parent follows it; an unknown kind is rejected.
 
@@ -542,12 +542,12 @@ A milestone is done when every box under it is ticked. Tick boxes in the same PR
 
 ### M11 `<Shape>`
 
-- [ ] New runtime class, manifest entries, and the `kind` literal check
-- [ ] Analyzer and transform accept the element; unsupported forms have diagnostics and tests
-- [ ] `docs/DESIGN.md` updated
-- [ ] At least one example uses it; `npm run example` regenerated and committed
-- [ ] Tests cover IR, generated code, type-check, and runtime
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] New runtime class, manifest entries (`intrinsics`, `transformIntrinsics`, `intrinsicMembers`, `intrinsicRequired`, and the new `intrinsicLiterals`), and the `kind` literal check
+- [x] Transform accepts the element; unsupported forms have diagnostics and tests (an unknown kind with and without a suggestion, non-string literals, at the root, a missing import, reserved field names)
+- [x] `docs/DESIGN.md` updated ("Shape", the built-in list, the manifest)
+- [x] `Level.tsx` shows each enemy's collider bounds with a `Shape`; `npm run example` regenerated and committed
+- [x] Tests cover the IR, generated code, both type-checks, runtime (in-place update, following a parent, as a root) and that the check is driven by the manifest (`m11.test.ts`, the manifest and transform tests)
+- [x] `npm test` and `npm run typecheck` pass on Node 22.18+
 
 ### M12 `<Camera>`
 
