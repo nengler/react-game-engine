@@ -1370,8 +1370,8 @@ with no area (zero or negative size, zero scale) never collides. A pair that kee
 once; one that separates and touches again is reported again; a collider that leaves the world is forgotten,
 so one that returns already touching is a new contact. **Colliders with the same parent never collide with each
 other**, so a component with a hitbox and a shield does not hit itself. Pairs are found with a sweep over x, which keeps it cheap
-(about 1.5 ms a frame for 2,000 colliders in Node and 38 ms in the embedded interpreter; testing every pair cost
-465 ms there). There is no physics: nothing is pushed apart, and `other` has no readable members in handler code yet.
+(a whole frame with 2,000 moving colliders is about 0.9 ms in Node and 16 ms in the embedded interpreter; testing
+every pair cost 465 ms there). There is no physics: nothing is pushed apart, and `other` has no readable members in handler code yet.
 
 **Sound.** `Sound` reports to a `SoundSink` (`setSoundSink`, one at a time). The player installs one
 that loads each file through the backend once (when a component creates its `Sound`, so it is ready by
