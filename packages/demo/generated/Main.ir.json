@@ -8,8 +8,8 @@
       "name": "Main",
       "span": {
         "fileName": "packages/demo/src/Main.tsx",
-        "start": 877,
-        "end": 2019,
+        "start": 934,
+        "end": 2051,
         "line": 17,
         "column": 1
       },
@@ -20,8 +20,8 @@
           "setterName": "setClicks",
           "span": {
             "fileName": "packages/demo/src/Main.tsx",
-            "start": 918,
-            "end": 951,
+            "start": 975,
+            "end": 1008,
             "line": 18,
             "column": 9
           }
@@ -51,8 +51,8 @@
           "path": "click.wav",
           "span": {
             "fileName": "packages/demo/src/Main.tsx",
-            "start": 961,
-            "end": 994,
+            "start": 1018,
+            "end": 1051,
             "line": 19,
             "column": 9
           }
@@ -95,22 +95,6 @@
           },
           {
             "kind": "StaticProp",
-            "name": "width",
-            "value": {
-              "kind": "NumberLiteral",
-              "value": 640
-            }
-          },
-          {
-            "kind": "StaticProp",
-            "name": "height",
-            "value": {
-              "kind": "NumberLiteral",
-              "value": 360
-            }
-          },
-          {
-            "kind": "StaticProp",
             "name": "background",
             "value": {
               "kind": "StringLiteral",
@@ -145,8 +129,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1132,
-                "end": 1142,
+                "start": 1164,
+                "end": 1174,
                 "line": 23,
                 "column": 7
               }
@@ -194,8 +178,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1149,
-                "end": 1191,
+                "start": 1181,
+                "end": 1223,
                 "line": 24,
                 "column": 7
               }
@@ -235,8 +219,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1198,
-                "end": 1237,
+                "start": 1230,
+                "end": 1269,
                 "line": 25,
                 "column": 7
               }
@@ -276,8 +260,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1244,
-                "end": 1280,
+                "start": 1276,
+                "end": 1312,
                 "line": 26,
                 "column": 7
               }
@@ -377,8 +361,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1391,
-                "end": 1512,
+                "start": 1423,
+                "end": 1544,
                 "line": 28,
                 "column": 7
               }
@@ -486,8 +470,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1519,
-                "end": 1717,
+                "start": 1551,
+                "end": 1749,
                 "line": 29,
                 "column": 7
               }
@@ -569,8 +553,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1724,
-                "end": 1823,
+                "start": 1756,
+                "end": 1855,
                 "line": 38,
                 "column": 7
               }
@@ -614,8 +598,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1830,
-                "end": 1867,
+                "start": 1862,
+                "end": 1899,
                 "line": 41,
                 "column": 7
               }
@@ -651,8 +635,8 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/demo/src/Main.tsx",
-                      "start": 1974,
-                      "end": 1984,
+                      "start": 2006,
+                      "end": 2016,
                       "line": 44,
                       "column": 9
                     }
@@ -661,8 +645,8 @@
               ],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1957,
-                "end": 2000,
+                "start": 1989,
+                "end": 2032,
                 "line": 43,
                 "column": 7
               }
@@ -671,8 +655,8 @@
         ],
         "span": {
           "fileName": "packages/demo/src/Main.tsx",
-          "start": 1012,
-          "end": 2012,
+          "start": 1069,
+          "end": 2044,
           "line": 22,
           "column": 5
         }

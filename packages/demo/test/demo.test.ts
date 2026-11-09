@@ -5,11 +5,10 @@ import { fileURLToPath } from "node:url";
 import { createPlayer, RecordingBackend, type DecodedRecord, type InputFrame, type Player } from "@rge/player";
 import { createNodeBackend, findNativeLibrary, type Pixels } from "@rge/player-node";
 import { gameConfig } from "../game.ts";
-import { Main } from "../generated/Main.ts";
 
 const ASSETS = resolve(dirname(fileURLToPath(import.meta.url)), "../assets");
-/** The window the root asks for with `<Game width height>`. */
-const WINDOW = { width: new Main().width as number, height: new Main().height as number };
+/** The window the demo opens: its size is the player's config (`game.ts`). */
+const WINDOW = { width: gameConfig.width as number, height: gameConfig.height as number };
 
 type Rect = Extract<DecodedRecord, { op: "rect" }>;
 

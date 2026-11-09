@@ -1,6 +1,6 @@
 import type { GameStore } from "./GameState.ts";
 import type { InputState } from "./input.ts";
-import { IDENTITY_TRANSFORM, Transform, composeTransforms, type WorldTransform } from "./Transform.ts";
+import { IDENTITY_TRANSFORM, Transform, composeTransforms, offsetTransform, type WorldTransform } from "./Transform.ts";
 import type { World } from "./World.ts";
 
 type StructureOp =
@@ -37,6 +37,14 @@ export class GameObject<P extends object = {}> {
    * element, or by a scene; identity otherwise.
    */
   readonly placement: Transform = new Transform();
+  /**
+   * Where layout put this object, in its parent's space, composed before `placement`
+   * (`world = parent × layout × placement × transform`). Written by the player's layout pass (a `<Flex>`
+   * placing its children), never by components, and zero for anything layout does not place. Only a position:
+   * layout never turns or scales anything.
+   */
+  layoutX = 0;
+  layoutY = 0;
   /** The component's props: a private copy, updated in place by `updateProps`. */
   props: P;
   parent: GameObject | null = null;
@@ -220,12 +228,13 @@ export class GameObject<P extends object = {}> {
 
   /**
    * This object's transform in world space: the parent's, then this object's
-   * `placement`, then its own `transform` (see `Transform`). A `global`
-   * placement ignores the parent; a `global` transform ignores both.
+   * layout offset (`layoutX`, `layoutY`), then its `placement`, then its own
+   * `transform` (see `Transform`). A `global` placement ignores the parent and
+   * the layout offset; a `global` transform ignores all three.
    */
   worldTransform(): WorldTransform {
     const parent = this.parent === null ? IDENTITY_TRANSFORM : this.parent.childSpace();
-    return composeTransforms(composeTransforms(parent, this.placement), this.transform);
+    return composeTransforms(composeTransforms(offsetTransform(parent, this.layoutX, this.layoutY), this.placement), this.transform);
   }
 
   /**

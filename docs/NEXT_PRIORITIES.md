@@ -8,32 +8,30 @@ Phase 3 is done: a compiled game runs in a native window under Node and as a Qui
 
 | # | Priority | Why now | Size (estimate) |
 | --- | --- | --- | --- |
-| 1 | Verify on real hardware; build macOS and Windows in CI | Nobody has played it in a real window; macOS and Windows have never been built | \~1 week |
+| 1 | Verify on real hardware; cache CI builds | Nobody has played it in a real window; every CI job rebuilds raylib from source | \~2–3 days |
 | 2 | Collisions gameplay can use: readable `other`, layers, exit events | A handler cannot tell a coin from an enemy, which blocks almost any game | \~1–1.5 weeks |
-| 3 | A screen-space HUD layer and a `z` prop (ABI v2) | A score drawn in the world moves with the camera; draw order is tree order only | \~1 week |
+| 3 | A screen-space HUD layer (ABI v2) and a `z` draw order (done) | A score drawn in the world moves with the camera; `z` is in, the HUD layer is not | \~1 week, `z` done |
 | 4 | Performance pass two: dependency-scoped `render()`, cached transforms, a collision grid | 2,000 state-driven objects with colliders still take 18 ms of a 16.7 ms frame under QuickJS | \~1.5–2 weeks |
 | 5 | Developer loop: errors in the window, scenes as an entry point, hot reload | A crash today closes the window and prints to a terminal the player may not see | \~1.5 weeks |
 
 Sizes are rough, for one engineer, in the style of the Phase 3 plan. Each priority below ends with a checklist that says when it is done.
 
-## 1. Verify on real hardware, and build macOS and Windows in CI
+## 1. Verify on real hardware, and cache CI builds
 
-Every Phase 3 milestone was built and tested only in a Linux cloud container, against a virtual display. Three things have never happened: a person playing in a real window, a sound actually playing (hidden test windows have no audio device), and a build on macOS or Windows. `host/build.rs` carries macOS and Windows link lists copied from raylib's and marked unverified, so the first person to try either platform is likely to hit a link error.
+Every Phase 3 milestone was built and tested only in a Linux cloud container, against a virtual display. Two things have never happened: a person playing in a real window, and a sound actually playing (hidden test windows have no audio device).
+
+**Decided 2026-11-09: no macOS or Windows CI.** Extra platform jobs are a lot of CI for a game nobody has asked to ship there yet. Linux is the one supported platform. `host/build.rs` still carries macOS and Windows link lists copied from raylib's, and they stay unverified; the first person to try either platform is likely to hit a link error, and that is when they get fixed. See "Not now".
 
 **Work**
 
-- A person plays the demo on a desktop: window feel and resizing, arrow keys and WASD, both Shift keys (the review changed how left and right combine), a click on the button through the moving camera, and the click sound.
-- CI jobs on `macos-latest` and `windows-latest`: build librge on raylib's software renderer and run the C smoke test, build the Rust host, and run the Node↔QuickJS parity test. The software renderer needs no display, so all three platforms can run the same checks.
-- A compile-only desktop (OpenGL) build of librge and the host on macOS and Windows, so the window path at least links.
+- A person plays the demo on a Linux desktop: window feel and resizing, arrow keys and WASD, both Shift keys (the review changed how left and right combine), a click on the button through the moving camera, and the click sound.
 - Cache Cargo and the CMake build of raylib in CI: today every job rebuilds raylib from source, twice in `native-desktop`.
 
 **Done when**
 
-- [ ] The demo has been played on Linux, macOS and Windows desktops, with any findings filed
-- [ ] Sound plays on all three
-- [ ] CI runs smoke, host build and parity on Linux, macOS and Windows
-- [ ] Desktop builds link on macOS and Windows in CI
-- [ ] The "unverified" notes are gone from `build.rs` and `NATIVE_PLAN.md`
+- [ ] The demo has been played on a Linux desktop, with any findings filed
+- [ ] Sound plays
+- [ ] Cargo and the raylib CMake build are cached in CI, and the `native-desktop` job builds raylib once
 
 ## 2. Collisions that gameplay can use
 
@@ -57,22 +55,23 @@ Every Phase 3 milestone was built and tested only in a Linux cloud container, ag
 
 ## 3. A screen-space HUD layer and draw order
 
-Everything is drawn through the camera, so a score or a health bar placed in the world drifts away as the camera follows the player; the demo's "Clicks" text does exactly that. Draw order is tree order only, so a sprite that must sit behind its siblings has to be moved in the tree.
+Everything is drawn through the camera, so a score or a health bar placed in the world drifts away as the camera follows the player; the demo's "Clicks" text does exactly that. Draw order used to be tree order only, so a sprite that had to sit behind its siblings had to be moved in the tree; `z` fixed that.
 
 **Proposal**
 
-- A `<Screen>` built-in. Its subtree is drawn after the world, through an identity view, in window pixels. The player emits a second `RGE_OP_VIEW` before it.
+- A `<Hud>` built-in. Its subtree is drawn after the world, through an identity view, in window pixels. The player emits a second `RGE_OP_VIEW` before it.
 - librge today refuses a second view record ("malformed draw records"), so this is an ABI change: allow a later `RGE_OP_VIEW` to replace the current view, and bump `RGE_ABI_VERSION` to 2. Both hosts already check the version at load.
-- A `<Pointer>` inside `<Screen>` is hit-tested in window coordinates, so HUD buttons work while the camera moves.
-- A `z` prop: a sort key applied in TypeScript to the draw list before it is sent, stable within equal keys. It stays inside the current record format.
+- A `<Pointer>` inside `<Hud>` is hit-tested in window coordinates, so HUD buttons work while the camera moves.
+- A `z` draw order: **done 2026-11-09**, as a `transform` field (`transform={{ z: 2 }}`) rather than a prop, because `z` is a common prop name that an attribute would reserve on every component. It is relative to the parent like `x` and `y`, sorted in TypeScript (stable, tree order among equals) so the record format is unchanged, and pointers follow it. See "What is drawn" in `DESIGN.md`. Cost: about 10% of the tree walk in the bench scenes under QuickJS, which priority 4's `Transform` setters would remove for games that never use it.
+- UI layout (`<Flex alignItems="center" gap={8}>`) builds on this layer, and a sized root `<Screen width={320} height={180}>` gives the game a fixed resolution scaled to the window; see [UI_PLAN.md](UI_PLAN.md). It needs two measuring functions (`rge_measure_text`, `rge_texture_size`), which should go into the same ABI v2 so the version moves once.
 
 **Done when**
 
 - [ ] `rge.h`, `protocol.ts` and the header-parity test agree on ABI v2; `smoke.c` checks a second view
-- [ ] `<Screen>` children stay fixed while the camera moves (a recording test and a pixel test)
+- [ ] `<Hud>` children stay fixed while the camera moves (a recording test and a pixel test)
 - [ ] A HUD pointer receives presses through a moving, zoomed camera
-- [ ] `z` reorders records, and equal keys keep tree order
-- [ ] The demo's click counter moves into a `<Screen>`
+- [x] `z` reorders records, and equal keys keep tree order
+- [ ] The demo's click counter moves into a `<Hud>`
 
 ## 4. Performance pass two
 
@@ -122,13 +121,13 @@ When a handler throws, both hosts print the stack and exit with status 1. That i
 
 ## Sequencing and open decisions
 
-Start priorities 1 and 2 together: they touch different code (CI and build scripts; the compiler and the collision tracker). The HUD layer waits for cross-platform CI because it changes the ABI, and in-window errors wait for the HUD layer they draw on.
+Priorities 1 and 2 touch different code (CI and build scripts; the compiler and the collision tracker). Priority 3 changes the ABI and no longer waits for anything: it is tested by the Linux CI that exists. In-window errors wait for the HUD layer they draw on.
 
 ```mermaid
 flowchart LR
   subgraph platform["Platform and rendering"]
-    P1["1. Hardware and CI<br/>macOS, Windows, real window"] -->|ABI v2 tested on 3 OSes| P3["3. HUD layer and z<br/>ABI v2, Screen, z prop"]
-    P3 -->|errors drawn on the HUD| P5["5. Developer loop<br/>errors in window, reload"]
+    P1["1. Hardware and CI<br/>real window, CI caching"]
+    P3["3. HUD layer and z<br/>ABI v2, Hud, z prop"] -->|errors drawn on the HUD| P5["5. Developer loop<br/>errors in window, reload"]
   end
   subgraph gameplay["Gameplay"]
     P2["2. Gameplay collisions<br/>other.tag, layers, exit"]
@@ -143,8 +142,7 @@ flowchart LR
 
 1. ~~**What `other` exposes (priority 2).**~~ Decided 2026-11-09: both `other.tag` and `other.owner` (the owning entity's name).
 2. **How a moved transform is detected (priority 4).** Setters with a version counter are exact but change `Transform` from plain fields; comparing against last frame keeps the fields but costs a check per object.
-3. **Whether ABI v2 also takes the `z` sort key (priority 3).** Sorting in TypeScript keeps the record format unchanged, which is the plan's existing choice.
-4. **Who plays the demo on macOS and Windows (priority 1).** This needs a person with each machine; no CI job can replace it.
+3. ~~**Whether ABI v2 also takes the `z` sort key (priority 3).**~~ Decided and done 2026-11-09: no, it is sorted in TypeScript, and the record format is unchanged.
 
 ## Not now, and what would pull it in
 
@@ -157,6 +155,7 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 | Sound volume, looping music, overlapping plays, a build-time asset check | `useSound` takes one literal path and covers one-shot effects | Any game with background music |
 | Web backend (canvas) | Records map directly onto canvas calls, so it stays cheap to add later | Wanting a shareable browser build |
 | Gamepads, high DPI, fixed timestep | Each slots into the ABI without rework | A controller game, a blurry Retina window, or physics |
+| macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
 | One-file executable, prebuilt librge, macOS signing | Packaging as a folder works | Handing a build to people outside the team |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
 | Custom hooks (`function useHealth(max) { … }`) | Inlining them at compile time fits "hooks are compiler intrinsics", but no game needs them yet | Repeated hook logic across components |

@@ -8,10 +8,6 @@ export interface GameStateHandle {
 export interface GameProps extends EntityProps {
   /** The window's title. Default: the player's `title`, else `"react-game-engine"`. */
   title?: string;
-  /** The window's width in pixels (the screen's, not the world's). Default 640. */
-  width?: number;
-  /** The window's height in pixels. Default 360. */
-  height?: number;
   /** A CSS colour. Default `"black"`. */
   background?: string;
   /** The folder image and sound names are relative to. Default `"assets"`. */
@@ -27,20 +23,19 @@ export interface GameProps extends EntityProps {
 }
 
 /**
- * The root of a game, and where its configuration lives: the window (title, size, background, resizing, vsync,
- * filtering), the assets folder, and the game state. It is an `Entity` with those extra props, so a component whose root
+ * The root of a game, and where its configuration lives: the window (title, resizing, vsync, filtering), the
+ * background colour, the assets folder, and the game state. It has no size: the game's resolution is a `<Screen
+ * width height>` (put it inside, as its only child), and the window's size is the player's. It is an `Entity` with those extra props, so a component whose root
  * is `<Game …>` extends it. It is optional: a game with any other root gets the default settings (and whatever the player was
  * configured with); a `<Game>` root overrides them, each prop only where it is written.
  *
- * Its settings are read before the tree is built, so they are literals (`width={640}`, never state), and a `<Game>`
+ * Its settings are read before the tree is built, so they are literals (`title="x"`, never state), and a `<Game>`
  * is only ever a component's root, never a child. A field is `undefined` where its prop was not written.
  */
 export class Game<P extends object = {}> extends Entity<P> {
   static override readonly intrinsic = true;
 
   title: string | undefined;
-  width: number | undefined;
-  height: number | undefined;
   background: string | undefined;
   assets: string | undefined;
   resizable: boolean | undefined;
@@ -52,8 +47,6 @@ export class Game<P extends object = {}> extends Entity<P> {
   constructor(hostProps: GameProps = {}, props?: P, defaults?: Partial<P>) {
     super(hostProps, props, defaults);
     this.title = hostProps.title;
-    this.width = hostProps.width;
-    this.height = hostProps.height;
     this.background = hostProps.background;
     this.assets = hostProps.assets;
     this.resizable = hostProps.resizable;

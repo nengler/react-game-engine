@@ -124,7 +124,7 @@ export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnMountHo
  * `transform={{ x, y }}` attribute. Pixels, y down; `rotation` in radians.
  * Relative to the nearest ancestor `<Entity>` unless `global` is true.
  */
-export const TRANSFORM_FIELDS = ["x", "y", "rotation", "scaleX", "scaleY", "global"] as const;
+export const TRANSFORM_FIELDS = ["x", "y", "z", "rotation", "scaleX", "scaleY", "global"] as const;
 export type TransformField = (typeof TRANSFORM_FIELDS)[number];
 
 /**

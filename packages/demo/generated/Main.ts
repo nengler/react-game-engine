@@ -27,7 +27,7 @@ export class Main extends Game {
   readonly player: Player = new Player();
 
   constructor() {
-    super({ name: "Main", state: useGame, title: "rge demo", width: 640, height: 360, background: "#10131c", assets: "assets" });
+    super({ name: "Main", state: useGame, title: "rge demo", background: "#10131c", assets: "assets" });
     this.addChild(this.ground);
     this.beacon.placement.x = -120;
     this.beacon.placement.y = -60;

@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AnimatedSprite, Camera, Collider, Entity, GameObject, Pointer, Shape, Sprite, Text, World } from "@rge/runtime";
+import { AnimatedSprite, Camera, Collider, Entity, GameObject, Pointer, Screen, Shape, Sprite, Text, World } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
 import { Level } from "../../example/generated/Level.ts";
-import { FrameBuilder, walkTree } from "../src/draw.ts";
+import { estimateTextWidth, FrameBuilder, walkTree } from "../src/draw.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 import { RGE_IN_LEN, KEYS } from "../src/protocol.ts";
 
@@ -91,6 +91,35 @@ describe("walkTree", () => {
       const expected = object.worldTransform();
       for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const) close(transform[field], expected[field], `${object.constructor.name}.${field}`);
     });
+  });
+
+  it("agrees with worldTransform() when layout has moved objects, under a turned, scaled parent", () => {
+    const outer = new Entity();
+    outer.transform.rotation = 0.7;
+    outer.transform.scaleX = 3;
+    outer.layoutX = 11;
+    const row = new Entity();
+    row.layoutX = 5;
+    row.layoutY = -2;
+    row.placement.x = 4;
+    const leaf = new Text({ text: "hi" });
+    leaf.layoutY = 9;
+    leaf.transform.y = -1;
+    const camera = new Camera();
+    camera.layoutX = 100;
+    const followed = new Shape({ kind: "rect", width: 1, height: 1 });
+    followed.layoutX = 2;
+    outer.addChild(row);
+    row.addChild(leaf);
+    row.addChild(camera);
+    camera.addChild(followed);
+    let count = 0;
+    walkTree(outer, (object, transform) => {
+      const expected = object.worldTransform();
+      for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const) close(transform[field], expected[field], `${object.constructor.name}.${field}`);
+      count++;
+    });
+    assert.equal(count, 5);
   });
 
   it("visits parents before children, children in order", () => {
@@ -374,5 +403,243 @@ describe("golden draw lists", () => {
     const world = mounted(new Level());
     for (let i = 0; i < 100; i++) world.tick(0.05);
     golden("level", draw(world.root, { width: 320, height: 240 }).records);
+  });
+});
+
+describe("FrameBuilder: measuring, for layout", () => {
+  function builder(backend: RecordingBackend, warnings: string[] = [], withMeasuring = true): FrameBuilder {
+    return new FrameBuilder({
+      loadTexture: (path) => backend.loadTexture(path),
+      measureText: withMeasuring ? (text, size) => backend.measureText(text, size) : undefined,
+      textureSize: withMeasuring ? (handle) => backend.textureSize(handle) : undefined,
+      warn: (m) => warnings.push(m),
+    });
+  }
+
+  it("measures shapes, pointers and colliders by their own size", () => {
+    const b = builder(new RecordingBackend());
+    assert.deepEqual(b.measure(new Shape({ kind: "circle", width: 6, height: 4 })), { width: 6, height: 4 });
+    assert.deepEqual(b.measure(new Pointer({ width: 96, height: 32 })), { width: 96, height: 32 });
+    assert.deepEqual(b.measure(new Collider({ width: 3, height: 9 })), { width: 3, height: 9 });
+  });
+
+  it("measures text through the backend, as wide as it is and as tall as its size, asking once per string", () => {
+    const backend = new RecordingBackend();
+    const b = builder(backend);
+    const label = new Text({ text: "Score", size: 20 });
+    assert.deepEqual(b.measure(label), { width: estimateTextWidth("Score", 20), height: 20 });
+    assert.deepEqual(b.measure(label), { width: 60, height: 20 });
+    label.size = 10;
+    b.measure(label);
+    label.text = "";
+    assert.deepEqual(b.measure(label), { width: 0, height: 10 }, "empty text is not measured");
+    assert.deepEqual(backend.textMeasures, ["20:Score", "10:Score"]);
+  });
+
+  it("estimates text without a backend that measures, counting characters, not UTF-16 units", () => {
+    const b = builder(new RecordingBackend(), [], false);
+    assert.deepEqual(b.measure(new Text({ text: "héllo", size: 10 })), { width: 30, height: 10 });
+    assert.equal(estimateTextWidth("🙂🙂", 10), 12);
+  });
+
+  it("measures a sprite by its texture, loading it once and asking its size once", () => {
+    const backend = new RecordingBackend({ textureSizes: { "assets/coin.png": { width: 12, height: 14 } } });
+    const b = builder(backend);
+    assert.deepEqual(b.measure(new Sprite({ image: "coin.png" })), { width: 12, height: 14 });
+    assert.deepEqual(b.measure(new Sprite({ image: "coin.png" })), { width: 12, height: 14 });
+    assert.deepEqual(b.measure(new Sprite({ image: "other.png" })), { width: 16, height: 16 });
+    assert.deepEqual(backend.textureLoads, ["assets/coin.png", "assets/other.png"]);
+    assert.deepEqual(backend.textureSizeQueries, ["assets/coin.png", "assets/other.png"]);
+    // Drawing the same sprite afterwards does not load it again.
+    draw(new Sprite({ image: "coin.png" }), { builder: b, backend });
+    assert.deepEqual(backend.textureLoads, ["assets/coin.png", "assets/other.png"]);
+  });
+
+  it("measures an animated sprite by its first frame, so the size does not jitter", () => {
+    const backend = new RecordingBackend({ textureSizes: { "assets/a.png": { width: 8, height: 8 }, "assets/b.png": { width: 30, height: 30 } } });
+    const sprite = new AnimatedSprite({ frames: ["a.png", "b.png"], fps: 10 });
+    sprite.onUpdate(0.15);
+    assert.equal(sprite.image, "b.png");
+    assert.deepEqual(builder(backend).measure(sprite), { width: 8, height: 8 });
+  });
+
+  it("measures a missing texture as the square drawn in its place, and an empty image as nothing", () => {
+    const backend = new RecordingBackend({ missingTextures: ["assets/gone.png"] });
+    const b = builder(backend);
+    assert.deepEqual(b.measure(new Sprite({ image: "gone.png" })), { width: 16, height: 16 });
+    assert.deepEqual(b.measure(new Sprite({ image: "" })), { width: 0, height: 0 });
+    assert.deepEqual(backend.textureSizeQueries, []);
+  });
+
+  it("measures textures as 0 × 0, warning once, without a backend that can say", () => {
+    const warnings: string[] = [];
+    const b = builder(new RecordingBackend(), warnings, false);
+    assert.deepEqual(b.measure(new Sprite({ image: "a.png" })), { width: 0, height: 0 });
+    b.measure(new Sprite({ image: "b.png" }));
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /cannot report texture sizes/);
+  });
+
+  it("leaves containers to layout", () => {
+    const b = builder(new RecordingBackend());
+    assert.equal(b.measure(new Entity()), null);
+    assert.equal(b.measure(new Camera()), null);
+  });
+});
+
+describe("FrameBuilder: draw order (z)", () => {
+  /** A rect whose width says which one it is, so a decoded frame reads as a list of names. */
+  function box(id: number, z = 0): Shape {
+    const shape = new Shape({ kind: "rect", width: id, height: 1 });
+    shape.transform.z = z;
+    return shape;
+  }
+
+  function parentOf(...children: GameObject[]): Entity {
+    const root = new Entity();
+    for (const child of children) root.addChild(child);
+    return root;
+  }
+
+  /** The widths of the drawn rects, in draw order. */
+  function order(records: readonly DecodedRecord[]): number[] {
+    return records.flatMap((r) => (r.op === "rect" ? [r.width] : []));
+  }
+
+  it("draws what has a higher z later, so on top, and negative z behind", () => {
+    const { records } = draw(parentOf(box(1, 1), box(2, 0), box(3, -1), box(4, 0)));
+    assert.deepEqual(order(records), [3, 2, 4, 1]);
+  });
+
+  it("keeps tree order among equal z, and changes nothing when every z is equal", () => {
+    assert.deepEqual(order(draw(parentOf(box(1), box(2), box(3))).records), [1, 2, 3]);
+    assert.deepEqual(order(draw(parentOf(box(1, 4), box(2, 4), box(3, 4))).records), [1, 2, 3]);
+    assert.deepEqual(order(draw(parentOf(box(1, 2), box(2, 1), box(3, 2), box(4, 1))).records), [2, 4, 1, 3]);
+  });
+
+  it("agrees with a stable sort by (z, tree order) over many objects, past the first buffers' size", () => {
+    let seed = 12345;
+    const random = (): number => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed;
+    };
+    const root = new Entity();
+    const expected: { id: number; z: number }[] = [];
+    for (let i = 1; i <= 2500; i++) {
+      const z = (random() % 7) - 3;
+      root.addChild(box(i, z));
+      expected.push({ id: i, z });
+    }
+    expected.sort((a, b) => a.z - b.z || a.id - b.id);
+    assert.deepEqual(order(draw(root).records), expected.map((e) => e.id));
+  });
+
+  it("adds a child's z to its parent's, so a raised subtree stays together relative to the rest", () => {
+    const parent = box(1, 5);
+    const child = box(2, 1);
+    parent.addChild(child);
+    const { records } = draw(parentOf(parent, box(3, 5.5)));
+    assert.deepEqual(order(records), [1, 3, 2], "the child is at 6: above a sibling at 5.5");
+  });
+
+  it("adds placement z and transform z, and lets `global` ignore the ancestors", () => {
+    const parent = box(1, 10);
+    const placed = box(2, 3);
+    placed.placement.z = 2;
+    const pinned = box(3, 1);
+    pinned.transform.global = true;
+    const placedGlobal = box(4, 1);
+    placedGlobal.placement.global = true;
+    placedGlobal.placement.z = 2;
+    parent.addChild(placed);
+    parent.addChild(pinned);
+    parent.addChild(placedGlobal);
+    const seen: Record<number, number> = {};
+    walkTree(parent, (object, _world, z) => void (seen[(object as Shape).width] = z));
+    assert.deepEqual(seen, { 1: 10, 2: 15, 3: 1, 4: 3 });
+    assert.deepEqual(order(draw(parent).records), [3, 4, 1, 2]);
+  });
+
+  it("does not let a camera's own z move its children", () => {
+    const camera = new Camera();
+    camera.transform.z = 50;
+    camera.addChild(box(1, 0));
+    const seen: number[] = [];
+    walkTree(parentOf(camera, box(2, 10)), (object, _w, z) => void (object instanceof Shape && seen.push(z)));
+    assert.deepEqual(seen, [0, 10]);
+  });
+
+  it("takes z from state-driven values each frame, with nothing left over from the last", () => {
+    const a = box(1, 0);
+    const b = box(2, 0);
+    const root = parentOf(a, b);
+    const backend = new RecordingBackend();
+    const builder = new FrameBuilder({ loadTexture: (p) => backend.loadTexture(p) });
+    const frame = (): number[] => {
+      const built = builder.build(root, 100, 100);
+      backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+      return order(backend.lastFrame.records);
+    };
+    assert.deepEqual(frame(), [1, 2]);
+    a.transform.z = 1;
+    assert.deepEqual(frame(), [2, 1]);
+    a.transform.z = 0;
+    assert.deepEqual(frame(), [1, 2]);
+  });
+
+  it("reorders every kind of record with its own payload: sprites, shapes, ellipses and text", () => {
+    const text = new Text({ text: "top", size: 12, color: "red" });
+    text.transform.z = 2;
+    const under = new Text({ text: "under", size: 9, color: "blue" });
+    under.transform.z = -1;
+    const sprite = new Sprite({ image: "a.png" });
+    sprite.transform.z = 1;
+    const circle = new Shape({ kind: "circle", width: 5, height: 6, color: "lime" });
+    const { records } = draw(parentOf(text, sprite, box(7), circle, under));
+    assert.deepEqual(
+      records.slice(1).map((r) => r.op),
+      ["text", "rect", "ellipse", "sprite", "text"],
+    );
+    const texts = records.filter((r) => r.op === "text");
+    assert.deepEqual(texts.map((r) => (r.op === "text" ? [r.text, r.size, r.color] : null)), [["under", 9, "#0000ffff"], ["top", 12, "#ff0000ff"]]);
+    const ellipse = records.find((r) => r.op === "ellipse");
+    assert.ok(ellipse?.op === "ellipse" && ellipse.width === 5 && ellipse.height === 6 && ellipse.color === "#00ff00ff");
+    assert.ok(records.some((r) => r.op === "sprite" && r.texture === "assets/a.png"));
+  });
+
+  it("keeps the view first, and a screen's border bars last, over everything", () => {
+    const screen = new Screen({ width: 100, height: 50, border: "navy" });
+    screen.addChild(box(1, 5));
+    screen.addChild(box(2, -5));
+    const { records } = draw(screen, { width: 320, height: 200 }); // ×3 at (10, 25): four bars
+    assert.equal(records[0]?.op, "view");
+    assert.deepEqual(order(records.slice(0, 3)), [2, 1]);
+    for (const bar of records.slice(3)) assert.ok(bar.op === "rect" && bar.color === "#000080ff");
+    assert.equal(records.length, 3 + 4);
+  });
+
+  it("puts an infinite z at the ends, and treats one that is not a number as 0, warning once", () => {
+    const { records } = draw(parentOf(box(1, Infinity), box(2, 0), box(3, -Infinity)));
+    assert.deepEqual(order(records), [3, 2, 1]);
+    const warnings: string[] = [];
+    const bad = draw(parentOf(box(1, NaN), box(2, 1), box(3, -1), box(4, NaN)), { warnings });
+    assert.deepEqual(order(bad.records), [3, 1, 4, 2], "a NaN sorts as 0, in tree order with the others");
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /z is not a number/);
+  });
+
+  it("orders pointers by z too, so the one drawn on top is the one pressed", () => {
+    const low = new Pointer({ width: 1, height: 1 });
+    low.transform.z = 3;
+    const high = new Pointer({ width: 2, height: 2 });
+    const { built } = draw(parentOf(low, high, new Pointer({ width: 3, height: 3 })));
+    assert.deepEqual(built.pointers.map((p) => p.width), [2, 3, 1], "last is on top");
+  });
+
+  it("does not reorder anything for a game that never sets z", () => {
+    const root = parentOf(box(3), box(1), box(2));
+    const { records, built } = draw(root);
+    assert.deepEqual(order(records), [3, 1, 2]);
+    assert.equal(built.list.length, 7 + 3 * 9);
   });
 });

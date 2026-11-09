@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, GameObject, Shape, Sprite, Text, World } from "../src/index.ts";
+import { Camera, Entity, GameObject, Screen, Shape, Sprite, Text, World } from "../src/index.ts";
 
 function close(actual: number, expected: number): void {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≈ ${expected}`);
@@ -108,5 +108,85 @@ describe("Shape", () => {
     assert.equal(shape.worldTransform().x, 110);
     parent.transform.x = 200;
     assert.equal(shape.worldTransform().x, 210);
+  });
+});
+
+describe("layout offset", () => {
+  it("is zero, and changes nothing, until layout writes it", () => {
+    const child = new Entity();
+    child.transform.x = 7;
+    assert.deepEqual([child.layoutX, child.layoutY], [0, 0]);
+    assert.deepEqual(child.worldTransform(), { x: 7, y: 0, rotation: 0, scaleX: 1, scaleY: 1 });
+  });
+
+  it("comes before placement and transform, in the parent's space: scaled and turned with the parent", () => {
+    const parent = new Entity();
+    parent.transform.x = 100;
+    parent.transform.rotation = Math.PI / 2;
+    parent.transform.scaleX = 2;
+    parent.transform.scaleY = 2;
+    const child = new Entity();
+    child.layoutX = 10;
+    child.placement.x = 1;
+    child.transform.rotation = 0.25;
+    parent.addChild(child);
+    const at = child.worldTransform();
+    // (10 + 1, 0) scaled by 2 and turned a quarter: (0, 22) from the parent.
+    close(at.x, 100);
+    close(at.y, 22);
+    close(at.rotation, Math.PI / 2 + 0.25);
+  });
+
+  it("moves an object without moving its own transform, so a nudge stays relative to the slot", () => {
+    const child = new Shape({ kind: "rect", width: 4, height: 4 });
+    child.transform.y = -3;
+    child.layoutX = 40;
+    child.layoutY = 8;
+    assert.deepEqual(child.worldTransform(), { x: 40, y: 5, rotation: 0, scaleX: 1, scaleY: 1 });
+    assert.equal(child.transform.x, 0);
+  });
+
+  it("carries to the object's children", () => {
+    const row = new Entity();
+    row.layoutY = 12;
+    const leaf = new Entity();
+    leaf.transform.x = 3;
+    row.addChild(leaf);
+    assert.deepEqual(leaf.worldTransform(), { x: 3, y: 12, rotation: 0, scaleX: 1, scaleY: 1 });
+  });
+
+  it("is ignored by a global placement or transform, like the parent", () => {
+    const pinned = new Entity();
+    pinned.layoutX = 50;
+    pinned.placement.global = true;
+    pinned.placement.x = 2;
+    assert.equal(pinned.worldTransform().x, 2);
+  });
+
+  it("does not move a camera's children, which are placed as if the camera were not there", () => {
+    const camera = new Camera();
+    camera.layoutX = 30;
+    const target = new Entity();
+    target.transform.x = 5;
+    camera.addChild(target);
+    assert.equal(target.worldTransform().x, 5);
+  });
+});
+
+describe("Screen", () => {
+  it("holds the game's resolution, with defaults for the rest", () => {
+    const screen = new Screen({ width: 320, height: 180 });
+    assert.deepEqual([screen.width, screen.height, screen.fit, screen.pixelPerfect, screen.border], [320, 180, "integer", true, "black"]);
+    const custom = new Screen({ width: 64, height: 64, fit: "stretch", pixelPerfect: false, border: "navy" });
+    assert.deepEqual([custom.fit, custom.pixelPerfect, custom.border], ["stretch", false, "navy"]);
+  });
+
+  it("does not move its children: a game at (8, 8) is 8 game pixels in", () => {
+    const screen = new Screen({ width: 320, height: 180 });
+    const hud = new Entity();
+    hud.transform.x = 8;
+    hud.transform.y = 8;
+    screen.addChild(hud);
+    assert.deepEqual(hud.worldTransform(), { x: 8, y: 8, rotation: 0, scaleX: 1, scaleY: 1 });
   });
 });

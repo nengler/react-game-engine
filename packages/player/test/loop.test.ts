@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Collider, Entity, Game, GameObject, Pointer, Shape, Sound, World, createGameState, getSoundSink, type InputState } from "@rge/runtime";
+import { Camera, Collider, Entity, Game, GameObject, Pointer, Screen, Shape, Sound, World, createGameState, getSoundSink, type InputState } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
 import { createPlayer, DEFAULT_WINDOW, MAX_DT, run, type PlayerConfig } from "../src/loop.ts";
 import { RecordingBackend } from "../src/recording.ts";
@@ -149,8 +149,8 @@ describe("createPlayer", () => {
 
   describe("a <Game> root", () => {
     it("opens the window it asks for, over the player's config, over the defaults, each setting on its own", () => {
-      const game = player(() => new Game({ title: "from game", width: 200, smooth: true }), { width: 999, height: 111, title: "from config", resizable: false, vsync: false, smooth: false });
-      assert.deepEqual(game.backend.config, { width: 200, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true }, "width, title and smooth from <Game>; the rest from the player");
+      const game = player(() => new Game({ title: "from game", smooth: true }), { width: 999, height: 111, title: "from config", resizable: false, vsync: false, smooth: false });
+      assert.deepEqual(game.backend.config, { width: 999, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true }, "title and smooth from <Game>; the size and the rest from the player: a <Game> has no size");
       game.player.close();
       const backend = new RecordingBackend();
       const plain = createPlayer(backend, { root: () => new Entity(), warn: () => {} });
@@ -158,13 +158,13 @@ describe("createPlayer", () => {
       plain.close();
     });
 
-    it("draws with the window's size and the game's background, and loads from the game's assets folder", () => {
+    it("draws with the game's background, and loads from the game's assets folder", () => {
       const backend = new RecordingBackend();
       class Level extends Game {
         readonly shape = new Shape({ kind: "rect", width: 1, height: 1 });
         readonly sound = new Sound("beep.wav");
         constructor() {
-          super({ width: 320, height: 200, background: "red", assets: "art" });
+          super({ background: "red", assets: "art" });
           this.addChild(this.shape);
         }
       }
@@ -172,6 +172,18 @@ describe("createPlayer", () => {
       p.step();
       assert.equal(backend.lastFrame.clearColor, "#ff0000ff");
       assert.deepEqual(backend.soundLoads, ["art/beep.wav"], "a sound made while the root is built is preloaded once the window is open, from the game's folder");
+      p.close();
+    });
+
+    it("finds a <Screen> that is its only child: the game's resolution is scaled into the window", () => {
+      const backend = new RecordingBackend();
+      const game = new Game({ title: "x" });
+      game.addChild(new Screen({ width: 320, height: 180 }));
+      const p = createPlayer(backend, { width: 640, height: 360, root: () => game });
+      p.step();
+      const view = backend.lastFrame.records[0];
+      assert.ok(view?.op === "view");
+      assert.equal(view.a, 2, "a 320 x 180 screen in a 640 x 360 window is drawn at 2x");
       p.close();
     });
 
@@ -186,7 +198,7 @@ describe("createPlayer", () => {
       const { player: p } = player(() => {
         order.push("root");
         void new Sound("a.wav");
-        return new Game({ width: 100 });
+        return new Game({ title: "x" });
       }, {}, backend);
       assert.deepEqual(order, ["root", "open"]);
       assert.deepEqual(backend.soundLoads, ["assets/a.wav"]);
@@ -249,6 +261,23 @@ describe("pointer presses", () => {
     const log: string[] = [];
     click(() => pointerAt("a", 100, 100, 50, log), { x: 120, y: 120 });
     assert.deepEqual(log, ["a"]);
+  });
+
+  it("gives a press to the pointer with the higher z, wherever it is in the tree", () => {
+    const log: string[] = [];
+    const root = (): GameObject => {
+      const entity = new Entity();
+      const raised = pointerAt("raised", 0, 0, 100, log);
+      raised.transform.z = 1;
+      entity.addChild(raised);
+      entity.addChild(pointerAt("later", 50, 50, 100, log));
+      return entity;
+    };
+    click(root, { x: 75, y: 75 });
+    assert.deepEqual(log, ["raised"], "drawn on top, so pressed first, though it comes first in the tree");
+    log.length = 0;
+    click(root, { x: 120, y: 120 });
+    assert.deepEqual(log, ["later"], "outside the raised one, the other still gets it");
   });
 
   it("calls nothing for a press outside every pointer", () => {

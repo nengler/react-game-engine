@@ -1,3 +1,4 @@
+import { SCREEN_FITS } from "./components/Screen.ts";
 import { SHAPE_KINDS } from "./components/Shape.ts";
 
 /**
@@ -88,13 +89,13 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
-    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "state"],
+    Game: ["name", "title", "background", "assets", "resizable", "vsync", "smooth", "state"],
     Sprite: ["image"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
@@ -102,6 +103,7 @@ export const runtimeManifest: RuntimeManifest = {
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: ["fps", "playing", "frame", "elapsed", "frames", "image"],
+    Screen: ["width", "height", "fit", "pixelPerfect", "border"],
   },
   intrinsicRequired: {
     Entity: [],
@@ -113,12 +115,14 @@ export const runtimeManifest: RuntimeManifest = {
     Shape: ["kind", "width", "height"],
     Camera: [],
     AnimatedSprite: ["frames"],
+    Screen: ["width", "height"],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
   },
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },
+    Screen: { fit: SCREEN_FITS },
   },
   intrinsicCallbacks: {
     Collider: {
@@ -130,7 +134,7 @@ export const runtimeManifest: RuntimeManifest = {
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
     // `updateProps` is generated into every component that has props, so a field may not take the name.
-    "name", "props", "applyProps", "updateProps", "transform", "placement", "worldTransform", "parent", "children", "world",
+    "name", "props", "applyProps", "updateProps", "transform", "placement", "layoutX", "layoutY", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",

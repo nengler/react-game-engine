@@ -259,7 +259,7 @@ describe("M6: scene validation", () => {
   const scene = (entity: string): string => `{\n  "version": 1,\n  "entities": [\n    ${entity}\n  ]\n}\n`;
 
   it("accepts a valid scene, defaults left out, nested children, every transform field", () => {
-    const text = scene(`{ "id": "f", "prefab": "Frame", "props": { "title": "t" }, "transform": { "x": -4, "y": 2.5, "rotation": 0.5, "scaleX": 2, "scaleY": 2, "global": false },
+    const text = scene(`{ "id": "f", "prefab": "Frame", "props": { "title": "t" }, "transform": { "x": -4, "y": 2.5, "z": 3, "rotation": 0.5, "scaleX": 2, "scaleY": 2, "global": false },
       "children": [{ "id": "e", "prefab": "Enemy", "props": { "speed": 1, "tint": "blue", "bounds": [1, -2] } }, { "id": "m", "prefab": "Marker" }] }`);
     assert.deepEqual(check(text), []);
   });
@@ -299,7 +299,8 @@ describe("M6: scene validation", () => {
   it("checks the transform", () => {
     expectOne(scene(`{ "id": "a", "prefab": "Marker", "transform": { "x": "left" } }`), DiagnosticCode.WrongPropType, `"left"`, /transform\.x: Expected a number/);
     expectOne(scene(`{ "id": "a", "prefab": "Marker", "transform": { "global": 9 } }`), DiagnosticCode.WrongPropType, `9`, /true or false/);
-    expectOne(scene(`{ "id": "a", "prefab": "Marker", "transform": { "z": 1 } }`), DiagnosticCode.SceneShape, `"z"`, /Unknown key 'z'/);
+    expectOne(scene(`{ "id": "a", "prefab": "Marker", "transform": { "z": "front" } }`), DiagnosticCode.WrongPropType, `"front"`, /transform\.z: Expected a number/);
+    expectOne(scene(`{ "id": "a", "prefab": "Marker", "transform": { "w": 1 } }`), DiagnosticCode.SceneShape, `"w"`, /Unknown key 'w'/);
   });
 
   it("checks the shape of the scene", () => {
