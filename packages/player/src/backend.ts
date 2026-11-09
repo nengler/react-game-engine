@@ -27,6 +27,13 @@ export interface Backend {
   loadSound(path: string): number;
   playSound(handle: number): void;
   /**
+   * The width in pixels of `text` drawn at `size`, for layout. Optional until the native library can measure
+   * (ABI v2); without it the player estimates.
+   */
+  measureText?(text: string, size: number): number;
+  /** The size in pixels of a loaded texture, for layout. Optional until the native library can say (ABI v2). */
+  textureSize?(handle: number): { readonly width: number; readonly height: number };
+  /**
    * Draw and present `records[0, length)` (text records index into `texts`), then poll the
    * devices and write the next frame's input into `input` and `keys`. Blocks until vsync
    * when the window has it.

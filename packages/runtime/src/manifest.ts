@@ -1,3 +1,4 @@
+import { SCREEN_FITS } from "./components/Screen.ts";
 import { SHAPE_KINDS } from "./components/Shape.ts";
 
 /**
@@ -88,9 +89,9 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer"],
+  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Camera"],
+  containerIntrinsics: ["Entity", "Camera", "Screen"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -101,6 +102,7 @@ export const runtimeManifest: RuntimeManifest = {
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: ["fps", "playing", "frame", "elapsed", "frames", "image"],
+    Screen: ["width", "height", "fit", "pixelPerfect", "border"],
   },
   intrinsicRequired: {
     Entity: [],
@@ -111,12 +113,14 @@ export const runtimeManifest: RuntimeManifest = {
     Shape: ["kind", "width", "height"],
     Camera: [],
     AnimatedSprite: ["frames"],
+    Screen: ["width", "height"],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
   },
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },
+    Screen: { fit: SCREEN_FITS },
   },
   intrinsicCallbacks: {
     Collider: {
@@ -128,7 +132,7 @@ export const runtimeManifest: RuntimeManifest = {
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
     // `updateProps` is generated into every component that has props, so a field may not take the name.
-    "name", "props", "applyProps", "updateProps", "transform", "placement", "worldTransform", "parent", "children", "world",
+    "name", "props", "applyProps", "updateProps", "transform", "placement", "layoutX", "layoutY", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",

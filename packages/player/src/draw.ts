@@ -4,11 +4,14 @@ import {
   Collider,
   composeTransforms,
   IDENTITY_TRANSFORM,
+  offsetTransform,
   Pointer,
+  Screen,
   Shape,
   Sprite,
   Text,
   type GameObject,
+  type ScreenFit,
   type ViewTransform,
   type WorldTransform,
 } from "@rge/runtime";
@@ -25,6 +28,7 @@ import {
   RGE_OP_VIEW,
   RGE_OP_VIEW_LEN,
 } from "./protocol.ts";
+import { borderRects, fitScreen, viewToWindow, type ScreenPlacement } from "./screen.ts";
 import { Warner } from "./warn.ts";
 
 /**
@@ -35,7 +39,9 @@ import { Warner } from "./warn.ts";
  * two agree over a real tree; if a built-in ever overrides `childSpace()` again, change this too.
  */
 export function walkTree(root: GameObject, visit: (object: GameObject, world: WorldTransform) => void, parentSpace: WorldTransform = IDENTITY_TRANSFORM): void {
-  const world = composeTransforms(composeTransforms(parentSpace, root.placement), root.transform);
+  // The zero test is inline, not left to offsetTransform: QuickJS does not inline calls, and almost nothing has a layout offset.
+  const laidOut = root.layoutX === 0 && root.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, root.layoutX, root.layoutY);
+  const world = composeTransforms(composeTransforms(laidOut, root.placement), root.transform);
   visit(root, world);
   const childSpace = root instanceof Camera ? parentSpace : world;
   // Indexed, not `for…of`: QuickJS makes an iterator object for every `for…of`, and this runs for every object every frame.
@@ -124,6 +130,10 @@ export class DrawList {
 export interface FrameBuilderOptions {
   /** Load a texture through the backend: a handle, or -1 if it could not be loaded. */
   loadTexture(path: string): number;
+  /** The width in pixels of `text` drawn at `size`, from the backend. Without it, widths are estimated (`estimateTextWidth`). */
+  measureText?: (text: string, size: number) => number;
+  /** The size in pixels of a loaded texture, from the backend. Without it, every texture measures 0 × 0. */
+  textureSize?: (handle: number) => Size;
   /** Folder that image names are relative to. Default `"assets"`. */
   assets?: string;
   /** Where warnings go. Default `console.warn`. */
@@ -135,10 +145,20 @@ export interface ColliderEntry {
   readonly world: WorldTransform;
 }
 
+export interface Size {
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface BuiltFrame {
   readonly list: DrawList;
-  /** The world → window map the frame is drawn through (identity with no camera), as the first record holds it. */
+  /**
+   * The world → window map the frame is drawn through, as the first record holds it: the camera's view (identity
+   * with no camera), then, under a root `<Screen>`, the game's scale and position in the window.
+   */
   readonly view: ViewTransform;
+  /** Where a root `<Screen>` is drawn in the window; null without one, when the game is the window. */
+  readonly screen: ScreenPlacement | null;
   readonly camera: Camera | null;
   /** In draw order: the last one is on top. */
   readonly pointers: readonly Pointer[];
@@ -154,6 +174,7 @@ const KIND_TEXT = 3;
 const KIND_CAMERA = 4;
 const KIND_POINTER = 5;
 const KIND_COLLIDER = 6;
+const KIND_SCREEN = 7;
 /** What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven times per object. */
 const KINDS = new Map<Function, number>();
 
@@ -167,14 +188,40 @@ function kindOf(object: GameObject): number {
       : object instanceof Camera ? KIND_CAMERA
       : object instanceof Pointer ? KIND_POINTER
       : object instanceof Collider ? KIND_COLLIDER
+      : object instanceof Screen ? KIND_SCREEN
       : KIND_NONE;
     KINDS.set(object.constructor, kind);
   }
   return kind;
 }
 
+/**
+ * The `<Screen>` that sets the game's resolution: `root` itself, or its only child, which is where a `World`
+ * keeps the object it mounted (`world.root` is a bare container). Null when the game has none.
+ */
+function rootScreen(root: GameObject): Screen | null {
+  if (root instanceof Screen) return root;
+  const only = root.children.length === 1 ? root.children[0] : undefined;
+  return only instanceof Screen ? only : null;
+}
+
 /** The size of the square drawn where a texture could not be loaded. */
 const MISSING_TEXTURE_SIZE = 16;
+
+/** How many measured strings are kept before the cache starts again, so a running timer cannot grow it without end. */
+const TEXT_CACHE_LIMIT = 1024;
+
+/**
+ * A text width for a backend that cannot measure: 0.6 of the size per character, close to raylib's default font.
+ * Layout through such a backend (a test recorder) is approximate but deterministic.
+ */
+export function estimateTextWidth(text: string, size: number): number {
+  let characters = 0;
+  for (const _ of text) characters++;
+  return characters * size * 0.6;
+}
+
+const NO_SIZE: Size = { width: 0, height: 0 };
 
 /**
  * Turns an object tree into one frame of draw records. It owns what must persist between frames: the
@@ -185,12 +232,18 @@ export class FrameBuilder {
   readonly #list = new DrawList();
   readonly #textures = new Map<string, number>();
   readonly #colors = new Map<string, PackedColor>();
+  readonly #textureSizes = new Map<number, Size>();
+  readonly #textWidths = new Map<string, number>();
   readonly #loadTexture: (path: string) => number;
+  readonly #measureText: ((text: string, size: number) => number) | undefined;
+  readonly #textureSize: ((handle: number) => Size) | undefined;
   readonly #assets: string;
   readonly #warner: Warner;
 
   constructor(options: FrameBuilderOptions) {
     this.#loadTexture = options.loadTexture;
+    this.#measureText = options.measureText;
+    this.#textureSize = options.textureSize;
     this.#assets = options.assets ?? "assets";
     this.#warner = new Warner(options.warn);
   }
@@ -200,6 +253,8 @@ export class FrameBuilder {
     const list = this.#list;
     list.reset();
     list.view(IDENTITY_VIEW);
+    const gameRoot = rootScreen(root);
+    const screen = gameRoot === null ? null : this.#usableScreen(gameRoot);
     let camera: Camera | null = null;
     const pointers: Pointer[] = [];
     const colliders: ColliderEntry[] = [];
@@ -231,15 +286,110 @@ export class FrameBuilder {
         case KIND_COLLIDER:
           colliders.push({ collider: object as Collider, world });
           break;
+        case KIND_SCREEN:
+          if (object !== gameRoot) this.#warner.once("screen-not-root", "A <Screen> only sets the game's resolution as the root of the game: this one is drawn as a plain container.");
+          break;
       }
     });
 
-    const view = this.#view(camera, width, height);
+    if (screen === null) {
+      const view = this.#view(camera, width, height);
+      list.setView(0, view);
+      return { list, view, screen: null, camera, pointers, colliders };
+    }
+    // The camera centres on the game's middle, in game pixels; the screen's placement then takes game pixels to the window.
+    const placement = fitScreen(screen.width, screen.height, width, height, this.#fit(screen));
+    const view = viewToWindow(this.#view(camera, screen.width, screen.height), placement);
     list.setView(0, view);
-    return { list, view, camera, pointers, colliders };
+    this.#borders(placement, width, height, view, this.#color(screen.border));
+    return { list, view, screen: placement, camera, pointers, colliders };
   }
 
-  /** Window origin at the top-left with no camera; with one, the followed point lands on the window's centre. */
+  /**
+   * The size of what an object draws, for layout: a shape's, pointer's or collider's `width` × `height`, a text's
+   * measured width × its `size`, a sprite's texture size (an animated sprite's first frame, so layout does not
+   * jitter as frames change; a texture that cannot be loaded is the 16 × 16 square drawn in its place). Null for
+   * anything else: containers are sized by layout itself. Texture sizes and text widths are asked of the backend
+   * once each and kept.
+   */
+  measure(object: GameObject): Size | null {
+    if (object instanceof Shape || object instanceof Pointer || object instanceof Collider) return { width: object.width, height: object.height };
+    if (object instanceof Text) return { width: object.text === "" ? 0 : this.#textWidth(object.text, object.size), height: object.size };
+    if (object instanceof AnimatedSprite) return this.#imageSize(object.frames[0] ?? "");
+    if (object instanceof Sprite) return this.#imageSize(object.image);
+    return null;
+  }
+
+  #textWidth(text: string, size: number): number {
+    const key = `${size}:${text}`;
+    let width = this.#textWidths.get(key);
+    if (width === undefined) {
+      width = this.#measureText ? this.#measureText(text, size) : estimateTextWidth(text, size);
+      if (this.#textWidths.size >= TEXT_CACHE_LIMIT) this.#textWidths.clear();
+      this.#textWidths.set(key, width);
+    }
+    return width;
+  }
+
+  #imageSize(image: string): Size {
+    if (image === "") return NO_SIZE;
+    const handle = this.#texture(image);
+    if (handle < 0) return { width: MISSING_TEXTURE_SIZE, height: MISSING_TEXTURE_SIZE };
+    let size = this.#textureSizes.get(handle);
+    if (size === undefined) {
+      if (this.#textureSize) size = this.#textureSize(handle);
+      else {
+        this.#warner.once("texture-size", "This backend cannot report texture sizes: sprites measure 0 × 0 for layout.");
+        size = NO_SIZE;
+      }
+      this.#textureSizes.set(handle, size);
+    }
+    return size;
+  }
+
+  /** A root `<Screen>` with a size it can be drawn at, or null (warning once) to draw the game at the window's size. */
+  #usableScreen(screen: Screen): Screen | null {
+    if (screen.width > 0 && screen.height > 0 && Number.isFinite(screen.width) && Number.isFinite(screen.height)) return screen;
+    this.#warner.once(`screen-size:${screen.width}x${screen.height}`, `A <Screen> needs a positive width and height, not ${screen.width} × ${screen.height}: drawing at the window's size instead.`);
+    return null;
+  }
+
+  #fit(screen: Screen): ScreenFit {
+    const fit = screen.fit;
+    if (fit === "integer" || fit === "contain" || fit === "stretch") return fit;
+    this.#warner.once(`screen-fit:${String(fit)}`, `Unknown <Screen fit> '${String(fit)}': using "integer". The choices are "integer", "contain" and "stretch".`);
+    return "integer";
+  }
+
+  /**
+   * Cover the window outside the game with `color`. Drawn last, so nothing in the game shows over them. The frame has
+   * one view, the world → window map, so each bar is a rectangle placed in world space: the window rectangle taken
+   * back through the view. Every view the player makes is a scale after a rotation (a camera's inverse, then the
+   * screen's scale), whose inverse is a rotation after a scale, which is exactly what a record's transform can say.
+   */
+  #borders(placement: ScreenPlacement, width: number, height: number, view: ViewTransform, color: PackedColor): void {
+    const rects = borderRects(placement, width, height);
+    if (rects.length === 0) return;
+    const det = view.a * view.d - view.b * view.c;
+    if (det === 0 || !Number.isFinite(det)) return;
+    // The inverse's columns: where a window step right (m11, m21) and down (m12, m22) goes in the world.
+    const m11 = view.d / det;
+    const m21 = -view.b / det;
+    const m12 = -view.c / det;
+    const m22 = view.a / det;
+    const rotation = Math.atan2(m21, m11);
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const scaleX = Math.hypot(m11, m21);
+    const scaleY = m22 * cos - m12 * sin;
+    for (const rect of rects) {
+      const dx = rect.x - view.e;
+      const dy = rect.y - view.f;
+      this.#list.rect({ x: m11 * dx + m12 * dy, y: m21 * dx + m22 * dy, rotation, scaleX, scaleY }, rect.width, rect.height, color);
+    }
+  }
+
+  /** Window origin at the top-left with no camera; with one, the followed point lands on the centre of a `width` × `height` view (the window, or the game's screen). */
   #view(camera: Camera | null, width: number, height: number): ViewTransform {
     if (camera === null) return IDENTITY_VIEW;
     try {
@@ -252,8 +402,8 @@ export class FrameBuilder {
     }
   }
 
-  #sprite(image: string, world: WorldTransform): void {
-    if (image === "") return;
+  /** The texture handle for an image name, loading it the first time (-1, warned about once, if it cannot be loaded). */
+  #texture(image: string): number {
     const path = `${this.#assets}/${image}`;
     let handle = this.#textures.get(path);
     if (handle === undefined) {
@@ -261,6 +411,12 @@ export class FrameBuilder {
       this.#textures.set(path, handle);
       if (handle < 0) this.#warner.once(`texture:${path}`, `Could not load the texture '${path}': drawing a magenta square instead.`);
     }
+    return handle;
+  }
+
+  #sprite(image: string, world: WorldTransform): void {
+    if (image === "") return;
+    const handle = this.#texture(image);
     if (handle < 0) this.#list.rect(world, MISSING_TEXTURE_SIZE, MISSING_TEXTURE_SIZE, MAGENTA);
     else this.#list.sprite(world, handle);
   }

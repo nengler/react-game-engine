@@ -31,6 +31,15 @@ export interface WorldTransform {
 export const IDENTITY_TRANSFORM: WorldTransform = Object.freeze({ x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 });
 
 /**
+ * `parent` moved by a layout offset (see `GameObject.layoutX`): the offset is in the parent's space, so it is
+ * scaled and turned with it, like a child's position. With no offset this is `parent` itself.
+ */
+export function offsetTransform(parent: WorldTransform, x: number, y: number): WorldTransform {
+  if (x === 0 && y === 0) return parent;
+  return composeTransforms(parent, { x, y, rotation: 0, scaleX: 1, scaleY: 1 });
+}
+
+/**
  * `local` placed inside `parent`: the local position is scaled, then rotated,
  * by the parent and added to the parent's position; rotations add and scales
  * multiply. (Non-uniform parent scale combined with a rotated child would

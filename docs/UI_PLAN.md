@@ -229,11 +229,13 @@ If games later need wrapping, `min`/`max` sizes, or absolute positioning inside 
 
 ### U1: the layout offset and the measurer
 
+**Done 2026-11-09.** Nothing writes the offset yet (that is U2's `<Flex>`), and no native backend measures yet (U0): until then text widths are estimated (0.6 × size per character) and textures measure 0 × 0, with one warning. `RecordingBackend` measures deterministically, so layout tests can start now. The QuickJS bench is unchanged within its noise; the tree walk tests for a zero offset inline, because QuickJS does not inline calls.
+
 **Done when**
 
-- [ ] `GameObject` has `layoutX`/`layoutY`, composed before `placement` in `worldTransform()` and in `walkTree`, and the draw test still finds them in agreement
-- [ ] The two names are in `reservedMembers`, with a compiler test that a state named `layoutX` is rejected
-- [ ] `FrameBuilder` measures `Text` and `Sprite` through the backend, with caching, and a test counts the native calls
+- [x] `GameObject` has `layoutX`/`layoutY`, composed before `placement` in `worldTransform()` and in `walkTree`, and the draw test still finds them in agreement
+- [x] The two names are in `reservedMembers`, with a compiler test that a state named `layoutX` is rejected
+- [x] `FrameBuilder` measures `Text` and `Sprite` through the backend, with caching, and a test counts the native calls
 
 ### U2: `<Flex>`
 
@@ -324,7 +326,7 @@ C1 can be done before priority 3, because it needs no ABI change. C2 goes in ABI
 | --- | --- | --- |
 | Set by | `<Screen width height>` in the game's TSX | `PlayerConfig.width`/`height` to start; the window's real size after that |
 | Changes when | The game changes the props (a settings menu could) | The player resizes the window, or goes full screen |
-| What uses it | Everything inside the game: transforms, the camera, `<Hud>`, `Flex fill`, `input.pointerX`, `input.width`/`height` | Only the player: to scale the canvas and place the borders, and to map the mouse back |
+| What uses it | Everything inside the game: transforms, the camera, `<Hud>`, `Flex fill`, `input.pointerX` | Only the player: to scale the canvas and place the borders, and to map the mouse back |
 | Without a `<Screen>` | The same as the window size, as today | |
 
 **Why the window's size stays in `PlayerConfig`, not on `<Screen>`.** The window opens before the root is built (`config.root()` runs once the window and sounds are ready, so sounds created in constructors preload). The player cannot know a `<Screen>`'s props until after the window exists. The window's size is also the host's business: the user resizes it, and a packaged game might save it between runs. So the game says what resolution it is drawn at, and the window is whatever it is. One small change helps: `PlayerConfig.width`/`height` become optional, and when they are left out with a `<Screen>` at the root, the window opens at 3 × the canvas (960 × 540 for 320 × 180). The window is resized to that once the root is built.
@@ -370,7 +372,7 @@ Most pixel-art games want `true`. Games with drawn or vector art, or with lots o
 
 ### The runtime: a container built-in that must be the root
 
-`Screen` is a runtime class with the fields above, a container like `Entity` and `Camera`, added to the manifest in the same places `Flex` is. A component whose root element is `<Screen>` extends `Screen` (that is how components work already), so the player finds it by checking `world.root instanceof Screen` once per frame. Reading its fields every frame means a game can change its resolution or `fit` from state, for example in a settings menu.
+`Screen` is a runtime class with the fields above, a container like `Entity` and `Camera`, added to the manifest in the same places `Flex` is. A component whose root element is `<Screen>` extends `Screen` (that is how components work already), so the player finds it once per frame at the root of the tree (as built in C1: the root it is given, or that root's only child, since a `World` keeps what it mounted under a bare root object). Reading its fields every frame means a game can change its resolution or `fit` from state, for example in a settings menu.
 
 A `<Screen>` anywhere but the root has nothing sensible to mean, so it draws its children as an `Entity` would, with a warning once: "A `<Screen>` only works as the root of the game." The compiler cannot catch this on its own, because whether a component ends up at the root depends on another file (`PlayerConfig.root`).
 
@@ -387,8 +389,8 @@ It then uses them in four places:
 
 1. **The camera's view.** `#view` centres the followed point on the canvas's centre (160, 90), not the window's. Today it adds `width / 2` and `height / 2` of the window; with a canvas, it adds the canvas's.
 2. **`<Hud>`.** Its view is the identity in canvas units (so a HUD at `x: 8` is 8 game pixels in), and its layout box for `Flex fill` is 320 × 180.
-3. **Drawing.** With `pixelPerfect={false}`, each `RGE_OP_VIEW` record is multiplied by the canvas-to-window map (`a, b, c, d` by the scale; `e, f` scaled, then offset by `dest`). Then the bars are drawn as up to four rectangle records, through a last identity view in window pixels. That uses priority 3's "a later view replaces the current one" rule. With `pixelPerfect={true}`, the views stay in canvas units, and the frame starts with the new `RGE_OP_CANVAS` record instead (next section).
-4. **The mouse.** `PlayerInput` takes the window position back through the same map: `canvasX = (mouseX − dest.x) / scale`. `input.pointerX` (world) and the press dispatch (`Pointer`s) start from that point. `input.width`/`height` report the canvas's size, which is what game code means by "the screen". The window's size stays available to the player only. A press in the border bars is outside the canvas and reaches no `Pointer`.
+3. **Drawing.** With `pixelPerfect={false}`, each `RGE_OP_VIEW` record is multiplied by the canvas-to-window map (`a, b, c, d` by the scale; `e, f` scaled, then offset by `dest`). Then the bars are drawn as up to four rectangle records. C1 places them in world space through the inverse of that one view, since ABI v1 allows only one view record; after priority 3 they can go through a last identity view in window pixels instead. With `pixelPerfect={true}`, the views stay in canvas units, and the frame starts with the new `RGE_OP_CANVAS` record instead (next section).
+4. **The mouse.** `PlayerInput` takes the window position back through the same map: `canvasX = (mouseX − dest.x) / scale`. `input.pointerX` (world) and the press dispatch (`Pointer`s) start from that point. Handlers never see the window's size (`InputState` has none), so it stays the player's business. A press in the border bars is outside the canvas and reaches no `Pointer`.
 
 Without a `<Screen>`, the map is the identity and `dest` is the whole window, so everything behaves exactly as today. That is the test that C1 changes nothing for existing games: every recording test still passes untouched.
 
@@ -423,17 +425,25 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 
 ### C1: `<Screen>`, drawn smooth
 
+**Done 2026-11-09**, with three differences from the text above, all recorded in DESIGN.md's "The game's screen":
+
+- **The bars** are not drawn through a last window-space view, because librge v1 refuses a second view record. Each bar is a rectangle placed in world space by taking its window rectangle back through the frame's one view. Every view the player makes is a scale after a rotation, so a record's rotate-then-scale says it exactly; a pixel test under a turned, zoomed camera checks the border stays solid. Priority 3 can switch to a window-space view.
+- **`input.width`/`height` still report the window.** Handlers never see either size (`InputState` has no size), so the question did not arise; the player keeps the window's size for itself.
+- **Where the root is.** A `World` keeps what it mounted under a bare root object, so the player looks for the `<Screen>` at the root it builds from or as that root's only child.
+
+`pixelPerfect` is accepted, and defaults to true, but until C2 the game is drawn at the window's resolution either way.
+
 **Done when**
 
-- [ ] `Screen` is a runtime class and in the manifest; `<Screen transform>` is a compile error
-- [ ] `fit` is checked at compile time, like `<Shape kind>`
-- [ ] The player computes scale and `dest` for each `fit`, tested at several window sizes, including one smaller than the canvas
-- [ ] The camera centres on the canvas's centre; `<Hud>` (once priority 3 lands) is in canvas units
-- [ ] The mouse maps back through the canvas: a `Pointer` is pressed in the right place in a resized, letterboxed window, and a press in the bars hits nothing
-- [ ] `input.width`/`height` report the canvas's size
-- [ ] Bars are drawn in `border`; a pixel test checks one
-- [ ] A game with no `<Screen>` produces byte-identical records to today (the existing recording tests pass unchanged)
-- [ ] A `<Screen>` that is not the root warns once and behaves as an `Entity`
+- [x] `Screen` is a runtime class and in the manifest; `<Screen transform>` is a compile error
+- [x] `fit` is checked at compile time, like `<Shape kind>`
+- [x] The player computes scale and `dest` for each `fit`, tested at several window sizes, including one smaller than the canvas
+- [ ] The camera centres on the canvas's centre (done); `<Hud>` is in canvas units (waits for priority 3)
+- [x] The mouse maps back through the canvas: a `Pointer` is pressed in the right place in a resized, letterboxed window, and a press in the bars hits nothing
+- [x] ~~`input.width`/`height` report the canvas's size~~ (see above: not needed)
+- [x] Bars are drawn in `border`; a pixel test checks one
+- [x] A game with no `<Screen>` produces byte-identical records to today (the existing recording tests and the Node↔QuickJS parity test pass unchanged)
+- [x] A `<Screen>` that is not the root warns once and behaves as an `Entity`
 
 ### C2: `pixelPerfect`
 

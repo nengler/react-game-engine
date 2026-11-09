@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
-import { Camera, Entity, Shape, Sprite, Text } from "@rge/runtime";
+import { Camera, Entity, Screen, Shape, Sprite, Text } from "@rge/runtime";
 import { createPlayer, KEYS, RGE_ABI_VERSION, type PlayerConfig } from "@rge/player";
 import { NodeBackend, checkAbi, createNodeBackend, findNativeLibrary, loadNative, type Pixels } from "../src/index.ts";
 
@@ -119,6 +119,47 @@ describe("librge through koffi", { skip }, () => {
     });
     assert.equal(pixel(frame, 33, 25), "0000ffff", "marker at the world point the camera is at");
     assert.equal(pixel(frame, 5, 5), "000000ff");
+  });
+
+  it("scales a <Screen> into the window and covers the rest with its border", () => {
+    // A 20 × 12 game in a 64 × 48 window: ×3 is the largest whole scale, so 60 × 36 at (2, 6).
+    const frame = render(() => {
+      const screen = new Screen({ width: 20, height: 12, border: "blue" });
+      screen.addChild(new Shape({ kind: "rect", width: 20, height: 12, color: "red" }));
+      const dot = new Shape({ kind: "rect", width: 1, height: 1, color: "lime" });
+      dot.transform.x = 5;
+      dot.transform.y = 4;
+      screen.addChild(dot);
+      return screen;
+    });
+    assert.equal(pixel(frame, 2, 6), "ff0000ff", "the game's top-left pixel");
+    assert.equal(pixel(frame, 61, 41), "ff0000ff", "the game's bottom-right pixel");
+    for (const [x, y] of [[17, 18], [19, 20]] as const) assert.equal(pixel(frame, x, y), "00ff00ff", `game pixel (5, 4) covers window (${x}, ${y})`);
+    assert.equal(pixel(frame, 20, 18), "ff0000ff", "and stops after three window pixels");
+    for (const [x, y] of [[1, 20], [62, 20], [30, 5], [30, 42], [0, 0], [63, 47]] as const) assert.equal(pixel(frame, x, y), "0000ffff", `border at (${x}, ${y})`);
+  });
+
+  it("keeps the border over anything drawn past the game, under a turned camera", () => {
+    const frame = render(() => {
+      const screen = new Screen({ width: 20, height: 12, border: "blue" });
+      const camera = new Camera({ zoom: 1.3 });
+      camera.transform.rotation = 0.6;
+      screen.addChild(camera);
+      const big = new Shape({ kind: "rect", width: 400, height: 400, color: "red" });
+      big.transform.x = -200;
+      big.transform.y = -200;
+      screen.addChild(big);
+      return screen;
+    });
+    assert.equal(pixel(frame, 32, 24), "ff0000ff", "the middle of the game");
+    for (let x = 0; x < 64; x++) {
+      assert.equal(pixel(frame, x, 0), "0000ffff", `top border at x=${x}`);
+      assert.equal(pixel(frame, x, 47), "0000ffff", `bottom border at x=${x}`);
+    }
+    for (let y = 0; y < 48; y++) {
+      assert.equal(pixel(frame, 0, y), "0000ffff", `left border at y=${y}`);
+      assert.equal(pixel(frame, 63, y), "0000ffff", `right border at y=${y}`);
+    }
   });
 
   it("loads a texture through the assets folder and flips it with a negative scale", () => {

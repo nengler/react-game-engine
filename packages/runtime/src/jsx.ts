@@ -17,6 +17,7 @@ import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
 import type { CameraProps } from "./components/Camera.ts";
 import type { AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
+import type { ScreenProps } from "./components/Screen.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
@@ -150,4 +151,13 @@ export function Camera(_props: CameraProps & { children?: Child }): JSX.Element 
  */
 export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
   return compileTimeOnly("AnimatedSprite");
+}
+
+/**
+ * The game's screen, at a fixed resolution: `<Screen width={320} height={180}>` as the root of the game draws
+ * everything at 320 × 180 and scales it to fit the window (`fit`), with `border` around it. Only the root's
+ * `<Screen>` does this; it cannot be placed with `transform`.
+ */
+export function Screen(_props: ScreenProps & { children?: Child }): JSX.Element {
+  return compileTimeOnly("Screen");
 }

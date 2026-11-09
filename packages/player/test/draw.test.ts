@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { AnimatedSprite, Camera, Collider, Entity, GameObject, Pointer, Shape, Sprite, Text, World } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
 import { Level } from "../../example/generated/Level.ts";
-import { FrameBuilder, walkTree } from "../src/draw.ts";
+import { estimateTextWidth, FrameBuilder, walkTree } from "../src/draw.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 import { RGE_IN_LEN, KEYS } from "../src/protocol.ts";
 
@@ -91,6 +91,35 @@ describe("walkTree", () => {
       const expected = object.worldTransform();
       for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const) close(transform[field], expected[field], `${object.constructor.name}.${field}`);
     });
+  });
+
+  it("agrees with worldTransform() when layout has moved objects, under a turned, scaled parent", () => {
+    const outer = new Entity();
+    outer.transform.rotation = 0.7;
+    outer.transform.scaleX = 3;
+    outer.layoutX = 11;
+    const row = new Entity();
+    row.layoutX = 5;
+    row.layoutY = -2;
+    row.placement.x = 4;
+    const leaf = new Text({ text: "hi" });
+    leaf.layoutY = 9;
+    leaf.transform.y = -1;
+    const camera = new Camera();
+    camera.layoutX = 100;
+    const followed = new Shape({ kind: "rect", width: 1, height: 1 });
+    followed.layoutX = 2;
+    outer.addChild(row);
+    row.addChild(leaf);
+    row.addChild(camera);
+    camera.addChild(followed);
+    let count = 0;
+    walkTree(outer, (object, transform) => {
+      const expected = object.worldTransform();
+      for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const) close(transform[field], expected[field], `${object.constructor.name}.${field}`);
+      count++;
+    });
+    assert.equal(count, 5);
   });
 
   it("visits parents before children, children in order", () => {
@@ -374,5 +403,86 @@ describe("golden draw lists", () => {
     const world = mounted(new Level());
     for (let i = 0; i < 100; i++) world.tick(0.05);
     golden("level", draw(world.root, { width: 320, height: 240 }).records);
+  });
+});
+
+describe("FrameBuilder: measuring, for layout", () => {
+  function builder(backend: RecordingBackend, warnings: string[] = [], withMeasuring = true): FrameBuilder {
+    return new FrameBuilder({
+      loadTexture: (path) => backend.loadTexture(path),
+      measureText: withMeasuring ? (text, size) => backend.measureText(text, size) : undefined,
+      textureSize: withMeasuring ? (handle) => backend.textureSize(handle) : undefined,
+      warn: (m) => warnings.push(m),
+    });
+  }
+
+  it("measures shapes, pointers and colliders by their own size", () => {
+    const b = builder(new RecordingBackend());
+    assert.deepEqual(b.measure(new Shape({ kind: "circle", width: 6, height: 4 })), { width: 6, height: 4 });
+    assert.deepEqual(b.measure(new Pointer({ width: 96, height: 32 })), { width: 96, height: 32 });
+    assert.deepEqual(b.measure(new Collider({ width: 3, height: 9 })), { width: 3, height: 9 });
+  });
+
+  it("measures text through the backend, as wide as it is and as tall as its size, asking once per string", () => {
+    const backend = new RecordingBackend();
+    const b = builder(backend);
+    const label = new Text({ text: "Score", size: 20 });
+    assert.deepEqual(b.measure(label), { width: estimateTextWidth("Score", 20), height: 20 });
+    assert.deepEqual(b.measure(label), { width: 60, height: 20 });
+    label.size = 10;
+    b.measure(label);
+    label.text = "";
+    assert.deepEqual(b.measure(label), { width: 0, height: 10 }, "empty text is not measured");
+    assert.deepEqual(backend.textMeasures, ["20:Score", "10:Score"]);
+  });
+
+  it("estimates text without a backend that measures, counting characters, not UTF-16 units", () => {
+    const b = builder(new RecordingBackend(), [], false);
+    assert.deepEqual(b.measure(new Text({ text: "héllo", size: 10 })), { width: 30, height: 10 });
+    assert.equal(estimateTextWidth("🙂🙂", 10), 12);
+  });
+
+  it("measures a sprite by its texture, loading it once and asking its size once", () => {
+    const backend = new RecordingBackend({ textureSizes: { "assets/coin.png": { width: 12, height: 14 } } });
+    const b = builder(backend);
+    assert.deepEqual(b.measure(new Sprite({ image: "coin.png" })), { width: 12, height: 14 });
+    assert.deepEqual(b.measure(new Sprite({ image: "coin.png" })), { width: 12, height: 14 });
+    assert.deepEqual(b.measure(new Sprite({ image: "other.png" })), { width: 16, height: 16 });
+    assert.deepEqual(backend.textureLoads, ["assets/coin.png", "assets/other.png"]);
+    assert.deepEqual(backend.textureSizeQueries, ["assets/coin.png", "assets/other.png"]);
+    // Drawing the same sprite afterwards does not load it again.
+    draw(new Sprite({ image: "coin.png" }), { builder: b, backend });
+    assert.deepEqual(backend.textureLoads, ["assets/coin.png", "assets/other.png"]);
+  });
+
+  it("measures an animated sprite by its first frame, so the size does not jitter", () => {
+    const backend = new RecordingBackend({ textureSizes: { "assets/a.png": { width: 8, height: 8 }, "assets/b.png": { width: 30, height: 30 } } });
+    const sprite = new AnimatedSprite({ frames: ["a.png", "b.png"], fps: 10 });
+    sprite.onUpdate(0.15);
+    assert.equal(sprite.image, "b.png");
+    assert.deepEqual(builder(backend).measure(sprite), { width: 8, height: 8 });
+  });
+
+  it("measures a missing texture as the square drawn in its place, and an empty image as nothing", () => {
+    const backend = new RecordingBackend({ missingTextures: ["assets/gone.png"] });
+    const b = builder(backend);
+    assert.deepEqual(b.measure(new Sprite({ image: "gone.png" })), { width: 16, height: 16 });
+    assert.deepEqual(b.measure(new Sprite({ image: "" })), { width: 0, height: 0 });
+    assert.deepEqual(backend.textureSizeQueries, []);
+  });
+
+  it("measures textures as 0 × 0, warning once, without a backend that can say", () => {
+    const warnings: string[] = [];
+    const b = builder(new RecordingBackend(), warnings, false);
+    assert.deepEqual(b.measure(new Sprite({ image: "a.png" })), { width: 0, height: 0 });
+    b.measure(new Sprite({ image: "b.png" }));
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /cannot report texture sizes/);
+  });
+
+  it("leaves containers to layout", () => {
+    const b = builder(new RecordingBackend());
+    assert.equal(b.measure(new Entity()), null);
+    assert.equal(b.measure(new Camera()), null);
   });
 });
