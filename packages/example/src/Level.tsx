@@ -1,4 +1,4 @@
-import { useState, useRef, useUpdate, AnimatedSprite, Camera, Entity, Sprite, Collider, Shape, Text } from "@rge/runtime/jsx";
+import { useState, useRef, useUpdate, AnimatedSprite, Camera, Entity, Sprite, Collider, Pointer, Shape, Text } from "@rge/runtime/jsx";
 import Coin, { Trail } from "./Coin.tsx";
 import { Banner } from "./Banner.tsx";
 import { Panel } from "./Panel.tsx";
@@ -72,6 +72,9 @@ function Level() {
       ))}
       {/* The camera follows its children: once the third enemy arrives the view centres on it, and zooms in from wave 6. */}
       <Camera zoom={wave > 5 ? 2 : 1}>{wave >= 3 && <Enemy speed={wave} transform={{ x: 120 }} />}</Camera>
+      {/* A hit area: a press inside it calls the handler. Pair it with a Shape to draw the button. */}
+      <Shape kind="rect" width={48} height={16} color="gray" transform={{ x: 160, y: 80 }} />
+      <Pointer width={48} height={16} transform={{ x: 160, y: 80 }} onPress={() => setWave((wave) => wave + 1)} />
       <Panel title="hud" transform={{ x: 160 }}>
         <Coin value={score} />
         <Trail value={wave} transform={{ x: 40, y: 20 }} />

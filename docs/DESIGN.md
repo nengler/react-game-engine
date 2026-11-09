@@ -298,13 +298,19 @@ state, write refs, and call callback props, which is how the parent finds out
 (`onDone?.()`). A callback created for a list item can still read its item
 there (see "Keyed lists").
 
+**Presses**: like collisions, the mock has no input device. An input system calls
+`world.reportPress(pointer, x, y)` with a world-space point; the pointer's own
+`onPress` is called if the point is inside its area, and the call returns whether
+it hit. Choosing which pointers to test, and in what order for overlaps, is the
+input system's job.
+
 **Rules.** Top-level only, imported from the authoring module (`RGE1005`),
 one arrow function with no parameters (`RGE1401`), several of a kind allowed
 and run in source order.
 
 Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
 not JSX event props. Element-level events are callback props on the element
-(`<Collider onCollisionEnter>`, later `<Pointer onPress>`).
+(`<Collider onCollisionEnter>`, `<Pointer onPress>`).
 
 ## Arrays and records
 
@@ -774,6 +780,22 @@ restricting another built-in's prop is a manifest edit (a test does it to
 the class extends `Shape`, the required props that vary get the usual
 constructor placeholders, and `kind`, `width`, `height` and `color` become names
 a state, ref or prop may not use.
+
+## Pointer
+
+`<Pointer>` (M14) is a hit area for presses, positioned with `transform`:
+
+```tsx
+<Shape kind="rect" width={48} height={16} color="gray" />
+<Pointer width={48} height={16} onPress={() => setOpen(!open)} />
+```
+
+`Pointer extends GameObject` with `width`, `height` (both required) and
+`onPress`. It draws nothing, and its origin is the top-left corner. `contains(x, y)`
+takes a world-space point back through the pointer's world position, rotation
+and scale, so a moved, turned or scaled pointer is hit where it is drawn; a zero
+scale is never hit. `onPress` takes no parameters, and the manifest says so
+(`intrinsicCallbacks`). It is a leaf.
 
 ## Camera
 

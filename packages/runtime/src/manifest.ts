@@ -88,7 +88,7 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite"],
+  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity", "Camera"],
   textContent: { Text: "text" },
@@ -96,6 +96,7 @@ export const runtimeManifest: RuntimeManifest = {
     Entity: ["name"],
     Sprite: ["image"],
     Collider: ["width", "height", "onCollisionEnter"],
+    Pointer: ["width", "height", "onPress", "contains"],
     Text: ["text", "size", "color"],
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "viewTransform", "worldToView", "viewToWorld"],
@@ -105,6 +106,7 @@ export const runtimeManifest: RuntimeManifest = {
     Entity: [],
     Sprite: ["image"],
     Collider: ["width", "height"],
+    Pointer: ["width", "height"],
     Text: ["text"],
     Shape: ["kind", "width", "height"],
     Camera: [],
@@ -118,6 +120,7 @@ export const runtimeManifest: RuntimeManifest = {
   },
   intrinsicCallbacks: {
     Collider: { onCollisionEnter: [{ name: "other", type: "GameObject" }] },
+    Pointer: { onPress: [] },
   },
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
@@ -132,7 +135,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },
