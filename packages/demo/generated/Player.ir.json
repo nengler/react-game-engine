@@ -1,0 +1,607 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/demo/src/Player.tsx",
+  "typeDeclarations": [],
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Player",
+      "span": {
+        "fileName": "packages/demo/src/Player.tsx",
+        "start": 172,
+        "end": 957,
+        "line": 4,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Player.x",
+          "setterName": "setX",
+          "span": {
+            "fileName": "packages/demo/src/Player.tsx",
+            "start": 207,
+            "end": 230,
+            "line": 5,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Player.y",
+          "setterName": "setY",
+          "span": {
+            "fileName": "packages/demo/src/Player.tsx",
+            "start": 240,
+            "end": 263,
+            "line": 6,
+            "column": 9
+          }
+        },
+        {
+          "kind": "OnInput",
+          "handler": {
+            "kind": "Function",
+            "params": [
+              {
+                "id": "Player.input#1",
+                "name": "input",
+                "type": {
+                  "kind": "Named",
+                  "name": "InputState"
+                }
+              }
+            ],
+            "body": [
+              {
+                "kind": "Assign",
+                "target": {
+                  "kind": "RefCurrent",
+                  "ref": "Player.moveX"
+                },
+                "operator": "=",
+                "value": {
+                  "kind": "Binary",
+                  "operator": "-",
+                  "left": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": "||",
+                      "left": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Method",
+                          "receiver": {
+                            "kind": "ParamRead",
+                            "param": "Player.input#1",
+                            "name": "input"
+                          },
+                          "name": "down"
+                        },
+                        "args": [
+                          {
+                            "kind": "StringLiteral",
+                            "value": "ArrowRight"
+                          }
+                        ]
+                      },
+                      "right": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Method",
+                          "receiver": {
+                            "kind": "ParamRead",
+                            "param": "Player.input#1",
+                            "name": "input"
+                          },
+                          "name": "down"
+                        },
+                        "args": [
+                          {
+                            "kind": "StringLiteral",
+                            "value": "D"
+                          }
+                        ]
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "NumberLiteral",
+                      "value": 1
+                    },
+                    "whenFalse": {
+                      "kind": "NumberLiteral",
+                      "value": 0
+                    }
+                  },
+                  "right": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": "||",
+                      "left": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Method",
+                          "receiver": {
+                            "kind": "ParamRead",
+                            "param": "Player.input#1",
+                            "name": "input"
+                          },
+                          "name": "down"
+                        },
+                        "args": [
+                          {
+                            "kind": "StringLiteral",
+                            "value": "ArrowLeft"
+                          }
+                        ]
+                      },
+                      "right": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Method",
+                          "receiver": {
+                            "kind": "ParamRead",
+                            "param": "Player.input#1",
+                            "name": "input"
+                          },
+                          "name": "down"
+                        },
+                        "args": [
+                          {
+                            "kind": "StringLiteral",
+                            "value": "A"
+                          }
+                        ]
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "NumberLiteral",
+                      "value": 1
+                    },
+                    "whenFalse": {
+                      "kind": "NumberLiteral",
+                      "value": 0
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "Assign",
+                "target": {
+                  "kind": "RefCurrent",
+                  "ref": "Player.moveY"
+                },
+                "operator": "=",
+                "value": {
+                  "kind": "Binary",
+                  "operator": "-",
+                  "left": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": "||",
+                      "left": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Method",
+                          "receiver": {
+                            "kind": "ParamRead",
+                            "param": "Player.input#1",
+                            "name": "input"
+                          },
+                          "name": "down"
+                        },
+                        "args": [
+                          {
+                            "kind": "StringLiteral",
+                            "value": "ArrowDown"
+                          }
+                        ]
+                      },
+                      "right": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Method",
+                          "receiver": {
+                            "kind": "ParamRead",
+                            "param": "Player.input#1",
+                            "name": "input"
+                          },
+                          "name": "down"
+                        },
+                        "args": [
+                          {
+                            "kind": "StringLiteral",
+                            "value": "S"
+                          }
+                        ]
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "NumberLiteral",
+                      "value": 1
+                    },
+                    "whenFalse": {
+                      "kind": "NumberLiteral",
+                      "value": 0
+                    }
+                  },
+                  "right": {
+                    "kind": "Conditional",
+                    "test": {
+                      "kind": "Binary",
+                      "operator": "||",
+                      "left": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Method",
+                          "receiver": {
+                            "kind": "ParamRead",
+                            "param": "Player.input#1",
+                            "name": "input"
+                          },
+                          "name": "down"
+                        },
+                        "args": [
+                          {
+                            "kind": "StringLiteral",
+                            "value": "ArrowUp"
+                          }
+                        ]
+                      },
+                      "right": {
+                        "kind": "Call",
+                        "callee": {
+                          "kind": "Method",
+                          "receiver": {
+                            "kind": "ParamRead",
+                            "param": "Player.input#1",
+                            "name": "input"
+                          },
+                          "name": "down"
+                        },
+                        "args": [
+                          {
+                            "kind": "StringLiteral",
+                            "value": "W"
+                          }
+                        ]
+                      }
+                    },
+                    "whenTrue": {
+                      "kind": "NumberLiteral",
+                      "value": 1
+                    },
+                    "whenFalse": {
+                      "kind": "NumberLiteral",
+                      "value": 0
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "span": {
+            "fileName": "packages/demo/src/Player.tsx",
+            "start": 405,
+            "end": 689,
+            "line": 11,
+            "column": 3
+          }
+        },
+        {
+          "kind": "OnUpdate",
+          "handler": {
+            "kind": "Function",
+            "params": [
+              {
+                "id": "Player.dt#2",
+                "name": "dt",
+                "type": {
+                  "kind": "Primitive",
+                  "name": "number"
+                }
+              }
+            ],
+            "body": [
+              {
+                "kind": "SetState",
+                "state": "Player.x",
+                "updater": {
+                  "kind": "Function",
+                  "params": [
+                    {
+                      "id": "Player.x#3",
+                      "name": "x",
+                      "type": {
+                        "kind": "Primitive",
+                        "name": "number"
+                      }
+                    }
+                  ],
+                  "body": [
+                    {
+                      "kind": "Return",
+                      "value": {
+                        "kind": "Binary",
+                        "operator": "+",
+                        "left": {
+                          "kind": "ParamRead",
+                          "param": "Player.x#3",
+                          "name": "x"
+                        },
+                        "right": {
+                          "kind": "Binary",
+                          "operator": "*",
+                          "left": {
+                            "kind": "Binary",
+                            "operator": "*",
+                            "left": {
+                              "kind": "RefRead",
+                              "ref": "Player.moveX"
+                            },
+                            "right": {
+                              "kind": "NumberLiteral",
+                              "value": 140
+                            }
+                          },
+                          "right": {
+                            "kind": "ParamRead",
+                            "param": "Player.dt#2",
+                            "name": "dt"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "SetState",
+                "state": "Player.y",
+                "updater": {
+                  "kind": "Function",
+                  "params": [
+                    {
+                      "id": "Player.y#4",
+                      "name": "y",
+                      "type": {
+                        "kind": "Primitive",
+                        "name": "number"
+                      }
+                    }
+                  ],
+                  "body": [
+                    {
+                      "kind": "Return",
+                      "value": {
+                        "kind": "Binary",
+                        "operator": "+",
+                        "left": {
+                          "kind": "ParamRead",
+                          "param": "Player.y#4",
+                          "name": "y"
+                        },
+                        "right": {
+                          "kind": "Binary",
+                          "operator": "*",
+                          "left": {
+                            "kind": "Binary",
+                            "operator": "*",
+                            "left": {
+                              "kind": "RefRead",
+                              "ref": "Player.moveY"
+                            },
+                            "right": {
+                              "kind": "NumberLiteral",
+                              "value": 140
+                            }
+                          },
+                          "right": {
+                            "kind": "ParamRead",
+                            "param": "Player.dt#2",
+                            "name": "dt"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "span": {
+            "fileName": "packages/demo/src/Player.tsx",
+            "start": 693,
+            "end": 812,
+            "line": 16,
+            "column": 3
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Player.x",
+          "name": "x",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          }
+        },
+        {
+          "kind": "State",
+          "id": "Player.y",
+          "name": "y",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          }
+        }
+      ],
+      "refs": [
+        {
+          "kind": "Ref",
+          "id": "Player.moveX",
+          "name": "moveX",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "span": {
+            "fileName": "packages/demo/src/Player.tsx",
+            "start": 356,
+            "end": 373,
+            "line": 8,
+            "column": 9
+          }
+        },
+        {
+          "kind": "Ref",
+          "id": "Player.moveY",
+          "name": "moveY",
+          "type": "number",
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "span": {
+            "fileName": "packages/demo/src/Player.tsx",
+            "start": 383,
+            "end": 400,
+            "line": 9,
+            "column": 9
+          }
+        }
+      ],
+      "sounds": [],
+      "props": [],
+      "propsType": null,
+      "isDefaultExport": false,
+      "isExported": true,
+      "acceptsChildren": false,
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Player"
+            }
+          }
+        ],
+        "transform": [
+          {
+            "kind": "DynamicProp",
+            "name": "x",
+            "value": {
+              "kind": "StateRead",
+              "state": "Player.x"
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Player.x"
+              }
+            ]
+          },
+          {
+            "kind": "DynamicProp",
+            "name": "y",
+            "value": {
+              "kind": "StateRead",
+              "state": "Player.y"
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Player.y"
+              }
+            ]
+          }
+        ],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Player/0",
+              "fieldName": "shape",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Shape"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "kind",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "rect"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 24
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 24
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "color",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "gold"
+                  }
+                }
+              ],
+              "transform": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/demo/src/Player.tsx",
+                "start": 879,
+                "end": 936,
+                "line": 23,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/demo/src/Player.tsx",
+          "start": 829,
+          "end": 950,
+          "line": 22,
+          "column": 5
+        }
+      }
+    }
+  ]
+}

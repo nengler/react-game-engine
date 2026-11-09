@@ -24,7 +24,11 @@
     "packages/player/test",
     "packages/player-node/src",
     "packages/player-node/test",
-    "packages/player-node/demo",
+    "packages/demo/generated",
+    "packages/demo/game.ts",
+    "packages/demo/main.ts",
+    "packages/demo/tools",
+    "packages/demo/test",
     "packages/example/generated"
   ]
 }

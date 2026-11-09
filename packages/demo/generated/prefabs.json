@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "prefabs": {
+    "Beacon": {
+      "module": "packages/demo/src/Beacon.tsx",
+      "props": []
+    },
+    "Game": {
+      "module": "packages/demo/src/Game.tsx",
+      "props": []
+    },
+    "Ground": {
+      "module": "packages/demo/src/Ground.tsx",
+      "props": []
+    },
+    "Player": {
+      "module": "packages/demo/src/Player.tsx",
+      "props": []
+    }
+  }
+}

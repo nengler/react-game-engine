@@ -50,7 +50,8 @@ packages/
               Sound (a mock that records plays), `loadScene`, and `runtimeManifest`
               (what the compiler is told about the runtime)
   player/     (Phase 3) the native player's pure-TypeScript half: object tree → draw records, `Backend`, a recording backend for tests
-  player-node/ (Phase 3) the Node host: koffi binding to `librge`, `play.ts`, a hello demo
+  player-node/ (Phase 3) the Node host: koffi binding to `librge`, and `play.ts`
+  demo/       (Phase 3) a small playable game in TSX with its generated output and assets; `npm run play:demo`
   example/    example components and their committed generated output
 ```
 

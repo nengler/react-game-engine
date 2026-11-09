@@ -22,9 +22,14 @@ jobs:
           npm run example
           git diff --exit-code -- packages/example/generated
           test -z "$(git ls-files --others --exclude-standard -- packages/example/generated)"
+      - name: Demo generated output is up to date
+        run: |
+          npm run demo
+          git diff --exit-code -- packages/demo/generated
+          test -z "$(git ls-files --others --exclude-standard -- packages/demo/generated)"
 
   # librge on raylib's software renderer: no window, no GPU, no system libraries. Runs the C smoke
-  # test, then the Node host (koffi) against the real library. RGE_REQUIRE_NATIVE makes a missing
+  # test, then the Node host (koffi) and the demo game against the real library. RGE_REQUIRE_NATIVE makes a missing
   # library a failure instead of a skip.
   native:
     runs-on: ubuntu-latest
@@ -40,7 +45,7 @@ jobs:
       - name: C smoke test
         run: ctest --test-dir native/build-headless --output-on-failure
       - name: Node host against the real library
-        run: node --test "packages/player-node/test/*.test.ts"
+        run: node --test "packages/player-node/test/*.test.ts" "packages/demo/test/*.test.ts"
         env:
           RGE_REQUIRE_NATIVE: "1"
 
@@ -63,7 +68,7 @@ jobs:
       - name: C smoke test
         run: xvfb-run -a ctest --test-dir native/build --output-on-failure
       - name: Node host against the real library
-        run: xvfb-run -a node --test "packages/player-node/test/*.test.ts"
+        run: xvfb-run -a node --test "packages/player-node/test/*.test.ts" "packages/demo/test/*.test.ts"
         env:
           RGE_REQUIRE_NATIVE: "1"
           RGE_NATIVE_LIB: ${{ github.workspace }}/native/build/librge.so
