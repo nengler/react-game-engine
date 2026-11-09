@@ -1328,7 +1328,9 @@ run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new 
 3. The tree is walked once (`walkTree`, depth first) into draw records. The walk composes world
    transforms on the way down and treats a `Camera` as transparent to its children, exactly as
    `GameObject.worldTransform()` and `childSpace()` do, and a test holds the two equal over a real tree.
-4. The backend draws and presents the frame, then writes the next frame's input.
+4. Colliders that started touching are reported with `world.reportCollision` (see "Collisions" below).
+   Their callbacks' effects are rendered by the next tick.
+5. The backend draws and presents the frame, then writes the next frame's input.
    `step()` returns false once that input says the window was closed (the frame is still drawn).
 
 **What is drawn.**
@@ -1358,6 +1360,18 @@ warning.
 `input.pointerX/pointerY` are the mouse **in world space**: the window position taken back through the
 view of the frame last drawn, so a handler never needs the camera. A pointer or collider mounted this
 frame is not clickable until it has been drawn once.
+
+**Collisions.** `CollisionTracker` (called once per frame by the player) finds the moment two colliders
+*start* touching and calls `world.reportCollision(a, b)`, which calls each collider's own `onCollisionEnter`
+with the other. A collider is the box `width × height` with its **top-left corner at the object's position**
+(like a `Sprite`), scaled and turned by its world transform; a rotated collider is approximated by the smallest
+upright box around it (a quarter turn is exact). Boxes that only share an edge do not touch, and a collider
+with no area (zero or negative size, zero scale) never collides. A pair that keeps overlapping is reported
+once; one that separates and touches again is reported again; a collider that leaves the world is forgotten,
+so one that returns already touching is a new contact. **Colliders with the same parent never collide with each
+other**, so a component with a hitbox and a shield does not hit itself. Every pair is tested, which costs about
+2.7 ms a frame for 1,000 colliders in Node (12 ms for 2,000); a sweep over x is the first optimisation. There is
+no physics: nothing is pushed apart, and `other` has no readable members in handler code yet.
 
 **Sound.** `Sound` reports to a `SoundSink` (`setSoundSink`, one at a time). The player installs one
 that loads each file through the backend once (when a component creates its `Sound`, so it is ready by

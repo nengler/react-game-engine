@@ -14,8 +14,8 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 | N1 Draw list (`@rge/player`, pure TS) | Done | #26 | `FrameBuilder` + `walkTree` in `draw.ts`; `native/include/rge.h` is committed here (complete, including the full key table); goldens are JSON files in `test/golden/` (`UPDATE_GOLDEN=1` rewrites them, numbers rounded to 1e-9) rather than `node:test` snapshots, which are still experimental |
 | N2 Input, sound and the frame loop (pure TS) | In review | #27 | Also added: `PlayerConfig.warn` (where warnings go; tests use it), `getSoundSink()` (so a closing player removes only its own sink), `PlayerInput` (the `InputState` with `worldPoint`, `screenX/Y`, `dt`, `quit`), `RecordingBackend`'s `missingSounds`. The press is dispatched only for a *new* left press and only to pointers drawn in the previous frame |
 | N3 `librge` (C + raylib) and the Node dev host | Done | #28 | First pixels. Built and tested in the cloud container on both raylib platforms: `Memory` (software renderer, no system libraries; the CI `native` job) and `Desktop` (GLFW + Mesa under Xvfb; the `native-desktop` job). Still needs a person at a real display: how the window feels, real keyboard and mouse input, and audio (a hidden window has no audio device, so sounds are loaded but silent) |
-| N4 Demo game and headless CI | In review | #29 | The headless C smoke test and the Node-host tests already ran in CI from N3; N4 adds the demo and runs it in those jobs: scripted-input tests through `RecordingBackend` (movement, camera, clicks, sound, the missing frame) and a 60-frame pixel check through the real library. Replaces N3's hello stand-in. Not yet seen by a person in a real window |
-| N5 Collisions (pure TS) | Not started | | Independent of N3; can run alongside |
+| N4 Demo game and headless CI | Done | #29 | The headless C smoke test and the Node-host tests already ran in CI from N3; N4 adds the demo and runs it in those jobs: scripted-input tests through `RecordingBackend` (movement, camera, clicks, sound, the missing frame) and a 60-frame pixel check through the real library. Replaces N3's hello stand-in. Not yet seen by a person in a real window |
+| N5 Collisions (pure TS) | In review | #30 | `CollisionTracker` in `collide.ts`, called once per frame by the player. Added a rule the plan did not have: colliders with the same parent never collide with each other (a hitbox and a shield must not hit each other, and handler code cannot read `other` to filter it out). Measured cost is in the doc comment |
 | N6 Rust host with QuickJS-ng | Not started | | The shipping executable |
 
 ## Goals
@@ -422,8 +422,8 @@ The ABI, the interfaces, the decisions, and the ground-rule change. Also points 
 | Work item | Where | Done when |
 | --- | --- | --- |
 | Box per collider: top-left origin, `width × scaleX` by `height × scaleY`, rotated by the world rotation. Use the axis-aligned bounds of the four corners (an approximation for rotated colliders, documented) | `src/collide.ts` | Unit tests for moved, scaled and rotated colliders |
-| Enter events: a pair that overlaps this frame and did not last frame calls `world.reportCollision(a, b)` once. A pair is forgotten when it stops overlapping or either side leaves the world | `src/collide.ts`, `src/loop.ts` | Two `Hero`s walking into each other report exactly once; separating and touching again reports again |
-| O(n²) over colliders is fine to start. Note the count at which it shows up in a profile | | Comment in `collide.ts` |
+| Enter events: a pair that overlaps this frame and did not last frame calls `world.reportCollision(a, b)` once. A pair is forgotten when it stops overlapping or either side leaves the world. Colliders with the same parent never collide with each other | `src/collide.ts`, `src/loop.ts` | Two `Hero`s walking into each other report exactly once; separating and touching again reports again |
+| O(n²) over colliders is fine to start. Note the count at which it shows up in a profile | | Comment in `collide.ts`: about 2.7 ms a frame for 1,000 colliders, 12 ms for 2,000, 59 ms for 4,000 (Node) |
 | `Collider` doc comment states the top-left origin | `runtime/src/components/Collider.ts` | |
 
 ### N6: Rust host with QuickJS-ng (~1–1.5 weeks)
@@ -519,10 +519,10 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 
 ### N5 Collisions
 
-- [ ] Collider boxes, including scaled and rotated colliders
-- [ ] Enter events reported once per contact; forgotten on separation or detach
-- [ ] `Collider` documents its top-left origin
-- [ ] Tests pass
+- [x] Collider boxes, including scaled and rotated colliders
+- [x] Enter events reported once per contact; forgotten on separation or detach
+- [x] `Collider` documents its top-left origin
+- [x] Tests pass
 
 ### N6 Rust host
 
