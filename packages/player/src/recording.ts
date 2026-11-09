@@ -66,6 +66,8 @@ export interface InputFrame {
 export interface RecordingOptions {
   /** Texture paths that fail to load (handle -1), as a missing file would. */
   readonly missingTextures?: Iterable<string>;
+  /** Sound paths that fail to load (handle -1). */
+  readonly missingSounds?: Iterable<string>;
 }
 
 /**
@@ -86,10 +88,12 @@ export class RecordingBackend implements Backend {
   readonly #textures: string[] = [];
   readonly #sounds: string[] = [];
   readonly #missing: Set<string>;
+  readonly #missingSounds: Set<string>;
   readonly #queue: InputFrame[] = [];
 
   constructor(options: RecordingOptions = {}) {
     this.#missing = new Set(options.missingTextures);
+    this.#missingSounds = new Set(options.missingSounds);
   }
 
   queueInput(frame: InputFrame): void {
@@ -119,6 +123,7 @@ export class RecordingBackend implements Backend {
 
   loadSound(path: string): number {
     this.soundLoads.push(path);
+    if (this.#missingSounds.has(path)) return -1;
     return handleFor(this.#sounds, path);
   }
 
