@@ -162,6 +162,29 @@ describe("librge through koffi", { skip }, () => {
     }
   });
 
+  it("draws what has a higher z on top, whatever the tree order, and equal z in tree order", () => {
+    const frame = render(() => {
+      const root = new Entity();
+      // Tree order: red, green, blue, all overlapping at (10..30, 10..30), offset so each leaves a corner showing.
+      const make = (color: string, x: number, z: number): Shape => {
+        const rect = new Shape({ kind: "rect", width: 20, height: 20, color });
+        rect.transform.x = x;
+        rect.transform.y = 10;
+        rect.transform.z = z;
+        root.addChild(rect);
+        return rect;
+      };
+      make("red", 10, 2);
+      make("lime", 20, 0);
+      make("blue", 30, 0);
+      return root;
+    });
+    assert.equal(pixel(frame, 25, 20), "ff0000ff", "red is first in the tree but has the highest z, so it covers green");
+    assert.equal(pixel(frame, 35, 20), "0000ffff", "blue and green are equal: blue is later, so on top");
+    assert.equal(pixel(frame, 45, 20), "0000ffff");
+    assert.equal(pixel(frame, 12, 20), "ff0000ff");
+  });
+
   it("loads a texture through the assets folder and flips it with a negative scale", () => {
     writePng(join(scratch, "red.png"), 8, [255, 0, 0]);
     const build = (scaleX: number) => () => {

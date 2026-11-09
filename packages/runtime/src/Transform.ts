@@ -8,10 +8,18 @@
  * parent at `{ x: 100 }` is at 110 in the world, and it turns and scales with
  * its parent. `global: true` opts out: the transform is then in world space,
  * whatever its ancestors do. A renderer reads `GameObject.worldTransform()`.
+ *
+ * `z` is draw order, not a position: what is drawn with a higher `z` is drawn
+ * later, so on top (0 is the default, and negative is behind). Like x and y it
+ * adds to the parent's, so a subtree can be raised as one; `global` ignores the
+ * parent's. Objects with equal `z` keep tree order. It is not part of
+ * `WorldTransform`: only the player's draw pass reads it.
  */
 export class Transform {
   x = 0;
   y = 0;
+  /** Draw order; see the class comment. */
+  z = 0;
   rotation = 0;
   scaleX = 1;
   scaleY = 1;

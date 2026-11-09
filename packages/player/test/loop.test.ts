@@ -183,6 +183,23 @@ describe("pointer presses", () => {
     assert.deepEqual(log, ["a"]);
   });
 
+  it("gives a press to the pointer with the higher z, wherever it is in the tree", () => {
+    const log: string[] = [];
+    const root = (): GameObject => {
+      const entity = new Entity();
+      const raised = pointerAt("raised", 0, 0, 100, log);
+      raised.transform.z = 1;
+      entity.addChild(raised);
+      entity.addChild(pointerAt("later", 50, 50, 100, log));
+      return entity;
+    };
+    click(root, { x: 75, y: 75 });
+    assert.deepEqual(log, ["raised"], "drawn on top, so pressed first, though it comes first in the tree");
+    log.length = 0;
+    click(root, { x: 120, y: 120 });
+    assert.deepEqual(log, ["later"], "outside the raised one, the other still gets it");
+  });
+
   it("calls nothing for a press outside every pointer", () => {
     const log: string[] = [];
     click(() => pointerAt("a", 100, 100, 50, log), { x: 10, y: 10 });

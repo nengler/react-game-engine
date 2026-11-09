@@ -150,9 +150,9 @@ describe("M3: runtime behaviour", () => {
   it("applies the transform at construction and leaves unset fields at the defaults", () => {
     const runner = new Runner();
     assert.ok(runner.transform instanceof Transform);
-    assert.deepEqual({ ...runner.transform }, { x: 10, y: -5, rotation: 0.1, scaleX: 2, scaleY: 1, global: false });
-    assert.deepEqual({ ...runner.entity.transform }, { x: 0, y: 4, rotation: 0, scaleX: 1, scaleY: 1, global: false });
-    assert.deepEqual({ ...new Entity().transform }, { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, global: false });
+    assert.deepEqual({ ...runner.transform }, { x: 10, y: -5, z: 0, rotation: 0.1, scaleX: 2, scaleY: 1, global: false });
+    assert.deepEqual({ ...runner.entity.transform }, { x: 0, y: 4, z: 0, rotation: 0, scaleX: 1, scaleY: 1, global: false });
+    assert.deepEqual({ ...new Entity().transform }, { x: 0, y: 0, z: 0, rotation: 0, scaleX: 1, scaleY: 1, global: false });
   });
 
   it("moving is a state change: one render per tick, in place", () => {
@@ -283,7 +283,7 @@ function C() {
 
   it("rejects malformed transform attributes", () => {
     for (const jsx of [
-      "<Entity transform={{ z: 1 }} />",
+      "<Entity transform={{ w: 1 }} />",
       "<Entity transform={{ x: 1, x: 2 }} />",
       "<Entity transform={5} />",
       "<Entity transform=\"x\" />",

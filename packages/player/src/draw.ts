@@ -37,16 +37,65 @@ import { Warner } from "./warn.ts";
  * composed on the way down instead of recomputed from the root for each object, and a camera is
  * transparent to its children, as `GameObject.childSpace()` says. `test/draw.test.ts` checks the
  * two agree over a real tree; if a built-in ever overrides `childSpace()` again, change this too.
+ *
+ * `visit` is also given the object's draw order, `z`: its own `transform.z` and `placement.z` added to its parent's,
+ * with `global` cutting the chain as it does for position (see `Transform`). A camera is transparent here too.
  */
-export function walkTree(root: GameObject, visit: (object: GameObject, world: WorldTransform) => void, parentSpace: WorldTransform = IDENTITY_TRANSFORM): void {
+export function walkTree(
+  root: GameObject,
+  visit: (object: GameObject, world: WorldTransform, z: number) => void,
+  parentSpace: WorldTransform = IDENTITY_TRANSFORM,
+  parentZ = 0,
+): void {
   // The zero test is inline, not left to offsetTransform: QuickJS does not inline calls, and almost nothing has a layout offset.
   const laidOut = root.layoutX === 0 && root.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, root.layoutX, root.layoutY);
   const world = composeTransforms(composeTransforms(laidOut, root.placement), root.transform);
-  visit(root, world);
-  const childSpace = root instanceof Camera ? parentSpace : world;
+  const transform = root.transform;
+  const placement = root.placement;
+  // Nearly nothing has a z, and then none of the three terms or the `global` flags matter: the answer is 0.
+  const z =
+    parentZ === 0 && transform.z === 0 && placement.z === 0 ? 0
+    : transform.global ? transform.z
+    : placement.global ? placement.z + transform.z
+    : parentZ + placement.z + transform.z;
+  visit(root, world, z);
+  const isCamera = root instanceof Camera;
+  const childSpace = isCamera ? parentSpace : world;
+  const childZ = isCamera ? parentZ : z;
   // Indexed, not `for…of`: QuickJS makes an iterator object for every `for…of`, and this runs for every object every frame.
   const children = root.children;
-  for (let i = 0; i < children.length; i++) walkTree(children[i] as GameObject, visit, childSpace);
+  for (let i = 0; i < children.length; i++) walkTree(children[i] as GameObject, visit, childSpace, childZ);
+}
+
+/** How many doubles the record starting with this op takes. */
+function recordLength(op: number): number {
+  switch (op) {
+    case RGE_OP_VIEW: return RGE_OP_VIEW_LEN;
+    case RGE_OP_SPRITE: return RGE_OP_SPRITE_LEN;
+    case RGE_OP_RECT: return RGE_OP_RECT_LEN;
+    case RGE_OP_ELLIPSE: return RGE_OP_ELLIPSE_LEN;
+    case RGE_OP_TEXT: return RGE_OP_TEXT_LEN;
+    default: throw new Error(`Unknown draw op ${op}.`);
+  }
+}
+
+/**
+ * The order that puts `zs` ascending and keeps the original order among equal values (a stable sort, whatever the
+ * engine's own), or null when it is already in that order, which is the usual case once a HUD sits at a high `z`.
+ * Every value must be a number, not NaN: a NaN would make the comparison inconsistent.
+ */
+function orderByZ(zs: readonly number[]): number[] | null {
+  let sorted = true;
+  for (let i = 1; i < zs.length; i++) {
+    if ((zs[i] as number) < (zs[i - 1] as number)) {
+      sorted = false;
+      break;
+    }
+  }
+  if (sorted) return null;
+  const order = Array.from({ length: zs.length }, (_, i) => i);
+  order.sort((a, b) => ((zs[a] as number) < (zs[b] as number) ? -1 : (zs[a] as number) > (zs[b] as number) ? 1 : a - b));
+  return order;
 }
 
 /** A growable frame of draw records (see `native/include/rge.h`) and the strings its text records refer to. */
@@ -54,10 +103,62 @@ export class DrawList {
   records = new Float64Array(1024);
   length = 0;
   texts: string[] = [];
+  /**
+   * Where draw order stops being tree order: `[offset, z, offset, z, …]`, one pair each time `setZ` is given a
+   * different value, `offset` being where the next record starts. Empty (and free) for a game that never uses `z`.
+   */
+  readonly #zRuns: number[] = [];
+  #z = 0;
+  #scratch = new Float64Array(1024);
 
   reset(): void {
     this.length = 0;
     this.texts.length = 0;
+    this.#zRuns.length = 0;
+    this.#z = 0;
+  }
+
+  /** The draw order of the records written from now on. Only a change is kept. */
+  setZ(z: number): void {
+    if (z === this.#z) return;
+    this.#z = z;
+    this.#zRuns.push(this.length, z);
+  }
+
+  /**
+   * Put the records from `from` on in `z` order, lowest first, keeping tree order among equal values: what has a
+   * higher `z` is drawn later, so on top. The records before `from` (the view) and any written after the sort
+   * (the screen's bars) stay where they are. Text records refer to `texts` by index, so they move freely.
+   */
+  sortByZ(from: number): void {
+    const runs = this.#zRuns;
+    if (runs.length === 0) return;
+    const starts: number[] = [];
+    const zs: number[] = [];
+    let run = 0;
+    let z = 0;
+    for (let at = from; at < this.length; at += recordLength(this.records[at] as number)) {
+      while (run < runs.length && (runs[run] as number) <= at) {
+        z = runs[run + 1] as number;
+        run += 2;
+      }
+      starts.push(at);
+      zs.push(z);
+    }
+    const order = orderByZ(zs);
+    if (order === null) return;
+    const total = this.length - from;
+    if (this.#scratch.length < total) this.#scratch = new Float64Array(Math.max(this.#scratch.length * 2, total));
+    const scratch = this.#scratch;
+    const records = this.records;
+    let write = 0;
+    for (let i = 0; i < order.length; i++) {
+      const start = starts[order[i] as number] as number;
+      const length = recordLength(records[start] as number);
+      for (let k = 0; k < length; k++) scratch[write + k] = records[start + k] as number;
+      write += length;
+    }
+    for (let k = 0; k < total; k++) records[from + k] = scratch[k] as number;
   }
 
   #reserve(count: number): number {
@@ -256,24 +357,40 @@ export class FrameBuilder {
     const gameRoot = rootScreen(root);
     const screen = gameRoot === null ? null : this.#usableScreen(gameRoot);
     let camera: Camera | null = null;
-    const pointers: Pointer[] = [];
+    let pointers: Pointer[] = [];
+    const pointerZs: number[] = [];
     const colliders: ColliderEntry[] = [];
+    let anyZ = false;
+    // The z of the records being written, kept here so a frame with no z makes no call per record.
+    let listZ = 0;
 
-    walkTree(root, (object, world) => {
+    walkTree(root, (object, world, objectZ) => {
+      let z = objectZ;
+      if (z !== 0) {
+        if (z !== z) {
+          this.#warner.once("z-nan", "A transform's z is not a number: it is drawn at z 0.");
+          z = 0;
+        } else anyZ = true;
+      }
       switch (kindOf(object)) {
         case KIND_SPRITE:
+          if (z !== listZ) list.setZ((listZ = z));
           this.#sprite((object as Sprite | AnimatedSprite).image, world);
           break;
         case KIND_SHAPE: {
           const shape = object as Shape;
           const color = this.#color(shape.color);
+          if (z !== listZ) list.setZ((listZ = z));
           if (shape.kind === "circle") list.ellipse(world, shape.width, shape.height, color);
           else list.rect(world, shape.width, shape.height, color);
           break;
         }
         case KIND_TEXT: {
           const text = object as Text;
-          if (text.text !== "") list.text(world, text.text, text.size, this.#color(text.color));
+          if (text.text !== "") {
+            if (z !== listZ) list.setZ((listZ = z));
+            list.text(world, text.text, text.size, this.#color(text.color));
+          }
           break;
         }
         case KIND_CAMERA:
@@ -282,6 +399,7 @@ export class FrameBuilder {
           break;
         case KIND_POINTER:
           pointers.push(object as Pointer);
+          pointerZs.push(z);
           break;
         case KIND_COLLIDER:
           colliders.push({ collider: object as Collider, world });
@@ -291,6 +409,13 @@ export class FrameBuilder {
           break;
       }
     });
+
+    // Draw order: by z, tree order among equals. A pointer that is drawn on top is pressed first, so the pointers move with it.
+    list.sortByZ(RGE_OP_VIEW_LEN);
+    if (anyZ) {
+      const order = orderByZ(pointerZs);
+      if (order !== null) pointers = order.map((i) => pointers[i] as Pointer);
+    }
 
     if (screen === null) {
       const view = this.#view(camera, width, height);
