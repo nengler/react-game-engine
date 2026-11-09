@@ -31,7 +31,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Refs | Refs hold values only (`const timer = useRef(0)`; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) |
-| Built-in elements | `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
+| Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
 | Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09) |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
@@ -840,6 +840,48 @@ object under a non-uniformly scaled ancestor is sheared by a renderer that appli
 **Cameras.** `reportPress` takes a **world-space** point. A pointer drawn through a `<Camera>` is on screen where
 the camera's view puts it, so an input system converts a screen point first: `camera.viewToWorld(x, y)`.
 
+## Game
+
+`<Game>` is the root of a game and where its configuration lives (decided 2026-11-09): the window (`title`, `width`,
+`height`, `resizable`, `vsync`, `smooth`), the `background` colour, the `assets` folder, and the game state. It is a
+built-in container, an `<Entity>` with those props (and `name`), so a component whose root is `<Game …>` extends it, as
+any component extends its root:
+
+```tsx
+// Main.tsx
+export default function Main() {
+  return (
+    <Game state={useGame} title="rge demo" width={640} height={360} background="#10131c" assets="assets">
+      <Ground />
+      <Camera><Player /></Camera>
+      <Hud />
+    </Game>
+  );
+}
+```
+```ts
+// game.ts: nothing but the root
+export const gameConfig: PlayerConfig = { root: () => new Main() };
+```
+
+**Optional.** A game with an `<Entity>` or fragment root, or any root object, works as before: the player's own config and
+the defaults apply. A `<Game>` root overrides them, each prop only where it is written; a field it does not write is
+`undefined` on the object, which is how the player knows to fall back.
+
+**Literals, and only a root.** The player reads these settings before the tree is built, so each is a literal
+(`width={640}`, `smooth`, `width={-1}`), never state or props: anything else is `RGE1210`. `<Game>` is only ever a
+component's root: as a child it is `RGE1003`. It is not placed, so it takes no `transform`. A prop it does not have is
+`RGE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
+built-in's.
+
+**`state`.** `state={useGame}` hands over the project's game state, the store imported from `GameState.ts`: the one
+place a component uses the store as a value (the compiler lowers it to a `StoreRef` expression, and the generated class
+passes the imported name to `super`). Anything else is `RGE1108`. It makes the ownership explicit; the player still starts
+every game state in the process from its initial values (`resetGameState`), and components keep reading it with
+selectors, which work with or without a `<Game>`.
+
+A user component cannot be called `Game`: it is an intrinsic like `Entity` (`RGE1206`). The demo's root is `Main`.
+
 ## Camera
 
 `<Camera>` (M12) is the viewport. Its own transform is the view, `zoom`
@@ -1465,8 +1507,16 @@ executable. The record layout and the input buffers are `native/include/rge.h`; 
 it and a test keeps them equal.
 
 ```ts
-run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new Level() });
+run(hostBackend(), { root: () => new Main() });   // a root that is a <Game> carries its own window settings
+run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new Level() });  // any other root, configured here
 ```
+
+**Startup.** The root is built first, with the window still closed, because a root that is a `<Game>` says what window to
+open (see "Game"). Sounds made while it is built only record their paths; once the window is open they are preloaded
+through the backend, so a sound still never hitches on its first play. Then the window opens, the tree is mounted
+and the first frame is drawn. A root that throws opens no window. Each setting is the `<Game>` prop where it is written,
+else the `PlayerConfig` field, else the default (640 × 360, title `"react-game-engine"`, background black, assets
+`"assets"`); `hidden` is the player's alone.
 
 **A frame** (`createPlayer(...).step()`), in a fixed order:
 

@@ -1,4 +1,4 @@
-import { World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pointer, type SoundSink } from "@rge/runtime";
+import { Game, World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pointer, type SoundSink } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -7,8 +7,18 @@ import { PlayerInput } from "./input.ts";
 import { RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
 import { Warner } from "./warn.ts";
 
-export interface PlayerConfig extends WindowConfig {
-  /** Builds the root object. Called once the window is open and sounds are wired, so sounds created here preload. */
+/** The window a game gets when neither its `<Game>` root nor the player's config say otherwise. */
+export const DEFAULT_WINDOW = { width: 640, height: 360, title: "react-game-engine" } as const;
+
+/**
+ * What the player is configured with. Everything but `root` is optional, and is the fallback for what the root's own
+ * `<Game>` leaves unset: a setting is the `<Game>` prop if it is written, else this, else the default.
+ */
+export interface PlayerConfig extends Partial<WindowConfig> {
+  /**
+   * Builds the root object. It is built **before** the window opens, because a root that is a `<Game>` says what window to
+   * open; sounds it creates are recorded and preloaded as soon as the window is open.
+   */
   readonly root: () => GameObject;
   /** A CSS colour. Default `"black"`. */
   readonly background?: string;
@@ -46,22 +56,41 @@ const LEFT_BUTTON = KEY_INDEX.get("MouseLeft") as number;
  */
 export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const warner = new Warner(config.warn);
-  const assets = config.assets ?? "assets";
-  const background = resolveBackground(config.background ?? "black", warner);
+
+  // Build the root first: if it is a `<Game>`, its props say what window to open. Sounds it creates only record their
+  // paths for now; they are loaded below, once the window is open. Each game starts from the game state's initial
+  // values, whatever an earlier player in this process left behind.
+  const preload: string[] = [];
+  const collector: SoundSink = { load: (name) => void preload.push(name), play: () => {} };
+  setSoundSink(collector);
+  resetGameState();
+  let root: GameObject;
+  try {
+    root = config.root();
+  } catch (error) {
+    if (getSoundSink() === collector) setSoundSink(null);
+    throw error;
+  }
+  const game = root instanceof Game ? root : null;
+  // Each setting: the `<Game>` prop where it is written, else the player's config, else the default.
+  const width = game?.width ?? config.width ?? DEFAULT_WINDOW.width;
+  const height = game?.height ?? config.height ?? DEFAULT_WINDOW.height;
+  const assets = game?.assets ?? config.assets ?? "assets";
+  const background = resolveBackground(game?.background ?? config.background ?? "black", warner);
 
   backend.open({
-    width: config.width,
-    height: config.height,
-    title: config.title,
-    resizable: config.resizable,
-    vsync: config.vsync,
+    width,
+    height,
+    title: game?.title ?? config.title ?? DEFAULT_WINDOW.title,
+    resizable: game?.resizable ?? config.resizable,
+    vsync: game?.vsync ?? config.vsync,
     hidden: config.hidden,
-    smooth: config.smooth,
+    smooth: game?.smooth ?? config.smooth,
   });
 
   const input = new PlayerInput(warner);
-  input.values[RGE_IN_WIDTH] = config.width;
-  input.values[RGE_IN_HEIGHT] = config.height;
+  input.values[RGE_IN_WIDTH] = width;
+  input.values[RGE_IN_HEIGHT] = height;
   const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), assets, warn: config.warn });
   const sink = createSoundSink(backend, assets, warner);
   const world = new World();
@@ -77,10 +106,9 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   };
 
   setSoundSink(sink);
-  // Each game starts from the game state's initial values, whatever an earlier player in this process left behind.
-  resetGameState();
+  for (const name of preload) sink.load(name);
   try {
-    world.mount(config.root());
+    world.mount(root);
   } catch (error) {
     close();
     throw error;

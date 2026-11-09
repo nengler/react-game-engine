@@ -5,9 +5,11 @@ import { fileURLToPath } from "node:url";
 import { createPlayer, RecordingBackend, type DecodedRecord, type InputFrame, type Player } from "@rge/player";
 import { createNodeBackend, findNativeLibrary, type Pixels } from "@rge/player-node";
 import { gameConfig } from "../game.ts";
+import { Main } from "../generated/Main.ts";
 
 const ASSETS = resolve(dirname(fileURLToPath(import.meta.url)), "../assets");
-const WINDOW = { width: gameConfig.width, height: gameConfig.height };
+/** The window the root asks for with `<Game width height>`. */
+const WINDOW = { width: new Main().width as number, height: new Main().height as number };
 
 type Rect = Extract<DecodedRecord, { op: "rect" }>;
 
@@ -223,13 +225,20 @@ describe("demo: pixels from the real library", { skip }, () => {
   it("shows the ground, the button, the player and the beacon where the draw list says, after 60 frames", () => {
     const backend = createNodeBackend(library);
     const warnings: string[] = [];
-    const p = createPlayer(backend, { ...gameConfig, assets: ASSETS, hidden: true, vsync: false, warn: (m) => warnings.push(m) });
+    // The root's `<Game assets="assets">` is relative to the working directory, as it is when the game is run.
+    const here = process.cwd();
+    process.chdir(dirname(ASSETS));
     let frame: Pixels | null;
     try {
-      for (let i = 0; i < 60; i++) p.step();
-      frame = backend.readPixels();
+      const p = createPlayer(backend, { ...gameConfig, hidden: true, vsync: false, warn: (m) => warnings.push(m) });
+      try {
+        for (let i = 0; i < 60; i++) p.step();
+        frame = backend.readPixels();
+      } finally {
+        p.close();
+      }
     } finally {
-      p.close();
+      process.chdir(here);
     }
     assert.ok(frame !== null);
     assert.equal(frame.width, WINDOW.width);

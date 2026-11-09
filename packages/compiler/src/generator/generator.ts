@@ -124,6 +124,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
   const visitExpr = (expr: ExprIR): void =>
     walkExpr(expr, (e) => {
       if (e.kind === "Call" && e.callee.kind === "Function" && runtimeFunctions.has(e.callee.name)) values.add(e.callee.name);
+      if (e.kind === "StoreRef") usage.store = true;
     });
   const visitProps = (props: readonly PropIR[]): void =>
     props.forEach((p) => {
@@ -837,6 +838,7 @@ class ComponentGenerator {
   #expr(e: ExprIR, top = false): string {
     const wrap = (s: string): string => (top ? s : `(${s})`);
     switch (e.kind) {
+      case "StoreRef": return this.#storeName;
       case "NumberLiteral": return String(e.value);
       case "StringLiteral": return JSON.stringify(e.value);
       case "BooleanLiteral": return String(e.value);

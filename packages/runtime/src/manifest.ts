@@ -88,12 +88,13 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Camera"],
+  containerIntrinsics: ["Entity", "Game", "Camera"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
+    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "state"],
     Sprite: ["image"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
@@ -104,6 +105,7 @@ export const runtimeManifest: RuntimeManifest = {
   },
   intrinsicRequired: {
     Entity: [],
+    Game: [],
     Sprite: ["image"],
     Collider: ["width", "height"],
     Pointer: ["width", "height"],

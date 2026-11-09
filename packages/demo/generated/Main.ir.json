@@ -1,28 +1,28 @@
 {
   "kind": "Module",
-  "sourceFile": "packages/demo/src/Game.tsx",
+  "sourceFile": "packages/demo/src/Main.tsx",
   "typeDeclarations": [],
   "components": [
     {
       "kind": "Component",
-      "name": "Game",
+      "name": "Main",
       "span": {
-        "fileName": "packages/demo/src/Game.tsx",
-        "start": 721,
-        "end": 1772,
-        "line": 15,
+        "fileName": "packages/demo/src/Main.tsx",
+        "start": 877,
+        "end": 2019,
+        "line": 17,
         "column": 1
       },
       "hooks": [
         {
           "kind": "UseState",
-          "state": "Game.clicks",
+          "state": "Main.clicks",
           "setterName": "setClicks",
           "span": {
-            "fileName": "packages/demo/src/Game.tsx",
-            "start": 762,
-            "end": 795,
-            "line": 16,
+            "fileName": "packages/demo/src/Main.tsx",
+            "start": 918,
+            "end": 951,
+            "line": 18,
             "column": 9
           }
         }
@@ -30,7 +30,7 @@
       "state": [
         {
           "kind": "State",
-          "id": "Game.clicks",
+          "id": "Main.clicks",
           "name": "clicks",
           "type": {
             "kind": "Primitive",
@@ -46,14 +46,14 @@
       "sounds": [
         {
           "kind": "Sound",
-          "id": "Game.playClick",
+          "id": "Main.playClick",
           "name": "playClick",
           "path": "click.wav",
           "span": {
-            "fileName": "packages/demo/src/Game.tsx",
-            "start": 805,
-            "end": 838,
-            "line": 17,
+            "fileName": "packages/demo/src/Main.tsx",
+            "start": 961,
+            "end": 994,
+            "line": 19,
             "column": 9
           }
         }
@@ -67,7 +67,7 @@
         "kind": "HostElement",
         "component": {
           "kind": "Intrinsic",
-          "name": "Entity"
+          "name": "Game"
         },
         "props": [
           {
@@ -75,7 +75,54 @@
             "name": "name",
             "value": {
               "kind": "StringLiteral",
-              "value": "Game"
+              "value": "Main"
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "state",
+            "value": {
+              "kind": "StoreRef"
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "title",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "rge demo"
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "width",
+            "value": {
+              "kind": "NumberLiteral",
+              "value": 640
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "height",
+            "value": {
+              "kind": "NumberLiteral",
+              "value": 360
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "background",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "#10131c"
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "assets",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "assets"
             }
           }
         ],
@@ -85,7 +132,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/0",
+              "id": "Main/0",
               "fieldName": "ground",
               "component": {
                 "kind": "Imported",
@@ -97,10 +144,10 @@
               "transform": [],
               "children": [],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 883,
-                "end": 893,
-                "line": 21,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1132,
+                "end": 1142,
+                "line": 23,
                 "column": 7
               }
             }
@@ -109,7 +156,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/1",
+              "id": "Main/1",
               "fieldName": "beacon",
               "component": {
                 "kind": "Imported",
@@ -146,10 +193,10 @@
               ],
               "children": [],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 900,
-                "end": 942,
-                "line": 22,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1149,
+                "end": 1191,
+                "line": 24,
                 "column": 7
               }
             }
@@ -158,7 +205,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/2",
+              "id": "Main/2",
               "fieldName": "spikes",
               "component": {
                 "kind": "Imported",
@@ -187,10 +234,10 @@
               ],
               "children": [],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 949,
-                "end": 988,
-                "line": 23,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1198,
+                "end": 1237,
+                "line": 25,
                 "column": 7
               }
             }
@@ -199,7 +246,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/3",
+              "id": "Main/3",
               "fieldName": "coin",
               "component": {
                 "kind": "Imported",
@@ -228,10 +275,10 @@
               ],
               "children": [],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 995,
-                "end": 1031,
-                "line": 24,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1244,
+                "end": 1280,
+                "line": 26,
                 "column": 7
               }
             }
@@ -240,7 +287,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/4",
+              "id": "Main/4",
               "fieldName": "shape",
               "component": {
                 "kind": "Intrinsic",
@@ -281,7 +328,7 @@
                       "operator": ">=",
                       "left": {
                         "kind": "StateRead",
-                        "state": "Game.clicks"
+                        "state": "Main.clicks"
                       },
                       "right": {
                         "kind": "NumberLiteral",
@@ -300,7 +347,7 @@
                   "dependencies": [
                     {
                       "kind": "State",
-                      "state": "Game.clicks"
+                      "state": "Main.clicks"
                     }
                   ]
                 }
@@ -329,10 +376,10 @@
               ],
               "children": [],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 1142,
-                "end": 1263,
-                "line": 26,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1391,
+                "end": 1512,
+                "line": 28,
                 "column": 7
               }
             }
@@ -341,7 +388,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/5",
+              "id": "Main/5",
               "fieldName": "pointer",
               "component": {
                 "kind": "Intrinsic",
@@ -373,16 +420,16 @@
                     "body": [
                       {
                         "kind": "PlaySound",
-                        "sound": "Game.playClick"
+                        "sound": "Main.playClick"
                       },
                       {
                         "kind": "SetState",
-                        "state": "Game.clicks",
+                        "state": "Main.clicks",
                         "updater": {
                           "kind": "Function",
                           "params": [
                             {
-                              "id": "Game.clicks#1",
+                              "id": "Main.clicks#1",
                               "name": "clicks",
                               "type": {
                                 "kind": "Primitive",
@@ -398,7 +445,7 @@
                                 "operator": "+",
                                 "left": {
                                   "kind": "ParamRead",
-                                  "param": "Game.clicks#1",
+                                  "param": "Main.clicks#1",
                                   "name": "clicks"
                                 },
                                 "right": {
@@ -438,10 +485,10 @@
               ],
               "children": [],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 1270,
-                "end": 1468,
-                "line": 27,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1519,
+                "end": 1717,
+                "line": 29,
                 "column": 7
               }
             }
@@ -450,7 +497,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/6",
+              "id": "Main/6",
               "fieldName": "text",
               "component": {
                 "kind": "Intrinsic",
@@ -485,14 +532,14 @@
                     "expressions": [
                       {
                         "kind": "StateRead",
-                        "state": "Game.clicks"
+                        "state": "Main.clicks"
                       }
                     ]
                   },
                   "dependencies": [
                     {
                       "kind": "State",
-                      "state": "Game.clicks"
+                      "state": "Main.clicks"
                     }
                   ]
                 }
@@ -521,10 +568,10 @@
               ],
               "children": [],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 1475,
-                "end": 1574,
-                "line": 36,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1724,
+                "end": 1823,
+                "line": 38,
                 "column": 7
               }
             }
@@ -533,7 +580,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/7",
+              "id": "Main/7",
               "fieldName": "hud",
               "component": {
                 "kind": "Imported",
@@ -566,10 +613,10 @@
               ],
               "children": [],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 1581,
-                "end": 1618,
-                "line": 39,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1830,
+                "end": 1867,
+                "line": 41,
                 "column": 7
               }
             }
@@ -578,7 +625,7 @@
             "kind": "StaticChild",
             "element": {
               "kind": "Element",
-              "id": "Game/8",
+              "id": "Main/8",
               "fieldName": "camera",
               "component": {
                 "kind": "Intrinsic",
@@ -591,7 +638,7 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Game/8/0",
+                    "id": "Main/8/0",
                     "fieldName": "player",
                     "component": {
                       "kind": "Imported",
@@ -603,30 +650,30 @@
                     "transform": [],
                     "children": [],
                     "span": {
-                      "fileName": "packages/demo/src/Game.tsx",
-                      "start": 1725,
-                      "end": 1735,
-                      "line": 42,
+                      "fileName": "packages/demo/src/Main.tsx",
+                      "start": 1974,
+                      "end": 1984,
+                      "line": 44,
                       "column": 9
                     }
                   }
                 }
               ],
               "span": {
-                "fileName": "packages/demo/src/Game.tsx",
-                "start": 1708,
-                "end": 1751,
-                "line": 41,
+                "fileName": "packages/demo/src/Main.tsx",
+                "start": 1957,
+                "end": 2000,
+                "line": 43,
                 "column": 7
               }
             }
           }
         ],
         "span": {
-          "fileName": "packages/demo/src/Game.tsx",
-          "start": 856,
-          "end": 1765,
-          "line": 20,
+          "fileName": "packages/demo/src/Main.tsx",
+          "start": 1012,
+          "end": 2012,
+          "line": 22,
           "column": 5
         }
       }

@@ -579,6 +579,7 @@ export interface DynamicPropIR {
 // ---------------------------------------------------------------------------
 
 export type ExprIR =
+  | StoreRefIR
   | NumberLiteralIR
   | StringLiteralIR
   | BooleanLiteralIR
@@ -598,6 +599,14 @@ export type ExprIR =
   | UnaryExprIR
   | BinaryExprIR
   | ConditionalExprIR;
+
+/**
+ * `state={useGame}` on a `<Game>`: the project's game state itself (the imported store), handed to the runtime. It is
+ * the only place a component uses the store as a value; the generated code writes the imported name.
+ */
+export interface StoreRefIR {
+  readonly kind: "StoreRef";
+}
 
 export interface NumberLiteralIR {
   readonly kind: "NumberLiteral";
@@ -795,6 +804,7 @@ export function assertNever(value: never, what = "value"): never {
 /** Direct sub-expressions of an expression, in evaluation order. */
 export function childExpressions(e: ExprIR): readonly ExprIR[] {
   switch (e.kind) {
+    case "StoreRef":
     case "NumberLiteral":
     case "StringLiteral":
     case "BooleanLiteral":

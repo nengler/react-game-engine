@@ -15,6 +15,7 @@ export {
   type SceneValue,
 } from "./scene.ts";
 export { Entity, type EntityProps } from "./components/Entity.ts";
+export { Game, type GameProps, type GameStateHandle } from "./components/Game.ts";
 export { Sprite, type SpriteProps } from "./components/Sprite.ts";
 export { Collider, type ColliderProps, type Contact } from "./components/Collider.ts";
 export { Sound, getSoundSink, setSoundSink, type SoundSink } from "./Sound.ts";

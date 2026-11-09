@@ -253,8 +253,8 @@ Backends receive `texts` as a JavaScript array: each host packs it the way that 
 **Player API.**
 
 ```ts
-export interface PlayerConfig extends WindowConfig {
-  /** Builds the root object. Called after the sound sink is installed, so sounds preload. */
+export interface PlayerConfig extends Partial<WindowConfig> {
+  /** Builds the root object, before the window opens (a `<Game>` root says what window to open); its sounds preload once it is open. */
   readonly root: () => GameObject;
   readonly background?: string;  // CSS colour, default "black"
   readonly assets?: string;      // default "assets"

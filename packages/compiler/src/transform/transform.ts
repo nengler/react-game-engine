@@ -105,6 +105,9 @@ export interface TransformResult {
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
+/** The root element that carries the game's configuration (`<Game title width …>`); it is only ever a component's root. */
+const GAME_TAG = "Game";
+
 /** The runtime class generated code constructs for each `useSound`; a component may not take the name. */
 const SOUND_CLASS = "Sound";
 
@@ -1078,6 +1081,10 @@ class ComponentLowering implements LoweringContext {
       return null;
     }
 
+    if (component.kind === "Intrinsic" && tag.text === GAME_TAG) {
+      this.#error(DiagnosticCode.RootMustBeEntity, `<${GAME_TAG}> is the root of a component, never a child: it configures the whole game. Make it the root of your main component.`, tag);
+      return null;
+    }
     const isComponent = component.kind !== "Intrinsic";
     const props = this.#lowerProps(opening.attributes, tag.text, isComponent, listItem);
     const transform = this.#lowerTransform(opening.attributes, tag.text, isComponent);
@@ -1195,6 +1202,11 @@ class ComponentLowering implements LoweringContext {
         continue;
       }
       const init = attribute.initializer;
+      if (!toComponent && tag === GAME_TAG) {
+        const setting = this.#lowerGameSetting(name, init, attribute);
+        if (setting) props.push({ kind: "StaticProp", name, value: setting });
+        continue;
+      }
       let value: ExprIR | null;
       if (!init) value = { kind: "BooleanLiteral", value: true };
       else if (isStringLiteral(init)) value = { kind: "StringLiteral", value: init.text };
@@ -1227,6 +1239,52 @@ class ComponentLowering implements LoweringContext {
       props.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
     }
     return props;
+  }
+
+  /**
+   * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`),
+   * and `state={useGame}` is the project's game state, the imported store. Anything else (a state read, an expression)
+   * would not exist yet, so it is `RGE1210`.
+   */
+  #lowerGameSetting(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
+    if (name === "state") {
+      const expression = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
+      if (!expression || !isIdentifier(expression) || !this.#storeImports.has(expression.text)) {
+        this.#error(
+          DiagnosticCode.InvalidGameState,
+          this.#gameState
+            ? `<Game state> is the game state itself: \`state={${this.#gameState.name}}\`, imported from GameState.ts.`
+            : "<Game state> needs the project's game state: add GameState.ts next to the components and import its store.",
+          at,
+        );
+        return null;
+      }
+      return { kind: "StoreRef" };
+    }
+    const allowed = this.#manifest.intrinsicMembers[GAME_TAG] ?? [];
+    if (!allowed.includes(name) || name === "name") {
+      if (name === "name") return this.#gameLiteral(name, init, at);
+      this.#error(DiagnosticCode.UnsupportedAttribute, `<${GAME_TAG}> has no prop '${name}'. Its settings: ${allowed.filter((m) => m !== "name").join(", ")}.`, at);
+      return null;
+    }
+    return this.#gameLiteral(name, init, at);
+  }
+
+  #gameLiteral(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
+    let value: ExprIR | null = null;
+    if (!init) value = { kind: "BooleanLiteral", value: true };
+    else if (isStringLiteral(init)) value = { kind: "StringLiteral", value: init.text };
+    else if (isJsxExpression(init) && init.expression && !init.dotDotDotToken) {
+      const lowered = this.#lowerExpression(init.expression);
+      if (!lowered) return null;
+      value = lowered;
+    }
+    const literal = value && (value.kind === "NumberLiteral" || value.kind === "StringLiteral" || value.kind === "BooleanLiteral" || (value.kind === "Unary" && value.operator === "-" && value.operand.kind === "NumberLiteral"));
+    if (!value || !literal) {
+      this.#error(DiagnosticCode.InvalidPropValue, `<${GAME_TAG} ${name}> must be a literal (a number, string or true/false): the player reads it before the tree is built, so it cannot depend on state or props.`, at);
+      return null;
+    }
+    return value;
   }
 
   /**

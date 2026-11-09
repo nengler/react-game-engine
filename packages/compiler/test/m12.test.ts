@@ -34,10 +34,10 @@ function Player() {
   );
 }
 
-function Game() {
+function Stage() {
   const [pet, setPet] = useState(false);
   return (
-    <Entity name="Game">
+    <Entity name="Stage">
       <Camera zoom={2}>
         <Player />
         {pet && <Sprite image="pet.png" transform={{ x: 100 }} />}
@@ -106,13 +106,13 @@ interface ViewInstance extends Camera {
 }
 
 let Level: new () => LevelInstance;
-let Game: new () => GameInstance;
+let Stage: new () => GameInstance;
 let Swarm: new () => SwarmInstance;
 let Hero: new () => HeroInstance;
 let View: new (props: { zoom: number }) => ViewInstance;
 
 before(async () => {
-  ({ Level, Game, Swarm, Hero, View } = await load<{ Level: typeof Level; Game: typeof Game; Swarm: typeof Swarm; Hero: typeof Hero; View: typeof View }>(
+  ({ Level, Stage, Swarm, Hero, View } = await load<{ Level: typeof Level; Stage: typeof Stage; Swarm: typeof Swarm; Hero: typeof Hero; View: typeof View }>(
     compile(SOURCE, "Cam.tsx"),
   ));
 });
@@ -121,7 +121,7 @@ describe("M12: IR and generated code", () => {
   const compiled = compile(SOURCE, "Cam.tsx");
   const level = compiled.ir.components.find((c) => c.name === "Level")!;
   const camera = elementOf(level.root.children[0]!);
-  const game = compiled.ir.components.find((c) => c.name === "Game")!;
+  const game = compiled.ir.components.find((c) => c.name === "Stage")!;
   const wrapper = elementOf(game.root.children[0]!);
 
   it("makes zoom a dynamic prop over the state it reads, and the view's placement a static transform", () => {
@@ -210,7 +210,7 @@ describe("M12: runtime behaviour", () => {
 
   it("follows its child as the child's own state moves it", () => {
     const world = new World();
-    const game = new Game();
+    const game = new Stage();
     world.mount(game);
     assert.deepEqual(game.camera.worldToView(0, 0), { x: 0, y: 0 });
     world.tick(3);
@@ -222,7 +222,7 @@ describe("M12: runtime behaviour", () => {
 
   it("centres on the middle of its children when a conditional one appears and leaves", () => {
     const world = new World();
-    const game = new Game();
+    const game = new Stage();
     world.mount(game);
     world.tick(1); // the player is at 10
     game.setPet(true);
