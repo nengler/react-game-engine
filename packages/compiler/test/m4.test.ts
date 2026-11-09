@@ -449,6 +449,17 @@ describe("M4: diagnostics", () => {
     assert.deepEqual(compile(state("count", "<number>")).ir.components[0]!.state[0]!.type, primitive("number"));
   });
 
+  it("imports a runtime function that is used only in a prop's default", async () => {
+    const compiled = compile(`import { Entity, clamp } from "@rge/runtime/jsx";
+interface P { speed?: number }
+export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Capped" transform={{ x: speed }} />; }`);
+    assert.match(compiled.code, /import \{ Entity, clamp, type PrefabDefinition \} from "@rge\/runtime";/);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Capped } = await load<{ Capped: new (props?: { speed?: number }) => Entity }>(compiled);
+    assert.equal(new Capped().transform.x, 3, "the default was computed");
+    assert.equal(new Capped({ speed: 1 }).transform.x, 1);
+  });
+
   it("keeps the generated updateProps name free", () => {
     assert.ok(compileErrors(`function A() { const [updateProps, setU] = useState(0); return <Entity name="A" />; }`).some((d) => d.code === DiagnosticCode.InvalidUseState));
   });

@@ -157,6 +157,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>)
     visitProps(c.root.props);
     visitProps(c.root.transform);
     visitChildren(c.root.children);
+    c.props.forEach((p) => p.defaultValue && visitExpr(p.defaultValue)); // a default may call a runtime function (`speed = clamp(5, 0, 3)`)
     c.state.forEach((s) => visitExpr(s.initialValue));
     c.refs.forEach((r) => visitExpr(r.initialValue));
     for (const hook of c.hooks) if (isHandlerHook(hook)) visitFunction(hook.handler);
