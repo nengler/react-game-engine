@@ -5,9 +5,9 @@ As of 2026-11-09. A proposal, written to sit next to priority 3 in [NEXT_PRIORIT
 The plan has two parts that are designed together:
 
 1. **Layout** (milestones U0–U4): a `<Flex>` built-in that places its children in a row or a column, as CSS flexbox does.
-2. **A fixed game resolution** (milestones C1–C3, [Part 2](#part-2-a-fixed-game-resolution-canvas)): a `<Canvas width={320} height={180}>` at the root, so the game is drawn at 320 × 180 whatever size the window is, and scaled up to fit.
+2. **A fixed game resolution** (milestones C1–C3, [Part 2](#part-2-a-fixed-game-resolution-screen)): a `<Screen width={320} height={180}>` at the root, so the game is drawn at 320 × 180 whatever size the window is, and scaled up to fit.
 
-They meet at one point: everything that today means "the window" (the size `<Screen>` and `Flex fill` take, the point the camera centres on, the mouse position) means "the canvas" once a `<Canvas>` exists. A HUD designed for 320 × 180 then looks the same in a 640 × 360 window as in a full-screen 4K one.
+They meet at one point: everything that today means "the window" (the size `<Hud>` and `Flex fill` take, the point the camera centres on, the mouse position) means the game's own 320 × 180 area once a `<Screen>` exists (called "the canvas" below: the surface the game is drawn on before it is scaled into the window). A HUD designed for 320 × 180 then looks the same in a 640 × 360 window as in a full-screen 4K one.
 
 ## Summary of part 1
 
@@ -22,12 +22,12 @@ This plan adds **layout**: a `<Flex>` built-in that places its children in a row
 </Flex>
 ```
 
-It takes the props a web developer expects (`direction`, `alignItems`, `justifyContent`, `gap`, `padding`), with CSS's meanings. It is a container, like `<Entity>`, and it works anywhere in the tree, in the world or on priority 3's `<Screen>`. In practice almost all of it will live on the screen, which is why it goes alongside priority 3.
+It takes the props a web developer expects (`direction`, `alignItems`, `justifyContent`, `gap`, `padding`), with CSS's meanings. It is a container, like `<Entity>`, and it works anywhere in the tree, in the world or on priority 3's `<Hud>`. In practice almost all of it will live on the screen, which is why it goes alongside priority 3.
 
 What has to exist first, and why priority 3 comes before or with this:
 
-- **Sizes.** Layout needs to know how big each child is. `Shape`, `Pointer` and `Collider` already have `width` and `height`. A `Text` and a `Sprite` do not: the size of text depends on the font, and the size of a sprite on the image file. Both are known only to librge. So the native library must answer two new questions, "how wide is this text at this size?" and "how big is this texture?", which is an ABI change. Priority 3 already bumps the ABI to version 2 for `<Screen>`; these two functions should go into the **same** version 2, so the ABI moves once.
-- **A screen to lay out on.** A HUD laid out in world space still drifts with the camera. `<Screen>` gives layout a fixed box: the window.
+- **Sizes.** Layout needs to know how big each child is. `Shape`, `Pointer` and `Collider` already have `width` and `height`. A `Text` and a `Sprite` do not: the size of text depends on the font, and the size of a sprite on the image file. Both are known only to librge. So the native library must answer two new questions, "how wide is this text at this size?" and "how big is this texture?", which is an ABI change. Priority 3 already bumps the ABI to version 2 for `<Hud>`; these two functions should go into the **same** version 2, so the ABI moves once.
+- **A screen to lay out on.** A HUD laid out in world space still drifts with the camera. `<Hud>` gives layout a fixed box: the window.
 
 So the order is: priority 3 (with the two measuring functions added to ABI v2), then this plan's milestones U1–U4. U1 can start alongside priority 3, because it does not touch the ABI.
 
@@ -55,7 +55,7 @@ Sizes are rough, for one engineer, in the style of the other plans.
 | `paddingX`, `paddingY` | pixels | `padding` | Left and right, or top and bottom; override `padding` |
 | `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft` | pixels | the axis value | One side; overrides the two above |
 | `width`, `height` | pixels | the size of the content | A fixed size for the box |
-| `fill` | boolean | `false` | Take the whole box of the parent (the window, under `<Screen>`) |
+| `fill` | boolean | `false` | Take the whole box of the parent (the window, under `<Hud>`) |
 | `grow` | number | `0` | Inside another `Flex`: take this share of the free main-axis space |
 | `background` | a CSS colour | none | Draw a filled rectangle behind the children, the size of the box |
 
@@ -68,14 +68,14 @@ The keyword props (`direction`, `alignItems`, `justifyContent`) go in the manife
 Coins at the top left, a health bar pushed to the top right, a pause button centred at the bottom. The coin count can grow from `9` to `10` and the row stays right; the label can change and the button resizes around it.
 
 ```tsx
-import { useState, Flex, Screen, Sprite, Text } from "@rge/runtime/jsx";
+import { useState, Flex, Hud, Sprite, Text } from "@rge/runtime/jsx";
 import { HealthBar } from "./HealthBar.tsx";
 import { Button } from "./Button.tsx";
 
-export function Hud({ coins, health }: { coins: number; health: number }) {
+export function PlayerHud({ coins, health }: { coins: number; health: number }) {
   const [paused, setPaused] = useState(false);
   return (
-    <Screen>
+    <Hud>
       <Flex fill direction="column" justifyContent="space-between" padding={16}>
         <Flex direction="row" alignItems="center" gap={8}>
           <Sprite image="coin.png" />
@@ -87,10 +87,12 @@ export function Hud({ coins, health }: { coins: number; health: number }) {
           <Button label={paused ? "Resume" : "Pause"} onPress={() => setPaused((p) => !p)} />
         </Flex>
       </Flex>
-    </Screen>
+    </Hud>
   );
 }
 ```
+
+The component is called `PlayerHud`, not `Hud`, because `Hud` is the built-in: the compiler rejects a component that takes a built-in's name ("Component 'Hud' conflicts with a runtime intrinsic"). Adding `Hud`, `Screen` and `Flex` as built-ins takes those three names away from games, so the work renames the two places that use one today: the `Hud` component in `packages/compiler/test/m10.test.ts` and the `Hud` example in DESIGN.md's "Children" section.
 
 `<Flex grow={1} />` is a spacer, as `flex: 1` on an empty `div` is in CSS.
 
@@ -132,7 +134,7 @@ Layout asks each child for a box: a width and a height, and where its top-left c
 | `Flex` | Its laid-out size: content plus padding, or its `width`/`height`/`fill`/`grow` size |
 | `Entity` or a component | The bounding box of its children, each at its own `transform` position, ignoring rotation. The demo's button (a 96 × 32 `Shape` with a `Text` inside it) is 96 × 32 |
 | `Camera` | Nothing; a warning once, because a camera inside a layout is almost certainly a mistake |
-| `Screen` (inside a `Flex`) | A compile error: a screen layer belongs at the top of the tree |
+| `Hud` or `Screen` (inside a `Flex`) | A compile error: a HUD layer goes directly inside the root, and `Screen` is the root |
 
 The `Entity` rule is what makes ordinary components work as layout children with no extra annotation. If the bounding box starts above or left of the origin (a sprite drawn centred on its position, say), layout shifts the child so the box, not the origin, sits in the slot.
 
@@ -198,11 +200,11 @@ Almost nothing, because the compiler is driven by the runtime manifest. `Flex` i
 
 The one compiler addition is the `flex-start` hint above, a special case in the existing literal-choice diagnostic.
 
-### `<Screen>` and layout together
+### `<Hud>` and layout together
 
-`<Screen>` (priority 3) is drawn through an identity view in window pixels. For layout it also defines a box: the window, `width` × `height` from the input buffer, read every frame, so a resized window lays out again. A `Flex fill` directly under `<Screen>` takes that box. That is how a HUD pins things to corners and edges: a full-window column with `justifyContent="space-between"`, holding rows with spacers.
+`<Hud>` (priority 3) is drawn through an identity view in window pixels. For layout it also defines a box: the window, `width` × `height` from the input buffer, read every frame, so a resized window lays out again. A `Flex fill` directly under `<Hud>` takes that box. That is how a HUD pins things to corners and edges: a full-window column with `justifyContent="space-between"`, holding rows with spacers.
 
-Pointers inside a laid-out `<Screen>` need nothing new. A `Pointer` hit-tests through `worldTransform()`, which includes the layout offset, and priority 3 already has screen pointers hit-tested in window coordinates.
+Pointers inside a laid-out `<Hud>` need nothing new. A `Pointer` hit-tests through `worldTransform()`, which includes the layout offset, and priority 3 already has screen pointers hit-tested in window coordinates.
 
 ## Why write the algorithm, not use a library
 
@@ -248,9 +250,9 @@ If games later need wrapping, `min`/`max` sizes, or absolute positioning inside 
 
 **Done when**
 
-- [ ] `fill` under `<Screen>` takes the window, and a resize lays out again (a recording test with two window sizes)
+- [ ] `fill` under `<Hud>` takes the window, and a resize lays out again (a recording test with two window sizes)
 - [ ] `grow` shares free space by weight; `stretch` sizes a child `Flex` on the cross axis
-- [ ] The demo's click counter and button are a `Flex` row inside `<Screen>`, with the label centred by layout instead of by a guessed `x`
+- [ ] The demo's click counter and button are a `Flex` row inside `<Hud>`, with the label centred by layout instead of by a guessed `x`
 - [ ] The parity run covers the demo's HUD under QuickJS
 
 ### U4: polish
@@ -284,7 +286,7 @@ All four were decided on 2026-11-09:
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |
 | Focus and keyboard or gamepad navigation between buttons | Needs gamepads first (a "Not now" item in NEXT_PRIORITIES) | A console-style menu |
 
-# Part 2: a fixed game resolution (`<Canvas>`)
+# Part 2: a fixed game resolution (`<Screen>`)
 
 ## Summary
 
@@ -295,37 +297,37 @@ This part adds a root built-in that separates the two sizes:
 ```tsx
 export default function Game() {
   return (
-    <Canvas width={320} height={180} fit="integer" border="black">
+    <Screen width={320} height={180} fit="integer" border="black">
       <World />
-      <Screen>
-        <Hud />
-      </Screen>
-    </Canvas>
+      <Hud>
+        <PlayerHud />
+      </Hud>
+    </Screen>
   );
 }
 ```
 
-- **The game size** is the `<Canvas>`'s `width` and `height`: 320 × 180. Everything inside is written in those units: transforms, the camera's view, `<Screen>`, `Flex fill`, the mouse position. The game never needs to know the window's size.
+- **The game size** is the `<Screen>`'s `width` and `height`: 320 × 180. Everything inside is written in those units: transforms, the camera's view, `<Hud>`, `Flex fill`, the mouse position. The game never needs to know the window's size.
 - **The screen size** is the window's: the starting size in `PlayerConfig` (`width: 1280, height: 720`), and then whatever the player resizes it to, or the monitor's size when full screen comes. The player scales the canvas to fit it each frame, and fills the leftover space with `border`.
 
 | Milestone | What | Size (estimate) |
 | --- | --- | --- |
-| C1 | `<Canvas>` with `pixelPerfect={false}`: drawn at window resolution through a scale. No ABI change | \~3–4 days |
+| C1 | `<Screen>` with `pixelPerfect={false}`: drawn at window resolution through a scale. No ABI change | \~3–4 days |
 | C2 | `pixelPerfect`: drawn into a 320 × 180 texture, then scaled up. One ABI op, in ABI v2 | \~3–4 days |
 | C3 | The demo on a canvas; `fit="expand"`; full screen on a key | \~2–3 days |
 
-C1 can be done before priority 3, because it needs no ABI change. C2 goes in ABI v2 with priority 3's `<Screen>` and U0's measuring functions, so the version still moves only once.
+C1 can be done before priority 3, because it needs no ABI change. C2 goes in ABI v2 with priority 3's `<Hud>` and U0's measuring functions, so the version still moves only once.
 
 ## The two sizes
 
-| | Game size | Screen size |
+| | Game size | Window size |
 | --- | --- | --- |
-| Set by | `<Canvas width height>` in the game's TSX | `PlayerConfig.width`/`height` to start; the window's real size after that |
+| Set by | `<Screen width height>` in the game's TSX | `PlayerConfig.width`/`height` to start; the window's real size after that |
 | Changes when | The game changes the props (a settings menu could) | The player resizes the window, or goes full screen |
-| What uses it | Everything inside the game: transforms, the camera, `<Screen>`, `Flex fill`, `input.pointerX`, `input.width`/`height` | Only the player: to scale the canvas and place the borders, and to map the mouse back |
-| Without a `<Canvas>` | The same as the screen size, as today | |
+| What uses it | Everything inside the game: transforms, the camera, `<Hud>`, `Flex fill`, `input.pointerX`, `input.width`/`height` | Only the player: to scale the canvas and place the borders, and to map the mouse back |
+| Without a `<Screen>` | The same as the window size, as today | |
 
-**Why the window's size stays in `PlayerConfig`, not on `<Canvas>`.** The window opens before the root is built (`config.root()` runs once the window and sounds are ready, so sounds created in constructors preload). The player cannot know a `<Canvas>`'s props until after the window exists. The window's size is also the host's business: the user resizes it, and a packaged game might save it between runs. So the game says what resolution it is drawn at, and the window is whatever it is. One small change helps: `PlayerConfig.width`/`height` become optional, and when they are left out with a `<Canvas>` at the root, the window opens at 3 × the canvas (960 × 540 for 320 × 180). The window is resized to that once the root is built.
+**Why the window's size stays in `PlayerConfig`, not on `<Screen>`.** The window opens before the root is built (`config.root()` runs once the window and sounds are ready, so sounds created in constructors preload). The player cannot know a `<Screen>`'s props until after the window exists. The window's size is also the host's business: the user resizes it, and a packaged game might save it between runs. So the game says what resolution it is drawn at, and the window is whatever it is. One small change helps: `PlayerConfig.width`/`height` become optional, and when they are left out with a `<Screen>` at the root, the window opens at 3 × the canvas (960 × 540 for 320 × 180). The window is resized to that once the root is built.
 
 ## Props
 
@@ -362,17 +364,17 @@ A later fourth mode, `"expand"`, keeps the height at 180 game pixels and widens 
 | Text | At 320 × 180, raylib's default font is big and blocky | Sharp at any size |
 | Needs | A new draw op in ABI v2, and a render texture in librge | Nothing new in the ABI: it is only a different view matrix |
 
-Most pixel-art games want `true`. Games with drawn or vector art, or with lots of small text, want `false`. A HUD with sharp text over chunky pixel art (drawing `<Screen>` at window resolution over a pixel-perfect world) is a reasonable later option; see "Not in this plan".
+Most pixel-art games want `true`. Games with drawn or vector art, or with lots of small text, want `false`. A HUD with sharp text over chunky pixel art (drawing `<Hud>` at window resolution over a pixel-perfect world) is a reasonable later option; see "Not in this plan".
 
 ## How it fits the engine
 
 ### The runtime: a container built-in that must be the root
 
-`Canvas` is a runtime class with the fields above, a container like `Entity` and `Camera`, added to the manifest in the same places `Flex` is. A component whose root element is `<Canvas>` extends `Canvas` (that is how components work already), so the player finds it by checking `world.root instanceof Canvas` once per frame. Reading its fields every frame means a game can change its resolution or `fit` from state, for example in a settings menu.
+`Screen` is a runtime class with the fields above, a container like `Entity` and `Camera`, added to the manifest in the same places `Flex` is. A component whose root element is `<Screen>` extends `Screen` (that is how components work already), so the player finds it by checking `world.root instanceof Screen` once per frame. Reading its fields every frame means a game can change its resolution or `fit` from state, for example in a settings menu.
 
-A `<Canvas>` anywhere but the root has nothing sensible to mean, so it draws its children as an `Entity` would, with a warning once: "A `<Canvas>` only works as the root of the game." The compiler cannot catch this on its own, because whether a component ends up at the root depends on another file (`PlayerConfig.root`).
+A `<Screen>` anywhere but the root has nothing sensible to mean, so it draws its children as an `Entity` would, with a warning once: "A `<Screen>` only works as the root of the game." The compiler cannot catch this on its own, because whether a component ends up at the root depends on another file (`PlayerConfig.root`).
 
-`Canvas` does not move its children: it has no transform of its own to apply, and a `transform` on it is rejected (it is left out of `transformIntrinsics`), like a sound would be.
+`Screen` does not move its children: it has no transform of its own to apply, and a `transform` on it is rejected (it is left out of `transformIntrinsics`), like a sound would be.
 
 ### The player: one canvas-to-window map
 
@@ -384,11 +386,11 @@ All the work is in the player, in TypeScript, keeping NATIVE_PLAN's "the C side 
 It then uses them in four places:
 
 1. **The camera's view.** `#view` centres the followed point on the canvas's centre (160, 90), not the window's. Today it adds `width / 2` and `height / 2` of the window; with a canvas, it adds the canvas's.
-2. **`<Screen>`.** Its view is the identity in canvas units (so a HUD at `x: 8` is 8 game pixels in), and its layout box for `Flex fill` is 320 × 180.
+2. **`<Hud>`.** Its view is the identity in canvas units (so a HUD at `x: 8` is 8 game pixels in), and its layout box for `Flex fill` is 320 × 180.
 3. **Drawing.** With `pixelPerfect={false}`, each `RGE_OP_VIEW` record is multiplied by the canvas-to-window map (`a, b, c, d` by the scale; `e, f` scaled, then offset by `dest`). Then the bars are drawn as up to four rectangle records, through a last identity view in window pixels. That uses priority 3's "a later view replaces the current one" rule. With `pixelPerfect={true}`, the views stay in canvas units, and the frame starts with the new `RGE_OP_CANVAS` record instead (next section).
 4. **The mouse.** `PlayerInput` takes the window position back through the same map: `canvasX = (mouseX − dest.x) / scale`. `input.pointerX` (world) and the press dispatch (`Pointer`s) start from that point. `input.width`/`height` report the canvas's size, which is what game code means by "the screen". The window's size stays available to the player only. A press in the border bars is outside the canvas and reaches no `Pointer`.
 
-Without a `<Canvas>`, the map is the identity and `dest` is the whole window, so everything behaves exactly as today. That is the test that C1 changes nothing for existing games: every recording test still passes untouched.
+Without a `<Screen>`, the map is the identity and `dest` is the whole window, so everything behaves exactly as today. That is the test that C1 changes nothing for existing games: every recording test still passes untouched.
 
 ### The ABI (C2 only): `RGE_OP_CANVAS`
 
@@ -411,7 +413,7 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 ### Where things interact
 
 - **Camera zoom** still works inside the canvas: `zoom={2}` on a 320 × 180 canvas shows 160 × 90 of the world, drawn at 320 × 180, then scaled to the window.
-- **`Flex` under `<Screen>`** lays out in game pixels. A 16 px padding is 16 game pixels, which is 64 screen pixels at ×4. That is the point: the HUD scales with the game.
+- **`Flex` under `<Hud>`** lays out in game pixels. A 16 px padding is 16 game pixels, which is 64 screen pixels at ×4. That is the point: the HUD scales with the game.
 - **Text measuring** (U0) is in game pixels too. With `pixelPerfect={true}`, text at size 8 is 8 game pixels tall, as drawn.
 - **Pixel snapping** (U4) rounds layout offsets to whole game pixels, which with `pixelPerfect={true}` is exactly the grid things are drawn on.
 - **High DPI** ("Not now" in NEXT_PRIORITIES) gets easier: the canvas is already a "logical resolution", so a Retina window only changes the window side of the map.
@@ -419,19 +421,19 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 
 ## Milestones
 
-### C1: `<Canvas>`, drawn smooth
+### C1: `<Screen>`, drawn smooth
 
 **Done when**
 
-- [ ] `Canvas` is a runtime class and in the manifest; `<Canvas transform>` is a compile error
+- [ ] `Screen` is a runtime class and in the manifest; `<Screen transform>` is a compile error
 - [ ] `fit` is checked at compile time, like `<Shape kind>`
 - [ ] The player computes scale and `dest` for each `fit`, tested at several window sizes, including one smaller than the canvas
-- [ ] The camera centres on the canvas's centre; `<Screen>` (once priority 3 lands) is in canvas units
+- [ ] The camera centres on the canvas's centre; `<Hud>` (once priority 3 lands) is in canvas units
 - [ ] The mouse maps back through the canvas: a `Pointer` is pressed in the right place in a resized, letterboxed window, and a press in the bars hits nothing
 - [ ] `input.width`/`height` report the canvas's size
 - [ ] Bars are drawn in `border`; a pixel test checks one
-- [ ] A game with no `<Canvas>` produces byte-identical records to today (the existing recording tests pass unchanged)
-- [ ] A `<Canvas>` that is not the root warns once and behaves as an `Entity`
+- [ ] A game with no `<Screen>` produces byte-identical records to today (the existing recording tests pass unchanged)
+- [ ] A `<Screen>` that is not the root warns once and behaves as an `Entity`
 
 ### C2: `pixelPerfect`
 
@@ -447,9 +449,9 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 
 **Done when**
 
-- [ ] The demo runs on a `<Canvas>` (320 × 180 or 640 × 360), and its HUD (from U3) is laid out in canvas units
+- [ ] The demo runs on a `<Screen>` (320 × 180 or 640 × 360), and its HUD (from U3) is laid out in canvas units
 - [ ] `fit="expand"` widens the canvas to the window's shape; `Flex fill` and the camera follow the changing width
-- [ ] `PlayerConfig.width`/`height` are optional with a root `<Canvas>`, and the window opens at 3 × the canvas
+- [ ] `PlayerConfig.width`/`height` are optional with a root `<Screen>`, and the window opens at 3 × the canvas
 - [ ] A full-screen toggle exists (a `PlayerConfig` key, or `useWindow().setFullscreen()`; see the decisions)
 
 ## Decisions
@@ -459,27 +461,14 @@ Decided on 2026-11-09:
 - ~~**Default for `pixelPerfect`.**~~ `true`.
 - ~~**Full screen.**~~ In, as part of C3. Unless decided otherwise, it is a key the player handles (F11 or Alt+Enter, configurable in `PlayerConfig`); a `useWindow()` hook for a settings menu would need its own design note under the "hooks are compiler intrinsics" rule.
 
-Still open:
-
-1. **One component or two: `<Canvas>` and `<Screen>`.** They do different jobs. `<Canvas>` is the whole game: its resolution and how it is scaled into the window. There is one, at the root. `<Screen>` (priority 3) is a layer inside the game that ignores the camera: the HUD. There may be several, and they sit inside the canvas, beside the world. They cannot be one component, because the world (which moves with the camera) must be inside the sized root but outside the camera-ignoring layer. What *can* change is the names. Since "screen" reads naturally as "the thing with a size", an alternative is to call the root `<Screen width={320} height={180}>` and rename priority 3's HUD layer to `<Hud>` (or `<Overlay>`):
-
-   ```tsx
-   <Screen width={320} height={180}>   {/* the game's resolution, scaled to the window */}
-     <World />                          {/* moves with the camera */}
-     <Hud>                              {/* does not */}
-       <Flex fill padding={8}>…</Flex>
-     </Hud>
-   </Screen>
-   ```
-
-   Recommendation: this renaming. It matches how the root was first described ("a base component like Screen with a size"), and `Hud` says what the layer is for.
-2. **Where the window's starting size lives.** Two sizes exist: the game's (320 × 180, on the root component) and the window's (say 1280 × 720). The game's size belongs in the TSX. The window's starting size is still needed before any component exists, because the player opens the window first and builds the game after, so `PlayerConfig` keeps an optional `width`/`height`. When left out, the window opens at 3 × the game's size. Recommendation: this, and nothing to decide unless you want the window size set somewhere else.
+- ~~**One component or two.**~~ Two, renamed: the sized root is `<Screen width height>` (called `Canvas` in earlier drafts), and priority 3's camera-ignoring layer is `<Hud>` (called `Screen` in earlier drafts). They do different jobs: the root sets the game's resolution and how it is scaled into the window, and there is one; `<Hud>` is a layer inside it that does not move with the camera, and there may be several. They cannot be one component, because the world must be inside the sized root but outside the camera-ignoring layer.
+- ~~**Where the window's starting size lives.**~~ In `PlayerConfig`, as an optional `width`/`height`, because the window opens before any component exists. Left out, the window opens at 3 × the game's size.
 
 ## Not in this part, and what would pull it in
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| A sharp HUD over a pixel-perfect world (`<Screen pixelPerfect={false}>`) | Two render paths in one frame; it needs `<Screen>` and C2 both working first | Small text in a pixel-art HUD that is hard to read |
+| A sharp HUD over a pixel-perfect world (`<Hud pixelPerfect={false}>`) | Two render paths in one frame; it needs `<Hud>` and C2 both working first | Small text in a pixel-art HUD that is hard to read |
 | Several canvases (split screen, a minimap) | Needs render targets as a general feature, not one canvas | A local multiplayer or minimap game |
 | Post-processing (CRT filter, palette shaders) | Needs shaders in the ABI | An art direction that asks for it |
 | Sub-pixel camera smoothing in `pixelPerfect` mode (drawing one pixel larger and offsetting the blit) | A refinement; slow pans may look a little steppy without it | A slow-scrolling game where the camera's steps show |
