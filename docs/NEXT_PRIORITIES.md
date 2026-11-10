@@ -92,7 +92,7 @@ The tree walk costs most; collisions add as much again. A 60 fps frame is 16.7 m
 
 - **Tree walk: cache world transforms for still subtrees.** Most objects do not move in a given frame, but every frame recomposes every transform from the root. This needs a change signal: `Transform`'s fields are plain public fields, so either setters that bump a version, or a comparison against last frame's values.
 - **Tick: dependency-scoped `render()`.** Today a moving object re-runs its whole `render()` every frame. Every dynamic prop already records which state it reads, so the compiler can re-evaluate only the props whose state changed. Setters called with an updater (`setX(x => x + 1)`) also allocate a closure per call, which the compiler could avoid.
-- **Collisions: a uniform grid.** The sweep over x degrades when colliders line up in columns, as platforms and the bench's own grid do. A grid sized to a typical collider keeps it near linear. Layers from priority 2 also cut pairs before they are tested.
+- **Collisions: a uniform grid.** *(Tried 2026-11-10: no gain under QuickJS, see NATIVE_PLAN.md.)* The sweep over x degrades when colliders line up in columns, as platforms and the bench's own grid do. A grid sized to a typical collider keeps it near linear. Layers from priority 2 also cut pairs before they are tested.
 - **A guard in CI.** The host job prints these numbers but fails on nothing, which is how a quadratic mount went unnoticed. Fail it on a generous threshold, or on the QuickJS/Node ratio, which is steadier on shared runners.
 
 **Done when**
@@ -150,7 +150,7 @@ flowchart LR
 ## Open decisions
 
 1. ~~**What `other` exposes (priority 2).**~~ Decided 2026-11-09: both `other.tag` and `other.owner` (the owning entity's name).
-2. **How a moved transform is detected (priority 4).** Setters with a version counter are exact but change `Transform` from plain fields; comparing against last frame keeps the fields but costs a check per object.
+2. **How a moved transform is detected (priority 4).** Chosen 2026-11-10: setters with a version counter. **Built, measured and reverted the same day**: under QuickJS it saved about 1.2 ms on 2,000 still objects and cost about 4 ms on 2,000 moving ones (see NATIVE_PLAN.md, "Performance pass two"). Open again; any signal must not make the moving case slower.
 3. ~~**Whether ABI v2 also takes the `z` sort key (priority 3).**~~ Decided and done 2026-11-09: no, it is sorted in TypeScript, and the record format is unchanged.
 
 ## Not now, and what would pull it in

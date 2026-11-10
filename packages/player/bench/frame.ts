@@ -70,15 +70,17 @@ interface Scene {
   readonly colliders?: boolean;
   readonly state?: boolean;
   readonly pile?: boolean;
+  /** How many of the `n` entities move; the rest are still. Default all of them. */
+  readonly moving?: number;
 }
 
-function buildScene({ n, colliders: withColliders = false, state = false, pile = false }: Scene): Entity {
+function buildScene({ n, colliders: withColliders = false, state = false, pile = false, moving = n }: Scene): Entity {
   const root = new Entity();
   const side = Math.ceil(Math.sqrt(n));
   for (let i = 0; i < n; i++) {
     const x = pile ? 0 : (i % side) * 14;
     const y = pile ? 0 : Math.floor(i / side) * 14;
-    const mover = state ? new StateMover() : new Mover();
+    const mover = i >= moving ? new Entity() : state ? new StateMover() : new Mover();
     mover.transform.x = x;
     mover.transform.y = y;
     if (mover instanceof StateMover) {
@@ -133,12 +135,15 @@ const scenes: [string, Scene][] = [
   ["5000 moving rects", { n: 5000 }],
   ["2000 rects moved by state", { n: 2000, state: true }],
   ["2000 rects by state with colliders", { n: 2000, state: true, colliders: true }],
+  ["2000 still rects", { n: 2000, moving: 0 }],
+  ["2000 rects, 20 moving, colliders", { n: 2000, moving: 20, colliders: true }],
+  ["2000 still rects with colliders", { n: 2000, moving: 0, colliders: true }],
   ["500 moving rects with colliders", { n: 500, colliders: true }],
   ["2000 moving rects with colliders", { n: 2000, colliders: true }],
   ["300 colliders in one pile", { n: 300, colliders: true, pile: true }],
 ];
 for (const [name, scene] of scenes) console.log(`${name.padEnd(35)}: ${measure(scene).toFixed(2)} ms per frame`);
-for (const [name, scene] of [scenes[3], scenes[4]] as [string, Scene][]) {
+for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7]] as [string, Scene][]) {
   const p = phases(scene);
   console.log(`  ${name} by phase: tick ${p.tick.toFixed(2)}, walk ${p.walk.toFixed(2)}, collisions ${p.collisions.toFixed(2)} ms`);
 }
