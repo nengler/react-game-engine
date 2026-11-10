@@ -27,6 +27,6 @@ export { AnimatedSprite, type AnimatedSpriteProps } from "./components/AnimatedS
 export { Flex, FlexBox, FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, type FlexAlignItems, type FlexAnchor, type FlexDirection, type FlexJustifyContent, type FlexProps, type FlexSizing } from "./components/Flex.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
-export { createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
+export { KEY_NAMES, createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
 export { clamp } from "./math.ts";
 export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";

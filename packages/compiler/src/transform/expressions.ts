@@ -6,7 +6,7 @@ import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import { assertNever, ARRAY_METHODS, MUTATING_ARRAY_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
 import { MATH_FUNCTIONS } from "./handles.ts";
 import { lowerFunction } from "./statements.ts";
-import { BINARY_OPERATORS, UNARY_OPERATORS } from "./helpers.ts";
+import { BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
 
 export class ExpressionLowering extends LoweringBase {
@@ -275,6 +275,7 @@ export class ExpressionLowering extends LoweringBase {
         this.report(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no callable method '${callee.name.text}'.`, callee.name);
         return null;
       }
+      if (!this.checkKeyName(receiver.type, callee.name.text, node)) return null;
       result = { callee: { kind: "Method", receiver: receiver.read, name: callee.name.text }, expected, label: callee.name.text };
     }
     if (!result) {
@@ -293,6 +294,27 @@ export class ExpressionLowering extends LoweringBase {
       args.push(lowered);
     }
     return { kind: "Call", callee: result.callee, args };
+  }
+
+  /**
+   * `input.pressed("Spcae")`: a key name written as a literal must be one the player knows, or it would never be pressed
+   * (the player only warns about it at run time). Any other expression is left alone.
+   */
+  protected checkKeyName(type: string, method: string, node: CallExpression): boolean {
+    const keys = this.manifest.keyNames;
+    if (keys === undefined || !this.manifest.keyMethods?.[type]?.includes(method)) return true;
+    const argument = node.arguments[0];
+    if (argument === undefined || !(isStringLiteral(argument) || isNoSubstitutionTemplateLiteral(argument))) return true;
+    const name = argument.text;
+    if (keys.includes(name)) return true;
+    // Single letters and digits are keys too, and every word "starts with" one: match a longer name against longer keys.
+    const near = nearest(name, name.length > 1 ? keys.filter((key) => key.length > 1) : keys);
+    this.report(
+      DiagnosticCode.InvalidPropValue,
+      `'${name}' is not a key name${near ? ` (did you mean "${near}"?)` : ""}. Keys are: ${keys.join(", ")}.`,
+      argument,
+    );
+    return false;
   }
 
   /** `enemies.filter((e) => e.alive)`: an allowlisted array method that does not mutate its receiver. */

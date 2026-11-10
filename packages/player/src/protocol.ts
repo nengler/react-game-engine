@@ -3,6 +3,7 @@
  * `native/include/rge.h`, which is the source of truth: change the header first.
  * `test/protocol.test.ts` parses the header and fails if anything here differs.
  */
+import { KEY_NAMES } from "@rge/runtime";
 
 export const RGE_ABI_VERSION = 4;
 
@@ -83,22 +84,8 @@ export const PROTOCOL = {
   RGE_OPEN_SMOOTH,
 } as const;
 
-const LETTERS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
-const DIGITS = Array.from({ length: 10 }, (_, i) => String(i));
-const FUNCTION_KEYS = Array.from({ length: 12 }, (_, i) => `F${i + 1}`);
-
-/**
- * Key names, in the order of the keys buffer (the header's `RGE_KEYS`, which is append only).
- * What `input.pressed("Space")` accepts. Mouse buttons are keys too.
- */
-export const KEYS: readonly string[] = [
-  "Space", "Enter", "Escape", "Tab", "Backspace", "Shift", "Control", "Alt",
-  "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
-  ...LETTERS,
-  ...DIGITS,
-  ...FUNCTION_KEYS,
-  "MouseLeft", "MouseRight", "MouseMiddle",
-];
+/** Key names, in the order of the keys buffer (the header's `RGE_KEYS`, which is append only). Defined in `@rge/runtime`, where the compiler checks key names against it. */
+export const KEYS: readonly string[] = KEY_NAMES;
 
 /** Index of each key name in the keys buffer. */
 export const KEY_INDEX: ReadonlyMap<string, number> = new Map(KEYS.map((name, index) => [name, index]));

@@ -1,3 +1,4 @@
+import { KEY_NAMES } from "./input.ts";
 import { FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT } from "./components/Flex.ts";
 import { TEXT_ALIGNS } from "./components/Text.ts";
 import { SCREEN_FITS } from "./components/Screen.ts";
@@ -60,6 +61,13 @@ export interface RuntimeManifest {
    * width>`), by intrinsic. The compiler checks a literal and suggests the nearest keyword for a typo; any other
    * expression is left to the type-check.
    */
+  /**
+   * Handle types whose methods take a key name as their first argument (`InputState`: `pressed`, `down`, `released`),
+   * mapped to those methods, and the key names they accept. The compiler checks a literal key name and suggests the
+   * nearest one for a typo; any other expression is left to the type-check.
+   */
+  readonly keyMethods?: Readonly<Record<string, readonly string[]>>;
+  readonly keyNames?: readonly string[];
   readonly intrinsicSizing: Readonly<Record<string, readonly string[]>>;
   /**
    * Callback props an intrinsic accepts, by intrinsic then prop name, with
@@ -141,6 +149,8 @@ export const runtimeManifest: RuntimeManifest = {
     Text: { align: TEXT_ALIGNS },
     Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS },
   },
+  keyMethods: { InputState: ["pressed", "down", "released"] },
+  keyNames: KEY_NAMES,
   intrinsicSizing: { Flex: ["width", "height"] },
   intrinsicCallbacks: {
     Collider: {
