@@ -766,6 +766,10 @@ Limits, each said by the importer: one tileset (the first is used; a second is a
 
 `useSound`'s function takes a volume (`play(0.5)`); `SoundSink.play(path, volume)`. `<Music src playing volume loop fade>` opens its stream when it is made, starts silent and fades up over `fade`, fades out and stops when `playing` turns off, and restarts from the beginning when it turns on; it belongs to whatever holds it, so a `<Music>` in the root keeps playing across rooms and screens. A backend without music (`loadMusic` absent) warns once and stays silent.
 
+### Frame-rate counter
+
+`<Game showFps>` (or `PlayerConfig.showFps`) draws `60 fps  0.9 ms` in the top left over everything: the frame rate from the time the backend measures between frames, and the script time of the step (tick, tree walk, collisions; not the backend's draw and wait), both smoothed. `F3` toggles it while playing (`fpsKey` changes or removes the key). A frame that is slow with a small script time is the backend's (vsync, drawing); one with a large script time is the game's.
+
 ### What a frame of the level costs
 
 `packages/kite/tools/frame-time.ts` plays the whole game (title, eight rooms, the end) on a recording backend under Node/V8 and times each `player.step()`: script only, no drawing. On the 4-core cloud VM, 1,384 steps: **mean 0.86 ms, 99th percentile 9–11 ms, slowest 25–26 ms**. The slow ones are the steps where a room changes (a `<Tilemap>` is made and the camera's bounds change) and the first frames of a cold JIT; a still room is about 75 draw records and well under a millisecond. The busiest room to draw is the one with the most particles (a death, while the dash trail is still alive), a few hundred rects. `npm run bench:check` is within budget (the player's scenes are unchanged).

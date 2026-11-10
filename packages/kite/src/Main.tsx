@@ -65,7 +65,7 @@ export default function Main() {
       assets="assets"
       fixedStep={60}
     >
-      <Screen width={320} height={180} fit="integer">
+      <Screen width={320} height={180} fit="contain">
         {screen === "title" && <Title />}
         {screen === "play" && <Play />}
         {screen === "end" && <End />}

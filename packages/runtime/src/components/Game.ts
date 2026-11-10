@@ -27,6 +27,10 @@ export interface GameProps extends EntityProps {
    * Default `"F11"`; `false` turns the key off. Alt + Enter always works too.
    */
   fullscreenKey?: string | false;
+  /** Show the frame rate and the script time of a frame in the top left corner, over everything: a debugging aid. Default false; the key `fpsKey` turns it on and off while playing. */
+  showFps?: boolean;
+  /** The key that toggles the frame-rate counter, by the name `useInput` uses. Default `"F3"`; `false` turns the key off. */
+  fpsKey?: string | false;
   /**
    * How far the gamepad's left stick must be pushed, 0 to 1, before `"PadLeft"`, `"PadRight"`, `"PadUp"` and `"PadDown"` count as
    * held. Default 0.35. (The buttons are `"PadA"`, `"PadB"`, `"PadX"`, `"PadY"`, `"PadLB"`, `"PadRB"`, `"PadBack"` and `"PadStart"`,
@@ -69,6 +73,8 @@ export class Game<P extends object = {}> extends Entity<P> {
   fullscreenKey: string | false | undefined;
   fixedStep: number | undefined;
   gamepadDeadzone: number | undefined;
+  showFps: boolean | undefined;
+  fpsKey: string | false | undefined;
   state: GameStateHandle | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
@@ -85,6 +91,8 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.fullscreenKey = hostProps.fullscreenKey;
     this.fixedStep = hostProps.fixedStep;
     this.gamepadDeadzone = hostProps.gamepadDeadzone;
+    this.showFps = hostProps.showFps;
+    this.fpsKey = hostProps.fpsKey;
     this.state = hostProps.state;
   }
 }

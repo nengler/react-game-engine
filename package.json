@@ -9,6 +9,9 @@
     "node": ">=22.18"
   },
   "scripts": {
+    "generate": "npm run -s demo && npm run -s example && npm run -s kite",
+    "pretest": "npm run -s generate",
+    "pretypecheck": "npm run -s generate",
     "test": "node --test \"packages/*/test/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json && tsc -p packages/example/tsconfig.json && tsc -p packages/demo/tsconfig.json && tsc -p packages/kite/tsconfig.json",
     "native:build": "cmake -S native -B native/build && cmake --build native/build -j",

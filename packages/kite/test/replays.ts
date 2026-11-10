@@ -11,13 +11,13 @@ export const REPLAYS: readonly string[] = [
   // 3. Dash across
   "right+down+dash, right*3+down*3, _*12, down+dash, down*3, dash, _*11, right*4, right*4+jump*4, _*4, dash, _*11, jump*4, _*8, dash, _*11, right*4, dash, _*11, right*4, dash, _*15, _*25",
   // 4. Dash up
-  "dash, _*11, right*4, right*4+jump*4, jump*4, _*4, up+dash, up*3, _*8, right*4, right*4+jump*4, right*4, right*4+jump*4, jump*8, right*4+jump*4, right+up+dash, right*3+up*3, _*12, _*25",
+  "dash, _*11, right*4, right+up+dash, right*3+up*3, _*4, jump*4, left*8+jump*8, right*8, right*4+jump*4, jump*4, right*8+jump*8, up+dash, up*3, _*8, right*12, _*25",
   // 5. The shaft
-  "_*4, right*4+jump*4, left*8+jump*8, right*4+jump*4, right*4, jump*8, left*4+jump*4, _*8, up+dash, up*3, _*8, left*4, left*8+jump*8, left*4, jump*8, left*4+jump*4, jump*4, _*25",
+  "left*4+jump*4, jump*4, left*4, jump*12, right*4+jump*4, right*4, right*8+jump*8, up+dash, up*3, _*8, right*8, left*4+jump*4, jump*12, _*4, _*25",
   // 6. Spikes on the wall
-  "right*8, right*4+jump*4, jump*4, right*8+jump*8, _*4, left*4+jump*4, jump*8, right*16+jump*16, right*4, left*4+jump*4, jump*8, right*4+jump*4, right*4, right*12+jump*12, _*4, right*4+jump*4, left*4+jump*4, jump*4, right*4+jump*4, _*4, right*4+jump*4, right*12, jump*4, left*4+jump*4, jump*4, right*4+jump*4, _*4, right*8+jump*8, up+dash, up*3, _*8, right*20, dash, _*11, right*4, dash, _*11, right*4+jump*4, _*8, _*25",
+  "right*20+jump*20, right*4, left*4+jump*4, right*4+jump*4, jump*8, right*4+jump*4, right*4, right*8+jump*8, right*4, _*4, jump*4, left*4+jump*4, jump*4, right*4+jump*4, right*4, right*12+jump*12, right*4, jump*12, right*12+jump*12, right*4, _*4, right*4, right*4+jump*4, jump*8, right*4+jump*4, right*4, right*8+jump*8, _*4, up+dash, up*3, _*8, right*4, right*4+jump*4, right*4, dash, _*11, right*4, dash, _*11, right*4+jump*4, _*8, _*25",
   // 7. Gem ledge
-  "_*8, down+dash, down*3, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, right*20, right+down+dash, right*3+down*3, right*4, right*4+jump*4, jump*4, right*4+jump*4, right*4, right*8+jump*8, up+dash, up*3, _*8, right*4, right*8+jump*8, right*4, dash, _*11, right*4+jump*4, _*16, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, right*4, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, dash, _*11, right*4+jump*4, _*4, _*25",
+  "_*8, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, right*4, right+down+dash, right*3+down*3, right*4, right+down+dash, right*3+down*3, right*12, right*4+jump*4, jump*4, right*8+jump*8, right*4, right*4+jump*4, up+dash, up*3, _*8, right*4, right*4+jump*4, right*4, dash, _*11, right*4+jump*4, _*16, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, right+down+dash, right*3+down*3, right*4, dash, _*11, right*4+jump*4, _*4, _*25",
   // 8. Summit
-  "jump*4, _*8, right*4, right*4+jump*4, jump*4, right*4+jump*4, dash, _*15, right+up+dash, right*3+up*3, _*4, right*4+jump*4, jump*4, _*4, jump*4, left*4+jump*4, jump*4, right+dash, right*3, _*8, right*4, jump*8, up+dash, up*3, _*12, right*8+jump*8, right+up+dash, right*3+up*3, right*4+jump*4, jump*4, _*4",
+  "jump*12, right*4, right*4+jump*4, jump*4, right*4+jump*4, dash, _*11, right*4, right+up+dash, right*3+up*3, _*4, right*4+jump*4, jump*4, _*4, left*4+jump*4, right*4+jump*4, right*4, right+jump+dash, right*3+jump*3, _*12, right*4+jump*4, jump*4, _*4, up+dash, up*3, _*8, right*4, right*4+jump*4, right*4, right+up+dash, right*3+up*3, _*8",
 ];

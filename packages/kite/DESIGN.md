@@ -35,13 +35,13 @@ character is back at the room's start 0.45 s later. Leaving a room by its exit m
 | 1 | First steps | run, a short hop, a 4-tile gap over spikes | run + jump |
 | 2 | Stepping stones | held jumps up 2-tile steps over spikes | jump height |
 | 3 | Dash across | an 8-tile gap, too wide to jump | jump + dash |
-| 4 | Dash up | a ledge 6 tiles up, an opening above it | jump + up-dash |
+| 4 | Dash up | a ledge 4 tiles up, a second 5 above it, an opening in the ceiling | up-dash, twice |
 | 5 | The shaft | wall jumps up a 6-wide shaft | walls |
 | 6 | Spikes on the wall | the same, with spikes on both walls | walls + dash |
 | 7 | Gem ledge | a spiked pit with a pillar; the **optional gem** is up and to the right | everything |
 | 8 | Summit | stepping stones, a dash across, up the wall, the exit | everything |
 
-Rooms 1 and 2 are solved by the search with no dash; 4 and 6 cannot be solved without one. Room 3 can be crossed by wall jumping
+A solver finding a route is not the same as a person finding one: room 4 was first built with a ledge whose only route was a contrived one, and was effectively impossible to play. `test/rooms.test.ts` now also checks that the two dash moves (rooms 3 and 4) work over a window of dash timings, not a single frame (`tools/margin.ts` prints the grid). Rooms 1 and 2 are solved by the search with no dash; 4 and 6 cannot be solved without one. Room 3 can be crossed by wall jumping
 out of the pit (a finding: one wall is a ladder).
 
 ## What "finished" means for the level

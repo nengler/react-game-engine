@@ -34,3 +34,35 @@ describe("gamepad keys", () => {
     assert.equal(none.gamepadDeadzone, null, "left to librge's default (0.35)");
   });
 });
+
+describe("the frame-rate counter", () => {
+  const counters = (backend: RecordingBackend): string[] => backend.lastFrame.records.flatMap((r) => (r.op === "text" && / fps /.test(r.text) ? [r.text] : []));
+
+  it("is off by default, on with showFps, and toggled by F3 (or the key chosen)", () => {
+    const off = new RecordingBackend();
+    const p1 = createPlayer(off, { root: () => new Entity() });
+    p1.step();
+    p1.step();
+    p1.close();
+    assert.deepEqual(counters(off), []);
+
+    const on = new RecordingBackend();
+    for (let i = 0; i < 3; i++) on.queueInput({ dt: 1 / 50 });
+    const p2 = createPlayer(on, { root: () => new Game({ showFps: true }) });
+    for (let i = 0; i < 4; i++) p2.step();
+    p2.close();
+    assert.match(counters(on)[0] as string, /^50 fps  \d+\.\d ms$/);
+
+    const keyed = new RecordingBackend();
+    keyed.queueInput({ dt: 1 / 60 });
+    keyed.queueInput({ dt: 1 / 60, pressed: ["F3"] });
+    keyed.queueInput({ dt: 1 / 60 });
+    const p3 = createPlayer(keyed, { root: () => new Entity() });
+    p3.step();
+    p3.step();
+    assert.deepEqual(counters(keyed), [], "not yet pressed");
+    p3.step();
+    assert.equal(counters(keyed).length, 1, "shown after F3");
+    p3.close();
+  });
+});

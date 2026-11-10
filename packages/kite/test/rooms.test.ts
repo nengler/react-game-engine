@@ -95,3 +95,35 @@ describe("replays", () => {
     assert.equal(result.states.find((s) => s.room === 6 && s.gems === 0) !== undefined, true, "it was not already picked up on arrival");
   });
 });
+
+describe("the dash moves have room to spare", () => {
+  /** Walk right `walk` frames, jump (held) and dash `dash` frames later; did `done` hold at any frame? */
+  function attempt(room: number, walk: number, dash: number, direction: { up?: boolean; right?: boolean }, done: (p: ReturnType<typeof startPlayback>) => boolean): boolean {
+    const r = ROOM_LIST[room]!;
+    let p = startPlayback({ ...newRun(), room, originX: r.ox, originY: r.oy, player: { ...newRun().player, x: r.spawnX, y: r.spawnY } });
+    for (let f = 0; f < 220 && !p.run.dead; f++) {
+      const j = f - walk;
+      p = playFrame(p, { ...NO_CONTROLS, right: f < walk + 25 || direction.right === true, jumpPressed: j === 0, jumpHeld: j >= 0 && j < 14, up: direction.up === true && j >= dash, dashPressed: j === dash }, 1 / 60);
+      if (done(p)) return true;
+    }
+    return false;
+  }
+
+  it("room 4: reaching the first ledge works for a dash timed anywhere in a quarter of a second, from several places to jump", () => {
+    for (const walk of [18, 24, 30]) {
+      let window = 0;
+      for (let dash = 0; dash <= 40; dash++) if (attempt(3, walk, dash, { up: true }, (p) => p.run.player.onGround && p.run.player.y < 105)) window++;
+      assert.ok(window >= 12, `walking ${walk} frames, ${window} frames of dash timing work`);
+    }
+  });
+
+  it("room 3: crossing the gap works for a dash timed anywhere in a tenth of a second or more, jumping from the edge", () => {
+    let best = 0;
+    for (let walk = 40; walk <= 70; walk += 2) {
+      let window = 0;
+      for (let dash = 0; dash <= 40; dash++) if (attempt(2, walk, dash, { right: true }, (p) => p.run.room === 3 || p.run.player.x > 175)) window++;
+      best = Math.max(best, window);
+    }
+    assert.ok(best >= 6, `at best ${best} frames of dash timing work`);
+  });
+});

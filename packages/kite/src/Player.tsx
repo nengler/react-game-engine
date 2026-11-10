@@ -119,9 +119,11 @@ export function Player() {
       />
       {/* A trail the dash leaves behind it in the world, not following the character. */}
       <Particles rate={120} lifetime={0.25} speed={6} spread={180} size={3} shrink fade color="#ff9a7a" space="world" emitting={dashing} transform={{ x: 4, y: 6 }} max={24} />
-      {landed && <Particles burst={5} lifetime={0.25} speed={30} angle={270} spread={80} size={2} fade color="#c9c3b8" gravity={120} transform={{ x: 4, y: 11 }} />}
-      {jumped && <Particles burst={4} lifetime={0.2} speed={25} angle={90} spread={70} size={2} fade color="#c9c3b8" transform={{ x: 4, y: 11 }} />}
-      {died && <Particles burst={16} lifetime={0.55} speed={75} spread={180} size={3} shrink color="#fff1d6" endColor="#ff7a59" gravity={140} transform={{ x: 4, y: 6 }} />}
+      {/* These stay mounted and switch on for a moment, in world space: a particle belongs to the world once it is made, so it is left behind
+          as the character moves (and is not cut off when the emitter switches off again). */}
+      <Particles burst={9} lifetime={0.4} speed={55} angle={270} spread={75} size={3} fade shrink color="#e6e0d2" gravity={160} space="world" emitting={landed} transform={{ x: 4, y: 10 }} max={24} />
+      <Particles burst={6} lifetime={0.3} speed={40} angle={90} spread={60} size={2} fade color="#e6e0d2" space="world" emitting={jumped} transform={{ x: 4, y: 10 }} max={16} />
+      <Particles burst={18} lifetime={0.6} speed={85} spread={180} size={3} shrink color="#fff1d6" endColor="#ff7a59" gravity={140} space="world" emitting={died} transform={{ x: 4, y: 6 }} max={32} />
     </Entity>
   );
 }

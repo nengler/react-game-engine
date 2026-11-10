@@ -27,6 +27,9 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly fixedStep?: number;
   /** The gamepad stick's dead zone, as the `<Game>` prop `gamepadDeadzone`. */
   readonly gamepadDeadzone?: number;
+  /** The frame-rate counter, as the `<Game>` props `showFps` and `fpsKey`. */
+  readonly showFps?: boolean;
+  readonly fpsKey?: string | false;
   /** A CSS colour. Default `"black"`. */
   readonly background?: string;
   /** Folder that image and sound names are relative to. Default `"assets"`. */
@@ -157,6 +160,14 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     if (backend.setFullscreen(!fullscreen)) fullscreen = !fullscreen;
   };
 
+  // The frame-rate counter: the frame rate from the time the backend measures between frames, and what the script cost (the step, without the backend's draw and wait), each smoothed.
+  let showFps = game?.showFps ?? config.showFps ?? false;
+  const fpsSetting = game?.fpsKey ?? config.fpsKey ?? "F3";
+  const fpsKey = fpsSetting === false ? undefined : KEY_INDEX.get(fpsSetting);
+  let smoothDt = 0;
+  let smoothMs = 0;
+  const clock = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
   const close = (): void => {
     if (closed) return;
     closed = true;
@@ -190,7 +201,11 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     world,
     step(): boolean {
       if (closed) throw new Error("The player is closed.");
+      const started = clock();
       toggleFullscreen();
+      if (fpsKey !== undefined && ((input.keys[fpsKey] as number) & RGE_KEY_PRESSED) !== 0) showFps = !showFps;
+      const realDt = input.values[RGE_IN_DT] as number;
+      if (realDt > 0) smoothDt = smoothDt === 0 ? realDt : smoothDt * 0.9 + realDt * 0.1;
       dispatchPress();
       const dt = input.values[RGE_IN_DT] as number;
       if (stepHz === undefined) world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
@@ -223,6 +238,13 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       screen = built.screen;
       input.view = built.view;
       collisions.update(world, built.colliders);
+      if (showFps) {
+        const ms = clock() - started;
+        smoothMs = smoothMs === 0 ? ms : smoothMs * 0.9 + ms * 0.1;
+        const shown = built.list;
+        shown.view({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+        shown.text({ x: 3, y: 3, rotation: 0, scaleX: 1, scaleY: 1 }, `${smoothDt > 0 ? Math.round(1 / smoothDt) : 0} fps  ${smoothMs.toFixed(1)} ms`, 8, 0xffe14dff);
+      }
       backend.frame(background, built.list.records, built.list.length, built.list.texts, input.values, input.keys);
       return input.values[RGE_IN_QUIT] === 0;
     },
