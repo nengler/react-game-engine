@@ -6,7 +6,8 @@
  *
  * A game is `packages/<name>` laid out like the demo: `src/*.tsx`, `generated/`, `test/`, `parity.ts`, `main.ts`.
  *
- * 1. compile   `rge-compile src generated` (with `--scenes scenes` if the package has a `scenes/` folder)
+ * 1. compile   `rge-compile src generated` (with `--scenes scenes` and `--assets assets` where the package has those folders:
+ *              maps become `generated/tilemaps.ts`, and a missing image or sound is an error)
  * 2. typecheck `tsc -p packages/<name>/tsconfig.json`, then the repository's `tsc -p tsconfig.json`
  * 3. tests     `node --test packages/<name>/test/**` (the output's counts are printed)
  * 4. parity    `parity.ts` twice under Node (identical, so a run is deterministic); and, when the Rust host is built
@@ -45,6 +46,7 @@ const steps: { name: string; run: () => Outcome }[] = [
     run: () => {
       const args = ["packages/compiler/src/cli.ts", `packages/${name}/src`, `packages/${name}/generated`];
       if (existsSync(join(pkg, "scenes"))) args.push("--scenes", `packages/${name}/scenes`);
+      if (existsSync(join(pkg, "assets"))) args.push("--assets", `packages/${name}/assets`);
       const r = node(args);
       return { ok: r.ok, detail: r.output.trim().split("\n").at(-1) ?? "", output: r.output };
     },

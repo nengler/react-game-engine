@@ -101,6 +101,20 @@ function main(argv: readonly string[]): number {
         console.log(`read GameState.ts (${schema.actions.length} action${schema.actions.length === 1 ? "" : "s"})`);
       }
     }
+    // Tilemaps come first: the game's own code (its rules, its game state) imports `tilemaps.ts`, so it must exist when the sources are type-checked.
+    if (scenesDir !== undefined && !diagnostics.some((d) => d.severity === "error")) {
+      const maps = new Map<string, TilemapOut>();
+      for (const name of readdirSync(scenesDir).filter((f) => f.endsWith(".tmj")).sort()) {
+        const imported = importTilemap(relative(process.cwd(), resolve(scenesDir, name)), readFileSync(resolve(scenesDir, name), "utf8"));
+        diagnostics.push(...imported.diagnostics);
+        if (imported.tilemap !== null) maps.set(name.replace(/\.tmj$/, ""), imported.tilemap);
+      }
+      if (maps.size > 0 && !diagnostics.some((d) => d.severity === "error")) {
+        writeFileSync(resolve(outDir, "tilemaps.ts"), tilemapsSource(maps, relative(process.cwd(), scenesDir)));
+        console.log(`wrote tilemaps.ts (${maps.size} map${maps.size === 1 ? "" : "s"})`);
+      }
+    }
+
     const sourceNames = readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort();
     if (check && sourceNames.length > 0) {
       diagnostics.push(
@@ -148,18 +162,6 @@ function main(argv: readonly string[]): number {
     if (scenesDir !== undefined) {
       if (diagnostics.some((d) => d.severity === "error")) console.error("skipped scene validation: fix the errors above first (scenes are checked against the compiled prefabs)");
       else diagnostics.push(...checkScenes(compiler, scenesDir, outDir, projectSchemas(modules)));
-    }
-    if (scenesDir !== undefined && !diagnostics.some((d) => d.severity === "error")) {
-      const maps = new Map<string, TilemapOut>();
-      for (const name of readdirSync(scenesDir).filter((f) => f.endsWith(".tmj")).sort()) {
-        const imported = importTilemap(relative(process.cwd(), resolve(scenesDir, name)), readFileSync(resolve(scenesDir, name), "utf8"));
-        diagnostics.push(...imported.diagnostics);
-        if (imported.tilemap !== null) maps.set(name.replace(/\.tmj$/, ""), imported.tilemap);
-      }
-      if (maps.size > 0 && !diagnostics.some((d) => d.severity === "error")) {
-        writeFileSync(resolve(outDir, "tilemaps.ts"), tilemapsSource(maps, relative(process.cwd(), scenesDir)));
-        console.log(`wrote tilemaps.ts (${maps.size} map${maps.size === 1 ? "" : "s"})`);
-      }
     }
   } finally {
     compiler.close();
