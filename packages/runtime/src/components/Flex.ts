@@ -12,6 +12,10 @@ export type FlexAlignItems = (typeof FLEX_ALIGN_ITEMS)[number];
 export const FLEX_JUSTIFY_CONTENT = ["start", "center", "end", "space-between", "space-around", "space-evenly"] as const;
 export type FlexJustifyContent = (typeof FLEX_JUSTIFY_CONTENT)[number];
 
+/** The nine points of a box that a floating `<Flex>` is attached by (`anchor`) and to (`to`). */
+export const FLEX_ANCHORS = ["top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right"] as const;
+export type FlexAnchor = (typeof FLEX_ANCHORS)[number];
+
 /**
  * How big a `<Flex>` is along one axis: `"fit"` (its children plus padding and gaps), `"grow"` (its fit size plus a
  * share of its parent's free space), a number of pixels, or a percentage of its parent's inner size (`"50%"`).
@@ -46,6 +50,20 @@ export interface FlexProps {
   maxWidth?: number;
   minHeight?: number;
   maxHeight?: number;
+  /**
+   * Take the box out of its parent's flow: it takes no space and moves no sibling, and is attached to a point of its
+   * parent instead (`anchor`, `to`, `offsetX`, `offsetY`). It is still sized like any `<Flex>`, and a `"grow"` or
+   * percentage size is of its parent's inner size. Draw it above its neighbours with `z`. Under a `<Hud>` or any
+   * parent that is not a `<Flex>`, the parent's box is the game's area (the `<Screen>`, or the window).
+   */
+  float?: boolean;
+  /** Which point of this box is attached. Default `"top-left"`. */
+  anchor?: FlexAnchor;
+  /** Which point of the parent it is attached to. Default `"top-left"`. */
+  to?: FlexAnchor;
+  /** Pixels to move it right / down from where the two points meet (negative moves it left / up). Default 0. */
+  offsetX?: number;
+  offsetY?: number;
   /** A CSS colour: draw a filled rectangle behind the children, the size of the box. Default none. */
   background?: string;
   /** Called when a press lands on the laid-out box (see `World.reportPress`). The box is the size it was laid out at, last frame. */
@@ -121,6 +139,11 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   minHeight: number | undefined;
   maxHeight: number | undefined;
   background: string | undefined;
+  float: boolean;
+  anchor: FlexAnchor;
+  to: FlexAnchor;
+  offsetX: number;
+  offsetY: number;
   onPress: (() => void) | undefined;
   /** Layout's working numbers (see `FlexBox`); `box.size` is the size the box was laid out at, last frame. */
   readonly box = new FlexBox();
@@ -146,6 +169,11 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.minHeight = hostProps.minHeight;
     this.maxHeight = hostProps.maxHeight;
     this.background = hostProps.background;
+    this.float = hostProps.float ?? false;
+    this.anchor = hostProps.anchor ?? "top-left";
+    this.to = hostProps.to ?? "top-left";
+    this.offsetX = hostProps.offsetX ?? 0;
+    this.offsetY = hostProps.offsetY ?? 0;
     this.onPress = hostProps.onPress;
   }
 

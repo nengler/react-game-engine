@@ -57,14 +57,14 @@ import { Warner } from "./warn.ts";
  */
 export function walkTree(
   root: GameObject,
-  visit: (object: GameObject, world: WorldTransform, z: number) => void,
+  visit: (object: GameObject, world: WorldTransform, z: number) => WorldTransform | void,
   parentSpace: WorldTransform = IDENTITY_TRANSFORM,
   parentZ = 0,
   intoHuds = false,
 ): void {
   // The zero test is inline, not left to offsetTransform: QuickJS does not inline calls, and almost nothing has a layout offset.
   const laidOut = root.layoutX === 0 && root.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, root.layoutX, root.layoutY);
-  const world = composeTransforms(composeTransforms(laidOut, root.placement), root.transform);
+  let world = composeTransforms(composeTransforms(laidOut, root.placement), root.transform);
   const transform = root.transform;
   const placement = root.placement;
   // Nearly nothing has a z, and then none of the three terms or the `global` flags matter: the answer is 0.
@@ -73,7 +73,9 @@ export function walkTree(
     : transform.global ? transform.z
     : placement.global ? placement.z + transform.z
     : parentZ + placement.z + transform.z;
-  visit(root, world, z);
+  // A visit may return the world to use for the children instead: a floating layout root is placed by the layout it has just run.
+  const replaced = visit(root, world, z);
+  if (replaced !== undefined) world = replaced;
   if (!intoHuds && kindOf(root) === KIND_HUD) return;
   const isCamera = root instanceof Camera;
   const childSpace = isCamera ? parentSpace : world;
@@ -481,14 +483,15 @@ export class FrameBuilder {
         case KIND_HUD:
           huds.push({ world, object });
           break;
-        case KIND_FLEX:
+        case KIND_FLEX: {
           if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
-          this.#flex(object as Flex, world, gameWidth, gameHeight);
+          const placed = this.#flex(object as Flex, world, gameWidth, gameHeight);
           if ((object as Flex).onPress !== undefined) {
             pointers.push(object as Flex);
             pointerZs.push(z);
           }
-          break;
+          return placed;
+        }
       }
     });
 
@@ -540,14 +543,15 @@ export class FrameBuilder {
                     this.#text(object as Text, world);
                   }
                   break;
-                case KIND_FLEX:
+                case KIND_FLEX: {
                   if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
-                  this.#flex(object as Flex, world, gameWidth, gameHeight);
+                  const placed = this.#flex(object as Flex, world, gameWidth, gameHeight);
                   if ((object as Flex).onPress !== undefined) {
                     hudPointers.push(object as Flex);
                     hudPointerZs.push(z);
                   }
-                  break;
+                  return placed;
+                }
                 case KIND_POINTER:
                   hudPointers.push(object as Pointer);
                   hudPointerZs.push(z);
@@ -618,9 +622,15 @@ export class FrameBuilder {
   }
 
   /** A `<Flex>` the walk has reached: lay it out if it is a layout root, then draw its background behind its children. */
-  #flex(flex: Flex, world: WorldTransform, availableWidth: number, availableHeight: number): void {
-    if (!(flex.parent instanceof Flex)) this.#layouter.layout(flex, availableWidth, availableHeight);
+  #flex(flex: Flex, world: WorldTransform, availableWidth: number, availableHeight: number): WorldTransform | undefined {
+    let placed: WorldTransform | undefined;
+    if (!(flex.parent instanceof Flex)) {
+      this.#layouter.layout(flex, availableWidth, availableHeight);
+      // The world was worked out before layout; a floating root's own offset is only known now.
+      if (flex.float) world = placed = flex.worldTransform();
+    }
     if (flex.background !== undefined) this.#list.rect(world, flex.box.size[0] as number, flex.box.size[1] as number, this.#color(flex.background));
+    return placed;
   }
 
   #textSize(text: string, size: number): Size {

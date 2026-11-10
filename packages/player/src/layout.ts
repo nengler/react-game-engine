@@ -1,4 +1,4 @@
-import { Camera, Flex, type GameObject } from "@rge/runtime";
+import { Camera, FLEX_ANCHORS, Flex, type FlexAnchor, type GameObject } from "@rge/runtime";
 
 /**
  * `<Flex>` layout, after Clay (see docs/UI_PLAN.md, "The layout algorithm"). Everything below one layout root (a
@@ -7,7 +7,11 @@ import { Camera, Flex, type GameObject } from "@rge/runtime";
  * 1. widths: fit sizes bottom-up, then sharing out space top-down;
  * 2. (text wrapping would go here: it needs final widths, and changes heights);
  * 3. heights: the same two steps;
- * 4. positions, top-down: each box places its children, writing their `layoutX` / `layoutY`.
+ * 4. positions, top-down: each box places its children, writing their `layoutX` / `layoutY`, then its floating children.
+ *
+ * A floating `Flex` (`float`) is fitted and sized like any other, but counts for nothing in its parent's flow: no space, no
+ * gap, no effect on `justifyContent`. A `"grow"` or percentage size is of the parent's inner size. After the parent has
+ * placed its flow, each floating child is attached by its `anchor` point to the parent's `to` point, plus its offset.
  *
  * Steps 1 and 3 are one function parameterised by the axis: what it does to a box depends on whether the axis is the
  * box's direction or across it, and on nothing else. It allocates nothing per box: the working numbers live in each
@@ -45,6 +49,15 @@ export interface LayoutHost {
   warn(key: string, message: string): void;
 }
 
+function finiteOr0(value: number): number {
+  return Number.isFinite(value) ? value : 0;
+}
+
+/** What a child of a `Flex` is, in `FlexBox.childKind`. */
+const LEAF = 0;
+const IN_FLOW = 1;
+const FLOATING = 2;
+
 export class Layouter {
   readonly #host: LayoutHost;
   readonly #measured: MeasuredSize = { width: 0, height: 0 };
@@ -65,6 +78,26 @@ export class Layouter {
     this.#sizeRoot(root, Y, availableHeight);
     this.#distribute(root, Y);
     this.#position(root);
+    // A floating root has no `Flex` parent: it hangs off the available box (the HUD's, the screen's or the window's).
+    if (root.float) this.#attach(root, availableWidth, availableHeight);
+  }
+
+  /** Attach a floating box to its parent's box of `width` × `height` (the parent's origin is the corner): its `anchor` on the parent's `to`, plus its offset. */
+  #attach(kid: Flex, width: number, height: number): void {
+    const x = width * this.#fraction(kid.to, X) - (kid.box.size[X] as number) * this.#fraction(kid.anchor, X) + finiteOr0(kid.offsetX);
+    const y = height * this.#fraction(kid.to, Y) - (kid.box.size[Y] as number) * this.#fraction(kid.anchor, Y) + finiteOr0(kid.offsetY);
+    kid.layoutX = Math.round(x);
+    kid.layoutY = Math.round(y);
+  }
+
+  /** How far along the axis a named point is: 0 at the start, 0.5 in the middle, 1 at the end. An unknown name warns once and is the top-left. */
+  #fraction(point: FlexAnchor, axis: number): number {
+    if (!FLEX_ANCHORS.includes(point)) {
+      this.#host.warn(`flex-anchor:${String(point)}`, `A <Flex> anchor must be one of ${FLEX_ANCHORS.join(", ")}, not ${JSON.stringify(point)}: using "top-left".`);
+      return 0;
+    }
+    if (axis === X) return point.endsWith("left") ? 0 : point.endsWith("right") ? 1 : 0.5;
+    return point.startsWith("top") ? 0 : point.startsWith("bottom") ? 1 : 0.5;
   }
 
   // -- reading a box's props, by axis -------------------------------------------------------------------------------
@@ -127,12 +160,12 @@ export class Layouter {
     for (let i = 0; i < kids.length; i++) {
       const kid = kids[i] as GameObject;
       if (kid instanceof Flex) {
-        box.childKind[i] = 1;
+        box.childKind[i] = kid.float ? FLOATING : IN_FLOW;
         (box.childOrigin[X] as Float64Array)[i] = 0;
         (box.childOrigin[Y] as Float64Array)[i] = 0;
         continue;
       }
-      box.childKind[i] = 0;
+      box.childKind[i] = LEAF;
       if (kid instanceof Camera) this.#host.warn("flex-camera", "A <Camera> inside a <Flex> takes no space and is not laid out: it almost certainly belongs outside it.");
       const e = this.#extent4;
       e[0] = Infinity;
@@ -211,13 +244,16 @@ export class Layouter {
     let sumMinimum = 0;
     let largest = 0;
     let largestMinimum = 0;
+    let flow = 0;
     for (let i = 0; i < n; i++) {
-      if (box.childKind[i] === 1) {
+      if (box.childKind[i] !== LEAF) {
         const kid = kids[i] as Flex;
         this.#fit(kid, axis);
         sizes[i] = kid.box.preferred[axis] as number;
         minimums[i] = kid.box.minimum[axis] as number;
       }
+      if (box.childKind[i] === FLOATING) continue; // takes no space
+      flow++;
       const size = sizes[i] as number;
       const minimum = minimums[i] as number;
       sum += size;
@@ -226,7 +262,7 @@ export class Layouter {
       if (minimum > largestMinimum) largestMinimum = minimum;
     }
     const edges = this.#pad(f, axis, false) + this.#pad(f, axis, true);
-    const gaps = along && n > 1 ? this.#gap(f) * (n - 1) : 0;
+    const gaps = along && flow > 1 ? this.#gap(f) * (flow - 1) : 0;
     const content = edges + gaps + (along ? sum : largest);
     const contentMinimum = edges + gaps + (along ? sumMinimum : largestMinimum);
     const mode = box.sizingMode[axis] as number;
@@ -264,12 +300,15 @@ export class Layouter {
     const minimums = box.childMinimum[axis] as Float64Array;
     const along = this.#direction(f) === axis;
     const inner = Math.max((box.size[axis] as number) - this.#pad(f, axis, false) - this.#pad(f, axis, true), 0);
-    const gaps = along && n > 1 ? this.#gap(f) * (n - 1) : 0;
+    let flow = 0;
+    for (let i = 0; i < n; i++) if (box.childKind[i] !== FLOATING) flow++;
+    const gaps = along && flow > 1 ? this.#gap(f) * (flow - 1) : 0;
 
     // Each child's starting size: its own, unless it is a fixed or percentage `Flex`.
     let total = 0;
     for (let i = 0; i < n; i++) {
-      if (box.childKind[i] === 1) {
+      if (box.childKind[i] === FLOATING) continue;
+      if (box.childKind[i] === IN_FLOW) {
         const kid = kids[i] as Flex;
         const mode = kid.box.sizingMode[axis] as number;
         if (mode === FIXED) sizes[i] = kid.box.sizingValue[axis] as number;
@@ -287,7 +326,7 @@ export class Layouter {
       else if (free < -EPSILON) this.#shrink(f, axis, -free);
     } else {
       for (let i = 0; i < n; i++) {
-        if (box.childKind[i] !== 1) continue;
+        if (box.childKind[i] !== IN_FLOW) continue;
         const kid = kids[i] as Flex;
         const mode = kid.box.sizingMode[axis] as number;
         if (mode === GROW || (mode === FIT && f.alignItems === "stretch")) {
@@ -299,8 +338,15 @@ export class Layouter {
     }
 
     for (let i = 0; i < n; i++) {
-      if (box.childKind[i] !== 1) continue;
+      if (box.childKind[i] === LEAF) continue;
       const kid = kids[i] as Flex;
+      if (box.childKind[i] === FLOATING) {
+        // Sized against the parent's whole inner size, as if it were the only child.
+        const mode = kid.box.sizingMode[axis] as number;
+        if (mode === FIXED) sizes[i] = kid.box.sizingValue[axis] as number;
+        else if (mode === PERCENT) sizes[i] = Math.min(Math.max((kid.box.sizingValue[axis] as number) * inner, this.#minProp(kid, axis)), this.#maxProp(kid, axis));
+        else if (mode === GROW) sizes[i] = Math.max(Math.min(inner, this.#maxProp(kid, axis)), minimums[i] as number);
+      }
       kid.box.size[axis] = sizes[i] as number;
       this.#distribute(kid, axis);
     }
@@ -319,7 +365,7 @@ export class Layouter {
     const active = box.active;
     let count = 0;
     for (let i = 0; i < kids.length; i++) {
-      if (box.childKind[i] !== 1) continue;
+      if (box.childKind[i] !== IN_FLOW) continue;
       const kid = kids[i] as Flex;
       if (kid.box.sizingMode[axis] === GROW && (sizes[i] as number) < this.#maxProp(kid, axis) - EPSILON) active[count++] = i;
     }
@@ -368,7 +414,7 @@ export class Layouter {
     const active = box.active;
     let count = 0;
     for (let i = 0; i < kids.length; i++) {
-      if (box.childKind[i] !== 1) continue;
+      if (box.childKind[i] !== IN_FLOW) continue;
       const mode = (kids[i] as Flex).box.sizingMode[axis];
       if ((mode === FIT || mode === GROW) && (sizes[i] as number) > (minimums[i] as number) + EPSILON) active[count++] = i;
     }
@@ -417,23 +463,30 @@ export class Layouter {
     const innerMain = Math.max((box.size[main] as number) - this.#pad(f, main, false) - this.#pad(f, main, true), 0);
     const innerCross = Math.max((box.size[cross] as number) - this.#pad(f, cross, false) - this.#pad(f, cross, true), 0);
 
-    let used = n > 1 ? gap * (n - 1) : 0;
-    for (let i = 0; i < n; i++) used += mainSizes[i] as number;
+    let flow = 0;
+    for (let i = 0; i < n; i++) if (box.childKind[i] !== FLOATING) flow++;
+    let used = flow > 1 ? gap * (flow - 1) : 0;
+    for (let i = 0; i < n; i++) if (box.childKind[i] !== FLOATING) used += mainSizes[i] as number;
     const free = innerMain - used;
     let lead = 0;
     let between = 0;
     switch (f.justifyContent) {
       case "center": lead = free / 2; break;
       case "end": lead = free; break;
-      case "space-between": if (free > 0 && n > 1) between = free / (n - 1); break;
-      case "space-around": if (free > 0 && n > 0) { between = free / n; lead = between / 2; } break;
-      case "space-evenly": if (free > 0 && n > 0) { between = free / (n + 1); lead = between; } break;
+      case "space-between": if (free > 0 && flow > 1) between = free / (flow - 1); break;
+      case "space-around": if (free > 0 && flow > 0) { between = free / flow; lead = between / 2; } break;
+      case "space-evenly": if (free > 0 && flow > 0) { between = free / (flow + 1); lead = between; } break;
       default: break;
     }
 
     let cursor = this.#pad(f, main, false) + lead;
     for (let i = 0; i < n; i++) {
       const kid = kids[i] as GameObject;
+      if (box.childKind[i] === FLOATING) {
+        this.#attach(kid as Flex, box.size[X] as number, box.size[Y] as number);
+        this.#position(kid as Flex);
+        continue;
+      }
       const crossSize = crossSizes[i] as number;
       let across = 0;
       if (f.alignItems === "center") across = (innerCross - crossSize) / 2;
@@ -449,7 +502,7 @@ export class Layouter {
         kid.layoutY = Math.round(along);
       }
       cursor += (mainSizes[i] as number) + gap + between;
-      if (box.childKind[i] === 1) this.#position(kid as Flex);
+      if (box.childKind[i] === IN_FLOW) this.#position(kid as Flex);
     }
   }
 }

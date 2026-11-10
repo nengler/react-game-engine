@@ -394,3 +394,53 @@ describe("<Flex onPress>", () => {
     assert.equal(built.pointers.length, 0);
   });
 });
+
+describe("<Flex float> in the frame", () => {
+  afterEach(() => {
+    assert.equal(getSoundSink(), null, "every test closes its player");
+  });
+
+  it("draws a badge in its button's corner, above the button's own children by z, under a <Hud>", () => {
+    const button = new Flex({ width: 40, height: 20, background: "gray" });
+    const badge = new Flex({ float: true, anchor: "center", to: "top-right", width: 10, height: 10, background: "red" });
+    badge.transform.z = 1;
+    button.addChild(badge);
+    const hudLayer = hud(button);
+    hudLayer.transform.x = 100;
+    const { records } = draw(hudLayer);
+    const rects = records.flatMap((r) => (r.op === "rect" ? [[r.x, r.y, r.width, r.height, r.color] as const] : []));
+    assert.deepEqual(rects, [
+      [100, 0, 40, 20, "#808080ff"],
+      [100 + 40 - 5, -5, 10, 10, "#ff0000ff"],
+    ]);
+  });
+
+  it("presses a floating box before the box it covers, and not a floating box's neighbours through it", () => {
+    const presses: string[] = [];
+    const button = new Flex({ width: 40, height: 20, onPress: () => presses.push("button") });
+    const badge = new Flex({ float: true, anchor: "top-right", to: "top-right", width: 16, height: 16, onPress: () => presses.push("badge") });
+    badge.transform.z = 1;
+    button.addChild(badge);
+    const backend = new RecordingBackend();
+    const p = createPlayer(backend, { width: 640, height: 360, title: "t", root: () => hud(button), warn: () => {} });
+    backend.queueInput({});
+    p.step();
+    // The badge covers (24..40, 0..16) of the button.
+    backend.queueInput({ mouse: { x: 30, y: 8 }, pressed: ["MouseLeft"] });
+    p.step();
+    backend.queueInput({ mouse: { x: 10, y: 8 }, pressed: ["MouseLeft"] });
+    p.step();
+    p.step();
+    p.close();
+    assert.deepEqual(presses, ["badge", "button"]);
+  });
+
+  it("is anchored to the screen's corners when it is the HUD's root, wherever the window is", () => {
+    const corner = new Flex({ float: true, anchor: "bottom-right", to: "bottom-right", offsetX: -8, offsetY: -8, width: 20, height: 10, background: "blue" });
+    const screen = new Screen({ width: 320, height: 180 });
+    screen.addChild(hud(corner));
+    const { records } = draw(screen, 1280, 720);
+    const rect = records.find((r) => r.op === "rect");
+    assert.deepEqual(rect && rect.op === "rect" ? [rect.x, rect.y] : null, [320 - 8 - 20, 180 - 8 - 10]);
+  });
+});

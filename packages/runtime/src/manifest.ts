@@ -1,4 +1,4 @@
-import { FLEX_ALIGN_ITEMS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT } from "./components/Flex.ts";
+import { FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT } from "./components/Flex.ts";
 import { TEXT_ALIGNS } from "./components/Text.ts";
 import { SCREEN_FITS } from "./components/Screen.ts";
 import { SHAPE_KINDS } from "./components/Shape.ts";
@@ -115,7 +115,7 @@ export const runtimeManifest: RuntimeManifest = {
     Hud: [],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "onPress", "contains", "box",
+      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "contains", "box",
     ],
   },
   intrinsicRequired: {
@@ -139,7 +139,7 @@ export const runtimeManifest: RuntimeManifest = {
     Shape: { kind: SHAPE_KINDS },
     Screen: { fit: SCREEN_FITS },
     Text: { align: TEXT_ALIGNS },
-    Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT },
+    Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS },
   },
   intrinsicSizing: { Flex: ["width", "height"] },
   intrinsicCallbacks: {

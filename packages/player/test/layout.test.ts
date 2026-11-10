@@ -470,3 +470,81 @@ describe("layout: keeping the numbers", () => {
     assert.equal(row.box.size[0], 10 + 2 + 30);
   });
 });
+
+describe("layout: floating boxes", () => {
+  const badge = (props: FlexProps = {}): Flex => flex({ float: true, width: 10, height: 6, ...props });
+
+  it("takes no space: no size, no gap, no effect on its siblings or the parent's fit size", () => {
+    const plain = lay(flex({ gap: 5, padding: 2 }, box(20, 10), box(30, 10)));
+    const parent = flex({ gap: 5, padding: 2 }, box(20, 10), badge({ width: 100, height: 100 }), box(30, 10));
+    lay(parent);
+    assert.deepEqual(size(parent), size(plain));
+    assert.deepEqual(at(parent.children[2] as GameObject), at(plain.children[1] as GameObject), "the second box sits where it would without the badge");
+  });
+
+  it("does not count as a child for justifyContent", () => {
+    const parent = flex({ width: 100, height: 20, justifyContent: "space-between" }, box(10, 10), badge(), box(10, 10));
+    lay(parent);
+    assert.deepEqual([parent.children[0], parent.children[2]].map((c) => at(c as GameObject)), [[0, 0], [90, 0]]);
+  });
+
+  it("is attached by each of its nine points to each of the parent's nine", () => {
+    const points = [
+      ["top-left", 0, 0], ["top-center", 0.5, 0], ["top-right", 1, 0],
+      ["center-left", 0, 0.5], ["center", 0.5, 0.5], ["center-right", 1, 0.5],
+      ["bottom-left", 0, 1], ["bottom-center", 0.5, 1], ["bottom-right", 1, 1],
+    ] as const;
+    for (const [to, tx, ty] of points) {
+      for (const [anchor, ax, ay] of points) {
+        const f = badge({ anchor, to }); // 10 × 6 in a 100 × 60 parent
+        lay(flex({ width: 100, height: 60 }, f));
+        assert.deepEqual(at(f), [Math.round(100 * tx - 10 * ax), Math.round(60 * ty - 6 * ay)], `${anchor} on ${to}`);
+      }
+    }
+  });
+
+  it("defaults to its top-left on the parent's top-left, and moves by its offset", () => {
+    const f = badge();
+    lay(flex({ width: 100, height: 60, padding: 8 }, f));
+    assert.deepEqual(at(f), [0, 0], "the parent's corner, not inside its padding");
+    const g = badge({ anchor: "top-right", to: "top-right", offsetX: -2, offsetY: 3 });
+    lay(flex({ width: 100, height: 60 }, g));
+    assert.deepEqual(at(g), [88, 3]);
+  });
+
+  it("is sized like any box, against the parent's inner size for grow and percentages", () => {
+    const grown = badge({ width: "grow", height: "50%" });
+    lay(flex({ width: 100, height: 60, padding: 10 }, box(5, 5), grown));
+    assert.deepEqual(size(grown), [80, 20]);
+    const fitted = flex({ float: true }, box(12, 7));
+    lay(flex({ width: 100, height: 60 }, fitted));
+    assert.deepEqual(size(fitted), [12, 7]);
+  });
+
+  it("lays out its own children, and a floating box can hold another", () => {
+    const inner = badge({ anchor: "bottom-right", to: "center" });
+    const outer = flex({ float: true, width: 40, height: 20, gap: 2 }, box(8, 8), box(8, 8), inner);
+    const root = flex({ width: 100, height: 100 }, outer);
+    lay(root);
+    assert.deepEqual(at(outer), [0, 0]);
+    assert.deepEqual(at(outer.children[1] as GameObject), [10, 0]);
+    assert.deepEqual(at(inner), [20 - 10, 10 - 6]);
+  });
+
+  it("hangs a floating root off the available box (a HUD's, the screen's)", () => {
+    const f = badge({ anchor: "bottom-right", to: "bottom-right", offsetX: -4, offsetY: -4 });
+    lay(f, 320, 180);
+    assert.deepEqual(at(f), [306, 170]);
+    const centred = badge({ anchor: "center", to: "center" });
+    lay(centred, 320, 180);
+    assert.deepEqual(at(centred), [155, 87]);
+  });
+
+  it("warns once about an anchor it does not know, and uses the top-left", () => {
+    const warnings: string[] = [];
+    const f = badge({ anchor: "middle" as never });
+    new Layouter({ ...host, warn: (key) => warnings.push(key) }).layout(flex({ width: 50, height: 50 }, f), 100, 100);
+    assert.deepEqual([...new Set(warnings)], ["flex-anchor:middle"], "the player's Warner says each key once");
+    assert.deepEqual(at(f), [0, 0]);
+  });
+});
