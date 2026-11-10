@@ -108,7 +108,7 @@ export function Entity(_props: EntityProps & { children?: Child }): JSX.Element 
 }
 
 /**
- * The root of a game and its configuration: the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`, `fullscreenKey`, `fixedStep`),
+ * The root of a game and its configuration: the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`, `fullscreenKey`, `fixedStep`, `gamepadDeadzone`),
  * the `background`, the `assets` folder and the game `state` (`state={useGame}`). A container, like `<Entity>`, and
  * optional: a component whose root is `<Game …>` overrides the defaults, each prop only where it is written. Its
  * `width` and `height` are the window's; put a `<Screen width height>` inside it for the resolution the game is drawn

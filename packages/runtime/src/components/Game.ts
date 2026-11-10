@@ -28,6 +28,12 @@ export interface GameProps extends EntityProps {
    */
   fullscreenKey?: string | false;
   /**
+   * How far the gamepad's left stick must be pushed, 0 to 1, before `"PadLeft"`, `"PadRight"`, `"PadUp"` and `"PadDown"` count as
+   * held. Default 0.35. (The buttons are `"PadA"`, `"PadB"`, `"PadX"`, `"PadY"`, `"PadLB"`, `"PadRB"`, `"PadBack"` and `"PadStart"`,
+   * and the d-pad counts as the same four directions; use them in `useInput` as any key.)
+   */
+  gamepadDeadzone?: number;
+  /**
    * Run `useUpdate` at a fixed rate, in steps per second (`fixedStep={60}`), from an accumulator: a frame runs as many whole steps as
    * the time since the last frame holds (none on a fast monitor, two on a slow frame), each with the same `dt`, and drawing stays once
    * per frame. A press that lands between steps is seen by the next step, never lost. Default: off, one update per frame with the
@@ -62,6 +68,7 @@ export class Game<P extends object = {}> extends Entity<P> {
   smooth: boolean | undefined;
   fullscreenKey: string | false | undefined;
   fixedStep: number | undefined;
+  gamepadDeadzone: number | undefined;
   state: GameStateHandle | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
@@ -77,6 +84,7 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.smooth = hostProps.smooth;
     this.fullscreenKey = hostProps.fullscreenKey;
     this.fixedStep = hostProps.fixedStep;
+    this.gamepadDeadzone = hostProps.gamepadDeadzone;
     this.state = hostProps.state;
   }
 }

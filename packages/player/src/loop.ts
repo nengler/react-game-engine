@@ -25,6 +25,8 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly fullscreenKey?: string | false;
   /** Steps per second for `useUpdate`, as the `<Game>` prop `fixedStep`; unset runs one update per frame. */
   readonly fixedStep?: number;
+  /** The gamepad stick's dead zone, as the `<Game>` prop `gamepadDeadzone`. */
+  readonly gamepadDeadzone?: number;
   /** A CSS colour. Default `"black"`. */
   readonly background?: string;
   /** Folder that image and sound names are relative to. Default `"assets"`. */
@@ -108,6 +110,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     smooth: game?.smooth ?? config.smooth,
   });
 
+  const deadzone = game?.gamepadDeadzone ?? config.gamepadDeadzone;
+  if (deadzone !== undefined) backend.setGamepadDeadzone?.(deadzone);
   const stepHz = game?.fixedStep ?? config.fixedStep;
   const fixedDt = stepHz === undefined ? 0 : 1 / stepHz;
   if (stepHz !== undefined && !(stepHz > 0 && Number.isFinite(stepHz))) throw new RangeError(`fixedStep must be a positive number of steps per second, not ${stepHz}.`);
