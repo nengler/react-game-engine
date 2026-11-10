@@ -1,7 +1,7 @@
 import { GameObject } from "../GameObject.ts";
 
 /** How a `<Screen>` is scaled into the window. The manifest's `intrinsicLiterals` reads this list, so the compiler cannot drift from it. */
-export const SCREEN_FITS = ["integer", "contain", "stretch"] as const;
+export const SCREEN_FITS = ["integer", "contain", "stretch", "expand"] as const;
 export type ScreenFit = (typeof SCREEN_FITS)[number];
 
 export interface ScreenProps {
@@ -11,7 +11,10 @@ export interface ScreenProps {
   /**
    * How the game is scaled into the window. `"integer"` (the default): the largest whole-number scale that
    * fits, so every game pixel is the same number of window pixels; `"contain"`: the largest scale that fits;
-   * `"stretch"`: each axis on its own, filling the window. The leftover space is filled with `border`.
+   * `"stretch"`: each axis on its own, filling the window; `"expand"`: scaled like `"integer"`, but the game is
+   * widened (never narrowed) to the window's shape, so a wide window shows more of the world instead of bars. The
+   * width is then the window's, not `width`, so lay out with `grow` and percentages, not fixed x positions. The
+   * leftover space is filled with `border`.
    */
   fit?: ScreenFit;
   /**

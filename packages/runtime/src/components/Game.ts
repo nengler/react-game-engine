@@ -22,6 +22,11 @@ export interface GameProps extends EntityProps {
   vsync?: boolean;
   /** Bilinear texture filtering. Default false, which keeps pixel art sharp. */
   smooth?: boolean;
+  /**
+   * The key that toggles full screen (a borderless window at the desktop's size), by the name `useInput` uses.
+   * Default `"F11"`; `false` turns the key off. Alt + Enter always works too.
+   */
+  fullscreenKey?: string | false;
   /** The game's state: `state={useGame}`, the store from `GameState.ts`. It starts from its initial values with the game. */
   state?: GameStateHandle;
 }
@@ -48,6 +53,7 @@ export class Game<P extends object = {}> extends Entity<P> {
   resizable: boolean | undefined;
   vsync: boolean | undefined;
   smooth: boolean | undefined;
+  fullscreenKey: string | false | undefined;
   state: GameStateHandle | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
@@ -61,6 +67,7 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.resizable = hostProps.resizable;
     this.vsync = hostProps.vsync;
     this.smooth = hostProps.smooth;
+    this.fullscreenKey = hostProps.fullscreenKey;
     this.state = hostProps.state;
   }
 }

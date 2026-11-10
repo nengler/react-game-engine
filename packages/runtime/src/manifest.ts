@@ -103,7 +103,7 @@ export const runtimeManifest: RuntimeManifest = {
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
-    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "state"],
+    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "state"],
     Sprite: ["image"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],

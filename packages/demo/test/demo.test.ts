@@ -34,6 +34,7 @@ function play(inputs: readonly InputFrame[], steps: number): Run {
 function summary(records: readonly DecodedRecord[]): unknown[] {
   return records.map((r) => {
     switch (r.op) {
+      case "canvas": return ["canvas", r.width, r.height];
       case "view": return ["view", r.e, r.f];
       case "sprite": return ["sprite", r.texture, r.x, r.y];
       case "rect": return ["rect", r.x, r.y, r.width, r.height, r.color];
@@ -55,7 +56,7 @@ const coin = (run: Run): DecodedRecord | undefined => run.backend.lastFrame.reco
 
 /** Where a world point is on the screen in the last frame. */
 function onScreen(run: Run, x: number, y: number): { x: number; y: number } {
-  const v = run.backend.lastFrame.records[0];
+  const v = run.backend.lastFrame.records[1];
   assert.ok(v?.op === "view");
   return { x: v.a * x + v.c * y + v.e, y: v.b * x + v.d * y + v.f };
 }
@@ -67,6 +68,8 @@ describe("demo: the first frame", () => {
   it("draws the world (ground, beacon, spikes, coin, player), then the HUD (coin count, button, its label) through a view of its own", () => {
     const run = play([], 1);
     assert.deepEqual(summary(run.backend.lastFrame.records), [
+      // The root `<Screen>` is pixel-perfect: a 640 × 360 canvas, which a 640 × 360 window shows 1:1.
+      ["canvas", 640, 360],
       ["view", 320, 180],
       ["rect", -240, 40, 48, 48, "#2b3550ff"],
       ["rect", 200, 90, 64, 32, "#2b3550ff"],
@@ -190,7 +193,7 @@ describe("demo: the beacon", () => {
     const shown: unknown[] = [];
     for (let i = 0; i < 9; i++) {
       p.step();
-      const r = backend.lastFrame.records[6] as DecodedRecord;
+      const r = backend.lastFrame.records[7] as DecodedRecord;
       shown.push(r.op === "sprite" ? r.texture : r.op === "rect" ? `${r.color} ${r.width}x${r.height} at ${r.x},${r.y}` : r.op);
     }
     p.close();
@@ -205,7 +208,7 @@ describe("demo: a minute of play", () => {
   it("runs 60 idle frames, keeping every element drawn and warning only about the missing frame", () => {
     const run = play([], 60);
     assert.equal(run.backend.frames.length, 60);
-    for (const frame of run.backend.frames) assert.equal(frame.records.length, 14);
+    for (const frame of run.backend.frames) assert.equal(frame.records.length, 15);
     assert.equal(run.warnings.length, 1);
     assert.match(run.warnings[0] as string, /beacon-gone/);
   });
@@ -258,5 +261,34 @@ describe("demo: pixels from the real library", { skip }, () => {
     for (let y = 44; y < 68; y++) for (let x = 18; x < 112; x++) if (pixel(frame, x, y) === "ffffffff") white++;
     assert.ok(white > 10, `the label drew ${white} white pixels`);
     assert.ok(warnings.every((w) => /beacon-gone/.test(w)), `unexpected warnings: ${warnings.join("; ")}`);
+  });
+});
+
+describe("demo: a fixed resolution that expands", () => {
+  const canvas = (run: Run) => run.backend.lastFrame.records[0] as Extract<DecodedRecord, { op: "canvas" }>;
+
+  it("is drawn at 640 × 360 and shown 1:1 in the window it opens at", () => {
+    const run = play([], 1);
+    assert.equal(run.backend.config?.width, 640);
+    assert.deepEqual([canvas(run).op, canvas(run).width, canvas(run).height, canvas(run).destW, canvas(run).destH], ["canvas", 640, 360, 640, 360]);
+  });
+
+  it("widens the canvas, not the scale, in a wider window, and the camera stays on the player in its middle", () => {
+    const run = play([{ width: 1920, height: 720 }], 2); // ×2, so 960 game pixels wide
+    assert.deepEqual([canvas(run).width, canvas(run).height, canvas(run).destW, canvas(run).destH], [960, 360, 1920, 720]);
+    const v = run.backend.lastFrame.records[1];
+    assert.ok(v?.op === "view");
+    assert.deepEqual([v.e, v.f], [480, 180], "the camera is on the middle of the wider game");
+    assert.deepEqual(run.warnings.filter((w) => !/beacon-gone/.test(w)), []);
+  });
+
+  it("toggles full screen on F11", () => {
+    const backend = new RecordingBackend({ missingTextures: ["assets/beacon-gone.png"] });
+    backend.queueInput({ pressed: ["F11"] });
+    const p = createPlayer(backend, { ...gameConfig, warn: () => {} });
+    p.step();
+    p.step();
+    p.close();
+    assert.deepEqual(backend.fullscreenCalls, [true]);
   });
 });

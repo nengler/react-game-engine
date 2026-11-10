@@ -147,6 +147,51 @@ describe("createPlayer", () => {
     assert.equal(getSoundSink(), null);
   });
 
+  describe("full screen", () => {
+    const run = (root: () => GameObject, frames: Parameters<RecordingBackend["queueInput"]>[0][], config: Partial<PlayerConfig> = {}) => {
+      const backend = new RecordingBackend();
+      for (const frame of frames) backend.queueInput(frame);
+      const p = createPlayer(backend, { root, warn: () => {}, ...config });
+      for (let i = 0; i <= frames.length; i++) p.step();
+      p.close();
+      return backend.fullscreenCalls;
+    };
+
+    it("toggles on F11, and off on the next F11", () => {
+      assert.deepEqual(run(() => new Entity(), [{ pressed: ["F11"] }, {}, { pressed: ["F11"] }]), [true, false]);
+    });
+
+    it("toggles on Alt + Enter, and not on Enter alone", () => {
+      assert.deepEqual(run(() => new Entity(), [{ pressed: ["Enter"] }, { down: ["Alt"], pressed: ["Enter"] }]), [true]);
+    });
+
+    it("uses the <Game> key over the player's, and a false key turns the key off", () => {
+      assert.deepEqual(run(() => new Game({ fullscreenKey: "F" }), [{ pressed: ["F11"] }, { pressed: ["F"] }]), [true]);
+      assert.deepEqual(run(() => new Entity(), [{ pressed: ["F11"] }, { pressed: ["G"] }], { fullscreenKey: "G" }), [true]);
+      assert.deepEqual(run(() => new Game({ fullscreenKey: false }), [{ pressed: ["F11"] }]), []);
+    });
+
+    it("warns once about a key it does not know, and Alt + Enter still works", () => {
+      const warnings: string[] = [];
+      assert.deepEqual(run(() => new Entity(), [{ pressed: ["F11"] }, { down: ["Alt"], pressed: ["Enter"] }], { fullscreenKey: "Nope", warn: (m) => warnings.push(m) }), [true]);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0] as string, /fullscreenKey 'Nope'/);
+    });
+
+    it("does nothing with a backend that cannot", () => {
+      class Plain extends RecordingBackend {
+        override setFullscreen = undefined as never;
+      }
+      const backend = new Plain();
+      backend.queueInput({ pressed: ["F11"] });
+      const p = createPlayer(backend, { root: () => new Entity(), warn: () => {} });
+      p.step();
+      p.step();
+      p.close();
+      assert.deepEqual(backend.fullscreenCalls, []);
+    });
+  });
+
   describe("a <Game> root", () => {
     it("opens the window it asks for, over the player's config, over the defaults, each setting on its own", () => {
       const game = player(() => new Game({ title: "from game", width: 200, smooth: true }), { width: 999, height: 111, title: "from config", resizable: false, vsync: false, smooth: false });
@@ -156,6 +201,29 @@ describe("createPlayer", () => {
       const plain = createPlayer(backend, { root: () => new Entity(), warn: () => {} });
       assert.deepEqual([backend.config?.width, backend.config?.height, backend.config?.title], [DEFAULT_WINDOW.width, DEFAULT_WINDOW.height, DEFAULT_WINDOW.title], "no <Game> and no config: the defaults");
       plain.close();
+    });
+
+    it("opens at 3 × a root <Screen> when nothing sets the window's size, and at what is set otherwise", () => {
+      const sized = (props: ConstructorParameters<typeof Game>[0]) => {
+        class Level extends Game {
+          constructor() {
+            super(props);
+            this.addChild(new Screen({ width: 320, height: 180 }));
+          }
+        }
+        return Level;
+      };
+      const open = (Root: new () => Game, config: Partial<PlayerConfig> = {}) => {
+        const backend = new RecordingBackend();
+        createPlayer(backend, { root: () => new Root(), warn: () => {}, ...config }).close();
+        return [backend.config?.width, backend.config?.height];
+      };
+      assert.deepEqual(open(sized({})), [960, 540], "a <Game> with a <Screen> and no size");
+      assert.deepEqual(open(sized({ width: 640 })), [640, 540], "each setting on its own");
+      assert.deepEqual(open(sized({}), { width: 800, height: 600 }), [800, 600], "the player's config beats the 3 ×");
+      const backend = new RecordingBackend();
+      createPlayer(backend, { root: () => new Screen({ width: 100, height: 50 }), warn: () => {} }).close();
+      assert.deepEqual([backend.config?.width, backend.config?.height], [300, 150], "a bare <Screen> root too");
     });
 
     it("draws with the window's size and the game's background, and loads from the game's assets folder", () => {

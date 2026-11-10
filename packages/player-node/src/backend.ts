@@ -38,6 +38,10 @@ export class NodeBackend implements Backend {
     this.#native.close();
   }
 
+  setFullscreen(on: boolean): boolean {
+    return this.#native.setFullscreen(on);
+  }
+
   loadTexture(path: string): number {
     return this.#native.loadTexture(path);
   }

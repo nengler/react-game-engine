@@ -1,4 +1,4 @@
-import { useSound, useState, Camera, Flex, Game, Hud, Text } from "@rge/runtime/jsx";
+import { useSound, useState, Camera, Flex, Game, Hud, Screen, Text } from "@rge/runtime/jsx";
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
 import { useGame } from "./GameState.ts";
@@ -20,36 +20,39 @@ export default function Main() {
 
   return (
     <Game name="Main" state={useGame} title="rge demo" width={640} height={360} background="#10131c" assets="assets">
-      <Ground />
-      <Beacon transform={{ x: -120, y: -60 }} />
-      <Spikes transform={{ x: 84, y: 10 }} />
-      <Coin transform={{ x: 60, y: 8 }} />
-      {/* The HUD stays where it is while the camera follows the player, and is laid out, not placed by hand: a column holding the coin count and the button. */}
-      <Hud transform={{ x: 16, y: 16 }}>
-        <Flex direction="column" gap={8}>
-          <CoinCounter />
-          {/* The button is a Flex: its label is centred by layout, and a press on its box counts. */}
-          <Flex
-            width={96}
-            height={32}
-            alignItems="center"
-            justifyContent="center"
-            background={clicks >= 3 ? "seagreen" : "slategray"}
-            onPress={() => {
-              playClick();
-              setClicks((clicks) => clicks + 1);
-            }}
-          >
-            <Text size={16} color="white">
-              Clicks: {clicks}
-            </Text>
+      {/* The game is drawn at 640 × 360 and scaled up by whole numbers; a wider window gets a wider view (fit="expand"), not bars. */}
+      <Screen width={640} height={360} fit="expand">
+        <Ground />
+        <Beacon transform={{ x: -120, y: -60 }} />
+        <Spikes transform={{ x: 84, y: 10 }} />
+        <Coin transform={{ x: 60, y: 8 }} />
+        {/* The HUD stays where it is while the camera follows the player, and is laid out, not placed by hand: a column holding the coin count and the button. */}
+        <Hud transform={{ x: 16, y: 16 }}>
+          <Flex direction="column" gap={8}>
+            <CoinCounter />
+            {/* The button is a Flex: its label is centred by layout, and a press on its box counts. */}
+            <Flex
+              width={96}
+              height={32}
+              alignItems="center"
+              justifyContent="center"
+              background={clicks >= 3 ? "seagreen" : "slategray"}
+              onPress={() => {
+                playClick();
+                setClicks((clicks) => clicks + 1);
+              }}
+            >
+              <Text size={16} color="white">
+                Clicks: {clicks}
+              </Text>
+            </Flex>
           </Flex>
-        </Flex>
-      </Hud>
-      {/* A camera follows its children, so this keeps the view on the player. */}
-      <Camera>
-        <Player />
-      </Camera>
+        </Hud>
+        {/* A camera follows its children, so this keeps the view on the player. */}
+        <Camera>
+          <Player />
+        </Camera>
+      </Screen>
     </Game>
   );
 }

@@ -81,6 +81,7 @@ int main(void) {
   CHECK(rge_open(0, 10, "bad", RGE_OPEN_HIDDEN) != 0, "a zero width is refused");
   CHECK(rge_open(W, H, "rge smoke", RGE_OPEN_HIDDEN) == 0, "open");
   CHECK(rge_open(W, H, "twice", RGE_OPEN_HIDDEN) != 0, "a second open is refused");
+  CHECK(rge_set_fullscreen(1) != 0 && rge_set_fullscreen(0) != 0, "full screen is refused in a hidden window");
 
   /* An empty frame is the clear colour everywhere. */
   reset(); view(1, 0, 0, 1, 0, 0); frame();

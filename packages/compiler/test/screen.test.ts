@@ -74,7 +74,7 @@ describe("Screen: diagnostics", () => {
   it("checks fit against its choices, with a suggestion", () => {
     const errors = compileErrors(`function C() { return <Screen width={320} height={180} fit="integr" />; }`);
     assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.InvalidPropValue]);
-    assert.match(errors[0]!.message, /<Screen fit> must be one of "integer", "contain", "stretch", not 'integr' \(did you mean "integer"\?\)/);
+    assert.match(errors[0]!.message, /<Screen fit> must be one of "integer", "contain", "stretch", "expand", not 'integr' \(did you mean "integer"\?\)/);
   });
 
   it("cannot be placed with transform", () => {

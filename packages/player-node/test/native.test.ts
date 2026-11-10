@@ -68,6 +68,18 @@ describe("librge through koffi", { skip }, () => {
     assert.equal(native.keyCount(), KEYS.length);
   });
 
+  it("refuses full screen in a hidden window, and says so", () => {
+    const native = loadNative(library as string);
+    assert.equal(native.setFullscreen(true), false, "no window is open yet");
+    const backend = createNodeBackend(library);
+    backend.open({ width: 64, height: 64, title: "t", hidden: true });
+    try {
+      assert.equal(backend.setFullscreen(true), false);
+    } finally {
+      backend.close();
+    }
+  });
+
   it("measures text and textures through librge", () => {
     const png = join(scratch, "measured.png");
     writePng(png, 6, [255, 0, 0]);

@@ -67,6 +67,27 @@ describe("fitScreen", () => {
   });
 });
 
+describe("fitScreen: expand", () => {
+  it("keeps the height at 180 and widens the game to the window's shape, with no bars at 16:9 or wider", () => {
+    assert.deepEqual(fitScreen(320, 180, 1280, 720, "expand"), { width: 320, height: 180, scaleX: 4, scaleY: 4, left: 0, top: 0 });
+    // 21:9 monitor: 2560 × 1080 is ×6 and 426 game pixels wide, centred (4 spare window pixels).
+    const wide = fitScreen(320, 180, 2560, 1080, "expand");
+    assert.deepEqual(wide, { width: 426, height: 180, scaleX: 6, scaleY: 6, left: 2, top: 0 });
+    assert.deepEqual(borderRects(wide, 2560, 1080).map((r) => r.width), [2, 2]);
+  });
+
+  it("never narrows the game: a window taller than 16:9 gets bars top and bottom, like integer", () => {
+    assert.deepEqual(fitScreen(320, 180, 960, 960, "expand"), { width: 320, height: 180, scaleX: 3, scaleY: 3, left: 0, top: 210 });
+  });
+
+  it("falls back to a fractional scale in a window smaller than the game, widening to fill it", () => {
+    const at = fitScreen(320, 180, 320, 90, "expand");
+    close(at.scaleX, 0.5, "scale");
+    assert.equal(at.width, 640);
+    close(at.left, 0, "left");
+  });
+});
+
 describe("borderRects and onScreen", () => {
   it("covers exactly the window outside the game", () => {
     const at = fitScreen(320, 180, 1000, 600, "integer"); // 960 × 540 at (20, 30)
@@ -226,6 +247,25 @@ describe("FrameBuilder: a root <Screen>", () => {
     const plain = new Entity();
     plain.addChild(shape());
     assert.deepEqual(draw(screen({ pixelPerfect: false }, shape()), 320, 180).records, draw(plain, 320, 180).records);
+  });
+});
+
+describe("FrameBuilder: fit expand", () => {
+  it("draws a canvas as wide as the window allows, and centres the camera and lays out the HUD on its width", () => {
+    const camera = new Camera();
+    const { records, built } = draw(screen({ fit: "expand" }, camera), 1280 + 160, 720);
+    // ×4, so 1440 / 4 = 360 game pixels wide.
+    assert.deepEqual(records[0], { op: "canvas", width: 360, height: 180, destX: 0, destY: 0, destW: 1440, destH: 720, borderColor: "#000000ff" });
+    assert.equal(built.screen?.width, 360);
+    assert.deepEqual(built.view, { a: 4, b: 0, c: 0, d: 4, e: 720, f: 360 }, "the camera is on the middle of the wider game");
+  });
+
+  it("follows a window that changes shape", () => {
+    const root = screen({ fit: "expand" });
+    const builder = new FrameBuilder({ loadTexture: () => 0 });
+    assert.equal(builder.build(root, 1280, 720).screen?.width, 320);
+    assert.equal(builder.build(root, 1680, 720).screen?.width, 420);
+    assert.equal(builder.build(root, 1280, 720).screen?.width, 320);
   });
 });
 

@@ -23,6 +23,8 @@ export interface ScreenPlacement {
  *   the game is shrunk rather than cut off.
  * - `"contain"`: the largest scale that fits, the same on both axes.
  * - `"stretch"`: each axis scaled to fill the window.
+ * - `"expand"`: scaled as `"integer"` is, then the game's width grows to fill what is left of the window's width (at
+ *   least `width`, in whole game pixels), so a wide window has no bars at the sides. The returned `width` is that.
  *
  * A window with no area (minimised) gets a scale of 1 at the top-left: there is nothing to see, and a scale of 0
  * would make the mouse impossible to map back.
@@ -31,6 +33,13 @@ export function fitScreen(width: number, height: number, windowWidth: number, wi
   if (!(windowWidth > 0 && windowHeight > 0)) return { width, height, scaleX: 1, scaleY: 1, left: 0, top: 0 };
   if (fit === "stretch") return { width, height, scaleX: windowWidth / width, scaleY: windowHeight / height, left: 0, top: 0 };
   const contain = Math.min(windowWidth / width, windowHeight / height);
+  if (fit === "expand") {
+    const scale = contain >= 1 ? Math.floor(contain) : contain;
+    const wide = Math.max(width, Math.floor(windowWidth / scale));
+    const left = contain >= 1 ? Math.floor((windowWidth - wide * scale) / 2) : (windowWidth - wide * scale) / 2;
+    const top = contain >= 1 ? Math.floor((windowHeight - height * scale) / 2) : (windowHeight - height * scale) / 2;
+    return { width: wide, height, scaleX: scale, scaleY: scale, left, top };
+  }
   if (fit === "integer" && contain >= 1) {
     const scale = Math.floor(contain);
     return { width, height, scaleX: scale, scaleY: scale, left: Math.floor((windowWidth - width * scale) / 2), top: Math.floor((windowHeight - height * scale) / 2) };
