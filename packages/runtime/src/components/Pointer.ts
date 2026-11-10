@@ -1,4 +1,16 @@
 import { GameObject } from "../GameObject.ts";
+import type { World } from "../World.ts";
+
+/**
+ * Anything a press can land on: a `<Pointer>`, or a `<Flex>` with an `onPress`. The player collects these in draw
+ * order and gives a press to the topmost one under the mouse (`World.reportPress`).
+ */
+export interface Pressable {
+  readonly world: World | null;
+  onPress: (() => void) | undefined;
+  /** Whether the world-space point (the HUD's, for one inside a `<Hud>`) is on it as it is drawn. */
+  contains(x: number, y: number): boolean;
+}
 
 export interface PointerProps {
   width: number;

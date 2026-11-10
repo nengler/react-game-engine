@@ -19,8 +19,8 @@ export { Game, type GameProps, type GameStateHandle } from "./components/Game.ts
 export { Sprite, type SpriteProps } from "./components/Sprite.ts";
 export { Collider, type ColliderProps, type Contact } from "./components/Collider.ts";
 export { Sound, getSoundSink, setSoundSink, type SoundSink } from "./Sound.ts";
-export { Pointer, type PointerProps } from "./components/Pointer.ts";
-export { Text, type TextProps } from "./components/Text.ts";
+export { Pointer, type PointerProps, type Pressable } from "./components/Pointer.ts";
+export { Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
 export { AnimatedSprite, type AnimatedSpriteProps } from "./components/AnimatedSprite.ts";

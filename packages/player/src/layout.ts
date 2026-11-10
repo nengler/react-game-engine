@@ -440,12 +440,13 @@ export class Layouter {
       else if (f.alignItems === "end") across = innerCross - crossSize;
       const along = cursor - ((box.childOrigin[main] as Float64Array)[i] as number);
       const side = this.#pad(f, cross, false) + across - ((box.childOrigin[cross] as Float64Array)[i] as number);
+      // Whole pixels, so centred text and edges are not blurred by half a pixel.
       if (main === X) {
-        kid.layoutX = along;
-        kid.layoutY = side;
+        kid.layoutX = Math.round(along);
+        kid.layoutY = Math.round(side);
       } else {
-        kid.layoutX = side;
-        kid.layoutY = along;
+        kid.layoutX = Math.round(side);
+        kid.layoutY = Math.round(along);
       }
       cursor += (mainSizes[i] as number) + gap + between;
       if (box.childKind[i] === 1) this.#position(kid as Flex);

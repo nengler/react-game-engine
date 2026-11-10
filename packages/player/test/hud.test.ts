@@ -270,3 +270,127 @@ function decode(built: ReturnType<FrameBuilder["build"]>): DecodedRecord[] {
   backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
   return [...backend.lastFrame.records];
 }
+
+describe("<Text align>", () => {
+  const textRecords = (root: GameObject) => draw(root).records.flatMap((r) => (r.op === "text" ? [r] : []));
+  const label = (props: { width?: number; align?: "left" | "center" | "right" }): Text => {
+    const text = new Text({ text: "Hello", size: 10, ...props }); // 5 characters: 30 wide under the recorder's estimate
+    text.transform.x = 100;
+    text.transform.y = 7;
+    return text;
+  };
+
+  it("sits at the start of its box by default, centred or at the end when asked, on whole pixels", () => {
+    assert.deepEqual(textRecords(label({ width: 80 })).map((t) => [t.x, t.y]), [[100, 7]]);
+    assert.deepEqual(textRecords(label({ width: 80, align: "left" })).map((t) => t.x), [100]);
+    assert.deepEqual(textRecords(label({ width: 80, align: "center" })).map((t) => t.x), [100 + 25]);
+    assert.deepEqual(textRecords(label({ width: 80, align: "right" })).map((t) => t.x), [100 + 50]);
+    assert.deepEqual(textRecords(label({ width: 31, align: "center" })).map((t) => t.x), [101], "(31 - 30) / 2 = 0.5 -> 1");
+  });
+
+  it("does nothing without a width, since the box is then the text itself", () => {
+    assert.deepEqual(textRecords(label({ align: "center" })).map((t) => t.x), [100]);
+    assert.deepEqual(textRecords(label({ align: "right" })).map((t) => t.x), [100]);
+  });
+
+  it("overflows a box that is too small, from the start for left and by the excess for the others", () => {
+    assert.deepEqual(textRecords(label({ width: 10, align: "left" })).map((t) => t.x), [100]);
+    assert.deepEqual(textRecords(label({ width: 10, align: "center" })).map((t) => t.x), [90]);
+    assert.deepEqual(textRecords(label({ width: 10, align: "right" })).map((t) => t.x), [80]);
+  });
+
+  it("shifts along the text's own axis when it is turned or scaled", () => {
+    const text = label({ width: 80, align: "right" });
+    text.transform.rotation = Math.PI / 2;
+    text.transform.scaleX = 2;
+    const [record] = textRecords(text);
+    // 50 pixels along a quarter turn, scaled by 2: 100 down.
+    assert.ok(Math.abs((record?.x ?? NaN) - 100) < 1e-9 && Math.abs((record?.y ?? NaN) - 107) < 1e-9, `${record?.x}, ${record?.y}`);
+  });
+
+  it("is the width layout uses, so a row of fixed-width labels lines up", () => {
+    const a = new Text({ text: "Hi", size: 10, width: 60, align: "right" });
+    const b = new Text({ text: "Hello", size: 10, width: 60, align: "right" });
+    const column = new Flex({ direction: "column" });
+    column.addChild(a);
+    column.addChild(b);
+    const { records } = draw(column);
+    const texts = records.flatMap((r) => (r.op === "text" ? [r] : []));
+    assert.deepEqual(texts.map((t) => t.x + (t.text.length * 6)), [60, 60], "both end at the right edge of the 60 box");
+    assert.equal(column.box.size[0], 60);
+  });
+});
+
+describe("<Flex onPress>", () => {
+  afterEach(() => {
+    assert.equal(getSoundSink(), null, "every test closes its player");
+  });
+
+  const WINDOW = { width: 640, height: 360, title: "test" };
+  const press = (backend: RecordingBackend, player: { step(): boolean }, x: number, y: number): void => {
+    backend.queueInput({ mouse: { x, y }, pressed: ["MouseLeft"] });
+    player.step();
+    player.step();
+  };
+
+  it("is pressed over its laid-out box, which fit its label, and nowhere else", () => {
+    const presses: string[] = [];
+    const button = new Flex({ padding: 4, onPress: () => presses.push("button") });
+    button.transform.x = 100;
+    button.transform.y = 50;
+    button.addChild(new Shape({ kind: "rect", width: 40, height: 10 }));
+    const root = new Entity();
+    root.addChild(button);
+    const backend = new RecordingBackend();
+    const p = createPlayer(backend, { ...WINDOW, root: () => root });
+    press(backend, p, 101, 51); // the padding, inside the box
+    press(backend, p, 147, 63); // the far corner: 48 × 18
+    press(backend, p, 149, 51); // just right of it
+    press(backend, p, 101, 69); // just below it
+    p.close();
+    assert.deepEqual(presses, ["button", "button"]);
+  });
+
+  it("is pressed through a HUD while the camera moves and zooms, and a Pointer on top of it wins", () => {
+    const presses: string[] = [];
+    const button = new Flex({ width: 60, height: 20, onPress: () => presses.push("flex") });
+    button.transform.x = 10;
+    const over = new Pointer({ width: 20, height: 20, onPress: () => presses.push("pointer") });
+    over.transform.x = 10;
+    const camera = new Camera({ zoom: 3 });
+    camera.transform.x = 500;
+    const root = new Entity();
+    root.addChild(camera);
+    root.addChild(hud(button, over));
+    const backend = new RecordingBackend();
+    const p = createPlayer(backend, { ...WINDOW, root: () => root });
+    press(backend, p, 50, 10); // on the Flex only
+    press(backend, p, 15, 10); // on both: the Pointer is later in the tree, so on top
+    p.close();
+    assert.deepEqual(presses, ["flex", "pointer"]);
+  });
+
+  it("follows z, like a Pointer: a Flex raised over another gets the press", () => {
+    const presses: string[] = [];
+    const low = new Flex({ width: 50, height: 50, onPress: () => presses.push("low") });
+    const high = new Flex({ width: 50, height: 50, onPress: () => presses.push("high") });
+    high.transform.z = -5;
+    const root = new Entity();
+    root.addChild(low);
+    root.addChild(high);
+    const backend = new RecordingBackend();
+    const p = createPlayer(backend, { ...WINDOW, root: () => root });
+    press(backend, p, 10, 10);
+    p.close();
+    assert.deepEqual(presses, ["low"], "high is behind (z -5), so low, drawn later, is on top");
+  });
+
+  it("is not pressable without an onPress, and a Flex that is not laid out yet has no box", () => {
+    const quiet = new Flex({ width: 50, height: 50 });
+    assert.equal(quiet.contains(10, 10), false, "no layout has run, so no box");
+    const root = new Entity();
+    root.addChild(quiet);
+    const built = draw(root).built;
+    assert.equal(built.pointers.length, 0);
+  });
+});

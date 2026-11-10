@@ -31,6 +31,37 @@ function Player() {
 compiles to [`packages/example/generated/Player.ts`](packages/example/generated/Player.ts)
 (the IR is next to it as `Player.ir.json`).
 
+UI is laid out, not placed by hand. A `<Hud>` stays on screen while the camera moves, and a `<Flex>` in it places its
+children in a row or a column (see [docs/UI_PLAN.md](docs/UI_PLAN.md)):
+
+```tsx
+import { useState, Flex, Hud, Sprite, Text } from "@rge/runtime/jsx";
+
+interface PlayerHudProps {
+  coins: number;
+}
+
+function PlayerHud({ coins }: PlayerHudProps) {
+  const [paused, setPaused] = useState(false);
+  return (
+    <Hud>
+      <Flex width="grow" height="grow" direction="column" justifyContent="space-between" padding={16}>
+        <Flex alignItems="center" gap={8}>
+          <Sprite image="coin.png" />
+          <Text size={20}>{coins}</Text>
+          <Flex width="grow" />
+        </Flex>
+        <Flex justifyContent="center">
+          <Flex paddingX={16} paddingY={8} background="slategray" onPress={() => setPaused((p) => !p)}>
+            <Text>{paused ? "Resume" : "Pause"}</Text>
+          </Flex>
+        </Flex>
+      </Flex>
+    </Hud>
+  );
+}
+```
+
 ## Layout
 
 ```
@@ -46,7 +77,7 @@ packages/
     test/             end-to-end tests
   runtime/    the authoring entry point (`@rge/runtime/jsx`: typed hooks and built-in elements for
               component source), and the mock GameObject / World (with `tick` / `reportCollision` / `reportPress`),
-              the built-ins (Entity, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer),
+              the built-ins (Entity, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex),
               Sound (a mock that records plays), `loadScene`, and `runtimeManifest`
               (what the compiler is told about the runtime)
   player/     (Phase 3) the native player's pure-TypeScript half: object tree → draw records, `Backend`, a recording backend for tests

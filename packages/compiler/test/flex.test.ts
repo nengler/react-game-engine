@@ -175,6 +175,63 @@ describe("Flex: the video's context menu", () => {
   });
 });
 
+const PRESS = `
+function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    <Flex width={96} height={32} alignItems="center" justifyContent="center" onPress={() => setCount((c) => c + 1)}>
+      <Text size={16} width={80} align="center">
+        Count: {count}
+      </Text>
+    </Flex>
+  );
+}
+`;
+
+describe("Flex onPress and Text align", () => {
+  it("presses a Flex through the world, running the handler against the component's state", async () => {
+    const { Counter } = await load<{ Counter: new () => Flex & { readonly text: { text: string; width: number | undefined; align: string } } }>(compile(PRESS, "Press.tsx"));
+    const world = new World();
+    const counter = new Counter();
+    world.mount(counter);
+    assert.equal(counter.onPress !== undefined, true);
+    new FrameBuilder({ loadTexture: () => 0 }).build(counter, 640, 360);
+    assert.equal(world.reportPress(counter, 10, 10), true);
+    world.flush();
+    assert.equal(counter.text.text, "Count: 1");
+    assert.equal(world.reportPress(counter, 200, 10), false, "outside the 96 × 32 box");
+    assert.deepEqual([counter.text.width, counter.text.align], [80, "center"]);
+  });
+
+  it("type-checks a Flex onPress and a Text's width and align, in source and in the generated module", () => {
+    assert.deepEqual(typeCheck(compile(PRESS, "Press.tsx")), []);
+    const check = (element: string) =>
+      getCompiler().typeCheckSources([
+        { fileName: `${process.cwd()}/.test-output/Press${Math.random()}.tsx`, text: `import { Flex, Text } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }` },
+      ]);
+    assert.deepEqual(check(`<Flex onPress={() => {}}><Text width={40} align={wide ? "left" : "right"}>x</Text></Flex>`), []);
+    assert.ok(check(`<Text align={wide ? "left" : "middle"}>x</Text>`).length > 0);
+  });
+
+  it("checks a Text's align literal with a suggestion", () => {
+    const errors = compileErrors(`function C() { return <Text align="centre">x</Text>; }`);
+    assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.InvalidPropValue]);
+    assert.match(errors[0]!.message, /<Text align> must be one of "left", "center", "right", not 'centre' \(did you mean "center"\?\)/);
+    assert.doesNotThrow(() => compile(`function C() { return <Text align="right" width={30}>x</Text>; }`));
+  });
+
+  it("reserves the new names", () => {
+    for (const name of ["onPress", "contains"]) {
+      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
+      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), `Flex ${name}`);
+    }
+    for (const name of ["align", "width"]) {
+      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Text>x</Text>; }`).map((d) => d.code);
+      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), `Text ${name}`);
+    }
+  });
+});
+
 describe("Flex: diagnostics", () => {
   it("checks the keyword props against their choices, with a suggestion, and explains CSS's spelling", () => {
     for (const [attribute, expected] of [

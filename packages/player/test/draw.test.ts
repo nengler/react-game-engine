@@ -634,7 +634,7 @@ describe("FrameBuilder: draw order (z)", () => {
     low.transform.z = 3;
     const high = new Pointer({ width: 2, height: 2 });
     const { built } = draw(parentOf(low, high, new Pointer({ width: 3, height: 3 })));
-    assert.deepEqual(built.pointers.map((p) => p.width), [2, 3, 1], "last is on top");
+    assert.deepEqual(built.pointers.map((p) => (p as Pointer).width), [2, 3, 1], "last is on top");
   });
 
   it("does not reorder anything for a game that never sets z", () => {
