@@ -77,7 +77,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   // paths for now; they are loaded below, once the window is open. Each game starts from the game state's initial
   // values, whatever an earlier player in this process left behind.
   const preload: string[] = [];
-  const collector: SoundSink = { load: (name) => void preload.push(name), play: () => {} };
+  const preloadMusic: string[] = [];
+  const collector: SoundSink = { load: (name) => void preload.push(name), play: () => {}, loadMusic: (name) => void preloadMusic.push(name) };
   setSoundSink(collector);
   resetGameState();
   let root: GameObject;
@@ -161,6 +162,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
 
   setSoundSink(sink);
   for (const name of preload) sink.load(name);
+  for (const name of preloadMusic) sink.loadMusic?.(name);
   try {
     world.mount(root);
   } catch (error) {
@@ -241,7 +243,11 @@ function resolveBackground(css: string, warner: Warner): number {
   return MAGENTA;
 }
 
-/** Sounds load through the backend once per path (a failed load is remembered too) and play by handle. */
+/**
+ * Sounds and music load through the backend once per path (a failed load is remembered too) and play by handle. A sound plays
+ * at a volume and over itself (the backend has four voices per sound); music streams, and a backend without music support
+ * leaves it silent, with one warning.
+ */
 function createSoundSink(backend: Backend, assets: string, warner: Warner): SoundSink {
   const handles = new Map<string, number>();
   const handleFor = (name: string): number => {
@@ -254,11 +260,40 @@ function createSoundSink(backend: Backend, assets: string, warner: Warner): Soun
     }
     return handle;
   };
+  const musics = new Map<string, number>();
+  const musicFor = (name: string): number => {
+    const path = `${assets}/${name}`;
+    let handle = musics.get(path);
+    if (handle === undefined) {
+      if (backend.loadMusic === undefined) {
+        warner.once("music-unsupported", "This backend cannot play music: <Music> is silent.");
+        handle = -1;
+      } else {
+        handle = backend.loadMusic(path);
+        if (handle < 0) warner.once(`music:${path}`, `Could not load the music '${path}': it will not play.`);
+      }
+      musics.set(path, handle);
+    }
+    return handle;
+  };
   return {
     load: (name) => void handleFor(name),
-    play: (name) => {
+    play: (name, volume) => {
       const handle = handleFor(name);
-      if (handle >= 0) backend.playSound(handle);
+      if (handle >= 0) backend.playSound(handle, volume);
+    },
+    loadMusic: (name) => void musicFor(name),
+    playMusic: (name, volume, loop) => {
+      const handle = musicFor(name);
+      if (handle >= 0) backend.playMusic?.(handle, volume, loop);
+    },
+    setMusicVolume: (name, volume) => {
+      const handle = musicFor(name);
+      if (handle >= 0) backend.setMusicVolume?.(handle, volume);
+    },
+    stopMusic: (name) => {
+      const handle = musicFor(name);
+      if (handle >= 0) backend.stopMusic?.(handle);
     },
   };
 }

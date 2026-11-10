@@ -17,7 +17,7 @@ const check = (imports: string, body: string, extra = "") =>
   getCompiler().typeCheckSources([
     {
       fileName: `${process.cwd()}/.test-output/B${Math.random()}.tsx`,
-      text: `import { Entity, Hud, Camera, Tilemap, Particles, Fade, Text, freeze, useUpdate, useState, ${imports} } from "@rge/runtime/jsx";\n${extra}\nfunction C() { const [on, setOn] = useState(false); const [n, setN] = useState(0); return <Entity name="C">${body}</Entity>; }`,
+      text: `import { Entity, Hud, Camera, Tilemap, Particles, Fade, Music, Text, freeze, useSound, useUpdate, useState, ${imports} } from "@rge/runtime/jsx";\n${extra}\nfunction C() { const [on, setOn] = useState(false); const [n, setN] = useState(0); return <Entity name="C">${body}</Entity>; }`,
     },
   ]);
 
@@ -36,6 +36,14 @@ describe("authored source of the new built-ins type-checks, and wrong props do n
     assert.ok(check("Screen", `<Particles rate="fast" />`).length > 0);
     assert.ok(check("Screen", `<Fade on="yes" />`).length > 0);
     assert.ok(check("Screen", `<Camera bounds={[0, 0]} slide="slow" />`).length > 0);
+  });
+
+  it("Music takes a file, whether it plays, a volume, a loop flag and a fade; a sound takes a volume", () => {
+    assert.deepEqual(check("Screen", `<Music src="theme.ogg" playing={on} volume={0.5} loop={false} fade={0.3} />`), []);
+    assert.ok(check("Screen", `<Music />`).length > 0, "src is required");
+    assert.ok(check("Screen", `<Music src="a.ogg" volume="loud" />`).length > 0);
+    const code = compile(`function S() { const hit = useSound("hit.wav"); const [n] = useState(1); useUpdate(() => { hit(); hit(0.5); hit(n / 2); }); return <Entity name="S" />; }`, "S.tsx").code;
+    assert.match(code, /\.play\(\);[^]*\.play\(0\.5\);[^]*\.play\(this\.n \/ 2\);/);
   });
 
   it("freeze is a statement in a handler, and nowhere else", () => {

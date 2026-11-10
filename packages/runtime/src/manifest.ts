@@ -98,7 +98,7 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "Fade"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "Fade", "Music"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex"],
   textContent: { Text: "text" },
@@ -120,6 +120,7 @@ export const runtimeManifest: RuntimeManifest = {
     Tilemap: ["map", "image", "layer", "opacity"],
     Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "count", "read", "emit"],
     Fade: ["color", "on", "duration", "amount"],
+    Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
       "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "contains", "box",
@@ -141,12 +142,14 @@ export const runtimeManifest: RuntimeManifest = {
     Tilemap: ["map", "image"],
     Particles: [],
     Fade: [],
+    Music: ["src"],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
     Camera: ["onUpdate"],
     Particles: ["onUpdate"],
     Fade: ["onUpdate"],
+    Music: ["onUpdate"],
   },
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },

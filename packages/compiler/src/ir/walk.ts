@@ -92,7 +92,7 @@ export function walkFunction(fn: FunctionIR, visit: (e: ExprIR) => void): void {
         case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
         case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit); else walkExpr(stmt.value, visit); break;
         case "Assign": walkExpr(stmt.value, visit); break;
-        case "PlaySound": break;
+        case "PlaySound": if (stmt.volume) walkExpr(stmt.volume, visit); break;
         case "CallAction": for (const arg of stmt.args) walkExpr(arg, visit); break;
         default: assertNever(stmt, "statement");
       }

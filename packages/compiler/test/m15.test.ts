@@ -139,8 +139,8 @@ describe("M15: diagnostics", () => {
     assert.deepEqual(typeCheck(fine), [], "next to the setter is fine");
   });
 
-  it("reports a call with arguments as an unsupported statement", () => {
-    assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={() => play(1)} />`), [DiagnosticCode.UnsupportedStatement]);
+  it("reports a call with more than the volume as an unsupported statement", () => {
+    assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={() => play(1, 2)} />`), [DiagnosticCode.UnsupportedStatement]);
   });
 
   it("keeps the runtime's Sound class name for itself", () => {
@@ -180,8 +180,10 @@ describe("M15: authored source type-checks", () => {
     assert.deepEqual(check(`const play = useSound("a.wav"); play();`), []);
   });
 
-  it("rejects a non-string path and a call with an argument", () => {
+  it("rejects a non-string path, and a volume that is not a number", () => {
     assert.ok(check(`const play = useSound(3);`).length > 0);
-    assert.ok(check(`const play = useSound("a.wav"); play(1);`).length > 0);
+    assert.deepEqual(check(`const play = useSound("a.wav"); play(0.5);`), [], "a volume is fine");
+    assert.ok(check(`const play = useSound("a.wav"); play("loud");`).length > 0);
+    assert.ok(check(`const play = useSound("a.wav"); play(1, 2);`).length > 0);
   });
 });

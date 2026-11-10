@@ -199,15 +199,17 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
     if (callee?.kind === "sound") {
-      if (call.arguments.length !== 0) {
-        ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes no arguments: the sound and its path are fixed where it is declared.`, call);
+      if (call.arguments.length > 1) {
+        ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes at most one argument, the volume from 0 to 1: the sound and its path are fixed where it is declared.`, call);
         return null;
       }
       if (!ctx.canPlaySound()) {
         ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Play the sound in the handler, next to the setter call.`, call);
         return null;
       }
-      return { kind: "PlaySound", sound: callee.id };
+      const volume = call.arguments.length === 1 ? ctx.lowerExpression(call.arguments[0]!) : null;
+      if (call.arguments.length === 1 && volume === null) return null;
+      return { kind: "PlaySound", sound: callee.id, volume };
     }
     if (callee?.kind === "action") {
       if (!ctx.canPlaySound()) {

@@ -138,7 +138,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
         case "Return": if (stmt.value) visitExpr(stmt.value); break;
         case "SetState": if ("updater" in stmt) visitFunction(stmt.updater); else visitExpr(stmt.value); break;
         case "Assign": visitExpr(stmt.value); break;
-        case "PlaySound": break;
+        case "PlaySound": if (stmt.volume) visitExpr(stmt.volume); break;
         case "CallAction": usage.store = true; stmt.args.forEach(visitExpr); break;
         default: assertNever(stmt, "statement");
       }

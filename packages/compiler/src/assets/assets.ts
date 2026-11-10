@@ -15,6 +15,7 @@ export const ASSET_PROPS: Readonly<Record<string, readonly string[]>> = {
   AnimatedSprite: ["frames", "sheet"],
   Tilemap: ["image"],
   Text: ["font"],
+  Music: ["src"],
 };
 
 export interface AssetCheckOptions {
@@ -41,7 +42,7 @@ export function checkAssets(modules: readonly IRModule[], options: AssetCheckOpt
     for (const prop of list) {
       if ((prop.kind !== "StaticProp" && prop.kind !== "DynamicProp") || !names.includes(prop.name)) continue;
       walkExpr(prop.value, (e) => {
-        if (e.kind === "StringLiteral" && e.value !== "") report(tag === "Text" ? "font" : "image", e.value, span);
+        if (e.kind === "StringLiteral" && e.value !== "") report(tag === "Text" ? "font" : tag === "Music" ? "music file" : "image", e.value, span);
       });
     }
   };

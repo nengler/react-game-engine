@@ -6,8 +6,14 @@
 export interface SoundSink {
   /** A sound was created: load it now, so it does not hitch the first time it plays. */
   load(path: string): void;
-  /** A sound was played. Called after `plays` is counted; loads the file first if it was never loaded. */
-  play(path: string): void;
+  /** A sound was played, at `volume` (0 to 1). Called after `plays` is counted; loads the file first if it was never loaded. A sound played again while it still sounds plays over itself. */
+  play(path: string, volume: number): void;
+  /** A `<Music>` was created: open the stream now. Optional: without it music is silent. */
+  loadMusic?(path: string): void;
+  /** Start the stream from the beginning at `volume`; `loop` repeats it. */
+  playMusic?(path: string, volume: number, loop: boolean): void;
+  setMusicVolume?(path: string, volume: number): void;
+  stopMusic?(path: string): void;
 }
 
 let sink: SoundSink | null = null;
@@ -24,7 +30,7 @@ export function getSoundSink(): SoundSink | null {
 
 /**
  * A sound a component can play (`const playHit = useSound("hit.wav")`). The runtime has no
- * audio backend: `play()` counts the call, so a game's logic can be tested, and reports to the
+ * audio backend: `play(volume?)` counts the call, so a game's logic can be tested, and reports to the
  * installed `SoundSink`, if any. Playing is an effect, not state: it takes place at once and never
  * renders anything.
  */
@@ -38,8 +44,9 @@ export class Sound {
     sink?.load(path);
   }
 
-  play(): void {
+  /** Play it, at `volume` (0 to 1, default 1), over any play of it that is still sounding. */
+  play(volume = 1): void {
     this.plays++;
-    sink?.play(this.path);
+    sink?.play(this.path, volume);
   }
 }

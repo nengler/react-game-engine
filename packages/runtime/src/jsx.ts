@@ -23,6 +23,7 @@ import type { ScreenProps } from "./components/Screen.ts";
 import type { TilemapProps } from "./components/Tilemap.ts";
 import type { ParticlesProps } from "./components/Particles.ts";
 import type { FadeProps } from "./components/Fade.ts";
+import type { MusicProps } from "./components/Music.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
@@ -56,10 +57,11 @@ export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>] {
 
 /**
  * A sound, played by calling the returned function in a handler:
- * `const playHit = useSound("hit.wav");` then `playHit();`. The path must be a
+ * `const playHit = useSound("hit.wav");` then `playHit();`, or `playHit(0.5)` at half volume (0 to 1). A sound played again
+ * while it still sounds plays over itself, up to four at once, then the oldest is cut off. The path must be a
  * string literal. Sounds are not placed, so there is no `transform`.
  */
-export function useSound(_path: string): () => void {
+export function useSound(_path: string): (volume?: number) => void {
   return compileTimeOnly("useSound");
 }
 
@@ -203,6 +205,15 @@ export function Particles(_props: ParticlesProps): JSX.Element {
  */
 export function Fade(_props: FadeProps): JSX.Element {
   return compileTimeOnly("Fade");
+}
+
+/**
+ * Music that streams from a file, loops, fades and stops: `<Music src="theme.ogg" volume={0.6} playing={!paused} />`. It plays for as
+ * long as it is mounted, so put it in the root, where room and screen changes do not touch it. `fade` is the seconds a full
+ * fade takes, in and out. A leaf with no position.
+ */
+export function Music(_props: MusicProps): JSX.Element {
+  return compileTimeOnly("Music");
 }
 
 /**

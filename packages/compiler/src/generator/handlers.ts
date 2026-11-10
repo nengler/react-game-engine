@@ -115,7 +115,7 @@ export class HandlerEmitter extends ExpressionEmitter {
           w.line(`this.${this.setter(stmt.state)}(${"updater" in stmt ? this.updater(stmt.updater) : this.expr(stmt.value, true)});`);
           break;
         case "PlaySound":
-          w.line(`this.${this.soundField(stmt.sound)}.play();`);
+          w.line(`this.${this.soundField(stmt.sound)}.play(${stmt.volume === null ? "" : this.expr(stmt.volume, true)});`);
           break;
         case "CallAction":
           w.line(`${this.storeName}.getState().${stmt.action}(${stmt.args.map((a) => this.expr(a, true)).join(", ")});`);

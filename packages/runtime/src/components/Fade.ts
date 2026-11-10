@@ -34,7 +34,7 @@ export class Fade<P extends object = {}> extends GameObject<P> {
   override onUpdate(dt: number): void {
     const goal = this.on ? 1 : 0;
     if (this.amount === goal) return;
-    const step = this.duration > 0 && dt > 0 ? dt / this.duration : 1;
+    const step = this.duration > 0 ? Math.max(0, dt) / this.duration : 1;
     this.amount = this.amount < goal ? Math.min(goal, this.amount + step) : Math.max(goal, this.amount - step);
     this.markChanged();
   }
