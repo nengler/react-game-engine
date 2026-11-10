@@ -15,6 +15,7 @@
     "native:build:headless": "cmake -S native -B native/build-headless -DRGE_PLATFORM=Memory && cmake --build native/build-headless -j",
     "native:test": "cmake --build native/build-headless -j && ctest --test-dir native/build-headless --output-on-failure",
     "bundle": "node tools/bundle.ts",
+    "bench:check": "node tools/bench-check.ts",
     "package": "node tools/package.ts",
     "host:build": "cargo build --release --manifest-path host/Cargo.toml",
     "host:build:headless": "cargo build --release --features headless --manifest-path host/Cargo.toml",
