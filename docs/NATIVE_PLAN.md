@@ -476,6 +476,22 @@ A review of the whole phase found three costs that the baseline did not show, an
 - **Collisions** built a string key per touching pair and a new `Set` every frame. Keys are now small integers, scrambled, because QuickJS-ng hashes an integer by one multiply and keeps the low bits, which in `low * 2^15 + high` come from one id alone (a plain integer key was *slower* than a string there, and a key above int32 ten times slower). Ids are renumbered when they grow past 2^15, so the keys stay small in a game that keeps creating colliders; past that many colliders in one frame they fall back to strings. Boxes go into a reused `Float64Array`.
 - **Still open**: the sweep over x degrades when colliders line up in columns (a grid of platforms; the bench's own grid is such a scene), so a uniform grid is the next step if collisions show up again. The state-driven tick (setters, closures, a full `render()` per moving object) is now the biggest cost after the walk; dependency-scoped `render()` and cached world transforms for still subtrees are the fixes the plan already names.
 
+### Performance pass two: what was measured (2026-11-10)
+
+Same bench, now with a by-phase breakdown (`tick` / `walk` / `collisions`) and scenes with still objects; the bench now prints the phases for four scenes. Rust host (QuickJS-ng), a 4-core cloud VM, noisy to about ±15%. Two designs were built, measured and **rejected**, so the numbers are what is left to beat.
+
+| Scene | Total | Tick | Walk and draw list | Collisions |
+| --- | --- | --- | --- | --- |
+| 2,000 rects moved by state | 9.2 ms | 2.9 | 6.1 | — |
+| 2,000 rects moved by state, each with a collider | 20.6 ms | 3.2 | 8.7 | 8.3 |
+| 2,000 still rects | 6.1 ms | — | 6.1 | — |
+| 2,000 still rects, each with a collider | 16.4 ms | — | 9.4 | 9.4 |
+| 2,000 rects with colliders, 20 moving | 16.3 ms | — | 9.1 | 8.9 |
+
+- **A uniform grid for collisions did not pay under QuickJS.** Inside `CollisionTracker.update`, the bounds loop is 2.3 ms for 2,000 colliders, the sort 1.4 ms and the sweep 4.9 ms. A hashed grid (a cell twice the mean collider, cells chained in typed arrays, large boxes tested against everything) cost 2.5 ms to build and 2.9 ms to query: 8.0 ms against the sweep's 8.1 ms, and the pile of 300 overlapping colliders went from 23 ms to 98 ms. The interpreter pays for every operation, so a broad phase that does more bookkeeping per box than the sweep does per comparison loses until the scene is far larger than 2,000.
+- **Version-counter setters on `Transform`, with each object's world transform kept while its inputs are unchanged, was a net loss.** Still scenes gained about 1.2 ms (2,000 still rects 6.1 to 4.7 ms) because the walk's cost is mostly writing the draw list and calling the visitor, not composing transforms; the accessors made every moving scene about 4 ms slower (2,000 moving rects 6.6 to 11.1 ms, by state 9.1 to 12.9 ms), since QuickJS calls a getter for every read and a setter for every write. Plain fields stay.
+- **What is left is per-node cost**: about 1.2 µs a node in the walk and about 1.5 µs a collider in `update`, mostly the interpreter's price for each statement. The ways to a large saving are structural: retained draw-list segments for subtrees that did not change (copy a cached range of records instead of rebuilding it), an incremental broad phase that tests only colliders that moved against the rest, and dependency-scoped `render()`; each needs a cheap "did this move" signal that does not slow the moving case, which plain-field comparison did not provide either.
+
 The review also fixed: `console.log` in the Rust host panicking (and ending the game) when stdout is closed, as with `rge-host game.js | head`; the Rust host accepting a keys buffer longer than librge's table (rge.h and protocol.ts drifting apart, which the Node host already refused); librge casting draw-record doubles straight to integers (undefined behaviour in C for NaN or out-of-range values; a bad op now stops the frame, a bad index draws nothing, a bad colour is magenta); frame capture on the OpenGL path copying a screen image whose size need not match the buffer on a high-DPI display; and Shift, Control and Alt reporting a second press when the other side went down while one was held, and a release while still held.
 
 ## Later (not scheduled)
