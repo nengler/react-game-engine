@@ -356,9 +356,15 @@ A floating `Flex` is laid out like any other (it fits its children, it can grow 
 
 **Done when**
 
-- [ ] `float`, `anchor`, `to`, `offsetX`, `offsetY` on `Flex`, the two anchors checked as literals
-- [ ] A floating box takes no space and is placed at its anchor (tests for all nine points), including under a `<Hud>`, where its parent's box is the HUD's
-- [ ] A floating box's pointers are pressed before what it covers, through `z`
+**Done 2026-11-10.** The nine points are `"top-left"`, `"top-center"`, `"top-right"`, `"center-left"`, `"center"`, `"center-right"`, `"bottom-left"`, `"bottom-center"`, `"bottom-right"`; `anchor` and `to` default to `"top-left"`. Details that were open:
+
+- A floating child is fitted and sized like any box, but is left out of its parent's flow in all three steps (fit sums, sharing out space, positions), so it takes no space, adds no gap and does not count for `justifyContent`. A `"grow"` or percentage size is of the parent's inner size.
+- It is attached to the parent's whole box, not inside its padding.
+- A floating box that is a layout root (its parent is a `<Hud>`, or anything but a `<Flex>`) hangs off the available box: the canvas, or the window without a `<Screen>`. Its own offset is only known after layout, so the walk lets a visit return the world its children use (`walkTree`), and the box draws at its place in the same frame.
+
+- [x] `float`, `anchor`, `to`, `offsetX`, `offsetY` on `Flex`, the two anchors checked as literals
+- [x] A floating box takes no space and is placed at its anchor (tests for all nine points), including under a `<Hud>`, where its parent's box is the HUD's
+- [x] A floating box's pointers are pressed before what it covers, through `z`
 
 ## Decisions
 

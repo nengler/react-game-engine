@@ -131,7 +131,7 @@ describe("walkTree", () => {
     root.addChild(b);
     a.addChild(a1);
     const seen: string[] = [];
-    walkTree(root, (object) => seen.push((object as Entity).name));
+    walkTree(root, (object) => void seen.push((object as Entity).name));
     assert.deepEqual(seen, ["root", "a", "a1", "b"]);
   });
 });

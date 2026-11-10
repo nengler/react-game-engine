@@ -239,6 +239,8 @@ describe("Flex: diagnostics", () => {
       [`alignItems="flex-start"`, /<Flex alignItems> must be one of "start", "center", "end", "stretch", not 'flex-start' \(did you mean "start"\?\)/],
       [`justifyContent="flex-end"`, /did you mean "end"\?/],
       [`justifyContent="space-betwen"`, /did you mean "space-between"\?/],
+      [`anchor="middle"`, /<Flex anchor> must be one of "top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right", not 'middle'/],
+      [`to="top-righ"`, /<Flex to> must be one of .*did you mean "top-right"\?/],
     ] as const) {
       const errors = compileErrors(`function C() { return <Flex ${attribute} />; }`);
       assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.InvalidPropValue], attribute);
@@ -284,5 +286,12 @@ describe("Flex: diagnostics", () => {
   it("takes the built-in's name, so a component cannot be called Flex", () => {
     const errors = compileErrors(`function Flex() { return <Entity name="Flex" />; }`);
     assert.ok(errors.some((d) => /conflicts with a runtime intrinsic/.test(d.message)));
+  });
+});
+
+describe("Flex: floating props", () => {
+  it("accepts float as a bare attribute, with anchors and offsets, and sets them on the box", () => {
+    const out = compile(`function C() { return <Flex width={40} height={20}><Flex float anchor="top-right" to="top-right" offsetX={-4} offsetY={4} width={8} height={8} /></Flex>; }`);
+    assert.match(JSON.stringify(out), /float: true, anchor: \\"top-right\\"|float: true, anchor: "top-right"/);
   });
 });
