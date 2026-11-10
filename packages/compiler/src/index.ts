@@ -20,7 +20,9 @@ export { parseGameState, type GameStateDefinition, type GameStateLeaf, type Game
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
 export { constantValue, exportedComponents, moduleSchemas, prefabSchema, type JsonValue, type PrefabPropSchema, type PrefabSchema } from "./prefabs/prefabs.ts";
 export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
+export { ASSET_PROPS, checkAssets, type AssetCheckOptions } from "./assets/assets.ts";
 export { importTiled, type TiledImport } from "./scenes/tiled.ts";
+export { importTilemap, tilemapsSource, type TilemapImport, type TilemapOut } from "./scenes/tilemap.ts";
 export { checkProject, prefabsIndexSource, prefabsJson, projectSchemas, type ProjectModule } from "./project.ts";
 export { typeCheckFiles, typeCheckSources, generatedCodeCompilerOptions, sourceCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
 

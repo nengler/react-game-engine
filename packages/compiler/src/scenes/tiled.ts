@@ -22,6 +22,7 @@ interface TiledObject {
   readonly y?: unknown;
   readonly height?: unknown;
   readonly rotation?: unknown;
+  readonly visible?: unknown;
   readonly gid?: unknown;
   readonly properties?: unknown;
 }
@@ -32,6 +33,7 @@ interface TiledLayer {
   /** Pixels the layer (and, for a group, everything in it) is shifted by. */
   readonly offsetx?: unknown;
   readonly offsety?: unknown;
+  readonly visible?: unknown;
   readonly objects?: unknown;
   readonly layers?: unknown;
 }
@@ -70,6 +72,8 @@ export function importTiled(fileName: string, text: string): TiledImport {
   // A layer's offset shifts its objects, and a group's shifts everything inside it: Tiled shows them there, so the entity goes there.
   const visit = (layers: readonly TiledLayer[], dx: number, dy: number): void => {
     for (const layer of layers) {
+      // A layer hidden in Tiled hides what is in it (a group's whole subtree too): its objects are not entities.
+      if (layer.visible === false) continue;
       const x = dx + (typeof layer.offsetx === "number" ? layer.offsetx : 0);
       const y = dy + (typeof layer.offsety === "number" ? layer.offsety : 0);
       if (layer.type === "group" && Array.isArray(layer.layers)) visit(layer.layers as TiledLayer[], x, y); // groups flatten
@@ -81,6 +85,7 @@ export function importTiled(fileName: string, text: string): TiledImport {
   };
 
   const importObject = (layerName: string, object: TiledObject, dx: number, dy: number): void => {
+    if (object.visible === false) return; // hidden in Tiled: not placed
     const label = `layer '${layerName}', object ${String(object.id)}${typeof object.name === "string" && object.name ? ` ('${object.name}')` : ""}`;
     // `class` is where Tiled 1.9 and later keep what older versions called `type`.
     const prefab = typeof object.class === "string" && object.class !== "" ? object.class : typeof object.type === "string" ? object.type : "";

@@ -1,6 +1,6 @@
 export { GameObject } from "./GameObject.ts";
 export { Transform, composeTransforms, offsetTransform, IDENTITY_TRANSFORM, type WorldTransform } from "./Transform.ts";
-export { World } from "./World.ts";
+export { freeze, World } from "./World.ts";
 export { createGameState, GameStore, resetGameState, type GameState, type GameStateCreator, type GetGameState, type SetGameState, type GameStateValue } from "./GameState.ts";
 export type { Child } from "./jsx-runtime.ts";
 export {
@@ -25,6 +25,10 @@ export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./component
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
 export { AnimatedSprite, parseAnimations, type AnimatedSpriteProps, type SheetAnimation } from "./components/AnimatedSprite.ts";
 export { Flex, FlexBox, FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, type FlexAlignItems, type FlexAnchor, type FlexDirection, type FlexJustifyContent, type FlexProps, type FlexSizing } from "./components/Flex.ts";
+export { Tilemap, type TilemapProps } from "./components/Tilemap.ts";
+export { findTilemap, getTilemap, registerTilemaps, TileGrid, TILE_FLIP_D, TILE_FLIP_H, TILE_FLIP_V, type TilemapData, type TilemapLayerData } from "./tilemap.ts";
+export { Particles, PARTICLE_SPACES, type ParticlesProps } from "./components/Particles.ts";
+export { Fade, type FadeProps } from "./components/Fade.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";

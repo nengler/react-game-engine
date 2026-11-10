@@ -20,6 +20,9 @@ import type { CameraProps } from "./components/Camera.ts";
 import type { AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
 import type { FlexProps } from "./components/Flex.ts";
 import type { ScreenProps } from "./components/Screen.ts";
+import type { TilemapProps } from "./components/Tilemap.ts";
+import type { ParticlesProps } from "./components/Particles.ts";
+import type { FadeProps } from "./components/Fade.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
@@ -174,6 +177,40 @@ export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
  */
 export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Flex");
+}
+
+/**
+ * A grid of tiles from a sheet, with no object per tile: `<Tilemap map="room1" image="tiles.png" />` draws the registered Tiled map
+ * `room1` with the tiles of `tiles.png`. The same map, as `getTilemap("room1")`, is the solid grid that movement code reads.
+ * Placed by `transform` at the map's top left; `layer` draws one layer only. A leaf.
+ */
+export function Tilemap(_props: TilemapProps): JSX.Element {
+  return compileTimeOnly("Tilemap");
+}
+
+/**
+ * An emitter of small squares for dust, a dash's trail or a death, with no game object per particle: `rate` a second while `emitting`,
+ * `burst` at once when it turns on (or when it is made), each living `lifetime` seconds, thrown at `speed` toward `angle` ± `spread`,
+ * pulled by `gravity`, fading or shrinking. `space="world"` leaves them where they were made. A leaf, placed by `transform`.
+ */
+export function Particles(_props: ParticlesProps): JSX.Element {
+  return compileTimeOnly("Particles");
+}
+
+/**
+ * A cover that fades the screen to a colour and back: put it in a `<Hud>` and switch `on`. `duration` is the seconds a full fade
+ * takes. For a death, a room change, a scene change.
+ */
+export function Fade(_props: FadeProps): JSX.Element {
+  return compileTimeOnly("Fade");
+}
+
+/**
+ * Pause every `useUpdate` for the next `steps` fixed steps: the freeze frames of a hit or a dash. Call it as a statement in a
+ * handler. `useInput` keeps running and a press during the freeze is kept for the first step after it.
+ */
+export function freeze(_steps: number): void {
+  return compileTimeOnly("freeze");
 }
 
 /**

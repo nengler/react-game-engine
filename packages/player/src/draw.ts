@@ -15,6 +15,13 @@ import {
   Sprite,
   isStyled,
   Text,
+  Tilemap,
+  Particles,
+  Fade,
+  findTilemap,
+  TILE_FLIP_D,
+  TILE_FLIP_H,
+  TILE_FLIP_V,
   type Pressable,
   type ScreenFit,
   type ViewTransform,
@@ -300,8 +307,20 @@ export class DrawList {
 
   /** One region of a texture (a frame of a sheet), with its origin, mirroring and tint: the record `RGE_OP_SPRITE_REGION`. */
   spriteRegion(world: WorldTransform, texture: number, srcX: number, srcY: number, srcW: number, srcH: number, originX: number, originY: number, flags: number, tint: PackedColor): void {
-    const at = this.#header(RGE_OP_SPRITE_REGION, RGE_OP_SPRITE_REGION_LEN, world);
+    this.spriteRegionAt(world.x, world.y, world.rotation, world.scaleX, world.scaleY, texture, srcX, srcY, srcW, srcH, originX, originY, flags, tint);
+  }
+
+  /** `spriteRegion` with the transform as numbers, for a tilemap's many records (no object per tile). */
+  spriteRegionAt(x: number, y: number, rotation: number, scaleX: number, scaleY: number, texture: number, srcX: number, srcY: number, srcW: number, srcH: number, originX: number, originY: number, flags: number, tint: PackedColor): void {
+    const base = this.#reserve(RGE_OP_SPRITE_REGION_LEN);
     const r = this.records;
+    r[base] = RGE_OP_SPRITE_REGION;
+    r[base + 1] = x;
+    r[base + 2] = y;
+    r[base + 3] = rotation;
+    r[base + 4] = scaleX;
+    r[base + 5] = scaleY;
+    const at = base + 6;
     r[at] = texture;
     r[at + 1] = srcX;
     r[at + 2] = srcY;
@@ -397,6 +416,9 @@ const KIND_COLLIDER = 6;
 const KIND_SCREEN = 7;
 const KIND_HUD = 8;
 const KIND_FLEX = 9;
+const KIND_TILEMAP = 10;
+const KIND_PARTICLES = 11;
+const KIND_FADE = 12;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
@@ -427,6 +449,9 @@ function classCode(object: GameObject): number {
       : object instanceof Screen ? KIND_SCREEN
       : object instanceof Hud ? KIND_HUD
       : object instanceof Flex ? KIND_FLEX
+      : object instanceof Tilemap ? KIND_TILEMAP
+      : object instanceof Particles ? KIND_PARTICLES
+      : object instanceof Fade ? KIND_FADE
       : KIND_NONE;
     code = kind;
     if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX) code |= FLAG_VOLATILE;
@@ -485,6 +510,10 @@ export function rootScreen(root: GameObject): Screen | null {
   }
   return null;
 }
+
+/** A bitmap font sheet holds the characters 32 to 127 in this many columns and rows. */
+const FONT_COLUMNS = 16;
+const FONT_ROWS = 6;
 
 /** The size of the square drawn where a texture could not be loaded. */
 const MISSING_TEXTURE_SIZE = 16;
@@ -567,6 +596,8 @@ export class FrameBuilder {
   readonly #retain: boolean;
   readonly #options: FrameBuilderOptions;
   #reference: FrameBuilder | undefined;
+  readonly #particle = { x: 0, y: 0, t: 0 };
+  readonly #placed = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
   // What reusing needs from the last frame (see `DrawInfo`): its world records in tree order, before the z sort, its texts and colliders.
   #token: object = {};
   #lastRoot: GameObject | null = null;
@@ -758,6 +789,17 @@ export class FrameBuilder {
             if (drawZ !== listZ) list.setZ((listZ = drawZ));
             this.#text(node as Text, at);
           }
+          break;
+        case KIND_TILEMAP:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#tilemap(node as Tilemap, at);
+          break;
+        case KIND_PARTICLES:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#particles(node as Particles, at);
+          break;
+        case KIND_FADE:
+          this.#warner.once("fade-world", "A <Fade> only draws inside a <Hud>: this one, in the world, does nothing.");
           break;
         case KIND_CAMERA:
           if (camera === null) camera = node as Camera;
@@ -1005,6 +1047,10 @@ export class FrameBuilder {
     }
 
     // The camera centres on the middle of the game's area; a screen's placement then takes game pixels to the window.
+    if (camera !== null) {
+      (camera as Camera).viewWidth = gameWidth;
+      (camera as Camera).viewHeight = gameHeight;
+    }
     const cameraView = this.#view(camera, gameWidth, gameHeight);
     const view = placement === null ? cameraView : viewToWindow(cameraView, placement);
     const hudView = placement === null ? IDENTITY_VIEW : viewToWindow(IDENTITY_VIEW, placement);
@@ -1038,6 +1084,18 @@ export class FrameBuilder {
                 case KIND_SHAPE:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#shape(object as Shape, world);
+                  break;
+                case KIND_TILEMAP:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#tilemap(object as Tilemap, world);
+                  break;
+                case KIND_PARTICLES:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#particles(object as Particles, world);
+                  break;
+                case KIND_FADE:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#fade(object as Fade, gameWidth, gameHeight);
                   break;
                 case KIND_TEXT:
                   if ((object as Text).text !== "") {
@@ -1134,7 +1192,7 @@ export class FrameBuilder {
         out.height = object.size;
         return true;
       }
-      size = this.#textSize(object.text, object.size);
+      size = object.font === undefined ? this.#textSize(object.text, object.size) : this.#bitmapSize(object.font, object.text, object.size);
       if (object.width !== undefined) {
         out.width = object.width;
         out.height = size.height;
@@ -1218,7 +1276,52 @@ export class FrameBuilder {
     else this.#list.rect(world, shape.width, shape.height, color);
   }
 
+  /** The size of a text drawn with a bitmap font: a cell's width for each character, the size as its height. */
+  #bitmapSize(font: string, text: string, size: number): Size {
+    const sheet = this.#imageSize(font);
+    if (sheet.width === 0 || sheet.height === 0) return { width: estimateTextWidth(text, size), height: size };
+    const scale = size / (sheet.height / FONT_ROWS);
+    let characters = 0;
+    for (const _ of text) characters++;
+    return { width: characters * (sheet.width / FONT_COLUMNS) * scale, height: size };
+  }
+
+  /** Text drawn from a bitmap font: one region of the font sheet for each character, in the text's colour. */
+  #bitmapText(text: Text, at: WorldTransform): void {
+    const font = text.font as string;
+    const handle = this.#texture(font);
+    const sheet = this.#imageSize(font);
+    if (handle < 0 || sheet.width === 0 || sheet.height === 0) {
+      if (handle >= 0) this.#warner.once(`font-size:${font}`, `The font '${font}' has no known size (this backend cannot report texture sizes): its text is not drawn.`);
+      return;
+    }
+    const cellW = sheet.width / FONT_COLUMNS;
+    const cellH = sheet.height / FONT_ROWS;
+    const scale = text.size / cellH;
+    const color = this.#color(text.color);
+    const cos = Math.cos(at.rotation);
+    const sin = Math.sin(at.rotation);
+    let x = 0;
+    if (text.width !== undefined && text.align !== "left") {
+      const room = text.width - this.#bitmapSize(font, text.text, text.size).width;
+      x = text.align === "center" ? Math.round(room / 2) : Math.round(room);
+    }
+    for (const ch of text.text) {
+      const code = ch.codePointAt(0) as number;
+      const glyph = code >= 32 && code < 128 ? code - 32 : 63 - 32; // anything else is a "?"
+      if (glyph !== 0) {
+        const lx = x * at.scaleX;
+        this.#list.spriteRegionAt(at.x + cos * lx, at.y + sin * lx, at.rotation, at.scaleX * scale, at.scaleY * scale, handle, (glyph % FONT_COLUMNS) * cellW, Math.floor(glyph / FONT_COLUMNS) * cellH, cellW, cellH, 0, 0, 0, color);
+      }
+      x += cellW * scale;
+    }
+  }
+
   #text(text: Text, world: WorldTransform): void {
+    if (text.font !== undefined) {
+      this.#bitmapText(text, world);
+      return;
+    }
     let at = world;
     if (text.width !== undefined && text.align !== "left") {
       // Aligned inside its own width: shift along the text's own x axis, by whole pixels.
@@ -1296,6 +1399,116 @@ export class FrameBuilder {
     this.#list.spriteRegion(world, handle, srcX, srcY, frameWidth, frameHeight, node.originX, node.originY, (node.flipX ? RGE_SPRITE_FLIP_X : 0) | (node.flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
   }
 
+  /** A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer, culled to none (a map is a room, not a world). */
+  #tilemap(node: Tilemap, at: WorldTransform): void {
+    const grid = findTilemap(node.map);
+    if (grid === undefined) {
+      this.#warner.once(`tilemap:${node.map}`, `<Tilemap map="${node.map}">: no map of that name is registered (registerTilemaps(tilemaps) with the compiler's generated table, before the game starts).`);
+      return;
+    }
+    if (node.image === "") return;
+    const handle = this.#texture(node.image);
+    if (handle < 0) return;
+    const sheet = this.#imageSize(node.image);
+    const tw = grid.tileWidth;
+    const th = grid.tileHeight;
+    if (!(sheet.width >= tw && tw > 0 && th > 0)) {
+      this.#warner.once(`tilemap-sheet:${node.image}`, `The tile sheet '${node.image}' (${sheet.width} × ${sheet.height}) is smaller than one ${tw} × ${th} tile (or this backend cannot report texture sizes): the map is not drawn.`);
+      return;
+    }
+    const columns = Math.floor(sheet.width / tw);
+    const cos = Math.cos(at.rotation);
+    const sin = Math.sin(at.rotation);
+    const sx = at.scaleX;
+    const sy = at.scaleY;
+    let tint = 0xffffffff;
+    if (node.opacity !== 1) tint = ((tint & 0xffffff00) | Math.round(255 * Math.min(1, Math.max(0, node.opacity)))) >>> 0;
+    const firstGid = grid.data.firstGid;
+    const width = grid.width;
+    for (const layer of grid.data.layers) {
+      if (!layer.visible || (node.layer !== undefined && layer.name !== node.layer)) continue;
+      const data = layer.data;
+      const flips = layer.flips;
+      for (let i = 0; i < data.length; i++) {
+        const gid = data[i] as number;
+        if (gid === 0) continue;
+        const frame = gid - firstGid;
+        if (frame < 0) continue;
+        const col = i % width;
+        const row = (i - col) / width;
+        const srcX = (frame % columns) * tw;
+        const srcY = Math.floor(frame / columns) * th;
+        const flip = flips === undefined ? 0 : (flips[i] as number);
+        let lx = col * tw;
+        let ly = row * th;
+        let rotation = at.rotation;
+        let flags = 0;
+        let ox = 0;
+        let oy = 0;
+        if (flip !== 0) {
+          // Mirrored tiles turn about their middle. Tiled applies the diagonal flip first, then horizontal, then vertical; each
+          // combination is a quarter turn and at most one mirror, which is what a record can say.
+          lx += tw / 2;
+          ly += th / 2;
+          ox = tw / 2;
+          oy = th / 2;
+          const h = (flip & TILE_FLIP_H) !== 0;
+          const v = (flip & TILE_FLIP_V) !== 0;
+          if ((flip & TILE_FLIP_D) === 0) flags = (h ? RGE_SPRITE_FLIP_X : 0) | (v ? RGE_SPRITE_FLIP_Y : 0);
+          else if (!h && !v) {
+            rotation += Math.PI / 2;
+            flags = RGE_SPRITE_FLIP_Y;
+          } else if (h && !v) rotation += Math.PI / 2;
+          else if (!h && v) rotation += (3 * Math.PI) / 2;
+          else {
+            rotation += (3 * Math.PI) / 2;
+            flags = RGE_SPRITE_FLIP_Y;
+          }
+        }
+        const px = at.x + cos * lx * sx - sin * ly * sy;
+        const py = at.y + sin * lx * sx + cos * ly * sy;
+        this.#list.spriteRegionAt(px, py, rotation, sx, sy, handle, srcX, srcY, tw, th, ox, oy, flags, tint);
+      }
+    }
+  }
+
+  /** A `<Particles>`: a small filled square for each live particle, aged toward its end colour, smaller or fainter. */
+  #particles(node: Particles, at: WorldTransform): void {
+    const count = node.count;
+    if (count === 0) return;
+    const start = this.#color(node.color);
+    const end = node.endColor === undefined ? start : this.#color(node.endColor);
+    const scratch = this.#particle;
+    const place = this.#placed;
+    const world = node.space === "world";
+    for (let i = 0; i < count; i++) {
+      node.read(i, scratch);
+      const t = scratch.t;
+      const size = node.shrink ? node.size * (1 - t) : node.size;
+      if (!(size > 0.01)) continue;
+      let color = start;
+      if (end !== start) color = mixColors(start, end, t);
+      if (node.fade) color = ((color & 0xffffff00) | Math.round((color & 255) * (1 - t))) >>> 0;
+      if ((color & 255) === 0) continue;
+      // Whole pixels, so particles stay crisp under a pixel-perfect screen.
+      place.x = Math.round((world ? scratch.x : at.x + scratch.x * at.scaleX) - size / 2);
+      place.y = Math.round((world ? scratch.y : at.y + scratch.y * at.scaleY) - size / 2);
+      this.#list.rect(place, Math.max(1, Math.round(size)), Math.max(1, Math.round(size)), color);
+    }
+  }
+
+  /** A `<Fade>` in a `<Hud>`: the colour, as faint as the fade is far along, over the whole screen. */
+  #fade(node: Fade, width: number, height: number): void {
+    if (!(node.amount > 0)) return;
+    const color = this.#color(node.color);
+    const alpha = Math.round((color & 255) * Math.min(1, node.amount));
+    if (alpha === 0) return;
+    const place = this.#placed;
+    place.x = 0;
+    place.y = 0;
+    this.#list.rect(place, width, height, ((color & 0xffffff00) | alpha) >>> 0);
+  }
+
   #sprite(image: string, world: WorldTransform): void {
     if (image === "") return;
     const handle = this.#texture(image);
@@ -1313,4 +1526,10 @@ export class FrameBuilder {
     }
     return color;
   }
+}
+
+/** The colour `t` of the way (0 to 1) from `a` to `b`, channel by channel. */
+function mixColors(a: PackedColor, b: PackedColor, t: number): PackedColor {
+  const mix = (shift: number): number => Math.round(((a >>> shift) & 255) * (1 - t) + ((b >>> shift) & 255) * t);
+  return (((mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | mix(0)) >>> 0);
 }
