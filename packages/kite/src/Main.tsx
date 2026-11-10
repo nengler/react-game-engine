@@ -12,8 +12,10 @@ export default function Main() {
     <Game name="Main" state={useGame} title="Kite" width={960} height={540} background="#12151f" assets="assets" fixedStep={60}>
       <Screen width={320} height={180} fit="integer">
         <Level />
-        <Player />
-        <Camera transform={{ x: originX + 160, y: originY + 90 }} />
+        {/* The camera follows the character and never leaves the room; a new room slides in. */}
+        <Camera bounds={[originX, originY, 320, 180]} slide={0.4}>
+          <Player />
+        </Camera>
       </Screen>
     </Game>
   );

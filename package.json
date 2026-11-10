@@ -24,7 +24,10 @@
     "demo": "node packages/compiler/src/cli.ts packages/demo/src packages/demo/generated",
     "demo:assets": "node packages/demo/tools/make-assets.ts",
     "play:demo": "cd packages/demo && node ../player-node/src/play.ts main.ts",
-    "kite": "node packages/compiler/src/cli.ts packages/kite/src packages/kite/generated",
+    "kite": "node packages/compiler/src/cli.ts packages/kite/src packages/kite/generated --scenes packages/kite/scenes --assets packages/kite/assets",
+    "kite:assets": "node packages/kite/tools/make-assets.ts",
+    "kite:rooms": "node packages/kite/tools/make-rooms.ts",
+    "kite:solve": "node packages/kite/tools/solve.ts --write",
     "play:kite": "cd packages/kite && node ../player-node/src/play.ts main.ts",
     "check:kite": "node tools/check-game.ts kite",
     "example": "node packages/compiler/src/cli.ts packages/example/src packages/example/generated --scenes packages/example/scenes"

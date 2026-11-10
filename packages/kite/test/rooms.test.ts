@@ -6,7 +6,8 @@ import { useGame } from "../src/GameState.ts";
 import { NO_CONTROLS } from "../src/rules/body.ts";
 import { ROOM_COLS, ROOM_ROWS } from "../src/rules/constants.ts";
 import { newRun, stepRun } from "../src/rules/level.ts";
-import { ROOM_LIST, ROOM_SPECS, tilesOf } from "../src/rules/rooms.ts";
+import { ROOM_LIST, tilesOf } from "../src/rules/rooms.ts";
+import { ROOM_SPECS } from "../tools/rooms.ts";
 import { REPLAYS } from "./replays.ts";
 
 describe("rooms", () => {
@@ -31,7 +32,16 @@ describe("rooms", () => {
         assert.ok(cols.every((c) => next.rows[15]![c] !== "#"), `room ${room.index + 1}'s exit columns are open at the bottom of room ${room.index + 2}`);
       }
     }
-    assert.equal(ROOM_SPECS.at(-1)?.exit, "end");
+    assert.equal(ROOM_LIST.at(-1)?.exit, "end");
+  });
+
+  it("are the Tiled maps in scenes/, which still agree with the drafts they were made from (until someone edits a map)", () => {
+    assert.equal(ROOM_SPECS.length, ROOM_LIST.length);
+    for (const spec of ROOM_SPECS) {
+      const room = ROOM_LIST[ROOM_SPECS.indexOf(spec)]!;
+      assert.deepEqual(room.rows, spec.rows, `room ${room.index + 1}`);
+      assert.equal(room.exit, spec.exit);
+    }
   });
 });
 

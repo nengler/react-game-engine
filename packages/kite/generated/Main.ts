@@ -13,15 +13,15 @@ export class Main extends Game {
   override readonly gameStateKeys: readonly string[] = ["originX", "originY"];
   readonly screen: Screen = new Screen({ width: 320, height: 180, fit: "integer" });
   readonly level: Level = new Level();
+  readonly camera: Camera = new Camera({ bounds: [this.originX, this.originY, 320, 180], slide: 0.4 });
   readonly player: Player = new Player();
-  readonly camera: Camera = new Camera();
 
   constructor() {
     super({ name: "Main", state: useGame, title: "Kite", width: 960, height: 540, background: "#12151f", assets: "assets", fixedStep: 60 });
     this.addChild(this.screen);
     this.screen.addChild(this.level);
-    this.screen.addChild(this.player);
     this.screen.addChild(this.camera);
+    this.camera.addChild(this.player);
     this.render();
     this.commitStructure();
   }
@@ -32,12 +32,10 @@ export class Main extends Game {
   }
 
   override render(): void {
-    const $1 = this.originX + 160;
-    const $2 = this.originY + 90;
-    if (this.camera.transform.x !== $1 || this.camera.transform.y !== $2) {
-      this.camera.transform.x = $1;
-      this.camera.transform.y = $2;
-      this.camera.markMoved();
+    const $1 = [this.originX, this.originY, 320, 180];
+    if (this.camera.bounds !== $1) {
+      this.camera.bounds = $1;
+      this.camera.markChanged();
     }
   }
 }

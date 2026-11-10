@@ -9,7 +9,7 @@
       "span": {
         "fileName": "packages/kite/src/Main.tsx",
         "start": 247,
-        "end": 705,
+        "end": 821,
         "line": 7,
         "column": 1
       },
@@ -216,87 +216,99 @@
                   "element": {
                     "kind": "Element",
                     "id": "Main/0/1",
-                    "fieldName": "player",
-                    "component": {
-                      "kind": "Imported",
-                      "name": "Player",
-                      "module": "./Player.tsx",
-                      "isDefault": false
-                    },
-                    "props": [],
-                    "transform": [],
-                    "children": [],
-                    "span": {
-                      "fileName": "packages/kite/src/Main.tsx",
-                      "start": 591,
-                      "end": 601,
-                      "line": 15,
-                      "column": 9
-                    }
-                  }
-                },
-                {
-                  "kind": "StaticChild",
-                  "element": {
-                    "kind": "Element",
-                    "id": "Main/0/2",
                     "fieldName": "camera",
                     "component": {
                       "kind": "Intrinsic",
                       "name": "Camera"
                     },
-                    "props": [],
-                    "transform": [
+                    "props": [
                       {
                         "kind": "DynamicProp",
-                        "name": "x",
+                        "name": "bounds",
                         "value": {
-                          "kind": "Binary",
-                          "operator": "+",
-                          "left": {
-                            "kind": "StateRead",
-                            "state": "Main.originX"
-                          },
-                          "right": {
-                            "kind": "NumberLiteral",
-                            "value": 160
-                          }
+                          "kind": "ArrayLiteral",
+                          "elements": [
+                            {
+                              "spread": false,
+                              "value": {
+                                "kind": "StateRead",
+                                "state": "Main.originX"
+                              }
+                            },
+                            {
+                              "spread": false,
+                              "value": {
+                                "kind": "StateRead",
+                                "state": "Main.originY"
+                              }
+                            },
+                            {
+                              "spread": false,
+                              "value": {
+                                "kind": "NumberLiteral",
+                                "value": 320
+                              }
+                            },
+                            {
+                              "spread": false,
+                              "value": {
+                                "kind": "NumberLiteral",
+                                "value": 180
+                              }
+                            }
+                          ]
                         },
                         "dependencies": [
                           {
                             "kind": "State",
                             "state": "Main.originX"
+                          },
+                          {
+                            "kind": "State",
+                            "state": "Main.originY"
                           }
                         ]
                       },
                       {
-                        "kind": "DynamicProp",
-                        "name": "y",
+                        "kind": "StaticProp",
+                        "name": "slide",
                         "value": {
-                          "kind": "Binary",
-                          "operator": "+",
-                          "left": {
-                            "kind": "StateRead",
-                            "state": "Main.originY"
-                          },
-                          "right": {
-                            "kind": "NumberLiteral",
-                            "value": 90
-                          }
-                        },
-                        "dependencies": [
-                          {
-                            "kind": "State",
-                            "state": "Main.originY"
-                          }
-                        ]
+                          "kind": "NumberLiteral",
+                          "value": 0.4
+                        }
                       }
                     ],
-                    "children": [],
+                    "transform": [],
+                    "children": [
+                      {
+                        "kind": "StaticChild",
+                        "element": {
+                          "kind": "Element",
+                          "id": "Main/0/1/0",
+                          "fieldName": "player",
+                          "component": {
+                            "kind": "Imported",
+                            "name": "Player",
+                            "module": "./Player.tsx",
+                            "isDefault": false
+                          },
+                          "props": [],
+                          "transform": [],
+                          "children": [],
+                          "span": {
+                            "fileName": "packages/kite/src/Main.tsx",
+                            "start": 758,
+                            "end": 768,
+                            "line": 17,
+                            "column": 11
+                          }
+                        }
+                      }
+                    ],
                     "span": {
                       "fileName": "packages/kite/src/Main.tsx",
-                      "start": 610,
-                      "end": 670,
+                      "start": 689,
+                      "end": 786,
                       "line": 16,
                       "column": 9
                     }
@@ -306,7 +318,7 @@
               "span": {
                 "fileName": "packages/kite/src/Main.tsx",
                 "start": 517,
-                "end": 686,
+                "end": 802,
                 "line": 13,
                 "column": 7
               }
@@ -316,7 +328,7 @@
         "span": {
           "fileName": "packages/kite/src/Main.tsx",
           "start": 386,
-          "end": 698,
+          "end": 814,
           "line": 12,
           "column": 5
         }
