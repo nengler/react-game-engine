@@ -69,10 +69,10 @@ Everything is drawn through the camera, so a score or a health bar placed in the
 
 - [x] `rge.h`, `protocol.ts` and the header-parity test agree on ABI v2; `smoke.c` checks a second view
 - [x] ABI v2 also has the measuring functions, the scissor record and `RGE_OP_CANVAS`, each with the checks in UI_PLAN's U0 and C2 (done 2026-11-10; the player does not write them yet, that is step 2)
-- [ ] `<Hud>` children stay fixed while the camera moves (a recording test and a pixel test)
-- [ ] A HUD pointer receives presses through a moving, zoomed camera
+- [x] `<Hud>` children stay fixed while the camera moves (a recording test and a pixel test)
+- [x] A HUD pointer receives presses through a moving, zoomed camera
 - [x] `z` reorders records, and equal keys keep tree order
-- [ ] The demo's click counter moves into a `<Hud>`
+- [x] The demo's click counter moves into a `<Hud>`
 
 ## 4. Performance pass two
 
@@ -122,10 +122,10 @@ When a handler throws, both hosts print the stack and exit with status 1. That i
 
 ## Order of work
 
-Decided 2026-11-09. This merges the priorities above with the milestones in [UI_PLAN.md](UI_PLAN.md) (U0–U5 for layout, C1–C3 for the fixed resolution). Done so far: priority 2 (#34), C1, U1 and `z` (#36), the game state and the `<Game>` root (#37), and the native half of ABI v2 (step 1).
+Decided 2026-11-09. This merges the priorities above with the milestones in [UI_PLAN.md](UI_PLAN.md) (U0–U5 for layout, C1–C3 for the fixed resolution). Done so far: priority 2 (#34), C1, U1 and `z` (#36), the game state and the `<Game>` root (#37), ABI v2 (step 1), and `<Hud>` with `pixelPerfect` (step 2, which finishes priority 3).
 
 1. ~~**ABI v2, as one change**~~ **Done 2026-11-10** (priority 3, U0, and C2's native half): the second view record, the measuring functions, the scissor record and `RGE_OP_CANVAS`, in `rge.h`, librge, both hosts and the recording backend.
-2. **The player's side of ABI v2:** the `<Hud>` built-in (with the renames), and `pixelPerfect` (the rest of C2). The demo's click counter moves into a `<Hud>`. This finishes priority 3.
+2. ~~**The player's side of ABI v2:**~~ **Done 2026-11-10.** the `<Hud>` built-in (with the renames), and `pixelPerfect` (the rest of C2). The demo's click counter moves into a `<Hud>`. This finishes priority 3.
 3. **U2, `<Flex>`:** the sizing modes, Clay's passes, alignment, `background`.
 4. **U3:** the HUD's box, shrinking to minimum sizes, and the demo's HUD rebuilt with `<Flex>`.
 5. **U4:** whole-pixel rounding, text alignment, `<Flex onPress>`.

@@ -166,6 +166,14 @@ export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
 }
 
 /**
+ * A layer that stays on the screen while the camera moves, drawn after the world: a score, a health bar, a button.
+ * Its coordinates are screen pixels (game pixels under a `<Screen>`). `transform` moves the whole layer.
+ */
+export function Hud(_props: { children?: Child }): JSX.Element {
+  return compileTimeOnly("Hud");
+}
+
+/**
  * The game's screen, at a fixed resolution: `<Screen width={320} height={180}>` as the root of the game draws
  * everything at 320 × 180 and scales it to fit the window (`fit`), with `border` around it. Only the root's
  * `<Screen>` does this; it cannot be placed with `transform`.

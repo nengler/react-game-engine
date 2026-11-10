@@ -4,7 +4,7 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Screen, Shape, World } from "@rge/runtime";
+import { Hud, Screen, Shape, World } from "@rge/runtime";
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -101,6 +101,50 @@ describe("Screen: diagnostics", () => {
       const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Screen width={1} height={1} />; }`).map((d) => d.code);
       assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
     }
+  });
+});
+
+describe("Hud", () => {
+  const HUD_GAME = `
+interface PanelProps {
+  coins: number;
+}
+function Panel({ coins }: PanelProps) {
+  return (
+    <Hud transform={{ x: 8, y: 4 }}>
+      <Text size={8}>Coins: {coins}</Text>
+    </Hud>
+  );
+}
+function Level() {
+  return (
+    <Entity name="Level">
+      <Panel coins={3} />
+    </Entity>
+  );
+}
+`;
+
+  it("is a container that can be placed, and a component can be rooted at one", async () => {
+    const { Panel } = await load<{ Panel: new (props: { coins: number }) => Hud & { setCoins?: never } }>(compile(HUD_GAME, "HudGame.tsx"));
+    const panel = new Panel({ coins: 3 });
+    new World().mount(panel);
+    assert.ok(panel instanceof Hud);
+    assert.equal(panel.children.length, 1);
+    assert.deepEqual(panel.children[0]!.worldTransform(), { x: 8, y: 4, rotation: 0, scaleX: 1, scaleY: 1 });
+  });
+
+  it("type-checks in authored source and in the generated module", () => {
+    assert.deepEqual(typeCheck(compile(HUD_GAME, "HudGame.tsx")), []);
+    const check = getCompiler().typeCheckSources([
+      { fileName: `${process.cwd()}/.test-output/Hud${Math.random()}.tsx`, text: `import { Hud, Text } from "@rge/runtime/jsx";\nfunction C() { return <Hud transform={{ x: 1 }}><Text size={8}>x</Text></Hud>; }` },
+    ]);
+    assert.deepEqual(check, []);
+  });
+
+  it("takes the built-in's name, so a component cannot be called Hud", () => {
+    const errors = compileErrors(`function Hud() { return <Entity name="Hud" />; }`);
+    assert.ok(errors.some((d) => /conflicts with a runtime intrinsic/.test(d.message)), errors.map((d) => d.message).join("\n"));
   });
 });
 

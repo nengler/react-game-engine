@@ -1,8 +1,8 @@
-import { useSound, useState, Camera, Game, Pointer, Shape, Text } from "@rge/runtime/jsx";
+import { useSound, useState, Camera, Game, Hud, Pointer, Shape, Text } from "@rge/runtime/jsx";
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
 import { useGame } from "./GameState.ts";
-import { Hud } from "./Hud.tsx";
+import { CoinCounter } from "./CoinCounter.tsx";
 import { Ground } from "./Ground.tsx";
 import { Player } from "./Player.tsx";
 import { Spikes } from "./Spikes.tsx";
@@ -24,21 +24,23 @@ export default function Main() {
       <Beacon transform={{ x: -120, y: -60 }} />
       <Spikes transform={{ x: 84, y: 10 }} />
       <Coin transform={{ x: 60, y: 8 }} />
-      {/* The button is a Shape for the look and a Pointer for the click: both are placed the same. */}
-      <Shape kind="rect" width={96} height={32} color={clicks >= 3 ? "seagreen" : "slategray"} transform={{ x: 80, y: -40 }} />
-      <Pointer
-        width={96}
-        height={32}
-        transform={{ x: 80, y: -40 }}
-        onPress={() => {
-          playClick();
-          setClicks((clicks) => clicks + 1);
-        }}
-      />
-      <Text size={16} color="white" transform={{ x: 92, y: -32 }}>
-        Clicks: {clicks}
-      </Text>
-      <Hud transform={{ x: 92, y: -56 }} />
+      {/* The HUD stays where it is put while the camera follows the player. The button is a Shape for the look and a Pointer for the click: both are placed the same. */}
+      <Hud transform={{ x: 16, y: 16 }}>
+        <CoinCounter />
+        <Shape kind="rect" width={96} height={32} color={clicks >= 3 ? "seagreen" : "slategray"} transform={{ x: 0, y: 28 }} />
+        <Pointer
+          width={96}
+          height={32}
+          transform={{ x: 0, y: 28 }}
+          onPress={() => {
+            playClick();
+            setClicks((clicks) => clicks + 1);
+          }}
+        />
+        <Text size={16} color="white" transform={{ x: 12, y: 36 }}>
+          Clicks: {clicks}
+        </Text>
+      </Hud>
       {/* A camera follows its children, so this keeps the view on the player. */}
       <Camera>
         <Player />

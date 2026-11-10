@@ -15,9 +15,8 @@ export interface ScreenProps {
    */
   fit?: ScreenFit;
   /**
-   * Draw at the game's resolution and scale the finished frame up (chunky pixels), rather than drawing at the
-   * window's resolution through a scale. Default true. Until the native library can draw into a texture
-   * (ABI v2), both draw the second way.
+   * Draw at the game's resolution and scale the finished frame up (chunky pixels, however things turn), rather
+   * than drawing at the window's resolution through a scale. Default true.
    */
   pixelPerfect?: boolean;
   /** A CSS colour for the bars around the game when it does not fill the window. Default black. */

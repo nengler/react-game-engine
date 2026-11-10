@@ -83,12 +83,12 @@ export class PlayerInput implements InputState {
 
   /** The world-space point under a window-space point: the inverse of the view last drawn. */
   worldPoint(x: number, y: number): Point {
-    const { a, b, c, d, e, f } = this.view;
-    const det = a * d - b * c;
-    if (det === 0 || !Number.isFinite(det)) return { x, y };
-    const dx = x - e;
-    const dy = y - f;
-    return { x: (d * dx - c * dy) / det, y: (a * dy - b * dx) / det };
+    return pointThrough(this.view, x, y);
+  }
+
+  /** The point a window-space point is, in the coordinates of any layer drawn through `view` (the HUD's, say). */
+  pointThrough(view: ViewTransform, x: number, y: number): Point {
+    return pointThrough(view, x, y);
   }
 
   #flags(key: string, flag: number): boolean {
@@ -99,4 +99,14 @@ export class PlayerInput implements InputState {
     }
     return ((this.keys[index] as number) & flag) !== 0;
   }
+}
+
+/** The point whose image under `view` is (x, y): the inverse map. A view that cannot be inverted leaves the point as it is. */
+function pointThrough(view: ViewTransform, x: number, y: number): Point {
+  const { a, b, c, d, e, f } = view;
+  const det = a * d - b * c;
+  if (det === 0 || !Number.isFinite(det)) return { x, y };
+  const dx = x - e;
+  const dy = y - f;
+  return { x: (d * dx - c * dy) / det, y: (a * dy - b * dx) / det };
 }

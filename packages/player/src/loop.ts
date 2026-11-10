@@ -1,4 +1,4 @@
-import { Game, World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pointer, type SoundSink } from "@rge/runtime";
+import { Game, World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pointer, type SoundSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -104,6 +104,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const world = new World();
   const collisions = new CollisionTracker();
   let pointers: readonly Pointer[] = [];
+  let hudPointersFrom = 0;
+  let hudView: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
   let screen: ScreenPlacement | null = null;
   let closed = false;
 
@@ -127,8 +129,12 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     if (((input.keys[LEFT_BUTTON] as number) & RGE_KEY_PRESSED) === 0) return;
     if (screen !== null && !onScreen(screen, input.screenX, input.screenY)) return;
     const at = input.worldPoint(input.screenX, input.screenY);
-    // The last pointer drawn is on top, so it gets the press; one press, one pointer.
-    for (let i = pointers.length - 1; i >= 0; i--) if (world.reportPress(pointers[i] as Pointer, at.x, at.y)) return;
+    const hudAt = input.pointThrough(hudView, input.screenX, input.screenY);
+    // The last pointer drawn is on top, so it gets the press; one press, one pointer. A HUD is drawn after the world, so its pointers come last.
+    for (let i = pointers.length - 1; i >= 0; i--) {
+      const point = i >= hudPointersFrom ? hudAt : at;
+      if (world.reportPress(pointers[i] as Pointer, point.x, point.y)) return;
+    }
   };
 
   return {
@@ -140,6 +146,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
       const built = builder.build(world.root, input.width, input.height);
       pointers = built.pointers;
+      hudPointersFrom = built.hudPointersFrom;
+      hudView = built.hudView;
       screen = built.screen;
       input.view = built.view;
       collisions.update(world, built.colliders);

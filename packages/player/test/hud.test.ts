@@ -1,0 +1,203 @@
+import { afterEach, describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { Camera, Collider, Entity, GameObject, Hud, Pointer, Screen, Shape, Text, getSoundSink } from "@rge/runtime";
+import { FrameBuilder } from "../src/draw.ts";
+import { createPlayer } from "../src/loop.ts";
+import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
+
+function draw(root: GameObject, width = 640, height = 360): { records: DecodedRecord[]; warnings: string[]; built: ReturnType<FrameBuilder["build"]> } {
+  const backend = new RecordingBackend();
+  const warnings: string[] = [];
+  const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), warn: (m) => warnings.push(m) });
+  const built = builder.build(root, width, height);
+  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  return { records: [...backend.lastFrame.records], warnings, built };
+}
+
+const box = (x: number, width = 10): Shape => {
+  const shape = new Shape({ kind: "rect", width, height: 10 });
+  shape.transform.x = x;
+  return shape;
+};
+
+const ops = (records: readonly DecodedRecord[]): string[] => records.map((r) => (r.op === "rect" ? `rect@${r.x}` : r.op));
+
+function hud(...children: GameObject[]): Hud {
+  const layer = new Hud();
+  for (const child of children) layer.addChild(child);
+  return layer;
+}
+
+describe("<Hud>: what is drawn", () => {
+  it("draws after the world, through a second view that ignores the camera", () => {
+    const root = new Entity();
+    const camera = new Camera({ zoom: 2 });
+    camera.transform.x = 50;
+    camera.addChild(box(1));
+    root.addChild(hud(box(100)));
+    root.addChild(camera); // later in the tree than the HUD, and still drawn before it
+    root.addChild(box(2));
+    const { records } = draw(root);
+    assert.deepEqual(ops(records), ["view", "rect@1", "rect@2", "view", "rect@100"]);
+    const world = records[0];
+    const layer = records[3];
+    assert.ok(world?.op === "view" && layer?.op === "view");
+    assert.equal(world.a, 2, "the world is zoomed");
+    assert.deepEqual(layer, { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, "the HUD is not");
+  });
+
+  it("is placed by its own transform, and its children by theirs", () => {
+    const layer = hud(box(5));
+    layer.transform.x = 20;
+    layer.transform.y = 7;
+    const { records } = draw(layer);
+    assert.ok(records[2]?.op === "rect");
+    assert.deepEqual([records[2].x, records[2].y], [25, 7]);
+  });
+
+  it("orders what is inside by z, and the layers in tree order", () => {
+    const high = box(1);
+    high.transform.z = 5;
+    const root = new Entity();
+    root.addChild(hud(high, box(2)));
+    root.addChild(hud(box(3)));
+    const { records } = draw(root);
+    assert.deepEqual(ops(records), ["view", "view", "rect@2", "rect@1", "rect@3"], "a high z inside the first layer does not lift it over the second");
+  });
+
+  it("does not let the HUD's z reach into the world's order, or the world's into the HUD's", () => {
+    const root = new Entity();
+    const worldHigh = box(1);
+    worldHigh.transform.z = 100;
+    root.addChild(worldHigh);
+    root.addChild(box(2));
+    const low = box(3);
+    low.transform.z = -100;
+    root.addChild(hud(box(4), low));
+    assert.deepEqual(ops(draw(root).records), ["view", "rect@2", "rect@1", "view", "rect@3", "rect@4"]);
+  });
+
+  it("treats a HUD inside a HUD as a plain container", () => {
+    const { records } = draw(hud(box(1), hud(box(2))));
+    assert.deepEqual(ops(records), ["view", "view", "rect@1", "rect@2"]);
+  });
+
+  it("ignores a camera and a collider inside it, warning once about the camera", () => {
+    const touched: string[] = [];
+    const root = new Entity();
+    root.addChild(new Collider({ width: 10, height: 10, onCollisionEnter: () => touched.push("world") }));
+    root.addChild(hud(new Camera(), new Camera(), new Collider({ width: 10, height: 10, onCollisionEnter: () => touched.push("hud") })));
+    const { built, warnings } = draw(root);
+    assert.equal(built.colliders.length, 1, "only the world's collider takes part in collisions");
+    assert.deepEqual(touched, []);
+    assert.equal(built.camera, null);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /<Camera> inside a <Hud>/);
+  });
+
+  it("is the same frame as without one when it holds nothing and no HUD exists", () => {
+    const root = new Entity();
+    root.addChild(box(1));
+    assert.deepEqual(ops(draw(root).records), ["view", "rect@1"]);
+  });
+
+  it("draws text in the HUD, in game pixels under a <Screen>", () => {
+    const screen = new Screen({ width: 320, height: 180, pixelPerfect: false });
+    const camera = new Camera();
+    camera.transform.x = 500;
+    screen.addChild(camera);
+    screen.addChild(hud(new Text({ text: "Score" })));
+    const { records, built } = draw(screen, 1280, 720);
+    const layer = records.find((r, i) => r.op === "view" && i > 0);
+    assert.deepEqual(layer, { op: "view", a: 4, b: 0, c: 0, d: 4, e: 0, f: 0 }, "a HUD pixel is 4 window pixels, whatever the camera does");
+    assert.deepEqual(built.hudView, { a: 4, b: 0, c: 0, d: 4, e: 0, f: 0 });
+  });
+
+  it("is drawn in game pixels inside a pixel-perfect canvas, where the canvas record does the scaling", () => {
+    const screen = new Screen({ width: 320, height: 180 });
+    screen.addChild(hud(box(8)));
+    const { records, built } = draw(screen, 1280, 720);
+    assert.deepEqual(ops(records), ["canvas", "view", "view", "rect@8"]);
+    assert.deepEqual(records[2], { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+    assert.equal(built.hudView.a, 4, "the mouse still comes from the window");
+  });
+
+  it("is drawn before the border bars, which stay last", () => {
+    const screen = new Screen({ width: 100, height: 50, pixelPerfect: false });
+    screen.addChild(hud(box(1)));
+    const { records } = draw(screen, 320, 200);
+    // The world's view (nothing in it), the HUD's view and its box, then a view of window pixels and four bars.
+    // The world's view (nothing in it), the HUD's view and its box, then a view of window pixels and four bars: left, right, top, bottom.
+    assert.deepEqual(ops(records), ["view", "view", "rect@1", "view", "rect@0", "rect@310", "rect@10", "rect@10"]);
+  });
+});
+
+describe("<Hud>: pointers", () => {
+  afterEach(() => {
+    assert.equal(getSoundSink(), null, "every test closes its player");
+  });
+
+  const WINDOW = { width: 640, height: 360, title: "test" };
+
+  it("presses a HUD pointer where it is drawn, however the camera moves and zooms", () => {
+    const presses: string[] = [];
+    const button = new Pointer({ width: 40, height: 20, onPress: () => presses.push("hud") });
+    button.transform.x = 100;
+    button.transform.y = 50;
+    const camera = new Camera({ zoom: 3 });
+    camera.transform.x = 900;
+    camera.transform.y = -400;
+    const root = new Entity();
+    root.addChild(camera);
+    root.addChild(hud(button));
+    const backend = new RecordingBackend();
+    const p = createPlayer(backend, { ...WINDOW, root: () => root });
+    backend.queueInput({ mouse: { x: 120, y: 60 }, pressed: ["MouseLeft"] });
+    p.step();
+    p.step();
+    assert.deepEqual(presses, ["hud"]);
+    backend.queueInput({ mouse: { x: 99, y: 60 }, pressed: ["MouseLeft"] });
+    p.step();
+    p.step();
+    p.close();
+    assert.deepEqual(presses, ["hud"], "a press beside it hits nothing");
+  });
+
+  it("gives the press to a HUD pointer before a world pointer under it", () => {
+    const presses: string[] = [];
+    const world = new Pointer({ width: 100, height: 100, onPress: () => presses.push("world") });
+    const button = new Pointer({ width: 50, height: 50, onPress: () => presses.push("hud") });
+    const root = new Entity();
+    root.addChild(world);
+    root.addChild(hud(button));
+    const backend = new RecordingBackend();
+    const p = createPlayer(backend, { ...WINDOW, root: () => root });
+    backend.queueInput({ mouse: { x: 10, y: 10 }, pressed: ["MouseLeft"] });
+    p.step();
+    p.step();
+    backend.queueInput({ mouse: { x: 80, y: 80 }, pressed: ["MouseLeft"] });
+    p.step();
+    p.step();
+    p.close();
+    assert.deepEqual(presses, ["hud", "world"]);
+  });
+
+  it("takes a press through a <Screen> in the HUD's game pixels, and none from the bars", () => {
+    const presses: string[] = [];
+    const button = new Pointer({ width: 10, height: 10, onPress: () => presses.push("hud") });
+    const screen = new Screen({ width: 100, height: 50 });
+    screen.addChild(hud(button));
+    const backend = new RecordingBackend();
+    // A 640 × 360 window shows 100 × 50 at ×6, at (20, 30).
+    const p = createPlayer(backend, { ...WINDOW, root: () => screen });
+    backend.queueInput({ mouse: { x: 20 + 6 * 5, y: 30 + 6 * 5 }, pressed: ["MouseLeft"] });
+    p.step();
+    p.step();
+    backend.queueInput({ mouse: { x: 10, y: 45 }, pressed: ["MouseLeft"] });
+    p.step();
+    p.step();
+    p.close();
+    assert.deepEqual(presses, ["hud"]);
+  });
+});
