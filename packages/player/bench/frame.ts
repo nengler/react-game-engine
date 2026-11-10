@@ -78,9 +78,22 @@ class StateMover extends Entity {
       if (this.#yNext !== y) this.markDirty();
     }
   }
+  /** As generated: `render()` says what it changed, here only where the component is. */
+  protected override readonly reportsChanges = true;
   override render(): void {
-    this.transform.x = this.x;
-    this.transform.y = this.y;
+    const $t = this.transform;
+    let $moved = false;
+    const $x = this.x;
+    if ($t.x !== $x) {
+      $t.x = $x;
+      $moved = true;
+    }
+    const $y = this.y;
+    if ($t.y !== $y) {
+      $t.y = $y;
+      $moved = true;
+    }
+    if ($moved) this.markMoved();
   }
 }
 

@@ -101,8 +101,8 @@ describe("M13: IR and generated code", () => {
   it("builds the sprite with its frames, and re-assigns only what varies", () => {
     assert.match(compiled.code, /readonly animatedSprite: AnimatedSprite = new AnimatedSprite\(\{ frames: this\.running \? \["run1\.png", "run2\.png", "run3\.png"\] : \["idle1\.png", "idle2\.png"\], fps: 8, playing: this\.running \}\);/);
     assert.match(compiled.code, /readonly animatedSprite2: AnimatedSprite = new AnimatedSprite\(\{ frames: \["blink1\.png", "blink2\.png"\] \}\);/);
-    assert.match(compiled.code, /this\.animatedSprite\.frames = this\.running \? \[/);
-    assert.match(compiled.code, /this\.animatedSprite\.playing = this\.running;/);
+    assert.match(compiled.code, /const (\$\d+) = this\.running \? \[[^]*?this\.animatedSprite\.frames = \1;/);
+    assert.match(compiled.code, /const (\$\d+) = this\.running;[^]*?this\.animatedSprite\.playing = \1;/);
     assert.doesNotMatch(compiled.code, /this\.animatedSprite2\./, "a fixed sprite is never touched by render");
   });
 

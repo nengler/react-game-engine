@@ -61,7 +61,7 @@ describe("z in transform", () => {
     assert.deepEqual(fixed!.transform.map((p) => [p.name, p.kind]), [["z", "StaticProp"]]);
     assert.deepEqual(moving!.transform.map((p) => [p.name, p.kind]), [["z", "DynamicProp"]]);
     assert.match(compiled.code, /this\.shape\.transform\.z = 2;/);
-    assert.match(compiled.code, /this\.shape2\.transform\.z = this\.front \? 5 : \(-5\);/);
+    assert.match(compiled.code, /const (\$\d+) = this\.front \? 5 : \(-5\);[^]*?this\.shape2\.transform\.z = \1;/);
   });
 
   it("places a component with `transform={{ z }}` in its placement, under the component's own", () => {

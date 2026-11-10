@@ -279,6 +279,112 @@ function Idle() {
   });
 });
 
+describe("what a render reports", () => {
+  // A generated `render()` writes only what differs and tells the object it wrote to: `markMoved` for a transform,
+  // `markChanged` for anything else. The stamps are `[self, subtree, content]` (see GameObject.markMoved).
+  const DRIFTER = `
+interface DrifterProps { tint: string }
+function Drifter({ tint }: DrifterProps) {
+  const [x, setX] = useState(0);
+  const [ticks, setTicks] = useState(0);
+  useUpdate(() => {
+    setTicks((t) => t + 1);
+    if (ticks < 3) setX((x) => x + 10);
+  });
+  return (
+    <Entity transform={{ x }}>
+      <Shape kind="rect" width={4} height={4} color={tint} />
+      <Shape kind="rect" width={2} height={2} transform={{ y: ticks > 5 ? 1 : 0 }} />
+    </Entity>
+  );
+}
+`;
+  interface DrifterInstance extends Entity {
+    x: number;
+    ticks: number;
+    readonly shape: GameObject & { color: string };
+    readonly shape2: GameObject;
+    updateProps(next: { tint?: string }): void;
+  }
+  let Drifter: new (props: { tint: string }) => DrifterInstance;
+  const stamps = (object: GameObject): number[] => [object.selfChangedAt, object.subtreeChangedAt, object.contentChangedAt];
+
+  before(async () => {
+    const compiled = compile(DRIFTER);
+    assert.deepEqual(typeCheck(compiled).map((d) => d.message), []);
+    ({ Drifter } = await load<{ Drifter: typeof Drifter }>(compiled));
+  });
+
+  it("a move of the component only, nothing for a render that draws the same, and each element it really changed", () => {
+    const world = new World();
+    const drifter = new Drifter({ tint: "red" });
+    world.mount(drifter);
+    const frame = (serial: number): void => {
+      world.serial = serial;
+      world.tick(0.1);
+    };
+    frame(1);
+    frame(2);
+    assert.equal(drifter.transform.x, 20);
+    assert.deepEqual(stamps(drifter), [2, 2, 0], "it moved; what it draws did not change");
+    assert.deepEqual(stamps(drifter.shape), [0, 0, 0]);
+    frame(3);
+    frame(4);
+    frame(5);
+    assert.equal(drifter.ticks, 5, "it still renders every frame");
+    assert.equal(drifter.transform.x, 30);
+    assert.deepEqual(stamps(drifter), [3, 3, 0], "but the renders after the third changed nothing that is drawn");
+
+    world.serial = 6;
+    drifter.updateProps({ tint: "blue" });
+    world.tick(0.1);
+    assert.equal(drifter.shape.color, "blue");
+    assert.deepEqual(stamps(drifter.shape), [6, 6, 6], "the shape was told");
+    assert.deepEqual(stamps(drifter), [3, 6, 6], "so the component's content changed, though it did not move");
+    // The same render took ticks past 5, which moves the second shape inside the component: a move of that shape.
+    assert.equal(drifter.shape2.transform.y, 1);
+    assert.deepEqual(stamps(drifter.shape2), [6, 6, 0]);
+
+    frame(7);
+    frame(8);
+    assert.deepEqual(stamps(drifter), [3, 6, 6], "and nothing since");
+    assert.deepEqual(stamps(drifter.shape2), [6, 6, 0]);
+  });
+
+  it("writes every value of a group when any one differs, and reports a change of the root's own props", async () => {
+    const compiled = compile(`
+function Tag() {
+  const [x, setX] = useState(0);
+  const [y, setY] = useState(0);
+  const [n, setN] = useState(0);
+  useInput((input) => {
+    if (input.pressed("Y")) setY((y) => y + 5);
+    if (input.pressed("X")) setX((x) => x + 5);
+    if (input.pressed("N")) setN((n) => n + 1);
+  });
+  return <Text transform={{ x, y }}>{\`n\${n}\`}</Text>;
+}
+`);
+    assert.deepEqual(typeCheck(compiled).map((d) => d.message), []);
+    const { Tag } = await load<{ Tag: new () => GameObject & { text: string } }>(compiled);
+    const world = new World();
+    const tag = new Tag();
+    world.mount(tag);
+    const press = (key: string, serial: number): void => {
+      world.serial = serial;
+      world.tick(0.1, { pressed: (k: string) => k === key, down: () => false, released: () => false, pointerX: 0, pointerY: 0 });
+    };
+    press("Y", 1); // only the second of the two transform values changes
+    assert.deepEqual([tag.transform.x, tag.transform.y], [0, 5]);
+    assert.deepEqual(stamps(tag), [1, 1, 0], "a move");
+    press("X", 2);
+    assert.deepEqual([tag.transform.x, tag.transform.y], [5, 5]);
+    press("N", 3); // the text is a prop of the root itself
+    assert.equal(tag.text, "n1");
+    assert.deepEqual(stamps(tag), [3, 3, 3], "a change of what it draws");
+  });
+});
+
 describe("dynamic props", () => {
   it("update the existing child instance; the Sprite keeps its identity", () => {
     const { world, player } = mountPlayer();

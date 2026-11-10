@@ -23,6 +23,7 @@ export interface Spawn {
 
 export class Enemy extends Entity<EnemyProps> {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   hp: number = 3;
   #hpNext: number = this.hp;
   reported: boolean = false;
@@ -67,13 +68,22 @@ export class Enemy extends Entity<EnemyProps> {
   }
 
   override render(): void {
-    this.sprite.image = (this.props.tint! === "red") ? "enemy-red.png" : "enemy-blue.png";
-    this.shape.color = (this.hp <= 0) ? "gray" : "rgba(255, 0, 0, 0.3)";
+    const $1 = (this.props.tint! === "red") ? "enemy-red.png" : "enemy-blue.png";
+    if (this.sprite.image !== $1) {
+      this.sprite.image = $1;
+      this.sprite.markChanged();
+    }
+    const $2 = (this.hp <= 0) ? "gray" : "rgba(255, 0, 0, 0.3)";
+    if (this.shape.color !== $2) {
+      this.shape.color = $2;
+      this.shape.markChanged();
+    }
   }
 }
 
 export class Level extends Entity {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   wave: number = 1;
   #waveNext: number = this.wave;
   score: number = 0;
@@ -182,7 +192,11 @@ export class Level extends Entity {
           this.#enemyRecords.get($key)!.current = s;
           $item.updateProps({ speed: (s.tint === "blue") ? (this.wave * 2) : this.wave, tint: s.tint });
         }
-        $item.placement.x = s.x;
+        const $1 = s.x;
+        if ($item.placement.x !== $1) {
+          $item.placement.x = $1;
+          $item.markMoved();
+        }
       }
       for (const [$key, $item] of this.enemyItems) {
         if (!$seen.has($key)) {
@@ -196,7 +210,11 @@ export class Level extends Entity {
         this.#enemyOrder = $keys;
       }
     }
-    this.camera.zoom = (this.wave > 5) ? 2 : 1;
+    const $2 = (this.wave > 5) ? 2 : 1;
+    if (this.camera.zoom !== $2) {
+      this.camera.zoom = $2;
+      this.camera.markChanged();
+    }
     if (this.wave >= 3) {
       if (this.enemy2 === null) {
         this.enemy2 = new Enemy({ speed: this.wave });
@@ -210,8 +228,13 @@ export class Level extends Entity {
     }
     this.coin.updateProps({ value: this.score });
     this.trail.updateProps({ value: this.wave });
-    this.text.color = (this.score >= 5) ? "gold" : "white";
-    this.text.text = `Score: ${this.score} (wave ${this.wave})`;
+    const $3 = (this.score >= 5) ? "gold" : "white";
+    const $4 = `Score: ${this.score} (wave ${this.wave})`;
+    if (this.text.color !== $3 || this.text.text !== $4) {
+      this.text.color = $3;
+      this.text.text = $4;
+      this.text.markChanged();
+    }
     if (this.defeats.some((d) => d.tint === "blue") && (this.defeats.length >= 2)) {
       if (this.entity === null) {
         this.entity = new Entity({ name: "Boss" });
@@ -226,10 +249,18 @@ export class Level extends Entity {
         this.queueAddChild(this.entity, 5);
       }
       if (this.sprite !== null) {
-        this.sprite.image = (this.wave > 5) ? "boss-enraged.png" : "boss.png";
+        const $5 = (this.wave > 5) ? "boss-enraged.png" : "boss.png";
+        if (this.sprite.image !== $5) {
+          this.sprite.image = $5;
+          this.sprite.markChanged();
+        }
       }
       if (this.animatedSprite !== null) {
-        this.animatedSprite.frames = (this.wave > 8) ? ["boss-rage-1.png", "boss-rage-2.png"] : ["boss-1.png", "boss-2.png", "boss-3.png"];
+        const $6 = (this.wave > 8) ? ["boss-rage-1.png", "boss-rage-2.png"] : ["boss-1.png", "boss-2.png", "boss-3.png"];
+        if (this.animatedSprite.frames !== $6) {
+          this.animatedSprite.frames = $6;
+          this.animatedSprite.markChanged();
+        }
       }
     } else if (this.entity !== null) {
       this.queueRemoveChild(this.entity);

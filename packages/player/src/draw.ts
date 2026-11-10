@@ -422,6 +422,18 @@ function classCode(object: GameObject): number {
 
 const GameObjectPrototype = GameObject.prototype;
 
+/** `object.worldTransform()` for an object whose parent's child space is `parentSpace`: what the walk works out on its way down. */
+function worldIn(parentSpace: WorldTransform, object: GameObject): WorldTransform {
+  const placement = object.placement;
+  const laidOut = object.layoutX === 0 && object.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, object.layoutX, object.layoutY);
+  return composeTransforms(
+    placement.x === 0 && placement.y === 0 && placement.rotation === 0 && placement.scaleX === 1 && placement.scaleY === 1 && !placement.global
+      ? laidOut
+      : composeTransforms(laidOut, placement),
+    object.transform,
+  );
+}
+
 /** A rect and an ellipse are records of one length, which the walk relies on when it writes a shape in place: this line stops compiling if they ever differ. */
 const SHAPE_LEN: typeof RGE_OP_RECT_LEN & typeof RGE_OP_ELLIPSE_LEN = RGE_OP_RECT_LEN;
 
@@ -486,6 +498,11 @@ class DrawInfo {
   len = 0;
   colLen = 0;
   textLen = 0;
+  /**
+   * Every record and collider this object and everything under it wrote is at this object's own world transform (a component
+   * and its plain shapes, sprites and colliders), so when only that transform changes they are last frame's with the new one in each.
+   */
+  flat = false;
 
   constructor(owner: object) {
     this.owner = owner;
@@ -532,10 +549,16 @@ export class FrameBuilder {
   #prevTexts: string[] = [];
   #prevColliders: ColliderEntry[] = [];
   #reused = 0;
+  #moved = 0;
 
   /** How many doubles of the last frame's world records were copied from the frame before instead of made again (for tests and benchmarks). */
   get reusedRecords(): number {
     return this.#reused;
+  }
+
+  /** How many doubles of the last frame's world records were the frame before's with a new transform written in: what an object that only moved had drawn (for tests and benchmarks). */
+  get movedRecords(): number {
+    return this.#moved;
   }
 
   constructor(options: FrameBuilderOptions) {
@@ -602,6 +625,9 @@ export class FrameBuilder {
     let listZ = 0;
     const colors = this.#colors;
     const textures = this.#textures;
+    // What the `walk` that just returned says about `DrawInfo.flat` for the object it was given.
+    let flatWalk = false;
+    let moved = 0;
 
     /**
      * Copy last frame's records for `children[first]` and the siblings after it that can be copied in the same run (they were
@@ -736,10 +762,19 @@ export class FrameBuilder {
         }
       }
 
-      if (count === 0) return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : z !== 0 || code >= FLAG_VOLATILE ? WALK_VOLATILE : WALK_CLEAN;
+      // An entity, sprite, shape or collider writes what it writes at `at`; a text may shift it, and the rest are not plain drawing.
+      const plainKind = kind < KIND_TEXT || kind === KIND_COLLIDER;
+      if (count === 0) {
+        flatWalk = plainKind;
+        return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : z !== 0 || code >= FLAG_VOLATILE ? WALK_VOLATILE : WALK_CLEAN;
+      }
       const childAnc = (code & FLAG_OPAQUE) !== 0 ? Infinity : node.selfChangedAt > anc ? node.selfChangedAt : anc;
       // Nothing above changed this frame: what is under is worth copying from last frame, and worth writing down for the next.
-      if (reuse && childAnc < lastSerial) return walkChildren(children, count, kind, code, at, z, parentSpace, parentZ, childAnc, oldStart, oldCol, oldText, startRel, colStart, textStart);
+      if (reuse && childAnc < lastSerial) {
+        const result = walkChildren(children, count, kind, code, at, z, parentSpace, parentZ, childAnc, oldStart, oldCol, oldText, startRel, colStart, textStart);
+        flatWalk = false; // not looked into: its children may have been copied
+        return result;
+      }
 
       // This object changed this frame, or something above it did (or nothing is reused at all): everything under it is made
       // again, and nothing is written down; a child that was is told its place is no longer known.
@@ -747,6 +782,7 @@ export class FrameBuilder {
       const isCamera = kind === KIND_CAMERA;
       const childSpace = isCamera ? parentSpace : at;
       const childZ = isCamera ? parentZ : z;
+      let flat = plainKind; // so far, everything written under this object is at `at`
       for (let i = 0; i < count; i++) {
         const child = children[i] as GameObject;
         let result = -1;
@@ -759,6 +795,7 @@ export class FrameBuilder {
             const placed = child.placement;
             if (own.z === 0 && placed.z === 0 && placed.x === 0 && placed.y === 0 && placed.rotation === 0 && placed.scaleX === 1 && placed.scaleY === 1 && !placed.global) {
               const world = own.x === 0 && own.y === 0 && own.rotation === 0 && own.scaleX === 1 && own.scaleY === 1 && !own.global ? childSpace : composeTransforms(childSpace, own);
+              if (world !== childSpace) flat = false;
               if (leaf === KIND_COLLIDER) colliders.push({ collider: child as Collider, world });
               else {
                 if (listZ !== 0) list.setZ((listZ = 0));
@@ -803,13 +840,17 @@ export class FrameBuilder {
             }
           }
         }
-        if (result < 0) result = walk(child, childSpace, childZ, childAnc, -1, -1, -1);
+        if (result < 0) {
+          result = walk(child, childSpace, childZ, childAnc, -1, -1, -1);
+          flat = false;
+        }
         if (result !== WALK_CLEAN) volatile = true;
         if (reuse) {
           const info = child.drawCache as DrawInfo | null;
           if (info !== null) info.ok = false;
         }
       }
+      flatWalk = flat;
       return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
     };
 
@@ -834,9 +875,53 @@ export class FrameBuilder {
         let childOldCol = -1;
         let childOldText = -1;
         if (canCopy && known && info.ok) {
-          if (info.built > childAnc && child.subtreeChangedAt < info.built) {
-            i = copyRun(children, i, info, childAnc, oldStart, oldCol, oldText, startRel, colStart, textStart);
-            continue;
+          if (info.built > childAnc) {
+            if (child.subtreeChangedAt < info.built) {
+              i = copyRun(children, i, info, childAnc, oldStart, oldCol, oldText, startRel, colStart, textStart);
+              continue;
+            }
+            // It only moved since (nothing else of it, and nothing under it, changed), and everything it wrote is at its own
+            // world transform: last frame's records with the new transform in each, and its colliders at the new transform.
+            if (info.flat && child.contentChangedAt < info.built && childZ === 0 && child.transform.z === 0 && child.placement.z === 0) {
+              const world = worldIn(childSpace, child);
+              const destRel = list.length - region - startRel;
+              const destColRel = colliders.length - colStart;
+              const size = info.len;
+              if (size > 0) {
+                if (listZ !== 0) list.setZ((listZ = 0));
+                list.grow(size);
+                const r = list.records;
+                let to = list.length;
+                for (let from = oldStart + info.rel, end = from + size; from < end; ) {
+                  // Only sprites and shapes are in such a run: a header, then a texture, or a width, a height and a colour.
+                  const op = prevTree[from] as number;
+                  r[to] = op;
+                  r[to + 1] = world.x;
+                  r[to + 2] = world.y;
+                  r[to + 3] = world.rotation;
+                  r[to + 4] = world.scaleX;
+                  r[to + 5] = world.scaleY;
+                  r[to + 6] = prevTree[from + 6] as number;
+                  if (op === RGE_OP_SPRITE) {
+                    to += RGE_OP_SPRITE_LEN;
+                    from += RGE_OP_SPRITE_LEN;
+                  } else {
+                    r[to + 7] = prevTree[from + 7] as number;
+                    r[to + 8] = prevTree[from + 8] as number;
+                    to += SHAPE_LEN;
+                    from += SHAPE_LEN;
+                  }
+                }
+                list.length = to;
+                moved += size;
+              }
+              for (let k = oldCol + info.colRel, stop = k + info.colLen; k < stop; k++) colliders.push({ collider: (prevColliders[k] as ColliderEntry).collider, world });
+              info.rel = destRel;
+              info.colRel = destColRel;
+              info.textRel = list.texts.length - textStart;
+              info.built = serial;
+              continue;
+            }
           }
           childOld = oldStart + info.rel;
           childOldCol = oldCol + info.colRel;
@@ -847,8 +932,10 @@ export class FrameBuilder {
         const textBefore = list.texts.length;
         const result = walk(child, childSpace, childZ, childAnc, childOld, childOldCol, childOldText);
         if (result !== WALK_CLEAN) volatile = true;
-        if (result === WALK_OPAQUE || child.selfChangedAt >= lastSerial) {
-          // This object moves (or something above it does): it, and what is under it, is rebuilt now and likely next frame, so it is not written down.
+        // What a later frame can use of this: all of it if it stands still, and, when it is flat, all of it with a new transform if it only moves.
+        const flat = flatWalk && result === WALK_CLEAN;
+        if (result === WALK_OPAQUE || (child.selfChangedAt >= lastSerial && !flat)) {
+          // This object changes (or something above it does): it, and what is under it, is rebuilt now and likely next frame, so it is not written down.
           if (known) info.ok = false;
           continue;
         }
@@ -857,8 +944,9 @@ export class FrameBuilder {
         record.rel = before - startRel;
         record.colRel = colBefore - colStart;
         record.textRel = textBefore - textStart;
-        // Only what stood still this frame can be copied next frame, so only that is written down.
-        if (result === WALK_CLEAN && child.subtreeChangedAt < lastSerial) {
+        record.flat = flat;
+        // Only what stood still this frame, or only moved, can be copied next frame, so only that is written down.
+        if (result === WALK_CLEAN && (flat || child.subtreeChangedAt < lastSerial)) {
           record.len = list.length - region - before;
           record.colLen = colliders.length - colBefore;
           record.textLen = list.texts.length - textBefore;
@@ -870,6 +958,7 @@ export class FrameBuilder {
 
     walk(root, IDENTITY_TRANSFORM, 0, 0, continued ? 0 : -1, 0, 0);
     this.#reused = reused;
+    this.#moved = moved;
 
     if (reuse) {
       // Next frame copies from this one's records in tree order, so take them before the z sort moves them.

@@ -4,6 +4,7 @@ import { useGame } from "../src/GameState.ts";
 
 export class Player extends Entity {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   x: number = 0;
   #xNext: number = this.x;
   y: number = 0;
@@ -82,9 +83,18 @@ export class Player extends Entity {
   }
 
   override render(): void {
-    this.transform.x = this.x;
-    this.transform.y = this.y;
-    this.shape.color = this.hurt ? "tomato" : "gold";
+    const $1 = this.x;
+    const $2 = this.y;
+    if (this.transform.x !== $1 || this.transform.y !== $2) {
+      this.transform.x = $1;
+      this.transform.y = $2;
+      this.markMoved();
+    }
+    const $3 = this.hurt ? "tomato" : "gold";
+    if (this.shape.color !== $3) {
+      this.shape.color = $3;
+      this.shape.markChanged();
+    }
   }
 }
 

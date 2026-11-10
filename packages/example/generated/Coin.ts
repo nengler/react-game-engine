@@ -12,6 +12,7 @@ export interface TrailProps {
 
 export class Coin extends Sprite<CoinProps> {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   angle: number = 0;
   #angleNext: number = this.angle;
 
@@ -45,8 +46,16 @@ export class Coin extends Sprite<CoinProps> {
   }
 
   override render(): void {
-    this.image = (this.props.value >= 5) ? "gold-coin.png" : "coin.png";
-    this.transform.rotation = this.angle;
+    const $1 = (this.props.value >= 5) ? "gold-coin.png" : "coin.png";
+    if (this.image !== $1) {
+      this.image = $1;
+      this.markChanged();
+    }
+    const $2 = this.angle;
+    if (this.transform.rotation !== $2) {
+      this.transform.rotation = $2;
+      this.markMoved();
+    }
   }
 }
 
@@ -54,6 +63,7 @@ export default Coin;
 
 export class Trail extends Entity<TrailProps> {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   readonly coin: Coin = new Coin({ value: this.props.value });
   readonly coin2: Coin = new Coin({ value: this.props.value });
   readonly coin3: Coin = new Coin({ value: this.props.value, spin: 4 });

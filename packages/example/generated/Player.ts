@@ -4,6 +4,7 @@ import { WarningIcon } from "./WarningIcon.ts";
 
 export class Player extends Entity {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   health: number = 100;
   #healthNext: number = this.health;
   readonly sprite: Sprite = new Sprite({ image: (this.health > 50) ? "normal.png" : "hurt.png" });
@@ -30,7 +31,11 @@ export class Player extends Entity {
   }
 
   override render(): void {
-    this.sprite.image = (this.health > 50) ? "normal.png" : "hurt.png";
+    const $1 = (this.health > 50) ? "normal.png" : "hurt.png";
+    if (this.sprite.image !== $1) {
+      this.sprite.image = $1;
+      this.sprite.markChanged();
+    }
     if (this.health < 25) {
       if (this.warningIcon === null) {
         this.warningIcon = new WarningIcon();

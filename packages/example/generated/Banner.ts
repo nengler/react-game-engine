@@ -8,6 +8,7 @@ export interface BannerProps {
 
 export class Banner extends Sprite<BannerProps> {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   shown: boolean = false;
   #shownNext: boolean = this.shown;
 
@@ -41,7 +42,11 @@ export class Banner extends Sprite<BannerProps> {
   }
 
   override render(): void {
-    this.image = this.shown ? `banner-${this.props.text}.png` : "banner-hidden.png";
+    const $1 = this.shown ? `banner-${this.props.text}.png` : "banner-hidden.png";
+    if (this.image !== $1) {
+      this.image = $1;
+      this.markChanged();
+    }
   }
 }
 

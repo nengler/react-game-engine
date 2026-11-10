@@ -3,6 +3,7 @@ import { AnimatedSprite, type PrefabDefinition } from "@rge/runtime";
 
 export class Beacon extends AnimatedSprite {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
 
   constructor() {
     super({ frames: ["beacon-1.png", "beacon-2.png", "beacon-gone.png"], fps: 4 });

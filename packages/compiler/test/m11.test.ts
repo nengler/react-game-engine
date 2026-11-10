@@ -74,8 +74,8 @@ describe("M11: IR and generated code", () => {
 
   it("builds the shapes and updates the varying fields in place", () => {
     assert.match(compiled.code, /readonly shape: Shape = new Shape\(\{ kind: "rect", width: this\.props\.max, height: 4, color: "gray" \}\);/);
-    assert.match(compiled.code, /this\.shape2\.kind = this\.round \? "circle" : "rect";/);
-    assert.match(compiled.code, /this\.shape2\.color = \(this\.value > 5\) \? "red" : "green";/);
+    assert.match(compiled.code, /const (\$\d+) = this\.round \? "circle" : "rect";[^]*?this\.shape2\.kind = \1;/);
+    assert.match(compiled.code, /const (\$\d+) = \(this\.value > 5\) \? "red" : "green";[^]*?this\.shape2\.color = \1;/);
   });
 
   it("makes a Shape-rooted component a Shape, with the required props as placeholders when they vary", () => {

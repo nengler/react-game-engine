@@ -1559,7 +1559,9 @@ and its ancestors with the world's `serial`, and the builder advances the serial
 in it, and no ancestor's own transform, was stamped since the frame the records came from. The contract that follows:
 
 - **A compiled component needs nothing.** Its draw state changes only in its constructor and `render()`, and its hooks only
-  call setters, so the compiler marks every class it generates `static readonly managed = true`.
+  call setters, so the compiler marks every class it generates `static readonly managed = true`. Its `render()` writes only what
+  differs and reports it (`markMoved` for a transform, `markChanged` for anything else), and it declares `reportsChanges`, so a
+  render that changes nothing keeps what was drawn, and one that only moves it lets the player move its records as a block.
 - **A hand-written class** that overrides `onInput` or `onUpdate` and is not marked is redrawn every frame, with everything under
   it, because it may write a transform or a colour from the hook and nothing would report it. The same write with no hook (from a
   collision callback, a test, a script holding a reference) is not seen: call `object.markChanged()` after it.
