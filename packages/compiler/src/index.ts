@@ -8,6 +8,7 @@ import type { PrefabSchema } from "./prefabs/prefabs.ts";
 import { validateScene } from "./scenes/validate.ts";
 import { buildModuleIR } from "./transform/transform.ts";
 import { parseGameState, type GameStateDefinition, type GameStateSchemaResult } from "./gamestate/schema.ts";
+import { inlineCustomHooks, type HookResolver } from "./hooks/inline.ts";
 import { typeCheckFiles, typeCheckSources, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export * from "./ir/types.ts";
@@ -23,6 +24,7 @@ export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
 export { ASSET_PROPS, checkAssets, type AssetCheckOptions } from "./assets/assets.ts";
 export { importTiled, type TiledImport } from "./scenes/tiled.ts";
 export { importTilemap, tilemapsSource, type TilemapImport, type TilemapOut } from "./scenes/tilemap.ts";
+export { inlineCustomHooks, type HookResolver, type HookSource } from "./hooks/inline.ts";
 export { checkProject, prefabsIndexSource, prefabsJson, projectSchemas, type ProjectModule } from "./project.ts";
 export { typeCheckFiles, typeCheckSources, generatedCodeCompilerOptions, sourceCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
 
@@ -61,6 +63,7 @@ export class Compiler {
   readonly #runtimeModule: string;
   readonly #manifest: RuntimeManifest;
   #gameState: GameStateDefinition | undefined;
+  #hookResolver: HookResolver | null = null;
 
   constructor(config: CompilerConfig = {}) {
     this.#parser = new TsxParser({ cwd: config.cwd ?? process.cwd() });
@@ -79,7 +82,19 @@ export class Compiler {
     }
   }
 
-  compile(fileName: string, text: string): CompileResult {
+  /**
+   * Say where custom hooks imported from a relative `.tsx` file are read from (`import { useThing } from "./hooks.tsx"`). The
+   * CLI reads them from the source directory. Hooks in the same file as the component need no resolver.
+   */
+  setHookResolver(resolver: HookResolver | null): void {
+    this.#hookResolver = resolver;
+  }
+
+  compile(fileName: string, original: string): CompileResult {
+    // Custom hooks are inlined first: from here on the file is a component with everything written out.
+    const hookDiagnostics: CompilerDiagnostic[] = [];
+    const text = inlineCustomHooks(this.#parser, fileName, original, this.#hookResolver, hookDiagnostics);
+    if (hasErrors(hookDiagnostics)) return { ok: false, fileName, ir: null, diagnostics: hookDiagnostics };
     return this.analyze(fileName, text, (analysis) => {
       const transformed = buildModuleIR(analysis, { manifest: this.#manifest, ...(this.#gameState ? { gameState: this.#gameState } : {}) });
       const diagnostics = [...analysis.diagnostics, ...transformed.diagnostics];

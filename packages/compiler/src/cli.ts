@@ -22,7 +22,7 @@
  * `<outDir>/scenes/<name>.scene.json` and validates that.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import {
   Compiler,
   checkProject,
@@ -80,6 +80,11 @@ function main(argv: readonly string[]): number {
   }
 
   const compiler = new Compiler(runtimeModule ? { runtimeModule } : {});
+  // Custom hooks imported from a relative .tsx file are read from beside the file that imports them.
+  compiler.setHookResolver((specifier, fromFile) => {
+    const path = resolve(dirname(resolve(fromFile)), specifier);
+    return existsSync(path) ? { fileName: relative(process.cwd(), path), text: readFileSync(path, "utf8") } : null;
+  });
   const diagnostics: CompilerDiagnostic[] = [];
   const outputs: VirtualFile[] = [];
   const modules: ProjectModule[] = [];
