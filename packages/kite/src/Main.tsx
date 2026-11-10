@@ -21,7 +21,13 @@ function Play() {
       <Level />
       <Gem transform={{ x: 1542, y: -330 }} />
       {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it. */}
-      <Camera bounds={[originX, originY, 320, 180]} slide={0.4} shake={deathCount} shakeStrength={3} shakeDuration={0.25}>
+      <Camera
+        bounds={[originX, originY, 320, 180]}
+        slide={0.4}
+        shake={deathCount}
+        shakeStrength={3}
+        shakeDuration={0.25}
+      >
         <Player />
       </Camera>
       <Hud>
@@ -48,7 +54,17 @@ export default function Main() {
   const screen = useGame((s) => s.screen);
 
   return (
-    <Game name="Main" state={useGame} title="Kite" width={960} height={540} background="#12151f" assets="assets" fixedStep={60}>
+    <Game
+      vsync={false}
+      name="Main"
+      state={useGame}
+      title="Kite"
+      width={960}
+      height={540}
+      background="#12151f"
+      assets="assets"
+      fixedStep={60}
+    >
       <Screen width={320} height={180} fit="integer">
         {screen === "title" && <Title />}
         {screen === "play" && <Play />}

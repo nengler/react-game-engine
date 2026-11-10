@@ -109,7 +109,7 @@ export class Main extends Game {
   readonly music: Music = new Music({ src: "theme.wav", volume: 0.45, fade: 1 });
 
   constructor() {
-    super({ name: "Main", state: useGame, title: "Kite", width: 960, height: 540, background: "#12151f", assets: "assets", fixedStep: 60 });
+    super({ vsync: false, name: "Main", state: useGame, title: "Kite", width: 960, height: 540, background: "#12151f", assets: "assets", fixedStep: 60 });
     this.addChild(this.screen2);
     this.screen2.addChild(this.music, 3);
     this.render();
