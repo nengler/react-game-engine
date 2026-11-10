@@ -533,4 +533,42 @@ describe("CollisionTracker: layers and exits", () => {
     tracker.update(world, fresh);
     assert.deepEqual(log, ["in 10", "out 10", "in 12"], "the old pair's exit comes first, though neither of its colliders is in the list now");
   });
+
+  it("finds the same contacts as testing every pair when colliders jump around, so the sort's fallback runs too", () => {
+    let seed = 12345;
+    const random = (): number => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+    const entered: string[] = [];
+    const exited: string[] = [];
+    const key = (a: Collider, b: Collider): string => (a.width < b.width ? `${a.width}-${b.width}` : `${b.width}-${a.width}`);
+    const world = { reportCollision: (a: Collider, b: Collider) => void entered.push(key(a, b)), reportCollisionExit: (a: Collider, b: Collider) => void exited.push(key(a, b)) } as unknown as World;
+    const tracker = new CollisionTracker();
+    const entries: { collider: Collider; world: { x: number; y: number; rotation: number; scaleX: number; scaleY: number } }[] = [];
+    for (let i = 0; i < 120; i++) {
+      const c = new Collider({ width: 10 + i / 1000, height: 10 }); // each a width of its own, so a pair can be named
+      new Entity().addChild(c);
+      entries.push({ collider: c, world: { ...IDENTITY } });
+    }
+    let touching = new Set<string>();
+    for (let frame = 0; frame < 30; frame++) {
+      // Even frames: everything jumps. Odd frames: a small drift, which is the sort's usual case.
+      for (const e of entries) {
+        e.world.x = frame % 2 === 0 ? random() * 200 : e.world.x + random() - 0.5;
+        e.world.y = frame % 2 === 0 ? random() * 200 : e.world.y + random() - 0.5;
+      }
+      const expected = new Set<string>();
+      for (let i = 0; i < entries.length; i++) {
+        for (let j = i + 1; j < entries.length; j++) {
+          const a = entries[i]!;
+          const b = entries[j]!;
+          if (boundsOverlap(colliderBounds(a.collider.width, 10, a.world)!, colliderBounds(b.collider.width, 10, b.world)!)) expected.add(key(a.collider, b.collider));
+        }
+      }
+      entered.length = 0;
+      exited.length = 0;
+      tracker.update(world, entries);
+      assert.deepEqual([...entered].sort(), [...expected].filter((k) => !touching.has(k)).sort(), `frame ${frame}: enters`);
+      assert.deepEqual([...exited].sort(), [...touching].filter((k) => !expected.has(k)).sort(), `frame ${frame}: exits`);
+      touching = expected;
+    }
+  });
 });

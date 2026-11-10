@@ -57,32 +57,53 @@ import { Warner } from "./warn.ts";
  */
 export function walkTree(
   root: GameObject,
-  visit: (object: GameObject, world: WorldTransform, z: number) => WorldTransform | void,
+  visit: (object: GameObject, world: WorldTransform, z: number, kind: number) => WorldTransform | void,
   parentSpace: WorldTransform = IDENTITY_TRANSFORM,
   parentZ = 0,
   intoHuds = false,
 ): void {
-  // The zero test is inline, not left to offsetTransform: QuickJS does not inline calls, and almost nothing has a layout offset.
-  const laidOut = root.layoutX === 0 && root.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, root.layoutX, root.layoutY);
-  let world = composeTransforms(composeTransforms(laidOut, root.placement), root.transform);
+  walk(root, visit, parentSpace, parentZ, intoHuds);
+}
+
+/**
+ * `walkTree` without default parameters, which QuickJS pays for on every call of a recursion that runs once per object.
+ * `visit` is also told the object's kind (`KIND_*`), found here once, so it does not look it up again.
+ */
+function walk(
+  root: GameObject,
+  visit: (object: GameObject, world: WorldTransform, z: number, kind: number) => WorldTransform | void,
+  parentSpace: WorldTransform,
+  parentZ: number,
+  intoHuds: boolean,
+): void {
   const transform = root.transform;
   const placement = root.placement;
+  // The zero test is inline, not left to offsetTransform: QuickJS does not inline calls, and almost nothing has a layout offset.
+  const laidOut = root.layoutX === 0 && root.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, root.layoutX, root.layoutY);
+  // Almost every placement is the identity, and then composing it gives `laidOut` back: skip the call.
+  let world = composeTransforms(
+    placement.x === 0 && placement.y === 0 && placement.rotation === 0 && placement.scaleX === 1 && placement.scaleY === 1 && !placement.global
+      ? laidOut
+      : composeTransforms(laidOut, placement),
+    transform,
+  );
   // Nearly nothing has a z, and then none of the three terms or the `global` flags matter: the answer is 0.
   const z =
     parentZ === 0 && transform.z === 0 && placement.z === 0 ? 0
     : transform.global ? transform.z
     : placement.global ? placement.z + transform.z
     : parentZ + placement.z + transform.z;
+  const kind = kindOf(root);
   // A visit may return the world to use for the children instead: a floating layout root is placed by the layout it has just run.
-  const replaced = visit(root, world, z);
+  const replaced = visit(root, world, z, kind);
   if (replaced !== undefined) world = replaced;
-  if (!intoHuds && kindOf(root) === KIND_HUD) return;
-  const isCamera = root instanceof Camera;
+  if (!intoHuds && kind === KIND_HUD) return;
+  const isCamera = kind === KIND_CAMERA;
   const childSpace = isCamera ? parentSpace : world;
   const childZ = isCamera ? parentZ : z;
   // Indexed, not `for…of`: QuickJS makes an iterator object for every `for…of`, and this runs for every object every frame.
   const children = root.children;
-  for (let i = 0; i < children.length; i++) walkTree(children[i] as GameObject, visit, childSpace, childZ, intoHuds);
+  for (let i = 0; i < children.length; i++) walk(children[i] as GameObject, visit, childSpace, childZ, intoHuds);
 }
 
 /** How many doubles the record starting with this op takes. */
@@ -443,7 +464,7 @@ export class FrameBuilder {
     // The z of the records being written, kept here so a frame with no z makes no call per record.
     let listZ = 0;
 
-    walkTree(root, (object, world, objectZ) => {
+    walkTree(root, (object, world, objectZ, kind) => {
       let z = objectZ;
       if (z !== 0) {
         if (z !== z) {
@@ -451,7 +472,7 @@ export class FrameBuilder {
           z = 0;
         } else anyZ = true;
       }
-      switch (kindOf(object)) {
+      switch (kind) {
         case KIND_SPRITE:
           if (z !== listZ) list.setZ((listZ = z));
           this.#sprite((object as Sprite | AnimatedSprite).image, world);
@@ -522,13 +543,13 @@ export class FrameBuilder {
         for (const child of hud.children) {
           walkTree(
             child,
-            (object, world, objectZ) => {
+            (object, world, objectZ, kind) => {
               let z = objectZ;
               if (z !== 0) {
                 if (z !== z) z = 0;
                 else hudAnyZ = true;
               }
-              switch (kindOf(object)) {
+              switch (kind) {
                 case KIND_SPRITE:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#sprite((object as Sprite | AnimatedSprite).image, world);
