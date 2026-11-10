@@ -2,10 +2,10 @@ import { Game, World, getSoundSink, setSoundSink, resetGameState, type GameObjec
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
-import { FrameBuilder } from "./draw.ts";
+import { FrameBuilder, rootScreen } from "./draw.ts";
 import { PlayerInput } from "./input.ts";
 import { onScreen, type ScreenPlacement } from "./screen.ts";
-import { RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
+import { RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
 import { Warner } from "./warn.ts";
 
 /** The window a game gets when neither its `<Game>` root nor the player's config say otherwise. */
@@ -21,6 +21,8 @@ export interface PlayerConfig extends Partial<WindowConfig> {
    * open; sounds it creates are recorded and preloaded as soon as the window is open.
    */
   readonly root: () => GameObject;
+  /** The key that toggles full screen, as the `<Game>` prop of the same name; `false` turns it off. Default `"F11"` (Alt + Enter always works). */
+  readonly fullscreenKey?: string | false;
   /** A CSS colour. Default `"black"`. */
   readonly background?: string;
   /** Folder that image and sound names are relative to. Default `"assets"`. */
@@ -40,7 +42,12 @@ export interface Player {
 /** The longest step a frame may simulate: a stall (a breakpoint, a dragged window) must not teleport things. */
 export const MAX_DT = 0.1;
 
+/** How many times larger than a root `<Screen>` the window opens when nothing sets its size. */
+export const DEFAULT_SCREEN_SCALE = 3;
+
 const LEFT_BUTTON = KEY_INDEX.get("MouseLeft") as number;
+const ENTER_KEY = KEY_INDEX.get("Enter") as number;
+const ALT_KEY = KEY_INDEX.get("Alt") as number;
 
 /**
  * Open the window and build the game. Each `step()` is one frame, in a fixed order:
@@ -75,8 +82,11 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   }
   const game = root instanceof Game ? root : null;
   // Each setting: the `<Game>` prop where it is written, else the player's config, else the default.
-  const width = game?.width ?? config.width ?? DEFAULT_WINDOW.width;
-  const height = game?.height ?? config.height ?? DEFAULT_WINDOW.height;
+  // With nothing set, a game with a `<Screen>` opens at 3 × its resolution, so each game pixel is 3 × 3 window pixels.
+  const screen0 = rootScreen(root);
+  const fromScreen = screen0 !== null && screen0.width > 0 && screen0.height > 0 && Number.isFinite(screen0.width) && Number.isFinite(screen0.height);
+  const width = game?.width ?? config.width ?? (fromScreen ? Math.round(screen0.width * DEFAULT_SCREEN_SCALE) : DEFAULT_WINDOW.width);
+  const height = game?.height ?? config.height ?? (fromScreen ? Math.round(screen0.height * DEFAULT_SCREEN_SCALE) : DEFAULT_WINDOW.height);
   const assets = game?.assets ?? config.assets ?? "assets";
   const background = resolveBackground(game?.background ?? config.background ?? "black", warner);
 
@@ -108,6 +118,21 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   let hudView: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
   let screen: ScreenPlacement | null = null;
   let closed = false;
+  let fullscreen = false;
+  const fullscreenSetting = game?.fullscreenKey ?? config.fullscreenKey ?? "F11";
+  const fullscreenKey = fullscreenSetting === false ? undefined : KEY_INDEX.get(fullscreenSetting);
+  if (typeof fullscreenSetting === "string" && fullscreenKey === undefined) {
+    warner.once(`fullscreenKey:${fullscreenSetting}`, `Unknown fullscreenKey '${fullscreenSetting}': only Alt + Enter toggles full screen.`);
+  }
+
+  /** The full-screen key (or Alt + Enter) was pressed last frame: switch, and keep the switch only if the window did. */
+  const toggleFullscreen = (): void => {
+    if (!backend.setFullscreen) return;
+    const pressed = (index: number | undefined): boolean => index !== undefined && ((input.keys[index] as number) & RGE_KEY_PRESSED) !== 0;
+    const altEnter = pressed(ENTER_KEY) && ((input.keys[ALT_KEY] as number) & RGE_KEY_DOWN) !== 0;
+    if (!pressed(fullscreenKey) && !altEnter) return;
+    if (backend.setFullscreen(!fullscreen)) fullscreen = !fullscreen;
+  };
 
   const close = (): void => {
     if (closed) return;
@@ -141,6 +166,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     world,
     step(): boolean {
       if (closed) throw new Error("The player is closed.");
+      toggleFullscreen();
       dispatchPress();
       const dt = input.values[RGE_IN_DT] as number;
       world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);

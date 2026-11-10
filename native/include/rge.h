@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 2
+#define RGE_ABI_VERSION 3
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -101,6 +101,9 @@ int32_t rge_abi_version(void);
 int32_t rge_key_count(void);
 int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t options); /* 0 ok, nonzero error */
 void    rge_close(void);
+/* Full screen on (nonzero) or off (0), as a borderless window at the desktop's size, so the video mode never changes.
+ * Returns 0, or nonzero when there is no window or it is hidden (tests, CI). The next rge_frame reports the new size. */
+int32_t rge_set_fullscreen(int32_t on);
 
 int32_t rge_load_texture(const char *path); /* handle >= 0, or -1 if it could not be loaded */
 int32_t rge_load_sound(const char *path);   /* handle >= 0, or -1 */

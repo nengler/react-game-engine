@@ -21,6 +21,11 @@ export interface WindowConfig {
 export interface Backend {
   open(config: WindowConfig): void;
   close(): void;
+  /**
+   * Full screen on or off (a borderless window at the desktop's size). Returns false when it cannot, for instance in a
+   * hidden window. Optional: without it the full-screen key does nothing.
+   */
+  setFullscreen?(on: boolean): boolean;
   /** A texture handle, or -1 if the file could not be loaded. */
   loadTexture(path: string): number;
   /** A sound handle, or -1 if the file could not be loaded. */

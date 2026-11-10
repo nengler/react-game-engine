@@ -133,6 +133,14 @@ export class RecordingBackend implements Backend {
     this.closed = true;
   }
 
+  /** Every `setFullscreen` call, in order. */
+  readonly fullscreenCalls: boolean[] = [];
+
+  setFullscreen(on: boolean): boolean {
+    this.fullscreenCalls.push(on);
+    return true;
+  }
+
   loadTexture(path: string): number {
     this.textureLoads.push(path);
     if (this.#missing.has(path)) return -1;

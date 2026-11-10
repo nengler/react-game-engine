@@ -350,7 +350,7 @@ function kindOf(object: GameObject): number {
  * keeps the object it mounted (`world.root` is a bare container). Either may be a `<Game>` (the configuration root)
  * whose only child is the `<Screen>`. Null when the game has none.
  */
-function rootScreen(root: GameObject): Screen | null {
+export function rootScreen(root: GameObject): Screen | null {
   const only = root.children.length === 1 ? root.children[0] : undefined;
   for (const top of [root, only]) {
     const inner = top instanceof Game && top.children.length === 1 ? top.children[0] : top;
@@ -421,13 +421,14 @@ export class FrameBuilder {
     const gameRoot = rootScreen(root);
     const screen = gameRoot === null ? null : this.#usableScreen(gameRoot);
     // The size of the area the game is laid out and centred in: the game's resolution, or the window.
-    const gameWidth = screen === null ? width : screen.width;
-    const gameHeight = screen === null ? height : screen.height;
     const placement = screen === null ? null : fitScreen(screen.width, screen.height, width, height, this.#fit(screen));
+    // (`fit="expand"` makes the game wider than the `<Screen>`'s `width`, so the placement says how wide it is.)
+    const gameWidth = placement === null ? width : placement.width;
+    const gameHeight = placement === null ? height : placement.height;
     const pixelPerfect = screen !== null && placement !== null && screen.pixelPerfect !== false;
     const borderColor = screen === null ? 0 : this.#color(screen.border);
     if (screen !== null && placement !== null && pixelPerfect) {
-      list.canvas(screen.width, screen.height, { x: placement.left, y: placement.top, width: screen.width * placement.scaleX, height: screen.height * placement.scaleY }, borderColor);
+      list.canvas(placement.width, placement.height, { x: placement.left, y: placement.top, width: placement.width * placement.scaleX, height: screen.height * placement.scaleY }, borderColor);
     }
     const worldStart = list.length;
     list.view(IDENTITY_VIEW);
@@ -658,8 +659,8 @@ export class FrameBuilder {
 
   #fit(screen: Screen): ScreenFit {
     const fit = screen.fit;
-    if (fit === "integer" || fit === "contain" || fit === "stretch") return fit;
-    this.#warner.once(`screen-fit:${String(fit)}`, `Unknown <Screen fit> '${String(fit)}': using "integer". The choices are "integer", "contain" and "stretch".`);
+    if (fit === "integer" || fit === "contain" || fit === "stretch" || fit === "expand") return fit;
+    this.#warner.once(`screen-fit:${String(fit)}`, `Unknown <Screen fit> '${String(fit)}': using "integer". The choices are "integer", "contain", "stretch" and "expand".`);
     return "integer";
   }
 

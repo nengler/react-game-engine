@@ -22,6 +22,7 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     let backend = Object::new(ctx.clone())?;
     backend.set("open", Function::new(ctx.clone(), open)?.with_name("open")?)?;
     backend.set("close", Function::new(ctx.clone(), close)?.with_name("close")?)?;
+    backend.set("setFullscreen", Function::new(ctx.clone(), set_fullscreen)?.with_name("setFullscreen")?)?;
     backend.set("loadTexture", Function::new(ctx.clone(), load_texture)?.with_name("loadTexture")?)?;
     backend.set("loadSound", Function::new(ctx.clone(), load_sound)?.with_name("loadSound")?)?;
     backend.set("playSound", Function::new(ctx.clone(), play_sound)?.with_name("playSound")?)?;
@@ -56,6 +57,11 @@ fn open<'js>(ctx: Ctx<'js>, config: Object<'js>) -> JsResult<()> {
 
 fn close() {
     unsafe { ffi::rge_close() }
+}
+
+/// Full screen on or off; false when librge cannot (no window, or a hidden one).
+fn set_fullscreen(on: bool) -> bool {
+    unsafe { ffi::rge_set_fullscreen(on as i32) == 0 }
 }
 
 fn load_texture(path: String) -> i32 {

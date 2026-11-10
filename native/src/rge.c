@@ -69,6 +69,13 @@ void rge_close(void) {
   memset(&state, 0, sizeof(state));
 }
 
+int32_t rge_set_fullscreen(int32_t on) {
+  if (!state.open || state.hidden) return 1;
+  bool wanted = on != 0;
+  if (IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) != wanted) ToggleBorderlessWindowed();
+  return 0;
+}
+
 int32_t rge_measure_text(const char *text, double size, double *out) {
   if (!state.open || text == NULL || out == NULL || !(size >= 0.0 && size <= 100000.0)) return 1;
   /* The font and spacing RGE_OP_TEXT draws with. */

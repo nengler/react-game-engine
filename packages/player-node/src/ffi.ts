@@ -15,6 +15,8 @@ export interface Native {
   keyCount(): number;
   open(width: number, height: number, title: string, options: number): number;
   close(): void;
+  /** Full screen on or off; false when librge cannot (no window, or a hidden one). */
+  setFullscreen(on: boolean): boolean;
   loadTexture(path: string): number;
   loadSound(path: string): number;
   playSound(handle: number): void;
@@ -74,6 +76,7 @@ export function loadNative(path: string): Native {
   const keyCount = lib.func("int32_t rge_key_count(void)");
   const open = lib.func("int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t options)");
   const close = lib.func("void rge_close(void)");
+  const setFullscreen = lib.func("int32_t rge_set_fullscreen(int32_t on)");
   const loadTexture = lib.func("int32_t rge_load_texture(const char *path)");
   const loadSound = lib.func("int32_t rge_load_sound(const char *path)");
   const playSound = lib.func("void rge_play_sound(int32_t handle)");
@@ -89,6 +92,7 @@ export function loadNative(path: string): Native {
     keyCount: () => keyCount() as number,
     open: (width, height, title, options) => open(width, height, title, options) as number,
     close: () => void close(),
+    setFullscreen: (on) => (setFullscreen(on ? 1 : 0) as number) === 0,
     loadTexture: (path) => loadTexture(path) as number,
     loadSound: (path) => loadSound(path) as number,
     playSound: (handle) => void playSound(handle),

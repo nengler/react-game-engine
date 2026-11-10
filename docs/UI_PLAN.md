@@ -435,7 +435,7 @@ C1 can be done before priority 3, because it needs no ABI change. C2 goes in ABI
 | What uses it | Everything inside the game: transforms, the camera, `<Hud>` and its layout, `input.pointerX` | Only the player: to scale the canvas and place the borders, and to map the mouse back |
 | Without a `<Screen>` | The same as the window size, as today | |
 
-**Why two components, `<Game>` and `<Screen>`.** They hold different sizes. `<Game width height>` is the window the game opens, which the user can then resize; `<Screen width height>` is the resolution the game is drawn at, whatever the window does. The player builds the root before it opens the window (#37), so it reads `<Game>`'s settings first; sounds made in constructors are recorded and preloaded once the window is open. Because the root is built first, the window can also default from the `<Screen>`: when neither `<Game>` nor `PlayerConfig` gives a size, the window could open at 3 × the canvas (960 × 540 for 320 × 180). That default is not built yet (C3).
+**Why two components, `<Game>` and `<Screen>`.** They hold different sizes. `<Game width height>` is the window the game opens, which the user can then resize; `<Screen width height>` is the resolution the game is drawn at, whatever the window does. The player builds the root before it opens the window (#37), so it reads `<Game>`'s settings first; sounds made in constructors are recorded and preloaded once the window is open. Because the root is built first, the window can also default from the `<Screen>`: when neither `<Game>` nor `PlayerConfig` gives a size, the window could open at 3 × the canvas (960 × 540 for 320 × 180). That default is built (C3).
 
 ## Props
 
@@ -460,7 +460,7 @@ For a 320 × 180 canvas in a window of a given size:
 
 The canvas is centred, and the bars are drawn in `border`. `"integer"` falls back to `"contain"` when the window is smaller than the canvas (a scale below 1), so the game is never cut off.
 
-A later fourth mode, `"expand"`, keeps the height at 180 game pixels and widens the canvas to the window's shape (320 × 180 at 16:9, 384 × 180 at a 21:9 monitor), so there are no bars and a wide screen shows more of the world. It is in C3, because then the game size is no longer fixed, and the HUD's layout must cope with a canvas width that changes.
+A fourth mode, `"expand"` (C3), keeps the height at 180 game pixels and widens the canvas to the window's shape (320 × 180 at 16:9, 426 × 180 at 2560 × 1080), so there are no bars (at most a few window pixels at the sides, centred) and a wide screen shows more of the world. The scale is the whole number `"integer"` would pick; the width is never below `width`, so a window taller than 16:9 gets bars top and bottom. The game size is then not fixed: the HUD's layout and the camera use the placement's width, which changes with the window.
 
 ### `pixelPerfect`: two ways to draw
 
@@ -567,10 +567,12 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 
 **Done when**
 
-- [ ] The demo's `<Game>` holds a `<Screen>` (320 × 180 or 640 × 360), and its HUD (from U3) is laid out in canvas units
-- [ ] `fit="expand"` widens the canvas to the window's shape; the HUD's layout and the camera follow the changing width
-- [ ] When neither `<Game>` nor `PlayerConfig` sets the window's size, the window opens at 3 × the `<Screen>` (#37 left this open)
-- [ ] A full-screen toggle exists (a key set on `<Game>` or in `PlayerConfig`, or `useWindow().setFullscreen()`; see the decisions)
+**Done 2026-11-10.** The demo kept 640 × 360 (so its world and HUD sizes did not change) and still opens at that size, since its `<Game>` sets it. Full screen is a key, not a `useWindow()` hook, and needed ABI v3.
+
+- [x] The demo's `<Game>` holds a `<Screen width={640} height={360} fit="expand">`, and its HUD is laid out in canvas units
+- [x] `fit="expand"` widens the canvas to the window's shape (a whole-number scale as `"integer"` picks, then the width fills what is left, never below `width`); the placement's `width` is the game's real width, and the HUD's layout and the camera use it each frame
+- [x] When neither `<Game>` nor `PlayerConfig` sets the window's size, the window opens at 3 × the `<Screen>` (each setting on its own)
+- [x] A full-screen toggle: `<Game fullscreenKey>` or `PlayerConfig.fullscreenKey` (default `"F11"`, `false` for none), and Alt + Enter always. `rge_set_fullscreen` (ABI v3) switches to a borderless window at the desktop's size and refuses in a hidden window; `Backend.setFullscreen` is optional
 
 ## Decisions
 
