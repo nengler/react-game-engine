@@ -33,7 +33,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
-set(RGE_SOURCES src/rge.c src/assets.c src/keys.c)
+set(RGE_SOURCES src/rge.c src/assets.c src/keys.c src/overlaps.c)
 
 add_library(rge SHARED ${RGE_SOURCES})
 target_include_directories(rge PUBLIC include PRIVATE src)

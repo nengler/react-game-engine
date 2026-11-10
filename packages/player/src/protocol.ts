@@ -4,7 +4,7 @@
  * `test/protocol.test.ts` parses the header and fails if anything here differs.
  */
 
-export const RGE_ABI_VERSION = 3;
+export const RGE_ABI_VERSION = 4;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const RGE_OP_VIEW = 1;

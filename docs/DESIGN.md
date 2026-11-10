@@ -1569,6 +1569,9 @@ in it, and no ancestor's own transform, was stamped since the frame the records 
 - **Collisions follow it.** A collider in a reused subtree comes with the same `ColliderEntry` object as last frame, and one that is
   not gets a new one, so `CollisionTracker` tests again only the colliders whose entry is new (see its doc comment). An entry must not be
   changed after it is handed over.
+- **Which boxes overlap is the host's to find, when it can.** A backend may implement `overlaps` (both native hosts do, with
+  `rge_overlaps` in `librge`); the tracker then hands it the boxes and applies the rules to the pairs that come back. Without
+  it the tracker sweeps in script. The two find the same pairs, so a game cannot tell which ran.
 - **What changed is drawn the short way.** Under an object that changed this frame, a `<Shape>`, `<Sprite>` or `<Collider>` with no
   children, z, layout offset or placement is written by its parent's loop, not by a call of its own (most of a moving component is
   such leaves). It draws exactly what the general walk draws; the tests compare the two.

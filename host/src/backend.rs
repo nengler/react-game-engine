@@ -28,6 +28,7 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     backend.set("playSound", Function::new(ctx.clone(), play_sound)?.with_name("playSound")?)?;
     backend.set("measureText", Function::new(ctx.clone(), measure_text)?.with_name("measureText")?)?;
     backend.set("textureSize", Function::new(ctx.clone(), texture_size)?.with_name("textureSize")?)?;
+    backend.set("overlaps", Function::new(ctx.clone(), overlaps)?.with_name("overlaps")?)?;
     backend.set("frame", Function::new(ctx.clone(), frame)?.with_name("frame")?)?;
     ctx.globals().set(HOST_BACKEND_KEY, backend)
 }
@@ -106,6 +107,16 @@ fn size_object<'js>(ctx: &Ctx<'js>, size: [f64; 2]) -> JsResult<Object<'js>> {
     Ok(object)
 }
 
+/// The pairs of boxes that overlap (`rge_overlaps`): never more boxes than `boxes` and `order` hold, whatever `count` claims.
+fn overlaps<'js>(ctx: Ctx<'js>, boxes: TypedArray<'js, f64>, count: i32, order: TypedArray<'js, i32>, pairs: TypedArray<'js, i32>) -> JsResult<i32> {
+    let (boxes_ptr, boxes_len) = raw_f64(&ctx, &boxes, "boxes")?;
+    let (order_ptr, order_len) = raw_i32(&ctx, &order, "order")?;
+    let (pairs_ptr, pairs_len) = raw_i32(&ctx, &pairs, "pairs")?;
+    let count = (count.max(0) as usize).min(boxes_len / 4).min(order_len).min(i32::MAX as usize);
+    let capacity = (pairs_len / 2).min(i32::MAX as usize);
+    Ok(unsafe { ffi::rge_overlaps(boxes_ptr as *const f64, count as i32, order_ptr, pairs_ptr, capacity as i32) })
+}
+
 /// Draw and present one frame, then write the next frame's input into `input` and `keys`.
 fn frame<'js>(
     ctx: Ctx<'js>,
@@ -180,3 +191,4 @@ macro_rules! raw_fn {
 }
 raw_fn!(raw_f64, f64);
 raw_fn!(raw_u8, u8);
+raw_fn!(raw_i32, i32);

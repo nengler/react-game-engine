@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Collider, Entity, GameObject, World } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
-import { boundsOverlap, colliderBounds, CollisionTracker } from "../src/collide.ts";
+import { boundsOverlap, colliderBounds, CollisionTracker, type Overlaps } from "../src/collide.ts";
 import { walkTree, type ColliderEntry } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend } from "../src/recording.ts";
@@ -836,5 +836,112 @@ describe("CollisionTracker: the sweep in bands", () => {
     assert.deepEqual(frame(c, a, d), []);
     assert.deepEqual(frame(), ["out a c", "out a d", "out c d"], "all gone");
     assert.deepEqual(frame(a, b), ["in a b"]);
+  });
+});
+
+describe("CollisionTracker: a host's broad phase", () => {
+  /**
+   * What `Backend.overlaps` promises, done the slow way: every overlapping pair once, one first index's pairs together (here
+   * from the last box to the first, and the later box named first, since no order is promised), `order` put by left edge, and
+   * the count of all pairs whatever the room.
+   */
+  const calls = { count: 0, short: 0 };
+  const overlaps: Overlaps = (boxes, count, order, pairs) => {
+    calls.count++;
+    let found = 0;
+    for (let a = count - 1; a >= 0; a--) {
+      for (let b = 0; b < a; b++) {
+        if (!(boxes[a * 4]! < boxes[b * 4 + 2]! && boxes[a * 4 + 2]! > boxes[b * 4]! && boxes[a * 4 + 1]! < boxes[b * 4 + 3]! && boxes[a * 4 + 3]! > boxes[b * 4 + 1]!)) continue;
+        if (found * 2 + 1 < pairs.length) {
+          pairs[found * 2] = a;
+          pairs[found * 2 + 1] = b;
+        }
+        found++;
+      }
+    }
+    if (found * 2 > pairs.length) calls.short++;
+    const sorted = Array.from({ length: count }, (_, i) => i).sort((p, q) => boxes[p * 4]! - boxes[q * 4]! || p - q);
+    order.set(sorted);
+    return found;
+  };
+
+  it("reports what the tracker's own sweep reports, in the same order, and asks again when the pairs did not fit", () => {
+    let state = 99;
+    const next = (): number => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+    const names = new Map<Collider, string>();
+    const parents: Entity[] = Array.from({ length: 30 }, () => new Entity());
+    const make = (label: string): ColliderEntry => {
+      const c = new Collider({ width: 10 + next() * 30, height: 10 + next() * 30, layer: next() < 0.3 ? "a" : "", hits: next() < 0.2 ? ["a"] : undefined });
+      names.set(c, label);
+      (parents[Math.floor(next() * parents.length)] as Entity).addChild(c);
+      return { collider: c, world: { ...IDENTITY, x: next() * 200, y: next() * 200 } };
+    };
+    let entries: ColliderEntry[] = Array.from({ length: 150 }, (_, i) => make(`c${i}`));
+    let serial = entries.length;
+    const logs: string[][] = [[], [], []];
+    const worlds = logs.map(
+      (log) =>
+        ({
+          reportCollision: (a: Collider, b: Collider) => void log.push(`in ${names.get(a)} ${names.get(b)}`),
+          reportCollisionExit: (a: Collider, b: Collider) => void log.push(`out ${names.get(a)} ${names.get(b)}`),
+        }) as unknown as World,
+    );
+    const trackers = [new CollisionTracker(undefined, true, true, overlaps), new CollisionTracker(undefined, false, true, overlaps), new CollisionTracker(undefined, false, false)];
+    let reports = 0;
+    for (let frame = 0; frame < 150; frame++) {
+      const kind = frame === 0 ? "same" : (["drift", "few", "few", "few", "jump", "add", "remove", "area", "same"] as const)[Math.floor(next() * 9)];
+      entries = entries.slice();
+      const move = (i: number, x: number, y: number): void => void (entries[i] = { collider: (entries[i] as ColliderEntry).collider, world: { ...IDENTITY, x, y } });
+      const lost = entries.findIndex((e) => e.collider.width === 0);
+      if (lost >= 0) {
+        (entries[lost] as ColliderEntry).collider.width = 12;
+        move(lost, (entries[lost] as ColliderEntry).world.x, (entries[lost] as ColliderEntry).world.y);
+      } else if (kind === "drift") entries.forEach((e, i) => move(i, e.world.x + next() * 6 - 3, e.world.y + next() * 6 - 3));
+      else if (kind === "few") for (let k = 0; k < 4; k++) move(Math.floor(next() * entries.length), next() * 200, next() * 200);
+      else if (kind === "jump") entries.forEach((_, i) => move(i, next() * 200, next() * 200));
+      else if (kind === "add") entries.splice(Math.floor(next() * (entries.length + 1)), 0, make(`c${serial++}`));
+      else if (kind === "remove") entries.splice(Math.floor(next() * entries.length), 1);
+      else if (kind === "area") {
+        const i = Math.floor(next() * entries.length);
+        (entries[i] as ColliderEntry).collider.width = 0; // no box this frame; back in the next
+        move(i, (entries[i] as ColliderEntry).world.x, (entries[i] as ColliderEntry).world.y);
+      }
+      logs.forEach((log) => (log.length = 0));
+      trackers.forEach((tracker, k) => tracker.update(worlds[k] as World, entries));
+      assert.deepEqual(logs[0], logs[2], `frame ${frame} (${kind})`);
+      assert.deepEqual(logs[1], logs[2], `frame ${frame} (${kind}), every frame a full sweep`);
+      reports += (logs[2] as string[]).length;
+    }
+    assert.ok(reports > 3000, `contacts come and go (${reports} reports)`);
+    assert.ok(calls.short > 0, "more pairs than the first buffer held, at least once");
+    assert.ok((trackers[0] as CollisionTracker).incrementalFrames > 20, "frames that look only at what moved ran between the host's sweeps");
+    assert.equal((trackers[0] as CollisionTracker).bandedFrames, 0, "the script's bands are not used with a host's broad phase");
+  });
+
+  it("is handed to the tracker by the player when the backend has one, and not otherwise", () => {
+    for (const withHost of [true, false]) {
+      calls.count = 0;
+      const met: string[] = [];
+      const backend = new RecordingBackend();
+      if (withHost) (backend as RecordingBackend & { overlaps?: Overlaps }).overlaps = overlaps;
+      const player = createPlayer(backend, {
+        width: 100, height: 100, title: "t",
+        root: () => {
+          const root = new Entity();
+          for (const x of [0, 5]) {
+            const entity = new Entity({ name: `x${x}` });
+            entity.transform.x = x;
+            entity.addChild(new Collider({ width: 10, height: 10, onCollisionEnter: (other) => void met.push(other.owner) }));
+            root.addChild(entity);
+          }
+          return root;
+        },
+      });
+      player.step();
+      player.step();
+      player.close();
+      assert.deepEqual(met, ["x5", "x0"], withHost ? "with a host's broad phase" : "without");
+      assert.equal(calls.count > 0, withHost);
+    }
   });
 });
