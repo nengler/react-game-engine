@@ -101,6 +101,7 @@ npm run example     # recompile packages/example/src → packages/example/genera
 npm run native:build    # librge with a real window → native/build
 npm run play:demo       # play the demo under Node
 npm run package         # dist/demo/: the Rust host (needs cargo), game.js and assets/
+npm run package -- --engine node   # dist/demo/: the same game on Node's V8 as one executable (~125 MB; 10-30x faster script)
 ```
 
 Programmatic use:

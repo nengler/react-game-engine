@@ -19,7 +19,9 @@ import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerI
  * The host's broad phase for collisions, when the bench runs under a host that has one (the Rust host): a player there asks
  * it which boxes overlap instead of sweeping in script. Under plain `node` there is no host, and the script's sweep is measured.
  */
-const hostOverlaps = (globalThis as { [HOST_BACKEND_KEY]?: Backend })[HOST_BACKEND_KEY]?.overlaps;
+const hostBackend = (globalThis as { [HOST_BACKEND_KEY]?: Backend })[HOST_BACKEND_KEY];
+// Bound: the Node host's backend is a class whose `overlaps` reads its own fields (the Rust host's is a plain function).
+const hostOverlaps = hostBackend?.overlaps?.bind(hostBackend);
 
 /** A backend that draws nothing and reports a steady 60 fps. */
 const nothing: Backend = {

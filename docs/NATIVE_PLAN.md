@@ -687,6 +687,26 @@ Old and new code alternately, the middle of three, Rust host:
 
 `npm run bench:check` runs the bench under Node, and with `--host <rge-host>` under the Rust host too, and fails when a scene is over its budget in `packages/player/bench/budget.json` or a scene with four times the objects takes more than about twice four times as long (`ratios`: a mount, collisions and the walk, which catch quadratic growth on any machine). The bench now also times mounting 5,000 and 20,000 objects, which is how the quadratic mount went unnoticed. Budgets are about 2.5 to 3 times this VM's numbers. The CI `host` job runs it in place of the step that only printed the numbers. Run against the code before pass four, it fails on the pile under Node (5.6 ms against 2.5).
 
+### A V8 build for desktops (2026-11-10)
+
+After pass four, what is left in a busy frame is mostly the price QuickJS-ng charges for each statement: the same bench under Node is 10 to 30 times faster. QuickJS stays the default, because it is small and goes where a JIT is not allowed (iOS, consoles). For desktops there is now a second way to package a game, on V8:
+
+    npm run package -- --engine node [--headless]
+
+`dist/<name>/` then holds a Node single executable application (Node's own binary with the game bundled inside it), `lib/librge.so` (the shared library the Node dev host already uses), `node_modules/koffi` (with this platform's addon; koffi finds it by paths relative to its own files, so it cannot be bundled and is loaded from beside the executable) and `assets/`. Like the Rust host run with no arguments, it runs from its own folder. It is about 125 MB, nearly all of it Node, against a few MB for the Rust host. It is built from the Node that runs `npm run package`, with `postject` (a dev dependency) per the Node documentation; the macOS and Windows steps follow that documentation and are unverified, like the link lists in `host/build.rs`.
+
+The frame bench packaged this way, against the Rust host, same VM:
+
+| Scene | QuickJS-ng (Rust host) | V8 (packaged Node) |
+| --- | --- | --- |
+| 2,000 moved by state, each with a collider | 9.5 ms | 0.65 ms |
+| 5,000 moving rects | 12.6 ms | 0.73 ms |
+| 300 colliders in one pile | 11.3 ms | 0.39 ms |
+| mount 20,000 objects | 310 ms | 41 ms |
+
+- **How it was checked.** The demo's parity script, packaged this way, prints byte for byte what it prints under Node and under the Rust host; CI's `native` job does the same and then runs the packaged demo from another folder, and the `native-desktop` job packages it with a window and runs it under a virtual display. The windowed package was not built in the container this was written in (it lacks the X11 development packages), only in CI.
+- **Found on the way:** the bench took the host backend's `overlaps` without binding it, which worked for the Rust host's plain function and threw for the Node backend's method. It is bound now.
+
 ## Later (not scheduled)
 
 | Idea | Notes |
@@ -704,6 +724,7 @@ Old and new code alternately, the middle of three, Rust host:
 | Prebuilt `librge` | Publish binaries per platform so `@rge/player-node` users skip CMake |
 | SDL3 platform layer | raylib's SDL backend, if consoles or better gamepad support become goals. Our code does not change |
 | Native code generation | Go first if ever, since its garbage collector fits the object graph. Needs resolved types from the TypeScript checker first |
+| A smaller V8 build | `--engine node` ships all of Node (about 125 MB). Embedding V8 alone in the Rust host (the `v8` crate) would be smaller, without the rest of Node, and keep one host, at the cost of a binding of its own; worth it if download size starts to matter |
 
 ## Risks
 

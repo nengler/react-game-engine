@@ -27,6 +27,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6",
     "typescript": "7.1.0-beta"
   }
 }
