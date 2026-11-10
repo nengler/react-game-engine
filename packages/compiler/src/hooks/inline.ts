@@ -117,12 +117,10 @@ export function inlineCustomHooks(parser: TsxParser, fileName: string, text: str
               reportNested(stmt, sf, fileName, stores, diagnostics);
               continue;
             }
-            found = true;
             const hook = hooks.get(call.name);
-            if (hook === undefined) {
-              diagnostics.push(error(DiagnosticCode.UnknownHook, `'${call.name}' is not a hook this file can see: declare \`function ${call.name}() { … }\` in this file, or import it from a relative .tsx file.`, spanOf(stmt, sf, fileName)));
-              continue;
-            }
+            // A name that is no hook of this file is left for the compiler's own report (it knows the retired hooks and suggests the nearest).
+            if (hook === undefined) continue;
+            found = true;
             const expanded = expandCall(parser, stmt, call, hook, sf, fileName, `_${call.name}${++counter}_`, diagnostics);
             if (hook.fileName !== fileName) collectImports(parser, hook, needed);
             if (expanded !== null) edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: expanded });
