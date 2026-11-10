@@ -9,7 +9,7 @@ export default function Main() {
   const originY = useGame((s) => s.originY);
 
   return (
-    <Game name="Main" state={useGame} title="Kite" width={960} height={540} background="#12151f" assets="assets">
+    <Game name="Main" state={useGame} title="Kite" width={960} height={540} background="#12151f" assets="assets" fixedStep={60}>
       <Screen width={320} height={180} fit="integer">
         <Level />
         <Player />

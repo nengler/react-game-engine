@@ -64,4 +64,14 @@ describe("replays", () => {
     const rooms = result.states.map((s) => s.room);
     assert.deepEqual([...new Set(rooms)], [0, 1, 2, 3, 4, 5, 6, 7], "the rooms came in order");
   });
+
+  it("give the same result at any frame rate, because the game runs on a fixed timestep", () => {
+    const script = REPLAYS.slice(0, 3).join(", ");
+    const final = (frames: ReturnType<typeof parseInputScript>) => runScript(gameConfig, frames, () => ({ ...useGame.getState().player })).states.at(-1);
+    const at60 = parseInputScript(script, { bindings });
+    // The same inputs drawn at 120 and at 30 frames a second: every frame twice with half the time, or two frames' keys in one frame.
+    const at120 = at60.flatMap((frame) => [{ ...frame, dt: 1 / 120 }, { ...frame, dt: 1 / 120 }]);
+    const reference = final(at60);
+    assert.deepEqual(final(at120), reference);
+  });
 });

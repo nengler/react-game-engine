@@ -17,7 +17,7 @@ export class Main extends Game {
   readonly camera: Camera = new Camera();
 
   constructor() {
-    super({ name: "Main", state: useGame, title: "Kite", width: 960, height: 540, background: "#12151f", assets: "assets" });
+    super({ name: "Main", state: useGame, title: "Kite", width: 960, height: 540, background: "#12151f", assets: "assets", fixedStep: 60 });
     this.addChild(this.screen);
     this.screen.addChild(this.level);
     this.screen.addChild(this.player);

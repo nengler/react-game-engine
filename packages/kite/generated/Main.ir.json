@@ -9,7 +9,7 @@
       "span": {
         "fileName": "packages/kite/src/Main.tsx",
         "start": 247,
-        "end": 690,
+        "end": 705,
         "line": 7,
         "column": 1
       },
@@ -137,6 +137,14 @@
               "kind": "StringLiteral",
               "value": "assets"
             }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "fixedStep",
+            "value": {
+              "kind": "NumberLiteral",
+              "value": 60
+            }
           }
         ],
         "transform": [],
@@ -196,8 +204,8 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/kite/src/Main.tsx",
-                      "start": 558,
-                      "end": 567,
+                      "start": 573,
+                      "end": 582,
                       "line": 14,
                       "column": 9
                     }
@@ -220,8 +228,8 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/kite/src/Main.tsx",
-                      "start": 576,
-                      "end": 586,
+                      "start": 591,
+                      "end": 601,
                       "line": 15,
                       "column": 9
                     }
@@ -287,8 +295,8 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/kite/src/Main.tsx",
-                      "start": 595,
-                      "end": 655,
+                      "start": 610,
+                      "end": 670,
                       "line": 16,
                       "column": 9
                     }
@@ -297,8 +305,8 @@
               ],
               "span": {
                 "fileName": "packages/kite/src/Main.tsx",
-                "start": 502,
-                "end": 671,
+                "start": 517,
+                "end": 686,
                 "line": 13,
                 "column": 7
               }
@@ -308,7 +316,7 @@
         "span": {
           "fileName": "packages/kite/src/Main.tsx",
           "start": 386,
-          "end": 683,
+          "end": 698,
           "line": 12,
           "column": 5
         }
