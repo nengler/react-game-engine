@@ -178,7 +178,8 @@ describe("librge through koffi", { skip }, () => {
         }
       }
     }
-    assert.equal(pixel(chunky, 2 + 10 * 3 + 1, 6 + 6 * 3 + 1), "ff0000ff", "the diamond's middle");
+    // The diamond turns about its top corner at (10, 6), so its centre is at (10, 11.7): well inside, unlike the corner, which rasterisers disagree about.
+    assert.equal(pixel(chunky, 2 + 10 * 3 + 1, 6 + 11 * 3 + 1), "ff0000ff", "the diamond's middle");
     assert.equal(pixel(chunky, 0, 0), "0000ffff", "the border");
     const smooth = render(make(false));
     let blocky = true;
