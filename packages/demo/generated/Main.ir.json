@@ -490,7 +490,8 @@
                                       "body": [
                                         {
                                           "kind": "PlaySound",
-                                          "sound": "Main.playClick"
+                                          "sound": "Main.playClick",
+                                          "volume": null
                                         },
                                         {
                                           "kind": "SetState",

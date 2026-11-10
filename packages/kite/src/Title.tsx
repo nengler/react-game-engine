@@ -1,13 +1,15 @@
-import { useInput, useState, Entity, Fade, Hud, Text } from "@rge/runtime/jsx";
+import { useInput, useSound, useState, Entity, Fade, Hud, Text } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 
 /** The title screen: the name, how to move, and a prompt that waits for a button. */
 export function Title() {
   const begin = useGame((s) => s.begin);
+  const playStart = useSound("start.wav");
   const [blink, setBlink] = useState(0);
 
   useInput((input) => {
     if (input.pressed("Enter") || input.pressed("Z") || input.pressed("C") || input.pressed("Space") || input.pressed("PadA") || input.pressed("PadStart")) {
+      playStart();
       begin();
     }
     setBlink((b) => b + 1);

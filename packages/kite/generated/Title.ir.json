@@ -8,8 +8,8 @@
       "name": "Title",
       "span": {
         "fileName": "packages/kite/src/Title.tsx",
-        "start": 209,
-        "end": 1238,
+        "start": 219,
+        "end": 1310,
         "line": 5,
         "column": 1
       },
@@ -20,9 +20,9 @@
           "setterName": "setBlink",
           "span": {
             "fileName": "packages/kite/src/Title.tsx",
-            "start": 284,
-            "end": 315,
-            "line": 7,
+            "start": 337,
+            "end": 368,
+            "line": 8,
             "column": 9
           }
         },
@@ -173,6 +173,11 @@
                 },
                 "then": [
                   {
+                    "kind": "PlaySound",
+                    "sound": "Title.playStart",
+                    "volume": null
+                  },
+                  {
                     "kind": "CallAction",
                     "action": "begin",
                     "args": []
@@ -219,9 +224,9 @@
           },
           "span": {
             "fileName": "packages/kite/src/Title.tsx",
-            "start": 320,
-            "end": 554,
-            "line": 9,
+            "start": 373,
+            "end": 626,
+            "line": 10,
             "column": 3
           }
         }
@@ -242,7 +247,21 @@
         }
       ],
       "refs": [],
-      "sounds": [],
+      "sounds": [
+        {
+          "kind": "Sound",
+          "id": "Title.playStart",
+          "name": "playStart",
+          "path": "start.wav",
+          "span": {
+            "fileName": "packages/kite/src/Title.tsx",
+            "start": 294,
+            "end": 327,
+            "line": 7,
+            "column": 9
+          }
+        }
+      ],
       "props": [],
       "propsType": null,
       "isDefaultExport": false,
@@ -331,9 +350,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/kite/src/Title.tsx",
-                "start": 599,
-                "end": 703,
-                "line": 18,
+                "start": 671,
+                "end": 775,
+                "line": 20,
                 "column": 7
               }
             }
@@ -403,9 +422,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/kite/src/Title.tsx",
-                "start": 710,
-                "end": 822,
-                "line": 21,
+                "start": 782,
+                "end": 894,
+                "line": 23,
                 "column": 7
               }
             }
@@ -475,9 +494,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/kite/src/Title.tsx",
-                "start": 829,
-                "end": 958,
-                "line": 24,
+                "start": 901,
+                "end": 1030,
+                "line": 26,
                 "column": 7
               }
             }
@@ -573,9 +592,9 @@
               "children": [],
               "span": {
                 "fileName": "packages/kite/src/Title.tsx",
-                "start": 995,
-                "end": 1115,
-                "line": 28,
+                "start": 1067,
+                "end": 1187,
+                "line": 30,
                 "column": 9
               }
             }
@@ -641,9 +660,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/kite/src/Title.tsx",
-                      "start": 1145,
-                      "end": 1204,
-                      "line": 33,
+                      "start": 1217,
+                      "end": 1276,
+                      "line": 35,
                       "column": 9
                     }
                   }
@@ -651,9 +670,9 @@
               ],
               "span": {
                 "fileName": "packages/kite/src/Title.tsx",
-                "start": 1131,
-                "end": 1217,
-                "line": 32,
+                "start": 1203,
+                "end": 1289,
+                "line": 34,
                 "column": 7
               }
             }
@@ -661,9 +680,9 @@
         ],
         "span": {
           "fileName": "packages/kite/src/Title.tsx",
-          "start": 571,
-          "end": 1231,
-          "line": 17,
+          "start": 643,
+          "end": 1303,
+          "line": 19,
           "column": 5
         }
       }

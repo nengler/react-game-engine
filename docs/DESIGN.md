@@ -727,9 +727,15 @@ degrees to radians. A tile object (one with a `gid`) is anchored at its bottom
 left in Tiled, an entity at its top left, so the importer moves the anchor
 along the object's own rotated up axis. An object with no class is skipped
 with a warning. A layer's `offsetx` / `offsety`, and those of every group it is in,
-shift its objects, because Tiled shows them there. Not handled: Tiled's `visible` flag (a hidden object is still an
-entity), tile flip flags in a `gid`, whether an `int` property is whole, and
-properties inherited from object templates.
+shift its objects, because Tiled shows them there. A layer or group hidden in Tiled, and an object with `visible: false`,
+are not placed (priority 7). Flip bits in an object's `gid` do not move its anchor, so they need no handling. Not handled:
+whether an `int` property is whole, and properties inherited from object templates.
+
+**Tile layers** (priority 7) are a second import, `importTilemap`, of the same `.tmj` into `generated/tilemaps.ts`, a table of
+`TilemapData` by file name (see `NATIVE_PLAN.md`, "Tilemap"): the layers' ids with flip bits split off, each layer's `visible`
+(a hidden group hides its layers), the first embedded tileset's `firstgid` and its tiles with the property `solid`. It is written
+**before** the sources are type-checked, because a game's own code (its rules) imports it. A map with no tile data (an objects-only
+map) writes nothing.
 
 **Runtime.** `loadScene(world, scene, prefabs)` builds each entity with
 `create(props)`, copies `transform` onto its **`placement`** (so the component's
@@ -1230,6 +1236,32 @@ The IR marks such a state `globalKey` (the dotted path) and has a `CallAction` s
 **Not yet.** Zustand's `subscribe`, middleware and `replace`; `setState` inside a compiled handler (writes go through
 actions, which keeps what the compiler must understand small); save and restore of the store; arrays in the state;
 and more than one store per project (one store per process, one `createGameState` call per project).
+
+## Custom hooks (priority 7)
+
+"Hooks are compiler intrinsics" extends to the ones an author writes. A function named `use…` (not a built-in hook, not the
+game state's store) whose body is what a component body may hold is a **custom hook**, and a call to it that is a statement of a
+component body is replaced, before the file is compiled, by the hook's own statements (`hooks/inline.ts`; text to text, so the
+rest of the compiler is unchanged and every rule and diagnostic applies to the expanded component):
+
+```tsx
+function usePlatformerBody() { const step = useGame((s) => s.step); const buttons = useRef(0); useInput(…); useUpdate((dt) => { step(buttons.current, dt); }); }
+export function Player() { usePlatformerBody(); … }
+```
+
+- **Names.** What the hook declares at its top level (its `const`s, its `[x, setX]` state, its parameters) is given a prefix unique to the call, `_useName3_x`, so two calls make two separate states and nothing clashes with the component's own names. Properties, keys and JSX attribute names are left alone; `{ x }` becomes `{ x: _useName3_x }`.
+- **Parameters.** A literal argument (a string, number or boolean) is written into the hook where the parameter is used, so a parameter can be a `useSound` path; any other argument is bound with `const _useName3_p = (argument);`. A missing argument takes the parameter's default. A destructured parameter is a diagnostic.
+- **Results.** `const v = useX()`, `const { a, b } = useX()` (the hook returns an object literal) and `const [a, b] = useX()` (an array literal) become `const` declarations of the returned expressions. A hook can return only values: state-derived expressions, not refs (they are not readable outside handlers) and not setters.
+- **Where.** In the component's file, or imported from a relative `.tsx` (`import { useClock } from "./hooks.tsx"`, read by the CLI; the hook's imports from the authoring module are added to the file that uses it). Hooks may call hooks, to a depth of six, which also stops recursion. A call anywhere but as a statement of the component body (in a condition, a callback, an expression) is `RGE1101` with the hook's name.
+- **What is left.** After expansion the hook's declaration and its import are removed, so a hooks-only file compiles to an empty module. Positions in later diagnostics are those of the expanded text. An unknown `use…` name is left alone, so the retired hooks keep their messages.
+
+The author's editor still sees ordinary typed functions: the file type-checks as written (the hook calls `useState` and friends, which throw only if actually run).
+
+## Tilemap, assets and the other built-ins (priority 7)
+
+`<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [NATIVE_PLAN.md](NATIVE_PLAN.md) ("Priority 7 additions"). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.
+
+**Build-time asset check.** `rge-compile --assets <dir>` (`checkAssets`, `RGE1211`) reports every literal image, font, music file and `useSound` path that is not a file in the folder, with the nearest file name; literals inside conditionals and arrays are found (`frames={on ? [...] : [...]}`), computed paths are not. `npm run check:<game>` passes `--assets` when the package has an `assets/` folder.
 
 ## Props and callbacks
 

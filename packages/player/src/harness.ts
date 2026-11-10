@@ -15,6 +15,11 @@ export class ScriptedInputBackend implements Backend {
   readonly textureSize: Backend["textureSize"];
   readonly overlaps: Backend["overlaps"];
   readonly setFullscreen: Backend["setFullscreen"];
+  readonly loadMusic: Backend["loadMusic"];
+  readonly playMusic: Backend["playMusic"];
+  readonly setMusicVolume: Backend["setMusicVolume"];
+  readonly stopMusic: Backend["stopMusic"];
+  readonly setGamepadDeadzone: Backend["setGamepadDeadzone"];
 
   constructor(inner: Backend, frames: readonly InputFrame[] = []) {
     this.#inner = inner;
@@ -23,6 +28,11 @@ export class ScriptedInputBackend implements Backend {
     this.textureSize = inner.textureSize?.bind(inner);
     this.overlaps = inner.overlaps?.bind(inner);
     this.setFullscreen = inner.setFullscreen?.bind(inner);
+    this.loadMusic = inner.loadMusic?.bind(inner);
+    this.playMusic = inner.playMusic?.bind(inner);
+    this.setMusicVolume = inner.setMusicVolume?.bind(inner);
+    this.stopMusic = inner.stopMusic?.bind(inner);
+    this.setGamepadDeadzone = inner.setGamepadDeadzone?.bind(inner);
   }
 
   queueInput(frame: InputFrame): void {
@@ -33,7 +43,7 @@ export class ScriptedInputBackend implements Backend {
   close: Backend["close"] = () => this.#inner.close();
   loadTexture: Backend["loadTexture"] = (path) => this.#inner.loadTexture(path);
   loadSound: Backend["loadSound"] = (path) => this.#inner.loadSound(path);
-  playSound: Backend["playSound"] = (handle) => this.#inner.playSound(handle);
+  playSound: Backend["playSound"] = (handle, volume) => this.#inner.playSound(handle, volume);
 
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
     this.#inner.frame(clearColor, records, length, texts, input, keys);

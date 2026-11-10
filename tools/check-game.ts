@@ -14,7 +14,7 @@
  *              (host/target/release/rge-host, or RGE_HOST_BIN), bundled and run under it too, which must print the same
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,7 +46,9 @@ const steps: { name: string; run: () => Outcome }[] = [
     run: () => {
       const args = ["packages/compiler/src/cli.ts", `packages/${name}/src`, `packages/${name}/generated`];
       if (existsSync(join(pkg, "scenes"))) args.push("--scenes", `packages/${name}/scenes`);
-      if (existsSync(join(pkg, "assets"))) args.push("--assets", `packages/${name}/assets`);
+      // The demo's beacon names an image that is missing on purpose (to show the placeholder), so it opts out in its package.json: "rge": { "checkAssets": false }.
+      const optOut = (JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")) as { rge?: { checkAssets?: boolean } }).rge?.checkAssets === false;
+      if (existsSync(join(pkg, "assets")) && !optOut) args.push("--assets", `packages/${name}/assets`);
       const r = node(args);
       return { ok: r.ok, detail: r.output.trim().split("\n").at(-1) ?? "", output: r.output };
     },

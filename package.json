@@ -29,6 +29,7 @@
     "kite:rooms": "node packages/kite/tools/make-rooms.ts",
     "kite:solve": "node packages/kite/tools/solve.ts --write",
     "play:kite": "cd packages/kite && node ../player-node/src/play.ts main.ts",
+    "package:kite": "node tools/package.ts packages/kite/main.ts kite packages/kite/assets",
     "check:kite": "node tools/check-game.ts kite",
     "example": "node packages/compiler/src/cli.ts packages/example/src packages/example/generated --scenes packages/example/scenes"
   },
