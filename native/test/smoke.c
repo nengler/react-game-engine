@@ -43,6 +43,9 @@ static void ellipse(double x, double y, double w, double h, uint32_t color) {
 static void sprite(double x, double y, double sx, double sy, int32_t texture) {
   header(RGE_OP_SPRITE, x, y, 0, sx, sy); push(texture);
 }
+static void region(double x, double y, int32_t texture, double sx, double sy, double sw, double sh, double ox, double oy, int flags, uint32_t tint) {
+  header(RGE_OP_SPRITE_REGION, x, y, 0, 1, 1); push(texture); push(sx); push(sy); push(sw); push(sh); push(ox); push(oy); push(flags); push(tint);
+}
 static void text(double x, double y, int32_t index, double size, uint32_t color) {
   header(RGE_OP_TEXT, x, y, 0, 1, 1); push(index); push(size); push(color);
 }
@@ -256,6 +259,33 @@ int main(void) {
   reset(); view(1, 0, 0, 1, 0, 0); sprite(20, 10, 1, 1, 9999); frame();
   expect(24, 14, CLEAR, "an invalid texture handle draws nothing");
 
+  /* A region of a texture: an 8 x 8 sheet, left half red and right half green, drawn a frame at a time. */
+  {
+    Image sheet = GenImageColor(8, 8, (Color){ 0, 255, 0, 255 });
+    ImageDrawRectangle(&sheet, 0, 0, 4, 8, (Color){ 255, 0, 0, 255 });
+    CHECK(ExportImage(sheet, "rge_smoke_sheet.png"), "write the sheet");
+    UnloadImage(sheet);
+    int32_t sheet_tex = rge_load_texture("rge_smoke_sheet.png");
+    CHECK(sheet_tex >= 0, "load the sheet");
+    reset(); view(1, 0, 0, 1, 0, 0); region(20, 10, sheet_tex, 0, 0, 4, 8, 0, 0, 0, WHITE_RGBA); frame();
+    expect(21, 14, C_RED, "the red region");
+    expect(25, 14, CLEAR, "only the region, not the rest of the sheet");
+    reset(); view(1, 0, 0, 1, 0, 0); region(20, 10, sheet_tex, 4, 0, 4, 8, 0, 0, 0, WHITE_RGBA); frame();
+    expect(21, 14, C_GREEN, "the green region, drawn where the red one was");
+    reset(); view(1, 0, 0, 1, 0, 0); region(20, 10, sheet_tex, 0, 0, 8, 8, 4, 4, 0, WHITE_RGBA); frame();
+    expect(17, 11, C_RED, "the origin moves the region: its left is 4 pixels left of the record's position");
+    expect(23, 11, C_GREEN, "and its right half is on the other side of it");
+    reset(); view(1, 0, 0, 1, 0, 0); region(20, 10, sheet_tex, 0, 0, 8, 8, 0, 0, RGE_SPRITE_FLIP_X, WHITE_RGBA); frame();
+    expect(14, 14, C_GREEN, "mirrored about the origin: the picture is on the left of it, green half first");
+    expect(18, 14, C_RED, "and the red half next to the origin");
+    expect(22, 14, CLEAR, "nothing on the right of it");
+    reset(); view(1, 0, 0, 1, 0, 0); region(20, 10, sheet_tex, 0, 0, 4, 8, 0, 0, 0, 0xffffff00u); frame();
+    expect(21, 14, CLEAR, "a tint with no alpha draws nothing");
+    reset(); view(1, 0, 0, 1, 0, 0); region(20, 10, sheet_tex, 0, 0, 0, 8, 0, 0, 0, WHITE_RGBA); region(30, 10, 9999, 0, 0, 4, 4, 0, 0, 0, WHITE_RGBA); frame();
+    expect(21, 14, CLEAR, "an empty region and an invalid texture draw nothing");
+    remove("rge_smoke_sheet.png");
+  }
+
   /* Text: white pixels appear in the text's box, and an out-of-range string index draws nothing. */
   {
     const char strings[] = "HI\0second";
@@ -382,6 +412,18 @@ int main(void) {
   CHECK(rge_load_sound("does-not-exist.wav") == -1, "missing sound is -1");
   rge_play_sound(-1);
   rge_play_sound(12345);
+  rge_play_sound_ex(-1, 0.5);
+  rge_play_sound_ex(12345, NAN);
+  /* Music: a missing file is -1, and everything ignores a bad handle. */
+  CHECK(rge_load_music("does-not-exist.ogg") == -1 && rge_load_music(NULL) == -1, "missing music is -1");
+  rge_music_play(-1, 1.0, 1);
+  rge_music_set_volume(7, 0.5);
+  rge_music_stop(99);
+  /* The gamepad: nothing is connected in a test, so no gamepad key is ever down, whatever the dead zone. */
+  rge_set_gamepad_deadzone(0.5);
+  rge_set_gamepad_deadzone(NAN);
+  reset(); view(1, 0, 0, 1, 0, 0); frame();
+  for (int i = 0; i < rge_key_count(); i++) CHECK(keys[i] == 0, "key %d is idle with no input device (flags %d)", i, keys[i]);
 
   rge_close();
   rge_close(); /* closing twice is harmless */

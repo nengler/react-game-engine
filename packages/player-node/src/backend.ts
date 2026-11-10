@@ -50,8 +50,28 @@ export class NodeBackend implements Backend {
     return this.#native.loadSound(path);
   }
 
-  playSound(handle: number): void {
-    this.#native.playSound(handle);
+  playSound(handle: number, volume = 1): void {
+    this.#native.playSound(handle, volume);
+  }
+
+  loadMusic(path: string): number {
+    return this.#native.loadMusic(path);
+  }
+
+  playMusic(handle: number, volume: number, loop: boolean): void {
+    this.#native.playMusic(handle, volume, loop);
+  }
+
+  setMusicVolume(handle: number, volume: number): void {
+    this.#native.setMusicVolume(handle, volume);
+  }
+
+  stopMusic(handle: number): void {
+    this.#native.stopMusic(handle);
+  }
+
+  setGamepadDeadzone(deadzone: number): void {
+    this.#native.setGamepadDeadzone(deadzone);
   }
 
   measureText(text: string, size: number): { width: number; height: number } {

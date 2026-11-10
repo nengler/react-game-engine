@@ -20,7 +20,7 @@ function headerKeys(): { kind: string; code: string; name: string }[] {
   assert.ok(start >= 0, "RGE_KEYS is missing from rge.h");
   const end = header.indexOf("\n\n", start);
   const block = header.slice(start, end);
-  return [...block.matchAll(/X\((K|M),\s*(\w+),\s*"([^"]+)"\)/g)].map((m) => ({ kind: m[1] as string, code: m[2] as string, name: m[3] as string }));
+  return [...block.matchAll(/X\((K|M|G|S),\s*(\w+),\s*"([^"]+)"\)/g)].map((m) => ({ kind: m[1] as string, code: m[2] as string, name: m[3] as string }));
 }
 
 describe("protocol.ts mirrors native/include/rge.h", () => {

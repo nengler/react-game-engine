@@ -148,6 +148,7 @@ static void execute_records(const double *records, int32_t length, const char *t
       case RGE_OP_RECT: need = RGE_OP_RECT_LEN; break;
       case RGE_OP_ELLIPSE: need = RGE_OP_ELLIPSE_LEN; break;
       case RGE_OP_TEXT: need = RGE_OP_TEXT_LEN; break;
+      case RGE_OP_SPRITE_REGION: need = RGE_OP_SPRITE_REGION_LEN; break;
       case RGE_OP_SCISSOR: need = RGE_OP_SCISSOR_LEN; break;
       case RGE_OP_SCISSOR_END: need = RGE_OP_SCISSOR_END_LEN; break;
       case RGE_OP_CANVAS: report_bad_frame("canvas record that is not first", at); goto done;
@@ -192,6 +193,24 @@ static void execute_records(const double *records, int32_t length, const char *t
         if (assets_texture(to_index(r[6]), &texture)) {
           push_transform(r);
           DrawTexture(texture, 0, 0, WHITE);
+          rlPopMatrix();
+        }
+        break;
+      }
+      case RGE_OP_SPRITE_REGION: {
+        Texture2D texture;
+        if (assets_texture(to_index(r[6]), &texture)) {
+          int32_t flags = to_index(r[13]);
+          float w = (float)r[9], h = (float)r[10];
+          if (!(w > 0.0f && h > 0.0f)) break;
+          /* A negative source size mirrors the region; the destination always starts at minus the origin. */
+          Rectangle source = { (float)r[7], (float)r[8], (flags & RGE_SPRITE_FLIP_X) ? -w : w, (flags & RGE_SPRITE_FLIP_Y) ? -h : h };
+          float ox = (float)r[11], oy = (float)r[12];
+          if (flags & RGE_SPRITE_FLIP_X) ox = w - ox;
+          if (flags & RGE_SPRITE_FLIP_Y) oy = h - oy;
+          Rectangle dest = { -ox, -oy, w, h };
+          push_transform(r);
+          DrawTexturePro(texture, source, dest, (Vector2){ 0.0f, 0.0f }, 0.0f, unpack_color(to_color(r[14])));
           rlPopMatrix();
         }
         break;
@@ -302,6 +321,7 @@ void rge_frame(uint32_t clear_color, const double *records, int32_t records_leng
                double *input, uint8_t *keys) {
   if (!state.open) return;
 
+  assets_update_music();
   BeginDrawing();
   bool has_records = records != NULL && records_length > 0;
   if (has_records && to_index(records[0]) == RGE_OP_CANVAS) {

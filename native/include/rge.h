@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 4
+#define RGE_ABI_VERSION 5
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -29,6 +29,12 @@
  *                                                or the canvas when there is one), top-left origin, ignoring the view.
  *                                                A later SCISSOR replaces it; they do not nest.
  *   RGE_OP_SCISSOR_END  op                       stop clipping
+ *   RGE_OP_SPRITE_REGION  op, x, y, rot, sx, sy, texture, srcX, srcY, srcW, srcH, originX, originY, flags, tint
+ *                                                one srcW x srcH region of a texture (a frame of a sheet), drawn with
+ *                                                its origin (originX, originY, in region pixels) at the record's local
+ *                                                origin; flags: RGE_SPRITE_FLIP_X, RGE_SPRITE_FLIP_Y, mirroring the
+ *                                                region about the origin; tint is packed 0xRRGGBBAA, which multiplies
+ *                                                the texel colours (alpha included, so it is also opacity).
  *   RGE_OP_CANVAS   op, width, height, destX, destY, destW, destH, borderColor
  *                                                Only as the first record of a frame. Everything after it is drawn
  *                                                into an off-screen width x height texture (point filtered, cleared to
@@ -43,6 +49,7 @@
 #define RGE_OP_SCISSOR      6
 #define RGE_OP_SCISSOR_END  7
 #define RGE_OP_CANVAS       8
+#define RGE_OP_SPRITE_REGION 9
 
 /* Record lengths in doubles, op included. */
 #define RGE_OP_VIEW_LEN    7
@@ -53,6 +60,11 @@
 #define RGE_OP_SCISSOR_LEN     5
 #define RGE_OP_SCISSOR_END_LEN 1
 #define RGE_OP_CANVAS_LEN      8
+#define RGE_OP_SPRITE_REGION_LEN 15
+
+/* RGE_OP_SPRITE_REGION flags. */
+#define RGE_SPRITE_FLIP_X 1
+#define RGE_SPRITE_FLIP_Y 2
 
 /* ---------- Input, written by rge_frame ---------- */
 #define RGE_IN_DT       0  /* seconds since the previous frame */
@@ -69,7 +81,9 @@
 #define RGE_KEY_PRESSED  2
 #define RGE_KEY_RELEASED 4
 
-/* The key table: X(kind, raylib code, name). Kind K is a keyboard key, M a mouse button.
+/* The key table: X(kind, raylib code, name). Kind K is a keyboard key, M a mouse button, G a button of the first
+ * gamepad, S a direction (code 0 left, 1 right, 2 up, 3 down) that is down for the d-pad or the left stick beyond the
+ * dead zone (see rge_set_gamepad_deadzone). A gamepad that is not connected reads as nothing held.
  * The order here is the order of the keys buffer. Append only.
  * "Shift", "Control" and "Alt" are down when either the left or the right key is. */
 #define RGE_KEYS(X) \
@@ -88,7 +102,12 @@
   X(K, KEY_F1, "F1") X(K, KEY_F2, "F2") X(K, KEY_F3, "F3") X(K, KEY_F4, "F4") \
   X(K, KEY_F5, "F5") X(K, KEY_F6, "F6") X(K, KEY_F7, "F7") X(K, KEY_F8, "F8") \
   X(K, KEY_F9, "F9") X(K, KEY_F10, "F10") X(K, KEY_F11, "F11") X(K, KEY_F12, "F12") \
-  X(M, MOUSE_BUTTON_LEFT, "MouseLeft") X(M, MOUSE_BUTTON_RIGHT, "MouseRight") X(M, MOUSE_BUTTON_MIDDLE, "MouseMiddle")
+  X(M, MOUSE_BUTTON_LEFT, "MouseLeft") X(M, MOUSE_BUTTON_RIGHT, "MouseRight") X(M, MOUSE_BUTTON_MIDDLE, "MouseMiddle") \
+  X(G, GAMEPAD_BUTTON_RIGHT_FACE_DOWN, "PadA") X(G, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT, "PadB") \
+  X(G, GAMEPAD_BUTTON_RIGHT_FACE_LEFT, "PadX") X(G, GAMEPAD_BUTTON_RIGHT_FACE_UP, "PadY") \
+  X(G, GAMEPAD_BUTTON_LEFT_TRIGGER_1, "PadLB") X(G, GAMEPAD_BUTTON_RIGHT_TRIGGER_1, "PadRB") \
+  X(G, GAMEPAD_BUTTON_MIDDLE_LEFT, "PadBack") X(G, GAMEPAD_BUTTON_MIDDLE_RIGHT, "PadStart") \
+  X(S, 0, "PadLeft") X(S, 1, "PadRight") X(S, 2, "PadUp") X(S, 3, "PadDown")
 
 /* ---------- Window options for rge_open ---------- */
 #define RGE_OPEN_RESIZABLE 1
@@ -108,6 +127,20 @@ int32_t rge_set_fullscreen(int32_t on);
 int32_t rge_load_texture(const char *path); /* handle >= 0, or -1 if it could not be loaded */
 int32_t rge_load_sound(const char *path);   /* handle >= 0, or -1 */
 void    rge_play_sound(int32_t handle);     /* ignores -1 */
+/* Play a sound at `volume` (0 to 1, clamped) over any plays of it still going: up to RGE_SOUND_VOICES at once, then the
+ * oldest is cut off. Ignores -1. */
+void    rge_play_sound_ex(int32_t handle, double volume);
+#define RGE_SOUND_VOICES 4
+
+/* Music streams from the file and loops; one `handle` can play at a time per stream, and it keeps playing between
+ * frames (rge_frame feeds the stream) until stopped. Without an audio device these load and play silently. */
+int32_t rge_load_music(const char *path);                           /* handle >= 0, or -1 */
+void    rge_music_play(int32_t handle, double volume, int32_t loop); /* from the start; loop nonzero repeats */
+void    rge_music_set_volume(int32_t handle, double volume);        /* 0 to 1, takes effect at once */
+void    rge_music_stop(int32_t handle);                             /* stops it; a later play starts again from the start */
+/* The stick's dead zone for the PadLeft/Right/Up/Down keys: a stick pushed less than this far (0 to 1) reads as
+ * centred. Default 0.35. */
+void    rge_set_gamepad_deadzone(double deadzone);
 
 /* Layout needs sizes. Both return 0 and write two doubles to `out`, or return nonzero (and write nothing) when
  * they cannot answer: no window is open, the handle is invalid, or an argument is NULL. */

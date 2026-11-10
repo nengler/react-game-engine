@@ -27,6 +27,10 @@ import {
   RGE_OP_SCISSOR_LEN,
   RGE_OP_SPRITE,
   RGE_OP_SPRITE_LEN,
+  RGE_OP_SPRITE_REGION,
+  RGE_OP_SPRITE_REGION_LEN,
+  RGE_SPRITE_FLIP_X,
+  RGE_SPRITE_FLIP_Y,
   RGE_OP_TEXT,
   RGE_OP_TEXT_LEN,
   RGE_OP_VIEW,
@@ -48,6 +52,19 @@ export type DecodedRecord =
   | { readonly op: "scissorEnd" }
   | { readonly op: "view"; readonly a: number; readonly b: number; readonly c: number; readonly d: number; readonly e: number; readonly f: number }
   | ({ readonly op: "sprite"; readonly texture: string } & Placed)
+  | ({
+      readonly op: "spriteRegion";
+      readonly texture: string;
+      readonly srcX: number;
+      readonly srcY: number;
+      readonly srcW: number;
+      readonly srcH: number;
+      readonly originX: number;
+      readonly originY: number;
+      readonly flipX: boolean;
+      readonly flipY: boolean;
+      readonly tint: string;
+    } & Placed)
   | ({ readonly op: "rect"; readonly width: number; readonly height: number; readonly color: string } & Placed)
   | ({ readonly op: "ellipse"; readonly width: number; readonly height: number; readonly color: string } & Placed)
   | ({ readonly op: "text"; readonly text: string; readonly size: number; readonly color: string } & Placed);
@@ -78,6 +95,8 @@ export interface RecordingOptions {
   readonly missingTextures?: Iterable<string>;
   /** Sound paths that fail to load (handle -1). */
   readonly missingSounds?: Iterable<string>;
+  /** Music paths that fail to load (handle -1). */
+  readonly missingMusic?: Iterable<string>;
   /** The size `textureSize` reports for a texture path. Default 16 × 16. */
   readonly textureSizes?: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
 }
@@ -97,6 +116,14 @@ export class RecordingBackend implements Backend {
   readonly soundLoads: string[] = [];
   /** The path of each sound played, in order. */
   readonly plays: string[] = [];
+  /** Each sound played with the volume it was played at (1 when none was given). */
+  readonly playVolumes: { readonly path: string; readonly volume: number }[] = [];
+  /** What the game did with music, in order: `load:path`, `play:path:volume:loop`, `volume:path:volume`, `stop:path`. */
+  readonly musicEvents: string[] = [];
+  /** The gamepad dead zone the game set, when it did. */
+  gamepadDeadzone: number | null = null;
+  readonly #music: string[] = [];
+  readonly #missingMusic: Set<string>;
   /** Every `measureText` call, as `size:text`: the player should measure a string once, not every frame. */
   readonly textMeasures: string[] = [];
   /** Every `textureSize` call, by path. */
@@ -111,6 +138,7 @@ export class RecordingBackend implements Backend {
   constructor(options: RecordingOptions = {}) {
     this.#missing = new Set(options.missingTextures);
     this.#missingSounds = new Set(options.missingSounds);
+    this.#missingMusic = new Set(options.missingMusic);
     this.#textureSizes = options.textureSizes ?? {};
   }
 
@@ -166,10 +194,39 @@ export class RecordingBackend implements Backend {
     return { ...(this.#textureSizes[path] ?? { width: 16, height: 16 }) };
   }
 
-  playSound(handle: number): void {
+  playSound(handle: number, volume = 1): void {
     const path = this.#sounds[handle];
     if (path === undefined) throw new Error(`playSound: no sound has handle ${handle}.`);
     this.plays.push(path);
+    this.playVolumes.push({ path, volume });
+  }
+
+  loadMusic(path: string): number {
+    this.musicEvents.push(`load:${path}`);
+    if (this.#missingMusic.has(path)) return -1;
+    return handleFor(this.#music, path);
+  }
+
+  #musicPath(handle: number, what: string): string {
+    const path = this.#music[handle];
+    if (path === undefined) throw new Error(`${what}: no music has handle ${handle}.`);
+    return path;
+  }
+
+  playMusic(handle: number, volume: number, loop: boolean): void {
+    this.musicEvents.push(`play:${this.#musicPath(handle, "playMusic")}:${volume}:${loop}`);
+  }
+
+  setMusicVolume(handle: number, volume: number): void {
+    this.musicEvents.push(`volume:${this.#musicPath(handle, "setMusicVolume")}:${volume}`);
+  }
+
+  stopMusic(handle: number): void {
+    this.musicEvents.push(`stop:${this.#musicPath(handle, "stopMusic")}`);
+  }
+
+  setGamepadDeadzone(deadzone: number): void {
+    this.gamepadDeadzone = deadzone;
   }
 
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
@@ -217,6 +274,29 @@ export class RecordingBackend implements Backend {
           if (texture === undefined) throw new Error(`Sprite record uses texture handle ${handle}, which was never loaded.`);
           out.push({ op: "sprite", ...placed(), texture });
           at += RGE_OP_SPRITE_LEN;
+          break;
+        }
+        case RGE_OP_SPRITE_REGION: {
+          need(RGE_OP_SPRITE_REGION_LEN);
+          const handle = records[at + 6] as number;
+          const texture = this.#textures[handle];
+          if (texture === undefined) throw new Error(`Sprite region record uses texture handle ${handle}, which was never loaded.`);
+          const flags = records[at + 13] as number;
+          out.push({
+            op: "spriteRegion",
+            ...placed(),
+            texture,
+            srcX: records[at + 7]!,
+            srcY: records[at + 8]!,
+            srcW: records[at + 9]!,
+            srcH: records[at + 10]!,
+            originX: records[at + 11]!,
+            originY: records[at + 12]!,
+            flipX: (flags & RGE_SPRITE_FLIP_X) !== 0,
+            flipY: (flags & RGE_SPRITE_FLIP_Y) !== 0,
+            tint: colorToHex(records[at + 14]!),
+          });
+          at += RGE_OP_SPRITE_REGION_LEN;
           break;
         }
         case RGE_OP_RECT:

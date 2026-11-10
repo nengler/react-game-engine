@@ -30,7 +30,18 @@ export interface Backend {
   loadTexture(path: string): number;
   /** A sound handle, or -1 if the file could not be loaded. */
   loadSound(path: string): number;
-  playSound(handle: number): void;
+  /** Play a sound; `volume` is 0 to 1 (default 1). A sound played again while it still sounds plays over itself, up to four voices. */
+  playSound(handle: number, volume?: number): void;
+  /**
+   * Music streams from its file and loops. `loadMusic` gives a handle or -1; the rest ignore -1. Optional: without it music is
+   * silent (and a game's music is still counted by a recording backend). Both native hosts implement it (ABI v5).
+   */
+  loadMusic?(path: string): number;
+  playMusic?(handle: number, volume: number, loop: boolean): void;
+  setMusicVolume?(handle: number, volume: number): void;
+  stopMusic?(handle: number): void;
+  /** The dead zone of the gamepad's left stick for `PadLeft` and the other directions, 0 to 1 (ABI v5). */
+  setGamepadDeadzone?(deadzone: number): void;
   /**
    * The width and line height in pixels of `text` drawn at `size`, for layout. Optional: without it the player
    * estimates. Both native hosts implement it (ABI v2).
