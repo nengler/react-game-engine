@@ -2,6 +2,7 @@
 import { Collider, Entity, Shape, type PrefabDefinition } from "@rge/runtime";
 
 export class Spikes extends Entity {
+  static readonly managed = true;
   readonly shape: Shape = new Shape({ kind: "rect", width: 24, height: 24, color: "#8b1e2d" });
   readonly collider: Collider = new Collider({ width: 24, height: 24, tag: "spikes" });
 

@@ -7,6 +7,7 @@ export interface BannerProps {
 }
 
 export class Banner extends Sprite<BannerProps> {
+  static readonly managed = true;
   shown: boolean = false;
   #shownNext: boolean = this.shown;
 

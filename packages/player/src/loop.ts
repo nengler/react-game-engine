@@ -29,6 +29,8 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly assets?: string;
   /** Where warnings go. Default `console.warn`. */
   readonly warn?: (message: string) => void;
+  /** Reuse last frame's draw records for what has not changed; `"check"` also rebuilds each frame and throws on a difference. See `FrameBuilderOptions.retain`. Default `true`. */
+  readonly retain?: boolean | "check";
 }
 
 export interface Player {
@@ -109,6 +111,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     textureSize: backend.textureSize ? (handle) => backend.textureSize!(handle) : undefined,
     assets,
     warn: config.warn,
+    retain: config.retain,
   });
   const sink = createSoundSink(backend, assets, warner);
   const world = new World();

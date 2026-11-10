@@ -2,6 +2,7 @@
 import { Entity, Shape, Sprite, type PrefabDefinition } from "@rge/runtime";
 
 export class Ground extends Entity {
+  static readonly managed = true;
   readonly shape: Shape = new Shape({ kind: "rect", width: 48, height: 48, color: "#2b3550" });
   readonly shape2: Shape = new Shape({ kind: "rect", width: 64, height: 32, color: "#2b3550" });
   readonly shape3: Shape = new Shape({ kind: "circle", width: 56, height: 56, color: "#3a2b50" });

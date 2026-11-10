@@ -3,6 +3,7 @@ import { Collider, Entity, Sprite } from "@rge/runtime";
 import { WarningIcon } from "./WarningIcon.ts";
 
 export class Player extends Entity {
+  static readonly managed = true;
   health: number = 100;
   #healthNext: number = this.health;
   readonly sprite: Sprite = new Sprite({ image: (this.health > 50) ? "normal.png" : "hurt.png" });

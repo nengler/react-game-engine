@@ -3,6 +3,7 @@ import { Collider, Entity, Shape, type Contact, type InputState, type PrefabDefi
 import { useGame } from "../src/GameState.ts";
 
 export class Player extends Entity {
+  static readonly managed = true;
   x: number = 0;
   #xNext: number = this.x;
   y: number = 0;

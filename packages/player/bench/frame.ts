@@ -4,7 +4,8 @@
  * draw list, collisions) is measured, not the GPU. Movers either set their transform directly, or move the way
  * compiled components do (state setters, a render each frame). One scene piles 300 colliders on one spot, every
  * pair touching, which is the worst case for collisions. The same file runs under Node and, bundled, under the
- * Rust host (QuickJS-ng):
+ * Rust host (QuickJS-ng). A mover that writes its transform in a hook (`Mover`) is the hand-written case, which the player
+ * redraws every frame; one that moves by state (`StateMover`) is a compiled component, which it reuses around while it stands still:
  *
  *   node packages/player/bench/frame.ts
  *   npm run bundle -- packages/player/bench/frame.ts host/dist/bench.js && host/target/release/rge-host host/dist/bench.js
@@ -35,6 +36,8 @@ class Mover extends Entity {
 
 /** Moves the way a compiled component does: `useUpdate` calls state setters, and a render applies the state. */
 class StateMover extends Entity {
+  /** What the compiler writes on every component: its draw state changes only in `render()`, so its draw records may be reused while it stands still. */
+  static readonly managed = true;
   x = 0;
   #xNext = 0;
   y = 0;
@@ -138,12 +141,13 @@ const scenes: [string, Scene][] = [
   ["2000 still rects", { n: 2000, moving: 0 }],
   ["2000 rects, 20 moving, colliders", { n: 2000, moving: 20, colliders: true }],
   ["2000 still rects with colliders", { n: 2000, moving: 0, colliders: true }],
+  ["2000 rects, 20 moving by state, colliders", { n: 2000, moving: 20, state: true, colliders: true }],
   ["500 moving rects with colliders", { n: 500, colliders: true }],
   ["2000 moving rects with colliders", { n: 2000, colliders: true }],
   ["300 colliders in one pile", { n: 300, colliders: true, pile: true }],
 ];
 for (const [name, scene] of scenes) console.log(`${name.padEnd(35)}: ${measure(scene).toFixed(2)} ms per frame`);
-for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7]] as [string, Scene][]) {
+for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8]] as [string, Scene][]) {
   const p = phases(scene);
   console.log(`  ${name} by phase: tick ${p.tick.toFixed(2)}, walk ${p.walk.toFixed(2)}, collisions ${p.collisions.toFixed(2)} ms`);
 }

@@ -2,6 +2,7 @@
 import { Collider, Entity, Sound, Sprite, clamp, type InputState } from "@rge/runtime";
 
 export class Hero extends Entity {
+  static readonly managed = true;
   health: number = 100;
   #healthNext: number = this.health;
   poisoned: boolean = false;

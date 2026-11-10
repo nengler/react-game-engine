@@ -8,12 +8,12 @@ import {
   Pointer,
   Flex,
   Game,
+  GameObject,
   Hud,
   Screen,
   Shape,
   Sprite,
   Text,
-  type GameObject,
   type Pressable,
   type ScreenFit,
   type ViewTransform,
@@ -233,6 +233,22 @@ export class DrawList {
     return at + 6;
   }
 
+  /**
+   * Append the records `[from, to)` of `source`, a copy of an earlier frame's. `textShift` is added to the text index of
+   * every text record in them (the strings they refer to are re-added at new positions); pass 0 when there are none.
+   */
+  appendFrom(source: Float64Array, from: number, to: number, textShift: number, hasText: boolean): void {
+    const count = to - from;
+    const at = this.#reserve(count);
+    const r = this.records;
+    r.set(source.subarray(from, to), at);
+    if (!hasText) return;
+    const end = at + count;
+    for (let p = at; p < end; p += recordLength(r[p] as number)) {
+      if (r[p] === RGE_OP_TEXT) r[p + 6] = (r[p + 6] as number) + textShift;
+    }
+  }
+
   /** The canvas record, which must be first in the frame: draw into a `width` × `height` texture, shown in the window at `dest`. */
   canvas(width: number, height: number, dest: WindowRect, border: PackedColor): void {
     const at = this.#reserve(RGE_OP_CANVAS_LEN);
@@ -302,6 +318,12 @@ export interface FrameBuilderOptions {
   assets?: string;
   /** Where warnings go. Default `console.warn`. */
   warn?: (message: string) => void;
+  /**
+   * Reuse last frame's draw records for subtrees that have not changed since (see "Reusing draw records" on `FrameBuilder`).
+   * `false` rebuilds everything each frame; `"check"` reuses, then builds the frame again from scratch and throws if the two differ,
+   * which is how the tests (and a game under development) catch a change that nothing reported. Default `true`.
+   */
+  retain?: boolean | "check";
 }
 
 export interface ColliderEntry {
@@ -346,13 +368,20 @@ const KIND_COLLIDER = 6;
 const KIND_SCREEN = 7;
 const KIND_HUD = 8;
 const KIND_FLEX = 9;
-/** What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven times per object. */
+/**
+ * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
+ * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
+ */
 const KINDS = new Map<Function, number>();
+/** The draw records of a subtree with this object in it are never reused: it is found by the walk each frame (it feeds a list besides the draw records, or is not drawn where it is). */
+const FLAG_VOLATILE = 16;
+/** Nothing below this object is reused either: what it does to its children is not reported (layout), or it may change itself at any time (a hook of a hand-written class). */
+const FLAG_OPAQUE = 32;
 
-function kindOf(object: GameObject): number {
-  let kind = KINDS.get(object.constructor);
-  if (kind === undefined) {
-    kind =
+function kindCode(object: GameObject): number {
+  let code = KINDS.get(object.constructor);
+  if (code === undefined) {
+    const kind =
       object instanceof Sprite || object instanceof AnimatedSprite ? KIND_SPRITE
       : object instanceof Shape ? KIND_SHAPE
       : object instanceof Text ? KIND_TEXT
@@ -363,9 +392,28 @@ function kindOf(object: GameObject): number {
       : object instanceof Hud ? KIND_HUD
       : object instanceof Flex ? KIND_FLEX
       : KIND_NONE;
-    KINDS.set(object.constructor, kind);
+    code = kind;
+    if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX) code |= FLAG_VOLATILE;
+    if (kind === KIND_FLEX) code |= FLAG_OPAQUE;
+    // A class that overrides a per-tick hook may write its own transform or colour from it, which nothing reports, unless it is
+    // a built-in or a compiled component (the compiler marks those `managed`; the marker is an own property, so a hand-written subclass of one is not).
+    const ownProperty = (name: string): boolean => Object.prototype.hasOwnProperty.call(object.constructor, name);
+    const hooked = object.onInput !== GameObjectPrototype.onInput || object.onUpdate !== GameObjectPrototype.onUpdate;
+    if (hooked && !ownProperty("intrinsic") && !ownProperty("managed")) code |= FLAG_VOLATILE | FLAG_OPAQUE;
+    KINDS.set(object.constructor, code);
   }
-  return kind;
+  return code;
+}
+
+const GameObjectPrototype = GameObject.prototype;
+
+/** What `FrameBuilder`'s world walk says about a subtree (see there). */
+const WALK_CLEAN = 0;
+const WALK_VOLATILE = 1;
+const WALK_OPAQUE = 2;
+
+function kindOf(object: GameObject): number {
+  return kindCode(object) & 15;
 }
 
 /**
@@ -401,9 +449,47 @@ export function estimateTextWidth(text: string, size: number): number {
 const NO_SIZE: Size = { width: 0, height: 0 };
 
 /**
+ * What a `FrameBuilder` remembers about an object so it can reuse the draw records it made for it (kept in `GameObject.drawCache`).
+ * Offsets are relative to the parent's own start in the same frame, so that a subtree copied from last frame keeps them all valid
+ * without touching them: only the root of a copied run is updated.
+ */
+class DrawInfo {
+  /** The builder's continuity token when this was written: a different one means it belongs to an earlier life of the builder and is ignored. */
+  readonly owner: object;
+  /** Whether `rel`, `colRel` and `textRel` say where this object's records are in last frame's list. */
+  ok = false;
+  /** The serial of the frame whose records `len`, `colLen` and `textLen` describe and that are known to be current; -1 when this object's records cannot be reused. */
+  built = -1;
+  /** Where this object's records start in the draw records, colliders and texts, relative to its parent's start. */
+  rel = 0;
+  colRel = 0;
+  textRel = 0;
+  /** How many doubles, collider entries and strings this object and everything under it wrote. */
+  len = 0;
+  colLen = 0;
+  textLen = 0;
+
+  constructor(owner: object) {
+    this.owner = owner;
+  }
+}
+
+/**
  * Turns an object tree into one frame of draw records. It owns what must persist between frames: the
  * texture handles (each path is loaded once), the colour cache and the warn-once set. It draws
  * nothing itself, so it runs anywhere, with no window.
+ *
+ * **Reusing draw records.** Most of a game's objects stand still, and a frame spends its time on them: the walk composes a
+ * transform and writes a record for each. So the builder keeps last frame's world records and, for a subtree that has not
+ * changed, copies the run of records instead of making them again (and its colliders, and its texts). "Changed" is what the
+ * world reports: a render, a structural change, an `AnimatedSprite` frame, or `markChanged` (see `GameObject.markChanged`); each
+ * stamps the object and its ancestors with the world's serial, and the builder advances the serial once a frame. A subtree is
+ * copied when nothing in it was stamped since the frame its records came from, and nothing above it was either (an ancestor's
+ * transform moves it). Left out, because the walk must see them each frame: a `<Camera>`, `<Pointer>`, `<Hud>` and `<Flex>`
+ * (anything that feeds a list besides the draw records, or lays its children out), anything with a non-zero `z`, and a
+ * hand-written class that overrides `onInput` or `onUpdate`, whose subtree is not reused either since it may change itself unseen.
+ * The unchanged-object rule is the whole contract: a transform, colour or text written anywhere but a render, with no
+ * `markChanged`, is not drawn until something else redraws that object. `retain: "check"` finds that out by rebuilding.
  */
 export class FrameBuilder {
   readonly #list = new DrawList();
@@ -417,8 +503,26 @@ export class FrameBuilder {
   readonly #assets: string;
   readonly #warner: Warner;
   readonly #layouter: Layouter;
+  readonly #retain: boolean;
+  readonly #options: FrameBuilderOptions;
+  #reference: FrameBuilder | undefined;
+  // What reusing needs from the last frame (see `DrawInfo`): its world records in tree order, before the z sort, its texts and colliders.
+  #token: object = {};
+  #lastRoot: GameObject | null = null;
+  #lastWorld: object | null = null;
+  #prevTree = new Float64Array(1024);
+  #prevTexts: string[] = [];
+  #prevColliders: ColliderEntry[] = [];
+  #reused = 0;
+
+  /** How many doubles of the last frame's world records were copied from the frame before instead of made again (for tests and benchmarks). */
+  get reusedRecords(): number {
+    return this.#reused;
+  }
 
   constructor(options: FrameBuilderOptions) {
+    this.#options = options;
+    this.#retain = options.retain !== false;
     this.#loadTexture = options.loadTexture;
     this.#measureText = options.measureText;
     this.#textureSize = options.textureSize;
@@ -455,6 +559,21 @@ export class FrameBuilder {
     }
     const worldStart = list.length;
     list.view(IDENTITY_VIEW);
+    // Reuse needs a world to read changes from, and the same root and world as last frame to have last frame's records to copy.
+    const world = root.world;
+    const reuse = this.#retain && world !== null;
+    const continued = reuse && this.#lastRoot === root && this.#lastWorld === world;
+    if (!continued) this.#token = {};
+    this.#lastRoot = null; // until this frame is done, a failure leaves nothing to reuse
+    this.#reused = 0;
+    const token = this.#token;
+    const serial = world !== null && reuse ? ++world.serial : 0;
+    const lastSerial = serial - 1;
+    const prevTree = this.#prevTree;
+    const prevTexts = this.#prevTexts;
+    const prevColliders = this.#prevColliders;
+    const region = list.length;
+    let reused = 0;
     let camera: Camera | null = null;
     let pointers: Pressable[] = [];
     const pointerZs: number[] = [];
@@ -464,57 +583,223 @@ export class FrameBuilder {
     // The z of the records being written, kept here so a frame with no z makes no call per record.
     let listZ = 0;
 
-    walkTree(root, (object, world, objectZ, kind) => {
-      let z = objectZ;
-      if (z !== 0) {
-        if (z !== z) {
+    /**
+     * Copy last frame's records for `children[first]` and the siblings after it that can be copied in the same run (they were
+     * adjacent last frame too), then return the index of the last one. Colliders and texts go with them; each member's offsets
+     * are moved to where it now starts, which leaves everything inside it valid.
+     */
+    const copyRun = (children: GameObject[], first: number, info: DrawInfo, anc: number, oldStart: number, oldCol: number, oldText: number, startRel: number, colStart: number, textStart: number): number => {
+      const count = children.length;
+      let end = info.rel + info.len;
+      let colEnd = info.colRel + info.colLen;
+      let textEnd = info.textRel + info.textLen;
+      let last = first;
+      while (last + 1 < count) {
+        const next = children[last + 1] as GameObject;
+        const nextInfo = next.drawCache as DrawInfo | null;
+        if (nextInfo === null || nextInfo.owner !== token || !nextInfo.ok || !(nextInfo.built > anc) || next.subtreeChangedAt >= nextInfo.built) break;
+        if (nextInfo.rel !== end || nextInfo.colRel !== colEnd || nextInfo.textRel !== textEnd) break;
+        end += nextInfo.len;
+        colEnd += nextInfo.colLen;
+        textEnd += nextInfo.textLen;
+        last++;
+      }
+      const from = oldStart + info.rel;
+      const colFrom = oldCol + info.colRel;
+      const textFrom = oldText + info.textRel;
+      const destRel = list.length - region - startRel;
+      const destColRel = colliders.length - colStart;
+      const destTextRel = list.texts.length - textStart;
+      const records = end - info.rel;
+      if (records > 0) {
+        reused += records;
+        if (listZ !== 0) list.setZ((listZ = 0)); // reused records have no z: what they were drawn at is not what the list is at now
+        list.appendFrom(prevTree, from, from + records, list.texts.length - textFrom, textEnd > info.textRel);
+      }
+      for (let k = colFrom, stop = oldCol + colEnd; k < stop; k++) colliders.push(prevColliders[k] as ColliderEntry);
+      const texts = list.texts;
+      for (let k = textFrom, stop = oldText + textEnd; k < stop; k++) texts.push(prevTexts[k] as string);
+      const rel0 = info.rel;
+      const col0 = info.colRel;
+      const text0 = info.textRel;
+      for (let k = first; k <= last; k++) {
+        const member = (children[k] as GameObject).drawCache as DrawInfo;
+        member.rel = destRel + (member.rel - rel0);
+        member.colRel = destColRel + (member.colRel - col0);
+        member.textRel = destTextRel + (member.textRel - text0);
+      }
+      return last;
+    };
+
+    /**
+     * The world walk: `walkTree` and the visit in one, because it also decides, for each child, whether to copy its records
+     * from last frame. Returns `WALK_CLEAN`, `WALK_VOLATILE` (something in this subtree must be found by the walk every frame:
+     * `FLAG_VOLATILE`, a z, or a descendant like that, which is what keeps its records from being reused) or `WALK_OPAQUE`
+     * (this object is `FLAG_OPAQUE`, so nothing under it is ever reused and its own position is not worth keeping).
+     *
+     * `anc` is the newest stamp on an ancestor's own transform (`Infinity` under something opaque): a child's records are
+     * current only if they were made after it. `oldStart`, `oldCol` and `oldText` say where this object's records, colliders and
+     * texts were in last frame's lists, or -1 when they are not known. (A closure, not a method: QuickJS makes a private-method call slow, and this runs per object.)
+     */
+    const walk = (node: GameObject, parentSpace: WorldTransform, parentZ: number, anc: number, oldStart: number, oldCol: number, oldText: number): number => {
+      const transform = node.transform;
+      const placement = node.placement;
+      const laidOut = node.layoutX === 0 && node.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, node.layoutX, node.layoutY);
+      let at = composeTransforms(
+        placement.x === 0 && placement.y === 0 && placement.rotation === 0 && placement.scaleX === 1 && placement.scaleY === 1 && !placement.global
+          ? laidOut
+          : composeTransforms(laidOut, placement),
+        transform,
+      );
+      const z =
+        parentZ === 0 && transform.z === 0 && placement.z === 0 ? 0
+        : transform.global ? transform.z
+        : placement.global ? placement.z + transform.z
+        : parentZ + placement.z + transform.z;
+      const code = kindCode(node);
+      const kind = code & 15;
+      const children = node.children;
+      const count = children.length;
+      // Where this object's records start, for its children's offsets (a leaf has none).
+      const startRel = count > 0 ? list.length - region : 0;
+      const colStart = count > 0 ? colliders.length : 0;
+      const textStart = count > 0 ? list.texts.length : 0;
+
+      let drawZ = z;
+      if (drawZ !== 0) {
+        if (drawZ !== drawZ) {
           this.#warner.once("z-nan", "A transform's z is not a number: it is drawn at z 0.");
-          z = 0;
+          drawZ = 0;
         } else anyZ = true;
       }
       switch (kind) {
         case KIND_SPRITE:
-          if (z !== listZ) list.setZ((listZ = z));
-          this.#sprite((object as Sprite | AnimatedSprite).image, world);
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#sprite((node as Sprite | AnimatedSprite).image, at);
           break;
         case KIND_SHAPE:
-          if (z !== listZ) list.setZ((listZ = z));
-          this.#shape(object as Shape, world);
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#shape(node as Shape, at);
           break;
         case KIND_TEXT:
-          if ((object as Text).text !== "") {
-            if (z !== listZ) list.setZ((listZ = z));
-            this.#text(object as Text, world);
+          if ((node as Text).text !== "") {
+            if (drawZ !== listZ) list.setZ((listZ = drawZ));
+            this.#text(node as Text, at);
           }
           break;
         case KIND_CAMERA:
-          if (camera === null) camera = object as Camera;
+          if (camera === null) camera = node as Camera;
           else this.#warner.once("camera", "More than one <Camera> is mounted: only the first one in draw order is used.");
           break;
         case KIND_POINTER:
-          pointers.push(object as Pointer);
-          pointerZs.push(z);
+          pointers.push(node as Pointer);
+          pointerZs.push(drawZ);
           break;
         case KIND_COLLIDER:
-          colliders.push({ collider: object as Collider, world });
+          colliders.push({ collider: node as Collider, world: at });
           break;
         case KIND_SCREEN:
-          if (object !== gameRoot) this.#warner.once("screen-not-root", "A <Screen> only sets the game's resolution as the root of the game: this one is drawn as a plain container.");
+          if (node !== gameRoot) this.#warner.once("screen-not-root", "A <Screen> only sets the game's resolution as the root of the game: this one is drawn as a plain container.");
           break;
         case KIND_HUD:
-          huds.push({ world, object });
-          break;
+          huds.push({ world: at, object: node });
+          return WALK_VOLATILE; // drawn in a layer of its own, and not entered here
         case KIND_FLEX: {
-          if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
-          const placed = this.#flex(object as Flex, world, gameWidth, gameHeight);
-          if ((object as Flex).onPress !== undefined) {
-            pointers.push(object as Flex);
-            pointerZs.push(z);
+          if (drawZ !== listZ && (node as Flex).background !== undefined) list.setZ((listZ = drawZ));
+          const placed = this.#flex(node as Flex, at, gameWidth, gameHeight);
+          if ((node as Flex).onPress !== undefined) {
+            pointers.push(node as Flex);
+            pointerZs.push(drawZ);
           }
-          return placed;
+          if (placed !== undefined) at = placed;
+          break;
         }
       }
-    });
+
+      const volatile = z !== 0 || code >= FLAG_VOLATILE;
+      if (count === 0) return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
+      return walkChildren(node, children, count, kind, code, at, z, parentSpace, parentZ, anc, oldStart, oldCol, oldText, startRel, colStart, textStart);
+    };
+
+    /** The part of `walk` for an object with children, apart so that the leaves, which are half of all objects, do not pay for its many locals (QuickJS sets up every local of a function at each call). */
+    const walkChildren = (node: GameObject, children: GameObject[], count: number, kind: number, code: number, at: WorldTransform, z: number, parentSpace: WorldTransform, parentZ: number, anc: number, oldStart: number, oldCol: number, oldText: number, startRel: number, colStart: number, textStart: number): number => {
+      let volatile = z !== 0 || code >= FLAG_VOLATILE;
+      const own = (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
+      const isCamera = kind === KIND_CAMERA;
+      const childSpace = isCamera ? parentSpace : at;
+      const childZ = isCamera ? parentZ : z;
+      const childAnc = (code & FLAG_OPAQUE) !== 0 ? Infinity : node.selfChangedAt > anc ? node.selfChangedAt : anc;
+      // Nothing above changed this frame: what is under is worth copying from last frame, and worth writing down for the next.
+      const quiet = childAnc < lastSerial;
+      if (!reuse || !quiet) {
+        // Nothing under is reused, so nothing is written down; a child that was is told its place is no longer known.
+        for (let i = 0; i < count; i++) {
+          const child = children[i] as GameObject;
+          if (walk(child, childSpace, childZ, childAnc, -1, -1, -1) !== WALK_CLEAN) volatile = true;
+          if (reuse) {
+            const info = child.drawCache as DrawInfo | null;
+            if (info !== null) info.ok = false;
+          }
+        }
+        return own === WALK_OPAQUE ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
+      }
+      const canCopy = oldStart >= 0;
+      for (let i = 0; i < count; i++) {
+        const child = children[i] as GameObject;
+        const info = child.drawCache as DrawInfo | null;
+        const known = info !== null && info.owner === token;
+        // Where this child's records were last frame, when known, so that what is under it can be copied too.
+        let childOld = -1;
+        let childOldCol = -1;
+        let childOldText = -1;
+        if (canCopy && known && info.ok) {
+          if (info.built > childAnc && child.subtreeChangedAt < info.built) {
+            i = copyRun(children, i, info, childAnc, oldStart, oldCol, oldText, startRel, colStart, textStart);
+            continue;
+          }
+          childOld = oldStart + info.rel;
+          childOldCol = oldCol + info.colRel;
+          childOldText = oldText + info.textRel;
+        }
+        const before = list.length - region;
+        const colBefore = colliders.length;
+        const textBefore = list.texts.length;
+        const result = walk(child, childSpace, childZ, childAnc, childOld, childOldCol, childOldText);
+        if (result !== WALK_CLEAN) volatile = true;
+        if (result === WALK_OPAQUE || child.selfChangedAt >= lastSerial) {
+          // This object moves (or something above it does): it, and what is under it, is rebuilt now and likely next frame, so it is not written down.
+          if (known) info.ok = false;
+          continue;
+        }
+        const record = known ? info : (child.drawCache = new DrawInfo(token));
+        record.ok = true;
+        record.rel = before - startRel;
+        record.colRel = colBefore - colStart;
+        record.textRel = textBefore - textStart;
+        // Only what stood still this frame can be copied next frame, so only that is written down.
+        if (result === WALK_CLEAN && child.subtreeChangedAt < lastSerial) {
+          record.len = list.length - region - before;
+          record.colLen = colliders.length - colBefore;
+          record.textLen = list.texts.length - textBefore;
+          record.built = serial;
+        } else record.built = -1;
+      }
+      return own === WALK_OPAQUE ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
+    };
+
+    walk(root, IDENTITY_TRANSFORM, 0, 0, continued ? 0 : -1, 0, 0);
+    this.#reused = reused;
+
+    if (reuse) {
+      // Next frame copies from this one's records in tree order, so take them before the z sort moves them.
+      const count = list.length - region;
+      if (this.#prevTree.length < count) this.#prevTree = new Float64Array(Math.max(this.#prevTree.length * 2, count));
+      this.#prevTree.set(list.records.subarray(region, list.length));
+      this.#prevTexts = list.texts.slice();
+      this.#prevColliders = colliders;
+      this.#lastRoot = root;
+      this.#lastWorld = world;
+    }
 
     // Draw order: by z, tree order among equals. A pointer that is drawn on top is pressed first, so the pointers move with it.
     list.sortByZ(worldStart + RGE_OP_VIEW_LEN);
@@ -599,7 +884,32 @@ export class FrameBuilder {
 
     // Bars around a game that is not pixel-perfect: window pixels, drawn last. (A pixel-perfect game's canvas record clears them.)
     if (placement !== null && !pixelPerfect) this.#borders(placement, width, height, borderColor);
-    return { list, view, hudView, screen: placement, camera, pointers, hudPointersFrom, colliders };
+    const built: BuiltFrame = { list, view, hudView, screen: placement, camera, pointers, hudPointersFrom, colliders };
+    if (this.#options.retain === "check" && reuse) this.#check(root, width, height, built);
+    return built;
+  }
+
+  /** `retain: "check"`: build the frame again without reusing anything, and throw if it is not the frame just built. */
+  #check(root: GameObject, width: number, height: number, built: BuiltFrame): void {
+    this.#reference ??= new FrameBuilder({ ...this.#options, retain: false, warn: () => {} });
+    const expected = this.#reference.build(root, width, height);
+    const fail = (what: string): never => {
+      throw new Error(`Reused draw records differ from a full rebuild (${what}): something changed an object without reporting it (see GameObject.markChanged).`);
+    };
+    const a = built.list;
+    const b = expected.list;
+    if (a.length !== b.length) fail(`${a.length} doubles against ${b.length}`);
+    for (let i = 0; i < a.length; i++) {
+      if (!Object.is(a.records[i], b.records[i])) fail(`record double ${i} is ${a.records[i]}, not ${b.records[i]}`);
+    }
+    if (a.texts.length !== b.texts.length || a.texts.some((text, i) => text !== b.texts[i])) fail("texts");
+    if (built.colliders.length !== expected.colliders.length) fail("colliders");
+    for (let i = 0; i < built.colliders.length; i++) {
+      const x = built.colliders[i] as ColliderEntry;
+      const y = expected.colliders[i] as ColliderEntry;
+      if (x.collider !== y.collider || x.world.x !== y.world.x || x.world.y !== y.world.y || x.world.rotation !== y.world.rotation || x.world.scaleX !== y.world.scaleX || x.world.scaleY !== y.world.scaleY) fail(`collider ${i}`);
+    }
+    if (built.pointers.length !== expected.pointers.length || built.pointers.some((pointer, i) => pointer !== expected.pointers[i])) fail("pointers");
   }
 
   /**

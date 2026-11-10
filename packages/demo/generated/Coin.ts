@@ -2,6 +2,7 @@
 import { Collider, Entity, Shape, type Contact, type PrefabDefinition } from "@rge/runtime";
 
 export class Coin extends Entity {
+  static readonly managed = true;
   taken: boolean = false;
   #takenNext: boolean = this.taken;
   shape: Shape | null = null;

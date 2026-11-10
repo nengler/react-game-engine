@@ -3,6 +3,7 @@ import { Text, type PrefabDefinition } from "@rge/runtime";
 import { useGame } from "../src/GameState.ts";
 
 export class CoinCounter extends Text {
+  static readonly managed = true;
   coins: number = useGame.store.get<number>("stats.coins");
   override readonly gameStateStore = useGame.store;
   override readonly gameStateKeys: readonly string[] = ["stats.coins"];

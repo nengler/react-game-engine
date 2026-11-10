@@ -2,6 +2,7 @@
 import { Entity, Sprite } from "@rge/runtime";
 
 export class Mover extends Entity {
+  static readonly managed = true;
   x: number = 0;
   #xNext: number = this.x;
   readonly sprite: Sprite = new Sprite({ image: (this.x > 100) ? "run.png" : "idle.png" });
