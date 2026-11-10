@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { AnimatedSprite, Camera, Collider, Entity, Flex, Hud, Pointer, Shape, Sprite, Text, World, type GameObject } from "@rge/runtime";
+import { CollisionTracker } from "../src/collide.ts";
 import { FrameBuilder } from "../src/draw.ts";
 
 /**
@@ -52,6 +53,16 @@ function random(seed: number): () => number {
 }
 
 /** An entity with a shape in it, added to `parent`: the kind of thing a scene is mostly made of. */
+function everything(root: GameObject): GameObject[] {
+  const out: GameObject[] = [];
+  const visit = (o: GameObject): void => {
+    out.push(o);
+    o.children.forEach(visit);
+  };
+  visit(root);
+  return out;
+}
+
 function addStill(parent: GameObject, width = 3): void {
   const entity = new Entity();
   entity.addChild(new Shape({ kind: "rect", width, height: 3 }));
@@ -134,6 +145,58 @@ describe("reusing draw records", () => {
         drawn += 1;
       }
       assert.ok(reused > 0, `seed ${seed}: nothing was ever reused over ${drawn} frames`);
+    }
+  });
+
+  it("hands the collision tracker the same entry for a collider it reused, so only what moved is tested again", () => {
+    for (const seed of [11, 12, 13]) {
+      const next = random(seed);
+      const pick = <T>(items: readonly T[]): T => items[Math.floor(next() * items.length)] as T;
+      const world = new World();
+      const root = new Entity();
+      const dyns: Dyn[] = [];
+      for (let i = 0; i < 60; i++) {
+        const group = new Entity();
+        for (let k = 0; k < 4; k++) {
+          const d = new Dyn();
+          d.set({ x: next() * 300, y: next() * 300 });
+          d.addChild(new Collider({ width: 12, height: 12, layer: pick(["a", "b"]) }));
+          group.addChild(d);
+          dyns.push(d);
+        }
+        root.addChild(group);
+      }
+      world.mount(root);
+      const builder = new FrameBuilder({ loadTexture: () => 0, retain: "check" });
+      const logs: string[][] = [[], []];
+      const names = new Map<GameObject, string>();
+      everything(root).forEach((o, i) => names.set(o, `o${i}`));
+      const worlds = logs.map((log) => ({ reportCollision: (a: GameObject, b: GameObject) => void log.push(`in ${names.get(a)} ${names.get(b)}`), reportCollisionExit: (a: GameObject, b: GameObject) => void log.push(`out ${names.get(a)} ${names.get(b)}`) }) as unknown as World);
+      const incremental = new CollisionTracker();
+      const full = new CollisionTracker(undefined, false);
+      let frames = 0;
+      for (let frame = 0; frame < 150; frame++) {
+        // A few things move or recolour each frame; now and then something is added or removed.
+        if (frame > 3) {
+          for (let c = Math.floor(next() * 6); c > 0; c--) pick(dyns).set(next() < 0.8 ? { x: next() * 300 } : { y: next() * 300, color: pick(["red", "blue"]) });
+          if (next() < 0.05) {
+            const fresh = new Dyn();
+            fresh.set({ x: next() * 300, y: next() * 300 });
+            fresh.addChild(new Collider({ width: 12, height: 12 }));
+            names.set(fresh.children[2] as GameObject, `n${frame}`);
+            pick(root.children).queueAddChild(fresh);
+            dyns.push(fresh);
+          }
+        }
+        world.tick(1 / 60);
+        const built = builder.build(world.root, 800, 600);
+        for (const log of logs) log.length = 0;
+        incremental.update(worlds[0] as World, built.colliders);
+        full.update(worlds[1] as World, built.colliders);
+        assert.deepEqual(logs[0], logs[1], `seed ${seed} frame ${frame}`);
+        frames++;
+      }
+      assert.ok(incremental.incrementalFrames > 40, `seed ${seed}: ${incremental.incrementalFrames} of ${frames} frames looked only at what moved`);
     }
   });
 
