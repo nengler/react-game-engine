@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { InputState } from "../input.ts";
 
 export interface FadeProps {
   /** A CSS colour the screen fades to. Default black. */
@@ -34,7 +35,7 @@ export class Fade<P extends object = {}> extends GameObject<P> {
     this.amount = Math.min(1, Math.max(0, hostProps.from ?? 0));
   }
 
-  override onUpdate(dt: number): void {
+  override onUpdate(dt: number, _input?: InputState): void {
     const goal = this.on ? 1 : 0;
     if (this.amount === goal) return;
     const step = this.duration > 0 ? Math.max(0, dt) / this.duration : 1;

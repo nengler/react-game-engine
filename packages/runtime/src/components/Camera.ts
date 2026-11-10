@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { InputState } from "../input.ts";
 import { IDENTITY_TRANSFORM, type WorldTransform } from "../Transform.ts";
 
 export interface CameraProps {
@@ -109,7 +110,7 @@ export class Camera<P extends object = {}> extends GameObject<P> {
   }
 
   /** Advance the shake and the slide. */
-  override onUpdate(dt: number): void {
+  override onUpdate(dt: number, _input?: InputState): void {
     if (this.shake !== this.#shakeSeen) {
       this.#shakeSeen = this.shake;
       if (this.shake !== undefined) this.#shakeTime = this.shakeDuration;

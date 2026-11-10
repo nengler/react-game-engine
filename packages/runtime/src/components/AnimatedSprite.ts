@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { InputState } from "../input.ts";
 import { isStyled, type SpriteLook, type SpriteOptions } from "./Sprite.ts";
 
 export interface AnimatedSpriteProps extends SpriteOptions {
@@ -187,7 +188,7 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
   }
 
   /** Advance by `dt` seconds while playing. The World calls this every tick, since the class overrides it. */
-  override onUpdate(dt: number): void {
+  override onUpdate(dt: number, _input?: InputState): void {
     const current = this.current;
     const count = current === null ? this.#frames.length : current.frames.length;
     const fps = current === null ? this.fps : current.fps;

@@ -30,7 +30,9 @@ export class HandlerEmitter extends ExpressionEmitter {
         w.block(`override ${signature.method}(${this.params(handler)}): void`, () => this.stmts(handler.body));
         continue;
       }
-      const canonical = signature.params.map((p) => annotated(p.name, p.type)).join(", ");
+      // Every parameter the runtime passes when `super` is called with them; otherwise only as many as some handler declares (an unused one is a type error).
+      const declared = callsSuper ? signature.params.length : Math.max(0, ...hooks.map((h) => h.handler.params.length));
+      const canonical = signature.params.slice(0, declared).map((p) => annotated(p.name, p.type)).join(", ");
       w.block(`override ${signature.method}(${canonical}): void`, () => {
         if (callsSuper) w.line(`super.${signature.method}(${signature.params.map((p) => p.name).join(", ")});`);
         hooks.forEach((hook, i) => {

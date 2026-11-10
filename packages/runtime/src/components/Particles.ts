@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { InputState } from "../input.ts";
 
 export interface ParticlesProps {
   /** Particles per second while `emitting`. Default 0 (only `burst`). */
@@ -149,7 +150,7 @@ export class Particles<P extends object = {}> extends GameObject<P> {
     if (n > 0) this.markChanged();
   }
 
-  override onUpdate(dt: number): void {
+  override onUpdate(dt: number, _input?: InputState): void {
     if (!(dt > 0)) return;
     if (this.emitting) {
       if (!this.#wasEmitting && this.burst > 0) this.emit(this.burst);

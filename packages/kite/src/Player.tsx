@@ -1,28 +1,15 @@
-import { useInput, useRef, useSound, useState, useUpdate, AnimatedSprite, Collider, Entity, Particles } from "@rge/runtime/jsx";
+import { useRef, useSound, useState, useUpdate, AnimatedSprite, Collider, Entity, Particles } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 
 /**
- * Keyboard and gamepad to the buttons the rules take, and one step of the rules for every fixed step. The first custom hook
- * of the game: the compiler writes its two handlers into the component that calls it. Arrows, WASD or the d-pad and left stick
- * move; Z, C, Space or A jump; X, Shift, B, X or the right bumper dash.
+ * One step of the rules for every fixed step, given that step's polled input: the action reads the controls from it (keyboard,
+ * gamepad; `rules/controls.ts`). A custom hook, so the compiler writes its handler into the component that calls it.
  */
 function usePlatformerBody() {
   const step = useGame((s) => s.step);
-  const buttons = useRef(0);
 
-  useInput((input) => {
-    buttons.current =
-      (input.down("ArrowLeft") || input.down("A") || input.down("PadLeft") ? 1 : 0) +
-      (input.down("ArrowRight") || input.down("D") || input.down("PadRight") ? 2 : 0) +
-      (input.down("ArrowUp") || input.down("W") || input.down("PadUp") ? 4 : 0) +
-      (input.down("ArrowDown") || input.down("S") || input.down("PadDown") ? 8 : 0) +
-      (input.down("Z") || input.down("C") || input.down("Space") || input.down("PadA") ? 16 : 0) +
-      (input.pressed("Z") || input.pressed("C") || input.pressed("Space") || input.pressed("PadA") ? 32 : 0) +
-      (input.pressed("X") || input.pressed("Shift") || input.pressed("PadX") || input.pressed("PadB") || input.pressed("PadRB") ? 64 : 0);
-  });
-
-  useUpdate((dt) => {
-    step(buttons.current, dt);
+  useUpdate((dt, input) => {
+    step(input, dt);
   });
 }
 

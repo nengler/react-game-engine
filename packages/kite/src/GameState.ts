@@ -1,13 +1,14 @@
-import { createGameState, freeze } from "@rge/runtime";
-import { unpackControls, type Body } from "./rules/body.ts";
+import { createGameState, freeze, type InputState } from "@rge/runtime";
+import type { Body } from "./rules/body.ts";
+import { readControls } from "./rules/controls.ts";
 import { DASH_FREEZE_STEPS, DEATH_FREEZE_STEPS } from "./rules/constants.ts";
 import { newRun, stepRun, type Run } from "./rules/level.ts";
 
 /**
  * The game's state, shared by every component: which screen is showing, the run of the level (`Run`, see `rules/level.ts`)
  * and the actions that move it on. All the rules are plain functions in `rules/`; this file only keeps their state where
- * components can read it, and calls them. `step` is one fixed step of the game: the character passes the buttons held (see
- * `Player.tsx`) and the time. A dash and a death freeze the world for a few steps from here, which is where they are known.
+ * components can read it, and calls them. `step` is one fixed step of the game: the character passes the step's input and time (see
+ * `Player.tsx`); the controls are read from the input here, in plain TypeScript (`rules/controls.ts`). A dash and a death freeze the world for a few steps from here, which is where they are known.
  */
 interface State {
   /** `"title"`, `"play"` or `"end"`: the screens, switched by the `Main` component's conditions. */
@@ -26,7 +27,7 @@ interface State {
   roomCount: number;
   /** Gems collected: there is one in the level. */
   gems: number;
-  step: (buttons: number, dt: number) => void;
+  step: (input: InputState, dt: number) => void;
   /** Start a new run: the first room, no deaths, no gems. */
   begin: () => void;
   /** Back to the title screen. */
@@ -54,12 +55,12 @@ export const useGame = createGameState<State>()((set, get) => ({
   deathCount: 0,
   roomCount: 0,
   gems: 0,
-  step: (buttons, dt) => {
+  step: (input, dt) => {
     const state = get();
     if (state.screen !== "play") return;
     const before = {} as Record<string, unknown>;
     for (const key of RUN_KEYS) before[key] = state[key];
-    const after = stepRun(before as unknown as Run, unpackControls(buttons), dt);
+    const after = stepRun(before as unknown as Run, readControls(input), dt);
     if (after.player.dashCount !== state.player.dashCount) freeze(DASH_FREEZE_STEPS);
     if (after.deathCount !== state.deathCount) freeze(DEATH_FREEZE_STEPS);
     set({ ...after, screen: after.finished ? "end" : "play" });

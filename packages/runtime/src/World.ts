@@ -72,7 +72,7 @@ export class World {
     if (this.#frozen > 0) this.#frozen--;
     else {
       const updates = [...this.#onUpdate];
-      for (const object of updates) if (object.world === this) object.onUpdate(dt);
+      for (const object of updates) if (object.world === this) object.onUpdate(dt, input);
     }
     // A freeze asked for during this tick starts with the next.
     if (freezeRequest > this.#frozen) this.#frozen = freezeRequest;

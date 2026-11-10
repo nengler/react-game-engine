@@ -357,7 +357,7 @@ export class GameObject<P extends object = {}> {
   /** Per-tick hooks. Generated code overrides the ones a component declares; the World only visits overriders. */
   onInput(_input: InputState): void {}
 
-  onUpdate(_dt: number): void {}
+  onUpdate(_dt: number, _input?: InputState): void {}
 
   /**
    * Runs once when this object joins a World, after its whole subtree has

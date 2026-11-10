@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { InputState } from "../input.ts";
 import { getSoundSink } from "../Sound.ts";
 
 export interface MusicProps {
@@ -48,7 +49,7 @@ export class Music<P extends object = {}> extends GameObject<P> {
     return this.#started;
   }
 
-  override onUpdate(dt: number): void {
+  override onUpdate(dt: number, _input?: InputState): void {
     const sink = getSoundSink();
     if (this.src === undefined || this.src === "") return;
     const goal = this.playing ? Math.min(1, Math.max(0, this.volume)) : 0;

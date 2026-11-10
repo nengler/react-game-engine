@@ -107,12 +107,12 @@ describe("M13: IR and generated code", () => {
   });
 
   it("calls super first in a hook override on a component rooted at one that implements the hook", () => {
-    assert.match(compiled.code, /override onUpdate\(dt: number\): void \{\n\s+super\.onUpdate\(dt\);\n\s+this\.#onUpdate0\(\);\n\s+\}/);
+    assert.match(compiled.code, /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(\);\n\s+\}/);
     assert.match(compiled.code, /#onUpdate0\(\): void \{\n\s+this\.ticks \+= 1;/);
   });
 
   it("calls super once, then each handler in order, when there are several", () => {
-    assert.match(compiled.code, /override onUpdate\(dt: number\): void \{\n\s+super\.onUpdate\(dt\);\n\s+this\.#onUpdate0\(dt\);\n\s+this\.#onUpdate1\(\);\n\s+\}/);
+    assert.match(compiled.code, /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);\n\s+this\.#onUpdate1\(\);\n\s+\}/);
   });
 
   it("does not add super to a component whose root does not implement the hook", () => {
@@ -278,7 +278,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
       }
     };
     assert.doesNotMatch(withSuper(runtimeManifest), /super\.onUpdate/);
-    assert.match(withSuper({ ...runtimeManifest, intrinsicHooks: { Sprite: ["onUpdate"] } }), /override onUpdate\(dt: number\): void \{\n\s+super\.onUpdate\(dt\);\n\s+this\.#onUpdate0\(dt\);/);
+    assert.match(withSuper({ ...runtimeManifest, intrinsicHooks: { Sprite: ["onUpdate"] } }), /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/);
   });
 
   it("reserves the sprite's own names for a component rooted at it", () => {

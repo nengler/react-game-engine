@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { Camera, Entity, Fade, Particles, Text, Tilemap, World, registerTilemaps } from "@rge/runtime";
+import { Camera, Entity, Fade, Particles, Text, Tilemap, World, createInputState, registerTilemaps } from "@rge/runtime";
 import { cleanOutput, closeCompiler, compile, getCompiler, load } from "./helpers.ts";
 
 after(() => {
@@ -148,5 +148,26 @@ export function A() {
     assert.match(r.stderr, /The image 'b1\.png' is not in/);
     assert.match(r.stderr, /The font 'font\.png' is not in/);
     assert.doesNotMatch(r.stderr, /hero\.png|tiles\.png|sheet\.png/);
+  });
+});
+
+describe("useUpdate takes the input, and an action can take it", () => {
+  it("a handler gets the same input as useInput, and passes it to a plain function", async () => {
+    const compiled = compile(
+      `function P() {
+        const [n, setN] = useState(0);
+        useUpdate((dt, input) => { if (input.down("Space")) { setN((n) => n + dt); } });
+        return <Entity name="P" transform={{ x: n }} />;
+      }`,
+      "P.tsx",
+    );
+    assert.match(compiled.code, /onUpdate\(dt: number, input: InputState\)/);
+    const { P } = await load<{ P: new () => Entity }>(compiled);
+    const world = new World();
+    const p = new P();
+    world.mount(p);
+    world.tick(0.5, createInputState({ down: ["Space"] }));
+    world.tick(0.5, createInputState({}));
+    assert.equal(p.transform.x, 0.5);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { newBody, NO_CONTROLS, packControls, stepBody, unpackControls, type Body, type Controls, type SolidAt } from "../src/rules/body.ts";
+import { newBody, NO_CONTROLS, stepBody, type Body, type Controls, type SolidAt } from "../src/rules/body.ts";
+import { createInputState } from "@rge/runtime";
+import { readControls } from "../src/rules/controls.ts";
 import { BODY_H, COYOTE, DASH_SPEED, JUMP_BUFFER, TILE, WALL_SLIDE_SPEED } from "../src/rules/constants.ts";
 
 const DT = 1 / 60;
@@ -186,7 +188,15 @@ describe("walls", () => {
 });
 
 describe("controls", () => {
-  it("round-trip through the number the game state passes", () => {
-    for (let bits = 0; bits < 128; bits++) assert.equal(packControls(unpackControls(bits)), bits);
+  const input = (down: string[], pressed: string[] = []) => createInputState({ down, pressed });
+
+  it("read keyboard, gamepad and d-pad alike, and tell a press from a hold", () => {
+    assert.deepEqual(readControls(input(["ArrowLeft"])), { ...NO_CONTROLS, left: true });
+    assert.deepEqual(readControls(input(["PadRight", "PadUp"])), { ...NO_CONTROLS, right: true, up: true });
+    assert.deepEqual(readControls(input(["D", "S"])), { ...NO_CONTROLS, right: true, down: true });
+    assert.deepEqual(readControls(input(["PadA"], ["PadA"])), { ...NO_CONTROLS, jumpHeld: true, jumpPressed: true });
+    assert.deepEqual(readControls(input(["Space"])), { ...NO_CONTROLS, jumpHeld: true }, "held, not pressed");
+    for (const key of ["X", "Shift", "PadX", "PadB", "PadRB"]) assert.equal(readControls(input([key], [key])).dashPressed, true, key);
+    assert.equal(readControls(input(["X"])).dashPressed, false, "a dash is a press");
   });
 });

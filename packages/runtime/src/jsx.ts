@@ -72,8 +72,11 @@ export function useRef<T extends Primitive>(_initial: T): { current: Widen<T> } 
 
 // -- per-frame hooks ----------------------------------------------------------
 
-/** Runs every frame, after `useInput`. `dt` is the frame time in seconds. */
-export function useUpdate(_handler: (dt: number) => void): void {
+/**
+ * Runs every frame, after `useInput`. `dt` is the frame time in seconds (the fixed step, with a fixed timestep). `input` is the same
+ * polled input `useInput` gets, for a game that reads its buttons where it steps: `useUpdate((dt, input) => { step(input, dt); })`.
+ */
+export function useUpdate(_handler: (dt: number, input: InputState) => void): void {
   return compileTimeOnly("useUpdate");
 }
 

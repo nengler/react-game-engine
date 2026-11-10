@@ -58,15 +58,6 @@ export interface Controls {
 
 export const NO_CONTROLS: Controls = { left: false, right: false, up: false, down: false, jumpHeld: false, jumpPressed: false, dashPressed: false };
 
-/** The controls as one number, so a compiled handler can pass them to the game state in one argument. */
-export function packControls(c: Controls): number {
-  return (c.left ? 1 : 0) | (c.right ? 2 : 0) | (c.up ? 4 : 0) | (c.down ? 8 : 0) | (c.jumpHeld ? 16 : 0) | (c.jumpPressed ? 32 : 0) | (c.dashPressed ? 64 : 0);
-}
-
-export function unpackControls(bits: number): Controls {
-  return { left: (bits & 1) !== 0, right: (bits & 2) !== 0, up: (bits & 4) !== 0, down: (bits & 8) !== 0, jumpHeld: (bits & 16) !== 0, jumpPressed: (bits & 32) !== 0, dashPressed: (bits & 64) !== 0 };
-}
-
 /** Whether the pixel at (x, y), in the room, is solid. */
 export type SolidAt = (x: number, y: number) => boolean;
 
