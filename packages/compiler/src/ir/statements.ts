@@ -74,7 +74,10 @@ export interface ReturnStmtIR {
   readonly value: ExprIR | null;
 }
 
-/** `setX(value)` or `setX(prev => ...)`. Emitted as a call to the generated setter, so dirty marking stays in one place. */
+/**
+ * `setX(value)` or `setX(prev => ...)`. Emitted as a call to the generated setter, except an updater of one expression in a
+ * hook, which is written out as what the setter would do with it (see `HandlerEmitter.updaterInPlace`).
+ */
 export type SetStateStmtIR = SetStateValueIR | SetStateUpdaterIR;
 
 export interface SetStateValueIR {

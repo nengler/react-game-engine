@@ -426,6 +426,24 @@ override onUpdate(dt: number): void {
 An arrow whose body is an object literal is parenthesised, in callbacks and in
 updaters (`setP((p: P) => ({ ...p, x: 1 }))`).
 
+**An updater of one expression, in a hook, is written out in place**, because a
+moving object calls a setter or two every frame and the host's interpreter pays
+for the arrow and for both calls each time. `setX((x) => x + speed * dt)` in a
+`useUpdate` generates what the setter would do with it:
+
+```ts
+{
+  const x = this.#xNext;
+  this.#xNext = x + (this.props.speed * dt);
+  if (this.#xNext !== x) this.markDirty();
+}
+```
+
+The block's only name is the updater's own parameter, so it hides the same outer
+names as the arrow did. Everything else still calls the setter: a plain value
+(`setX(5)`), an updater with statements, and any setter in a callback handed to
+an element (`onPress`, `onCollisionEnter`), which runs on an event.
+
 ## Keyed lists
 
 `{items.map((item) => <Element key={…} … />)}` keeps one instance of the

@@ -587,6 +587,20 @@ Old and new code run alternately on one VM; the middle of three runs each.
 - **Found on the way**: `DrawList.sprite` read `records` before the call that could grow it, so a sprite whose record was the one that grew the buffer was drawn with texture 0 for that one frame. Fixed, with a test.
 - **How it was checked.** Trackers that always, never and sometimes sweep in bands, and one that looks only at what moved, are run over the same lists and must report the same in the same order, and the same enters and exits as testing every pair: boxes of mixed sizes, some reaching through every band, tiles whose edges land on band edges, a world taller than the most bands, a far-away box, a row and a pile. Leaves written in place are compared, record for record, with the same tree under a z, which the general walk draws. 26 deliberate bugs in the new code each fail a test; a 27th (not clamping a box's last band) changes nothing, because a write past the end of a typed array is dropped.
 
+### Performance pass three, updaters written in place (2026-11-10)
+
+The first of the three things pass three left. In a hook, `setX((x) => x + dt * 30)` made an arrow, called the setter and had the setter call the arrow back: a closure and two calls per setter per frame, for every object that moves. The compiler now writes an updater of one expression out where it stands, as what the setter would do with it (see "Generated code" under handlers in DESIGN.md); the block's only name is the updater's own parameter. A plain value, an updater with statements and any setter in an element's callback still call the setter.
+
+The bench's stand-in component moves the way the compiler now writes it. Before and after alternately, the middle of three runs (this VM was about a tenth slower than for the table above):
+
+| Scene (2,000 objects) | Tick, before | Tick, after | Whole frame, before | Whole frame, after |
+| --- | --- | --- | --- | --- |
+| moved by state | 4.1 ms | 2.7 ms | 10.0 ms | 8.2 ms |
+| moved by state, each with a collider | 4.5 ms | 3.0 ms | 17.3 ms | 16.1 ms |
+
+- **What is left of the tick** is `markDirty`, the render list, `runRender`, `commitState` and `render`: five calls for an object that moved, about 1.4 µs.
+- **How it was checked.** A component with every case (two updaters chained, a parameter named like a state, like a local and like the hook's own parameter, an updater that changes nothing, one that makes a new array, one with statements, one in a callback) is compiled, type-checked and run; the example and demo are generated again, and their golden draw lists and the Node/QuickJS parity test are unchanged.
+
 ## Later (not scheduled)
 
 | Idea | Notes |

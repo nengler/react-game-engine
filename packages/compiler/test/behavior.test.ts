@@ -5,7 +5,7 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Collider, Entity, GameObject, Sprite, World } from "@rge/runtime";
-import { cleanOutput, closeCompiler, compile, load, sameOrder } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, load, sameOrder, typeCheck } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -178,6 +178,104 @@ describe("state setters", () => {
     assert.equal(player.sprite.image, "normal.png");
     world.flush();
     assert.equal(player.sprite.image, "hurt.png");
+  });
+});
+
+describe("updaters written in place", () => {
+  // In a hook, `setN((n) => …)` with one expression is generated as an assignment to the pending value, not a call.
+  const COUNTER = `
+interface CounterProps { step: number }
+function Counter({ step }: CounterProps) {
+  const [n, setN] = useState(0);
+  const [still, setStill] = useState(7);
+  const [items, setItems] = useState<number[]>([]);
+  const [big, setBig] = useState(0);
+  useUpdate((dt) => {
+    const n2 = n;
+    setN((n) => n + step);
+    setN((n) => n + step);
+    setN((dt) => dt + n2 * 0);
+    setStill((s) => s);
+    setBig((b) => { if (b > 2) return 0; return b + 1; });
+  });
+  useInput((input) => {
+    if (input.down("A")) setItems((items) => [...items, items.length]);
+  });
+  return <Entity name="Counter"><Pointer width={1} height={1} onPress={() => setN((n) => n + 100)} /></Entity>;
+}
+
+function Idle() {
+  const [still, setStill] = useState(7);
+  useUpdate(() => { setStill((s) => s); });
+  return <Entity name="Idle" />;
+}
+`;
+  interface CounterInstance extends Entity {
+    n: number;
+    still: number;
+    items: number[];
+    big: number;
+    setN: Setter<number>;
+  }
+  let Counter: new (props: { step: number }) => CounterInstance;
+  let Idle: new () => Entity;
+  let code = "";
+
+  before(async () => {
+    const compiled = compile(COUNTER);
+    code = compiled.code;
+    assert.deepEqual(typeCheck(compiled).map((d) => d.message), [], "the generated code type-checks");
+    ({ Counter, Idle } = await load<{ Counter: typeof Counter; Idle: typeof Idle }>(compiled));
+  });
+
+  it("are assignments in a hook, and stay calls in a callback and when the updater has statements", () => {
+    assert.match(code, /const n = this\.#nNext;\n\s+this\.#nNext = n \+ this\.props\.step;\n\s+if \(this\.#nNext !== n\) this\.markDirty\(\);/);
+    assert.equal(code.match(/this\.setN\(/g)?.length, 1, "only the callback calls the setter");
+    assert.match(code, /onPress: \(\) => \{ this\.setN\(\(n: number\) => n \+ 100\); \}/);
+    assert.match(code, /this\.setBig\(\(b: number\) => \{/);
+    assert.doesNotMatch(code, /this\.setStill\(|this\.setItems\(/);
+  });
+
+  it("chain on the pending value, show at the next render, and render once", () => {
+    const world = new World();
+    const counter = new Counter({ step: 3 });
+    world.mount(counter);
+    assert.equal(world.tick(0.5), 1, "one render for the frame's five updates");
+    assert.equal(counter.n, 6, "the second updater saw what the first left; the third added nothing");
+    assert.equal(counter.big, 1);
+    world.tick(0.5);
+    assert.equal(counter.n, 12);
+    // A call to the setter and an updater in place work on the same pending value.
+    counter.setN((n) => n + 100);
+    world.tick(0.5);
+    assert.equal(counter.n, 118);
+  });
+
+  it("take the updater's parameter over a state, a local or the hook's own parameter of the same name", () => {
+    const world = new World();
+    const counter = new Counter({ step: 1 });
+    world.mount(counter);
+    // `setN((dt) => dt + n2 * 0)` is the previous n, not the frame's dt; `(n) => n + step` reads the pending n, not the rendered one.
+    world.tick(1000);
+    assert.equal(counter.n, 2);
+  });
+
+  it("do not ask for a render when the value comes out the same", () => {
+    const world = new World();
+    const idle = new Idle();
+    world.mount(idle);
+    world.flush();
+    assert.equal(world.tick(0.1), 0);
+    assert.equal(idle.isDirty, false);
+  });
+
+  it("ask for one when it comes out different by identity, as for a new array", () => {
+    const world = new World();
+    const counter = new Counter({ step: 0 });
+    world.mount(counter);
+    world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, pointerX: 0, pointerY: 0 });
+    world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, pointerX: 0, pointerY: 0 });
+    assert.deepEqual(counter.items, [0, 1]);
   });
 });
 

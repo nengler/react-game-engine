@@ -211,7 +211,8 @@ describe("M5a: generated code", () => {
 
   it("emits literals, spreads, member reads and arrow callbacks; an object body is parenthesised", () => {
     const { code } = compile(SWARM, "Swarm.tsx");
-    assert.match(code, /this\.setEnemies\(\(list: EnemyData\[\]\) => \[\.\.\.list, \{ id: `e\$\{this\.spawned\}`, hp: 2 \+ this\.spawned \}\]\);/);
+    // An updater of one expression, in a hook, is written out in place (see "updaters written in place" in behavior.test.ts).
+    assert.match(code, /const list = this\.#enemiesNext;\n\s+this\.#enemiesNext = \[\.\.\.list, \{ id: `e\$\{this\.spawned\}`, hp: 2 \+ this\.spawned \}\];\n\s+if \(this\.#enemiesNext !== list\) this\.markDirty\(\);/);
     assert.match(code, /const next = this\.enemies\.map\(\(e\) => \(\{ \.\.\.e, hp: e\.hp - dt \}\)\)\.filter\(\(e\) => e\.hp > 0\);/);
     assert.match(code, /this\.setWeakest\(next\.find\(\(e\) => e\.hp < 1\)\?\.id \?\? ""\);/);
     assert.match(code, /onHit: \(id\) => \{ this\.setEnemies\(this\.enemies\.filter\(\(e\) => e\.id !== id\)\); \}/);
@@ -224,9 +225,11 @@ function C() {
   const [p, setP] = useState<P2>({ x: 0 });
   const [xs, setXs] = useState<(number | string)[]>([]);
   useUpdate((dt) => { setP((p) => ({ ...p, x: p.x + dt })); });
-  return <Entity name="C" />;
+  return <Entity name="C"><Pointer width={1} height={1} onPress={() => setP((p) => ({ ...p, x: 0 }))} /></Entity>;
 }`);
-    assert.match(code, /this\.setP\(\(p: P2\) => \(\{ \.\.\.p, x: p\.x \+ dt \}\)\);/);
+    // In a callback the updater stays an arrow, and its object body needs the parentheses; in the hook it is an assignment, and does not.
+    assert.match(code, /this\.setP\(\(p: P2\) => \(\{ \.\.\.p, x: 0 \}\)\);/);
+    assert.match(code, /this\.#pNext = \{ \.\.\.p, x: p\.x \+ dt \};/);
     assert.match(code, /xs: \(number \| string\)\[\] = \[\];/);
   });
 

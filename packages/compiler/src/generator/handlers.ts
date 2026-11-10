@@ -2,7 +2,7 @@
 import { assertNever, type FunctionIR, type HandlerHookIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { CodeWriter } from "./writer.ts";
-import { param, annotated } from "./helpers.ts";
+import { param, annotated, pendingRef } from "./helpers.ts";
 import { ExpressionEmitter } from "./expressions.ts";
 
 export class HandlerEmitter extends ExpressionEmitter {
@@ -72,6 +72,35 @@ export class HandlerEmitter extends ExpressionEmitter {
     return this.arrow(params, inner.toString().trimEnd().split("\n"), fn);
   }
 
+  /**
+   * `setX((x) => x + 1)` written out where it stands, when the updater is one expression of the previous value:
+   *
+   *     {
+   *       const x = this.#xNext;
+   *       this.#xNext = x + 1;
+   *       if (this.#xNext !== x) this.markDirty();
+   *     }
+   *
+   * which is what the setter does with the arrow, without making the arrow and calling it through the setter (an
+   * interpreter pays for both on every call, and a moving object calls a setter or two every frame). The block's only name
+   * is the updater's own parameter, which hides the same outer names in the expression as it did in the arrow. Returns false,
+   * having written nothing, for any other updater: the caller writes the call to the setter.
+   */
+  protected updaterInPlace(state: StateId, fn: FunctionIR): boolean {
+    const only = fn.body.length === 1 ? fn.body[0]! : null;
+    const previous = fn.params.length === 1 ? fn.params[0]! : null;
+    // Not in a callback handed to an element: those run on an event, not every frame, and read better as the call.
+    if (this.callbackDepth > 0 || previous === null || only?.kind !== "Return" || !only.value || !this.hasSetter(state)) return false;
+    const w = this.w;
+    const slot = pendingRef(this.state(state));
+    w.open("{");
+    w.line(`const ${previous.name} = ${slot};`);
+    w.line(`${slot} = ${this.expr(only.value, true)};`);
+    w.line(`if (${slot} !== ${previous.name}) this.markDirty();`);
+    w.close("}");
+    return true;
+  }
+
   // -- handler statements --------------------------------------------------
 
   protected stmts(body: readonly StatementIR[]): void {
@@ -82,6 +111,7 @@ export class HandlerEmitter extends ExpressionEmitter {
           w.line(`${this.expr(stmt.expression, true)};`);
           break;
         case "SetState":
+          if ("updater" in stmt && this.updaterInPlace(stmt.state, stmt.updater)) break;
           w.line(`this.${this.setter(stmt.state)}(${"updater" in stmt ? this.updater(stmt.updater) : this.expr(stmt.value, true)});`);
           break;
         case "PlaySound":
