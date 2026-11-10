@@ -29,7 +29,7 @@ What has to exist first, and why priority 3 comes before or with this:
 - **Sizes.** Layout needs to know how big each child is. `Shape`, `Pointer` and `Collider` already have `width` and `height`. A `Text` and a `Sprite` do not: the size of text depends on the font, and the size of a sprite on the image file. Both are known only to librge. So the native library must answer two new questions, "how big is this text at this size?" and "how big is this texture?", which is an ABI change. Priority 3 already bumps the ABI to version 2 for `<Hud>`; these functions go into the **same** version 2, so the ABI moves once.
 - **A box to lay out in.** A HUD laid out in world space still drifts with the camera. `<Hud>` gives layout a fixed box: the canvas (or the window, with no `<Screen>`).
 
-So the order is: priority 3 (with U0's additions in ABI v2), then U2–U5. U1 is done.
+So the order is: priority 3 (with U0's additions in ABI v2), then U2–U5. U1 is done. The full order, interleaving these milestones with C2, C3 and the other priorities, is "Order of work" in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md#order-of-work).
 
 | Milestone | What | Size (estimate) |
 | --- | --- | --- |
@@ -44,10 +44,10 @@ Sizes are rough, for one engineer, in the style of the other plans.
 
 ## The model: Clay
 
-The layout algorithm follows Clay (C Layout, by Nic Barker: [github.com/nicbarker/clay](https://github.com/nicbarker/clay)), a single-header flexbox-like layout library whose author explains it in the video "How Clay's UI Layout Algorithm Works". This plan was revised from Clay's own README and `clay.h` (the layout passes are `Clay__CloseElement`, `Clay__SizeContainersAlongAxis` and `Clay__CalculateFinalLayout`); the video itself could not be fetched from the cloud machine the plan was written on. What it takes from Clay:
+The layout algorithm follows Clay (C Layout, by Nic Barker: [github.com/nicbarker/clay](https://github.com/nicbarker/clay)), a single-header flexbox-like layout library whose author explains it in the video "How Clay's UI Layout Algorithm Works". This plan was revised from Clay's own README and `clay.h` (the layout passes are `Clay__CloseElement`, `Clay__SizeContainersAlongAxis` and `Clay__CalculateFinalLayout`), and then checked against the video's transcript (pasted in by the user on 2026-11-10; the video could not be fetched from the cloud machine). The transcript agrees with the code on every rule below, and changed how the passes are structured (see "The layout algorithm"). What was read in Clay and in the video, including what this plan does not use yet, is logged in [CLAY_NOTES.md](CLAY_NOTES.md). What it takes from Clay:
 
 - **Sizing is per axis, with four modes.** `fit` (the default) is the size of the children plus padding and gaps; `grow` takes free space in the parent; `fixed` is a number; `percent` is a share of the parent's inner size. `fit` and `grow` take a minimum and a maximum. This replaces the earlier draft's `width`/`height`/`fill`/weighted `grow`.
-- **Widths are settled before heights.** Fit sizes are computed bottom-up, then widths top-down, then heights bottom-up and top-down again, then positions. Text wrapping slots in between widths and heights, because a wrapped text's height depends on its width; ordering the passes this way from the start means wrapping can be added later without redesigning anything.
+- **Sizes first, then positions; widths before heights.** An element's position cannot be known until every size is (a wider item further along pushes everything after it), so sizing and positioning are separate passes and positions come last. Sizing is itself one pair of passes per axis, fit bottom-up then grow/shrink top-down, widths first: a wrapped text's height depends on its width, so heights wait until after wrapping. Ordering the passes this way from the start means wrapping can be added later without redesigning anything. The video's way to say it: UI layout is mostly a one-dimensional problem, so the two axes share one function.
 - **Grow is not weighted.** Free space goes to the smallest growing child first, until it matches the next smallest, and so on, each child stopping at its maximum. Equal growing siblings end up equal, which is what a row of buttons wants.
 - **Overflow shrinks, down to minimums.** When children do not fit, the largest shrinkable child gives way first, down to its minimum size (by default, its own content's minimum). Leaves never shrink.
 - **Floating boxes are separate.** A floating box is laid out like any other but attached to a point of its parent with an offset, takes no space, and draws above according to `z`. That is how tooltips, badges and HUD corners are placed (U5).
@@ -164,18 +164,23 @@ The `Entity` rule is what makes ordinary components work as layout children with
 
 ## The layout algorithm
 
-A **layout root** is a `Flex` whose parent is not a `Flex`. Its available box is the `<Hud>`'s (the canvas, or the window with no `<Screen>`) when it grows on an axis, and otherwise its own fit, fixed or percentage size; a percentage of a non-`Flex` parent is a percentage of the HUD box. Everything below one layout root is laid out together, in five passes over its `Flex` subtree, Clay's order:
+A **layout root** is a `Flex` whose parent is not a `Flex`. Its available box is the `<Hud>`'s (the canvas, or the window with no `<Screen>`) when it grows on an axis, and otherwise its own fit, fixed or percentage size; a percentage of a non-`Flex` parent is a percentage of the HUD box. Everything below one layout root is laid out together, over its `Flex` subtree, in the order the video teaches and Clay's code follows. Sizing is **one function, `sizeAlongAxis(axis)`**, run for the x axis and later the y axis; it reads width fields or height fields and is otherwise the same, and what it does to a box depends only on whether the axis is the box's direction or across it. Each run has two steps, A and B:
 
-1. **Fit sizes, bottom-up.** Each box's fit size on both axes: along its direction, the sum of its children's sizes plus gaps and padding; across it, the largest child plus padding. Its minimum size is worked out the same way from its children's minimums. Both are clamped to `min…`/`max…`; a percentage child counts as 0 here.
-2. **Widths, top-down.** For each box, from the root down, on the x axis:
-   - percentage children take their share of the inner width (minus gaps, when the box is a row);
-   - in a **row**: the free width is the inner width minus the children's widths and gaps. If it is positive and some children grow, it goes to the narrowest growing child until it is as wide as the next narrowest, then to both, and so on, each stopping at its `maxWidth`. If it is negative, the widest shrinkable child (a `Flex` that is `"fit"` or `"grow"`) gives way first, until it is as narrow as the next widest, each stopping at its minimum width;
-   - in a **column**: a growing child (or a fit child under `alignItems="stretch"`) takes the inner width; every child is clamped between its minimum width and the inner width.
-3. **Text wrapping** would go here, using the final widths. Not in this plan (see the table at the end); the slot is what makes it cheap to add.
-4. **Heights.** Fit heights are recomputed bottom-up (a wrapped text, later, is taller than it was), then the same top-down pass runs on the y axis, with rows and columns swapped.
-5. **Positions, top-down.** Each box starts its children inside its padding. Along its direction, the free space left after the sizes is shared by `justifyContent`; across it, each child is placed by `alignItems`. Each child's `layoutX`/`layoutY` is written, and advances the next by its size plus the gap. Offsets are rounded to whole pixels (U4).
+**A. Fit sizes, bottom-up** (children before their parent, which a recursive post-order walk gives for free; Clay gets the same order because its close-element step runs after a box's children). Each box's *preferred* size on the axis: along its direction, the padding at both ends plus `gap × (children − 1)` plus the sum of its children's sizes (the gap count is the fence-post rule: five children have four gaps); across it, the padding plus the largest child. Its *minimum* size is worked out the same way from its children's minimums (a leaf's minimum is its own size, so a fixed or leaf box has the same preferred and minimum size; later, a wrapping text's is its widest word). Both are clamped to `min…`/`max…`; a percentage child counts as 0 here.
 
-The free-space sharing in step 2 is Clay's: unweighted, smallest first. It makes equal growing siblings equal, it never grows a child past its maximum, and it hands what a capped child could not take to the others.
+**B. Distribute, top-down.** For each box, from the root down, on the axis:
+   - percentage children take their share of the inner size (minus gaps, along the direction);
+   - **along the box's direction** (the width in a row, the height in a column): the free space is the inner size minus the children's sizes and gaps. If it is positive and some children grow, it goes to the smallest growing child until it is as big as the next smallest, then to both, and so on, each stopping at its maximum. If it is negative, the largest shrinkable child (a `Flex` that is `"fit"` or `"grow"`) gives way first, until it is as small as the next largest, each stopping at its minimum, and a box that has reached its minimum is dropped from the list of shrinkers (the video's two loops, grow and shrink, are the same loop with the comparison reversed);
+   - **across the direction**: a growing child (or a fit child under `alignItems="stretch"`) takes the box's inner size minus its own padding; every child is clamped between its minimum size and the inner size.
+
+The steps run in this order, and the order matters:
+
+1. `sizeAlongAxis("x")`: fit widths (A), then distribute widths (B).
+2. **Text wrapping**, using the final widths. Not in this plan (see the table at the end); this slot is what makes it cheap to add. It comes here because a wrapped text is taller than it was, and heights must be fitted after that is known, which is why the y axis is not sized in step 1.
+3. `sizeAlongAxis("y")`: fit heights (A), then distribute heights (B).
+4. **Positions, top-down.** Each box starts its children inside its padding. Along its direction, the free space left after the sizes is shared by `justifyContent`; across it, each child is placed by `alignItems`. Each child's `layoutX`/`layoutY` is written, and advances the next by its size plus the gap. Offsets are rounded to whole pixels (U4).
+
+The free-space sharing in step B is Clay's: unweighted, smallest first. It makes equal growing siblings equal, it never grows a child past its maximum, and it hands what a capped child could not take to the others.
 
 ## How it fits the engine
 
@@ -195,7 +200,7 @@ They are zero for anything not inside a `Flex`. `worldTransform()` and the playe
 
 The player's `FrameBuilder.build` walks the tree once per frame, a parent before its children. Layout fits in that walk:
 
-1. When the walk reaches a layout root, it runs the five passes over that root's `Flex` subtree, measuring leaves through the measurer, and writes every child's `layoutX`/`layoutY` and every `Flex`'s final size.
+1. When the walk reaches a layout root, it runs the layout steps over that root's `Flex` subtree, measuring leaves through the measurer, and writes every child's `layoutX`/`layoutY` and every `Flex`'s final size.
 2. It emits each `background` rectangle as it reaches its `Flex`, then continues into the children, whose world transforms now include their layout offsets.
 
 A game with no `Flex` pays nothing beyond one more `kindOf` case. A HUD is tens of objects, so laying it out every frame is cheap. Caching layout for an unchanged subtree can come later if a menu with hundreds of items ever shows up in the bench.
@@ -254,7 +259,7 @@ Pointers inside a laid-out `<Hud>` need nothing new. A `Pointer` hit-tests throu
 Two libraries were considered:
 
 - **Yoga** (the flexbox engine React Native uses) ships as C++ or as WebAssembly. QuickJS-ng has no WebAssembly, and linking C++ into librge breaks its "C + raylib, the C side does no maths" rule from NATIVE_PLAN.
-- **Clay** is a single C header with no dependencies, so it would link into librge. But it would put layout maths on the C side, it lays out its own element tree rather than the engine's `GameObject`s, and byte-identical output between Node and QuickJS is easy to keep with one pure TypeScript function, while a native layout engine would be a second thing to verify.
+- **Clay** is a single C header with no dependencies, so it would link into librge. Its author says its layout code is three functions of about 800 lines, which is also why porting the subset this engine needs is reasonable. But it would put layout maths on the C side, it lays out its own element tree rather than the engine's `GameObject`s, and byte-identical output between Node and QuickJS is easy to keep with one pure TypeScript function, while a native layout engine would be a second thing to verify.
 
 So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI needs (rows and columns, the four sizing modes, alignment, floating boxes), and keeps Clay as the reference: when a question comes up about an edge case (a percentage child in a fit parent, shrinking below a minimum), Clay's answer is the default one.
 
@@ -285,14 +290,30 @@ So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI
 **Done when**
 
 - [ ] `Flex` is a runtime class with the props above, and in the manifest; the compiler adds only the sizing check and the `flex-start` hint
-- [ ] `layout.ts` runs the five passes; each sizing mode (`"fit"`, `"grow"`, fixed, percentage) and each bound is tested on both axes, with a fake measurer, against hand-computed sizes
+- [ ] `layout.ts` runs the steps above with one axis-parameterized sizing function, not one copy per axis; each sizing mode (`"fit"`, `"grow"`, fixed, percentage) and each bound is tested on both axes, with a fake measurer, against hand-computed sizes
 - [ ] Growing children share free space smallest first and stop at their maximum, and what a capped child cannot take goes to the others (tests taken from Clay's behaviour)
 - [ ] Every `direction` × `alignItems` × `justifyContent` combination, `gap` and every padding prop place children where hand-computed positions say
 - [ ] Nested `Flex`es, and component and `Entity` children sized by their bounding box, are tested
 - [ ] A child's own `transform` moves it within its slot without moving its neighbours (a test)
 - [ ] `background` draws a rectangle behind the children; a recording test and a pixel test show it
 - [ ] Conditional children and keyed lists inside a `Flex` reflow when they change
+- [ ] The video's final example, a context menu, lays out as it does there (see below)
 - [ ] Laying out allocates no object per node per frame (a test counts, or the bench shows no growth in garbage collection)
+
+**The acceptance test: the video's context menu.** The video ends by building a right-click menu from nothing but the features above, and explains how every element lands where it does. U2 is done when the same menu, written as TSX, comes out as the video says, with a recording test checking the positions and sizes:
+
+```tsx
+<Flex direction="column" minWidth={...} maxWidth={...} background="purple">     {/* fit, with a minimum and a maximum width */}
+  {items.map((item) => (
+    <Flex key={item.id} width="grow" minHeight={80} paddingX={...} gap={32} alignItems="center">   {/* grow across the column; centred vertically */}
+      <Flex width="grow"><Text>{item.label}</Text></Flex>                      {/* the invisible container that pushes the icon right */}
+      <Sprite image={item.icon} />
+    </Flex>
+  ))}
+</Flex>
+```
+
+The test covers: the menu fitting its widest row; the minimum width holding when the labels are short; every row growing to the same width; the icon at the right edge while the label sits at the left; rows of equal minimum height with their contents centred vertically (the video uses a minimum height instead of vertical padding, so rows stay equal); and the gap between label and icon. The video's last step, a label wrapping when it reaches the maximum width, needs text wrapping and is tested when that arrives; until then a label past the maximum overflows.
 
 ### U3: the HUD box, shrinking, and the demo
 
@@ -347,7 +368,7 @@ Also decided on 2026-11-09, each as recommended:
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| Text wrapping inside a box | One-line text covers a HUD; the passes already leave its slot (pass 3), and `rge_measure_text` already measures words | A dialogue box, or any text longer than its box |
+| Text wrapping inside a box | One-line text covers a HUD; the steps already leave its slot (step 2), and `rge_measure_text` already measures words | A dialogue box, or any text longer than its box |
 | Wrapping rows (`flex-wrap`) | A HUD row rarely wraps | An inventory grid; or a separate `Grid` built-in |
 | Aspect-ratio boxes | Nothing in a HUD needs one | A portrait or a minimap frame that must keep its shape while growing |
 | Borders and rounded corners on `background` | Needs new draw records (outline, rounded rectangle), as Clay's renderer has | The first real menu design |
