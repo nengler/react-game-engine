@@ -31,7 +31,7 @@ Every Phase 3 milestone was built and tested only in a Linux cloud container, ag
 
 - [ ] The demo has been played on a Linux desktop, with any findings filed
 - [ ] Sound plays
-- [ ] Cargo and the raylib CMake build are cached in CI, and the `native-desktop` job builds raylib once
+- [x] Cargo and the raylib CMake build are cached in CI (#32); whether `native-desktop` builds raylib once is unchecked
 
 ## 2. Collisions that gameplay can use
 
@@ -75,6 +75,8 @@ Everything is drawn through the camera, so a score or a health bar placed in the
 - [x] The demo's click counter moves into a `<Hud>`
 
 ## 4. Performance pass two
+
+**Decided 2026-11-10: V8 is the main engine, QuickJS-ng the fallback.** `npm run package` now ships the Node/V8 build by default; `--engine quickjs` is the small, JIT-free build for platforms that ban a JIT. The QuickJS numbers below are therefore a regression guard and a floor, not the target: the remaining open items (the 10 ms QuickJS target, dependency-scoped `render()`) are no longer priorities, and the developer loop (priority 5) comes next.
 
 After the review, 2,000 objects moving the way compiled components do cost about 7 ms of script a frame under QuickJS; with a collider each, about 18 ms, which is over a 60 fps frame before any drawing. Each of the three known fixes targets one column below.
 

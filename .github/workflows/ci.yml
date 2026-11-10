@@ -130,7 +130,7 @@ jobs:
         run: npm run host:build
       - name: Package the demo and run it under a virtual display
         run: |
-          npm run package
+          npm run package -- --engine quickjs
           cd /tmp
           # The game runs until its window closes, so stopping it after five seconds (status 124) is the pass.
           xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
@@ -177,6 +177,6 @@ jobs:
         run: npm run bench:check -- --host host/target/release/rge-host
       - name: Package the demo and run it
         run: |
-          npm run package -- --headless
+          npm run package -- --engine quickjs --headless
           cd /tmp
           timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
