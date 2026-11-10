@@ -11,6 +11,7 @@ export interface TrailProps {
 }
 
 export class Coin extends Sprite<CoinProps> {
+  static readonly managed = true;
   angle: number = 0;
   #angleNext: number = this.angle;
 
@@ -48,6 +49,7 @@ export class Coin extends Sprite<CoinProps> {
 export default Coin;
 
 export class Trail extends Entity<TrailProps> {
+  static readonly managed = true;
   readonly coin: Coin = new Coin({ value: this.props.value });
   readonly coin2: Coin = new Coin({ value: this.props.value });
   readonly coin3: Coin = new Coin({ value: this.props.value, spin: 4 });

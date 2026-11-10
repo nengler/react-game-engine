@@ -56,6 +56,15 @@ export class GameObject<P extends object = {}> {
   readonly gameStateKeys: readonly string[] = NO_KEYS;
   readonly children: GameObject[] = [];
   world: World | null = null;
+  /**
+   * When this object, or anything under it, last changed what it draws (see `markChanged`): the `World`'s `serial` at the
+   * time. The player's frame builder reuses the draw records of a subtree that has not changed since it built them.
+   * `selfChangedAt` is the object's own change, `subtreeChangedAt` is its own or any descendant's. Zero: never.
+   */
+  selfChangedAt = 0;
+  subtreeChangedAt = 0;
+  /** The player's per-object bookkeeping for reusing draw records. Owned by `FrameBuilder`; nothing else reads or writes it. */
+  drawCache: object | null = null;
 
   constructor(props?: P, defaults?: Partial<P>) {
     this.props = { ...defaults, ...definedOnly(props) } as P;
@@ -152,6 +161,7 @@ export class GameObject<P extends object = {}> {
       throw new Error("GameObject already has a parent");
     }
     child.parent = this;
+    child.drawCache = null; // its records were made under another parent
     child.#slot = slot;
     child.#order = order;
     // Children are sorted, so a child that sorts after the last one (the usual case: building a tree in
@@ -163,6 +173,7 @@ export class GameObject<P extends object = {}> {
       const index = this.children.findIndex((sibling) => sibling.#slot > slot || (sibling.#slot === slot && sibling.#order > order));
       this.children.splice(index, 0, child);
     }
+    this.markChanged();
     if (this.world !== null) child.attachToWorld(this.world);
   }
 
@@ -170,8 +181,10 @@ export class GameObject<P extends object = {}> {
   removeChild(child: GameObject): void {
     const index = this.children.indexOf(child);
     if (index === -1) throw new Error("GameObject is not a child of this object");
+    this.markChanged();
     this.children.splice(index, 1);
     child.parent = null;
+    child.drawCache = null;
     child.#slot = Infinity;
     child.#order = 0;
     child.detachFromWorld();
@@ -222,6 +235,7 @@ export class GameObject<P extends object = {}> {
     children.forEach((child, index) => {
       if (child.parent === this && child.#slot === slot) child.#order = index;
     });
+    this.markChanged();
     // Children are kept sorted by (slot, order), and the sort is stable, so only this slot's range can move.
     this.children.sort((a, b) => (a.#slot === b.#slot ? a.#order - b.#order : a.#slot < b.#slot ? -1 : 1));
   }
@@ -246,6 +260,25 @@ export class GameObject<P extends object = {}> {
     return this.worldTransform();
   }
 
+  /**
+   * Say that something this object draws, or where it draws it, has changed outside a render: the player redraws this
+   * object and what is under it on the next frame instead of reusing last frame's draw records for it.
+   *
+   * Compiled components never need this: a render (`runRender`), a structural change and an `AnimatedSprite` frame
+   * report themselves. It is for code that writes a transform, a colour or a text directly, anywhere but in `render()`:
+   * a hand-written class, a test, or a collision callback that reaches into another object. A class that overrides
+   * `onInput` or `onUpdate` and is not a built-in is redrawn every frame anyway, as it is assumed to do exactly that,
+   * so a hook there needs no call.
+   */
+  markChanged(): void {
+    const world = this.world;
+    if (world === null) return; // nothing has been drawn from a tree that is not in a world, so nothing is reused
+    const serial = world.serial;
+    this.selfChangedAt = serial;
+    // Stop at the first ancestor already stamped with this serial: everything above it was stamped with it.
+    for (let object: GameObject | null = this; object !== null && object.subtreeChangedAt !== serial; object = object.parent) object.subtreeChangedAt = serial;
+  }
+
   /** Request a render pass for this object. */
   markDirty(): void {
     if (this.#dirty) return;
@@ -260,6 +293,13 @@ export class GameObject<P extends object = {}> {
    */
   runRender(): void {
     this.#dirty = false;
+    // A render writes this object's draw state and that of the elements it owns, which is what `markChanged` does, written out because this runs for every render.
+    const world = this.world;
+    if (world !== null) {
+      const serial = world.serial;
+      this.selfChangedAt = serial;
+      for (let object: GameObject | null = this; object !== null && object.subtreeChangedAt !== serial; object = object.parent) object.subtreeChangedAt = serial;
+    }
     this.commitState();
     this.render();
   }

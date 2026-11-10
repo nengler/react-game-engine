@@ -7,6 +7,7 @@ export interface PanelProps {
 }
 
 export class Panel extends Entity<Omit<PanelProps, "children">> {
+  static readonly managed = true;
   readonly sprite: Sprite = new Sprite({ image: (this.props.title === "hud") ? "panel-hud.png" : "panel.png" });
   readonly entity: Entity = new Entity({ name: "Content" });
 

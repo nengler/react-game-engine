@@ -33,6 +33,7 @@ describe("code generation", () => {
 import { Entity, Sprite } from "@rge/runtime";
 
 export class Player extends Entity {
+  static readonly managed = true;
   health: number = 100;
   #healthNext: number = this.health;
   readonly sprite: Sprite = new Sprite({ image: "player.png" });
@@ -70,6 +71,8 @@ export class Player extends Entity {
 }
 
 export class WarningIcon extends Entity {
+  static readonly managed = true;
+
   constructor() {
     super({ name: "Warning" });
   }

@@ -157,7 +157,7 @@ export const runtimeManifest: RuntimeManifest = {
     "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
-    "markDirty", "runRender", "commitState", "render",
+    "markDirty", "markChanged", "selfChangedAt", "subtreeChangedAt", "drawCache", "runRender", "commitState", "render",
     "onInput", "onUpdate", "onMount", "onUnmount",
     "attachToWorld", "detachFromWorld",
     // Object.prototype

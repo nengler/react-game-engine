@@ -1532,6 +1532,26 @@ and the first frame is drawn. A root that throws opens no window. Each setting i
 else the `PlayerConfig` field, else the default (640 × 360, title `"react-game-engine"`, background black, assets
 `"assets"`); `hidden` is the player's alone.
 
+**Reusing draw records** (decided and built 2026-11-10). Most objects stand still in a given frame, and walking them is most
+of a frame's script time. So `FrameBuilder` keeps last frame's world records and, for a subtree that has not changed since,
+copies the run of records (with its colliders and texts) instead of making them again. The signal is what the world already
+knows, not a watch on `Transform`'s fields (plain fields are kept, because accessors made every moving scene slower under
+QuickJS): a render (`runRender`), a structural change and an `AnimatedSprite` frame call `markChanged()`, which stamps the object
+and its ancestors with the world's `serial`, and the builder advances the serial once a frame. A subtree is copied when nothing
+in it, and no ancestor's own transform, was stamped since the frame the records came from. The contract that follows:
+
+- **A compiled component needs nothing.** Its draw state changes only in its constructor and `render()`, and its hooks only
+  call setters, so the compiler marks every class it generates `static readonly managed = true`.
+- **A hand-written class** that overrides `onInput` or `onUpdate` and is not marked is redrawn every frame, with everything under
+  it, because it may write a transform or a colour from the hook and nothing would report it. The same write with no hook (from a
+  collision callback, a test, a script holding a reference) is not seen: call `object.markChanged()` after it.
+- **What the walk must see every frame is never reused**: a `<Camera>`, `<Pointer>`, `<Hud>`, `<Flex>` (they feed lists besides the
+  draw records, or lay out their children) and anything with a non-zero `z`. A subtree containing one is rebuilt, and so are its
+  ancestors, though their other children are still copied.
+- `retain: false` (on `PlayerConfig` or `FrameBuilderOptions`) turns it off; `retain: "check"` also rebuilds each frame and
+  throws when the two differ, which is how an unreported change is found. The player's tests run reuse against a full rebuild
+  over random changes.
+
 **A frame** (`createPlayer(...).step()`), in a fixed order:
 
 1. A new **left press** goes to the topmost `Pointer` that was under the mouse in the frame last

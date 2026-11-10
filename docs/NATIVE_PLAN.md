@@ -501,6 +501,33 @@ Measured on a VM about 1.4x slower than the one above, so read the changes, not 
 | Tree walk and draw list | 12.6-13.3 ms | 9.9-10.8 ms | `walkTree` has no default parameters (QuickJS pays for each on every recursive call); it finds an object's kind once and hands it to the visitor, which used to look it up again; and it skips the `composeTransforms` call for an identity `placement` |
 | Collisions | 11.7-12.6 ms | 9.5-10.2 ms | The x-order is an insertion sort over last frame's order (boxes barely move; after too many shifts it falls back to `sort`), and a collider at the same index as last frame keeps its id without a `WeakMap` lookup |
 
+### Performance pass two, reusing draw records (2026-11-10)
+
+The structural fix the previous section named: copy last frame's records for a subtree that did not change (see "Reusing draw
+records" in DESIGN.md for the contract). It needed a cheap "did this change" signal, and found one that costs a moving scene almost
+nothing: the renders, structural changes and animation frames the world already runs stamp the object and its ancestors, instead of
+watching `Transform`'s fields. Same VM, same bench file, old and new code run alternately; the middle of three runs.
+
+| Scene (2,000 objects) | Walk, before | Walk, after | Whole frame, before | Whole frame, after |
+| --- | --- | --- | --- | --- |
+| still rects | 7.1 ms | about 0.1 ms | 7.1 ms | 0.03 ms |
+| still rects, each with a collider | 10.1 ms | 0.3 ms | 20.8 ms | 10.9 ms |
+| with colliders, 20 moving (hooks) | 10.3 ms | 1.7 ms | 21.0 ms | 11.7 ms |
+| with colliders, 20 moving by state (compiled-style) | 10.8 ms | 1.7 ms | 19.1 ms | 11.3 ms |
+| moved by state | 7.7 ms | 8.4 ms | 12.3 ms | 13.1 ms |
+| moved by state, each with a collider | 10.1 ms | 12.3 ms | 25.6 ms | 27.7 ms |
+
+- **What it costs where nothing can be reused**: about 0.5 to 2 ms on 2,000 objects that all move every frame (a walk that
+  does a little more per node, and a stamp per render in the tick). Writing a subtree down is skipped for anything that changed this
+  frame, which is what keeps that small; an earlier version that wrote everything down cost more.
+- **With reuse, collisions are now the larger half of a mostly-still frame** (10 ms of 11): the tracker still rebuilds and sorts
+  every collider each frame. An incremental broad phase is the next step, and a retained collider entry is the "did it move" signal it needs.
+- **Not reused yet**: anything with a `z` (its records would need their z runs replayed), `<Pointer>`s, and everything under a
+  `<Flex>` or the `<Hud>`. Each is rebuilt every frame, as before.
+- **How it was checked.** The tests rebuild every frame from scratch beside the reused one and compare record for record (and colliders,
+  texts, pointers) over random renders, adds, removes, reorders, z changes and text changes. Breaking the implementation in four ways (ignoring a
+  descendant's change, ignoring an ancestor's, not moving a copied child's offsets, not patching text indices) each fails them.
+
 The review also fixed: `console.log` in the Rust host panicking (and ending the game) when stdout is closed, as with `rge-host game.js | head`; the Rust host accepting a keys buffer longer than librge's table (rge.h and protocol.ts drifting apart, which the Node host already refused); librge casting draw-record doubles straight to integers (undefined behaviour in C for NaN or out-of-range values; a bad op now stops the frame, a bad index draws nothing, a bad colour is magenta); frame capture on the OpenGL path copying a screen image whose size need not match the buffer on a high-DPI display; and Shift, Control and Alt reporting a second press when the other side went down while one was held, and a release while still held.
 
 ## Later (not scheduled)

@@ -9,6 +9,7 @@ import { Player } from "./Player.ts";
 import { Spikes } from "./Spikes.ts";
 
 export class Main extends Game {
+  static readonly managed = true;
   clicks: number = 0;
   #clicksNext: number = this.clicks;
   readonly playClick: Sound = new Sound("click.wav");

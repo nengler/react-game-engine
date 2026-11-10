@@ -9,6 +9,12 @@ import { NO_INPUT, type InputState } from "./input.ts";
  */
 export class World {
   readonly root: GameObject = new GameObject();
+  /**
+   * A counter the player's frame builder advances once per frame it builds. A change to an object is stamped with
+   * the value current when it happens (`GameObject.markChanged`), so the builder can tell what changed since it
+   * last drew an object: a stamp at or after the serial of that frame is newer than the frame.
+   */
+  serial = 0;
   #dirty = new Set<GameObject>();
   #structure = new Set<GameObject>();
   #onInput = new Set<GameObject>();

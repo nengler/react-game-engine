@@ -2,6 +2,7 @@
 import { Entity, Sprite, type PrefabDefinition } from "@rge/runtime";
 
 export class WarningIcon extends Entity {
+  static readonly managed = true;
   readonly sprite: Sprite = new Sprite({ image: "warning.png" });
 
   constructor() {

@@ -200,6 +200,9 @@ class ComponentGenerator extends ElementEmitter {
     const runtimeProps = c.propsType && c.acceptsChildren ? `Omit<${c.propsType}, "children">` : c.propsType;
     const extendsClause = runtimeProps ? `${c.root.component.name}<${runtimeProps}>` : c.root.component.name;
     w.block(`export class ${c.name} extends ${extendsClause}`, () => {
+      // What a compiled component draws changes only in its constructor, its `render()` and structural changes, which the
+      // runtime reports; its hooks only call setters. So the player may reuse its draw records while it stands still (see `FrameBuilder`).
+      w.line("static readonly managed = true;");
       // Persistent state.
       for (const s of c.state) {
         if (s.globalKey !== undefined) {

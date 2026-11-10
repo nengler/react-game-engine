@@ -69,6 +69,8 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> {
     const steps = Math.floor((this.elapsed + 1e-9) / step);
     if (steps === 0) return;
     this.elapsed = Math.max(0, this.elapsed - steps * step);
-    this.frame = (this.frame + steps) % count;
+    const next = (this.frame + steps) % count;
+    if (next !== this.frame) this.markChanged();
+    this.frame = next;
   }
 }

@@ -22,6 +22,7 @@ export interface Spawn {
 }
 
 export class Enemy extends Entity<EnemyProps> {
+  static readonly managed = true;
   hp: number = 3;
   #hpNext: number = this.hp;
   reported: boolean = false;
@@ -68,6 +69,7 @@ export class Enemy extends Entity<EnemyProps> {
 }
 
 export class Level extends Entity {
+  static readonly managed = true;
   wave: number = 1;
   #waveNext: number = this.wave;
   score: number = 0;
