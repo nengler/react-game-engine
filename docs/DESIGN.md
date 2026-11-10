@@ -551,10 +551,10 @@ function Panel({ title, children }: PanelProps) {
   );
 }
 
-function Hud() {
+function Scoreboard() {
   const [score, setScore] = useState(0);
   return (
-    <Entity name="Hud">
+    <Entity name="Scoreboard">
       <Panel title="hud">
         <Coin value={score} />
         {score > 10 && <Sprite image="star.png" />}
@@ -564,11 +564,11 @@ function Hud() {
 }
 ```
 
-**The parent owns what it passes.** The elements are fields of `Hud`, built
-from `Hud`'s state and props and updated in `Hud`'s `render()`, exactly as if
-they were `Hud`'s own children: `<Coin value={score} />` follows `score`
+**The parent owns what it passes.** The elements are fields of `Scoreboard`, built
+from `Scoreboard`'s state and props and updated in `Scoreboard`'s `render()`, exactly as if
+they were `Scoreboard`'s own children: `<Coin value={score} />` follows `score`
 without `Panel` knowing, and `{score > 10 && …}` is a conditional child of
-`Hud`. `Panel` only says where they mount, so a passed child's `transform` is
+`Scoreboard`. `Panel` only says where they mount, so a passed child's `transform` is
 relative to the container that holds `{children}`.
 
 **Receiving** (`RGE1208`/`RGE1202` otherwise):
@@ -856,7 +856,7 @@ export default function Main() {
       <Screen width={320} height={180}>
         <Ground />
         <Camera><Player /></Camera>
-        <Hud />
+        <CoinCounter />
       </Screen>
     </Game>
   );
@@ -1149,7 +1149,7 @@ export const useGame = createGameState<State>()((set, get) => ({
 ```
 
 ```tsx
-// Hud.tsx: access                    // Player.tsx: update
+// CoinCounter.tsx: access                    // Player.tsx: update
 import { useGame } from "./GameState.ts";
 const hp = useGame((s) => s.player.hp);          const hurt = useGame((s) => s.hurt);
                                                   useUpdate(() => { if (hit) hurt(); });
@@ -1196,7 +1196,7 @@ player call it between cases. Generated output for a reader and an action:
 
 ```ts
 import { useGame } from "../src/GameState.ts";          // relative to the generated file; the CLI computes it
-export class Hud extends Text {
+export class CoinCounter extends Text {
   hp: number = useGame.store.get<number>("player.hp");
   override readonly gameStateStore = useGame.store;
   override readonly gameStateKeys: readonly string[] = ["player.hp"];
@@ -1590,26 +1590,35 @@ root `build` is given) sets the game's resolution: everything inside is in game 
 into the window. `fit` picks the scale: `"integer"` (the default) is the largest whole number that fits, with the
 game's corner on a whole window pixel, falling back to `"contain"` for a window smaller than the game;
 `"contain"` is the largest scale that fits; `"stretch"` fills each axis. The game is centred, and the window
-outside it is covered with `border`. All of it is one view: the camera's view in game pixels, then the
-screen's scale and position (`viewToWindow`), in the first record. The bars are drawn last, as rectangles
-placed in world space by taking each window rectangle back through that view; every view the player makes
-is a scale after a rotation, so its inverse is exactly a record's rotate-then-scale and the bars land on
-whole window pixels however the camera turns. (When the ABI allows a second view, priority 3, they can be
-drawn through a window-space view instead.) A press on the bars reaches no `Pointer`, and
-`input.pointerX/pointerY` come back through the same view, so handlers see game positions. `pixelPerfect`
-(default true) is accepted but, until the library can draw into a texture (ABI v2), the game is drawn at the
-window's resolution either way. A `<Screen>` anywhere else is a plain container, with one warning; one whose
+outside it is covered with `border`. `pixelPerfect` (the default) draws the game into a texture of the game's own
+size, through views in game pixels, and the first record of the frame, `RGE_OP_CANVAS`, says where in the window
+the texture is shown and what colour is around it, so a game pixel is a whole block of window pixels whatever is
+turned or scaled inside. `pixelPerfect={false}` draws at the window's resolution: the camera's view in game pixels,
+then the screen's scale and position (`viewToWindow`), in one view, and the bars last as four rectangles through a
+view in window pixels. In both modes a press on the bars reaches no `Pointer`, and `input.pointerX/pointerY` come
+back through the window's map (`BuiltFrame.view`, which is the same in both modes), so handlers see game positions.
+A `<Screen>` anywhere else is a plain container, with one warning; one whose
 size is not positive is ignored, with one warning. Without a `<Screen>` the frame is exactly what it was
 before: the game is the window.
 
+**The HUD.** A `<Hud>` is a layer drawn after the world through a second `RGE_OP_VIEW` that ignores the camera:
+its contents are in game pixels under a `<Screen>` and in window pixels without one. The tree walk records each
+`Hud` and does not enter it; each is then walked on its own after the world, in tree order, from its own world
+transform, with `z` ordering the contents of that layer only (a high `z` inside one layer never lifts it over the
+next layer, or the world). Inside a `Hud`, sprites, shapes and text are drawn, `Pointer`s are collected, and a
+`Camera` is ignored with one warning; a `Collider` takes no part in collisions; a `Hud` inside a `Hud` is a plain
+container. The HUD's pointers are listed after the world's, so they are pressed first, and a press reaches them at
+HUD coordinates: the window point taken back through `BuiltFrame.hudView` (the screen's placement, or the
+identity), not through the camera.
+
 **Measuring.** `FrameBuilder.measure(object)` is the size layout will place an object by: a `Shape`'s,
-`Pointer`'s or `Collider`'s `width × height`, a `Text`'s measured width × its `size`, a `Sprite`'s texture size
+`Pointer`'s or `Collider`'s `width × height`, a `Text`'s measured width × its measured line height, a `Sprite`'s texture size
 (an `AnimatedSprite`'s first frame, so the size does not jitter; a texture that will not load measures as the
 16×16 square drawn instead), and null for containers. It asks the backend's optional `measureText` and
 `textureSize` once per string and once per texture and keeps the answers (text widths up to 1,024 strings,
-then the cache starts again). No native backend has them until ABI v2, so text widths are estimated
-(`estimateTextWidth`: 0.6 × size per character) and textures measure 0 × 0, with one warning;
-`RecordingBackend` implements both deterministically for tests.
+then the cache starts again). Both native hosts answer from librge (ABI v2). A backend without them gets text
+widths estimated (`estimateTextWidth`: 0.6 × size per character, a line as tall as `size`) and textures that measure
+0 × 0, with one warning; `RecordingBackend` implements both deterministically for tests.
 
 **Input.** `input.pressed/down/released(key)` read the backend's key flags. Keys are `"A"`–`"Z"`,
 `"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`,

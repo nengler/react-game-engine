@@ -96,8 +96,28 @@ describe("borderRects and onScreen", () => {
 });
 
 describe("FrameBuilder: a root <Screen>", () => {
-  it("draws game pixels scaled into the window, the game's corner at its place", () => {
-    const { records, built } = draw(screen(), 1000, 600);
+  it("draws game pixels into a canvas the window shows at the game's place, in the border colour around it", () => {
+    const { records, built } = draw(screen({ border: "navy" }), 1000, 600);
+    assert.deepEqual(records, [
+      { op: "canvas", width: 320, height: 180, destX: 20, destY: 30, destW: 960, destH: 540, borderColor: "#000080ff" },
+      { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+    ]);
+    // The mouse is still taken back through the window's map, so the views the records carry do not matter to it.
+    assert.deepEqual(built.view, { a: 3, b: 0, c: 0, d: 3, e: 20, f: 30 });
+  });
+
+  it("centres a pixel-perfect camera on the canvas, in game pixels", () => {
+    const camera = new Camera({ zoom: 2 });
+    camera.transform.x = 100;
+    const { records } = draw(screen({}, camera), 1000, 600);
+    const view = records[1];
+    assert.ok(view?.op === "view");
+    assert.equal(view.a, 2);
+    close(view.a * 100 + view.e, 160, "the followed point is the canvas's middle");
+  });
+
+  it("draws game pixels scaled into the window, the game's corner at its place, when it is not pixel-perfect", () => {
+    const { records, built } = draw(screen({ pixelPerfect: false }), 1000, 600);
     assert.deepEqual(records[0], { op: "view", a: 3, b: 0, c: 0, d: 3, e: 20, f: 30 });
     assert.deepEqual(built.screen, { width: 320, height: 180, scaleX: 3, scaleY: 3, left: 20, top: 30 });
     assert.deepEqual(built.view, { a: 3, b: 0, c: 0, d: 3, e: 20, f: 30 });
@@ -115,57 +135,40 @@ describe("FrameBuilder: a root <Screen>", () => {
   });
 
   it("draws bars in the border colour over the window outside the game, last", () => {
-    const { records } = draw(screen({ border: "navy" }, new Shape({ kind: "rect", width: 400, height: 400 })), 1000, 600);
-    const bars = records.slice(2);
+    const { records } = draw(screen({ border: "navy", pixelPerfect: false }, new Shape({ kind: "rect", width: 400, height: 400 })), 1000, 600);
+    const bars = records.slice(3);
     assert.equal(records[1]?.op, "rect", "the game's own shape comes first");
+    assert.deepEqual(records[2], { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, "then a view in window pixels");
     assert.equal(bars.length, 4);
     for (const bar of bars) assert.ok(bar.op === "rect" && bar.color === "#000080ff");
   });
 
-  it("places each bar so that, drawn through the view, it covers its window rectangle, even under a turned, zoomed camera", () => {
-    for (const make of [
-      () => new Camera(),
-      () => {
-        const camera = new Camera({ zoom: 1.7 });
-        camera.transform.x = 33;
-        camera.transform.y = -12;
-        camera.transform.rotation = 0.8;
-        camera.transform.scaleX = 1.5;
-        camera.transform.scaleY = 0.5;
-        return camera;
-      },
-    ]) {
-      for (const fit of ["integer", "contain", "stretch"] as const) {
-        const window = { width: 1000, height: 700 };
-        const { records, built } = draw(screen({ fit }, make()), window.width, window.height);
-        const expected = borderRects(built.screen!, window.width, window.height);
-        const bars = records.slice(1).filter((r) => r.op === "rect");
-        assert.equal(bars.length, expected.length, fit);
-        bars.forEach((bar, i) => {
-          assert.ok(bar.op === "rect");
-          const want = expected[i]!;
-          // A record draws local (u, v) at position + rotate(scale · (u, v)); the view then takes it to the window.
-          const corner = (u: number, v: number) => {
-            const sx = u * bar.scaleX;
-            const sy = v * bar.scaleY;
-            const cos = Math.cos(bar.rotation);
-            const sin = Math.sin(bar.rotation);
-            return apply(built.view, bar.x + sx * cos - sy * sin, bar.y + sx * sin + sy * cos);
-          };
-          const tl = corner(0, 0);
-          const br = corner(bar.width, bar.height);
-          const tr = corner(bar.width, 0);
-          for (const [p, x, y] of [[tl, want.x, want.y], [br, want.x + want.width, want.y + want.height], [tr, want.x + want.width, want.y]] as const) {
-            assert.ok(Math.abs(p.x - x) < 1e-6 && Math.abs(p.y - y) < 1e-6, `${fit} bar ${i}: (${p.x}, ${p.y}) ≈ (${x}, ${y})`);
-          }
-        });
+  it("places each bar on its window rectangle, whatever the camera does, in a view of window pixels", () => {
+    for (const fit of ["integer", "contain", "stretch"] as const) {
+      const camera = new Camera({ zoom: 1.7 });
+      camera.transform.rotation = 0.8;
+      const window = { width: 1000, height: 700 };
+      const { records, built } = draw(screen({ fit, pixelPerfect: false }, camera), window.width, window.height);
+      const expected = borderRects(built.screen!, window.width, window.height);
+      if (expected.length === 0) {
+        assert.equal(fit, "stretch", "only a stretched game fills the window");
+        assert.equal(records.length, 1);
+        continue;
       }
+      const bars = records.slice(2);
+      assert.deepEqual(records[1], { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+      assert.deepEqual(
+        bars.map((bar) => (bar.op === "rect" ? { x: bar.x, y: bar.y, width: bar.width, height: bar.height, rotation: bar.rotation, scaleX: bar.scaleX, scaleY: bar.scaleY } : null)),
+        expected.map((r) => ({ ...r, rotation: 0, scaleX: 1, scaleY: 1 })),
+        fit,
+      );
     }
   });
 
   it("draws no bars when the game fills the window", () => {
-    const { records } = draw(screen(), 1280, 720);
+    const { records } = draw(screen({ pixelPerfect: false }), 1280, 720);
     assert.deepEqual(records, [{ op: "view", a: 4, b: 0, c: 0, d: 4, e: 0, f: 0 }]);
+    assert.equal(draw(screen(), 1280, 720).records[0]?.op, "canvas", "a pixel-perfect game always has its canvas");
   });
 
   it("follows the screen's props as they change", () => {
@@ -222,7 +225,7 @@ describe("FrameBuilder: a root <Screen>", () => {
     };
     const plain = new Entity();
     plain.addChild(shape());
-    assert.deepEqual(draw(screen({}, shape()), 320, 180).records, draw(plain, 320, 180).records);
+    assert.deepEqual(draw(screen({ pixelPerfect: false }, shape()), 320, 180).records, draw(plain, 320, 180).records);
   });
 });
 

@@ -533,7 +533,7 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 - [x] `Screen` is a runtime class and in the manifest; `<Screen transform>` is a compile error
 - [x] `fit` is checked at compile time, like `<Shape kind>`
 - [x] The player computes scale and `dest` for each `fit`, tested at several window sizes, including one smaller than the canvas
-- [ ] The camera centres on the canvas's centre (done); `<Hud>` is in canvas units (waits for priority 3)
+- [x] The camera centres on the canvas's centre (done); `<Hud>` is in canvas units (done 2026-11-10)
 - [x] The mouse maps back through the canvas: a `Pointer` is pressed in the right place in a resized, letterboxed window, and a press in the bars hits nothing
 - [x] ~~`input.width`/`height` report the canvas's size~~ (see above: not needed)
 - [x] Bars are drawn in `border`; a pixel test checks one
@@ -544,11 +544,13 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 
 **Done when**
 
-- [ ] `RGE_OP_CANVAS` is in `rge.h` (ABI v2) and `protocol.ts`, and the header-parity test agrees
-- [ ] librge draws into a render texture, recreated only when the size changes, and scales it with point filtering
-- [ ] `smoke.c` checks that one canvas pixel becomes a 4 × 4 block of window pixels
-- [ ] A turned sprite stays on the game's pixel grid (a pixel test)
-- [ ] The parity test passes byte for byte under both hosts
+**Done 2026-11-10.** The native half landed with ABI v2; the player writes `RGE_OP_CANVAS` first when the root `<Screen>` is pixel-perfect (the default), draws the world and `<Hud>` through views in game pixels, and leaves the border to the canvas record. `BuiltFrame.view` stays the world → window map for the mouse, so input is unchanged. Without pixel-perfect, the border bars are drawn through a last view in window pixels, replacing the inverse-through-the-camera trick.
+
+- [x] `RGE_OP_CANVAS` is in `rge.h` (ABI v2) and `protocol.ts`, and the header-parity test agrees
+- [x] librge draws into a render texture, recreated only when the size changes, and scales it with point filtering
+- [x] `smoke.c` checks that one canvas pixel becomes a 4 × 4 block of window pixels
+- [x] A turned shape stays on the game's pixel grid (a pixel test in `native.test.ts`)
+- [x] The parity test passes byte for byte under both hosts
 
 ### C3: the demo, `expand` and full screen
 

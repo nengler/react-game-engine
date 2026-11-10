@@ -88,7 +88,7 @@ export function Scorer() {
 `;
 
 const HUD = `
-export function Hud() {
+export function Scoreboard() {
   const coins = useGame((s) => s.coins);
   return <Text size={12} color="white">Coins: {coins}</Text>;
 }
@@ -267,12 +267,12 @@ describe("running a game state", () => {
 
   async function game() {
     const { Scorer } = await make<{ Scorer: new () => Scorer }>(SCORER, "Scorer.tsx");
-    const { Hud } = await make<{ Hud: new () => Reader }>(HUD, "Hud.tsx");
+    const { Scoreboard } = await make<{ Scoreboard: new () => Reader }>(HUD, "Scoreboard.tsx");
     const { HpBar } = await make<{ HpBar: new () => Reader }>(HP, "HpBar.tsx");
     const world = new World();
     const root = new Entity({ name: "root" });
     const scorer = new Scorer();
-    const hud = new Hud();
+    const hud = new Scoreboard();
     const hpBar = new HpBar();
     root.addChild(scorer);
     root.addChild(hud);
@@ -342,9 +342,9 @@ describe("running a game state", () => {
   });
 
   it("starts a component built later from the current value, and catches up one built before a change it missed", async () => {
-    const { Hud } = await make<{ Hud: new () => Reader }>(HUD, "Hud.tsx");
+    const { Scoreboard } = await make<{ Scoreboard: new () => Reader }>(HUD, "Scoreboard.tsx");
     act("collect", 7);
-    const early = new Hud();
+    const early = new Scoreboard();
     assert.equal(early.text, "Coins: 7", "built after the change: starts from it");
     act("collect", 2);
     const world = new World();

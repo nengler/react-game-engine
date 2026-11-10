@@ -89,9 +89,9 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera", "Screen"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -104,6 +104,7 @@ export const runtimeManifest: RuntimeManifest = {
     Camera: ["zoom", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: ["fps", "playing", "frame", "elapsed", "frames", "image"],
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
+    Hud: [],
   },
   intrinsicRequired: {
     Entity: [],
@@ -116,6 +117,7 @@ export const runtimeManifest: RuntimeManifest = {
     Camera: [],
     AnimatedSprite: ["frames"],
     Screen: ["width", "height"],
+    Hud: [],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
@@ -144,7 +146,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },

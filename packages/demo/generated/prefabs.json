@@ -9,12 +9,12 @@
       "module": "packages/demo/src/Coin.tsx",
       "props": []
     },
-    "Ground": {
-      "module": "packages/demo/src/Ground.tsx",
+    "CoinCounter": {
+      "module": "packages/demo/src/CoinCounter.tsx",
       "props": []
     },
-    "Hud": {
-      "module": "packages/demo/src/Hud.tsx",
+    "Ground": {
+      "module": "packages/demo/src/Ground.tsx",
       "props": []
     },
     "Main": {

@@ -608,14 +608,15 @@ describe("FrameBuilder: draw order (z)", () => {
   });
 
   it("keeps the view first, and a screen's border bars last, over everything", () => {
-    const screen = new Screen({ width: 100, height: 50, border: "navy" });
+    const screen = new Screen({ width: 100, height: 50, border: "navy", pixelPerfect: false });
     screen.addChild(box(1, 5));
     screen.addChild(box(2, -5));
     const { records } = draw(screen, { width: 320, height: 200 }); // ×3 at (10, 25): four bars
     assert.equal(records[0]?.op, "view");
     assert.deepEqual(order(records.slice(0, 3)), [2, 1]);
-    for (const bar of records.slice(3)) assert.ok(bar.op === "rect" && bar.color === "#000080ff");
-    assert.equal(records.length, 3 + 4);
+    assert.equal(records[3]?.op, "view", "the bars are drawn through a view of window pixels");
+    for (const bar of records.slice(4)) assert.ok(bar.op === "rect" && bar.color === "#000080ff");
+    assert.equal(records.length, 3 + 1 + 4);
   });
 
   it("puts an infinite z at the ends, and treats one that is not a number as 0, warning once", () => {

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
-import { Camera, Entity, Screen, Shape, Sprite, Text } from "@rge/runtime";
+import { Camera, Entity, Hud, Screen, Shape, Sprite, Text } from "@rge/runtime";
 import { createPlayer, KEYS, RGE_ABI_VERSION, type PlayerConfig } from "@rge/player";
 import { NodeBackend, checkAbi, createNodeBackend, findNativeLibrary, loadNative, type Pixels } from "../src/index.ts";
 
@@ -156,6 +156,63 @@ describe("librge through koffi", { skip }, () => {
     for (const [x, y] of [[17, 18], [19, 20]] as const) assert.equal(pixel(frame, x, y), "00ff00ff", `game pixel (5, 4) covers window (${x}, ${y})`);
     assert.equal(pixel(frame, 20, 18), "ff0000ff", "and stops after three window pixels");
     for (const [x, y] of [[1, 20], [62, 20], [30, 5], [30, 42], [0, 0], [63, 47]] as const) assert.equal(pixel(frame, x, y), "0000ffff", `border at (${x}, ${y})`);
+  });
+
+  it("keeps a turned shape on the game's pixel grid when the game is pixel-perfect, and not when it is not", () => {
+    const make = (pixelPerfect: boolean) => () => {
+      const screen = new Screen({ width: 20, height: 12, border: "blue", pixelPerfect });
+      const diamond = new Shape({ kind: "rect", width: 8, height: 8, color: "red" });
+      diamond.transform.x = 10;
+      diamond.transform.y = 6;
+      diamond.transform.rotation = Math.PI / 4;
+      screen.addChild(diamond);
+      return screen;
+    };
+    // The game is 20 × 12 at ×3, at (2, 6) in a 64 × 48 window. Every game pixel is a 3 × 3 block of one colour when pixel-perfect.
+    const chunky = render(make(true));
+    for (let gy = 0; gy < 12; gy++) {
+      for (let gx = 0; gx < 20; gx++) {
+        const first = pixel(chunky, 2 + gx * 3, 6 + gy * 3);
+        for (const [dx, dy] of [[1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]] as const) {
+          assert.equal(pixel(chunky, 2 + gx * 3 + dx, 6 + gy * 3 + dy), first, `game pixel (${gx}, ${gy}) is one colour`);
+        }
+      }
+    }
+    assert.equal(pixel(chunky, 2 + 10 * 3 + 1, 6 + 6 * 3 + 1), "ff0000ff", "the diamond's middle");
+    assert.equal(pixel(chunky, 0, 0), "0000ffff", "the border");
+    const smooth = render(make(false));
+    let blocky = true;
+    for (let gy = 0; gy < 12 && blocky; gy++) {
+      for (let gx = 0; gx < 20 && blocky; gx++) blocky = pixel(smooth, 2 + gx * 3, 6 + gy * 3) === pixel(smooth, 2 + gx * 3 + 2, 6 + gy * 3 + 2);
+    }
+    assert.ok(!blocky, "drawn at the window's resolution, the diamond's edge is finer than a game pixel");
+  });
+
+  it("draws a <Hud> over the world, where it is put, whatever the camera does, in both pixel-perfect modes", () => {
+    for (const pixelPerfect of [true, false]) {
+      const frame = render(() => {
+        const screen = new Screen({ width: 20, height: 12, border: "blue", pixelPerfect });
+        const camera = new Camera({ zoom: 2 });
+        camera.transform.x = 7;
+        camera.transform.y = 3;
+        screen.addChild(camera);
+        const world = new Shape({ kind: "rect", width: 400, height: 400, color: "red" });
+        world.transform.x = -200;
+        world.transform.y = -200;
+        screen.addChild(world);
+        const layer = new Hud();
+        const badge = new Shape({ kind: "rect", width: 4, height: 2, color: "lime" });
+        badge.transform.x = 1;
+        badge.transform.y = 1;
+        layer.addChild(badge);
+        screen.addChild(layer);
+        return screen;
+      });
+      assert.equal(pixel(frame, 2 + 1 * 3, 6 + 1 * 3), "00ff00ff", `the badge's corner (${pixelPerfect})`);
+      assert.equal(pixel(frame, 2 + 4 * 3, 6 + 2 * 3), "00ff00ff", `the badge's far corner (${pixelPerfect})`);
+      assert.equal(pixel(frame, 2 + 5 * 3 + 1, 6 + 1 * 3), "ff0000ff", `the world next to it (${pixelPerfect})`);
+      assert.equal(pixel(frame, 0, 0), "0000ffff", `the border (${pixelPerfect})`);
+    }
   });
 
   it("keeps the border over anything drawn past the game, under a turned camera", () => {

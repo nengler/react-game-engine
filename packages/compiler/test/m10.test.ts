@@ -19,10 +19,10 @@ interface HudProps {
   label: string;
 }
 
-function Hud({ label }: HudProps) {
+function Scoreboard({ label }: HudProps) {
   const [score, setScore] = useState(0);
   return (
-    <Entity name="Hud">
+    <Entity name="Scoreboard">
       <Text size={12}>
         Score: {score}
       </Text>
@@ -51,11 +51,11 @@ interface BadgeInstance extends Text {
   updateProps(next: { points: number }): void;
 }
 
-let Hud: new (props: { label: string }) => HudInstance;
+let Scoreboard: new (props: { label: string }) => HudInstance;
 let Badge: new (props: { points: number }) => BadgeInstance;
 
 before(async () => {
-  ({ Hud, Badge } = await load<{ Hud: typeof Hud; Badge: typeof Badge }>(compile(HUD, "Hud.tsx")));
+  ({ Scoreboard, Badge } = await load<{ Scoreboard: typeof Scoreboard; Badge: typeof Badge }>(compile(HUD, "Scoreboard.tsx")));
 });
 
 const prop = (props: readonly PropIR[], name: string): PropIR => {
@@ -69,15 +69,15 @@ const valueOf = (p: PropIR): ExprIR => {
 };
 
 describe("M10: IR", () => {
-  const ir = compile(HUD, "Hud.tsx").ir;
-  const hud = ir.components.find((c) => c.name === "Hud")!;
+  const ir = compile(HUD, "Scoreboard.tsx").ir;
+  const hud = ir.components.find((c) => c.name === "Scoreboard")!;
   const texts = hud.root.children.map((c) => elementOf(c));
 
   it("makes text between the tags a template over the state it reads, as a dynamic prop", () => {
     const text = prop(texts[0]!.props, "text");
     assert.equal(text.kind, "DynamicProp");
-    assert.deepEqual(valueOf(text), { kind: "TemplateLiteral", quasis: ["Score: ", ""], expressions: [{ kind: "StateRead", state: "Hud.score" }] });
-    assert.deepEqual(text.kind === "DynamicProp" && text.dependencies, [{ kind: "State", state: "Hud.score" }]);
+    assert.deepEqual(valueOf(text), { kind: "TemplateLiteral", quasis: ["Score: ", ""], expressions: [{ kind: "StateRead", state: "Scoreboard.score" }] });
+    assert.deepEqual(text.kind === "DynamicProp" && text.dependencies, [{ kind: "State", state: "Scoreboard.score" }]);
     assert.equal(prop(texts[0]!.props, "size").kind, "StaticProp");
   });
 
@@ -137,7 +137,7 @@ describe("M10: whitespace and literals follow JSX", () => {
 });
 
 describe("M10: generated code", () => {
-  const { code } = compile(HUD, "Hud.tsx");
+  const { code } = compile(HUD, "Scoreboard.tsx");
 
   it("builds the element with its text and updates the field in place", () => {
     assert.match(code, /readonly text: Text = new Text\(\{ size: 12, text: `Score: \$\{this\.score\}` \}\);/);
@@ -154,7 +154,7 @@ describe("M10: generated code", () => {
   });
 
   it("type-checks the generated module", () => {
-    assert.deepEqual(typeCheck(compile(HUD, "Hud.tsx")), []);
+    assert.deepEqual(typeCheck(compile(HUD, "Scoreboard.tsx")), []);
   });
 });
 
@@ -187,7 +187,7 @@ describe("M10: authored source type-checks", () => {
 describe("M10: runtime behaviour", () => {
   it("updates the text in place when its state changes, keeping the instance, in one render", () => {
     const world = new World();
-    const hud = new Hud({ label: "HP" });
+    const hud = new Scoreboard({ label: "HP" });
     world.mount(hud);
     assert.deepEqual([hud.text.text, hud.text2.text, hud.text3.text, hud.text4.text], ["Score: 0", "HP:", "Total 0", "Fixed"]);
     const [first, second] = [hud.text, hud.text2];
@@ -200,7 +200,7 @@ describe("M10: runtime behaviour", () => {
   });
 
   it("applies size, color and placement", () => {
-    const hud = new Hud({ label: "HP" });
+    const hud = new Scoreboard({ label: "HP" });
     assert.deepEqual([hud.text.size, hud.text.color], [12, "white"]);
     assert.deepEqual([hud.text3.size, hud.text3.color], [16, "white"], "defaults");
     assert.equal(hud.text2.transform.x, 4);

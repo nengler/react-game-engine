@@ -182,9 +182,9 @@ describe("createPlayer", () => {
       const p = createPlayer(backend, { root: () => game });
       assert.deepEqual([backend.config?.width, backend.config?.height], [960, 540], "the window is the <Game>'s size");
       p.step();
-      const view = backend.lastFrame.records[0];
-      assert.ok(view?.op === "view");
-      assert.equal(view.a, 3, "a 320 x 180 screen in a 960 x 540 window (the <Game>'s) is drawn at 3x");
+      const canvas = backend.lastFrame.records[0];
+      assert.ok(canvas?.op === "canvas");
+      assert.equal(canvas.destW / canvas.width, 3, "a 320 x 180 screen in a 960 x 540 window (the <Game>'s) is drawn at 3x");
       p.close();
     });
 

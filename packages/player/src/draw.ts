@@ -7,6 +7,7 @@ import {
   offsetTransform,
   Pointer,
   Game,
+  Hud,
   Screen,
   Shape,
   Sprite,
@@ -35,7 +36,7 @@ import {
   RGE_OP_SCISSOR_END_LEN,
   RGE_OP_CANVAS_LEN,
 } from "./protocol.ts";
-import { borderRects, fitScreen, viewToWindow, type ScreenPlacement } from "./screen.ts";
+import { borderRects, fitScreen, viewToWindow, type ScreenPlacement, type WindowRect } from "./screen.ts";
 import { Warner } from "./warn.ts";
 
 /**
@@ -47,12 +48,16 @@ import { Warner } from "./warn.ts";
  *
  * `visit` is also given the object's draw order, `z`: its own `transform.z` and `placement.z` added to its parent's,
  * with `global` cutting the chain as it does for position (see `Transform`). A camera is transparent here too.
+ *
+ * A `<Hud>` is visited but not entered, because its subtree is drawn in a layer of its own (see `FrameBuilder.build`);
+ * `intoHuds` walks it as a plain container instead, which is how that layer is walked.
  */
 export function walkTree(
   root: GameObject,
   visit: (object: GameObject, world: WorldTransform, z: number) => void,
   parentSpace: WorldTransform = IDENTITY_TRANSFORM,
   parentZ = 0,
+  intoHuds = false,
 ): void {
   // The zero test is inline, not left to offsetTransform: QuickJS does not inline calls, and almost nothing has a layout offset.
   const laidOut = root.layoutX === 0 && root.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, root.layoutX, root.layoutY);
@@ -66,12 +71,13 @@ export function walkTree(
     : placement.global ? placement.z + transform.z
     : parentZ + placement.z + transform.z;
   visit(root, world, z);
+  if (!intoHuds && kindOf(root) === KIND_HUD) return;
   const isCamera = root instanceof Camera;
   const childSpace = isCamera ? parentSpace : world;
   const childZ = isCamera ? parentZ : z;
   // Indexed, not `for…of`: QuickJS makes an iterator object for every `for…of`, and this runs for every object every frame.
   const children = root.children;
-  for (let i = 0; i < children.length; i++) walkTree(children[i] as GameObject, visit, childSpace, childZ);
+  for (let i = 0; i < children.length; i++) walkTree(children[i] as GameObject, visit, childSpace, childZ, intoHuds);
 }
 
 /** How many doubles the record starting with this op takes. */
@@ -141,8 +147,15 @@ export class DrawList {
    * (the screen's bars) stay where they are. Text records refer to `texts` by index, so they move freely.
    */
   sortByZ(from: number): void {
+    if (this.#zRuns.length === 0) return;
+    this.#sort(from);
+    // The runs belong to the records just sorted; a later layer (the HUD) starts its own.
+    this.#zRuns.length = 0;
+    this.#z = 0;
+  }
+
+  #sort(from: number): void {
     const runs = this.#zRuns;
-    if (runs.length === 0) return;
     const starts: number[] = [];
     const zs: number[] = [];
     let run = 0;
@@ -192,6 +205,20 @@ export class DrawList {
     r[at + 4] = world.scaleX;
     r[at + 5] = world.scaleY;
     return at + 6;
+  }
+
+  /** The canvas record, which must be first in the frame: draw into a `width` × `height` texture, shown in the window at `dest`. */
+  canvas(width: number, height: number, dest: WindowRect, border: PackedColor): void {
+    const at = this.#reserve(RGE_OP_CANVAS_LEN);
+    const r = this.records;
+    r[at] = RGE_OP_CANVAS;
+    r[at + 1] = width;
+    r[at + 2] = height;
+    r[at + 3] = dest.x;
+    r[at + 4] = dest.y;
+    r[at + 5] = dest.width;
+    r[at + 6] = dest.height;
+    r[at + 7] = border;
   }
 
   view(v: ViewTransform): void {
@@ -264,15 +291,20 @@ export interface Size {
 export interface BuiltFrame {
   readonly list: DrawList;
   /**
-   * The world → window map the frame is drawn through, as the first record holds it: the camera's view (identity
-   * with no camera), then, under a root `<Screen>`, the game's scale and position in the window.
+   * The world → window map: the camera's view (identity with no camera), then, under a root `<Screen>`, the game's
+   * scale and position in the window. This is what the mouse is taken back through; the view the records carry is the
+   * same unless the game is pixel-perfect, which is drawn in game pixels and scaled by its canvas record.
    */
   readonly view: ViewTransform;
+  /** The same for the `<Hud>` layers: HUD coordinates → window pixels (the screen's placement, or the identity). */
+  readonly hudView: ViewTransform;
   /** Where a root `<Screen>` is drawn in the window; null without one, when the game is the window. */
   readonly screen: ScreenPlacement | null;
   readonly camera: Camera | null;
-  /** In draw order: the last one is on top. */
+  /** In draw order: the last one is on top. The world's pointers, then (from `hudPointersFrom`) those inside a `<Hud>`. */
   readonly pointers: readonly Pointer[];
+  /** Where the HUD's pointers start in `pointers`: they are pressed at `hudView`'s coordinates, not the world's. */
+  readonly hudPointersFrom: number;
   readonly colliders: readonly ColliderEntry[];
 }
 
@@ -286,6 +318,7 @@ const KIND_CAMERA = 4;
 const KIND_POINTER = 5;
 const KIND_COLLIDER = 6;
 const KIND_SCREEN = 7;
+const KIND_HUD = 8;
 /** What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven times per object. */
 const KINDS = new Map<Function, number>();
 
@@ -300,6 +333,7 @@ function kindOf(object: GameObject): number {
       : object instanceof Pointer ? KIND_POINTER
       : object instanceof Collider ? KIND_COLLIDER
       : object instanceof Screen ? KIND_SCREEN
+      : object instanceof Hud ? KIND_HUD
       : KIND_NONE;
     KINDS.set(object.constructor, kind);
   }
@@ -363,17 +397,35 @@ export class FrameBuilder {
     this.#warner = new Warner(options.warn);
   }
 
-  /** Build the frame for a window of this size. The returned `list` is reused: copy it to keep it. */
+  /**
+   * Build the frame for a window of this size. The returned `list` is reused: copy it to keep it.
+   *
+   * The records are, in order: the canvas (under a pixel-perfect `<Screen>`), the world's view and the world, then
+   * for the `<Hud>` layers a second view (the camera ignored) and their contents, then, under a `<Screen>` that is
+   * not pixel-perfect, a last view in window pixels and the border bars. A pixel-perfect game is drawn in game pixels
+   * and scaled by the canvas record; any other game is drawn through views that scale to the window themselves.
+   */
   build(root: GameObject, width: number, height: number): BuiltFrame {
     const list = this.#list;
     list.reset();
-    list.view(IDENTITY_VIEW);
     const gameRoot = rootScreen(root);
     const screen = gameRoot === null ? null : this.#usableScreen(gameRoot);
+    // The size of the area the game is laid out and centred in: the game's resolution, or the window.
+    const gameWidth = screen === null ? width : screen.width;
+    const gameHeight = screen === null ? height : screen.height;
+    const placement = screen === null ? null : fitScreen(screen.width, screen.height, width, height, this.#fit(screen));
+    const pixelPerfect = screen !== null && placement !== null && screen.pixelPerfect !== false;
+    const borderColor = screen === null ? 0 : this.#color(screen.border);
+    if (screen !== null && placement !== null && pixelPerfect) {
+      list.canvas(screen.width, screen.height, { x: placement.left, y: placement.top, width: screen.width * placement.scaleX, height: screen.height * placement.scaleY }, borderColor);
+    }
+    const worldStart = list.length;
+    list.view(IDENTITY_VIEW);
     let camera: Camera | null = null;
     let pointers: Pointer[] = [];
     const pointerZs: number[] = [];
     const colliders: ColliderEntry[] = [];
+    const huds: { readonly world: WorldTransform; readonly object: GameObject }[] = [];
     let anyZ = false;
     // The z of the records being written, kept here so a frame with no z makes no call per record.
     let listZ = 0;
@@ -391,22 +443,16 @@ export class FrameBuilder {
           if (z !== listZ) list.setZ((listZ = z));
           this.#sprite((object as Sprite | AnimatedSprite).image, world);
           break;
-        case KIND_SHAPE: {
-          const shape = object as Shape;
-          const color = this.#color(shape.color);
+        case KIND_SHAPE:
           if (z !== listZ) list.setZ((listZ = z));
-          if (shape.kind === "circle") list.ellipse(world, shape.width, shape.height, color);
-          else list.rect(world, shape.width, shape.height, color);
+          this.#shape(object as Shape, world);
           break;
-        }
-        case KIND_TEXT: {
-          const text = object as Text;
-          if (text.text !== "") {
+        case KIND_TEXT:
+          if ((object as Text).text !== "") {
             if (z !== listZ) list.setZ((listZ = z));
-            list.text(world, text.text, text.size, this.#color(text.color));
+            this.#text(object as Text, world);
           }
           break;
-        }
         case KIND_CAMERA:
           if (camera === null) camera = object as Camera;
           else this.#warner.once("camera", "More than one <Camera> is mounted: only the first one in draw order is used.");
@@ -421,27 +467,87 @@ export class FrameBuilder {
         case KIND_SCREEN:
           if (object !== gameRoot) this.#warner.once("screen-not-root", "A <Screen> only sets the game's resolution as the root of the game: this one is drawn as a plain container.");
           break;
+        case KIND_HUD:
+          huds.push({ world, object });
+          break;
       }
     });
 
     // Draw order: by z, tree order among equals. A pointer that is drawn on top is pressed first, so the pointers move with it.
-    list.sortByZ(RGE_OP_VIEW_LEN);
+    list.sortByZ(worldStart + RGE_OP_VIEW_LEN);
     if (anyZ) {
       const order = orderByZ(pointerZs);
       if (order !== null) pointers = order.map((i) => pointers[i] as Pointer);
     }
 
-    if (screen === null) {
-      const view = this.#view(camera, width, height);
-      list.setView(0, view);
-      return { list, view, screen: null, camera, pointers, colliders };
+    // The camera centres on the middle of the game's area; a screen's placement then takes game pixels to the window.
+    const cameraView = this.#view(camera, gameWidth, gameHeight);
+    const view = placement === null ? cameraView : viewToWindow(cameraView, placement);
+    const hudView = placement === null ? IDENTITY_VIEW : viewToWindow(IDENTITY_VIEW, placement);
+    list.setView(worldStart, pixelPerfect ? cameraView : view);
+
+    // The HUD layers, after the world, each through a view the camera does not touch.
+    const hudPointersFrom = pointers.length;
+    if (huds.length > 0) {
+      list.view(pixelPerfect ? IDENTITY_VIEW : hudView);
+      for (const { world: hudWorld, object: hud } of huds) {
+        // Each layer is ordered by its own z, so a high z inside one layer never lifts it over the next.
+        const layerStart = list.length;
+        let hudAnyZ = false;
+        const hudPointerZs: number[] = [];
+        const hudPointers: Pointer[] = [];
+        listZ = 0;
+        for (const child of hud.children) {
+          walkTree(
+            child,
+            (object, world, objectZ) => {
+              let z = objectZ;
+              if (z !== 0) {
+                if (z !== z) z = 0;
+                else hudAnyZ = true;
+              }
+              switch (kindOf(object)) {
+                case KIND_SPRITE:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#sprite((object as Sprite | AnimatedSprite).image, world);
+                  break;
+                case KIND_SHAPE:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#shape(object as Shape, world);
+                  break;
+                case KIND_TEXT:
+                  if ((object as Text).text !== "") {
+                    if (z !== listZ) list.setZ((listZ = z));
+                    this.#text(object as Text, world);
+                  }
+                  break;
+                case KIND_POINTER:
+                  hudPointers.push(object as Pointer);
+                  hudPointerZs.push(z);
+                  break;
+                case KIND_CAMERA:
+                  this.#warner.once("hud-camera", "A <Camera> inside a <Hud> does nothing: the HUD is drawn through no camera.");
+                  break;
+              }
+            },
+            hudWorld,
+            0,
+            true,
+          );
+        }
+        list.sortByZ(layerStart);
+        let ordered = hudPointers;
+        if (hudAnyZ) {
+          const order = orderByZ(hudPointerZs);
+          if (order !== null) ordered = order.map((i) => hudPointers[i] as Pointer);
+        }
+        for (const pointer of ordered) pointers.push(pointer);
+      }
     }
-    // The camera centres on the game's middle, in game pixels; the screen's placement then takes game pixels to the window.
-    const placement = fitScreen(screen.width, screen.height, width, height, this.#fit(screen));
-    const view = viewToWindow(this.#view(camera, screen.width, screen.height), placement);
-    list.setView(0, view);
-    this.#borders(placement, width, height, view, this.#color(screen.border));
-    return { list, view, screen: placement, camera, pointers, colliders };
+
+    // Bars around a game that is not pixel-perfect: window pixels, drawn last. (A pixel-perfect game's canvas record clears them.)
+    if (placement !== null && !pixelPerfect) this.#borders(placement, width, height, borderColor);
+    return { list, view, hudView, screen: placement, camera, pointers, hudPointersFrom, colliders };
   }
 
   /**
@@ -503,32 +609,22 @@ export class FrameBuilder {
     return "integer";
   }
 
-  /**
-   * Cover the window outside the game with `color`. Drawn last, so nothing in the game shows over them. The frame has
-   * one view, the world → window map, so each bar is a rectangle placed in world space: the window rectangle taken
-   * back through the view. Every view the player makes is a scale after a rotation (a camera's inverse, then the
-   * screen's scale), whose inverse is a rotation after a scale, which is exactly what a record's transform can say.
-   */
-  #borders(placement: ScreenPlacement, width: number, height: number, view: ViewTransform, color: PackedColor): void {
+  /** Cover the window outside the game with `color`: a view in window pixels, then up to four rectangles. */
+  #borders(placement: ScreenPlacement, width: number, height: number, color: PackedColor): void {
     const rects = borderRects(placement, width, height);
     if (rects.length === 0) return;
-    const det = view.a * view.d - view.b * view.c;
-    if (det === 0 || !Number.isFinite(det)) return;
-    // The inverse's columns: where a window step right (m11, m21) and down (m12, m22) goes in the world.
-    const m11 = view.d / det;
-    const m21 = -view.b / det;
-    const m12 = -view.c / det;
-    const m22 = view.a / det;
-    const rotation = Math.atan2(m21, m11);
-    const cos = Math.cos(rotation);
-    const sin = Math.sin(rotation);
-    const scaleX = Math.hypot(m11, m21);
-    const scaleY = m22 * cos - m12 * sin;
-    for (const rect of rects) {
-      const dx = rect.x - view.e;
-      const dy = rect.y - view.f;
-      this.#list.rect({ x: m11 * dx + m12 * dy, y: m21 * dx + m22 * dy, rotation, scaleX, scaleY }, rect.width, rect.height, color);
-    }
+    this.#list.view(IDENTITY_VIEW);
+    for (const rect of rects) this.#list.rect({ x: rect.x, y: rect.y, rotation: 0, scaleX: 1, scaleY: 1 }, rect.width, rect.height, color);
+  }
+
+  #shape(shape: Shape, world: WorldTransform): void {
+    const color = this.#color(shape.color);
+    if (shape.kind === "circle") this.#list.ellipse(world, shape.width, shape.height, color);
+    else this.#list.rect(world, shape.width, shape.height, color);
+  }
+
+  #text(text: Text, world: WorldTransform): void {
+    this.#list.text(world, text.text, text.size, this.#color(text.color));
   }
 
   /** Window origin at the top-left with no camera; with one, the followed point lands on the centre of a `width` × `height` view (the window, or the game's screen). */

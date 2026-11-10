@@ -64,7 +64,7 @@ const MOVE_RIGHT: InputFrame = { dt: 0.1, down: ["ArrowRight"] };
 const IDLE: InputFrame = { dt: 0.1 };
 
 describe("demo: the first frame", () => {
-  it("draws the ground, the beacon, the spikes, the coin, the button, its label and the player, in tree order, with the player in the middle", () => {
+  it("draws the world (ground, beacon, spikes, coin, player), then the HUD (coin count, button, its label) through a view of its own", () => {
     const run = play([], 1);
     assert.deepEqual(summary(run.backend.lastFrame.records), [
       ["view", 320, 180],
@@ -76,10 +76,11 @@ describe("demo: the first frame", () => {
       ["sprite", "assets/beacon-1.png", -120, -60],
       ["rect", 84, 10, 24, 24, "#8b1e2dff"],
       ["ellipse", 60, 8, 16, 16, "#e8a317ff"],
-      ["rect", 80, -40, 96, 32, "#708090ff"],
-      ["text", "Clicks: 0", 92, -32, 16, "#ffffffff"],
-      ["text", "Coins: 0", 92, -56, 16, "#ffd700ff"],
       ["rect", 0, 0, 24, 24, "#ffd700ff"],
+      ["view", 0, 0],
+      ["text", "Coins: 0", 16, 16, 16, "#ffd700ff"],
+      ["rect", 16, 44, 96, 32, "#708090ff"],
+      ["text", "Clicks: 0", 28, 52, 16, "#ffffffff"],
     ]);
     assert.deepEqual(run.warnings, []);
     assert.equal(run.backend.lastFrame.clearColor, "#10131cff");
@@ -95,8 +96,9 @@ describe("demo: moving", () => {
     const at = onScreen(run, player(run).x, player(run).y);
     close(at.x, 320, "the player stays at the middle of the screen");
     close(at.y, 180, "...vertically too");
-    const buttonAt = onScreen(run, 80, -40);
-    close(buttonAt.x, 80 + 320 - 70, "the rest of the world slides the other way");
+    const spikesAt = onScreen(run, 84, 10);
+    close(spikesAt.x, 84 + 320 - 70, "the rest of the world slides the other way");
+    assert.deepEqual([button(run).x, button(run).y], [16, 44], "the HUD's button stays where it is put");
   });
 
   it("moves with WASD and diagonally, and stops when the keys are released", () => {
@@ -119,32 +121,32 @@ describe("demo: the button", () => {
   const press = (x: number, y: number): InputFrame => ({ dt: 0.1, mouse: { x, y }, pressed: ["MouseLeft"] });
 
   it("counts clicks, plays the sound each time, and turns green at three", () => {
-    // The button is at world (80, -40), 96×32; with the player in the middle of a 640×360 window it is at screen (400, 140).
-    const run = play([press(410, 150), IDLE, press(450, 160), IDLE, press(490, 170)], 6);
+    // The button is in the HUD at (16, 44) in window pixels, 96×32.
+    const run = play([press(30, 50), IDLE, press(60, 60), IDLE, press(100, 70)], 6);
     assert.deepEqual(texts(run), ["Clicks: 3"]);
     assert.deepEqual(run.backend.plays, ["assets/click.wav", "assets/click.wav", "assets/click.wav"]);
     assert.equal(button(run).color, "#2e8b57ff", "seagreen from the third click");
   });
 
   it("is still grey after two clicks", () => {
-    const run = play([press(410, 150), IDLE, press(450, 160)], 4);
+    const run = play([press(30, 50), IDLE, press(60, 60)], 4);
     assert.deepEqual(texts(run), ["Clicks: 2"]);
     assert.equal(button(run).color, "#708090ff");
   });
 
   it("ignores a click beside the button, a held button, and the right button", () => {
-    const run = play([press(100, 100), { dt: 0.1, mouse: { x: 410, y: 150 }, down: ["MouseLeft"] }, { dt: 0.1, mouse: { x: 410, y: 150 }, pressed: ["MouseRight"] }], 4);
+    const run = play([press(100, 100), { dt: 0.1, mouse: { x: 30, y: 50 }, down: ["MouseLeft"] }, { dt: 0.1, mouse: { x: 30, y: 50 }, pressed: ["MouseRight"] }], 4);
     assert.deepEqual(texts(run), ["Clicks: 0"]);
     assert.deepEqual(run.backend.plays, []);
   });
 
-  it("is clicked where it is drawn after the camera has followed the player away", () => {
+  it("stays where it is drawn while the camera follows the player away", () => {
     const stopped = Array.from({ length: 10 }, () => MOVE_RIGHT);
-    // Walk right for a second, stop, then click where the button used to be (misses), then where it is now (hits).
+    // Walk right for a second, stop, then click where the button would be in the world (misses), then on the HUD (hits).
     const walked = play([...stopped, IDLE, IDLE], 13);
-    const now = onScreen(walked, 80 + 48, -40 + 16); // the middle of the button
-    close(now.x, 400 + 48 - player(walked).x, "the button moved left on the screen");
-    const run = play([...stopped, IDLE, IDLE, press(410, 150), IDLE, press(now.x, now.y), IDLE], 17);
+    assert.deepEqual([button(walked).x, button(walked).y], [16, 44], "the button did not move on the screen");
+    assert.ok(player(walked).x > 100, "the player walked");
+    const run = play([...stopped, IDLE, IDLE, press(410, 150), IDLE, press(30, 50), IDLE], 17);
     assert.deepEqual(texts(run), ["Clicks: 1"], "only the click on the drawn button counts");
     assert.deepEqual(run.backend.plays, ["assets/click.wav"]);
   });
@@ -202,7 +204,7 @@ describe("demo: a minute of play", () => {
   it("runs 60 idle frames, keeping every element drawn and warning only about the missing frame", () => {
     const run = play([], 60);
     assert.equal(run.backend.frames.length, 60);
-    for (const frame of run.backend.frames) assert.equal(frame.records.length, 13);
+    for (const frame of run.backend.frames) assert.equal(frame.records.length, 14);
     assert.equal(run.warnings.length, 1);
     assert.match(run.warnings[0] as string, /beacon-gone/);
   });
@@ -246,13 +248,13 @@ describe("demo: pixels from the real library", { skip }, () => {
     assert.equal(pixel(frame, 5, 5), "10131cff", "background");
     assert.equal(pixel(frame, 100, 240), "2b3550ff", "a ground rect");
     assert.equal(pixel(frame, 308, 68), "3a2b50ff", "a ground circle");
-    assert.equal(pixel(frame, 440, 170), "708090ff", "the button, below its label");
+    assert.equal(pixel(frame, 100, 72), "708090ff", "the button, below its label");
     assert.equal(pixel(frame, 332, 192), "ffd700ff", "the player, in the middle of the window");
     assert.equal(pixel(frame, 468, 308), "00aaaaff", "the plain sprite (teal) in the lower right");
     // The beacon is orange, teal or (on its missing frame) magenta, depending on how long 60 frames took.
     assert.ok(["ff8c00ff", "00aaaaff", "ff00ffff"].includes(pixel(frame, 208, 128)), `beacon pixel ${pixel(frame, 208, 128)}`);
     let white = 0;
-    for (let y = 148; y < 164; y++) for (let x = 412; x < 496; x++) if (pixel(frame, x, y) === "ffffffff") white++;
+    for (let y = 52; y < 68; y++) for (let x = 28; x < 112; x++) if (pixel(frame, x, y) === "ffffffff") white++;
     assert.ok(white > 10, `the label drew ${white} white pixels`);
     assert.ok(warnings.every((w) => /beacon-gone/.test(w)), `unexpected warnings: ${warnings.join("; ")}`);
   });
