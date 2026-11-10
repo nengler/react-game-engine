@@ -90,12 +90,12 @@ const ROOMS: readonly RoomSpec[] = [
       .rows(),
   },
   {
-    // 4. Dash up, twice: a ledge four tiles up (too high to jump to), then a second five tiles above that, and the opening in the ceiling.
+    // 4. Dash up, twice: a ledge four tiles up on the right (too high to jump to), then a second five tiles above it on the left, with the opening in the ceiling over that.
     name: "Dash up",
     exit: "up",
     rows: draft()
-      .rect(10, 11, 22, 11, "#")
-      .rect(25, 6, 29, 6, "#")
+      .rect(19, 11, 29, 11, "#")
+      .rect(10, 6, 15, 6, "#")
       .rect(13, 0, 18, 0, ".")
       .rect(14, 0, 17, 2, "E")
       .rect(0, 11, 0, 14, ".")

@@ -109,11 +109,46 @@ describe("the dash moves have room to spare", () => {
     return false;
   }
 
-  it("room 4: reaching the first ledge works for a dash timed anywhere in a quarter of a second, from several places to jump", () => {
-    for (const walk of [18, 24, 30]) {
+  /** From standing at (x, y) in room 4, with `hold` held, a jump (held) and a dash up `dash` frames later: did `done` hold? */
+  function climb(x: number, y: number, hold: "left" | "right" | null, dash: number, done: (p: ReturnType<typeof startPlayback>) => boolean): boolean {
+    const r = ROOM_LIST[3]!;
+    let p = startPlayback({ ...newRun(), room: 3, originX: r.ox, originY: r.oy, player: { ...newRun().player, x, y, onGround: true } });
+    for (let f = 0; f < 150 && !p.run.dead; f++) {
+      p = playFrame(p, { ...NO_CONTROLS, left: hold === "left", right: hold === "right", jumpPressed: f === 1, jumpHeld: f >= 1 && f < 15, up: f >= 1 + dash, dashPressed: f === 1 + dash }, 1 / 60);
+      if (done(p)) return true;
+    }
+    return false;
+  }
+  const windowOf = (x: number, y: number, hold: "left" | "right", done: (p: ReturnType<typeof startPlayback>) => boolean): number => {
+    let n = 0;
+    for (let dash = 0; dash <= 30; dash++) if (climb(x, y, hold, dash, done)) n++;
+    return n;
+  };
+
+  it("room 4, first ledge: from the floor, a dash up timed anywhere in more than a tenth of a second, from a spread of places to jump", () => {
+    for (const walk of [70, 80, 90]) {
       let window = 0;
-      for (let dash = 0; dash <= 40; dash++) if (attempt(3, walk, dash, { up: true }, (p) => p.run.player.onGround && p.run.player.y < 105)) window++;
-      assert.ok(window >= 12, `walking ${walk} frames, ${window} frames of dash timing work`);
+      for (let dash = 0; dash <= 30; dash++) if (attempt(3, walk, dash, { up: true }, (p) => p.run.player.onGround && p.run.player.y < 105 && p.run.player.x > 185)) window++;
+      assert.ok(window >= 10, `walking ${walk} frames: ${window} frames of dash timing work`);
+    }
+  });
+
+  it("room 4, second ledge: from the first, jumping and dashing up while holding left, from anywhere along it", () => {
+    for (const x of [198, 210, 222]) {
+      const window = windowOf(x, 99, "left", (p) => p.run.player.onGround && p.run.player.y < 55 && p.run.player.x < 165);
+      assert.ok(window >= 10, `from x ${x}: ${window} frames of dash timing work`);
+    }
+  });
+
+  it("room 4, the exit: from the second ledge a plain jump (with a step toward the opening) reaches it", () => {
+    for (const x of [110, 130, 150]) {
+      let reached = false;
+      let p = startPlayback({ ...newRun(), room: 3, originX: ROOM_LIST[3]!.ox, originY: ROOM_LIST[3]!.oy, player: { ...newRun().player, x, y: 49, onGround: true } });
+      for (let f = 0; f < 80 && !p.run.dead; f++) {
+        p = playFrame(p, { ...NO_CONTROLS, jumpPressed: f === 1, jumpHeld: f >= 1 && f < 15, right: x < 140 && f > 5 }, 1 / 60);
+        if (p.run.room !== 3) reached = true;
+      }
+      assert.ok(reached, `from x ${x}`);
     }
   });
 

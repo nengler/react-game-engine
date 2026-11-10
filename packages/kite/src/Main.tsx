@@ -1,4 +1,4 @@
-import { Camera, Entity, Fade, Game, Hud, Music, Screen, Text } from "@rge/runtime/jsx";
+import { Camera, Entity, Fade, Flex, Game, Hud, Music, Screen, Text } from "@rge/runtime/jsx";
 import { End } from "./End.tsx";
 import { Gem } from "./Gem.tsx";
 import { useGame } from "./GameState.ts";
@@ -31,17 +31,18 @@ function Play() {
         <Player />
       </Camera>
       <Hud>
-        <Text font="font.png" size={8} color="#8e9ac2" transform={{ x: 6, y: 5 }}>
-          {room + 1}/8
-        </Text>
-        <Text font="font.png" size={8} color="#ff7a59" transform={{ x: 270, y: 5 }}>
-          X{deaths}
-        </Text>
-        {gems > 0 && (
-          <Text font="font.png" size={8} color="#7de3ff" transform={{ x: 40, y: 5 }}>
-            GEM
+        {/* A row across the top: the room, the gem once it is picked up, the deaths. */}
+        <Flex direction="row" justifyContent="space-between" width="grow" padding={5}>
+          <Text font="font.png" size={8} color="#8e9ac2">
+            {room + 1}/8
           </Text>
-        )}
+          <Text font="font.png" size={8} color="#7de3ff">
+            {gems > 0 ? "GEM" : ""}
+          </Text>
+          <Text font="font.png" size={8} color="#ff7a59">
+            X{deaths}
+          </Text>
+        </Flex>
         {/* Dying fades the screen to the background colour, and the new life fades it back. */}
         <Fade on={dead} duration={0.3} color="#12151f" />
       </Hud>

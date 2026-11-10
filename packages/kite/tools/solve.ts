@@ -127,7 +127,7 @@ export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit 
   const start: Playback = from ?? startPlayback({ ...newRun(), room: roomIndex, originX: room.ox, originY: room.oy, player: { ...newRun().player, x: room.spawnX, y: room.spawnY } });
   const open: Node[] = [{ run: start, held: { jump: false }, parent: null, burst: null, g: 0 }];
   const seen = new Set<string>([key(start)]);
-  const scoreOf = (n: Node): number => n.g * 1.0 + heuristic(n.run, targets) * 0.35;
+  const scoreOf = (n: Node): number => n.g * 1.0 + heuristic(n.run, targets) * 2;
   const heap = new Heap<Node>(scoreOf);
   heap.push(open[0]!);
   let expanded = 0;
@@ -209,7 +209,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   for (let i = 0; i < ROOM_LIST.length; i++) {
     const started = Date.now();
     previousDown = [];
-    const result = solve(i, { dash: !NO_DASH.has(i + 1) }, 600_000, from);
+    const result = solve(i, { dash: !NO_DASH.has(i + 1) }, i === 5 ? 3_000_000 : 600_000, from);
     console.log(`room ${i + 1} (${ROOM_LIST[i]!.name}): ${result === null ? "NO SOLUTION" : result.script} [${Date.now() - started} ms]`);
     if (result === null) {
       process.exitCode = 1;
