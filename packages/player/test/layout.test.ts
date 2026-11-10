@@ -3,12 +3,28 @@ import assert from "node:assert/strict";
 import { Entity, Flex, Shape, Sprite, Text, type FlexProps, type GameObject } from "@rge/runtime";
 import { Layouter, type MeasuredSize } from "../src/layout.ts";
 
+/** A shape that can be laid out smaller than it is, as a wrapping text can (its minimum is its widest word). */
+class Squishy extends Shape {
+  smallestWidth: number;
+  smallestHeight: number;
+
+  constructor(width: number, height: number, smallestWidth: number, smallestHeight = height) {
+    super({ kind: "rect", width, height });
+    this.smallestWidth = smallestWidth;
+    this.smallestHeight = smallestHeight;
+  }
+}
+
 /** Shapes measure as their width and height, a Text as 10 per character by its size, a Sprite as 16 × 16. */
 const host = {
   measure(object: GameObject, out: MeasuredSize): boolean {
     if (object instanceof Shape) {
       out.width = object.width;
       out.height = object.height;
+      if (object instanceof Squishy) {
+        out.minWidth = object.smallestWidth;
+        out.minHeight = object.smallestHeight;
+      }
       return true;
     }
     if (object instanceof Text) {
@@ -179,6 +195,87 @@ describe("layout: growing", () => {
     const short = flex({ height: "grow", minHeight: 5 }, box(1, 1));
     lay(flex({ height: 50 }, tall, short));
     assert.deepEqual([tall.box.size[1], short.box.size[1]], [20, 50]);
+  });
+});
+
+describe("layout: shrinking", () => {
+  const cell = (width: number, smallest: number, props: FlexProps = {}): Flex => flex(props, new Squishy(width, 4, smallest));
+
+  it("takes back what overflows from the largest box first, until it matches the next, then from both", () => {
+    const a = cell(80, 20);
+    const b = cell(60, 20);
+    lay(flex({ width: 100 }, a, b));
+    // 140 in 100: a shrinks to 60 (20), then both give 10 more.
+    assert.deepEqual([a.box.size[0], b.box.size[0]], [50, 50]);
+    assert.deepEqual([a.layoutX, b.layoutX], [0, 50], "later boxes close up behind a shrunk one");
+  });
+
+  it("shrinks equal boxes equally", () => {
+    const a = cell(60, 20);
+    const b = cell(60, 20);
+    lay(flex({ width: 100 }, a, b));
+    assert.deepEqual([a.box.size[0], b.box.size[0]], [50, 50]);
+  });
+
+  it("stops a box at its minimum and takes the rest from the others", () => {
+    const a = cell(80, 70);
+    const b = cell(60, 20);
+    lay(flex({ width: 100 }, a, b));
+    assert.deepEqual([a.box.size[0], b.box.size[0]], [70, 30]);
+  });
+
+  it("counts the gaps and padding the row keeps", () => {
+    const a = cell(50, 10);
+    const b = cell(50, 10);
+    lay(flex({ width: 80, gap: 10, padding: 5 }, a, b));
+    // inner 70, gap 10, 60 left for 100: each gives 20.
+    assert.deepEqual([a.box.size[0], b.box.size[0]], [30, 30]);
+  });
+
+  it("shrinks heights in a column the same way", () => {
+    const a = flex({ direction: "column" }, new Squishy(5, 80, 5, 20));
+    const b = flex({ direction: "column" }, new Squishy(5, 60, 5, 20));
+    lay(flex({ direction: "column", height: 100 }, a, b));
+    assert.deepEqual([a.box.size[1], b.box.size[1]], [50, 50]);
+  });
+
+  it("shrinks a growing box too, but not a fixed or percentage one, and never a leaf", () => {
+    const grow = cell(60, 10, { width: "grow" });
+    const fixed = flex({ width: 40 });
+    const leaf = new Squishy(30, 4, 5);
+    lay(flex({ width: 100 }, grow, fixed, leaf));
+    // 130 in 100: only `grow` can give way.
+    assert.deepEqual([grow.box.size[0], fixed.box.size[0]], [30, 40]);
+    assert.equal(leaf.layoutX, 70);
+  });
+
+  it("lets what still does not fit overflow, at the boxes' minimums", () => {
+    const a = cell(80, 60);
+    const b = cell(80, 60);
+    const row = lay(flex({ width: 100 }, a, b));
+    assert.deepEqual([a.box.size[0], b.box.size[0]], [60, 60]);
+    assert.equal(b.layoutX + (b.box.size[0] as number), 120, "past the row's 100");
+    assert.equal(row.box.size[0], 100);
+  });
+
+  it("does not shrink a box that fits, or one with nothing to give", () => {
+    const a = cell(30, 10);
+    const b = flex({}, box(70, 4));
+    lay(flex({ width: 100 }, a, b));
+    assert.deepEqual([a.box.size[0], b.box.size[0]], [30, 70]);
+    const c = flex({}, box(90, 4));
+    const d = flex({}, box(90, 4));
+    lay(flex({ width: 100 }, c, d));
+    assert.deepEqual([c.box.size[0], d.box.size[0]], [90, 90], "leaves cannot shrink, so their boxes cannot either");
+  });
+
+  it("places a shrunk box's own children inside its new size", () => {
+    const leaf = new Squishy(80, 4, 20);
+    const a = flex({ justifyContent: "end" }, leaf);
+    const b = cell(60, 20);
+    lay(flex({ width: 100 }, a, b));
+    assert.equal(a.box.size[0], 50);
+    assert.equal(leaf.layoutX, 50 - 80, "the leaf keeps its size and, ended in a smaller box, overflows its start");
   });
 });
 

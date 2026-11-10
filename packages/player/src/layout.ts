@@ -29,6 +29,12 @@ const EPSILON = 1e-9;
 export interface MeasuredSize {
   width: number;
   height: number;
+  /**
+   * The smallest the thing can be laid out in, when that is less than its size (a wrapping text's is its widest word).
+   * Without them a leaf's minimum is its size. A leaf never shrinks itself: the minimum only lets the boxes around it.
+   */
+  minWidth?: number;
+  minHeight?: number;
 }
 
 /** What layout needs from the player: the size of what an object draws, and somewhere to complain. */
@@ -42,7 +48,7 @@ export interface LayoutHost {
 export class Layouter {
   readonly #host: LayoutHost;
   readonly #measured: MeasuredSize = { width: 0, height: 0 };
-  /** minX, minY, maxX, maxY of what a leaf container draws, filled by `#extent`. */
+  /** minX, minY, maxX, maxY of what a leaf container draws, and the same for its minimum size: filled by `#extentOf`. */
   readonly #extent4 = new Float64Array(4);
 
   constructor(host: LayoutHost) {
@@ -133,15 +139,27 @@ export class Layouter {
       e[1] = Infinity;
       e[2] = -Infinity;
       e[3] = -Infinity;
+      this.#measured.minWidth = undefined;
+      this.#measured.minHeight = undefined;
       this.#extentOf(kid, 0, 0, e);
+      // A leaf with nothing inside it can be laid out smaller than it is (its own minimum); a container cannot.
+      const leaf = kid.children.length === 0;
       const any = e[2]! >= e[0]!;
       for (let axis = 0; axis < 2; axis++) {
         (box.childOrigin[axis] as Float64Array)[i] = any ? (e[axis] as number) : 0;
         const size = any ? (e[axis + 2] as number) - (e[axis] as number) : 0;
+        const smallest = leaf ? (axis === X ? this.#measured.minWidth : this.#measured.minHeight) : undefined;
         (box.childSize[axis] as Float64Array)[i] = size;
-        (box.childMinimum[axis] as Float64Array)[i] = size;
+        (box.childMinimum[axis] as Float64Array)[i] = smallest !== undefined && smallest >= 0 && smallest < size ? smallest : size;
       }
     }
+  }
+
+  /** Ask the host for a leaf's size, clearing the optional minimums first so a host that has none leaves them unset. */
+  #measureLeaf(object: GameObject): boolean {
+    this.#measured.minWidth = undefined;
+    this.#measured.minHeight = undefined;
+    return this.#host.measure(object, this.#measured);
   }
 
   /**
@@ -158,7 +176,7 @@ export class Layouter {
       width = object.box.preferred[X] as number;
       height = object.box.preferred[Y] as number;
       drawn = true;
-    } else if (this.#host.measure(object, this.#measured)) {
+    } else if (this.#measureLeaf(object)) {
       width = this.#measured.width;
       height = this.#measured.height;
       drawn = true;
@@ -263,8 +281,11 @@ export class Layouter {
       total += sizes[i] as number;
     }
 
-    if (along) this.#grow(f, axis, inner - gaps - total);
-    else {
+    if (along) {
+      const free = inner - gaps - total;
+      if (free > EPSILON) this.#grow(f, axis, free);
+      else if (free < -EPSILON) this.#shrink(f, axis, -free);
+    } else {
       for (let i = 0; i < n; i++) {
         if (box.childKind[i] !== 1) continue;
         const kid = kids[i] as Flex;
@@ -327,6 +348,54 @@ export class Layouter {
       for (let a = 0; a < count; a++) {
         const i = active[a] as number;
         if ((sizes[i] as number) < this.#maxProp(kids[i] as Flex, axis) - EPSILON) active[kept++] = i;
+      }
+      if (kept === count && !(delta > EPSILON)) break;
+      count = kept;
+    }
+  }
+
+  /**
+   * Take `overflow` back along the axis from the children that can give way, largest first: the largest shrinks until it
+   * is as small as the next largest, then both do, and so on, each stopping at its minimum, and a box that has reached its
+   * minimum drops out. Only a `<Flex>` that is `"fit"` or `"grow"` shrinks; a fixed or percentage one holds, and a leaf
+   * keeps its size (it only offers a minimum to the box around it). What still does not fit overflows.
+   */
+  #shrink(f: Flex, axis: number, overflow: number): void {
+    const box = f.box;
+    const kids = f.children;
+    const sizes = box.childSize[axis] as Float64Array;
+    const minimums = box.childMinimum[axis] as Float64Array;
+    const active = box.active;
+    let count = 0;
+    for (let i = 0; i < kids.length; i++) {
+      if (box.childKind[i] !== 1) continue;
+      const mode = (kids[i] as Flex).box.sizingMode[axis];
+      if ((mode === FIT || mode === GROW) && (sizes[i] as number) > (minimums[i] as number) + EPSILON) active[count++] = i;
+    }
+    while (overflow > EPSILON && count > 0) {
+      let largest = -Infinity;
+      for (let a = 0; a < count; a++) largest = Math.max(largest, sizes[active[a] as number] as number);
+      let next = -Infinity;
+      let atLargest = 0;
+      let room = Infinity;
+      for (let a = 0; a < count; a++) {
+        const i = active[a] as number;
+        const size = sizes[i] as number;
+        if (largest - size <= EPSILON) {
+          atLargest++;
+          room = Math.min(room, size - (minimums[i] as number));
+        } else next = Math.max(next, size);
+      }
+      const delta = Math.min(largest - next, overflow / atLargest, room);
+      for (let a = 0; a < count; a++) {
+        const i = active[a] as number;
+        if (largest - (sizes[i] as number) <= EPSILON) sizes[i] = (sizes[i] as number) - delta;
+      }
+      overflow -= delta * atLargest;
+      let kept = 0;
+      for (let a = 0; a < count; a++) {
+        const i = active[a] as number;
+        if ((sizes[i] as number) > (minimums[i] as number) + EPSILON) active[kept++] = i;
       }
       if (kept === count && !(delta > EPSILON)) break;
       count = kept;

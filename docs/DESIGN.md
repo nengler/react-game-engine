@@ -1621,7 +1621,9 @@ smallest growing child first and stops at each maximum. Only a `Flex` is resized
 `Text` keeps its own size. An `Entity` or component child is sized by the bounding box of what it draws. A root that
 grows fills the game's area (the canvas, else the window). Layout runs every frame, so conditional children and keyed
 lists reflow with no extra work, and in steady state it allocates nothing. `background` is a rectangle drawn first,
-behind the children, at the box's size. Not built yet: shrinking when children overflow (U3), whole-pixel rounding and
+behind the children, at the box's size. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
+minimums; a leaf's minimum is its size unless the measurer reports a smaller one (`minWidth` / `minHeight`, for
+wrapping text), so in a real game nothing shrinks yet and overflow is visible. Not built yet: whole-pixel rounding and
 `onPress` (U4), floating boxes (U5), text wrapping.
 
 **Measuring.** `FrameBuilder.measure(object)` is the size layout will place an object by: a `Shape`'s,

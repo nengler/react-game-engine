@@ -1,4 +1,4 @@
-import { useSound, useState, Camera, Game, Hud, Pointer, Shape, Text } from "@rge/runtime/jsx";
+import { useSound, useState, Camera, Entity, Flex, Game, Hud, Pointer, Text } from "@rge/runtime/jsx";
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
 import { useGame } from "./GameState.ts";
@@ -24,22 +24,27 @@ export default function Main() {
       <Beacon transform={{ x: -120, y: -60 }} />
       <Spikes transform={{ x: 84, y: 10 }} />
       <Coin transform={{ x: 60, y: 8 }} />
-      {/* The HUD stays where it is put while the camera follows the player. The button is a Shape for the look and a Pointer for the click: both are placed the same. */}
+      {/* The HUD stays where it is while the camera follows the player, and is laid out, not placed by hand: a column holding the coin count and the button. */}
       <Hud transform={{ x: 16, y: 16 }}>
-        <CoinCounter />
-        <Shape kind="rect" width={96} height={32} color={clicks >= 3 ? "seagreen" : "slategray"} transform={{ x: 0, y: 28 }} />
-        <Pointer
-          width={96}
-          height={32}
-          transform={{ x: 0, y: 28 }}
-          onPress={() => {
-            playClick();
-            setClicks((clicks) => clicks + 1);
-          }}
-        />
-        <Text size={16} color="white" transform={{ x: 12, y: 36 }}>
-          Clicks: {clicks}
-        </Text>
+        <Flex direction="column" gap={8}>
+          <CoinCounter />
+          {/* The button is a Flex for the look (its label is centred by layout) and a Pointer for the click, both 96 × 32 at the Entity's origin. */}
+          <Entity name="Button">
+            <Flex width={96} height={32} alignItems="center" justifyContent="center" background={clicks >= 3 ? "seagreen" : "slategray"}>
+              <Text size={16} color="white">
+                Clicks: {clicks}
+              </Text>
+            </Flex>
+            <Pointer
+              width={96}
+              height={32}
+              onPress={() => {
+                playClick();
+                setClicks((clicks) => clicks + 1);
+              }}
+            />
+          </Entity>
+        </Flex>
       </Hud>
       {/* A camera follows its children, so this keeps the view on the player. */}
       <Camera>

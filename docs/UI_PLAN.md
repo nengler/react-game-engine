@@ -292,7 +292,7 @@ So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI
 **Done 2026-11-10**, with these differences from the text above:
 
 - **`onPress` is not on `Flex` yet** (U4 adds it); every other prop in the table is.
-- **Shrinking is not built** (U3): when children overflow, nothing gives way, so a row or label past its box overflows it. A child's minimum size is still computed, and a growing child across the axis never goes below it, so the context menu's long-label case overflows exactly as this plan says it should until text wraps.
+- **Shrinking came in U3** (below). Until text wraps nothing can shrink in a real game, so a row or label past its box overflows it, as this plan says it should: the context menu's long-label case overflows, and a growing child across the axis never goes below its minimum.
 - **A growing root takes the game's area**: the canvas under a `<Screen>`, else the window, whether it is under a `<Hud>` or in the world. That is U3's "HUD box" in effect; U3 adds the resize tests and the demo.
 - **The working numbers are one field**, `box` (a `FlexBox`), so a component rooted at a `Flex` reserves one name for them, not a dozen. `box.size` is the size the box was laid out at, last frame.
 - **The leaf rule for an `Entity`**: its extent is the union of its own measurable box (if it is a leaf) and its children at their `transform` + `placement` positions; layout puts the extent's top-left in the slot. A `Flex` inside one counts at its fit size, then is laid out for real when the walk reaches it, as a layout root of its own.
@@ -326,12 +326,12 @@ The test covers: the menu fitting its widest row; the minimum width holding when
 
 ### U3: the HUD box, shrinking, and the demo
 
-**Done when**
+**Done 2026-11-10.** The HUD's box needed no new code after U2 (a growing root fills the game's area, which is the canvas or the window), so its checkbox is tests. Shrinking is `Layouter.#shrink`, the grow loop turned around. One thing to know: **nothing shrinks yet in a real game.** A `<Flex>`'s minimum comes from its children's, a leaf's minimum is its size, and so a box can only get smaller than it asked to be once a leaf can report a smaller minimum: a wrapping text's widest word. `MeasuredSize` has optional `minWidth` / `minHeight` for that (tests use a `Squishy` shape that sets them), and the frame builder sets none until text wrapping exists. The demo's HUD, a column with the coin count and a button whose label is centred by layout, is in `Main.tsx`; the button is an `Entity` holding a `Flex` (the look) and a `Pointer` (the click) until U4 gives `Flex` an `onPress`.
 
-- [ ] A `Flex` growing under `<Hud>` takes the HUD's box, and a resize lays out again (a recording test with two window sizes)
-- [ ] Children that overflow a row or column shrink largest first, down to their minimum sizes; leaves never shrink, and what still does not fit overflows
-- [ ] The demo's click counter and button are a `Flex` row inside `<Hud>`, with the label centred by layout instead of by a guessed `x`
-- [ ] The parity run covers the demo's HUD under QuickJS
+- [x] A `Flex` growing under `<Hud>` takes the HUD's box, and a resize lays out again (`hud.test.ts`: two window sizes, and the canvas under a `<Screen>`)
+- [x] Children that overflow a row or column shrink largest first, down to their minimum sizes; leaves never shrink, and what still does not fit overflows
+- [x] The demo's click counter and button are a `Flex` row inside `<Hud>`, with the label centred by layout instead of by a guessed `x`
+- [x] The parity run covers the demo's HUD under QuickJS
 
 ### U4: polish
 
