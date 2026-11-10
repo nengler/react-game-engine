@@ -7,6 +7,8 @@ export interface FadeProps {
   on?: boolean;
   /** Seconds a full fade takes, either way. Default 0.25. 0 switches at once. */
   duration?: number;
+  /** How covered it starts, 0 (clear, the default) to 1 (covered): `from={1}` with `on={false}` fades in from the colour as the screen begins. */
+  from?: number;
 }
 
 /**
@@ -21,7 +23,7 @@ export class Fade<P extends object = {}> extends GameObject<P> {
   on: boolean;
   duration: number;
   /** How far covered it is now, 0 to 1. */
-  amount = 0;
+  amount: number;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: FadeProps = {}, props?: P, defaults?: Partial<P>) {
@@ -29,6 +31,7 @@ export class Fade<P extends object = {}> extends GameObject<P> {
     this.color = hostProps.color ?? "black";
     this.on = hostProps.on ?? false;
     this.duration = hostProps.duration ?? 0.25;
+    this.amount = Math.min(1, Math.max(0, hostProps.from ?? 0));
   }
 
   override onUpdate(dt: number): void {

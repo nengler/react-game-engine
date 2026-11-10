@@ -11,9 +11,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseInputScript } from "@rge/player";
 import { NO_CONTROLS, type Controls } from "../src/rules/body.ts";
-import { newRun, stepRun, type Run } from "../src/rules/level.ts";
+import { newRun } from "../src/rules/level.ts";
+import { playFrame, startPlayback, type Playback } from "../src/rules/playback.ts";
 import { TRANSITION_TIME } from "../src/rules/constants.ts";
-import { ROOM_LIST } from "../src/rules/rooms.ts";
+import { overlapsRect, ROOM_LIST } from "../src/rules/rooms.ts";
 
 /** Rooms that teach running and jumping: found without the dash, so the replay shows the intended way. */
 const NO_DASH = new Set([1, 2]);
@@ -36,7 +37,7 @@ for (const h of [0, 1, -1] as const) for (const jump of [false, true]) {
 }
 
 interface Node {
-  readonly run: Run;
+  readonly run: Playback;
   readonly held: { jump: boolean };
   readonly parent: Node | null;
   readonly burst: Burst | null;
@@ -56,14 +57,15 @@ function controlsFor(burst: Burst, frame: number, jumpWasHeld: boolean): Control
   };
 }
 
-function key(run: Run): string {
+function key(play: Playback): string {
+  const run = play.run;
   const b = run.player;
-  return [Math.round(b.x / 2), Math.round(b.y / 2), Math.round(b.vx / 30), Math.round(b.vy / 30), b.onGround ? 1 : 0, b.dashes, b.jumpHold > 0 ? 1 : 0, b.dashTime > 0 ? 1 : 0, b.wallLock > 0 ? 1 : 0, b.coyote > 0 ? 1 : 0].join(",");
+  return [Math.round(b.x / 2), Math.round(b.y / 2), Math.round(b.vx / 30), Math.round(b.vy / 30), b.onGround ? 1 : 0, b.dashes, b.jumpHold > 0 ? 1 : 0, b.dashTime > 0 ? 1 : 0, b.wallLock > 0 ? 1 : 0, b.coyote > 0 ? 1 : 0, play.frozen].join(",");
 }
 
 /** Distance to the nearest exit tile: how promising a state looks. */
-function heuristic(run: Run, targets: [number, number][]): number {
-  const b = run.player;
+function heuristic(play: Playback, targets: [number, number][]): number {
+  const b = play.run.player;
   let best = Infinity;
   for (const [c, r] of targets) best = Math.min(best, Math.abs(b.x - c * 10) + Math.abs(b.y - r * 10));
   return best;
@@ -116,12 +118,13 @@ class Heap<T> {
   }
 }
 
-export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit = 600_000, from: Run | null = null): { script: string; end: Run } | null {
+export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit = 600_000, from: Playback | null = null, goal: { x: number; y: number; w: number; h: number } | null = null): { script: string; end: Playback } | null {
   const allowed = allow.dash ? BURSTS : BURSTS.filter((b) => !b.dash);
   const room = ROOM_LIST[roomIndex]!;
   const targets: [number, number][] = [];
-  room.rows.forEach((row, r) => [...row].forEach((ch, c) => ch === "E" && targets.push([c, r])));
-  const start: Run = from ?? { ...newRun(), room: roomIndex, originX: room.ox, originY: room.oy, player: { ...newRun().player, x: room.spawnX, y: room.spawnY } };
+  if (goal !== null) targets.push([(goal.x + goal.w / 2) / 10, (goal.y + goal.h / 2) / 10]);
+  else room.rows.forEach((row, r) => [...row].forEach((ch, c) => ch === "E" && targets.push([c, r])));
+  const start: Playback = from ?? startPlayback({ ...newRun(), room: roomIndex, originX: room.ox, originY: room.oy, player: { ...newRun().player, x: room.spawnX, y: room.spawnY } });
   const open: Node[] = [{ run: start, held: { jump: false }, parent: null, burst: null, g: 0 }];
   const seen = new Set<string>([key(start)]);
   const scoreOf = (n: Node): number => n.g * 1.0 + heuristic(n.run, targets) * 0.35;
@@ -135,13 +138,14 @@ export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit 
       let run = node.run;
       let ok = true;
       for (let f = 0; f < BURST; f++) {
-        run = stepRun(run, controlsFor(burst, f, node.held.jump), DT);
-        if (run.dead) { ok = false; break; }
-        if (run.room !== roomIndex || run.finished) break;
+        run = playFrame(run, controlsFor(burst, f, node.held.jump), DT);
+        if (run.run.dead) { ok = false; break; }
+        if (goal !== null && overlapsRect(run.run.player.x, run.run.player.y, goal)) return finish({ run, held: { jump: burst.jump }, parent: node, burst, g: node.g + BURST }, start);
+        if (goal === null && (run.run.room !== roomIndex || run.run.finished)) break;
       }
       if (!ok) continue;
       const child: Node = { run, held: { jump: burst.jump }, parent: node, burst, g: node.g + BURST };
-      if (run.room !== roomIndex || run.finished) return finish(child, start);
+      if (goal === null && (run.run.room !== roomIndex || run.run.finished)) return finish(child, start);
       const k = key(run);
       if (seen.has(k)) continue;
       seen.add(k);
@@ -152,10 +156,10 @@ export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit 
 }
 
 /** The script for `node`, and the run it ends in once the room change's wait is over (where the next room's search starts). */
-function finish(node: Node, start: Run): { script: string; end: Run } {
+function finish(node: Node, start: Playback): { script: string; end: Playback } {
   const text = script(node);
   let run = start;
-  for (const frame of parseInputScript(text, { bindings: BINDINGS })) run = stepRun(run, controlsOf(frame.down), DT);
+  for (const frame of parseInputScript(text, { bindings: BINDINGS })) run = playFrame(run, controlsOf(frame.down), DT);
   return { script: text, end: run };
 }
 
@@ -201,7 +205,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const write = args.includes("--write");
   const found: string[] = [];
-  let from: Run | null = null;
+  let from: Playback | null = null;
   for (let i = 0; i < ROOM_LIST.length; i++) {
     const started = Date.now();
     previousDown = [];
@@ -214,7 +218,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // The wait while the camera slides, then the next room's search starts where this one left the body.
     found.push(i + 1 < ROOM_LIST.length ? `${result.script}, _*${WAIT}` : result.script);
     from = result.end;
-    for (let w = 0; w < WAIT; w++) from = stepRun(from, NO_CONTROLS, DT);
+    for (let w = 0; w < WAIT; w++) from = playFrame(from, NO_CONTROLS, DT);
   }
   if (write && process.exitCode !== 1) {
     const body = found.map((r, i) => `  // ${i + 1}. ${ROOM_LIST[i]!.name}\n  ${JSON.stringify(r)},`).join("\n");

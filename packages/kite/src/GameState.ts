@@ -1,13 +1,17 @@
-import { createGameState } from "@rge/runtime";
-import { packControls, unpackControls, type Body } from "./rules/body.ts";
-import { stepRun, type Run } from "./rules/level.ts";
+import { createGameState, freeze } from "@rge/runtime";
+import { unpackControls, type Body } from "./rules/body.ts";
+import { DASH_FREEZE_STEPS, DEATH_FREEZE_STEPS } from "./rules/constants.ts";
+import { newRun, stepRun, type Run } from "./rules/level.ts";
 
 /**
- * The game's state, shared by every component: the run of the level (`Run`, see `rules/level.ts`) and the actions that
- * move it on. All the rules are plain functions in `rules/`; this file only keeps their state where components can read
- * it, and calls them. `step` is one fixed step of the game: components pass the buttons held (`packControls`) and the time.
+ * The game's state, shared by every component: which screen is showing, the run of the level (`Run`, see `rules/level.ts`)
+ * and the actions that move it on. All the rules are plain functions in `rules/`; this file only keeps their state where
+ * components can read it, and calls them. `step` is one fixed step of the game: the character passes the buttons held (see
+ * `Player.tsx`) and the time. A dash and a death freeze the world for a few steps from here, which is where they are known.
  */
 interface State {
+  /** `"title"`, `"play"` or `"end"`: the screens, switched by the `Main` component's conditions. */
+  screen: string;
   room: number;
   originX: number;
   originY: number;
@@ -20,15 +24,20 @@ interface State {
   steps: number;
   deathCount: number;
   roomCount: number;
-  /** Gems collected. */
+  /** Gems collected: there is one in the level. */
   gems: number;
   step: (buttons: number, dt: number) => void;
+  /** Start a new run: the first room, no deaths, no gems. */
+  begin: () => void;
+  /** Back to the title screen. */
+  toTitle: () => void;
   collect: () => void;
 }
 
 const RUN_KEYS = ["room", "originX", "originY", "player", "dead", "deathTimer", "deaths", "transition", "finished", "steps", "deathCount", "roomCount"] as const;
 
 export const useGame = createGameState<State>()((set, get) => ({
+  screen: "title",
   room: 0,
   originX: 0,
   originY: 0,
@@ -47,11 +56,15 @@ export const useGame = createGameState<State>()((set, get) => ({
   gems: 0,
   step: (buttons, dt) => {
     const state = get();
-    const run = {} as Record<string, unknown>;
-    for (const key of RUN_KEYS) run[key] = state[key];
-    set(stepRun(run as unknown as Run, unpackControls(buttons), dt));
+    if (state.screen !== "play") return;
+    const before = {} as Record<string, unknown>;
+    for (const key of RUN_KEYS) before[key] = state[key];
+    const after = stepRun(before as unknown as Run, unpackControls(buttons), dt);
+    if (after.player.dashCount !== state.player.dashCount) freeze(DASH_FREEZE_STEPS);
+    if (after.deathCount !== state.deathCount) freeze(DEATH_FREEZE_STEPS);
+    set({ ...after, screen: after.finished ? "end" : "play" });
   },
+  begin: () => set({ ...newRun(), screen: "play", gems: 0 }),
+  toTitle: () => set({ ...newRun(), screen: "title", gems: 0 }),
   collect: () => set((s) => ({ gems: s.gems + 1 })),
 }));
-
-export { packControls };

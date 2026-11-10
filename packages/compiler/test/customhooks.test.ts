@@ -89,6 +89,21 @@ describe("custom hooks", () => {
     assert.deepEqual([c.transform.x, c.transform.y], [4, 10], "the first counter steps by its default of 2, the second by 5");
   });
 
+  it("write a literal argument into the hook, so a parameter can be a sound's path", () => {
+    const compiled = compile(
+      `function useBeep(path: string, volume: number, count: number) {
+         const play = useSound(path);
+         const seen = useRef(0);
+         useUpdate(() => { if (count !== seen.current) { seen.current = count; play(volume); } });
+       }
+       function Hit() { const [hits] = useState(0); useBeep("hit.wav", 0.5, hits); return <Entity name="H" />; }`,
+      "Hit.tsx",
+    );
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /new Sound\("hit\.wav"\)/);
+    assert.match(compiled.code, /\.play\(0\.5\)/);
+  });
+
   it("do not leak: a hook's names cannot clash with the component's own", () => {
     const compiled = compile(
       `function useThing() { const [x, setX] = useState(1); useUpdate(() => { setX((x) => x + 1); }); return x; }

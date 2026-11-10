@@ -1,6 +1,14 @@
 {
   "version": 1,
   "prefabs": {
+    "End": {
+      "module": "packages/kite/src/End.tsx",
+      "props": []
+    },
+    "Gem": {
+      "module": "packages/kite/src/Gem.tsx",
+      "props": []
+    },
     "Level": {
       "module": "packages/kite/src/Level.tsx",
       "props": []
@@ -11,6 +19,10 @@
     },
     "Player": {
       "module": "packages/kite/src/Player.tsx",
+      "props": []
+    },
+    "Title": {
+      "module": "packages/kite/src/Title.tsx",
       "props": []
     }
   }

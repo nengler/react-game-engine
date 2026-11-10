@@ -284,7 +284,19 @@ function expandCall(parser: TsxParser, statement: Statement, call: HookCall, hoo
       } else kept.push(s);
     }
     for (const s of kept) if (isVariableStatement(s)) for (const d of s.declarationList.declarations) bindingNames(d.name, declared);
-    const rename = (name: string): string => `${prefix}${name}`;
+    // A literal argument is written into the hook where its parameter is used, so what needs a literal (a `useSound` path) gets
+    // one; any other argument is bound to a constant.
+    const literals = new Map<string, string>();
+    {
+      const given = call.call.arguments;
+      for (let i = 0; i < params.length && i < given.length; i++) {
+        const arg = given[i] as Node;
+        if (isStringLiteral(arg) || arg.kind === SyntaxKind.NumericLiteral || arg.kind === SyntaxKind.TrueKeyword || arg.kind === SyntaxKind.FalseKeyword) {
+          literals.set((params[i]!.name as { text: string }).text, callSf.text.slice(arg.getStart(callSf), arg.getEnd()));
+        }
+      }
+    }
+    const rename = (name: string): string => literals.get(name) ?? `${prefix}${name}`;
 
     const args = call.call.arguments;
     if (args.length > params.length) {
@@ -300,7 +312,7 @@ function expandCall(parser: TsxParser, statement: Statement, call: HookCall, hoo
         diagnostics.push(error(DiagnosticCode.InvalidProps, `The hook '${hook.name}' needs an argument for '${(p.name as { text: string }).text}'.`, at));
         return null;
       }
-      lines.push(`const ${rename((p.name as { text: string }).text)} = ${valueText};`);
+      if (!literals.has((p.name as { text: string }).text)) lines.push(`const ${rename((p.name as { text: string }).text)} = ${valueText};`);
     }
     for (const s of kept) lines.push(renameIn(s, sf, hook.text, declared, rename));
 

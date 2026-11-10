@@ -1,0 +1,346 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/kite/src/Gem.tsx",
+  "typeDeclarations": [],
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Gem",
+      "span": {
+        "fileName": "packages/kite/src/Gem.tsx",
+        "start": 330,
+        "end": 753,
+        "line": 8,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Gem.gems",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Gem.tsx",
+            "start": 362,
+            "end": 391,
+            "line": 9,
+            "column": 9
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Gem.gems",
+          "name": "gems",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "globalKey": "gems"
+        }
+      ],
+      "refs": [],
+      "sounds": [],
+      "props": [],
+      "propsType": null,
+      "isDefaultExport": false,
+      "isExported": true,
+      "acceptsChildren": false,
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Gem"
+            }
+          }
+        ],
+        "transform": [],
+        "children": [
+          {
+            "kind": "ConditionalChild",
+            "condition": {
+              "kind": "Unary",
+              "operator": "!",
+              "operand": {
+                "kind": "Binary",
+                "operator": ">",
+                "left": {
+                  "kind": "StateRead",
+                  "state": "Gem.gems"
+                },
+                "right": {
+                  "kind": "NumberLiteral",
+                  "value": 0
+                }
+              }
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Gem.gems"
+              }
+            ],
+            "element": {
+              "kind": "Element",
+              "id": "Gem/0",
+              "fieldName": "shape",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Shape"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "kind",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "circle"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 8
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 8
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "color",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "#7de3ff"
+                  }
+                }
+              ],
+              "transform": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/kite/src/Gem.tsx",
+                "start": 472,
+                "end": 532,
+                "line": 14,
+                "column": 18
+              }
+            }
+          },
+          {
+            "kind": "ConditionalChild",
+            "condition": {
+              "kind": "Unary",
+              "operator": "!",
+              "operand": {
+                "kind": "Binary",
+                "operator": ">",
+                "left": {
+                  "kind": "StateRead",
+                  "state": "Gem.gems"
+                },
+                "right": {
+                  "kind": "NumberLiteral",
+                  "value": 0
+                }
+              }
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Gem.gems"
+              }
+            ],
+            "element": {
+              "kind": "Element",
+              "id": "Gem/1",
+              "fieldName": "shape2",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Shape"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "kind",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "circle"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 4
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 4
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "color",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "#e8fbff"
+                  }
+                }
+              ],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 2
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 1
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/kite/src/Gem.tsx",
+                "start": 551,
+                "end": 638,
+                "line": 15,
+                "column": 18
+              }
+            }
+          },
+          {
+            "kind": "ConditionalChild",
+            "condition": {
+              "kind": "Unary",
+              "operator": "!",
+              "operand": {
+                "kind": "Binary",
+                "operator": ">",
+                "left": {
+                  "kind": "StateRead",
+                  "state": "Gem.gems"
+                },
+                "right": {
+                  "kind": "NumberLiteral",
+                  "value": 0
+                }
+              }
+            },
+            "dependencies": [
+              {
+                "kind": "State",
+                "state": "Gem.gems"
+              }
+            ],
+            "element": {
+              "kind": "Element",
+              "id": "Gem/2",
+              "fieldName": "collider",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Collider"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 8
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 8
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "tag",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "gem"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "layer",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "item"
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "hits",
+                  "value": {
+                    "kind": "ArrayLiteral",
+                    "elements": [
+                      {
+                        "spread": false,
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "player"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "transform": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/kite/src/Gem.tsx",
+                "start": 657,
+                "end": 731,
+                "line": 16,
+                "column": 18
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/kite/src/Gem.tsx",
+          "start": 435,
+          "end": 746,
+          "line": 13,
+          "column": 5
+        }
+      }
+    }
+  ]
+}

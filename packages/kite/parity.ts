@@ -9,7 +9,7 @@ import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
 import { bindings, gameConfig } from "./game.ts";
 import { REPLAYS } from "./test/replays.ts";
 
-const frames = parseInputScript(REPLAYS.slice(0, 3).join(", "), { bindings });
+const frames = parseInputScript(`Enter, _*3, ${REPLAYS.slice(0, 2).join(", ")}`, { bindings });
 const backend = new RecordingBackend();
 const warnings: string[] = [];
 for (const frame of frames) backend.queueInput(frame);

@@ -85,3 +85,6 @@ export const VOID_MARGIN = 24;
 export const TRANSITION_TIME = 0.4;
 /** Coming up into a room from below, the body arrives this far above the room's bottom edge, standing on its floor. */
 export const ENTRY_LIFT = 20;
+
+/** Steps the world stands still for when the character dies. */
+export const DEATH_FREEZE_STEPS = 5;

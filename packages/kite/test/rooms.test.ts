@@ -5,9 +5,11 @@ import { bindings, gameConfig } from "../game.ts";
 import { useGame } from "../src/GameState.ts";
 import { NO_CONTROLS } from "../src/rules/body.ts";
 import { ROOM_COLS, ROOM_ROWS } from "../src/rules/constants.ts";
-import { newRun, stepRun } from "../src/rules/level.ts";
+import { newRun } from "../src/rules/level.ts";
+import { playFrame, startPlayback } from "../src/rules/playback.ts";
 import { ROOM_LIST, tilesOf } from "../src/rules/rooms.ts";
 import { ROOM_SPECS } from "../tools/rooms.ts";
+import { GEM_REPLAY } from "./gem-replay.ts";
 import { REPLAYS } from "./replays.ts";
 
 describe("rooms", () => {
@@ -49,39 +51,47 @@ describe("replays", () => {
   it("has one per room", () => assert.equal(REPLAYS.length, ROOM_LIST.length));
 
   it("finish every room, one after the other, without dying (the rules alone, no drawing)", () => {
-    let run = newRun();
+    let play = startPlayback(newRun());
     let previous: string[] = [];
     REPLAYS.forEach((script, index) => {
       for (const frame of parseInputScript(script, { bindings })) {
         const has = (key: string): boolean => frame.down.includes(key);
-        run = stepRun(run, { ...NO_CONTROLS, left: has("ArrowLeft"), right: has("ArrowRight"), up: has("ArrowUp"), down: has("ArrowDown"), jumpHeld: has("Z"), jumpPressed: has("Z") && !previous.includes("Z"), dashPressed: has("X") && !previous.includes("X") }, 1 / 60);
+        play = playFrame(play, { ...NO_CONTROLS, left: has("ArrowLeft"), right: has("ArrowRight"), up: has("ArrowUp"), down: has("ArrowDown"), jumpHeld: has("Z"), jumpPressed: has("Z") && !previous.includes("Z"), dashPressed: has("X") && !previous.includes("X") }, 1 / 60);
         previous = frame.down;
       }
-      assert.equal(run.deaths, 0, `room ${index + 1}: no deaths`);
-      assert.ok(run.finished || run.room === index + 1, `room ${index + 1} was finished (now in room ${run.room + 1})`);
+      assert.equal(play.run.deaths, 0, `room ${index + 1}: no deaths`);
+      assert.ok(play.run.finished || play.run.room === index + 1, `room ${index + 1} was finished (now in room ${play.run.room + 1})`);
     });
-    assert.ok(run.finished, "the last exit ends the level");
+    assert.ok(play.run.finished, "the last exit ends the level");
   });
 
   it("also finish the whole level through the game itself, with its input, state and components", () => {
-    const frames = parseInputScript(REPLAYS.join(", "), { bindings });
+    const frames = parseInputScript(`Enter, _*3, ${REPLAYS.join(", ")}`, { bindings });
     const result = runScript(gameConfig, frames, () => {
       const s = useGame.getState();
-      return { room: s.room, deaths: s.deaths, finished: s.finished };
+      return { room: s.room, deaths: s.deaths, finished: s.finished, screen: s.screen };
     });
     const last = result.states.at(-1);
-    assert.deepEqual(last, { room: 7, deaths: 0, finished: true });
+    assert.deepEqual(last, { room: 7, deaths: 0, finished: true, screen: "end" });
     const rooms = result.states.map((s) => s.room);
     assert.deepEqual([...new Set(rooms)], [0, 1, 2, 3, 4, 5, 6, 7], "the rooms came in order");
+    assert.equal(result.states[0]?.screen, "play", "the first button, on the title screen, starts the run");
   });
 
   it("give the same result at any frame rate, because the game runs on a fixed timestep", () => {
-    const script = REPLAYS.slice(0, 3).join(", ");
+    const script = `Enter, _*3, ${REPLAYS.slice(0, 3).join(", ")}`;
     const final = (frames: ReturnType<typeof parseInputScript>) => runScript(gameConfig, frames, () => ({ ...useGame.getState().player })).states.at(-1);
     const at60 = parseInputScript(script, { bindings });
     // The same inputs drawn at 120 and at 30 frames a second: every frame twice with half the time, or two frames' keys in one frame.
     const at120 = at60.flatMap((frame) => [{ ...frame, dt: 1 / 120 }, { ...frame, dt: 1 / 120 }]);
     const reference = final(at60);
     assert.deepEqual(final(at120), reference);
+  });
+
+  it("reach the optional gem in room 7 by a detour, through the game: its collider and the character's collider meet", () => {
+    const script = `Enter, _*3, ${REPLAYS.slice(0, 6).join(", ")}, ${GEM_REPLAY}, _*4`;
+    const result = runScript(gameConfig, parseInputScript(script, { bindings }), () => ({ gems: useGame.getState().gems, room: useGame.getState().room }));
+    assert.deepEqual(result.states.at(-1), { gems: 1, room: 6 });
+    assert.equal(result.states.find((s) => s.room === 6 && s.gems === 0) !== undefined, true, "it was not already picked up on arrival");
   });
 });

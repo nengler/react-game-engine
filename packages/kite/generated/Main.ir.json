@@ -5,36 +5,96 @@
   "components": [
     {
       "kind": "Component",
-      "name": "Main",
+      "name": "Play",
       "span": {
         "fileName": "packages/kite/src/Main.tsx",
-        "start": 247,
-        "end": 821,
-        "line": 7,
+        "start": 440,
+        "end": 1729,
+        "line": 10,
         "column": 1
       },
       "hooks": [
         {
           "kind": "UseState",
-          "state": "Main.originX",
+          "state": "Play.originX",
           "setterName": null,
           "span": {
             "fileName": "packages/kite/src/Main.tsx",
-            "start": 288,
-            "end": 323,
-            "line": 8,
+            "start": 466,
+            "end": 501,
+            "line": 11,
             "column": 9
           }
         },
         {
           "kind": "UseState",
-          "state": "Main.originY",
+          "state": "Play.originY",
           "setterName": null,
           "span": {
             "fileName": "packages/kite/src/Main.tsx",
-            "start": 333,
-            "end": 368,
-            "line": 9,
+            "start": 511,
+            "end": 546,
+            "line": 12,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Play.room",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Main.tsx",
+            "start": 556,
+            "end": 585,
+            "line": 13,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Play.deaths",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Main.tsx",
+            "start": 595,
+            "end": 628,
+            "line": 14,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Play.gems",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Main.tsx",
+            "start": 638,
+            "end": 667,
+            "line": 15,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Play.deathCount",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Main.tsx",
+            "start": 677,
+            "end": 718,
+            "line": 16,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Play.dead",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Main.tsx",
+            "start": 728,
+            "end": 757,
+            "line": 17,
             "column": 9
           }
         }
@@ -42,7 +102,7 @@
       "state": [
         {
           "kind": "State",
-          "id": "Main.originX",
+          "id": "Play.originX",
           "name": "originX",
           "type": {
             "kind": "Primitive",
@@ -56,7 +116,7 @@
         },
         {
           "kind": "State",
-          "id": "Main.originY",
+          "id": "Play.originY",
           "name": "originY",
           "type": {
             "kind": "Primitive",
@@ -67,6 +127,701 @@
             "value": 0
           },
           "globalKey": "originY"
+        },
+        {
+          "kind": "State",
+          "id": "Play.room",
+          "name": "room",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "globalKey": "room"
+        },
+        {
+          "kind": "State",
+          "id": "Play.deaths",
+          "name": "deaths",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "globalKey": "deaths"
+        },
+        {
+          "kind": "State",
+          "id": "Play.gems",
+          "name": "gems",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "globalKey": "gems"
+        },
+        {
+          "kind": "State",
+          "id": "Play.deathCount",
+          "name": "deathCount",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "globalKey": "deathCount"
+        },
+        {
+          "kind": "State",
+          "id": "Play.dead",
+          "name": "dead",
+          "type": {
+            "kind": "Primitive",
+            "name": "boolean"
+          },
+          "initialValue": {
+            "kind": "BooleanLiteral",
+            "value": false
+          },
+          "globalKey": "dead"
+        }
+      ],
+      "refs": [],
+      "sounds": [],
+      "props": [],
+      "propsType": null,
+      "isDefaultExport": false,
+      "isExported": false,
+      "acceptsChildren": false,
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Entity"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Play"
+            }
+          }
+        ],
+        "transform": [],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Play/0",
+              "fieldName": "level",
+              "component": {
+                "kind": "Imported",
+                "name": "Level",
+                "module": "./Level.tsx",
+                "isDefault": false
+              },
+              "props": [],
+              "transform": [],
+              "children": [],
+              "span": {
+                "fileName": "packages/kite/src/Main.tsx",
+                "start": 802,
+                "end": 811,
+                "line": 21,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Play/1",
+              "fieldName": "gem",
+              "component": {
+                "kind": "Imported",
+                "name": "Gem",
+                "module": "./Gem.tsx",
+                "isDefault": false
+              },
+              "props": [],
+              "transform": [
+                {
+                  "kind": "StaticProp",
+                  "name": "x",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 1542
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "y",
+                  "value": {
+                    "kind": "Unary",
+                    "operator": "-",
+                    "operand": {
+                      "kind": "NumberLiteral",
+                      "value": 330
+                    }
+                  }
+                }
+              ],
+              "children": [],
+              "span": {
+                "fileName": "packages/kite/src/Main.tsx",
+                "start": 818,
+                "end": 858,
+                "line": 22,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Play/2",
+              "fieldName": "camera",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Camera"
+              },
+              "props": [
+                {
+                  "kind": "DynamicProp",
+                  "name": "bounds",
+                  "value": {
+                    "kind": "ArrayLiteral",
+                    "elements": [
+                      {
+                        "spread": false,
+                        "value": {
+                          "kind": "StateRead",
+                          "state": "Play.originX"
+                        }
+                      },
+                      {
+                        "spread": false,
+                        "value": {
+                          "kind": "StateRead",
+                          "state": "Play.originY"
+                        }
+                      },
+                      {
+                        "spread": false,
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 320
+                        }
+                      },
+                      {
+                        "spread": false,
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 180
+                        }
+                      }
+                    ]
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Play.originX"
+                    },
+                    {
+                      "kind": "State",
+                      "state": "Play.originY"
+                    }
+                  ]
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "slide",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 0.4
+                  }
+                },
+                {
+                  "kind": "DynamicProp",
+                  "name": "shake",
+                  "value": {
+                    "kind": "StateRead",
+                    "state": "Play.deathCount"
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Play.deathCount"
+                    }
+                  ]
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "shakeStrength",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 3
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "shakeDuration",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 0.25
+                  }
+                }
+              ],
+              "transform": [],
+              "children": [
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Play/2/0",
+                    "fieldName": "player",
+                    "component": {
+                      "kind": "Imported",
+                      "name": "Player",
+                      "module": "./Player.tsx",
+                      "isDefault": false
+                    },
+                    "props": [],
+                    "transform": [],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 1105,
+                      "end": 1115,
+                      "line": 25,
+                      "column": 9
+                    }
+                  }
+                }
+              ],
+              "span": {
+                "fileName": "packages/kite/src/Main.tsx",
+                "start": 980,
+                "end": 1131,
+                "line": 24,
+                "column": 7
+              }
+            }
+          },
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Play/3",
+              "fieldName": "hud",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Hud"
+              },
+              "props": [],
+              "transform": [],
+              "children": [
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Play/3/0",
+                    "fieldName": "text",
+                    "component": {
+                      "kind": "Intrinsic",
+                      "name": "Text"
+                    },
+                    "props": [
+                      {
+                        "kind": "StaticProp",
+                        "name": "font",
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "font.png"
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "size",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 8
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "color",
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "#8e9ac2"
+                        }
+                      },
+                      {
+                        "kind": "DynamicProp",
+                        "name": "text",
+                        "value": {
+                          "kind": "TemplateLiteral",
+                          "quasis": [
+                            "",
+                            "/8"
+                          ],
+                          "expressions": [
+                            {
+                              "kind": "Binary",
+                              "operator": "+",
+                              "left": {
+                                "kind": "StateRead",
+                                "state": "Play.room"
+                              },
+                              "right": {
+                                "kind": "NumberLiteral",
+                                "value": 1
+                              }
+                            }
+                          ]
+                        },
+                        "dependencies": [
+                          {
+                            "kind": "State",
+                            "state": "Play.room"
+                          }
+                        ]
+                      }
+                    ],
+                    "transform": [
+                      {
+                        "kind": "StaticProp",
+                        "name": "x",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 6
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "y",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 5
+                        }
+                      }
+                    ],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 1152,
+                      "end": 1265,
+                      "line": 28,
+                      "column": 9
+                    }
+                  }
+                },
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Play/3/1",
+                    "fieldName": "text2",
+                    "component": {
+                      "kind": "Intrinsic",
+                      "name": "Text"
+                    },
+                    "props": [
+                      {
+                        "kind": "StaticProp",
+                        "name": "font",
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "font.png"
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "size",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 8
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "color",
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "#ff7a59"
+                        }
+                      },
+                      {
+                        "kind": "DynamicProp",
+                        "name": "text",
+                        "value": {
+                          "kind": "TemplateLiteral",
+                          "quasis": [
+                            "X",
+                            ""
+                          ],
+                          "expressions": [
+                            {
+                              "kind": "StateRead",
+                              "state": "Play.deaths"
+                            }
+                          ]
+                        },
+                        "dependencies": [
+                          {
+                            "kind": "State",
+                            "state": "Play.deaths"
+                          }
+                        ]
+                      }
+                    ],
+                    "transform": [
+                      {
+                        "kind": "StaticProp",
+                        "name": "x",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 270
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "y",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 5
+                        }
+                      }
+                    ],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 1274,
+                      "end": 1386,
+                      "line": 31,
+                      "column": 9
+                    }
+                  }
+                },
+                {
+                  "kind": "ConditionalChild",
+                  "condition": {
+                    "kind": "Binary",
+                    "operator": ">",
+                    "left": {
+                      "kind": "StateRead",
+                      "state": "Play.gems"
+                    },
+                    "right": {
+                      "kind": "NumberLiteral",
+                      "value": 0
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Play.gems"
+                    }
+                  ],
+                  "element": {
+                    "kind": "Element",
+                    "id": "Play/3/2",
+                    "fieldName": "text3",
+                    "component": {
+                      "kind": "Intrinsic",
+                      "name": "Text"
+                    },
+                    "props": [
+                      {
+                        "kind": "StaticProp",
+                        "name": "font",
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "font.png"
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "size",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 8
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "color",
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "#7de3ff"
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "text",
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "GEM"
+                        }
+                      }
+                    ],
+                    "transform": [
+                      {
+                        "kind": "StaticProp",
+                        "name": "x",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 40
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "y",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 5
+                        }
+                      }
+                    ],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 1420,
+                      "end": 1529,
+                      "line": 35,
+                      "column": 11
+                    }
+                  }
+                },
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Play/3/3",
+                    "fieldName": "fade",
+                    "component": {
+                      "kind": "Intrinsic",
+                      "name": "Fade"
+                    },
+                    "props": [
+                      {
+                        "kind": "DynamicProp",
+                        "name": "on",
+                        "value": {
+                          "kind": "StateRead",
+                          "state": "Play.dead"
+                        },
+                        "dependencies": [
+                          {
+                            "kind": "State",
+                            "state": "Play.dead"
+                          }
+                        ]
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "duration",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 0.3
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "color",
+                        "value": {
+                          "kind": "StringLiteral",
+                          "value": "#12151f"
+                        }
+                      }
+                    ],
+                    "transform": [],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 1646,
+                      "end": 1695,
+                      "line": 40,
+                      "column": 9
+                    }
+                  }
+                }
+              ],
+              "span": {
+                "fileName": "packages/kite/src/Main.tsx",
+                "start": 1138,
+                "end": 1708,
+                "line": 27,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/kite/src/Main.tsx",
+          "start": 775,
+          "end": 1722,
+          "line": 20,
+          "column": 5
+        }
+      }
+    },
+    {
+      "kind": "Component",
+      "name": "Main",
+      "span": {
+        "fileName": "packages/kite/src/Main.tsx",
+        "start": 1855,
+        "end": 2447,
+        "line": 47,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Main.screen",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Main.tsx",
+            "start": 1896,
+            "end": 1929,
+            "line": 48,
+            "column": 9
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Main.screen",
+          "name": "screen",
+          "type": {
+            "kind": "Primitive",
+            "name": "string"
+          },
+          "initialValue": {
+            "kind": "StringLiteral",
+            "value": "title"
+          },
+          "globalKey": "screen"
         }
       ],
       "refs": [],
@@ -154,7 +909,7 @@
             "element": {
               "kind": "Element",
               "id": "Main/0",
-              "fieldName": "screen",
+              "fieldName": "screen2",
               "component": {
                 "kind": "Intrinsic",
                 "name": "Screen"
@@ -188,15 +943,33 @@
               "transform": [],
               "children": [
                 {
-                  "kind": "StaticChild",
+                  "kind": "ConditionalChild",
+                  "condition": {
+                    "kind": "Binary",
+                    "operator": "===",
+                    "left": {
+                      "kind": "StateRead",
+                      "state": "Main.screen"
+                    },
+                    "right": {
+                      "kind": "StringLiteral",
+                      "value": "title"
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Main.screen"
+                    }
+                  ],
                   "element": {
                     "kind": "Element",
                     "id": "Main/0/0",
-                    "fieldName": "level",
+                    "fieldName": "title2",
                     "component": {
                       "kind": "Imported",
-                      "name": "Level",
-                      "module": "./Level.tsx",
+                      "name": "Title",
+                      "module": "./Title.tsx",
                       "isDefault": false
                     },
                     "props": [],
@@ -204,10 +977,92 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/kite/src/Main.tsx",
-                      "start": 573,
-                      "end": 582,
-                      "line": 14,
-                      "column": 9
+                      "start": 2157,
+                      "end": 2166,
+                      "line": 53,
+                      "column": 32
+                    }
+                  }
+                },
+                {
+                  "kind": "ConditionalChild",
+                  "condition": {
+                    "kind": "Binary",
+                    "operator": "===",
+                    "left": {
+                      "kind": "StateRead",
+                      "state": "Main.screen"
+                    },
+                    "right": {
+                      "kind": "StringLiteral",
+                      "value": "play"
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Main.screen"
+                    }
+                  ],
+                  "element": {
+                    "kind": "Element",
+                    "id": "Main/0/1",
+                    "fieldName": "play",
+                    "component": {
+                      "kind": "Local",
+                      "name": "Play"
+                    },
+                    "props": [],
+                    "transform": [],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 2198,
+                      "end": 2206,
+                      "line": 54,
+                      "column": 31
+                    }
+                  }
+                },
+                {
+                  "kind": "ConditionalChild",
+                  "condition": {
+                    "kind": "Binary",
+                    "operator": "===",
+                    "left": {
+                      "kind": "StateRead",
+                      "state": "Main.screen"
+                    },
+                    "right": {
+                      "kind": "StringLiteral",
+                      "value": "end"
+                    }
+                  },
+                  "dependencies": [
+                    {
+                      "kind": "State",
+                      "state": "Main.screen"
+                    }
+                  ],
+                  "element": {
+                    "kind": "Element",
+                    "id": "Main/0/2",
+                    "fieldName": "end",
+                    "component": {
+                      "kind": "Imported",
+                      "name": "End",
+                      "module": "./End.tsx",
+                      "isDefault": false
+                    },
+                    "props": [],
+                    "transform": [],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 2237,
+                      "end": 2244,
+                      "line": 55,
+                      "column": 30
                     }
                   }
                 },
@@ -215,101 +1070,45 @@
                   "kind": "StaticChild",
                   "element": {
                     "kind": "Element",
-                    "id": "Main/0/1",
-                    "fieldName": "camera",
+                    "id": "Main/0/3",
+                    "fieldName": "music",
                     "component": {
                       "kind": "Intrinsic",
-                      "name": "Camera"
+                      "name": "Music"
                     },
                     "props": [
                       {
-                        "kind": "DynamicProp",
-                        "name": "bounds",
+                        "kind": "StaticProp",
+                        "name": "src",
                         "value": {
-                          "kind": "ArrayLiteral",
-                          "elements": [
-                            {
-                              "spread": false,
-                              "value": {
-                                "kind": "StateRead",
-                                "state": "Main.originX"
-                              }
-                            },
-                            {
-                              "spread": false,
-                              "value": {
-                                "kind": "StateRead",
-                                "state": "Main.originY"
-                              }
-                            },
-                            {
-                              "spread": false,
-                              "value": {
-                                "kind": "NumberLiteral",
-                                "value": 320
-                              }
-                            },
-                            {
-                              "spread": false,
-                              "value": {
-                                "kind": "NumberLiteral",
-                                "value": 180
-                              }
-                            }
-                          ]
-                        },
-                        "dependencies": [
-                          {
-                            "kind": "State",
-                            "state": "Main.originX"
-                          },
-                          {
-                            "kind": "State",
-                            "state": "Main.originY"
-                          }
-                        ]
+                          "kind": "StringLiteral",
+                          "value": "theme.wav"
+                        }
                       },
                       {
                         "kind": "StaticProp",
-                        "name": "slide",
+                        "name": "volume",
                         "value": {
                           "kind": "NumberLiteral",
-                          "value": 0.4
+                          "value": 0.45
+                        }
+                      },
+                      {
+                        "kind": "StaticProp",
+                        "name": "fade",
+                        "value": {
+                          "kind": "NumberLiteral",
+                          "value": 1
                         }
                       }
                     ],
                     "transform": [],
-                    "children": [
-                      {
-                        "kind": "StaticChild",
-                        "element": {
-                          "kind": "Element",
-                          "id": "Main/0/1/0",
-                          "fieldName": "player",
-                          "component": {
-                            "kind": "Imported",
-                            "name": "Player",
-                            "module": "./Player.tsx",
-                            "isDefault": false
-                          },
-                          "props": [],
-                          "transform": [],
-                          "children": [],
-                          "span": {
-                            "fileName": "packages/kite/src/Main.tsx",
-                            "start": 758,
-                            "end": 768,
-                            "line": 17,
-                            "column": 11
-                          }
-                        }
-                      }
-                    ],
+                    "children": [],
                     "span": {
                       "fileName": "packages/kite/src/Main.tsx",
-                      "start": 689,
-                      "end": 786,
-                      "line": 16,
+                      "start": 2364,
+                      "end": 2412,
+                      "line": 57,
                       "column": 9
                     }
                   }
@@ -317,9 +1116,9 @@
               ],
               "span": {
                 "fileName": "packages/kite/src/Main.tsx",
-                "start": 517,
-                "end": 802,
-                "line": 13,
+                "start": 2078,
+                "end": 2428,
+                "line": 52,
                 "column": 7
               }
             }
@@ -327,9 +1126,9 @@
         ],
         "span": {
           "fileName": "packages/kite/src/Main.tsx",
-          "start": 386,
-          "end": 814,
-          "line": 12,
+          "start": 1947,
+          "end": 2440,
+          "line": 51,
           "column": 5
         }
       }
