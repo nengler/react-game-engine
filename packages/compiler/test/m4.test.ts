@@ -137,7 +137,7 @@ describe("M4: generated code", () => {
     assert.match(code, /constructor\(props: EnemyProps\) \{\n\s+super\(\{ name: "Enemy" \}, props, \{ skin: "red" \}\);/);
     assert.match(code, /updateProps\(next: Partial<EnemyProps>\): void \{\n\s+if \(this\.applyProps\(next, \{ skin: "red" \}\)\) this\.markDirty\(\);/);
     assert.match(code, /this\.props\.onDefeated\?\.\(\)/);
-    assert.match(code, /this\.transform\.x = this\.props\.speed;/);
+    assert.match(code, /const (\$\d+) = this\.props\.speed;[^]*?this\.transform\.x = \1;/);
   });
 
   it("builds a child with all its props and callbacks, and re-sends the dynamic ones in one call", () => {

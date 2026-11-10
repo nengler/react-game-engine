@@ -3,6 +3,7 @@ import { Collider, Entity, Shape, type Contact, type PrefabDefinition } from "@r
 
 export class Coin extends Entity {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   taken: boolean = false;
   #takenNext: boolean = this.taken;
   shape: Shape | null = null;

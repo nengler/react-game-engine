@@ -629,6 +629,41 @@ The bench under the Rust host now uses the host's broad phase, as a player there
 - **The pile hardly changes**, as expected: its time is the `Set` of touching pairs, in script.
 - **How it was checked.** `smoke.c` compares `rge_overlaps` with testing every pair over seven layouts (mixed sizes with boxes that reach through every band, tiles on band edges, a world deeper than the most bands, a far-away box, a row, a pile, a column) and twelve frames each, with the order carried over, a shorter and a longer list, too little room, and rubbish for boxes and order. Seven deliberate bugs in the C each fail it. The Node host's tests do the same through koffi, and run a tracker on the host's broad phase beside one on the script's sweep over 120 frames of moves, adds and removals: the same reports in the same order. The player's tests do that again with a stand-in broad phase that returns its pairs in another order and too many for the first buffer.
 
+### Performance pass three, a component that only moved (2026-11-10)
+
+The last of the three things pass three left. A render stamped the component and every element it owns as changed, so the
+builder made every record under a moving component again, though usually only the component's own transform had changed.
+
+- **A generated `render()` now says what it changed.** It works out each value, and only when one differs from what is there
+  writes them and tells that object: `markMoved()` for a transform or placement, `markChanged()` for anything else. A render
+  that changes nothing that is drawn reports nothing, so the player keeps everything it drew. Generated classes declare
+  `reportsChanges = true`; for any other class a render still counts as a change of everything it owns, as before.
+- **`markMoved` is a new, narrower stamp.** It stamps the object's own transform, and the content of its ancestors (something
+  under them moved), but not the object's own content (`GameObject.contentChangedAt`). A hand-written object moved from
+  outside a render may call it instead of `markChanged`.
+- **The builder moves a block of records.** When everything an object and its subtree wrote is at the object's own world
+  transform (a component with plain shapes, sprites and colliders, a `DrawInfo` it marks `flat`), and only that transform
+  changed, last frame's records are copied with the new transform written into each, and its colliders become new entries at
+  that transform, so the collision tracker still tests them. Anything else (a text, which may be shifted inside its width, a
+  child placed off the component's origin, a z, something the walk must see) is drawn the long way, as before.
+
+Main against this, alternately, the middle of three (2,000 objects, QuickJS):
+
+| Scene | Walk, before | Walk, after | Whole frame, before | Whole frame, after |
+| --- | --- | --- | --- | --- |
+| moved by state | 4.9 ms | 3.9 ms | 7.7 ms | 6.0 ms |
+| moved by state, each with a collider | 7.7 ms | 5.3 ms | 11.9 ms | 10.0 ms |
+| still, each with a collider; 20 moving | within noise | | | |
+
+- **The 10 ms target** for 2,000 state-driven objects with colliders is now at the line on this VM (about 10 ms, from 27 ms at the start of pass three).
+- **How it was checked.** The runtime's stamps are tested for each kind of report. Generated components are compiled, type-checked
+  and run, and their stamps checked for a move, a render that changes nothing, a change of an element, of a root prop and of one
+  value of several. The builder is run with `retain: "check"` (every frame built again from nothing and compared) over turned,
+  flipped, recoloured, offset, z-raised, nested and relabelled components, components that are themselves a sprite or a text,
+  and 160 random frames of moves, changes, adds and removes, with the collision tracker beside a full sweep. The demo plays a
+  scripted minute under the same check. Of 27 deliberate bugs, 26 fail a test; the 27th (marking a subtree with something the
+  walk must see as movable) cannot change what is drawn, because the copy checks for a z again when it copies.
+
 ## Later (not scheduled)
 
 | Idea | Notes |

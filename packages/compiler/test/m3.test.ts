@@ -127,8 +127,8 @@ describe("M3: generated code", () => {
     assert.match(constructor, /this\.transform\.scaleX = 2;/);
     assert.match(constructor, /this\.entity\.transform\.y = 4;\n\s*this\.addChild\(this\.entity\);/, "a child's transform is set before it is attached");
     const render = code.slice(code.indexOf("override render"));
-    assert.match(render, /this\.transform\.x = this\.x;/);
-    assert.match(render, /this\.transform\.rotation = \(?this\.x \/ 100\)?;/);
+    assert.match(render, /const (\$\d+) = this\.x;[^]*?this\.transform\.x = \1;/);
+    assert.match(render, /const (\$\d+) = \(?this\.x \/ 100\)?;[^]*?this\.transform\.rotation = \1;/);
     assert.doesNotMatch(render, /transform\.y/, "static fields are not re-applied");
   });
 

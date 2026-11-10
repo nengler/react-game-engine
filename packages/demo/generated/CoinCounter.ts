@@ -4,6 +4,7 @@ import { useGame } from "../src/GameState.ts";
 
 export class CoinCounter extends Text {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   coins: number = useGame.store.get<number>("stats.coins");
   override readonly gameStateStore = useGame.store;
   override readonly gameStateKeys: readonly string[] = ["stats.coins"];
@@ -19,7 +20,11 @@ export class CoinCounter extends Text {
   }
 
   override render(): void {
-    this.text = `Coins: ${this.coins}`;
+    const $1 = `Coins: ${this.coins}`;
+    if (this.text !== $1) {
+      this.text = $1;
+      this.markChanged();
+    }
   }
 }
 

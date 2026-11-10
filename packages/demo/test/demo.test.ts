@@ -20,11 +20,11 @@ interface Run {
 }
 
 /** Run the demo against a recording backend: scripted input, no window. `steps` frames are stepped. */
-function play(inputs: readonly InputFrame[], steps: number): Run {
+function play(inputs: readonly InputFrame[], steps: number, retain: boolean | "check" = true): Run {
   const backend = new RecordingBackend({ missingTextures: ["assets/beacon-gone.png"] });
   const warnings: string[] = [];
   for (const input of inputs) backend.queueInput(input);
-  const player = createPlayer(backend, { ...gameConfig, warn: (m) => warnings.push(m) });
+  const player = createPlayer(backend, { ...gameConfig, retain, warn: (m) => warnings.push(m) });
   for (let i = 0; i < steps; i++) player.step();
   player.close();
   return { backend, player, warnings };
@@ -179,6 +179,31 @@ describe("demo: collisions", () => {
     close(player(off).x, 0, "walked back");
     assert.equal(player(off).color, "#ffd700ff", "gold again, once the exit event fired");
     assert.deepEqual(coinsText(off), ["Coins: 1"], "the coin was collected on the way, and not again on the way back");
+  });
+});
+
+describe("demo: what is kept from the frame before", () => {
+  // The components say what each render changed (a move, a colour, a text), and the player keeps the rest of what it drew.
+  // `retain: "check"` builds every frame again from nothing and throws if the two differ, so this fails if a generated
+  // `render()` changes something it does not report.
+  const LEFT: InputFrame = { dt: 0.1, down: ["ArrowLeft"] };
+  const CLICK: InputFrame = { dt: 0.1, mouse: { x: 60, y: 60 }, pressed: ["MouseLeft"] };
+  const script: InputFrame[] = [
+    ...Array.from({ length: 6 }, () => MOVE_RIGHT), // over the coin and onto the spikes
+    IDLE, IDLE, CLICK, IDLE, CLICK, CLICK, IDLE,
+    ...Array.from({ length: 8 }, () => LEFT), // back off the spikes, and past the start
+    { dt: 0.1, down: ["ArrowDown", "D"] }, { dt: 0.1, down: ["W"] },
+    ...Array.from({ length: 12 }, () => IDLE), // the beacon keeps cycling while nothing else moves
+  ];
+
+  it("draws every frame of a played minute exactly as a full rebuild does", () => {
+    const checked = play(script, script.length + 1, "check");
+    const rebuilt = play(script, script.length + 1, false);
+    assert.equal(checked.backend.frames.length, script.length + 1);
+    checked.backend.frames.forEach((frame, i) => assert.deepEqual(frame, rebuilt.backend.frames[i], `frame ${i}`));
+    assert.deepEqual(checked.backend.plays, rebuilt.backend.plays);
+    assert.deepEqual(coinsText(checked), ["Coins: 1"]);
+    assert.deepEqual(texts(checked), ["Clicks: 3"]);
   });
 });
 

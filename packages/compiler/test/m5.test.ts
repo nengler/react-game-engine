@@ -216,7 +216,7 @@ describe("M5a: generated code", () => {
     assert.match(code, /const next = this\.enemies\.map\(\(e\) => \(\{ \.\.\.e, hp: e\.hp - dt \}\)\)\.filter\(\(e\) => e\.hp > 0\);/);
     assert.match(code, /this\.setWeakest\(next\.find\(\(e\) => e\.hp < 1\)\?\.id \?\? ""\);/);
     assert.match(code, /onHit: \(id\) => \{ this\.setEnemies\(this\.enemies\.filter\(\(e\) => e\.id !== id\)\); \}/);
-    assert.match(code, /this\.sprite\.image = \(this\.enemies\.length >= 3\) \? "full\.png" : "spawning\.png";/);
+    assert.match(code, /const (\$\d+) = \(this\.enemies\.length >= 3\) \? "full\.png" : "spawning\.png";[^]*?this\.sprite\.image = \1;/);
   });
 
   it("parenthesises an object returned by an updater, and an array type of a union", () => {

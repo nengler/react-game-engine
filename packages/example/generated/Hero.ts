@@ -3,6 +3,7 @@ import { Collider, Entity, Sound, Sprite, clamp, type InputState } from "@rge/ru
 
 export class Hero extends Entity {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   health: number = 100;
   #healthNext: number = this.health;
   poisoned: boolean = false;
@@ -77,6 +78,10 @@ export class Hero extends Entity {
   }
 
   override render(): void {
-    this.sprite.image = this.poisoned ? "poisoned.png" : "normal.png";
+    const $1 = this.poisoned ? "poisoned.png" : "normal.png";
+    if (this.sprite.image !== $1) {
+      this.sprite.image = $1;
+      this.sprite.markChanged();
+    }
   }
 }

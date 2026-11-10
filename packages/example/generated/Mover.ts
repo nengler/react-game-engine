@@ -3,6 +3,7 @@ import { Entity, Sprite } from "@rge/runtime";
 
 export class Mover extends Entity {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   x: number = 0;
   #xNext: number = this.x;
   readonly sprite: Sprite = new Sprite({ image: (this.x > 100) ? "run.png" : "idle.png" });
@@ -35,7 +36,15 @@ export class Mover extends Entity {
   }
 
   override render(): void {
-    this.transform.x = this.x;
-    this.sprite.image = (this.x > 100) ? "run.png" : "idle.png";
+    const $1 = this.x;
+    if (this.transform.x !== $1) {
+      this.transform.x = $1;
+      this.markMoved();
+    }
+    const $2 = (this.x > 100) ? "run.png" : "idle.png";
+    if (this.sprite.image !== $2) {
+      this.sprite.image = $2;
+      this.sprite.markChanged();
+    }
   }
 }

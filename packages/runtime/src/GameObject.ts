@@ -63,6 +63,18 @@ export class GameObject<P extends object = {}> {
    */
   selfChangedAt = 0;
   subtreeChangedAt = 0;
+  /**
+   * When what this object draws last changed apart from where it is: its own change other than a move (see `markMoved`), or any
+   * change at all to something under it. An object whose stamps are newer than this one only moved, and the player can then
+   * reuse what it drew for it with the new position.
+   */
+  contentChangedAt = 0;
+  /**
+   * Whether this object's `render()` reports each change it makes itself, with `markMoved` and `markChanged` on the objects it
+   * wrote to. Generated components do, and set this; for any other class a render is taken to have changed the object and
+   * every element it owns.
+   */
+  protected readonly reportsChanges: boolean = false;
   /** The player's per-object bookkeeping for reusing draw records. Owned by `FrameBuilder`; nothing else reads or writes it. */
   drawCache: object | null = null;
   /** What this object's class is to the player's frame builder (a sprite, a collider, …), kept here once it has asked so the walk reads a field; -1 until then. Owned by `FrameBuilder`. */
@@ -279,8 +291,31 @@ export class GameObject<P extends object = {}> {
     if (world === null) return; // nothing has been drawn from a tree that is not in a world, so nothing is reused
     const serial = world.serial;
     this.selfChangedAt = serial;
-    // Stop at the first ancestor already stamped with this serial: everything above it was stamped with it.
-    for (let object: GameObject | null = this; object !== null && object.subtreeChangedAt !== serial; object = object.parent) object.subtreeChangedAt = serial;
+    this.subtreeChangedAt = serial;
+    // Stop at the first object whose content is already stamped with this serial: everything above it was stamped with it.
+    for (let object: GameObject | null = this; object !== null && object.contentChangedAt !== serial; object = object.parent) {
+      object.contentChangedAt = serial;
+      object.subtreeChangedAt = serial;
+    }
+  }
+
+  /**
+   * Say that this object's own `transform` or `placement` has changed, and nothing else about it: the player draws it and what
+   * is under it at the new place, and where it can, reuses the rest of what it drew for them last frame. A generated `render()`
+   * calls this when it writes a different value to the component's transform; code that moves an object by hand, outside a
+   * render, may call it instead of `markChanged`, which is always right but makes the player draw the subtree again.
+   */
+  markMoved(): void {
+    const world = this.world;
+    if (world === null) return;
+    const serial = world.serial;
+    this.selfChangedAt = serial;
+    this.subtreeChangedAt = serial;
+    // For everything above, something under it changed. (An ancestor that only moved itself this frame is passed through: its content had not changed until now.)
+    for (let object = this.parent; object !== null && object.contentChangedAt !== serial; object = object.parent) {
+      object.contentChangedAt = serial;
+      object.subtreeChangedAt = serial;
+    }
   }
 
   /** Request a render pass for this object. */
@@ -297,13 +332,8 @@ export class GameObject<P extends object = {}> {
    */
   runRender(): void {
     this.#dirty = false;
-    // A render writes this object's draw state and that of the elements it owns, which is what `markChanged` does, written out because this runs for every render.
-    const world = this.world;
-    if (world !== null) {
-      const serial = world.serial;
-      this.selfChangedAt = serial;
-      for (let object: GameObject | null = this; object !== null && object.subtreeChangedAt !== serial; object = object.parent) object.subtreeChangedAt = serial;
-    }
+    // A render may write this object's draw state and that of the elements it owns. Unless it says which itself, all of them changed.
+    if (!this.reportsChanges) this.markChanged();
     this.commitState();
     this.render();
   }

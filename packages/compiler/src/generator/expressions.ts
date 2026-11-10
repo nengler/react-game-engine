@@ -17,6 +17,8 @@ export class ExpressionEmitter {
   protected itemLookup: { readonly id: LocalId; readonly text: string } | null = null;
   /** Greater than zero while emitting a callback prop's body. */
   protected callbackDepth = 0;
+  /** How many temporaries the `render()` being written has used (see `emitReportedWrites`). */
+  protected renderTemps = 0;
   /** The imported game state (`useGame`), when the module uses one. */
   protected readonly storeName: string;
 

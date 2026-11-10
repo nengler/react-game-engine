@@ -1,5 +1,5 @@
 // Layer 2 of ComponentGenerator: the element tree, keyed lists, mounts and transforms, and the code that builds and updates each element.
-import { assertNever, type ChildIR, type ElementIR, type PropIR, type KeyedListChildIR, functionReadsParam } from "../ir/types.ts";
+import { assertNever, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam } from "../ir/types.ts";
 import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, transformTarget, typeName, propertyKey, access } from "./helpers.ts";
 import { HandlerEmitter } from "./handlers.ts";
 
@@ -92,10 +92,30 @@ export class ElementEmitter extends HandlerEmitter {
     this.emitChildUpdates(el.children, mountOf(el, ref), presence);
   }
 
+  /**
+   * What a render writes to one object: each value is worked out, and only if one differs from what is there are they
+   * written and the object told, once (`markChanged`, or `markMoved` for its transform). So a render that changes nothing
+   * that is drawn reports nothing, and the player keeps what it drew; one that only moves the component reports only that.
+   * The temporaries are numbered through the whole `render()`, so none can hide another.
+   */
+  protected emitReportedWrites(writes: readonly { readonly target: string; readonly value: ExprIR }[], report: string): void {
+    if (writes.length === 0) return;
+    const w = this.w;
+    const names = writes.map((write) => {
+      const name = `$${++this.renderTemps}`;
+      w.line(`const ${name} = ${this.expr(write.value, true)};`);
+      return name;
+    });
+    w.block(`if (${writes.map((write, i) => `${write.target} !== ${names[i]}`).join(" || ")})`, () => {
+      writes.forEach((write, i) => w.line(`${write.target} = ${names[i]};`));
+      w.line(`${report};`);
+    });
+  }
+
   protected emitPropUpdates(el: ElementIR, ref: string): void {
     const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
     if (el.component.kind === "Intrinsic") {
-      for (const prop of dynamic) this.w.line(`${access(ref, prop.name)} = ${this.expr(prop.value, true)};`);
+      this.emitReportedWrites(dynamic.map((prop) => ({ target: access(ref, prop.name), value: prop.value })), `${ref}.markChanged()`);
     } else if (dynamic.length > 0) {
       // A component takes all its changed props in one call, which marks it dirty once.
       this.w.line(`${ref}.updateProps(${this.propsObject(dynamic)});`);
@@ -217,11 +237,10 @@ export class ElementEmitter extends HandlerEmitter {
     }
   }
 
-  /** Transform fields that read state are re-applied on render, like any dynamic prop. */
+  /** Transform fields that read state are re-applied on render, like any dynamic prop; a change to them is a move of that object. */
   protected emitDynamicTransform(transform: readonly PropIR[], ref: string, target: "transform" | "placement"): void {
-    for (const p of transform) {
-      if (p.kind === "DynamicProp") this.w.line(`${ref}.${target}.${p.name} = ${this.expr(p.value, true)};`);
-    }
+    const dynamic = transform.filter((p) => p.kind === "DynamicProp");
+    this.emitReportedWrites(dynamic.map((p) => ({ target: `${ref}.${target}.${p.name}`, value: p.value })), `${ref}.markMoved()`);
   }
 
   protected hostHasDynamicProps(): boolean {

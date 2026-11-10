@@ -34,6 +34,7 @@ import { Entity, Sprite } from "@rge/runtime";
 
 export class Player extends Entity {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   health: number = 100;
   #healthNext: number = this.health;
   readonly sprite: Sprite = new Sprite({ image: "player.png" });
@@ -72,6 +73,7 @@ export class Player extends Entity {
 
 export class WarningIcon extends Entity {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
 
   constructor() {
     super({ name: "Warning" });
@@ -122,7 +124,11 @@ export class WarningIcon extends Entity {
         return <Entity><Sprite image={health > 50 ? "normal.png" : "hurt.png"} /></Entity>;
       }
     `);
-    assert.match(code, /override render\(\): void \{\n {4}this\.sprite\.image = \(this\.health > 50\) \? "normal\.png" : "hurt\.png";\n {2}\}/);
+    // Written only when it differs, and then the sprite is told: a render that changes nothing reports nothing.
+    assert.match(
+      code,
+      /override render\(\): void \{\n {4}const \$1 = \(this\.health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/,
+    );
     // The sprite is only ever constructed in its field initialiser.
     assert.equal(code.match(/new Sprite/g)?.length, 1);
   });
@@ -135,8 +141,8 @@ export class WarningIcon extends Entity {
         return <Entity><Collider width={(a + b) * 2} height={a + b * 2} /></Entity>;
       }
     `);
-    assert.match(code, /this\.collider\.width = \(this\.a \+ this\.b\) \* 2;/);
-    assert.match(code, /this\.collider\.height = this\.a \+ \(this\.b \* 2\);/);
+    assert.match(code, /const (\$\d+) = \(this\.a \+ this\.b\) \* 2;[^]*?this\.collider\.width = \1;/);
+    assert.match(code, /const (\$\d+) = this\.a \+ \(this\.b \* 2\);[^]*?this\.collider\.height = \1;/);
   });
 });
 

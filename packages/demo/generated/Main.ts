@@ -10,6 +10,7 @@ import { Spikes } from "./Spikes.ts";
 
 export class Main extends Game {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   clicks: number = 0;
   #clicksNext: number = this.clicks;
   readonly playClick: Sound = new Sound("click.wav");
@@ -67,8 +68,16 @@ export class Main extends Game {
   }
 
   override render(): void {
-    this.flex.background = (this.clicks >= 3) ? "seagreen" : "slategray";
-    this.text.text = `Clicks: ${this.clicks}`;
+    const $1 = (this.clicks >= 3) ? "seagreen" : "slategray";
+    if (this.flex.background !== $1) {
+      this.flex.background = $1;
+      this.flex.markChanged();
+    }
+    const $2 = `Clicks: ${this.clicks}`;
+    if (this.text.text !== $2) {
+      this.text.text = $2;
+      this.text.markChanged();
+    }
   }
 }
 

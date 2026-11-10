@@ -424,9 +424,12 @@ describe("collisions in the frame loop", () => {
     player.step();
     assert.equal(backend.plays.length, 2, "still overlapping: no new reports");
 
+    // Moved by hand, outside any render, so the player is told: a Hero whose render changes nothing it draws is not drawn again.
     right.placement.x = 100;
+    right.markMoved();
     player.step();
     right.placement.x = 10;
+    right.markMoved();
     player.step();
     assert.equal(backend.plays.length, 4, "met again");
     player.close();

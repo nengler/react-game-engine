@@ -203,6 +203,9 @@ class ComponentGenerator extends ElementEmitter {
       // What a compiled component draws changes only in its constructor, its `render()` and structural changes, which the
       // runtime reports; its hooks only call setters. So the player may reuse its draw records while it stands still (see `FrameBuilder`).
       w.line("static readonly managed = true;");
+      // Its `render()` writes only what differs and says what it wrote to (`markMoved`, `markChanged`), so the runtime does not
+      // take every render for a change: the player keeps what it drew for a render that changed nothing, and for one that only moved it.
+      w.line("protected override readonly reportsChanges = true;");
       // Persistent state.
       for (const s of c.state) {
         if (s.globalKey !== undefined) {
@@ -316,9 +319,9 @@ class ComponentGenerator extends ElementEmitter {
       if (hasRender) {
         w.blank();
         w.block("override render(): void", () => {
-          for (const prop of c.root.props) {
-            if (prop.kind === "DynamicProp") w.line(`${access("this", prop.name)} = ${this.expr(prop.value, true)};`);
-          }
+          this.renderTemps = 0;
+          const dynamic = c.root.props.filter((p) => p.kind === "DynamicProp");
+          this.emitReportedWrites(dynamic.map((prop) => ({ target: access("this", prop.name), value: prop.value })), "this.markChanged()");
           this.emitDynamicTransform(c.root.transform, "this", "transform");
           this.emitChildUpdates(c.root.children, ROOT, "persistent");
         });

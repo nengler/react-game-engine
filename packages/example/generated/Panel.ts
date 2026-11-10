@@ -8,6 +8,7 @@ export interface PanelProps {
 
 export class Panel extends Entity<Omit<PanelProps, "children">> {
   static readonly managed = true;
+  protected override readonly reportsChanges = true;
   readonly sprite: Sprite = new Sprite({ image: (this.props.title === "hud") ? "panel-hud.png" : "panel.png" });
   readonly entity: Entity = new Entity({ name: "Content" });
 
@@ -27,7 +28,11 @@ export class Panel extends Entity<Omit<PanelProps, "children">> {
   }
 
   override render(): void {
-    this.sprite.image = (this.props.title === "hud") ? "panel-hud.png" : "panel.png";
+    const $1 = (this.props.title === "hud") ? "panel-hud.png" : "panel.png";
+    if (this.sprite.image !== $1) {
+      this.sprite.image = $1;
+      this.sprite.markChanged();
+    }
   }
 }
 
