@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "prefabs": {
+    "Level": {
+      "module": "packages/kite/src/Level.tsx",
+      "props": []
+    },
+    "Main": {
+      "module": "packages/kite/src/Main.tsx",
+      "props": []
+    },
+    "Player": {
+      "module": "packages/kite/src/Player.tsx",
+      "props": []
+    }
+  }
+}

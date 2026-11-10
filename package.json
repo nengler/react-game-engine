@@ -10,7 +10,7 @@
   },
   "scripts": {
     "test": "node --test \"packages/*/test/**/*.test.ts\"",
-    "typecheck": "tsc -p tsconfig.json && tsc -p packages/example/tsconfig.json && tsc -p packages/demo/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p packages/example/tsconfig.json && tsc -p packages/demo/tsconfig.json && tsc -p packages/kite/tsconfig.json",
     "native:build": "cmake -S native -B native/build && cmake --build native/build -j",
     "native:build:headless": "cmake -S native -B native/build-headless -DRGE_PLATFORM=Memory && cmake --build native/build-headless -j",
     "native:test": "cmake --build native/build-headless -j && ctest --test-dir native/build-headless --output-on-failure",
@@ -24,6 +24,9 @@
     "demo": "node packages/compiler/src/cli.ts packages/demo/src packages/demo/generated",
     "demo:assets": "node packages/demo/tools/make-assets.ts",
     "play:demo": "cd packages/demo && node ../player-node/src/play.ts main.ts",
+    "kite": "node packages/compiler/src/cli.ts packages/kite/src packages/kite/generated",
+    "play:kite": "cd packages/kite && node ../player-node/src/play.ts main.ts",
+    "check:kite": "node tools/check-game.ts kite",
     "example": "node packages/compiler/src/cli.ts packages/example/src packages/example/generated --scenes packages/example/scenes"
   },
   "devDependencies": {

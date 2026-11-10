@@ -1,0 +1,318 @@
+{
+  "kind": "Module",
+  "sourceFile": "packages/kite/src/Main.tsx",
+  "typeDeclarations": [],
+  "components": [
+    {
+      "kind": "Component",
+      "name": "Main",
+      "span": {
+        "fileName": "packages/kite/src/Main.tsx",
+        "start": 247,
+        "end": 690,
+        "line": 7,
+        "column": 1
+      },
+      "hooks": [
+        {
+          "kind": "UseState",
+          "state": "Main.originX",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Main.tsx",
+            "start": 288,
+            "end": 323,
+            "line": 8,
+            "column": 9
+          }
+        },
+        {
+          "kind": "UseState",
+          "state": "Main.originY",
+          "setterName": null,
+          "span": {
+            "fileName": "packages/kite/src/Main.tsx",
+            "start": 333,
+            "end": 368,
+            "line": 9,
+            "column": 9
+          }
+        }
+      ],
+      "state": [
+        {
+          "kind": "State",
+          "id": "Main.originX",
+          "name": "originX",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "globalKey": "originX"
+        },
+        {
+          "kind": "State",
+          "id": "Main.originY",
+          "name": "originY",
+          "type": {
+            "kind": "Primitive",
+            "name": "number"
+          },
+          "initialValue": {
+            "kind": "NumberLiteral",
+            "value": 0
+          },
+          "globalKey": "originY"
+        }
+      ],
+      "refs": [],
+      "sounds": [],
+      "props": [],
+      "propsType": null,
+      "isDefaultExport": true,
+      "isExported": true,
+      "acceptsChildren": false,
+      "root": {
+        "kind": "HostElement",
+        "component": {
+          "kind": "Intrinsic",
+          "name": "Game"
+        },
+        "props": [
+          {
+            "kind": "StaticProp",
+            "name": "name",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Main"
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "state",
+            "value": {
+              "kind": "StoreRef"
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "title",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "Kite"
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "width",
+            "value": {
+              "kind": "NumberLiteral",
+              "value": 960
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "height",
+            "value": {
+              "kind": "NumberLiteral",
+              "value": 540
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "background",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "#12151f"
+            }
+          },
+          {
+            "kind": "StaticProp",
+            "name": "assets",
+            "value": {
+              "kind": "StringLiteral",
+              "value": "assets"
+            }
+          }
+        ],
+        "transform": [],
+        "children": [
+          {
+            "kind": "StaticChild",
+            "element": {
+              "kind": "Element",
+              "id": "Main/0",
+              "fieldName": "screen",
+              "component": {
+                "kind": "Intrinsic",
+                "name": "Screen"
+              },
+              "props": [
+                {
+                  "kind": "StaticProp",
+                  "name": "width",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 320
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "height",
+                  "value": {
+                    "kind": "NumberLiteral",
+                    "value": 180
+                  }
+                },
+                {
+                  "kind": "StaticProp",
+                  "name": "fit",
+                  "value": {
+                    "kind": "StringLiteral",
+                    "value": "integer"
+                  }
+                }
+              ],
+              "transform": [],
+              "children": [
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Main/0/0",
+                    "fieldName": "level",
+                    "component": {
+                      "kind": "Imported",
+                      "name": "Level",
+                      "module": "./Level.tsx",
+                      "isDefault": false
+                    },
+                    "props": [],
+                    "transform": [],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 558,
+                      "end": 567,
+                      "line": 14,
+                      "column": 9
+                    }
+                  }
+                },
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Main/0/1",
+                    "fieldName": "player",
+                    "component": {
+                      "kind": "Imported",
+                      "name": "Player",
+                      "module": "./Player.tsx",
+                      "isDefault": false
+                    },
+                    "props": [],
+                    "transform": [],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 576,
+                      "end": 586,
+                      "line": 15,
+                      "column": 9
+                    }
+                  }
+                },
+                {
+                  "kind": "StaticChild",
+                  "element": {
+                    "kind": "Element",
+                    "id": "Main/0/2",
+                    "fieldName": "camera",
+                    "component": {
+                      "kind": "Intrinsic",
+                      "name": "Camera"
+                    },
+                    "props": [],
+                    "transform": [
+                      {
+                        "kind": "DynamicProp",
+                        "name": "x",
+                        "value": {
+                          "kind": "Binary",
+                          "operator": "+",
+                          "left": {
+                            "kind": "StateRead",
+                            "state": "Main.originX"
+                          },
+                          "right": {
+                            "kind": "NumberLiteral",
+                            "value": 160
+                          }
+                        },
+                        "dependencies": [
+                          {
+                            "kind": "State",
+                            "state": "Main.originX"
+                          }
+                        ]
+                      },
+                      {
+                        "kind": "DynamicProp",
+                        "name": "y",
+                        "value": {
+                          "kind": "Binary",
+                          "operator": "+",
+                          "left": {
+                            "kind": "StateRead",
+                            "state": "Main.originY"
+                          },
+                          "right": {
+                            "kind": "NumberLiteral",
+                            "value": 90
+                          }
+                        },
+                        "dependencies": [
+                          {
+                            "kind": "State",
+                            "state": "Main.originY"
+                          }
+                        ]
+                      }
+                    ],
+                    "children": [],
+                    "span": {
+                      "fileName": "packages/kite/src/Main.tsx",
+                      "start": 595,
+                      "end": 655,
+                      "line": 16,
+                      "column": 9
+                    }
+                  }
+                }
+              ],
+              "span": {
+                "fileName": "packages/kite/src/Main.tsx",
+                "start": 502,
+                "end": 671,
+                "line": 13,
+                "column": 7
+              }
+            }
+          }
+        ],
+        "span": {
+          "fileName": "packages/kite/src/Main.tsx",
+          "start": 386,
+          "end": 683,
+          "line": 12,
+          "column": 5
+        }
+      }
+    }
+  ]
+}
