@@ -1,17 +1,17 @@
 /**
  * Build a game as a folder you can hand to someone: the native executable, the bundled game and its assets.
  *
- *   npm run package [-- <entry.ts> <name> <assets-dir>] [--headless] [--engine quickjs|node]
+ *   npm run package [-- <entry.ts> <name> <assets-dir>] [--headless] [--engine node|quickjs]
  *
  * The defaults package the demo. `--headless` builds on raylib's software renderer (no window; for CI) instead of a
  * real window. `--engine` picks what runs the game's script:
  *
- * - `quickjs` (the default): `dist/demo/` holds `demo` (the Rust host, which with no arguments runs the `game.js`
- *   beside it), `game.js` and `assets/`. A few MB; an interpreter, so it goes where a JIT is not allowed (iOS,
- *   consoles), but script runs 10 to 30 times slower than under V8 (see docs/NATIVE_PLAN.md).
- * - `node`: `dist/demo/` holds `demo` (a Node single executable application: Node's own binary with the bundled game
+ * - `node` (the default): `dist/demo/` holds `demo` (a Node single executable application: Node's own binary with the bundled game
  *   inside it, so V8 and its JIT), `lib/` (librge as a shared library), `node_modules/` (koffi, which loads it) and
  *   `assets/`. About 100 MB, most of it Node; for desktops, where script time matters more than size.
+ * - `quickjs` (the fallback): `dist/demo/` holds `demo` (the Rust host, which with no arguments runs the `game.js`
+ *   beside it), `game.js` and `assets/`. A few MB; an interpreter, so it goes where a JIT is not allowed (iOS,
+ *   consoles), but script runs 10 to 30 times slower than under V8 (see docs/NATIVE_PLAN.md).
  */
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -23,9 +23,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const headless = args.includes("--headless");
 const engineAt = args.indexOf("--engine");
-const engine = engineAt >= 0 ? args[engineAt + 1] : "quickjs";
+const engine = engineAt >= 0 ? args[engineAt + 1] : "node";
 if (engine !== "quickjs" && engine !== "node") {
-  console.error("usage: npm run package [-- <entry.ts> <name> <assets-dir>] [--headless] [--engine quickjs|node]");
+  console.error("usage: npm run package [-- <entry.ts> <name> <assets-dir>] [--headless] [--engine node|quickjs]");
   process.exit(2);
 }
 const positional = args.filter((arg, i) => !arg.startsWith("--") && !(engineAt >= 0 && i === engineAt + 1));
