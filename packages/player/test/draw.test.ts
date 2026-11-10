@@ -380,6 +380,15 @@ describe("FrameBuilder: buffers", () => {
     assert.deepEqual(records[400]?.op === "rect" && [records[400].x, records[400].width], [399, 399]);
   });
 
+  it("keeps a sprite's texture when its record is the one that makes the buffer grow", () => {
+    // Under a z, so each sprite is written by `DrawList.sprite`; 7 doubles each after a view of 7, so some record crosses 1,024.
+    const root = new Entity();
+    root.transform.z = 1;
+    for (let i = 0; i < 200; i++) root.addChild(new Sprite({ image: "a.png" }));
+    const built = new FrameBuilder({ loadTexture: () => 5 }).build(root, 800, 600);
+    for (let at = 7; at < built.list.length; at += 7) assert.equal(built.list.records[at + 6], 5, `the sprite at double ${at}`);
+  });
+
   it("reuses the list between frames without leaking the last frame's records", () => {
     const backend = new RecordingBackend();
     const builder = new FrameBuilder({ loadTexture: () => 0 });
@@ -642,5 +651,99 @@ describe("FrameBuilder: draw order (z)", () => {
     const { records, built } = draw(root);
     assert.deepEqual(order(records), [3, 1, 2]);
     assert.equal(built.list.length, 7 + 3 * 9);
+  });
+});
+
+describe("FrameBuilder: leaves drawn in place", () => {
+  /** Parents of every kind of placement, each with leaves of every kind: plain ones, which the walk deals with in place, and ones it must take the long way. */
+  function scene(seed: number): Entity {
+    let state = seed * 7919;
+    const next = (): number => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+    const move = (object: GameObject, chance: number): void => {
+      if (next() >= chance) return;
+      object.transform.x = next() * 200 - 100;
+      object.transform.y = next() * 200 - 100;
+      if (next() < 0.4) object.transform.rotation = next() * 6;
+      if (next() < 0.4) object.transform.scaleX = next() < 0.3 ? -1 : 0.5 + next() * 2;
+      if (next() < 0.4) object.transform.scaleY = 0.5 + next() * 2;
+      if (next() < 0.15) object.transform.global = true;
+    };
+    const root = new Entity();
+    for (let p = 0; p < 40; p++) {
+      const parent = new Entity();
+      move(parent, 0.9);
+      if (next() < 0.2) parent.placement.x = next() * 50;
+      for (let k = 0; k < 6; k++) {
+        const kind = Math.floor(next() * 9);
+        const leaf: GameObject =
+          kind === 0 ? new Shape({ kind: "rect", width: 1 + next() * 20, height: 1 + next() * 20, color: next() < 0.5 ? "red" : "#0f08" })
+          : kind === 1 ? new Shape({ kind: "circle", width: 8, height: 6, color: "blue" })
+          : kind === 2 ? new Sprite({ image: next() < 0.5 ? "a.png" : "b.png" })
+          : kind === 3 ? new Sprite({ image: next() < 0.5 ? "" : "missing.png" })
+          : kind === 4 ? new AnimatedSprite({ frames: ["f0.png", "f1.png"] })
+          : kind === 5 ? new Collider({ width: 5, height: 7 })
+          : kind === 6 ? new Text({ text: next() < 0.3 ? "" : "hi" })
+          : kind === 7 ? new Pointer({ width: 4, height: 4 })
+          : new Entity();
+        move(leaf, 0.5);
+        if (next() < 0.1) leaf.transform.global = true; // also one that is otherwise untouched: it is at the world's origin
+        if (next() < 0.15) leaf.placement.y = next() * 30;
+        if (next() < 0.1) leaf.placement.global = true;
+        if (next() < 0.1) leaf.layoutX = 3;
+        // Some are not leaves at all.
+        if (next() < 0.15) leaf.addChild(new Shape({ kind: "rect", width: 2, height: 2 }));
+        parent.addChild(leaf);
+      }
+      root.addChild(parent);
+    }
+    return root;
+  }
+
+  it("writes what the general walk writes for them: the same records, texts, colliders and pointers", () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const root = scene(seed);
+      const options = { loadTexture: (path: string): number => (path.includes("missing") ? -1 : path.length), warn: () => {} };
+      const snapshot = (built: ReturnType<FrameBuilder["build"]>) => ({
+        records: [...built.list.records.subarray(0, built.list.length)],
+        texts: [...built.list.texts],
+        colliders: built.colliders.map((entry) => ({ collider: entry.collider, world: { ...entry.world } })),
+        pointers: [...built.pointers],
+      });
+      const inPlace = snapshot(new FrameBuilder(options).build(root, 800, 600));
+      // Under a z nothing is dealt with in place (and with every z the same, nothing is reordered): the general walk.
+      // `global` ignores the z above it, so what is global is given the same z itself.
+      const raise = (object: GameObject): void => {
+        if (object === root || object.transform.global) object.transform.z = 3;
+        else if (object.placement.global) object.placement.z = 3;
+        object.children.forEach(raise);
+      };
+      raise(root);
+      const general = snapshot(new FrameBuilder(options).build(root, 800, 600));
+      assert.ok(inPlace.records.length > 600 && inPlace.colliders.length > 10, `seed ${seed}: the scene draws plenty`);
+      assert.deepEqual(inPlace.records, general.records, `seed ${seed}: records`);
+      assert.deepEqual(inPlace.texts, general.texts, `seed ${seed}: texts`);
+      assert.equal(inPlace.colliders.length, general.colliders.length);
+      inPlace.colliders.forEach((entry, i) => {
+        assert.equal(entry.collider, (general.colliders[i] as (typeof general.colliders)[number]).collider, `seed ${seed}: collider ${i}`);
+        assert.deepEqual(entry.world, (general.colliders[i] as (typeof general.colliders)[number]).world, `seed ${seed}: collider ${i} world`);
+      });
+      assert.deepEqual(inPlace.pointers, general.pointers, `seed ${seed}: pointers`);
+    }
+  });
+
+  it("writes them at worldTransform(), in a world too, where a parent that renders is rebuilt each frame", () => {
+    const root = scene(7);
+    const world = mounted(root);
+    const builder = new FrameBuilder({ loadTexture: (path) => (path.includes("missing") ? -1 : 1), warn: () => {}, retain: "check" });
+    for (let frame = 0; frame < 4; frame++) {
+      // Every parent changed, as when each re-rendered: its leaves are made again, in place.
+      for (const parent of root.children) {
+        parent.transform.x += 1;
+        parent.markChanged();
+      }
+      world.tick(1 / 60);
+      const built = builder.build(world.root, 800, 600);
+      for (const entry of built.colliders) assert.deepEqual({ ...entry.world }, { ...entry.collider.worldTransform() });
+    }
   });
 });

@@ -549,6 +549,44 @@ Same VM and bench file, old and new code run alternately; the middle of three ru
 
 The review also fixed: `console.log` in the Rust host panicking (and ending the game) when stdout is closed, as with `rge-host game.js | head`; the Rust host accepting a keys buffer longer than librge's table (rge.h and protocol.ts drifting apart, which the Node host already refused); librge casting draw-record doubles straight to integers (undefined behaviour in C for NaN or out-of-range values; a bad op now stops the frame, a bad index draws nothing, a bad colour is magenta); frame capture on the OpenGL path copying a screen image whose size need not match the buffer on a high-DPI display; and Shift, Control and Alt reporting a second press when the other side went down while one was held, and a release while still held.
 
+### Performance pass three: the frame where everything moves (2026-11-10)
+
+**Why the two changes before this did nothing for "moved by state, each with a collider".** Both skip work for what stood still. In that scene every component renders every frame, so every draw record is made again, every collider gets a new entry, and the tracker gives up looking only at what moved after an eighth of the entries are new. The frame was the same code as before them, and its 24 ms was the price of each object. Where that went, measured under QuickJS on the same VM (2,000 components, each an `Entity` with a `Shape` and a `Collider`: 6,001 objects):
+
+| Phase | Time | What it was spent on |
+| --- | --- | --- |
+| Collisions | 8.1 ms | **5.0 ms in the sweep, testing 43,450 pairs of boxes that never touch.** The sweep over x compares each box with every box that overlaps it in x, wherever it is in y, and a square of n boxes puts about √n / 2 of them in each box's column: 22 here. It is not only the bench's exact columns: the same boxes scattered at random test 63,000 pairs. About another 2 ms went on each collider's box and id (`writeBounds` with four `Math.min`/`max` and four `Number.isFinite` calls, and a method call to file the collider under its id; 2.3 ms when pass two measured it, 1.7 ms now) |
+| Tree walk | 10.2 ms | 6,001 calls of `walk`, 4,000 of them for a leaf (the shape and the collider) that only inherits its parent's transform. Each leaf paid for a 7-argument call, `composeTransforms`, a `Map` lookup of its class, and for a shape five more nested calls to write nine numbers |
+| Tick | 4.7 ms | Between 0.6 and 1 ms of it on the `Set` of objects to render: one `add` per object, and a copy of the whole set each frame. The rest is the component's own code: two setters with an updater arrow each, `commitState` and `render` |
+
+**What changed.**
+
+- **The sweep runs in horizontal bands when that pays.** The plain sweep counts the pairs it tests; when that is more than 8 for each box, the following sweeps deal the boxes into bands twice the mean box height (a counting sort over the x order, so each band is already sorted), sweep each band alone, and take a pair that shares several bands in the first of them only. This is the cheap half of the grid that did not pay in pass two: two more passes over the boxes instead of a hash per cell, about 1 ms for 2,000, after which the sweep takes about 1 ms instead of 5. Every 64 banded frames the tracker estimates what the plain sweep would have tested and goes back to it when bands save little (a row, a pile, one far-away box that stretches the bands), waiting longer each time before it tries again. Reports are the same in the same order either way.
+- **A box and an id cost less.** The upright case of `writeBounds` is written out in the loop, and while the list is last frame's colliders box for box (a steady scene, moving or not), ids and the colliders-by-id table are left as they are. A box's parent, layer and `hits` are read when the first other box overlaps it.
+- **The walk deals with plain leaves in place.** Under an object that changed this frame, a `<Shape>`, `<Sprite>` or `<Collider>` with no children, no z, no layout offset and no placement is written by its parent's loop instead of by a call to `walk`, and a shape's or sprite's record is written straight into the buffer. An object's class kind is kept on the object (`GameObject.drawKind`) once asked. Texture handles are looked up by image name instead of by a path put together for every sprite of every frame.
+- **The tick keeps a list, not a `Set`, of objects to render.** An object can be in it twice (it asks when it turns dirty, and again if it joins the world while dirty), so each pass of `flush` is numbered and looks at an object once, which is exactly what the `Set` did.
+
+Old and new code run alternately on one VM; the middle of three runs each.
+
+| Scene (2,000 objects) | Tick | Walk | Collisions | Whole frame, before | Whole frame, after |
+| --- | --- | --- | --- | --- | --- |
+| moved by state, each with a collider | 4.7 → 4.1 ms | 10.2 → 7.1 ms | 8.1 → 3.8 ms | 23.5 ms | 15.0 ms |
+| the same, scattered at random (2,000 pairs touching) | 5.1 → 4.0 ms | 10.8 → 7.8 ms | 11.5 → 5.8 ms | 27.6 ms | 16.5 ms |
+| the same, with sprites for shapes | 4.8 → 4.0 ms | 10.6 → 6.8 ms | 8.3 → 3.8 ms | 24.2 ms | 15.3 ms |
+| moved by a hook, each with a collider | 0.9 → 0.9 ms | 11.2 → 8.1 ms | 8.6 → 4.2 ms | 20.6 ms | 12.3 ms |
+| moved by state, no colliders | 4.4 → 3.9 ms | 7.7 → 5.4 ms | — | 11.2 ms | 9.1 ms |
+| with colliders, 20 moving by state | | 1.5 → 1.4 ms | 1.1 → 1.1 ms | 2.6 ms | 2.4 ms |
+| still, each with a collider | | | | 0.28 ms | 0.28 ms |
+| 300 colliders in one pile | | | 25.8 → 25.7 ms | 28.3 ms | 28.3 ms |
+
+- **The 10 ms target is still not met on this VM**: 15 ms, from 23.5. What is left is close to what an interpreter charges for the statements each object needs, so the next savings come from doing less in script, not from doing it more cleverly:
+  - **Updater arrows written out by the compiler**, about 0.9 ms (measured by editing the bench's stand-in by hand: tick 3.8 to 2.9 ms). `setX((x) => x + dt * 30)` makes a closure and two calls per setter per frame; `{ const x = this.#xNext; const next = x + dt * 30; if (next !== x) { this.#xNext = next; this.markDirty(); } }` is the same thing. Priority 4 already lists it.
+  - **The broad phase in `librge`**, about 2 ms of the 3.8 (the sort, the bands and the sweep; the box per collider stays in script). The player would hand the boxes over in a `Float64Array` and get back the pairs that overlap. An ABI change for both hosts, with the script sweep kept for a backend without it.
+  - **A component that only moved**, perhaps 3 ms of the walk (an estimate; nothing was built). A render stamps the component, and the builder then makes every record under it again, though usually only the component's own transform changed. If the compiler stamped each owned element whose props a render really changed, the builder could copy a moved component's records with the offset added, and make only its collider entries again.
+- **The pile is untouched** (26 ms): its time is the `Set` of touching pairs, 44,850 of them added and looked up each frame, not the sweep.
+- **Found on the way**: `DrawList.sprite` read `records` before the call that could grow it, so a sprite whose record was the one that grew the buffer was drawn with texture 0 for that one frame. Fixed, with a test.
+- **How it was checked.** Trackers that always, never and sometimes sweep in bands, and one that looks only at what moved, are run over the same lists and must report the same in the same order, and the same enters and exits as testing every pair: boxes of mixed sizes, some reaching through every band, tiles whose edges land on band edges, a world taller than the most bands, a far-away box, a row and a pile. Leaves written in place are compared, record for record, with the same tree under a z, which the general walk draws. 26 deliberate bugs in the new code each fail a test; a 27th (not clamping a box's last band) changes nothing, because a write past the end of a typed array is dropped.
+
 ## Later (not scheduled)
 
 | Idea | Notes |

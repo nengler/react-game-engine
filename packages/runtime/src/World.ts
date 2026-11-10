@@ -3,6 +3,9 @@ import { Collider } from "./components/Collider.ts";
 import type { Pressable } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 
+/** Numbers each pass of any World's `flush` over its list of renders (see `GameObject.renderInPass`): one counter for all worlds, so an object that moves between them is never mistaken for one already seen. */
+let passes = 0;
+
 /**
  * Owns the root of the object tree and drives dirty-driven updates:
  * render every dirty object, then apply queued structural changes.
@@ -15,7 +18,12 @@ export class World {
    * last drew an object: a stamp at or after the serial of that frame is newer than the frame.
    */
   serial = 0;
-  #dirty = new Set<GameObject>();
+  /**
+   * The objects that asked for a render, in the order they asked. A list, not a `Set`: adding to one and copying it out each
+   * frame was a fifth of the tick for 2,000 objects that re-render every frame. An object can be in it twice (it asks when it
+   * turns dirty, and again if it joins this world while dirty), which `flush` sees to: each object is looked at once per pass.
+   */
+  #dirty: GameObject[] = [];
   #structure = new Set<GameObject>();
   #onInput = new Set<GameObject>();
   #onUpdate = new Set<GameObject>();
@@ -29,7 +37,7 @@ export class World {
   }
 
   scheduleRender(object: GameObject): void {
-    this.#dirty.add(object);
+    this.#dirty.push(object);
   }
 
   scheduleCommit(object: GameObject): void {
@@ -98,14 +106,11 @@ export class World {
   /** Process all pending work until the tree is stable. Returns the number of renders run. */
   flush(): number {
     let renders = 0;
-    while (this.#dirty.size > 0 || this.#structure.size > 0) {
-      const dirty = [...this.#dirty];
-      this.#dirty.clear();
-      for (const object of dirty) {
-        if (object.world !== this || !object.isDirty) continue;
-        object.runRender();
-        renders++;
-      }
+    while (this.#dirty.length > 0 || this.#structure.size > 0) {
+      const dirty = this.#dirty;
+      this.#dirty = [];
+      const pass = ++passes;
+      for (let i = 0; i < dirty.length; i++) if ((dirty[i] as GameObject).renderInPass(this, pass)) renders++;
       const structure = [...this.#structure];
       this.#structure.clear();
       for (const object of structure) object.commitStructure();

@@ -256,3 +256,73 @@ describe("mount and unmount", () => {
     assert.equal(renders, 1);
   });
 });
+
+describe("renders asked for twice", () => {
+  class Counted extends GameObject {
+    seen: number[] = [];
+    onRender: (() => void) | undefined;
+    override render(): void {
+      this.seen.push(this.parent?.children.length ?? -1);
+      this.onRender?.();
+    }
+  }
+
+  it("renders an object once though it asked when it turned dirty and again when it joined the world still dirty", () => {
+    const world = new World();
+    const parent = new GameObject();
+    world.mount(parent);
+    const a = new Counted();
+    parent.addChild(a);
+    a.markDirty();
+    parent.removeChild(a);
+    parent.addChild(a);
+    assert.equal(world.flush(), 1);
+    assert.equal(a.seen.length, 1);
+    // One that asked and then left is not rendered, and nothing is left over for the next flush.
+    a.markDirty();
+    parent.removeChild(a);
+    assert.equal(world.flush(), 0);
+    parent.addChild(a);
+    assert.equal(world.flush(), 1);
+    assert.equal(world.flush(), 0);
+  });
+
+  it("looks at each object once per pass: one made dirty again by a later render waits for the next pass, after structure is committed", () => {
+    const world = new World();
+    const parent = new GameObject();
+    world.mount(parent);
+    const x = new Counted();
+    const y = new Counted();
+    parent.addChild(x);
+    parent.addChild(y);
+    x.markDirty();
+    y.markDirty();
+    // x is now in the list twice, with y between.
+    parent.removeChild(x);
+    parent.addChild(x);
+    let once = true;
+    y.onRender = () => {
+      if (!once) return;
+      once = false;
+      x.markDirty();
+      parent.queueAddChild(new GameObject());
+    };
+    assert.equal(world.flush(), 3);
+    // x rendered with two children there, then again in the next pass, after the third was added.
+    assert.deepEqual(x.seen, [2, 3]);
+    assert.deepEqual(y.seen, [2]);
+  });
+
+  it("renders an object in the world it is in now, when it moved there while dirty", () => {
+    const first = new World();
+    const second = new World();
+    const a = new Counted();
+    first.mount(a);
+    a.markDirty();
+    first.root.removeChild(a);
+    second.mount(a);
+    assert.equal(first.flush(), 0);
+    assert.equal(second.flush(), 1);
+    assert.equal(a.seen.length, 1);
+  });
+});
