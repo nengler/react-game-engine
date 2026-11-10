@@ -16,14 +16,14 @@ export {
 } from "./scene.ts";
 export { Entity, type EntityProps } from "./components/Entity.ts";
 export { Game, type GameProps, type GameStateHandle } from "./components/Game.ts";
-export { Sprite, type SpriteProps } from "./components/Sprite.ts";
+export { isStyled, Sprite, type SpriteLook, type SpriteOptions, type SpriteProps } from "./components/Sprite.ts";
 export { Collider, type ColliderProps, type Contact } from "./components/Collider.ts";
 export { Sound, getSoundSink, setSoundSink, type SoundSink } from "./Sound.ts";
 export { Pointer, type PointerProps, type Pressable } from "./components/Pointer.ts";
 export { Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
-export { AnimatedSprite, type AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
+export { AnimatedSprite, parseAnimations, type AnimatedSpriteProps, type SheetAnimation } from "./components/AnimatedSprite.ts";
 export { Flex, FlexBox, FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, type FlexAlignItems, type FlexAnchor, type FlexDirection, type FlexJustifyContent, type FlexProps, type FlexSizing } from "./components/Flex.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";

@@ -104,13 +104,16 @@ export const runtimeManifest: RuntimeManifest = {
   intrinsicMembers: {
     Entity: ["name"],
     Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "state"],
-    Sprite: ["image"],
+    Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
     Text: ["text", "size", "color", "width", "align"],
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "viewTransform", "worldToView", "viewToWorld"],
-    AnimatedSprite: ["fps", "playing", "frame", "elapsed", "frames", "image"],
+    AnimatedSprite: [
+      "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity",
+      "animations", "animation", "isSheet", "current", "sheetFrame", "styled", "finished",
+    ],
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
     Hud: [],
     Flex: [
@@ -127,7 +130,7 @@ export const runtimeManifest: RuntimeManifest = {
     Text: ["text"],
     Shape: ["kind", "width", "height"],
     Camera: [],
-    AnimatedSprite: ["frames"],
+    AnimatedSprite: [],
     Screen: ["width", "height"],
     Hud: [],
     Flex: [],

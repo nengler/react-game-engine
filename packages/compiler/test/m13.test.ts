@@ -143,8 +143,8 @@ describe("M13: authored source type-checks", () => {
     assert.deepEqual(check(`<AnimatedSprite frames={names} transform={{ x: 4 }} />`), []);
   });
 
-  it("rejects frames that are missing, a string, or not images, and a wrong fps or playing", () => {
-    assert.ok(check(`<AnimatedSprite />`).length > 0, "frames is required");
+  it("rejects frames that are a string, or not images, and a wrong fps or playing", () => {
+    assert.deepEqual(check(`<AnimatedSprite />`), [], "frames is optional since a sprite can play a sheet instead; with neither it draws nothing");
     assert.ok(check(`<AnimatedSprite frames="a.png" />`).length > 0);
     assert.ok(check(`<AnimatedSprite frames={[1, 2]} />`).length > 0);
     assert.ok(check(`<AnimatedSprite frames={["a.png"]} fps="fast" />`).length > 0);
@@ -223,8 +223,8 @@ describe("M13: runtime behaviour", () => {
     assert.equal(flame.image, "f2.png");
   });
 
-  it("works as a root whose frames come from a prop: the required prop is a placeholder until the first render", () => {
-    assert.match(compile(SOURCE, "Anim.tsx").code, /super\(\{ fps: 2, frames: undefined as never \}, props\);/);
+  it("works as a root whose frames come from a prop: they are set in the first render", () => {
+    assert.match(compile(SOURCE, "Anim.tsx").code, /super\(\{ fps: 2 \}, props\);/);
     const world = new World();
     const loop = new Loop({ frames: ["a.png", "b.png"] });
     world.mount(loop);
@@ -288,5 +288,48 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
         .diagnostics.map((d) => d.code);
       assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
     }
+  });
+});
+
+describe("sprite sheets and sprite options", () => {
+  const check = (body: string) =>
+    getCompiler().typeCheckSources([
+      {
+        fileName: `${process.cwd()}/.test-output/M13s${Math.random()}.tsx`,
+        text: `import { Entity, Sprite, AnimatedSprite, useState } from "@rge/runtime/jsx";\nfunction C() { const [n] = useState(0); const [left] = useState(false); const [anim] = useState("idle"); return <Entity name="C">${body}</Entity>; }`,
+      },
+    ]);
+
+  it("accepts a frame of a sheet and the sprite options, as literals and as state", () => {
+    assert.deepEqual(check(`<Sprite image="a.png" frameWidth={12} frameHeight={12} frame={n} flipX={left} originX={6} originY={12} tint="red" opacity={0.5} />`), []);
+    assert.deepEqual(check(`<AnimatedSprite sheet="a.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={anim} loop={false} flipX={left} />`), []);
+  });
+
+  it("rejects options of the wrong type", () => {
+    assert.ok(check(`<Sprite image="a.png" flipX="yes" />`).length > 0);
+    assert.ok(check(`<Sprite image="a.png" opacity="half" />`).length > 0);
+    assert.ok(check(`<AnimatedSprite sheet="a.png" animation={1} />`).length > 0);
+  });
+
+  it("builds a sprite that follows state: the options are set in render, and only when they change", async () => {
+    const compiled = compile(
+      `function Hero() { const [left, setLeft] = useState(false); const [anim, setAnim] = useState("idle");
+        return <AnimatedSprite sheet="hero.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={anim} flipX={left} />; }`,
+      "Hero.tsx",
+    );
+    assert.match(compiled.code, /super\(\{ sheet: "hero\.png", frameWidth: 12, frameHeight: 12, animations: "idle:0-1@4, run:2-7@12" \}\);/);
+    assert.match(compiled.code, /if \(this\.animation !== \$1 \|\| this\.flipX !== \$2\) \{\s+this\.animation = \$1;\s+this\.flipX = \$2;/);
+    const { Hero } = await load<{ Hero: new () => AnimatedSprite & { setAnim(v: string): void; setLeft(v: boolean): void } }>(compiled);
+    const world = new World();
+    const hero = new Hero();
+    world.mount(hero);
+    assert.equal(hero.sheetFrame, 0);
+    hero.setAnim("run");
+    world.flush();
+    assert.equal(hero.current?.name, "run");
+    assert.equal(hero.sheetFrame, 2);
+    hero.setLeft(true);
+    world.flush();
+    assert.equal(hero.flipX, true);
   });
 });

@@ -1,45 +1,124 @@
 import { GameObject } from "../GameObject.ts";
+import { isStyled, type SpriteLook, type SpriteOptions } from "./Sprite.ts";
 
-export interface AnimatedSpriteProps {
-  /** The images to cycle through, in order. Must not be empty to show anything. */
-  frames: readonly string[];
-  /** Frames per second. Default 10. A value that is not positive and finite freezes the animation. */
+export interface AnimatedSpriteProps extends SpriteOptions {
+  /** The images to cycle through, in order, one image file per frame. Leave it out to play a sheet (`sheet`). */
+  frames?: readonly string[];
+  /** Frames per second for `frames`. Default 10. A value that is not positive and finite freezes the animation. */
   fps?: number;
   /** False freezes it on the current frame; true resumes from there. Default true. */
   playing?: boolean;
+  /** A sheet to play: one image holding every frame, each `frameWidth` × `frameHeight` pixels, read left to right, then down. */
+  sheet?: string;
+  frameWidth?: number;
+  frameHeight?: number;
+  /**
+   * The named animations of the sheet, as text: `"idle:0-1@4, run:2-7@12, die:8-12@10~"`. Each is a name, a colon, frames
+   * (`3`, `2-7`, or several joined by `+`: `1+2+3+2`), `@` and the frames per second, and a `~` at the end to play once and stay on the last
+   * frame instead of looping. See `parseAnimations`.
+   */
+  animations?: string;
+  /** Which animation plays. Changing it restarts at its first frame; setting the same one again changes nothing. */
+  animation?: string;
+  /** Whether an animation without a `~` loops. Default true: false plays each once. */
+  loop?: boolean;
+}
+
+/** One named animation of a sheet. */
+export interface SheetAnimation {
+  readonly name: string;
+  /** Frame numbers on the sheet, in play order. */
+  readonly frames: readonly number[];
+  readonly fps: number;
+  /** Plays once and stays on its last frame (`~`); otherwise follows the sprite's `loop`. */
+  readonly once: boolean;
+}
+
+/**
+ * Read `"idle:0-1@4, run:2-7@12, die:8-12@10~"` into animations. Throws a readable error for a malformed entry, so a typo shows up
+ * the moment the sprite is made (and at build time for a literal).
+ */
+export function parseAnimations(text: string): SheetAnimation[] {
+  const out: SheetAnimation[] = [];
+  for (const entry of text.split(",")) {
+    const item = entry.trim();
+    if (item === "") continue;
+    const match = /^([A-Za-z_][\w-]*)\s*:\s*([\d+\-\s]+?)\s*(?:@\s*(\d+(?:\.\d+)?))?\s*(~?)$/.exec(item);
+    if (match === null) throw new Error(`Cannot read the animation '${item}': expected name:frames@fps, as in "run:2-7@12" (a trailing ~ plays it once).`);
+    const frames: number[] = [];
+    for (const part of (match[2] as string).split("+")) {
+      const range = /^\s*(\d+)(?:\s*-\s*(\d+))?\s*$/.exec(part);
+      if (range === null) throw new Error(`Cannot read the frames '${match[2] as string}' of the animation '${match[1] as string}': expected 3, 2-7 or 1+2+3+2.`);
+      const from = Number(range[1]);
+      const to = range[2] === undefined ? from : Number(range[2]);
+      if (to < from) for (let f = from; f >= to; f--) frames.push(f);
+      else for (let f = from; f <= to; f++) frames.push(f);
+    }
+    if (out.some((a) => a.name === match[1])) throw new Error(`The animation '${match[1] as string}' is listed twice.`);
+    out.push({ name: match[1] as string, frames, fps: match[3] === undefined ? 10 : Number(match[3]), once: match[4] === "~" });
+  }
+  return out;
 }
 
 const DEFAULT_FPS = 10;
 
 /**
- * A sprite that cycles through `frames` at `fps`, looping. The mock draws
- * nothing: a renderer reads `image`, which is the current frame, exactly as it
- * reads a `Sprite`'s. Playing is not state: advancing a frame does not
- * re-render anything, so an animation costs no renders.
+ * A sprite that animates, in one of two ways. With `frames`, it cycles through one image file per frame, looping, at `fps`.
+ * With a `sheet`, `frameWidth` and `frameHeight` and the text of `animations`, it plays the frames of the animation named by
+ * `animation` from one image, each at its own rate, looping or once (see `SheetAnimation`). Either way `image` is what the
+ * renderer draws (the current frame's file, or the sheet) and `sheetFrame` is the frame to cut from the sheet (-1 for files).
+ * It takes the sprite options too (flips, origin, tint, opacity). The mock draws nothing. Playing is not state: advancing a
+ * frame does not re-render anything, so an animation costs no renders.
  *
- * Setting `frames` to different contents restarts at the first frame; setting it
- * to the same contents (a new array that is equal, which is what a dynamic JSX
- * prop produces on every render) changes nothing.
+ * Setting `frames` to different contents restarts at the first frame; setting it to the same contents (a new array that is
+ * equal, which is what a dynamic JSX prop produces on every render) changes nothing. The same holds for `animation`.
  */
-export class AnimatedSprite<P extends object = {}> extends GameObject<P> {
+export class AnimatedSprite<P extends object = {}> extends GameObject<P> implements SpriteLook {
   static override readonly intrinsic = true;
 
   fps: number;
   playing: boolean;
-  /** Index of the current frame. */
+  /** Index of the current frame (within `frames`, or within the current animation). */
   frame = 0;
   /** Time carried over toward the next frame, in seconds. */
   elapsed = 0;
+  sheet: string | undefined;
+  frameWidth: number | undefined;
+  frameHeight: number | undefined;
+  loop: boolean;
+  flipX: boolean;
+  flipY: boolean;
+  originX: number;
+  originY: number;
+  tint: string | undefined;
+  opacity: number;
   #frames: readonly string[];
+  #animationsText: string;
+  #animations: SheetAnimation[] = [];
+  #animation: string;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: AnimatedSpriteProps, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
-    // `frames` is required, but a component rooted at one whose frames vary gets `undefined` here (the generated
-    // `super()` runs before state exists) and its real value in the first render.
+    // A component rooted at one whose props vary gets `undefined` here (the generated `super()` runs before state exists) and the
+    // real value in the first render.
     this.#frames = [...(hostProps.frames ?? [])];
     this.fps = hostProps.fps ?? DEFAULT_FPS;
     this.playing = hostProps.playing ?? true;
+    this.sheet = hostProps.sheet;
+    this.frameWidth = hostProps.frameWidth;
+    this.frameHeight = hostProps.frameHeight;
+    this.loop = hostProps.loop ?? true;
+    this.flipX = hostProps.flipX ?? false;
+    this.flipY = hostProps.flipY ?? false;
+    this.originX = hostProps.originX ?? 0;
+    this.originY = hostProps.originY ?? 0;
+    this.tint = hostProps.tint;
+    this.opacity = hostProps.opacity ?? 1;
+    this.#animationsText = "";
+    this.#animation = "";
+    if (hostProps.animations !== undefined) this.animations = hostProps.animations;
+    if (hostProps.animation !== undefined) this.animation = hostProps.animation;
   }
 
   get frames(): readonly string[] {
@@ -54,23 +133,83 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> {
     this.elapsed = 0;
   }
 
-  /** The current frame's image; empty when there are no frames. */
+  get animations(): string {
+    return this.#animationsText;
+  }
+
+  set animations(text: string | undefined) {
+    const next = text ?? "";
+    if (next === this.#animationsText) return;
+    this.#animationsText = next;
+    this.#animations = parseAnimations(next);
+    this.frame = 0;
+    this.elapsed = 0;
+  }
+
+  get animation(): string {
+    return this.#animation;
+  }
+
+  set animation(name: string | undefined) {
+    const next = name ?? "";
+    if (next === this.#animation) return;
+    this.#animation = next;
+    this.frame = 0;
+    this.elapsed = 0;
+  }
+
+  /** True when this plays a sheet: it has a `sheet` and animations to play. */
+  get isSheet(): boolean {
+    return this.sheet !== undefined && this.#animations.length > 0;
+  }
+
+  /** The animation now playing: the one named by `animation`, else the first. Null for a sprite of files. */
+  get current(): SheetAnimation | null {
+    if (!this.isSheet) return null;
+    return this.#animations.find((a) => a.name === this.#animation) ?? (this.#animations[0] as SheetAnimation);
+  }
+
+  /** What the renderer draws: the sheet, or the current frame's file; empty when there is nothing. */
   get image(): string {
+    if (this.isSheet) return this.sheet as string;
     return this.#frames[this.frame] ?? "";
+  }
+
+  /** The frame number to cut from the sheet right now, or -1 when this plays files. */
+  get sheetFrame(): number {
+    const current = this.current;
+    return current === null ? -1 : (current.frames[Math.min(this.frame, current.frames.length - 1)] ?? 0);
+  }
+
+  /** Whether the renderer must draw this as a region of a sheet or with options, rather than as a whole image. */
+  get styled(): boolean {
+    return this.isSheet || isStyled(this);
   }
 
   /** Advance by `dt` seconds while playing. The World calls this every tick, since the class overrides it. */
   override onUpdate(dt: number): void {
-    const count = this.#frames.length;
-    if (!this.playing || count === 0 || !(this.fps > 0) || !Number.isFinite(this.fps) || !(dt > 0)) return;
-    const step = 1 / this.fps;
+    const current = this.current;
+    const count = current === null ? this.#frames.length : current.frames.length;
+    const fps = current === null ? this.fps : current.fps;
+    if (!this.playing || count === 0 || !(fps > 0) || !Number.isFinite(fps) || !(dt > 0)) return;
+    const step = 1 / fps;
     this.elapsed += dt;
     // The epsilon keeps 10 ticks of 0.1s at 10 fps from landing a rounding error short of the 10th frame.
     const steps = Math.floor((this.elapsed + 1e-9) / step);
     if (steps === 0) return;
     this.elapsed = Math.max(0, this.elapsed - steps * step);
-    const next = (this.frame + steps) % count;
+    const looping = current === null ? true : !current.once && this.loop;
+    let next = this.frame + steps;
+    if (looping) next %= count;
+    else next = Math.min(next, count - 1);
     if (next !== this.frame) this.markChanged();
     this.frame = next;
+  }
+
+  /** True once a non-looping animation is on its last frame. */
+  get finished(): boolean {
+    const current = this.current;
+    if (current === null || (!current.once && this.loop)) return false;
+    return this.frame >= current.frames.length - 1;
   }
 }

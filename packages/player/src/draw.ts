@@ -13,6 +13,7 @@ import {
   Screen,
   Shape,
   Sprite,
+  isStyled,
   Text,
   type Pressable,
   type ScreenFit,
@@ -28,6 +29,10 @@ import {
   RGE_OP_RECT_LEN,
   RGE_OP_SPRITE,
   RGE_OP_SPRITE_LEN,
+  RGE_OP_SPRITE_REGION,
+  RGE_OP_SPRITE_REGION_LEN,
+  RGE_SPRITE_FLIP_X,
+  RGE_SPRITE_FLIP_Y,
   RGE_OP_TEXT,
   RGE_OP_TEXT_LEN,
   RGE_OP_VIEW,
@@ -111,6 +116,7 @@ function recordLength(op: number): number {
   switch (op) {
     case RGE_OP_VIEW: return RGE_OP_VIEW_LEN;
     case RGE_OP_SPRITE: return RGE_OP_SPRITE_LEN;
+    case RGE_OP_SPRITE_REGION: return RGE_OP_SPRITE_REGION_LEN;
     case RGE_OP_RECT: return RGE_OP_RECT_LEN;
     case RGE_OP_ELLIPSE: return RGE_OP_ELLIPSE_LEN;
     case RGE_OP_TEXT: return RGE_OP_TEXT_LEN;
@@ -292,6 +298,21 @@ export class DrawList {
     this.records[at] = texture;
   }
 
+  /** One region of a texture (a frame of a sheet), with its origin, mirroring and tint: the record `RGE_OP_SPRITE_REGION`. */
+  spriteRegion(world: WorldTransform, texture: number, srcX: number, srcY: number, srcW: number, srcH: number, originX: number, originY: number, flags: number, tint: PackedColor): void {
+    const at = this.#header(RGE_OP_SPRITE_REGION, RGE_OP_SPRITE_REGION_LEN, world);
+    const r = this.records;
+    r[at] = texture;
+    r[at + 1] = srcX;
+    r[at + 2] = srcY;
+    r[at + 3] = srcW;
+    r[at + 4] = srcH;
+    r[at + 5] = originX;
+    r[at + 6] = originY;
+    r[at + 7] = flags;
+    r[at + 8] = tint;
+  }
+
   rect(world: WorldTransform, width: number, height: number, color: PackedColor): void {
     const at = this.#header(RGE_OP_RECT, RGE_OP_RECT_LEN, world);
     this.records[at] = width;
@@ -432,6 +453,11 @@ function worldIn(parentSpace: WorldTransform, object: GameObject): WorldTransfor
       : composeTransforms(laidOut, placement),
     object.transform,
   );
+}
+
+/** A sprite that is drawn as a region of its image, with options, instead of as the whole image at its top left. */
+function styledSprite(node: Sprite | AnimatedSprite): boolean {
+  return node instanceof AnimatedSprite ? node.styled : node.frameWidth !== undefined || node.frameHeight !== undefined || node.frame !== 0 || isStyled(node);
 }
 
 /** A rect and an ellipse are records of one length, which the walk relies on when it writes a shape in place: this line stops compiling if they ever differ. */
@@ -721,7 +747,7 @@ export class FrameBuilder {
       switch (kind) {
         case KIND_SPRITE:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
-          this.#sprite((node as Sprite | AnimatedSprite).image, at);
+          this.#spriteNode(node as Sprite | AnimatedSprite, at);
           break;
         case KIND_SHAPE:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
@@ -763,7 +789,7 @@ export class FrameBuilder {
       }
 
       // An entity, sprite, shape or collider writes what it writes at `at`; a text may shift it, and the rest are not plain drawing.
-      const plainKind = kind < KIND_TEXT || kind === KIND_COLLIDER;
+      const plainKind = (kind < KIND_TEXT && !(kind === KIND_SPRITE && styledSprite(node as Sprite | AnimatedSprite))) || kind === KIND_COLLIDER;
       if (count === 0) {
         flatWalk = plainKind;
         return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : z !== 0 || code >= FLAG_VOLATILE ? WALK_VOLATILE : WALK_CLEAN;
@@ -790,7 +816,7 @@ export class FrameBuilder {
         // moves) is most of what is here, so it is dealt with in place: what `walk` would do for it, without the call.
         if (childZ === 0 && child.children.length === 0 && child.layoutX === 0 && child.layoutY === 0) {
           const leaf = child.drawKind >= 0 ? child.drawKind : kindCode(child);
-          if (leaf === KIND_SHAPE || leaf === KIND_COLLIDER || leaf === KIND_SPRITE) {
+          if (leaf === KIND_SHAPE || leaf === KIND_COLLIDER || (leaf === KIND_SPRITE && !styledSprite(child as Sprite | AnimatedSprite))) {
             const own = child.transform;
             const placed = child.placement;
             if (own.z === 0 && placed.z === 0 && placed.x === 0 && placed.y === 0 && placed.rotation === 0 && placed.scaleX === 1 && placed.scaleY === 1 && !placed.global) {
@@ -1007,7 +1033,7 @@ export class FrameBuilder {
               switch (kind) {
                 case KIND_SPRITE:
                   if (z !== listZ) list.setZ((listZ = z));
-                  this.#sprite((object as Sprite | AnimatedSprite).image, world);
+                  this.#spriteNode(object as Sprite | AnimatedSprite, world);
                   break;
                 case KIND_SHAPE:
                   if (z !== listZ) list.setZ((listZ = z));
@@ -1114,8 +1140,11 @@ export class FrameBuilder {
         out.height = size.height;
         return true;
       }
-    } else if (object instanceof AnimatedSprite) size = this.#imageSize(object.frames[0] ?? "");
-    else if (object instanceof Sprite) size = this.#imageSize(object.image);
+    } else if (object instanceof AnimatedSprite) {
+      // A sheet measures as one frame, a set of files as the first of them (so layout does not jitter as frames change).
+      if (object.isSheet) size = object.frameWidth !== undefined && object.frameHeight !== undefined ? { width: object.frameWidth, height: object.frameHeight } : this.#imageSize(object.image);
+      else size = this.#imageSize(object.frames[0] ?? "");
+    } else if (object instanceof Sprite) size = object.frameWidth !== undefined && object.frameHeight !== undefined ? { width: object.frameWidth, height: object.frameHeight } : this.#imageSize(object.image);
     else return false;
     out.width = size.width;
     out.height = size.height;
@@ -1227,6 +1256,44 @@ export class FrameBuilder {
       if (handle < 0) this.#warner.once(`texture:${path}`, `Could not load the texture '${path}': drawing a magenta square instead.`);
     }
     return handle;
+  }
+
+  /** A sprite or animated sprite: the whole image, or, when it has a sheet frame or options, a region of it. */
+  #spriteNode(node: Sprite | AnimatedSprite, world: WorldTransform): void {
+    if (!styledSprite(node)) {
+      this.#sprite(node.image, world);
+      return;
+    }
+    const image = node.image;
+    if (image === "") return;
+    const handle = this.#texture(image);
+    if (handle < 0) {
+      this.#list.rect(world, MISSING_TEXTURE_SIZE, MISSING_TEXTURE_SIZE, MAGENTA);
+      return;
+    }
+    const texture = this.#imageSize(image);
+    const sheet = node instanceof AnimatedSprite ? node.isSheet : node.frameWidth !== undefined || node.frameHeight !== undefined;
+    const frameWidth = sheet ? (node.frameWidth ?? texture.width) : texture.width;
+    const frameHeight = sheet ? (node.frameHeight ?? texture.height) : texture.height;
+    const frame = node instanceof AnimatedSprite ? node.sheetFrame : node.frame;
+    let srcX = 0;
+    let srcY = 0;
+    if (sheet && frame > 0 && frameWidth > 0) {
+      const columns = Math.max(1, Math.floor(texture.width / frameWidth));
+      srcX = (frame % columns) * frameWidth;
+      srcY = Math.floor(frame / columns) * frameHeight;
+    }
+    if (!(frameWidth > 0 && frameHeight > 0)) {
+      this.#warner.once(`sprite-size:${image}`, `The sprite '${image}' has no known size (this backend cannot report texture sizes and no frameWidth and frameHeight are set): it is not drawn.`);
+      return;
+    }
+    let tint = node.tint === undefined ? 0xffffffff : this.#color(node.tint);
+    const opacity = node.opacity;
+    if (opacity !== 1) {
+      const alpha = Math.round(((tint & 255) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity))));
+      tint = ((tint & 0xffffff00) | alpha) >>> 0;
+    }
+    this.#list.spriteRegion(world, handle, srcX, srcY, frameWidth, frameHeight, node.originX, node.originY, (node.flipX ? RGE_SPRITE_FLIP_X : 0) | (node.flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
   }
 
   #sprite(image: string, world: WorldTransform): void {
