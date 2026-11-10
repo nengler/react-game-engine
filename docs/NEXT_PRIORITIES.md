@@ -59,7 +59,16 @@ It lives in its own package beside `packages/demo`, and is written only through 
 
 **Not in this level:** a save system, settings or key rebinding, dialogue, cutscenes, a level editor, a web build or other platforms.
 
-**Movement and collision stay in game code.** `<Collider>` reports overlaps but stops nothing, so the player moves one axis at a time against the tilemap's solid grid, with whole-pixel positions and a sub-pixel remainder. Colliders handle hazards, room exits and pickups. Run, variable jump, coyote time, the jump buffer, an 8-direction dash, wall slide and wall jump are tuned by playing, from one module of constants. If that code is worth sharing, it becomes the first custom hook.
+**Movement and collision stay in game code.** `<Collider>` reports overlaps but stops nothing, so the player moves one axis at a time against the tilemap's solid grid, with whole-pixel positions and a sub-pixel remainder. Colliders handle hazards, room exits and pickups. Run, variable jump, coyote time, the jump buffer, an 8-direction dash, wall slide and wall jump come from one module of constants, first set from the genre's usual ranges and checked by tests, then tuned by a person playing (priority 6). **The game's rules are kept apart from drawing:** movement, rooms, deaths and pickups are plain functions or hooks that take inputs and return state, so a test can run them without rendering anything. If that code is worth sharing, it becomes the first custom hook.
+
+**Headless tooling, built first.** A person is not always there to play, and the level is written and checked mostly by agents, so the game must be buildable and verifiable without a window. The engine already has the parts: `RecordingBackend` (scripted input, decoded draw records), the software-rendered hidden window with `readPixels()`, and the parity script. Four things are missing, and they come before the game, in their own commits:
+
+- **A screenshot script** that renders a frame, or chosen frames of a scripted run, to PNG through the headless build, plus a contact sheet of a run, so an agent can look at a room, an animation or a camera slide.
+- **A headless harness** that takes a game and an input script and returns the game's state for each fixed step (the player's position and velocity, the room, deaths, pickups), so tests assert on behaviour such as jump height or reaching an exit, not on draw records.
+- **An input-script helper**, turning a short script such as `right*30, jump, right*20+dash` into input frames. The same format is the replay format for "every room can be finished" tests.
+- **One check command per game** (for example `npm run check:<game>`) that compiles it, type-checks, runs its tests and the parity run, and prints a short pass or fail summary.
+
+The harness steps exactly one tick at a time, so once the fixed timestep lands, a run is repeatable and a replay is a trustworthy test. None of this tells an agent how the game *feels*; that is still priority 6.
 
 **Engine additions, Tier 1: needed for the level to work**
 
@@ -84,6 +93,7 @@ Each addition gets a design section in the matching doc (`DESIGN.md`, `NATIVE_PL
 
 **Order of work**
 
+0. Headless tooling: the screenshot script, the harness, the input-script helper and the check command, with tests of their own, using the demo as the first game.
 1. Greybox: the player and tiles as `<Shape>`s, rooms as in-code tile strings, a variable step; movement roughly right, with headless tests for its rules.
 2. Fixed timestep, then retune movement under it.
 3. Tilemap, rooms and camera; the rooms move into Tiled.
@@ -94,15 +104,16 @@ Each addition gets a design section in the matching doc (`DESIGN.md`, `NATIVE_PL
 8. Title and end screens with the pixel font; play it start to finish and as a packaged build.
 9. Custom hooks whenever the movement code is ready to be pulled out, by step 7 at the latest.
 
-Someone plays it on a Linux desktop after step 1 and at the end (priority 6). Steps 1–4 are a natural place to stop and review before the rest.
+Someone plays it on a Linux desktop after step 1 and at the end (priority 6); the agent does not wait for that. Steps 0–4 are a natural place to stop and review if a person wants to.
 
 **Done when**
 
 - [ ] A one-page design note in the game's package covers the mechanics, the room list and what "finished" means for the level
 - [ ] The level is playable from title to end with keyboard or gamepad, under Node and as a packaged build, with music and sound
 - [ ] Every Tier 1 and Tier 2 addition is in, each with its design notes and tests, and its "Not now" row is removed or updated
-- [ ] The movement constants are tuned by playing, and the final values are recorded in the design note
-- [ ] Headless tests cover the movement rules (coyote time, the jump buffer, the dash refill, a wall jump) under the fixed timestep
+- [ ] The movement constants are recorded in the design note, with untested guesses marked; a person tunes them by playing (priority 6)
+- [ ] The headless tooling works on the demo and the game: screenshots and contact sheets, the harness with input scripts, and one check command
+- [ ] Headless tests cover the movement rules (coyote time, the jump buffer, the dash refill, a wall jump) under the fixed timestep, and a scripted run finishes every room
 - [ ] The parity test passes and `npm run bench:check` stays within budget; frame time on the busiest room is recorded in `NATIVE_PLAN.md`
 - [ ] A "Findings from the first level" section is added here: each gap beyond the planned additions, its workaround or fix, and what it should become
 - [ ] `npm test` and `npm run typecheck` pass
