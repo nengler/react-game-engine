@@ -1,0 +1,345 @@
+// Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
+import { SyntaxKind, type Node } from "typescript/ast";
+import { isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
+import { unwrapParens, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
+import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
+import { type TypeIR, collectDependencies, stateReads, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
+import { type GameStateLeaf, type GameStateNode } from "../gamestate/schema.ts";
+import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
+import { lowerFunction } from "./statements.ts";
+import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
+import { ExpressionLowering } from "./expressions.ts";
+
+export class HookLowering extends ExpressionLowering {
+  /**
+   * Resolve the props parameter against the props type declared in this file,
+   * declare each destructured prop in scope, and describe every member of the
+   * type (destructured or not) for the prefab registry.
+   */
+  protected lowerPropDecls(): PropDeclIR[] {
+    const analysis = this.component.props;
+    if (!analysis) return [];
+    const code = DiagnosticCode.InvalidProps;
+    const decl = this.typeDecls.get(analysis.typeName);
+    if (!decl) {
+      this.report(code, `Props type '${analysis.typeName}' is not declared in this file (declare an \`interface ${analysis.typeName} { … }\`).`, analysis.typeNode);
+      return [];
+    }
+    const members = this.propMembers(decl);
+    if (!members) return [];
+
+    const bindings = new Map(analysis.bindings.map((b) => [b.name, b] as const));
+    if (analysis.objectName !== null) this.componentScope.declare(analysis.objectName, { kind: "propsObject", name: analysis.objectName });
+    for (const binding of analysis.bindings) {
+      if (!members.has(binding.name)) {
+        this.report(code, `'${binding.name}' is not a prop of ${analysis.typeName}.`, binding.node);
+      }
+    }
+
+    const out: PropDeclIR[] = [];
+    for (const [name, member] of members) {
+      if (name === "children") {
+        // Not a value prop: the elements a parent passes mount at `{children}`. Typed `Child` so the TSX type-checks.
+        const binding = bindings.get(name);
+        if (member.role !== "value" || member.type.kind !== "SourceText" || member.type.text !== "Child") {
+          this.report(code, `\`children\` must be typed \`Child\`: \`children: Child;\`, with \`import { type Child } from "${this.manifest.authoringModule}"\`.`, member.node);
+        } else if (binding?.defaultValue) {
+          this.report(code, "`children` cannot have a default value.", binding.node);
+        } else {
+          this.declaredChildren = true;
+          if (binding) this.componentScope.declare(name, { kind: "children", name });
+        }
+        continue;
+      }
+      if (RESERVED_PROP_NAMES.has(name)) {
+        this.report(code, `'${name}' is reserved by the framework and cannot be a prop name.`, member.node);
+        continue;
+      }
+      const binding = bindings.get(name);
+      let defaultValue: ExprIR | null = null;
+      if (binding?.defaultValue) {
+        if (member.role === "callback") {
+          this.report(code, `Callback prop '${name}' cannot have a default value; call it with \`${name}?.()\` instead.`, binding.node);
+        } else {
+          defaultValue = this.lowerNode(binding.defaultValue);
+          if (defaultValue && collectDependencies(defaultValue).length > 0) {
+            this.report(code, `The default for '${name}' must be a constant: it cannot read state or other props.`, binding.defaultValue);
+            defaultValue = null;
+          }
+        }
+      }
+      out.push({ kind: "PropDecl", name, optional: member.optional || binding?.defaultValue != null, defaultValue, role: member.role, type: member.type });
+      if (binding) {
+        if (this.componentScope.hasOwn(name)) {
+          this.report(code, `'${name}' is already declared in this component.`, binding.node);
+        } else {
+          this.componentScope.declare(name, { kind: "prop", name, role: member.role });
+        }
+      }
+    }
+    return out;
+  }
+
+  /** The members of a props type: an `interface` or a `type` alias of an object type, with plain named members. */
+  protected propMembers(decl: TypeDeclarationAnalysis): Map<string, { optional: boolean; role: "value" | "callback"; type: PropTypeIR; node: Node }> | null {
+    const code = DiagnosticCode.InvalidProps;
+    const node = decl.node;
+    let elements: readonly Node[];
+    if (isInterfaceDeclaration(node)) {
+      if (node.heritageClauses && node.heritageClauses.length > 0) {
+        this.report(code, `Props type '${decl.name}' cannot extend another type: list the props in one interface.`, node);
+        return null;
+      }
+      elements = node.members;
+    } else if (isTypeLiteralNode(node.type)) {
+      elements = node.type.members;
+    } else {
+      this.report(code, `Props type '${decl.name}' must be an object type: \`type ${decl.name} = { … }\`.`, node);
+      return null;
+    }
+    const out = new Map<string, { optional: boolean; role: "value" | "callback"; type: PropTypeIR; node: Node }>();
+    for (const element of elements) {
+      const member = element as unknown as { kind: SyntaxKind; name?: Node; type?: Node; postfixToken?: Node };
+      const isProperty = member.kind === SyntaxKind.PropertySignature;
+      const isMethod = member.kind === SyntaxKind.MethodSignature;
+      if ((!isProperty && !isMethod) || !member.name || !isIdentifier(member.name)) {
+        this.report(code, `Props type '${decl.name}': members must be plain \`name: type\` or \`name(): void\`.`, element);
+        continue;
+      }
+      const optional = member.postfixToken?.kind === SyntaxKind.QuestionToken;
+      const typeNode = member.type ? unwrapTypeParens(member.type) : null;
+      const role = isMethod || (typeNode !== null && isFunctionTypeNode(typeNode)) ? "callback" : "value";
+      const type: PropTypeIR = role === "callback" ? { kind: "Function" } : this.propType(typeNode);
+      out.set(member.name.text, { optional, role, type, node: element });
+    }
+    return out;
+  }
+
+  protected lowerHooks(): { hooks: HookIR[]; state: StateIR[] } {
+    const hooks: HookIR[] = [];
+    const state: StateIR[] = [];
+    for (const hook of this.component.hooks) {
+      if (hook.kind !== "const" && hook.kind !== "useStore") this.requireImport(hook.kind, hook.call);
+      switch (hook.kind) {
+        case "useStore":
+          this.lowerStore(hook, state, hooks);
+          break;
+        case "useUpdate":
+        case "useInput":
+        case "useMount":
+        case "useUnmount": {
+          const kind = HANDLER_KIND[hook.kind];
+          const signature = HANDLER_SIGNATURES[kind];
+          this.functionDepth++;
+          // The component is going away: it can no longer render, so there is nothing for a setter to do.
+          if (hook.kind === "useUnmount") this.settersForbidden++;
+          const handler = lowerFunction(this, hook.handler, {
+            paramTypes: signature.params.map((p) => p.type),
+            returns: "void",
+            what: `${hook.kind} handler`,
+          });
+          if (hook.kind === "useUnmount") this.settersForbidden--;
+          this.functionDepth--;
+          if (handler) hooks.push({ kind, handler, span: this.span(hook.statement) });
+          break;
+        }
+        case "useRef":
+          this.lowerUseRef(hook);
+          break;
+        case "useSound":
+          this.lowerUseSound(hook);
+          break;
+        case "const": {
+          // Lowered now, against what is declared above it (state, refs, earlier consts), outside any handler.
+          const value = this.lowerNode(hook.initializer);
+          if (!value) break;
+          if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
+            this.report(DiagnosticCode.InvalidComponentBody, `'${hook.name}' is already declared in this component (or reserved).`, hook.declaration.name);
+            break;
+          }
+          this.componentScope.declare(hook.name, { kind: "derived", name: hook.name, value });
+          break;
+        }
+        case "useState": {
+          const taken = [hook.valueName, hook.setterName].find((n) => n !== null && this.componentScope.hasOwn(n));
+          if (taken) {
+            this.report(DiagnosticCode.InvalidUseState, `'${taken}' is already declared in this component.`, hook.declaration);
+            continue;
+          }
+          if (!this.claimName(hook.valueName, hook.declaration)) continue;
+          if (hook.setterName !== null && !this.claimName(hook.setterName, hook.declaration)) continue;
+          const id = stateId(this.component.name, hook.valueName);
+          if (!hook.initializer) {
+            this.report(DiagnosticCode.InvalidUseState, "useState requires an initial value.", hook.call);
+            continue;
+          }
+          // Initial values are evaluated before any state exists: lower with the scope as it is so far,
+          // then reject any state reads.
+          const initialValue = this.lowerNode(hook.initializer);
+          if (!initialValue) continue;
+          if (stateReads(initialValue).length > 0) {
+            this.report(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state (it may read props).", hook.initializer);
+            continue;
+          }
+          const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
+          if (!type) continue;
+          state.push({ kind: "State", id, name: hook.valueName, type, initialValue });
+          this.stateTypes.set(id, type);
+          hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.span(hook.declaration) });
+          this.componentScope.declare(hook.valueName, { kind: "state", id });
+          if (hook.setterName !== null) this.componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
+          break;
+        }
+      }
+    }
+    return { hooks, state };
+  }
+
+  /**
+   * `const hp = useGame((s) => s.player.hp)`: a state mirroring one leaf of the game state (a snapshot, refreshed
+   * when the leaf changes), or `const collect = useGame((s) => s.collect)`: an action, called as a statement in a
+   * handler. The path is checked against the state tree `GameState.ts` declares.
+   */
+  protected lowerStore(hook: UseStoreCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
+    const definition = this.gameState;
+    const at = (node: Node = hook.call): Node => node;
+    if (!definition || !this.storeImports.has(hook.storeName)) return; // already reported where the import was checked
+    if (this.componentScope.hasOwn(hook.valueName) || !this.claimName(hook.valueName, hook.declaration)) {
+      if (this.componentScope.hasOwn(hook.valueName)) this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component.`, hook.declaration);
+      return;
+    }
+    const first = hook.path[0] as string;
+    if (hook.path.length === 1 && definition.actions.includes(first)) {
+      this.componentScope.declare(hook.valueName, { kind: "action", name: hook.valueName, action: first });
+      return;
+    }
+    // Walk the state tree; a typo is reported with the nearest key at the level it went wrong.
+    let node: GameStateLeaf | GameStateNode = definition.tree;
+    const walked: string[] = [];
+    for (const key of hook.path) {
+      if (node.kind === "leaf") {
+        this.report(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is a ${node.type}, so it has no '${key}'.`, at(hook.selector));
+        return;
+      }
+      const child: GameStateLeaf | GameStateNode | undefined = Object.hasOwn(node.children, key) ? node.children[key] : undefined;
+      if (!child) {
+        const options = [...Object.keys(node.children), ...(walked.length === 0 ? definition.actions : [])];
+        const near = nearest(key, options);
+        this.report(
+          DiagnosticCode.InvalidGameState,
+          `'${[...walked, key].join(".")}' is not in the game state${near ? ` (did you mean "${[...walked, near].join(".")}"?)` : ""}. ${walked.length === 0 ? "State" : `'${walked.join(".")}' has`}: ${options.length > 0 ? options.join(", ") : "nothing"}.`,
+          at(hook.selector),
+        );
+        return;
+      }
+      walked.push(key);
+      node = child;
+    }
+    if (node.kind === "node") {
+      this.report(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is an object: select one of its values (${Object.keys(node.children).map((k) => `${walked.join(".")}.${k}`).join(", ")}). A component reads leaves, so it re-renders only when one it uses changes.`, at(hook.selector));
+      return;
+    }
+    const id = stateId(this.component.name, hook.valueName);
+    const initialValue: ExprIR = node.type === "number" ? { kind: "NumberLiteral", value: node.initial as number } : node.type === "string" ? { kind: "StringLiteral", value: node.initial as string } : { kind: "BooleanLiteral", value: node.initial as boolean };
+    const type: TypeIR = { kind: "Primitive", name: node.type };
+    state.push({ kind: "State", id, name: hook.valueName, type, initialValue, globalKey: hook.path.join(".") });
+    this.stateTypes.set(id, type);
+    hooks.push({ kind: "UseState", state: id, setterName: null, span: this.span(hook.declaration) });
+    this.componentScope.declare(hook.valueName, { kind: "state", id });
+  }
+
+  /**
+   * `const cooldown = useRef(0)` / `useRef<number>(0)`: a value that persists
+   * but never renders. The initial value is evaluated once and must not read state.
+   */
+  protected lowerUseRef(hook: UseRefCallAnalysis): void {
+    const code = DiagnosticCode.InvalidUseRef;
+    if (hook.arguments.length !== 1) {
+      this.report(code, "useRef takes one initial value: `const timer = useRef(0)`. Refs hold values; they do not point at elements.", hook.call);
+      return;
+    }
+    if (!this.checkHandleName(hook.name, code, hook.declaration.name)) return;
+    const initialValue = this.lowerNode(hook.arguments[0]!);
+    if (!initialValue) return;
+    if (stateReads(initialValue).length > 0) {
+      this.report(code, "useRef's initial value must not read state; it is evaluated once (it may read props).", hook.arguments[0]!);
+      return;
+    }
+    const type = this.valueType(hook.typeArgument, initialValue, hook.call, "useRef", code);
+    if (!type || !this.claimName(hook.name, hook.declaration, code)) return;
+    const id = refId(this.component.name, hook.name);
+    this.refs.push({ kind: "Ref", id, name: hook.name, type, initialValue, span: this.span(hook.declaration) });
+    this.componentScope.declare(hook.name, { kind: "ref", id, name: hook.name });
+  }
+
+  /**
+   * `const playHit = useSound("hit.wav")`: the path is a string literal, so a
+   * missing asset can be reported at build time once there is an asset list.
+   * The binding is a function that is only called, as a statement in a handler.
+   */
+  protected lowerUseSound(hook: UseSoundCallAnalysis): void {
+    const code = DiagnosticCode.InvalidUseSound;
+    const argument = hook.arguments.length === 1 ? unwrapParens(hook.arguments[0]!) : null;
+    if (!argument || !(isStringLiteral(argument) || isNoSubstitutionTemplateLiteral(argument))) {
+      this.report(code, "useSound takes one file path, written as a string literal: `const playHit = useSound(\"hit.wav\")`.", hook.call);
+      return;
+    }
+    if (!this.checkHandleName(hook.name, code, hook.declaration.name)) return;
+    if (!this.claimName(hook.name, hook.declaration, code)) return;
+    const id = soundId(this.component.name, hook.name);
+    this.sounds.push({ kind: "Sound", id, name: hook.name, path: argument.text, span: this.span(hook.declaration) });
+    this.componentScope.declare(hook.name, { kind: "sound", id, name: hook.name });
+  }
+
+  /** A `useRef` binding must not collide with state, setters or the reserved call names. */
+  protected checkHandleName(name: string, code: CompilerDiagnostic["code"], at: Node): boolean {
+    if (this.componentScope.has(name) || this.isCallableName(name)) {
+      this.report(code, `'${name}' is already declared in this component (or reserved).`, at);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * The type of a `useState` value: its type argument (a primitive, an array,
+   * or any type written in this file, such as a record interface), or
+   * inferred from the initial value. An array or record needs the type
+   * argument unless it comes from a prop, as in TypeScript, where `[]` alone
+   * would be `never[]`.
+   */
+  protected hookStateType(typeArgument: Node | null, initial: ExprIR, at: Node): TypeIR | null {
+    if (typeArgument) return this.typeFromNode(typeArgument);
+    const primitive = this.inferType(initial);
+    if (primitive) return { kind: "Primitive", name: primitive };
+    if (initial.kind === "PropRead") {
+      const decl = this.propDecls.find((p) => p.name === initial.name);
+      if (decl?.role === "value") return propTypeToType(decl.type);
+    }
+    const code = DiagnosticCode.UnsupportedStateType;
+    if (initial.kind === "ArrayLiteral" || initial.kind === "ObjectLiteral") {
+      this.report(code, `An ${initial.kind === "ArrayLiteral" ? "array" : "object"} state needs its type: \`useState<${initial.kind === "ArrayLiteral" ? "EnemyData[]" : "EnemyData"}>(…)\`, with the type declared in this file.`, at);
+    } else {
+      this.report(code, "Cannot infer the type; use a number/string/boolean literal, a prop, or `useState<T>(...)`.", at);
+    }
+    return null;
+  }
+
+  /** The type of a `useRef` value: its type argument, or inferred from a literal initial value. Refs hold primitives only. */
+  protected valueType(typeArgument: Node | null, initial: ExprIR, at: Node, hook: string, code: CompilerDiagnostic["code"]): ValueType | null {
+    if (typeArgument) {
+      switch (typeArgument.kind) {
+        case SyntaxKind.NumberKeyword: return "number";
+        case SyntaxKind.StringKeyword: return "string";
+        case SyntaxKind.BooleanKeyword: return "boolean";
+        default:
+          this.report(code, `${hook} type argument must be number, string or boolean.`, typeArgument);
+          return null;
+      }
+    }
+    const inferred = this.inferType(initial);
+    if (!inferred) {
+      this.report(code, `Cannot infer the type; use a number/string/boolean literal, a prop, or \`${hook}<T>(...)\`.`, at);
+    }
+    return inferred;
+  }
+}

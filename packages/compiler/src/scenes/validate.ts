@@ -214,7 +214,7 @@ function numberValue(node: Expression): number | null {
   return null;
 }
 
-export function describeType(type: PropTypeIR): string {
+function describeType(type: PropTypeIR): string {
   switch (type.kind) {
     case "Primitive": return type.name;
     case "Literals": return type.values.map((v) => JSON.stringify(v)).join(" | ");

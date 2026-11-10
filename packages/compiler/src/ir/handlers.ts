@@ -2,7 +2,7 @@ import type { HandlerHookIR, TypeIR } from "./types.ts";
 
 const number: TypeIR = { kind: "Primitive", name: "number" };
 
-export interface HandlerSignature {
+interface HandlerSignature {
   /** The runtime method the hook overrides. */
   readonly method: string;
   /** Canonical parameters the runtime passes. A handler may declare a prefix of them under its own names. */

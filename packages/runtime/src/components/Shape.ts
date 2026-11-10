@@ -13,7 +13,7 @@ export interface ShapeProps {
   color?: string;
 }
 
-export const DEFAULT_SHAPE_COLOR = "white";
+const DEFAULT_SHAPE_COLOR = "white";
 
 /**
  * A filled rectangle or circle, for debugging colliders and prototyping before

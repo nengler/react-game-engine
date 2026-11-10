@@ -1,30 +1,10 @@
-import {
-  assertNever,
-  type ChildIR,
-  type ComponentIR,
-  type ComponentRef,
-  type ElementIR,
-  type ExprIR,
-  type IRModule,
-  type PropIR,
-  type ParamIR,
-  type FunctionIR,
-  type HandlerHookIR,
-  type RefId,
-  type SoundId,
-  isHandlerHook,
-  type StatementIR,
-  type TypeIR,
-  walkExpr,
-  type StateId,
-  type StateIR,
-  type KeyedListChildIR,
-  type LocalId,
-  functionReadsParam,
-} from "../ir/types.ts";
-import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
+import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type StatementIR, type TypeIR, walkExpr } from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
 import { CodeWriter } from "./writer.ts";
+import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
+import { ElementEmitter } from "./elements.ts";
+
+
 
 export interface GeneratorOptions {
   /** Module specifier the generated code imports runtime classes from. */
@@ -208,86 +188,12 @@ function collectComponentImports(module: IRModule): Map<string, { defaultName: s
   );
 }
 
-/**
- * What children attach to. A built-in takes them by position among its
- * children (slot); a component takes the children its parent passes at its
- * `{children}` slot (`passed`), in the order they were written.
- */
-interface Mount {
-  readonly ref: string;
-  readonly passed: boolean;
-}
-
-const ROOT: Mount = { ref: "this", passed: false };
-
-function mountOf(el: ElementIR, ref: string): Mount {
-  return { ref, passed: el.component.kind !== "Intrinsic" };
-}
-
-function addChild(mount: Mount, child: string, siblings: readonly ChildIR[], index: number): string {
-  return mount.passed ? `${mount.ref}.attachPassedChild(${child}, ${index})` : `${mount.ref}.addChild(${child}${slotArgument(siblings, index)})`;
-}
-
-function queueAddChild(mount: Mount, child: string, siblings: readonly ChildIR[], index: number): string {
-  return mount.passed ? `${mount.ref}.queueAttachPassedChild(${child}, ${index})` : `${mount.ref}.queueAddChild(${child}${slotArgument(siblings, index)})`;
-}
-
-function queueRemoveChild(mount: Mount, child: string): string {
-  return mount.passed ? `${mount.ref}.queueDetachPassedChild(${child})` : `${mount.ref}.queueRemoveChild(${child})`;
-}
-
-/** The container holding `{children}` and the slot's index among its children, found through static elements (`{children}` is only allowed there). */
-function findChildrenSlot(children: readonly ChildIR[], host: string): { host: string; index: number } | null {
-  for (const [index, child] of children.entries()) {
-    if (child.kind === "ChildrenSlot") return { host, index };
-  }
-  for (const child of children) {
-    if (child.kind !== "StaticChild") continue;
-    const found = findChildrenSlot(child.element.children, `this.${child.element.fieldName}`);
-    if (found) return found;
-  }
-  return null;
-}
-
-/** Where an element lives: always present (readonly), or only while an enclosing condition holds. */
-type Presence = "persistent" | "conditional";
-
-class ComponentGenerator {
-  readonly #c: ComponentIR;
-  readonly #requiredHostProps: Readonly<Record<string, readonly string[]>>;
-  readonly #intrinsicHooks: Readonly<Record<string, readonly string[]>>;
-  #w: CodeWriter;
-  readonly #stateById: ReadonlyMap<StateId, StateIR>;
-  /**
-   * While emitting a keyed list: inside a callback prop, a read of the list's
-   * item is its current value, looked up by the item's key (`text`), because
-   * the callback was created with the item's first value.
-   */
-  #itemLookup: { readonly id: LocalId; readonly text: string } | null = null;
-  /** Greater than zero while emitting a callback prop's body. */
-  #callbackDepth = 0;
-  /** The imported game state (`useGame`), when the module uses one. */
-  readonly #storeName: string;
-
-  constructor(
-    component: ComponentIR,
-    writer: CodeWriter,
-    requiredHostProps: Readonly<Record<string, readonly string[]>>,
-    intrinsicHooks: Readonly<Record<string, readonly string[]>>,
-    storeName: string,
-  ) {
-    this.#storeName = storeName;
-    this.#requiredHostProps = requiredHostProps;
-    this.#intrinsicHooks = intrinsicHooks;
-    this.#c = component;
-    this.#w = writer;
-    this.#stateById = new Map(component.state.map((s) => [s.id, s]));
-  }
-
+/** The component generator: each layer in its own file (expressions, handlers, elements), each extending the one before it. */
+class ComponentGenerator extends ElementEmitter {
   emit(): void {
-    const c = this.#c;
-    const w = this.#w;
-    const hasRender = this.#hostHasDynamicProps() || this.#childrenNeedRender(c.root.children);
+    const c = this.c;
+    const w = this.w;
+    const hasRender = this.hostHasDynamicProps() || this.childrenNeedRender(c.root.children);
 
     // A component with props passes them (and its defaults) up to the runtime host, which owns `this.props`.
     // `children` is not a runtime prop: the parent mounts elements at the `{children}` slot instead.
@@ -298,54 +204,54 @@ class ComponentGenerator {
       for (const s of c.state) {
         if (s.globalKey !== undefined) {
           // A snapshot of the game's value (the store is the truth); refreshed in `commitState` when the leaf changes.
-          w.line(`${s.name}: ${typeText(s.type)} = ${this.#storeName}.store.get<${typeText(s.type)}>(${JSON.stringify(s.globalKey)});`);
+          w.line(`${s.name}: ${typeText(s.type)} = ${this.storeName}.store.get<${typeText(s.type)}>(${JSON.stringify(s.globalKey)});`);
           continue;
         }
-        w.line(`${s.name}: ${typeText(s.type)} = ${this.#expr(s.initialValue, true)};`);
+        w.line(`${s.name}: ${typeText(s.type)} = ${this.expr(s.initialValue, true)};`);
         // The value setters write; it becomes `s.name` when the component next renders.
-        if (this.#hasSetter(s.id)) w.line(`${pending(s)}: ${typeText(s.type)} = this.${s.name};`);
+        if (this.hasSetter(s.id)) w.line(`${pending(s)}: ${typeText(s.type)} = this.${s.name};`);
       }
       // The paths it reads: the runtime tells it when one changes (see `GameObject.gameStateKeys`).
       const globals = c.state.filter((s) => s.globalKey !== undefined);
       if (globals.length > 0) {
-        w.line(`override readonly gameStateStore = ${this.#storeName}.store;`);
+        w.line(`override readonly gameStateStore = ${this.storeName}.store;`);
         w.line(`override readonly gameStateKeys: readonly string[] = [${[...new Set(globals.map((s) => JSON.stringify(s.globalKey)))].join(", ")}];`);
       }
       // Refs: plain fields. Reading or writing them never marks anything dirty.
       for (const r of c.refs) {
-        w.line(`${r.name}: ${r.type} = ${this.#expr(r.initialValue, true)};`);
+        w.line(`${r.name}: ${r.type} = ${this.expr(r.initialValue, true)};`);
       }
       // Sounds: one per useSound. Playing is an effect, so nothing is marked dirty.
       for (const s of c.sounds) {
         w.line(`readonly ${s.name}: Sound = new Sound(${JSON.stringify(s.path)});`);
       }
       // Persistent children (field initialisers run after state initialisers, so they can read state).
-      this.#emitElementFields(c.root.children, "persistent");
+      this.emitElementFields(c.root.children, "persistent");
 
       w.blank();
       const defaults = c.props.filter((p) => p.defaultValue !== null);
-      const defaultsObject = defaults.length > 0 ? `{ ${defaults.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.defaultValue!, true)}`).join(", ")} }` : null;
+      const defaultsObject = defaults.length > 0 ? `{ ${defaults.map((p) => `${propertyKey(p.name)}: ${this.expr(p.defaultValue!, true)}`).join(", ")} }` : null;
       // Every prop optional: the parent may omit the object entirely.
       const constructorParams = runtimeProps ? `props: ${runtimeProps}${c.props.every((p) => p.optional) ? " = {}" : ""}` : "";
       w.block(`constructor(${constructorParams})`, () => {
         const staticHostProps = c.root.props.filter((p) => p.kind === "StaticProp");
         // A built-in's constructor may require a prop (a Sprite's `image`) that is dynamic here. `super()` runs before
         // state exists, so it gets a placeholder and its real value in the first `render()`, which the constructor runs.
-        const required = this.#requiredHostProps[c.root.component.name] ?? [];
+        const required = this.requiredHostProps[c.root.component.name] ?? [];
         const placeholders = c.root.props
           .filter((p) => p.kind === "DynamicProp" && required.includes(p.name))
           .map((p) => `${propertyKey(p.name)}: undefined as never`);
-        const hostEntries = [...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`), ...placeholders];
+        const hostEntries = [...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`), ...placeholders];
         const host = hostEntries.length > 0 ? `{ ${hostEntries.join(", ")} }` : "{}";
         if (c.propsType) w.line(`super(${host}, props${defaultsObject ? `, ${defaultsObject}` : ""});`);
         else w.line(hostEntries.length > 0 ? `super(${host});` : "super();");
         // A callback on the root (`<Collider onCollisionEnter>`) is assigned after `super()`: an arrow that uses
         // `this` cannot be created inside the call to it.
         for (const p of c.root.props) {
-          if (p.kind === "CallbackProp") w.line(`this.${p.name} = ${this.#callback(p.handler)};`);
+          if (p.kind === "CallbackProp") w.line(`this.${p.name} = ${this.callback(p.handler)};`);
         }
-        this.#emitStaticTransform(c.root.transform, "this", "transform");
-        this.#emitStaticWiring(c.root.children, ROOT);
+        this.emitStaticTransform(c.root.transform, "this", "transform");
+        this.emitStaticWiring(c.root.children, ROOT);
         const slot = findChildrenSlot(c.root.children, "this");
         if (slot) {
           // Where a parent's children mount: the container holding `{children}`, and the slot's position among its children.
@@ -369,7 +275,7 @@ class ComponentGenerator {
         switch (hook.kind) {
           case "UseState": {
             if (hook.setterName === null) break;
-            const s = this.#state(hook.state);
+            const s = this.state(hook.state);
             const type = typeText(s.type);
             w.blank();
             // React semantics: reads see the value from the last render; updaters chain on the pending value.
@@ -391,562 +297,29 @@ class ComponentGenerator {
         }
       }
 
-      const settable = c.state.filter((s) => s.globalKey === undefined && this.#hasSetter(s.id));
+      const settable = c.state.filter((s) => s.globalKey === undefined && this.hasSetter(s.id));
       const shared = c.state.filter((s) => s.globalKey !== undefined);
       if (settable.length > 0 || shared.length > 0) {
         w.blank();
         w.block("override commitState(): void", () => {
           for (const s of settable) w.line(`this.${s.name} = ${pendingRef(s)};`);
           // Every component that reads a leaf refreshes its snapshot when the game changes it, whoever acted.
-          for (const s of shared) w.line(`this.${s.name} = ${this.#storeName}.store.get<${typeText(s.type)}>(${JSON.stringify(s.globalKey)});`);
+          for (const s of shared) w.line(`this.${s.name} = ${this.storeName}.store.get<${typeText(s.type)}>(${JSON.stringify(s.globalKey)});`);
         });
       }
 
-      this.#emitHandlerMethods();
+      this.emitHandlerMethods();
 
       if (hasRender) {
         w.blank();
         w.block("override render(): void", () => {
           for (const prop of c.root.props) {
-            if (prop.kind === "DynamicProp") w.line(`${access("this", prop.name)} = ${this.#expr(prop.value, true)};`);
+            if (prop.kind === "DynamicProp") w.line(`${access("this", prop.name)} = ${this.expr(prop.value, true)};`);
           }
-          this.#emitDynamicTransform(c.root.transform, "this", "transform");
-          this.#emitChildUpdates(c.root.children, ROOT, "persistent");
+          this.emitDynamicTransform(c.root.transform, "this", "transform");
+          this.emitChildUpdates(c.root.children, ROOT, "persistent");
         });
       }
     });
   }
-
-  // -- handlers -------------------------------------------------------------
-
-  /**
-   * One override per hook kind. A single handler is inlined; several become
-   * private methods called in source order, so a `return;` in one cannot skip the others.
-   */
-  #emitHandlerMethods(): void {
-    const w = this.#w;
-    const byKind = new Map<HandlerHookIR["kind"], HandlerHookIR[]>();
-    for (const hook of this.#c.hooks) {
-      if (!isHandlerHook(hook)) continue;
-      byKind.set(hook.kind, [...(byKind.get(hook.kind) ?? []), hook]);
-    }
-    for (const [kind, hooks] of byKind) {
-      const signature = HANDLER_SIGNATURES[kind];
-      // The root built-in may implement this hook itself (an AnimatedSprite advances its frame in `onUpdate`).
-      // Overriding it would silently stop that, so the override calls `super` first, with the hook's own parameters.
-      const callsSuper = (this.#intrinsicHooks[this.#c.root.component.name] ?? []).includes(signature.method);
-      w.blank();
-      if (hooks.length === 1 && !callsSuper) {
-        const handler = hooks[0]!.handler;
-        w.block(`override ${signature.method}(${this.#params(handler)}): void`, () => this.#stmts(handler.body));
-        continue;
-      }
-      const canonical = signature.params.map((p) => annotated(p.name, p.type)).join(", ");
-      w.block(`override ${signature.method}(${canonical}): void`, () => {
-        if (callsSuper) w.line(`super.${signature.method}(${signature.params.map((p) => p.name).join(", ")});`);
-        hooks.forEach((hook, i) => {
-          const args = signature.params.slice(0, hook.handler.params.length).map((p) => p.name).join(", ");
-          w.line(`this.#${signature.method}${i}(${args});`);
-        });
-      });
-      hooks.forEach((hook, i) => {
-        w.blank();
-        w.block(`#${signature.method}${i}(${this.#params(hook.handler)}): void`, () => this.#stmts(hook.handler.body));
-      });
-    }
-  }
-
-  #params(fn: FunctionIR): string {
-    return fn.params.map(param).join(", ");
-  }
-
-  #hasSetter(state: StateId): boolean {
-    return this.#c.hooks.some((h) => h.kind === "UseState" && h.state === state && h.setterName !== null);
-  }
-
-  #setter(state: StateId): string {
-    for (const hook of this.#c.hooks) {
-      if (hook.kind === "UseState" && hook.state === state && hook.setterName !== null) return hook.setterName;
-    }
-    throw new Error(`State ${state} has no setter in component ${this.#c.name}`);
-  }
-
-  #updater(fn: FunctionIR): string {
-    const params = fn.params.map(param).join(", ");
-    const only = fn.body.length === 1 ? fn.body[0]! : null;
-    if (only?.kind === "Return" && only.value) return `(${params}) => ${this.#arrowBody(only.value)}`;
-    const inner = new CodeWriter();
-    const outer = this.#w;
-    this.#w = inner;
-    this.#stmts(fn.body);
-    this.#w = outer;
-    return this.#arrow(params, inner.toString().trimEnd().split("\n"), fn);
-  }
-
-  // -- handler statements --------------------------------------------------
-
-  #stmts(body: readonly StatementIR[]): void {
-    const w = this.#w;
-    for (const stmt of body) {
-      switch (stmt.kind) {
-        case "ExpressionStatement":
-          w.line(`${this.#expr(stmt.expression, true)};`);
-          break;
-        case "SetState":
-          w.line(`this.${this.#setter(stmt.state)}(${"updater" in stmt ? this.#updater(stmt.updater) : this.#expr(stmt.value, true)});`);
-          break;
-        case "PlaySound":
-          w.line(`this.${this.#soundField(stmt.sound)}.play();`);
-          break;
-        case "CallAction":
-          w.line(`${this.#storeName}.getState().${stmt.action}(${stmt.args.map((a) => this.#expr(a, true)).join(", ")});`);
-          break;
-        case "Assign": {
-          const target = `this.${this.#refField(stmt.target.ref)}`;
-          w.line(`${target} ${stmt.operator} ${this.#expr(stmt.value, true)};`);
-          break;
-        }
-        case "LocalConst":
-          w.line(`const ${stmt.name} = ${this.#expr(stmt.value, true)};`);
-          break;
-        case "Return":
-          w.line(stmt.value ? `return ${this.#expr(stmt.value, true)};` : "return;");
-          break;
-        case "If":
-          w.open(`if (${this.#expr(stmt.test, true)}) {`);
-          this.#stmts(stmt.then);
-          if (stmt.else.length > 0) {
-            w.close();
-            w.open("} else {");
-            this.#stmts(stmt.else);
-          }
-          w.close("}");
-          break;
-        default:
-          assertNever(stmt, "statement");
-      }
-    }
-  }
-
-  // -- fields ---------------------------------------------------------------
-
-  #emitElementFields(children: readonly ChildIR[], presence: Presence): void {
-    for (const child of children) {
-      if (child.kind === "ChildrenSlot") continue;
-      const el = child.element;
-      const type = typeName(el.component);
-      if (child.kind === "KeyedListChild") {
-        // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
-        this.#w.line(`readonly ${el.fieldName}Items: Map<string | number, ${type}> = new Map();`);
-        this.#w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
-        if (this.#listNeedsRecords(child)) this.#w.line(`#${el.fieldName}Records: Map<string | number, { current: ${this.#listItemType(child)} }> = new Map();`);
-        continue;
-      }
-      const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
-      if (childPresence === "persistent") {
-        this.#w.line(`readonly ${el.fieldName}: ${type} = ${this.#construct(el)};`);
-      } else {
-        this.#w.line(`${el.fieldName}: ${type} | null = null;`);
-      }
-      this.#emitElementFields(el.children, childPresence);
-    }
-  }
-
-  /** Attach persistent children to their parents (constructor only). */
-  #emitStaticWiring(children: readonly ChildIR[], mount: Mount): void {
-    for (const [index, child] of children.entries()) {
-      if (child.kind !== "StaticChild") continue;
-      const ref = `this.${child.element.fieldName}`;
-      this.#emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
-      this.#w.line(`${addChild(mount, ref, children, index)};`);
-      this.#emitStaticWiring(child.element.children, mountOf(child.element, ref));
-    }
-  }
-
-  // -- render ---------------------------------------------------------------
-
-  #emitChildUpdates(children: readonly ChildIR[], mount: Mount, presence: Presence): void {
-    const w = this.#w;
-    for (const [index, child] of children.entries()) {
-      switch (child.kind) {
-        case "StaticChild": {
-          const el = child.element;
-          if (!this.#elementNeedsRender(el)) break;
-          const ref = `this.${el.fieldName}`;
-          if (presence === "persistent") {
-            this.#emitElementUpdates(el, ref, "persistent");
-          } else {
-            // Inside a conditional subtree the field may be null (e.g. the subtree is unmounted).
-            w.block(`if (${ref} !== null)`, () => this.#emitElementUpdates(el, ref, "conditional"));
-          }
-          break;
-        }
-        case "ConditionalChild": {
-          const el = child.element;
-          const ref = `this.${el.fieldName}`;
-          w.open(`if (${this.#expr(child.condition, true)}) {`);
-          w.block(`if (${ref} === null)`, () => {
-            w.line(`${ref} = ${this.#construct(el)};`);
-            this.#emitStaticTransform(el.transform, ref, transformTarget(el));
-            this.#emitMountStatics(el.children, mountOf(el, ref));
-            w.line(`${queueAddChild(mount, ref, children, index)};`);
-          });
-          this.#emitElementUpdates(el, ref, "conditional");
-          w.close();
-          w.open(`} else if (${ref} !== null) {`);
-          w.line(`${queueRemoveChild(mount, ref)};`);
-          for (const line of this.#subtreeResets(el)) w.line(line);
-          w.close("}");
-          break;
-        }
-        case "KeyedListChild":
-          this.#emitList(child, mount, index);
-          break;
-        case "ChildrenSlot":
-          break; // nothing renders here: the parent mounts its elements
-        default:
-          assertNever(child, "child");
-      }
-    }
-  }
-
-  #emitElementUpdates(el: ElementIR, ref: string, presence: Presence): void {
-    this.#emitPropUpdates(el, ref);
-    this.#emitDynamicTransform(el.transform, ref, transformTarget(el));
-    this.#emitChildUpdates(el.children, mountOf(el, ref), presence);
-  }
-
-  #emitPropUpdates(el: ElementIR, ref: string): void {
-    const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
-    if (el.component.kind === "Intrinsic") {
-      for (const prop of dynamic) this.#w.line(`${access(ref, prop.name)} = ${this.#expr(prop.value, true)};`);
-    } else if (dynamic.length > 0) {
-      // A component takes all its changed props in one call, which marks it dirty once.
-      this.#w.line(`${ref}.updateProps(${this.#propsObject(dynamic)});`);
-    }
-  }
-
-  /**
-   * A keyed list, in its own block so its temporaries (`$`-prefixed: author
-   * names cannot start with `$`) never clash: compute every key and reject
-   * duplicates before changing anything; then update an existing key's
-   * instance, or construct and queue a new one at (slot, position); queue
-   * removal of keys that are gone; and queue a reorder only if the key
-   * sequence changed.
-   */
-  #emitList(list: KeyedListChildIR, mount: Mount, slot: number): void {
-    const w = this.#w;
-    const el = list.element;
-    const items = `this.${el.fieldName}Items`;
-    const order = `this.#${el.fieldName}Order`;
-    const records = this.#listNeedsRecords(list) ? `this.#${el.fieldName}Records` : null;
-    const item = list.item.name;
-    const position = list.index?.name ?? "$n";
-    const params = list.index ? `${item}, ${list.index.name}` : item;
-    const target = transformTarget(el);
-    const where = `in the <${el.component.name}> list of ${this.#c.name}`;
-    w.open("{");
-    w.line(`const $parent = ${mount.ref};`);
-    w.line(`const $list = ${this.#expr(list.source, true)};`);
-    w.line(`const $keys = $list.map((${params}) => ${this.#arrowBody(list.key)});`);
-    w.line("const $seen = new Set<string | number>();");
-    w.block("for (const $key of $keys)", () => {
-      w.line(`if ($seen.has($key)) throw new Error("Duplicate key " + JSON.stringify($key) + ${JSON.stringify(` ${where}.`)});`);
-      w.line("$seen.add($key);");
-    });
-    w.block(`for (const [${position}, ${item}] of $list.entries())`, () => {
-      w.line(`const $key = $keys[${position}]!;`);
-      w.line(`let $item = ${items}.get($key);`);
-      w.open("if ($item === undefined) {");
-      // A callback is created once, with the item's first value. It reads the item's current value through this
-      // holder, which every render refreshes, and which it keeps after the item is removed (an unmount hook may call it).
-      if (records) w.line(`const $rec = { current: ${item} };`);
-      this.#itemLookup = records ? { id: list.item.id, text: "$rec.current" } : null;
-      try {
-        w.line(`$item = ${this.#construct(el)};`);
-      } finally {
-        this.#itemLookup = null;
-      }
-      this.#emitStaticTransform(el.transform, "$item", target);
-      w.line(`${items}.set($key, $item);`);
-      if (records) w.line(`${records}.set($key, $rec);`);
-      w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, ${position})` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
-      if (records || el.props.some((p) => p.kind === "DynamicProp")) {
-        w.close();
-        w.open("} else {");
-        if (records) w.line(`${records}.get($key)!.current = ${item};`);
-        this.#emitPropUpdates(el, "$item");
-      }
-      w.close("}");
-      this.#emitDynamicTransform(el.transform, "$item", target);
-    });
-    w.block(`for (const [$key, $item] of ${items})`, () => {
-      w.block("if (!$seen.has($key))", () => {
-        w.line(`${queueRemoveChild({ ref: "$parent", passed: mount.passed }, "$item")};`);
-        w.line(`${items}.delete($key);`);
-        if (records) w.line(`${records}.delete($key);`);
-      });
-    });
-    w.block(`if ($keys.length !== ${order}.length || $keys.some(($k, $i) => $k !== ${order}[$i]))`, () => {
-      const ordered = `$keys.map(($k) => ${items}.get($k)!)`;
-      w.line(`${mount.passed ? `$parent.queueReorderPassedChildren(${ordered})` : `$parent.queueReorder(${slot}, ${ordered})`};`);
-      w.line(`${order} = $keys;`);
-    });
-    w.close("}");
-  }
-
-  /** Whether a list's item callbacks read the item, so each key's current item must be kept. */
-  #listNeedsRecords(list: KeyedListChildIR): boolean {
-    return list.element.props.some((p) => p.kind === "CallbackProp" && functionReadsParam(p.handler, list.item.id));
-  }
-
-  /** The element type of a list's source array, named through the state field or the props type. */
-  #listItemType(list: KeyedListChildIR): string {
-    let base = list.source;
-    while (base.kind === "Call" && base.callee.kind === "ArrayMethod") base = base.callee.receiver;
-    if (base.kind === "StateRead") return `${this.#c.name}[${JSON.stringify(this.#state(base.state).name)}][number]`;
-    if (base.kind === "PropRead" && this.#c.propsType) return `NonNullable<${this.#c.propsType}[${JSON.stringify(base.name)}]>[number]`;
-    throw new Error(`Unexpected list source in component ${this.#c.name}`);
-  }
-
-  /** What unmounting a conditional subtree resets: its element fields to null, its lists to empty. */
-  #subtreeResets(el: ElementIR): string[] {
-    return [
-      `this.${el.fieldName} = null;`,
-      ...el.children.flatMap((c) => {
-        if (c.kind === "ChildrenSlot") return [];
-        if (c.kind !== "KeyedListChild") return this.#subtreeResets(c.element);
-        const f = c.element.fieldName;
-        return [`this.${f}Items.clear();`, `this.#${f}Order = [];`, ...(this.#listNeedsRecords(c) ? [`this.#${f}Records.clear();`] : [])];
-      }),
-    ];
-  }
-
-  /** When a conditional subtree mounts, construct its static descendants and attach them immediately. */
-  #emitMountStatics(children: readonly ChildIR[], mount: Mount): void {
-    for (const [index, child] of children.entries()) {
-      if (child.kind !== "StaticChild") continue;
-      const ref = `this.${child.element.fieldName}`;
-      this.#w.line(`${ref} = ${this.#construct(child.element)};`);
-      this.#emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
-      this.#w.line(`${addChild(mount, ref, children, index)};`);
-      this.#emitMountStatics(child.element.children, mountOf(child.element, ref));
-    }
-  }
-
-  /** Transform fields that never change are set once, right after the element is constructed. */
-  #emitStaticTransform(transform: readonly PropIR[], ref: string, target: "transform" | "placement"): void {
-    for (const p of transform) {
-      if (p.kind === "StaticProp") this.#w.line(`${ref}.${target}.${p.name} = ${this.#expr(p.value, true)};`);
-    }
-  }
-
-  /** Transform fields that read state are re-applied on render, like any dynamic prop. */
-  #emitDynamicTransform(transform: readonly PropIR[], ref: string, target: "transform" | "placement"): void {
-    for (const p of transform) {
-      if (p.kind === "DynamicProp") this.#w.line(`${ref}.${target}.${p.name} = ${this.#expr(p.value, true)};`);
-    }
-  }
-
-  #hostHasDynamicProps(): boolean {
-    return [...this.#c.root.props, ...this.#c.root.transform].some((p) => p.kind === "DynamicProp");
-  }
-
-  #elementNeedsRender(el: ElementIR): boolean {
-    return [...el.props, ...el.transform].some((p) => p.kind === "DynamicProp") || this.#childrenNeedRender(el.children);
-  }
-
-  #childrenNeedRender(children: readonly ChildIR[]): boolean {
-    return children.some((c) => c.kind === "ConditionalChild" || c.kind === "KeyedListChild" || (c.kind === "StaticChild" && this.#elementNeedsRender(c.element)));
-  }
-
-  // -- expressions ----------------------------------------------------------
-
-  #construct(el: ElementIR): string {
-    switch (el.component.kind) {
-      case "Local":
-      case "Imported":
-        // Every value prop (static or dynamic) goes in at construction, with the callbacks; dynamic ones are
-        // re-sent through `updateProps` on render.
-        return el.props.length > 0 ? `new ${el.component.name}(${this.#propsObject(el.props)})` : `new ${el.component.name}()`;
-      case "Intrinsic":
-        return el.props.length > 0 ? `new ${el.component.name}(${this.#propsObject(el.props)})` : `new ${el.component.name}()`;
-      default:
-        return assertNever(el.component, "component ref");
-    }
-  }
-
-  #propsObject(props: readonly PropIR[]): string {
-    return `{ ${props.map((p) => `${propertyKey(p.name)}: ${p.kind === "CallbackProp" ? this.#callback(p.handler) : this.#expr(p.value, true)}`).join(", ")} }`;
-  }
-
-  /** A callback passed to a child: an arrow with unannotated parameters, typed by the child's props type. */
-  #callback(fn: FunctionIR): string {
-    const params = fn.params.map(param).join(", ");
-    const inner = new CodeWriter();
-    const outer = this.#w;
-    this.#w = inner;
-    this.#callbackDepth++;
-    try {
-      this.#stmts(fn.body);
-    } finally {
-      this.#callbackDepth--;
-      this.#w = outer;
-    }
-    return this.#arrow(params, inner.toString().trimEnd().split("\n"), fn);
-  }
-
-  /**
-   * An arrow function with a block body, from the statements already written
-   * (relative to column 0). One statement stays on one line. Several are laid
-   * out under the line that will contain the arrow, unless a string in them
-   * spans lines, where adding indentation would change its contents.
-   */
-  #arrow(params: string, lines: readonly string[], fn: FunctionIR): string {
-    if (lines.length === 1) return `(${params}) => { ${lines[0]} }`;
-    const base = JSON.stringify(fn.body).includes("\\n") ? "" : this.#w.indentation;
-    return `(${params}) => {\n${lines.map((l) => `${base}  ${l}`).join("\n")}\n${base}}`;
-  }
-
-  /** A sound's name is its field. */
-  #soundField(id: SoundId): string {
-    const sound = this.#c.sounds.find((s) => s.id === id);
-    if (!sound) throw new Error(`Unknown sound ${id} in component ${this.#c.name}`);
-    return sound.name;
-  }
-
-  /** A ref's name is its field. */
-  #refField(id: RefId): string {
-    const ref = this.#c.refs.find((r) => r.id === id);
-    if (!ref) throw new Error(`Unknown ref ${id} in component ${this.#c.name}`);
-    return ref.name;
-  }
-
-  #state(id: StateId): StateIR {
-    const s = this.#stateById.get(id);
-    if (!s) throw new Error(`Unknown state ${id} in component ${this.#c.name}`);
-    return s;
-  }
-
-  /** The body of an expression-bodied arrow: an object literal needs parentheses, or it would read as a block. */
-  #arrowBody(e: ExprIR): string {
-    const body = this.#expr(e, true);
-    return e.kind === "ObjectLiteral" ? `(${body})` : body;
-  }
-
-  /** Compound sub-expressions are always parenthesised, so operator precedence can never be wrong. */
-  #expr(e: ExprIR, top = false): string {
-    const wrap = (s: string): string => (top ? s : `(${s})`);
-    switch (e.kind) {
-      case "StoreRef": return this.#storeName;
-      case "NumberLiteral": return String(e.value);
-      case "StringLiteral": return JSON.stringify(e.value);
-      case "BooleanLiteral": return String(e.value);
-      case "NullLiteral": return "null";
-      case "StateRead": return `this.${this.#state(e.state).name}`;
-      case "LocalRead": return e.name;
-      case "ParamRead":
-        return this.#itemLookup !== null && this.#callbackDepth > 0 && e.param === this.#itemLookup.id ? this.#itemLookup.text : e.name;
-      case "PropertyRead": return `${e.object.name}.${e.name}`;
-      case "PropRead": {
-        // A prop with a default is never undefined (the runtime applies the default at construction and on update),
-        // but its declared type is optional; `!` says what the runtime guarantees.
-        const guaranteed = this.#c.props.find((p) => p.name === e.name)?.defaultValue != null;
-        return `this.props.${e.name}${guaranteed ? "!" : ""}`;
-      }
-      case "RefRead": return `this.${this.#refField(e.ref)}`;
-      case "MemberRead": return `${this.#expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
-      case "ArrayLiteral": return `[${e.elements.map((el) => `${el.spread ? "..." : ""}${this.#expr(el.value, true)}`).join(", ")}]`;
-      case "ObjectLiteral":
-        if (e.properties.length === 0) return "{}";
-        return `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.#expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.#expr(p.value, true)}`)).join(", ")} }`;
-      case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.#arrowBody(e.body)}`);
-      case "Call": {
-        const args = e.args.map((a) => this.#expr(a, true)).join(", ");
-        switch (e.callee.kind) {
-          case "Function": return `${e.callee.name}(${args})`;
-          case "Method": return `${e.callee.receiver.name}.${e.callee.name}(${args})`;
-          case "Prop": return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
-          case "ArrayMethod": return `${this.#expr(e.callee.receiver)}.${e.callee.name}(${args})`;
-          default: return assertNever(e.callee, "callee");
-        }
-      }
-      case "TemplateLiteral":
-        return "`" + e.quasis.map((q, i) => escapeTemplate(q) + (i < e.expressions.length ? `\${${this.#expr(e.expressions[i]!, true)}}` : "")).join("") + "`";
-      case "Unary": return wrap(`${e.operator}${this.#expr(e.operand)}`);
-      case "Binary": return wrap(`${this.#expr(e.left)} ${e.operator} ${this.#expr(e.right)}`);
-      case "Conditional": return wrap(`${this.#expr(e.test)} ? ${this.#expr(e.whenTrue)} : ${this.#expr(e.whenFalse)}`);
-      default: return assertNever(e, "expression");
-    }
-  }
-}
-
-/** A function parameter as written in generated code; a contextual one has no annotation. */
-function param(p: ParamIR): string {
-  return annotated(p.name, p.type);
-}
-
-function annotated(name: string, type: TypeIR): string {
-  return type.kind === "Contextual" ? name : `${name}: ${typeText(type)}`;
-}
-
-/** A type as written in generated code. */
-function typeText(type: TypeIR): string {
-  switch (type.kind) {
-    case "Primitive":
-    case "Named":
-      return type.name;
-    case "SourceType":
-      return type.text;
-    case "Array": {
-      const element = typeText(type.element);
-      // `(A | B)[]`, not `A | B[]`.
-      return `${IDENTIFIER.test(element) || element.endsWith("[]") ? element : `(${element})`}[]`;
-    }
-    case "Contextual":
-      throw new Error("A contextual type has no text: it is left to inference");
-    default:
-      return assertNever(type, "type");
-  }
-}
-
-/** A transform attribute on a component element places it (`placement`); on a built-in it sets the object's own `transform`. */
-function transformTarget(el: ElementIR): "transform" | "placement" {
-  return el.component.kind === "Intrinsic" ? "transform" : "placement";
-}
-
-function escapeTemplate(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
-}
-
-function typeName(ref: ComponentRef): string {
-  return ref.name;
-}
-
-/**
- * `, <index>` when the parent has children that mount later, so the runtime
- * keeps source order (a conditional lands between its siblings, not at the
- * end). Empty otherwise: appending in source order is already correct.
- */
-function slotArgument(siblings: readonly ChildIR[], index: number): string {
-  return siblings.some((c) => c.kind !== "StaticChild") ? `, ${index}` : "";
-}
-
-/** The private field holding a state slot's next value (`#healthNext`). Private names cannot clash with public ones. */
-function pending(s: StateIR): string {
-  return `#${s.name}Next`;
-}
-
-function pendingRef(s: StateIR): string {
-  return `this.${pending(s)}`;
-}
-
-const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
-
-function propertyKey(name: string): string {
-  return IDENTIFIER.test(name) ? name : JSON.stringify(name);
-}
-
-function access(target: string, name: string): string {
-  return IDENTIFIER.test(name) ? `${target}.${name}` : `${target}[${JSON.stringify(name)}]`;
 }
