@@ -50,6 +50,18 @@ export class NodeBackend implements Backend {
     this.#native.playSound(handle);
   }
 
+  measureText(text: string, size: number): { width: number; height: number } {
+    const measured = this.#native.measureText(text, size);
+    if (measured === null) throw new Error(`librge could not measure text at size ${size}.`);
+    return measured;
+  }
+
+  textureSize(handle: number): { width: number; height: number } {
+    const size = this.#native.textureSize(handle);
+    if (size === null) throw new Error(`librge has no texture with handle ${handle}.`);
+    return size;
+  }
+
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
     const count = this.#packTexts(texts);
     this.#native.frame(clearColor, records.subarray(0, length), length, this.#text, this.#offsets, count, input, keys);

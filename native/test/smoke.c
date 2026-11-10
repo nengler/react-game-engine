@@ -47,6 +47,12 @@ static void text(double x, double y, int32_t index, double size, uint32_t color)
   header(RGE_OP_TEXT, x, y, 0, 1, 1); push(index); push(size); push(color);
 }
 
+static void scissor(double x, double y, double w, double h) { push(RGE_OP_SCISSOR); push(x); push(y); push(w); push(h); }
+static void scissor_end(void) { push(RGE_OP_SCISSOR_END); }
+static void canvas(double w, double h, double dx, double dy, double dw, double dh, uint32_t border) {
+  push(RGE_OP_CANVAS); push(w); push(h); push(dx); push(dy); push(dw); push(dh); push(border);
+}
+
 static void present(const char *strings, const int32_t *offsets, int32_t count) {
   memset(input, 0, sizeof(input));
   memset(keys, 0, sizeof(keys));
@@ -141,6 +147,10 @@ int main(void) {
   expect(24, 14, CLEAR, "nothing where an unflipped sprite would be");
   reset(); view(1, 0, 0, 1, 0, 0); sprite(20, 18, 1, -1, tex); frame();
   expect(24, 14, C_RED, "vertically flipped sprite");
+  {
+    double size[2] = { -1, -1 };
+    CHECK(rge_texture_size(tex, size) == 0 && size[0] == 8 && size[1] == 8, "texture size %g x %g", size[0], size[1]);
+  }
   reset(); view(1, 0, 0, 1, 0, 0); sprite(20, 10, 1, 1, 9999); frame();
   expect(24, 14, CLEAR, "an invalid texture handle draws nothing");
 
@@ -156,6 +166,76 @@ int main(void) {
     white = 0;
     for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) if (is_color(x, y, WHITE_RGBA)) white++;
     CHECK(white == 0, "a bad string index drew %d white pixels", white);
+  }
+
+  /* A second view replaces the first (it does not compose with it): the HUD ignores the camera. */
+  reset(); view(1, 0, 0, 1, 20, 20); rect(0, 0, 0, 1, 1, 6, 6, C_RED); view(1, 0, 0, 1, 0, 0); rect(2, 2, 0, 1, 1, 6, 6, C_GREEN); frame();
+  expect(23, 23, C_RED, "drawn through the first view");
+  expect(4, 4, C_GREEN, "drawn through the second view, at its own origin");
+  expect(27, 27, CLEAR, "the second view did not stack on the first");
+  reset(); view(2, 0, 0, 2, 0, 0); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 10, 10, C_RED); frame();
+  expect(8, 8, C_RED, "a second view of scale 1 after a zoom of 2");
+  expect(15, 15, CLEAR, "...is not zoomed");
+
+  /* Scissor clips to a rectangle in target pixels, whatever the view, until SCISSOR_END. */
+  reset(); view(1, 0, 0, 1, 0, 0); scissor(10, 10, 10, 10); rect(0, 0, 0, 1, 1, 40, 40, C_RED); scissor_end(); rect(30, 30, 0, 1, 1, 10, 10, C_GREEN); frame();
+  expect(15, 15, C_RED, "inside the scissor");
+  expect(9, 15, CLEAR, "left of the scissor");
+  expect(20, 15, CLEAR, "right of the scissor");
+  expect(15, 9, CLEAR, "above the scissor");
+  expect(15, 20, CLEAR, "below the scissor");
+  expect(35, 35, C_GREEN, "drawn after SCISSOR_END");
+  reset(); view(2, 0, 0, 2, 5, 0); scissor(10, 10, 10, 10); rect(0, 0, 0, 1, 1, 40, 40, C_RED); frame();
+  expect(15, 15, C_RED, "the scissor is in target pixels, not world units");
+  expect(25, 15, CLEAR, "...so a zoomed view does not move it");
+  reset(); view(1, 0, 0, 1, 0, 0); scissor(0, 0, 0, 0); rect(0, 0, 0, 1, 1, 40, 40, C_RED); frame();
+  expect(5, 5, CLEAR, "an empty scissor clips everything");
+  reset(); view(1, 0, 0, 1, 0, 0); scissor(10, 10, 10, 10); scissor(30, 30, 10, 10); rect(0, 0, 0, 1, 1, 64, 48, C_RED); frame();
+  expect(15, 15, CLEAR, "a second scissor replaces the first");
+  expect(35, 35, C_RED, "...and clips to its own rectangle");
+  reset(); view(1, 0, 0, 1, 0, 0); scissor(10, 10, 10, 10); rect(0, 0, 0, 1, 1, 40, 40, C_RED); frame();
+  reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 40, 40, C_GREEN); frame();
+  expect(5, 5, C_GREEN, "a scissor left open does not leak into the next frame");
+
+  /* A canvas: a 16 x 9 texture drawn into a 64 x 36 box at (0, 6), 4 x, with a border colour around it. */
+  reset(); canvas(16, 9, 0, 6, 64, 36, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(1, 1, 0, 1, 1, 2, 2, C_RED); frame();
+  expect(4, 6 + 4, C_RED, "a canvas pixel is 4 x 4 window pixels (top-left of the rect)");
+  expect(11, 6 + 11, C_RED, "...and its far corner");
+  expect(12, 6 + 12, CLEAR, "the canvas clear colour next to it");
+  expect(3, 6 + 4, CLEAR, "left of the rect, inside the canvas");
+  expect(5, 2, C_GREEN, "the border above the canvas");
+  expect(5, 44, C_GREEN, "the border below the canvas");
+  reset(); canvas(16, 9, 0, 6, 64, 36, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(0, 7, 0, 1, 1, 2, 2, C_RED); frame();
+  expect(4, 6 + 7 * 4 + 4, C_RED, "the canvas is the right way up (a rect near its bottom is near the bottom)");
+  expect(4, 6 + 4, CLEAR, "...and not near its top");
+  reset(); canvas(16, 9, 0, 6, 64, 36, C_GREEN); view(1, 0, 0, 1, 0, 0); scissor(0, 0, 4, 4); rect(0, 0, 0, 1, 1, 16, 9, C_RED); scissor_end(); frame();
+  expect(3, 6 + 3, C_RED, "a scissor inside a canvas is in canvas pixels");
+  expect(16, 6 + 3, CLEAR, "...so it ends at canvas pixel 4 (window pixel 16)");
+  expect(3, 6 + 4 * 4, CLEAR, "...and below it");
+  reset(); canvas(32, 18, 0, 6, 64, 36, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 2, 2, C_RED); frame();
+  expect(1, 6 + 1, C_RED, "a canvas of another size is made again");
+  expect(5, 6 + 5, CLEAR, "...and drawn at its own scale");
+  reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, C_RED); frame();
+  expect(63, 47, C_RED, "a frame without a canvas goes to the window again");
+  reset(); canvas(0, 9, 0, 6, 64, 36, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 10, 10, C_RED); frame();
+  expect(5, 5, CLEAR, "a bad canvas size draws nothing but the clear colour");
+  reset(); view(1, 0, 0, 1, 0, 0); canvas(16, 9, 0, 6, 64, 36, C_GREEN); frame();
+  expect(5, 5, CLEAR, "a canvas that is not first is refused");
+
+  /* Measuring. */
+  {
+    double out[2] = { -1, -1 };
+    CHECK(rge_measure_text("Hello", 20, out) == 0, "measure text");
+    CHECK(out[0] > 20 && out[0] < 200, "width of Hello at 20 is %g", out[0]);
+    CHECK(out[1] >= 20 && out[1] < 30, "line height at 20 is %g", out[1]);
+    double wide[2], narrow[2], empty[2] = { -1, -1 };
+    CHECK(rge_measure_text("Hello Hello", 20, wide) == 0 && rge_measure_text("Hello", 20, narrow) == 0 && wide[0] > narrow[0], "longer text is wider");
+    CHECK(rge_measure_text("Hello", 40, wide) == 0 && wide[0] > 1.9 * narrow[0], "twice the size is about twice the width");
+    CHECK(rge_measure_text("", 20, empty) == 0 && empty[0] == 0, "empty text has no width");
+    CHECK(rge_measure_text(NULL, 20, out) != 0, "NULL text is refused");
+    CHECK(rge_measure_text("x", 20, NULL) != 0, "a NULL out is refused");
+    CHECK(rge_measure_text("x", NAN, out) != 0, "a NaN size is refused");
+    CHECK(rge_texture_size(9999, out) != 0 && rge_texture_size(-1, out) != 0, "a bad texture handle is refused");
   }
 
   /* Malformed records never crash, and what came before the bad record is still drawn. */

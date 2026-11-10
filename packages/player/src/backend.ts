@@ -27,11 +27,11 @@ export interface Backend {
   loadSound(path: string): number;
   playSound(handle: number): void;
   /**
-   * The width in pixels of `text` drawn at `size`, for layout. Optional until the native library can measure
-   * (ABI v2); without it the player estimates.
+   * The width and line height in pixels of `text` drawn at `size`, for layout. Optional: without it the player
+   * estimates. Both native hosts implement it (ABI v2).
    */
-  measureText?(text: string, size: number): number;
-  /** The size in pixels of a loaded texture, for layout. Optional until the native library can say (ABI v2). */
+  measureText?(text: string, size: number): { readonly width: number; readonly height: number };
+  /** The size in pixels of a loaded texture, for layout. Optional; both native hosts implement it (ABI v2). */
   textureSize?(handle: number): { readonly width: number; readonly height: number };
   /**
    * Draw and present `records[0, length)` (text records index into `texts`), then poll the

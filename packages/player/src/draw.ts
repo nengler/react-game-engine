@@ -28,6 +28,12 @@ import {
   RGE_OP_TEXT_LEN,
   RGE_OP_VIEW,
   RGE_OP_VIEW_LEN,
+  RGE_OP_SCISSOR,
+  RGE_OP_SCISSOR_END,
+  RGE_OP_CANVAS,
+  RGE_OP_SCISSOR_LEN,
+  RGE_OP_SCISSOR_END_LEN,
+  RGE_OP_CANVAS_LEN,
 } from "./protocol.ts";
 import { borderRects, fitScreen, viewToWindow, type ScreenPlacement } from "./screen.ts";
 import { Warner } from "./warn.ts";
@@ -76,6 +82,9 @@ function recordLength(op: number): number {
     case RGE_OP_RECT: return RGE_OP_RECT_LEN;
     case RGE_OP_ELLIPSE: return RGE_OP_ELLIPSE_LEN;
     case RGE_OP_TEXT: return RGE_OP_TEXT_LEN;
+    case RGE_OP_SCISSOR: return RGE_OP_SCISSOR_LEN;
+    case RGE_OP_SCISSOR_END: return RGE_OP_SCISSOR_END_LEN;
+    case RGE_OP_CANVAS: return RGE_OP_CANVAS_LEN;
     default: throw new Error(`Unknown draw op ${op}.`);
   }
 }
@@ -232,8 +241,8 @@ export class DrawList {
 export interface FrameBuilderOptions {
   /** Load a texture through the backend: a handle, or -1 if it could not be loaded. */
   loadTexture(path: string): number;
-  /** The width in pixels of `text` drawn at `size`, from the backend. Without it, widths are estimated (`estimateTextWidth`). */
-  measureText?: (text: string, size: number) => number;
+  /** The width and line height in pixels of `text` drawn at `size`, from the backend. Without it, they are estimated (`estimateTextWidth`, and a line as tall as `size`). */
+  measureText?: (text: string, size: number) => Size;
   /** The size in pixels of a loaded texture, from the backend. Without it, every texture measures 0 × 0. */
   textureSize?: (handle: number) => Size;
   /** Folder that image names are relative to. Default `"assets"`. */
@@ -339,9 +348,9 @@ export class FrameBuilder {
   readonly #textures = new Map<string, number>();
   readonly #colors = new Map<string, PackedColor>();
   readonly #textureSizes = new Map<number, Size>();
-  readonly #textWidths = new Map<string, number>();
+  readonly #textSizes = new Map<string, Size>();
   readonly #loadTexture: (path: string) => number;
-  readonly #measureText: ((text: string, size: number) => number) | undefined;
+  readonly #measureText: ((text: string, size: number) => Size) | undefined;
   readonly #textureSize: ((handle: number) => Size) | undefined;
   readonly #assets: string;
   readonly #warner: Warner;
@@ -437,28 +446,31 @@ export class FrameBuilder {
 
   /**
    * The size of what an object draws, for layout: a shape's, pointer's or collider's `width` × `height`, a text's
-   * measured width × its `size`, a sprite's texture size (an animated sprite's first frame, so layout does not
+   * measured width × its measured line height, a sprite's texture size (an animated sprite's first frame, so layout does not
    * jitter as frames change; a texture that cannot be loaded is the 16 × 16 square drawn in its place). Null for
    * anything else: containers are sized by layout itself. Texture sizes and text widths are asked of the backend
    * once each and kept.
    */
   measure(object: GameObject): Size | null {
     if (object instanceof Shape || object instanceof Pointer || object instanceof Collider) return { width: object.width, height: object.height };
-    if (object instanceof Text) return { width: object.text === "" ? 0 : this.#textWidth(object.text, object.size), height: object.size };
+    if (object instanceof Text) {
+      if (object.text === "") return { width: 0, height: object.size };
+      return this.#textSize(object.text, object.size);
+    }
     if (object instanceof AnimatedSprite) return this.#imageSize(object.frames[0] ?? "");
     if (object instanceof Sprite) return this.#imageSize(object.image);
     return null;
   }
 
-  #textWidth(text: string, size: number): number {
+  #textSize(text: string, size: number): Size {
     const key = `${size}:${text}`;
-    let width = this.#textWidths.get(key);
-    if (width === undefined) {
-      width = this.#measureText ? this.#measureText(text, size) : estimateTextWidth(text, size);
-      if (this.#textWidths.size >= TEXT_CACHE_LIMIT) this.#textWidths.clear();
-      this.#textWidths.set(key, width);
+    let measured = this.#textSizes.get(key);
+    if (measured === undefined) {
+      measured = this.#measureText ? this.#measureText(text, size) : { width: estimateTextWidth(text, size), height: size };
+      if (this.#textSizes.size >= TEXT_CACHE_LIMIT) this.#textSizes.clear();
+      this.#textSizes.set(key, measured);
     }
-    return width;
+    return measured;
   }
 
   #imageSize(image: string): Size {

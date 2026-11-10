@@ -269,11 +269,13 @@ So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI
 
 **Done when**
 
-- [ ] `rge_measure_text` (width and line height) and `rge_texture_size` are in `rge.h` as part of ABI v2, and `protocol.ts` and the header-parity test agree
-- [ ] `smoke.c` measures a string and a loaded texture
-- [ ] Both hosts and the recording backend implement `measureText` and `textureSize`, and `FrameBuilder` uses the measured line height
-- [ ] `RGE_OP_SCISSOR`/`RGE_OP_SCISSOR_END` are in `rge.h`, `smoke.c` checks a clipped rectangle, and the recording backend decodes them
-- [ ] The parity test still passes byte for byte
+**Done 2026-11-10**, together with ABI v2's second view record and `RGE_OP_CANVAS`. `Backend.measureText` now returns `{ width, height }`. Scissor rectangles are in target pixels (the canvas's when there is one) and ignore the view; a second `RGE_OP_SCISSOR` replaces the first, they do not nest. The software renderer takes scissor rectangles top-left while OpenGL's origin is bottom-left, so librge flips for OpenGL only (through raylib's `BeginScissorMode`); the OpenGL path is untested in CI, which runs the software renderer, so check clipping in the Linux playtest.
+
+- [x] `rge_measure_text` (width and line height) and `rge_texture_size` are in `rge.h` as part of ABI v2, and `protocol.ts` and the header-parity test agree
+- [x] `smoke.c` measures a string and a loaded texture
+- [x] Both hosts and the recording backend implement `measureText` and `textureSize`, and `FrameBuilder` uses the measured line height
+- [x] `RGE_OP_SCISSOR`/`RGE_OP_SCISSOR_END` are in `rge.h`, `smoke.c` checks a clipped rectangle, and the recording backend decodes them
+- [x] The parity test still passes byte for byte
 
 ### U1: the layout offset and the measurer
 

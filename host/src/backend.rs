@@ -1,4 +1,4 @@
-//! The `Backend` object the game's `hostBackend()` finds on `globalThis.__rgeBackend`: the same six
+//! The `Backend` object the game's `hostBackend()` finds on `globalThis.__rgeBackend`: the same eight
 //! methods the Node host implements, over the same `librge` calls. One `frame` call per frame carries the
 //! draw records; the input comes back by writing into the two typed arrays the player passes.
 use crate::ffi;
@@ -25,6 +25,8 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     backend.set("loadTexture", Function::new(ctx.clone(), load_texture)?.with_name("loadTexture")?)?;
     backend.set("loadSound", Function::new(ctx.clone(), load_sound)?.with_name("loadSound")?)?;
     backend.set("playSound", Function::new(ctx.clone(), play_sound)?.with_name("playSound")?)?;
+    backend.set("measureText", Function::new(ctx.clone(), measure_text)?.with_name("measureText")?)?;
+    backend.set("textureSize", Function::new(ctx.clone(), texture_size)?.with_name("textureSize")?)?;
     backend.set("frame", Function::new(ctx.clone(), frame)?.with_name("frame")?)?;
     ctx.globals().set(HOST_BACKEND_KEY, backend)
 }
@@ -68,6 +70,34 @@ fn load_sound(path: String) -> i32 {
 
 fn play_sound(handle: i32) {
     unsafe { ffi::rge_play_sound(handle) }
+}
+
+/// The width and line height of `text` at `size`, as an object.
+fn measure_text<'js>(ctx: Ctx<'js>, text: String, size: f64) -> JsResult<Object<'js>> {
+    let text = c_string(&text);
+    let mut out = [0.0f64; 2];
+    let code = unsafe { ffi::rge_measure_text(text.as_ptr(), size, out.as_mut_ptr()) };
+    if code != 0 {
+        return Err(Exception::throw_message(&ctx, &format!("librge could not measure text at size {size}.")));
+    }
+    size_object(&ctx, out)
+}
+
+/// The width and height of a loaded texture, as an object.
+fn texture_size<'js>(ctx: Ctx<'js>, handle: i32) -> JsResult<Object<'js>> {
+    let mut out = [0.0f64; 2];
+    let code = unsafe { ffi::rge_texture_size(handle, out.as_mut_ptr()) };
+    if code != 0 {
+        return Err(Exception::throw_message(&ctx, &format!("librge has no texture with handle {handle}.")));
+    }
+    size_object(&ctx, out)
+}
+
+fn size_object<'js>(ctx: &Ctx<'js>, size: [f64; 2]) -> JsResult<Object<'js>> {
+    let object = Object::new(ctx.clone())?;
+    object.set("width", size[0])?;
+    object.set("height", size[1])?;
+    Ok(object)
 }
 
 /// Draw and present one frame, then write the next frame's input into `input` and `keys`.

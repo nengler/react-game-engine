@@ -19,7 +19,10 @@ static struct {
   int32_t pixels_width;
   int32_t pixels_height;
   bool bad_frame_reported;
+  RenderTexture2D canvas; /* the off-screen target of RGE_OP_CANVAS; id 0 when there is none */
 } state;
+
+#define MAX_CANVAS 16384
 
 int32_t rge_abi_version(void) {
   return RGE_ABI_VERSION;
@@ -59,10 +62,28 @@ int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t opti
 
 void rge_close(void) {
   if (!state.open) return;
+  if (state.canvas.id != 0) UnloadRenderTexture(state.canvas);
   assets_shutdown();
   CloseWindow();
   free(state.pixels);
   memset(&state, 0, sizeof(state));
+}
+
+int32_t rge_measure_text(const char *text, double size, double *out) {
+  if (!state.open || text == NULL || out == NULL || !(size >= 0.0 && size <= 100000.0)) return 1;
+  /* The font and spacing RGE_OP_TEXT draws with. */
+  Vector2 measured = MeasureTextEx(GetFontDefault(), text, (float)size, (float)size / 10.0f);
+  out[0] = (double)measured.x;
+  out[1] = (double)measured.y;
+  return 0;
+}
+
+int32_t rge_texture_size(int32_t handle, double *out) {
+  Texture2D texture;
+  if (!state.open || out == NULL || !assets_texture(handle, &texture)) return 1;
+  out[0] = (double)texture.width;
+  out[1] = (double)texture.height;
+  return 0;
 }
 
 /* A record field as an index or an op: -1 unless it is a whole number in range. Casting NaN or an out-of-range
@@ -94,8 +115,21 @@ static void push_transform(const double *r) {
   rlScalef((float)r[4], (float)r[5], 1.0f);
 }
 
+/* Clip to a rectangle in target pixels, top-left origin. raylib's BeginScissorMode flips y for OpenGL, whose scissor
+ * origin is bottom-left; its software renderer takes the rectangle top-left already, so there it goes through unflipped. */
+static void begin_scissor(int x, int y, int width, int height) {
+#if defined(GRAPHICS_API_OPENGL_SOFTWARE)
+  rlDrawRenderBatchActive();
+  rlEnableScissorTest();
+  rlScissor(x, y, width, height);
+#else
+  BeginScissorMode(x, y, width, height);
+#endif
+}
+
 static void execute_records(const double *records, int32_t length, const char *text, const int32_t *text_offsets, int32_t text_count) {
   bool view_pushed = false;
+  bool scissor_on = false;
   int32_t at = 0;
   while (at < length) {
     const double *r = records + at;
@@ -107,6 +141,9 @@ static void execute_records(const double *records, int32_t length, const char *t
       case RGE_OP_RECT: need = RGE_OP_RECT_LEN; break;
       case RGE_OP_ELLIPSE: need = RGE_OP_ELLIPSE_LEN; break;
       case RGE_OP_TEXT: need = RGE_OP_TEXT_LEN; break;
+      case RGE_OP_SCISSOR: need = RGE_OP_SCISSOR_LEN; break;
+      case RGE_OP_SCISSOR_END: need = RGE_OP_SCISSOR_END_LEN; break;
+      case RGE_OP_CANVAS: report_bad_frame("canvas record that is not first", at); goto done;
       default: report_bad_frame("unknown op", at); goto done;
     }
     if (at + need > length) {
@@ -116,10 +153,8 @@ static void execute_records(const double *records, int32_t length, const char *t
 
     switch (op) {
       case RGE_OP_VIEW: {
-        if (view_pushed) {
-          report_bad_frame("second view record", at);
-          goto done;
-        }
+        /* A later view replaces the earlier one. */
+        if (view_pushed) rlPopMatrix();
         /* x' = a x + c y + e, y' = b x + d y + f, as a column-major 4x4. */
         const float m[16] = {
           (float)r[1], (float)r[2], 0.0f, 0.0f,
@@ -132,6 +167,19 @@ static void execute_records(const double *records, int32_t length, const char *t
         view_pushed = true;
         break;
       }
+      case RGE_OP_SCISSOR: {
+        /* NaN or negative sizes clip everything, which is what an empty rectangle means. */
+        double w = r[3] > 0.0 && r[3] <= 1e9 ? r[3] : 0.0, h = r[4] > 0.0 && r[4] <= 1e9 ? r[4] : 0.0;
+        double x = r[1] >= -1e9 && r[1] <= 1e9 ? r[1] : 0.0, y = r[2] >= -1e9 && r[2] <= 1e9 ? r[2] : 0.0;
+        if (scissor_on) EndScissorMode();
+        begin_scissor((int)x, (int)y, (int)w, (int)h);
+        scissor_on = true;
+        break;
+      }
+      case RGE_OP_SCISSOR_END:
+        if (scissor_on) EndScissorMode();
+        scissor_on = false;
+        break;
       case RGE_OP_SPRITE: {
         Texture2D texture;
         if (assets_texture(to_index(r[6]), &texture)) {
@@ -169,6 +217,7 @@ static void execute_records(const double *records, int32_t length, const char *t
     at += need;
   }
 done:
+  if (scissor_on) EndScissorMode();
   if (view_pushed) rlPopMatrix();
 }
 
@@ -208,14 +257,52 @@ static void capture_frame(void) {
 #endif
 }
 
+/* A frame that starts with RGE_OP_CANVAS: draw the rest into the off-screen texture, then copy it into the window. */
+static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t length, const char *text, const int32_t *text_offsets, int32_t text_count) {
+  int32_t width = to_index(r[1]), height = to_index(r[2]);
+  if (length < RGE_OP_CANVAS_LEN || width <= 0 || height <= 0 || width > MAX_CANVAS || height > MAX_CANVAS) {
+    report_bad_frame("bad canvas record", 0);
+    ClearBackground(unpack_color(clear_color));
+    return;
+  }
+  if (state.canvas.id != 0 && (state.canvas.texture.width != width || state.canvas.texture.height != height)) {
+    UnloadRenderTexture(state.canvas);
+    state.canvas.id = 0;
+  }
+  if (state.canvas.id == 0) {
+    state.canvas = LoadRenderTexture(width, height);
+    if (state.canvas.id != 0) SetTextureFilter(state.canvas.texture, TEXTURE_FILTER_POINT);
+  }
+  if (state.canvas.id == 0) {
+    report_bad_frame("could not make the canvas texture", 0);
+    ClearBackground(unpack_color(clear_color));
+    return;
+  }
+  BeginTextureMode(state.canvas);
+  ClearBackground(unpack_color(clear_color));
+  execute_records(r + RGE_OP_CANVAS_LEN, length - RGE_OP_CANVAS_LEN, text, text_offsets, text_count);
+  EndTextureMode();
+
+  ClearBackground(unpack_color(to_color(r[7])));
+  /* Render textures are upside down: a negative source height flips it. */
+  Rectangle source = { 0.0f, 0.0f, (float)width, -(float)height };
+  Rectangle dest = { (float)r[3], (float)r[4], (float)r[5], (float)r[6] };
+  DrawTexturePro(state.canvas.texture, source, dest, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
+}
+
 void rge_frame(uint32_t clear_color, const double *records, int32_t records_length,
                const char *text, const int32_t *text_offsets, int32_t text_count,
                double *input, uint8_t *keys) {
   if (!state.open) return;
 
   BeginDrawing();
-  ClearBackground(unpack_color(clear_color));
-  if (records != NULL && records_length > 0) execute_records(records, records_length, text, text_offsets, text_count);
+  bool has_records = records != NULL && records_length > 0;
+  if (has_records && to_index(records[0]) == RGE_OP_CANVAS) {
+    draw_canvas_frame(clear_color, records, records_length, text, text_offsets, text_count);
+  } else {
+    ClearBackground(unpack_color(clear_color));
+    if (has_records) execute_records(records, records_length, text, text_offsets, text_count);
+  }
   if (state.hidden) capture_frame();
   EndDrawing(); /* presents, waits for vsync or the frame cap, and polls devices */
 
