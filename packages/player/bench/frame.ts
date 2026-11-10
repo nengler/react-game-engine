@@ -59,8 +59,17 @@ class StateMover extends Entity {
     this.y = this.#yNext;
   }
   override onUpdate(dt: number): void {
-    this.setX((x) => x + dt * 30);
-    this.setY((y) => y + dt * 10);
+    // `setX((x) => x + dt * 30)`, as the compiler writes an updater of one expression in a hook.
+    {
+      const x = this.#xNext;
+      this.#xNext = x + dt * 30;
+      if (this.#xNext !== x) this.markDirty();
+    }
+    {
+      const y = this.#yNext;
+      this.#yNext = y + dt * 10;
+      if (this.#yNext !== y) this.markDirty();
+    }
   }
   override render(): void {
     this.transform.x = this.x;

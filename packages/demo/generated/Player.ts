@@ -69,8 +69,16 @@ export class Player extends Entity {
   }
 
   override onUpdate(dt: number): void {
-    this.setX((x: number) => x + ((this.moveX * 140) * dt));
-    this.setY((y: number) => y + ((this.moveY * 140) * dt));
+    {
+      const x = this.#xNext;
+      this.#xNext = x + ((this.moveX * 140) * dt);
+      if (this.#xNext !== x) this.markDirty();
+    }
+    {
+      const y = this.#yNext;
+      this.#yNext = y + ((this.moveY * 140) * dt);
+      if (this.#yNext !== y) this.markDirty();
+    }
   }
 
   override render(): void {

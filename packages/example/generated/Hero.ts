@@ -56,7 +56,11 @@ export class Hero extends Entity {
 
   #onUpdate0(dt: number): void {
     if (this.poisoned) {
-      this.setHealth((h: number) => clamp(h - (dt * 5), 0, 100));
+      {
+        const h = this.#healthNext;
+        this.#healthNext = clamp(h - (dt * 5), 0, 100);
+        if (this.#healthNext !== h) this.markDirty();
+      }
     }
   }
 
@@ -65,7 +69,11 @@ export class Hero extends Entity {
       return;
     }
     const regen = this.poisoned ? 0 : dt;
-    this.setHealth((health: number) => Math.min(health + regen, 100));
+    {
+      const health = this.#healthNext;
+      this.#healthNext = Math.min(health + regen, 100);
+      if (this.#healthNext !== health) this.markDirty();
+    }
   }
 
   override render(): void {

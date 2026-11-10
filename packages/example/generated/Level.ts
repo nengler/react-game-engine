@@ -55,7 +55,11 @@ export class Enemy extends Entity<EnemyProps> {
   }
 
   override onUpdate(dt: number): void {
-    this.setHp((hp: number) => hp - (dt * this.props.speed));
+    {
+      const hp = this.#hpNext;
+      this.#hpNext = hp - (dt * this.props.speed);
+      if (this.#hpNext !== hp) this.markDirty();
+    }
     if ((this.hp <= 0) && (!this.reported)) {
       this.reported = true;
       this.props.onDefeated?.();

@@ -37,7 +37,11 @@ export class Coin extends Sprite<CoinProps> {
   }
 
   override onUpdate(dt: number): void {
-    this.setAngle((angle: number) => angle + (dt * this.props.spin!));
+    {
+      const angle = this.#angleNext;
+      this.#angleNext = angle + (dt * this.props.spin!);
+      if (this.#angleNext !== angle) this.markDirty();
+    }
   }
 
   override render(): void {

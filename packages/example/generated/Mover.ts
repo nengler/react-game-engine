@@ -27,7 +27,11 @@ export class Mover extends Entity {
   }
 
   override onUpdate(dt: number): void {
-    this.setX((previous: number) => previous + (60 * dt));
+    {
+      const previous = this.#xNext;
+      this.#xNext = previous + (60 * dt);
+      if (this.#xNext !== previous) this.markDirty();
+    }
   }
 
   override render(): void {
