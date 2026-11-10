@@ -707,6 +707,27 @@ The frame bench packaged this way, against the Rust host, same VM:
 - **How it was checked.** The demo's parity script, packaged this way, prints byte for byte what it prints under Node and under the Rust host; CI's `native` job does the same and then runs the packaged demo from another folder, and the `native-desktop` job packages it with a window and runs it under a virtual display. The windowed package was not built in the container this was written in (it lacks the X11 development packages), only in CI.
 - **Found on the way:** the bench took the host backend's `overlaps` without binding it, which worked for the Rust host's plain function and threw for the Node backend's method. It is bound now.
 
+## Priority 7 additions (2026-11)
+
+Engine features the first level of the platformer needed (see [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md), priority 7). Each section says what was built, what was decided and why. Native changes are batched, so the ABI moves once.
+
+### Headless tooling
+
+Built first, because the level is written without a window. `npm run check:<game>` (`tools/check-game.ts`) compiles a game package, type-checks it, runs its tests and runs its parity script under Node (and under the Rust host when it is built), printing one line per step.
+
+- **`parseInputScript(script, { bindings, dt })`** turns `right*30, jump, right*20+dash` into input frames. Items run one after another, `+` joins terms that start together, `name*N` holds N frames, a bare name is a one-frame tap, `_` waits. Presses and releases are derived from what is held, so a key held across two items is one hold. The same format is the replay format of the level.
+- **`runScript(config, frames, observe)`** (`@rge/player`) builds a game on a `RecordingBackend`, does one warm-up step, then steps once per frame and returns what `observe` gives after each: the game state, not draw records. `ScriptedInputBackend` wraps any backend and takes input from a script, which is how a scripted run is drawn natively.
+- **`renderRun` and `npm run screenshot`** (`@rge/player-node`, `tools/screenshot.ts`) render chosen steps of a scripted run through the software-rendered hidden window to PNG, and a contact sheet of them with step numbers (`--sheet`). Needs `npm run native:build:headless`.
+
+### Fixed timestep
+
+`<Game fixedStep={60}>` (or `PlayerConfig.fixedStep`) runs `world.tick` at a fixed rate from an accumulator. Per frame: add the frame's `dt` (clamped to `MAX_DT`), run as many whole steps as it holds, each a full tick (`useInput`, `useUpdate`, renders) with `dt = 1 / rate`, then build and draw once. Decisions:
+
+- A frame can run no step (a fast monitor), one, or several. At most `MAX_STEPS_PER_FRAME` (8) run; after that the leftover time is dropped, so a stall is not followed by a catch-up burst. The accumulator compares with a 1e-9 epsilon: sixty sums of 1/60 s must give sixty steps.
+- **No input is lost.** Key edges (pressed, released) accumulate from every frame's poll and go to the next step only; a step after the first in a frame sees the key held but no edge. A tap that began and ended between two steps is shown to the next step as down, pressed and released at once. Handlers read a per-step copy of the key flags (`PlayerInput.handlerKeys`); the player's own reads (mouse press, full screen) use the raw flags once per frame.
+- Collisions are still reported once per frame after the steps, and nothing is interpolated: the frame draws the latest step. A frame that ran no step settles pending renders (`world.flush()`) so state set by the last step still shows.
+- Off by default, so existing games and the parity test are untouched.
+
 ## Later (not scheduled)
 
 | Idea | Notes |

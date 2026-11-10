@@ -25,6 +25,11 @@ const IDENTITY_VIEW: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 export class PlayerInput implements InputState {
   readonly values = new Float64Array(RGE_IN_LEN);
   readonly keys = new Uint8Array(KEYS.length);
+  /**
+   * The key flags handlers read (`pressed`, `down`, `released`). The raw `keys` unless a fixed timestep is on, when the player
+   * swaps in a per-step copy so an edge is seen by exactly one step (see `createPlayer`).
+   */
+  handlerKeys: Uint8Array = this.keys;
   /** Set by the player after each frame is built. */
   view: ViewTransform = IDENTITY_VIEW;
   readonly #warner: Warner;
@@ -97,7 +102,7 @@ export class PlayerInput implements InputState {
       this.#warner.once(`key:${key}`, `Unknown key '${key}': it is never pressed. Known keys: ${KEYS.join(", ")}.`);
       return false;
     }
-    return ((this.keys[index] as number) & flag) !== 0;
+    return ((this.handlerKeys[index] as number) & flag) !== 0;
   }
 }
 

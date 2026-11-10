@@ -71,6 +71,15 @@ describe("<Game> as a component's root", () => {
     assert.ok(main instanceof Entity, "it is still a container, named like any entity");
   });
 
+  it("takes fixedStep, the rate of the fixed timestep, as a literal setting", async () => {
+    const compiled = build(`function Main() { return <Game fixedStep={60} />; }`);
+    assert.match(compiled.code, /super\(\{ fixedStep: 60 \}\);/);
+    const { Main } = await load<{ Main: new () => Game }>(compiled);
+    assert.equal(new Main().fixedStep, 60);
+    assert.equal(new Game().fixedStep, undefined, "off unless written");
+    assert.match(errors(`function A() { const [n] = useState(60); return <Game fixedStep={n} />; }`)[0]!.message, /<Game fixedStep> must be a literal/);
+  });
+
   it("lowers state={useGame} to the store itself, and needs nothing else", () => {
     const compiled = build(`function Main() { return <Game state={useGame} />; }`);
     const root = compiled.ir.components[0]!.root;
@@ -105,7 +114,7 @@ describe("<Game> as a component's root", () => {
   it("rejects a prop it does not have, and a transform, saying what its settings are", () => {
     const unknown = errors(`function A() { return <Game fps={30} />; }`);
     assert.equal(unknown[0]!.code, DiagnosticCode.UnsupportedAttribute);
-    assert.match(unknown[0]!.message, /<Game> has no prop 'fps'\. Its settings: title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, state\./);
+    assert.match(unknown[0]!.message, /<Game> has no prop 'fps'\. Its settings: title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, state\./);
     assert.deepEqual(errors(`function A() { return <Game transform={{ x: 1 }} />; }`).map((d) => d.code), [DiagnosticCode.InvalidTransformAttribute]);
   });
 

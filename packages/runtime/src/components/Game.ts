@@ -27,6 +27,13 @@ export interface GameProps extends EntityProps {
    * Default `"F11"`; `false` turns the key off. Alt + Enter always works too.
    */
   fullscreenKey?: string | false;
+  /**
+   * Run `useUpdate` at a fixed rate, in steps per second (`fixedStep={60}`), from an accumulator: a frame runs as many whole steps as
+   * the time since the last frame holds (none on a fast monitor, two on a slow frame), each with the same `dt`, and drawing stays once
+   * per frame. A press that lands between steps is seen by the next step, never lost. Default: off, one update per frame with the
+   * frame's own time. See "Fixed timestep" in DESIGN.md.
+   */
+  fixedStep?: number;
   /** The game's state: `state={useGame}`, the store from `GameState.ts`. It starts from its initial values with the game. */
   state?: GameStateHandle;
 }
@@ -54,6 +61,7 @@ export class Game<P extends object = {}> extends Entity<P> {
   vsync: boolean | undefined;
   smooth: boolean | undefined;
   fullscreenKey: string | false | undefined;
+  fixedStep: number | undefined;
   state: GameStateHandle | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
@@ -68,6 +76,7 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.vsync = hostProps.vsync;
     this.smooth = hostProps.smooth;
     this.fullscreenKey = hostProps.fullscreenKey;
+    this.fixedStep = hostProps.fixedStep;
     this.state = hostProps.state;
   }
 }

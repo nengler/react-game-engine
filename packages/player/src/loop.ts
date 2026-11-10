@@ -5,7 +5,7 @@ import { CollisionTracker } from "./collide.ts";
 import { FrameBuilder, rootScreen } from "./draw.ts";
 import { PlayerInput } from "./input.ts";
 import { onScreen, type ScreenPlacement } from "./screen.ts";
-import { RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
+import { KEYS, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, RGE_KEY_RELEASED, KEY_INDEX } from "./protocol.ts";
 import { Warner } from "./warn.ts";
 
 /** The window a game gets when neither its `<Game>` root nor the player's config say otherwise. */
@@ -23,6 +23,8 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly root: () => GameObject;
   /** The key that toggles full screen, as the `<Game>` prop of the same name; `false` turns it off. Default `"F11"` (Alt + Enter always works). */
   readonly fullscreenKey?: string | false;
+  /** Steps per second for `useUpdate`, as the `<Game>` prop `fixedStep`; unset runs one update per frame. */
+  readonly fixedStep?: number;
   /** A CSS colour. Default `"black"`. */
   readonly background?: string;
   /** Folder that image and sound names are relative to. Default `"assets"`. */
@@ -43,6 +45,9 @@ export interface Player {
 
 /** The longest step a frame may simulate: a stall (a breakpoint, a dragged window) must not teleport things. */
 export const MAX_DT = 0.1;
+
+/** The most fixed steps one frame may run: a stall must not be followed by a burst that stalls again. The rest of the time is dropped. */
+export const MAX_STEPS_PER_FRAME = 8;
 
 /** How many times larger than a root `<Screen>` the window opens when nothing sets its size. */
 export const DEFAULT_SCREEN_SCALE = 3;
@@ -102,7 +107,16 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     smooth: game?.smooth ?? config.smooth,
   });
 
+  const stepHz = game?.fixedStep ?? config.fixedStep;
+  const fixedDt = stepHz === undefined ? 0 : 1 / stepHz;
+  if (stepHz !== undefined && !(stepHz > 0 && Number.isFinite(stepHz))) throw new RangeError(`fixedStep must be a positive number of steps per second, not ${stepHz}.`);
   const input = new PlayerInput(warner);
+  // With a fixed timestep a handler sees a copy of the key flags per step: edges (pressed, released) gathered since the last step
+  // go to the next step only, so a press between steps is never lost and never seen twice.
+  const edges = new Uint8Array(KEYS.length);
+  const stepKeys = new Uint8Array(KEYS.length);
+  let accumulator = 0;
+  if (stepHz !== undefined) input.handlerKeys = stepKeys;
   input.values[RGE_IN_WIDTH] = width;
   input.values[RGE_IN_HEIGHT] = height;
   const builder = new FrameBuilder({
@@ -173,7 +187,29 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       toggleFullscreen();
       dispatchPress();
       const dt = input.values[RGE_IN_DT] as number;
-      world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
+      if (stepHz === undefined) world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
+      else {
+        for (let i = 0; i < edges.length; i++) edges[i] = (edges[i] as number) | ((input.keys[i] as number) & (RGE_KEY_PRESSED | RGE_KEY_RELEASED));
+        accumulator += dt > 0 ? Math.min(dt, MAX_DT) : 0;
+        let steps = 0;
+        // The epsilon keeps sixty frames of 1/60 s from running 59 steps: a sum of 1/60s is a hair short of a step now and then.
+        while (accumulator >= fixedDt - 1e-9 && steps < MAX_STEPS_PER_FRAME) {
+          accumulator -= fixedDt;
+          for (let i = 0; i < stepKeys.length; i++) {
+            const raw = input.keys[i] as number;
+            const e = edges[i] as number;
+            // Down if held now, or if it went down since the last step (a tap that is over by now still counts for one step).
+            stepKeys[i] = (raw & RGE_KEY_DOWN) | (e & RGE_KEY_PRESSED ? RGE_KEY_DOWN : 0) | e;
+            edges[i] = 0;
+          }
+          world.tick(fixedDt, input);
+          steps++;
+        }
+        if (steps === MAX_STEPS_PER_FRAME) accumulator = 0;
+        else if (accumulator < 0) accumulator = 0;
+        // With no step this frame nothing ticked: still settle what the hooks of the last one set.
+        if (steps === 0) world.flush();
+      }
       const built = builder.build(world.root, input.width, input.height);
       pointers = built.pointers;
       hudPointersFrom = built.hudPointersFrom;

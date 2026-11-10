@@ -4,7 +4,7 @@ export { colorToHex, MAGENTA, packColor, parseColor, type PackedColor } from "./
 export { DrawList, estimateTextWidth, FrameBuilder, walkTree, type BuiltFrame, type ColliderEntry, type FrameBuilderOptions, type Size } from "./draw.ts";
 export { HOST_BACKEND_KEY, hostBackend } from "./host.ts";
 export { PlayerInput } from "./input.ts";
-export { createPlayer, DEFAULT_WINDOW, MAX_DT, run, type Player, type PlayerConfig } from "./loop.ts";
+export { createPlayer, DEFAULT_WINDOW, MAX_DT, MAX_STEPS_PER_FRAME, run, type Player, type PlayerConfig } from "./loop.ts";
 export * from "./protocol.ts";
 export { applyInputFrame, RecordingBackend, type DecodedRecord, type InputFrame, type RecordedFrame, type RecordingOptions } from "./recording.ts";
 export { borderRects, fitScreen, onScreen, viewToWindow, type ScreenPlacement, type WindowRect } from "./screen.ts";
