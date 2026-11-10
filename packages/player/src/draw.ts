@@ -18,6 +18,8 @@ import {
   Tilemap,
   Particles,
   Fade,
+  Route,
+  Router,
   findTilemap,
   TILE_FLIP_D,
   TILE_FLIP_H,
@@ -419,6 +421,8 @@ const KIND_FLEX = 9;
 const KIND_TILEMAP = 10;
 const KIND_PARTICLES = 11;
 const KIND_FADE = 12;
+const KIND_ROUTE = 13;
+const KIND_ROUTER = 14;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
@@ -452,9 +456,11 @@ function classCode(object: GameObject): number {
       : object instanceof Tilemap ? KIND_TILEMAP
       : object instanceof Particles ? KIND_PARTICLES
       : object instanceof Fade ? KIND_FADE
+      : object instanceof Route ? KIND_ROUTE
+      : object instanceof Router ? KIND_ROUTER
       : KIND_NONE;
     code = kind;
-    if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX) code |= FLAG_VOLATILE;
+    if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX || kind === KIND_ROUTER) code |= FLAG_VOLATILE;
     if (kind === KIND_FLEX) code |= FLAG_OPAQUE;
     // A class that overrides a per-tick hook may write its own transform or colour from it, which nothing reports, unless it is
     // a built-in or a compiled component (the compiler marks those `managed`; the marker is an own property, so a hand-written subclass of one is not).
@@ -677,6 +683,7 @@ export class FrameBuilder {
     const pointerZs: number[] = [];
     const colliders: ColliderEntry[] = [];
     const huds: { readonly world: WorldTransform; readonly object: GameObject }[] = [];
+    const covers: Router[] = [];
     let anyZ = false;
     // The z of the records being written, kept here so a frame with no z makes no call per record.
     let listZ = 0;
@@ -797,6 +804,13 @@ export class FrameBuilder {
         case KIND_PARTICLES:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
           this.#particles(node as Particles, at);
+          break;
+        case KIND_ROUTE:
+          // A screen a transition has hidden is not drawn, pressed or collided with: its children are not walked at all.
+          if (!(node as Route).visible) return WALK_VOLATILE;
+          break;
+        case KIND_ROUTER:
+          if ((node as Router).cover > 0) covers.push(node as Router);
           break;
         case KIND_FADE:
           this.#warner.once("fade-world", "A <Fade> only draws inside a <Hud>: this one, in the world, does nothing.");
@@ -1133,6 +1147,19 @@ export class FrameBuilder {
           if (order !== null) ordered = order.map((i) => hudPointers[i] as Pressable);
         }
         for (const pointer of ordered) pointers.push(pointer);
+      }
+    }
+
+    // A router's transition may cover the whole screen with a colour, over the world and the HUD.
+    if (covers.length > 0) {
+      list.view(pixelPerfect ? IDENTITY_VIEW : hudView);
+      const place = this.#placed;
+      place.x = 0;
+      place.y = 0;
+      for (const router of covers) {
+        const color = this.#color(router.coverColor);
+        const alpha = Math.round((color & 255) * Math.min(1, router.cover));
+        if (alpha > 0) list.rect(place, gameWidth, gameHeight, ((color & 0xffffff00) | alpha) >>> 0);
       }
     }
 

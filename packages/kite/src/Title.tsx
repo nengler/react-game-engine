@@ -1,4 +1,4 @@
-import { useInput, useSound, useState, Fade, Flex, Hud, Text } from "@rge/runtime/jsx";
+import { useInput, useSound, useState, Flex, Hud, Text } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 
 /** The title screen: the name, how to move, and a prompt that waits for a button. Laid out by a column on the HUD layer, which centres it whatever the screen's size. */
@@ -32,7 +32,6 @@ export function Title() {
           PRESS Z TO START
         </Text>
       </Flex>
-      <Fade from={1} on={false} duration={0.5} color="#12151f" />
     </Hud>
   );
 }

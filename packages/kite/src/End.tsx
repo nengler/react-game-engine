@@ -1,4 +1,4 @@
-import { useInput, Fade, Flex, Hud, Text } from "@rge/runtime/jsx";
+import { useInput, Flex, Hud, Text } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 
 /** The end screen: how the climb went, and a way back to the title, in a centred column on the HUD layer. */
@@ -39,7 +39,6 @@ export function End() {
           PRESS Z FOR THE TITLE
         </Text>
       </Flex>
-      <Fade from={1} on={false} duration={0.6} color="#12151f" />
     </Hud>
   );
 }

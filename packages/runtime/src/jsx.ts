@@ -24,6 +24,7 @@ import type { TilemapProps } from "./components/Tilemap.ts";
 import type { ParticlesProps } from "./components/Particles.ts";
 import type { FadeProps } from "./components/Fade.ts";
 import type { MusicProps } from "./components/Music.ts";
+import type { RouteProps, RouterProps } from "./components/Router.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
@@ -217,6 +218,21 @@ export function Fade(_props: FadeProps): JSX.Element {
  */
 export function Music(_props: MusicProps): JSX.Element {
   return compileTimeOnly("Music");
+}
+
+/**
+ * The screens of a game, and which one shows: `<Router route={screen} transition={slide}><Route name="title"><Title /></Route>…</Router>`.
+ * Only the shown `<Route>` is in the world. When `route` changes, `transition` (a function you write in a `.ts` file, called with the
+ * progress from 0 to 1 and the two route names, returning where each screen is, whether it is visible and how far a cover colour
+ * is over the screen) runs for `duration` seconds with both screens in the world; without one the screens switch at once.
+ */
+export function Router(_props: RouterProps & { children?: Child }): JSX.Element {
+  return compileTimeOnly("Router");
+}
+
+/** One screen of a `<Router>`, named for its `route`. It is in the world only while shown (or being left or entered). */
+export function Route(_props: RouteProps & { children?: Child }): JSX.Element {
+  return compileTimeOnly("Route");
 }
 
 /**

@@ -98,9 +98,9 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "Fade", "Music"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "Fade", "Music", "Router", "Route"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -121,6 +121,8 @@ export const runtimeManifest: RuntimeManifest = {
     Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "count", "read", "emit"],
     Fade: ["color", "on", "duration", "amount"],
     Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
+    Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
+    Route: ["name", "visible"],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
       "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "contains", "box",
@@ -143,6 +145,8 @@ export const runtimeManifest: RuntimeManifest = {
     Particles: [],
     Fade: [],
     Music: ["src"],
+    Router: ["route"],
+    Route: ["name"],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
@@ -150,6 +154,7 @@ export const runtimeManifest: RuntimeManifest = {
     Particles: ["onUpdate"],
     Fade: ["onUpdate"],
     Music: ["onUpdate"],
+    Router: ["onUpdate"],
   },
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },

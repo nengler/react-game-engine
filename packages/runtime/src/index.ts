@@ -30,6 +30,7 @@ export { findTilemap, getTilemap, registerTilemaps, TileGrid, TILE_FLIP_D, TILE_
 export { Music, type MusicProps } from "./components/Music.ts";
 export { Particles, PARTICLE_SPACES, type ParticlesProps } from "./components/Particles.ts";
 export { Fade, type FadeProps } from "./components/Fade.ts";
+export { Route, Router, type RouteProps, type RouterProps, type Transition, type TransitionFrame } from "./components/Router.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";

@@ -1,10 +1,11 @@
-import { Camera, Entity, Fade, Flex, Game, Hud, Music, Screen, Text } from "@rge/runtime/jsx";
+import { Camera, Entity, Fade, Flex, Game, Hud, Music, Route, Router, Screen, Text } from "@rge/runtime/jsx";
 import { End } from "./End.tsx";
 import { Gem } from "./Gem.tsx";
 import { useGame } from "./GameState.ts";
 import { Level } from "./Level.tsx";
 import { Player } from "./Player.tsx";
 import { Title } from "./Title.tsx";
+import { fadeThrough } from "./transitions.ts";
 
 /** What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, and the HUD. */
 function Play() {
@@ -67,9 +68,18 @@ export default function Main() {
       fixedStep={60}
     >
       <Screen width={320} height={180} fit="contain">
-        {screen === "title" && <Title />}
-        {screen === "play" && <Play />}
-        {screen === "end" && <End />}
+        {/* The screens: only the one the game state names is in the world, and changing it fades through the background colour. */}
+        <Router route={screen} transition={fadeThrough} duration={0.5} coverColor="#12151f">
+          <Route name="title">
+            <Title />
+          </Route>
+          <Route name="play">
+            <Play />
+          </Route>
+          <Route name="end">
+            <End />
+          </Route>
+        </Router>
         {/* Music keeps playing across rooms and screens: it belongs to the root, which is never removed. */}
         <Music src="theme.wav" volume={0.45} fade={1} />
       </Screen>

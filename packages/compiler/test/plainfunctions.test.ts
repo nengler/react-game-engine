@@ -114,4 +114,34 @@ export function B() {
     }
     void execFileSync;
   });
+
+  it("make a router's transition: a Router takes a function from a .ts file, and its route follows state", () => {
+    const p = project({
+      "transitions.ts": `import type { TransitionFrame } from "@rge/runtime";\nexport function wipe(t: number): TransitionFrame { return { toX: 320 - 320 * t, cover: 0 }; }\n`,
+      "R.tsx": `import { Entity, Route, Router, useState } from "@rge/runtime/jsx";
+import { wipe } from "./transitions.ts";
+export function R() {
+  const [screen] = useState("a");
+  return (
+    <Entity name="R">
+      <Router route={screen} transition={wipe} duration={0.3}>
+        <Route name="a"><Entity name="A" /></Route>
+        <Route name="b"><Entity name="B" /></Route>
+      </Router>
+    </Entity>
+  );
+}
+`,
+    });
+    try {
+      const r = p.run();
+      assert.equal(r.status, 0, r.stderr);
+      const code = p.out("R.ts");
+      assert.match(code, /new Router\(\{ route: this\.screen, transition: wipe, duration: 0\.3 \}\)/);
+      assert.match(code, /import \{ wipe \} from "\.\.\/src\/transitions\.ts";/);
+      assert.match(code, /new Route\(\{ name: "a" \}\)/);
+    } finally {
+      rmSync(p.dir, { recursive: true, force: true });
+    }
+  });
 });
