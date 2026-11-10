@@ -48,6 +48,8 @@ export interface FlexProps {
   maxHeight?: number;
   /** A CSS colour: draw a filled rectangle behind the children, the size of the box. Default none. */
   background?: string;
+  /** Called when a press lands on the laid-out box (see `World.reportPress`). The box is the size it was laid out at, last frame. */
+  onPress?: () => void;
 }
 
 /**
@@ -119,6 +121,7 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   minHeight: number | undefined;
   maxHeight: number | undefined;
   background: string | undefined;
+  onPress: (() => void) | undefined;
   /** Layout's working numbers (see `FlexBox`); `box.size` is the size the box was laid out at, last frame. */
   readonly box = new FlexBox();
 
@@ -143,5 +146,24 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.minHeight = hostProps.minHeight;
     this.maxHeight = hostProps.maxHeight;
     this.background = hostProps.background;
+    this.onPress = hostProps.onPress;
+  }
+
+  /**
+   * Whether the world-space point is on the box as it was laid out and drawn: taken back through the box's position,
+   * rotation and scale, like `Pointer.contains`. A box with no size, or a zero scale, is never hit.
+   */
+  contains(x: number, y: number): boolean {
+    const width = this.box.size[0] as number;
+    const height = this.box.size[1] as number;
+    const t = this.worldTransform();
+    if (!(width > 0 && height > 0) || t.scaleX === 0 || t.scaleY === 0) return false;
+    const dx = x - t.x;
+    const dy = y - t.y;
+    const cos = Math.cos(t.rotation);
+    const sin = Math.sin(t.rotation);
+    const localX = (dx * cos + dy * sin) / t.scaleX;
+    const localY = (dy * cos - dx * sin) / t.scaleY;
+    return localX >= 0 && localX <= width && localY >= 0 && localY <= height;
   }
 }

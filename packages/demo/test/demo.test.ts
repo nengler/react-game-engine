@@ -38,7 +38,7 @@ function summary(records: readonly DecodedRecord[]): unknown[] {
       case "sprite": return ["sprite", r.texture, r.x, r.y];
       case "rect": return ["rect", r.x, r.y, r.width, r.height, r.color];
       case "ellipse": return ["ellipse", r.x, r.y, r.width, r.height, r.color];
-      case "text": return ["text", r.text, Math.round(r.x * 1e6) / 1e6, Math.round(r.y * 1e6) / 1e6, r.size, r.color]; // layout adds halves: ignore the last bits
+      case "text": return ["text", r.text, r.x, r.y, r.size, r.color];
     }
   });
 }
@@ -80,8 +80,8 @@ describe("demo: the first frame", () => {
       ["view", 0, 0],
       ["text", "Coins: 0", 16, 16, 16, "#ffd700ff"],
       ["rect", 16, 40, 96, 32, "#708090ff"],
-      // The label is centred in the button by layout: 9 characters at 16 are 86.4 wide (the recorder's estimate) and 16 high.
-      ["text", "Clicks: 0", 20.8, 40 + (32 - 16) / 2, 16, "#ffffffff"],
+      // The label is centred in the button by layout: 9 characters at 16 are 86.4 wide (the recorder's estimate) and 16 high, so (96 - 86.4) / 2 = 4.8, which layout rounds to a whole pixel.
+      ["text", "Clicks: 0", 21, 40 + (32 - 16) / 2, 16, "#ffffffff"],
     ]);
     assert.deepEqual(run.warnings, []);
     assert.equal(run.backend.lastFrame.clearColor, "#10131cff");

@@ -255,6 +255,26 @@ describe("librge through koffi", { skip }, () => {
     }
   });
 
+  it("draws a <Text align> inside its width: right-aligned text leaves the left of its box empty", () => {
+    const make = (align: "left" | "right") => () => {
+      const text = new Text({ text: "Hi", size: 16, color: "white", width: 60, align });
+      text.transform.x = 2;
+      text.transform.y = 2;
+      return text;
+    };
+    const whiteColumns = (frame: Pixels): number[] => {
+      const columns: number[] = [];
+      for (let x = 0; x < 64; x++) for (let y = 0; y < 48; y++) if (pixel(frame, x, y) === "ffffffff") { columns.push(x); break; }
+      return columns;
+    };
+    const left = whiteColumns(render(make("left")));
+    const right = whiteColumns(render(make("right")));
+    assert.ok(left.length > 0 && right.length > 0, "both drew text");
+    assert.ok(Math.min(...left) >= 2 && Math.min(...left) < 8, `left starts at ${Math.min(...left)}`);
+    assert.ok(Math.min(...right) > 30, `right starts at ${Math.min(...right)}: the right edge of the box is x = 62`);
+    assert.ok(Math.max(...right) <= 62, `and ends inside it, at ${Math.max(...right)}`);
+  });
+
   it("keeps the border over anything drawn past the game, under a turned camera", () => {
     const frame = render(() => {
       const screen = new Screen({ width: 20, height: 12, border: "blue" });

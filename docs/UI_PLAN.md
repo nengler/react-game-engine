@@ -291,7 +291,7 @@ So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI
 
 **Done 2026-11-10**, with these differences from the text above:
 
-- **`onPress` is not on `Flex` yet** (U4 adds it); every other prop in the table is.
+- **`onPress` was added in U4**; every other prop in the table was there in U2.
 - **Shrinking came in U3** (below). Until text wraps nothing can shrink in a real game, so a row or label past its box overflows it, as this plan says it should: the context menu's long-label case overflows, and a growing child across the axis never goes below its minimum.
 - **A growing root takes the game's area**: the canvas under a `<Screen>`, else the window, whether it is under a `<Hud>` or in the world. That is U3's "HUD box" in effect; U3 adds the resize tests and the demo.
 - **The working numbers are one field**, `box` (a `FlexBox`), so a component rooted at a `Flex` reserves one name for them, not a dozen. `box.size` is the size the box was laid out at, last frame.
@@ -335,12 +335,16 @@ The test covers: the menu fitting its widest row; the minimum width holding when
 
 ### U4: polish
 
-**Done when**
+**Done 2026-11-10**, with these decisions:
 
-- [ ] Layout positions are rounded to whole pixels, so centred text is not blurry
-- [ ] `<Text align="center">` inside a box: the second half of "text measuring and alignment"
-- [ ] `<Flex onPress>` is pressable over its laid-out box, and the demo's button uses it
-- [ ] DESIGN.md has a "Layout" section and README shows the HUD example
+- **Rounding** is of each child's `layoutX` / `layoutY`, from the exact running position (so a row of odd widths does not drift), never of sizes: three equal growing children in 11 pixels are each 3⅔ wide, and sit at 0, 4 and 7. Parents' offsets are whole, so every descendant's world position is too (until something with a fractional `transform` moves it).
+- **`<Text align>` is relative to the text's own `width`**, a new optional prop: `<Text width={80} align="center">`. The box layout uses is that `width` (else the measured one), and the text is drawn shifted inside it, by whole pixels, along its own axis; a text wider than its box overflows it, from the start for `"left"` and by the excess for the others. Without a `width` the box is the text, so `align` has nothing to move. Single-line only, until wrapping.
+- **`Flex.onPress`** makes the laid-out box pressable, last frame's box as for any pointer. It joins the same list as `Pointer`s, in draw order (so `z` and tree order decide which is on top), and works inside a `<Hud>` at the HUD's coordinates. Both are now a `Pressable` (`World.reportPress` takes one); a `Flex` without `onPress` is not in the list.
+
+- [x] Layout positions are rounded to whole pixels, so centred text is not blurry
+- [x] `<Text align="center">` inside a box: the second half of "text measuring and alignment"
+- [x] `<Flex onPress>` is pressable over its laid-out box, and the demo's button uses it
+- [x] DESIGN.md has a "Layout" section and README shows the HUD example
 
 ### U5: floating boxes
 

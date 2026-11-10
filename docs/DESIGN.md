@@ -1621,10 +1621,12 @@ smallest growing child first and stops at each maximum. Only a `Flex` is resized
 `Text` keeps its own size. An `Entity` or component child is sized by the bounding box of what it draws. A root that
 grows fills the game's area (the canvas, else the window). Layout runs every frame, so conditional children and keyed
 lists reflow with no extra work, and in steady state it allocates nothing. `background` is a rectangle drawn first,
-behind the children, at the box's size. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
+behind the children, at the box's size. Each child's offset is rounded to a whole pixel (sizes stay exact), so centred
+text is not blurred. A `Flex` with an `onPress` is pressable over its laid-out box, in the same draw-order list as
+`Pointer`s (both are a `Pressable`). A `<Text width={80} align="center">` is laid out as an 80-wide box and drawn
+centred in it. When children overflow a row or column, boxes that are `"fit"` or `"grow"` shrink largest first down to their
 minimums; a leaf's minimum is its size unless the measurer reports a smaller one (`minWidth` / `minHeight`, for
-wrapping text), so in a real game nothing shrinks yet and overflow is visible. Not built yet: whole-pixel rounding and
-`onPress` (U4), floating boxes (U5), text wrapping.
+wrapping text), so in a real game nothing shrinks yet and overflow is visible. Not built yet: floating boxes (U5), text wrapping.
 
 **Measuring.** `FrameBuilder.measure(object)` is the size layout will place an object by: a `Shape`'s,
 `Pointer`'s or `Collider`'s `width × height`, a `Text`'s measured width × its measured line height, a `Sprite`'s texture size

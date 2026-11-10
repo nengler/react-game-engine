@@ -14,6 +14,7 @@ import {
   Sprite,
   Text,
   type GameObject,
+  type Pressable,
   type ScreenFit,
   type ViewTransform,
   type WorldTransform,
@@ -304,7 +305,7 @@ export interface BuiltFrame {
   readonly screen: ScreenPlacement | null;
   readonly camera: Camera | null;
   /** In draw order: the last one is on top. The world's pointers, then (from `hudPointersFrom`) those inside a `<Hud>`. */
-  readonly pointers: readonly Pointer[];
+  readonly pointers: readonly Pressable[];
   /** Where the HUD's pointers start in `pointers`: they are pressed at `hudView`'s coordinates, not the world's. */
   readonly hudPointersFrom: number;
   readonly colliders: readonly ColliderEntry[];
@@ -431,7 +432,7 @@ export class FrameBuilder {
     const worldStart = list.length;
     list.view(IDENTITY_VIEW);
     let camera: Camera | null = null;
-    let pointers: Pointer[] = [];
+    let pointers: Pressable[] = [];
     const pointerZs: number[] = [];
     const colliders: ColliderEntry[] = [];
     const huds: { readonly world: WorldTransform; readonly object: GameObject }[] = [];
@@ -482,6 +483,10 @@ export class FrameBuilder {
         case KIND_FLEX:
           if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
           this.#flex(object as Flex, world, gameWidth, gameHeight);
+          if ((object as Flex).onPress !== undefined) {
+            pointers.push(object as Flex);
+            pointerZs.push(z);
+          }
           break;
       }
     });
@@ -490,7 +495,7 @@ export class FrameBuilder {
     list.sortByZ(worldStart + RGE_OP_VIEW_LEN);
     if (anyZ) {
       const order = orderByZ(pointerZs);
-      if (order !== null) pointers = order.map((i) => pointers[i] as Pointer);
+      if (order !== null) pointers = order.map((i) => pointers[i] as Pressable);
     }
 
     // The camera centres on the middle of the game's area; a screen's placement then takes game pixels to the window.
@@ -508,7 +513,7 @@ export class FrameBuilder {
         const layerStart = list.length;
         let hudAnyZ = false;
         const hudPointerZs: number[] = [];
-        const hudPointers: Pointer[] = [];
+        const hudPointers: Pressable[] = [];
         listZ = 0;
         for (const child of hud.children) {
           walkTree(
@@ -537,6 +542,10 @@ export class FrameBuilder {
                 case KIND_FLEX:
                   if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
                   this.#flex(object as Flex, world, gameWidth, gameHeight);
+                  if ((object as Flex).onPress !== undefined) {
+                    hudPointers.push(object as Flex);
+                    hudPointerZs.push(z);
+                  }
                   break;
                 case KIND_POINTER:
                   hudPointers.push(object as Pointer);
@@ -553,10 +562,10 @@ export class FrameBuilder {
           );
         }
         list.sortByZ(layerStart);
-        let ordered = hudPointers;
+        let ordered: Pressable[] = hudPointers;
         if (hudAnyZ) {
           const order = orderByZ(hudPointerZs);
-          if (order !== null) ordered = order.map((i) => hudPointers[i] as Pointer);
+          if (order !== null) ordered = order.map((i) => hudPointers[i] as Pressable);
         }
         for (const pointer of ordered) pointers.push(pointer);
       }
@@ -589,11 +598,16 @@ export class FrameBuilder {
     }
     if (object instanceof Text) {
       if (object.text === "") {
-        out.width = 0;
+        out.width = object.width ?? 0;
         out.height = object.size;
         return true;
       }
       size = this.#textSize(object.text, object.size);
+      if (object.width !== undefined) {
+        out.width = object.width;
+        out.height = size.height;
+        return true;
+      }
     } else if (object instanceof AnimatedSprite) size = this.#imageSize(object.frames[0] ?? "");
     else if (object instanceof Sprite) size = this.#imageSize(object.image);
     else return false;
@@ -664,7 +678,17 @@ export class FrameBuilder {
   }
 
   #text(text: Text, world: WorldTransform): void {
-    this.#list.text(world, text.text, text.size, this.#color(text.color));
+    let at = world;
+    if (text.width !== undefined && text.align !== "left") {
+      // Aligned inside its own width: shift along the text's own x axis, by whole pixels.
+      const room = text.width - this.#textSize(text.text, text.size).width;
+      const shift = text.align === "center" ? Math.round(room / 2) : text.align === "right" ? Math.round(room) : 0;
+      if (shift !== 0) {
+        const along = shift * world.scaleX;
+        at = { x: world.x + Math.cos(world.rotation) * along, y: world.y + Math.sin(world.rotation) * along, rotation: world.rotation, scaleX: world.scaleX, scaleY: world.scaleY };
+      }
+    }
+    this.#list.text(at, text.text, text.size, this.#color(text.color));
   }
 
   /** Window origin at the top-left with no camera; with one, the followed point lands on the centre of a `width` × `height` view (the window, or the game's screen). */

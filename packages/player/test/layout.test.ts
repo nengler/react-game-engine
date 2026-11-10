@@ -291,8 +291,9 @@ describe("layout: positions", () => {
     assert.deepEqual(gather("row", "start", "center").map((p) => p[0]), [25, 40, 65]);
     assert.deepEqual(gather("row", "start", "end").map((p) => p[0]), [50, 65, 90]);
     assert.deepEqual(gather("row", "start", "space-between").map((p) => p[0]), [0, 40, 90]);
-    assert.deepEqual(gather("row", "start", "space-around").map((p) => p[0]), [50 / 6, 50 / 6 + 10 + 50 / 3 + 5, 50 / 6 + 10 + 5 + 20 + 2 * (50 / 3) + 5]);
-    assert.deepEqual(gather("row", "start", "space-evenly").map((p) => p[0]), [12.5, 12.5 + 10 + 12.5 + 5, 12.5 + 10 + 5 + 12.5 + 20 + 12.5 + 5]);
+    // Offsets are whole pixels: 50 / 6 = 8.33 -> 8, 8.33 + 10 + 16.67 + 5 = 40 and so on.
+    assert.deepEqual(gather("row", "start", "space-around").map((p) => p[0]), [Math.round(50 / 6), Math.round(50 / 6 + 10 + 50 / 3 + 5), Math.round(50 / 6 + 10 + 5 + 20 + 2 * (50 / 3) + 5)]);
+    assert.deepEqual(gather("row", "start", "space-evenly").map((p) => p[0]), [13, Math.round(12.5 + 10 + 12.5 + 5), Math.round(12.5 + 10 + 5 + 12.5 + 20 + 12.5 + 5)]);
   });
 
   it("places a column's children by justifyContent along y (inner 60, used 18 + 10 = 28, free 32)", () => {
@@ -353,6 +354,47 @@ describe("layout: positions", () => {
     assert.deepEqual(at(b), before, "b did not move");
     assert.deepEqual(at(a), [0, 0], "the slot is unchanged");
     assert.deepEqual([a.worldTransform().x, a.worldTransform().y], [100, -3], "the child is moved within it");
+  });
+});
+
+describe("layout: whole pixels", () => {
+  it("rounds a centred child's offset to a whole pixel, so it is not blurred by half a pixel", () => {
+    const a = box(7, 5); // 7 wide in a 20 box: (20 - 7) / 2 = 6.5
+    const row = flex({ width: 20, height: 10, alignItems: "center", justifyContent: "center" }, a);
+    lay(row);
+    assert.deepEqual(at(a), [7, 3], "6.5 -> 7 and 2.5 -> 3");
+    const b = box(7, 6);
+    lay(flex({ width: 20, height: 10, alignItems: "center", justifyContent: "center" }, b));
+    assert.deepEqual(at(b), [7, 2]);
+  });
+
+  it("keeps every offset whole through nesting, so a deep child lands on a pixel too", () => {
+    const leaf = box(3, 3);
+    const inner = flex({ width: 11, height: 11, alignItems: "center", justifyContent: "center" }, leaf);
+    const outer = flex({ width: 30, height: 30, alignItems: "center", justifyContent: "center" }, inner);
+    lay(outer);
+    assert.ok(Number.isInteger(inner.layoutX) && Number.isInteger(inner.layoutY), `${at(inner)}`);
+    assert.ok(Number.isInteger(leaf.layoutX) && Number.isInteger(leaf.layoutY), `${at(leaf)}`);
+    assert.ok(Number.isInteger(leaf.worldTransform().x) && Number.isInteger(leaf.worldTransform().y));
+  });
+
+  it("rounds each offset from the exact running position, so a row of odd widths does not drift", () => {
+    const kids = [box(1, 3), box(1, 3), box(1, 3), box(1, 3)];
+    lay(flex({ width: 103, justifyContent: "space-between" }, ...kids));
+    // Free space 99 in three gaps of 33 -> exactly on pixels, no drift.
+    assert.deepEqual(kids.map((k) => k.layoutX), [0, 34, 68, 102]);
+    const more = [box(1, 3), box(1, 3), box(1, 3)];
+    lay(flex({ width: 11, justifyContent: "space-between" }, ...more));
+    assert.deepEqual(more.map((k) => k.layoutX), [0, 5, 10], "(11 - 3) / 2 = 4 between each: 0, 5, 10");
+    const odd = [box(1, 3), box(1, 3), box(1, 3)];
+    lay(flex({ width: 10, justifyContent: "space-between" }, ...odd));
+    assert.deepEqual(odd.map((k) => k.layoutX), [0, 5, 9], "3.5 between each: 0, 4.5 -> 5, 9");
+  });
+
+  it("leaves sizes exact: only positions are snapped", () => {
+    const grown = flex({ width: "grow" });
+    lay(flex({ width: 11 }, grown, flex({ width: "grow" }), flex({ width: "grow" })));
+    assert.equal(grown.box.size[0], 11 / 3);
   });
 });
 

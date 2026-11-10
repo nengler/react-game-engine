@@ -1,4 +1,4 @@
-import { Game, World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pointer, type SoundSink, type ViewTransform } from "@rge/runtime";
+import { Game, World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pressable, type SoundSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -103,7 +103,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const sink = createSoundSink(backend, assets, warner);
   const world = new World();
   const collisions = new CollisionTracker();
-  let pointers: readonly Pointer[] = [];
+  let pointers: readonly Pressable[] = [];
   let hudPointersFrom = 0;
   let hudView: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
   let screen: ScreenPlacement | null = null;
@@ -133,7 +133,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     // The last pointer drawn is on top, so it gets the press; one press, one pointer. A HUD is drawn after the world, so its pointers come last.
     for (let i = pointers.length - 1; i >= 0; i--) {
       const point = i >= hudPointersFrom ? hudAt : at;
-      if (world.reportPress(pointers[i] as Pointer, point.x, point.y)) return;
+      if (world.reportPress(pointers[i] as Pressable, point.x, point.y)) return;
     }
   };
 

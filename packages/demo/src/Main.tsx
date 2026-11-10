@@ -1,4 +1,4 @@
-import { useSound, useState, Camera, Entity, Flex, Game, Hud, Pointer, Text } from "@rge/runtime/jsx";
+import { useSound, useState, Camera, Flex, Game, Hud, Text } from "@rge/runtime/jsx";
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
 import { useGame } from "./GameState.ts";
@@ -28,22 +28,22 @@ export default function Main() {
       <Hud transform={{ x: 16, y: 16 }}>
         <Flex direction="column" gap={8}>
           <CoinCounter />
-          {/* The button is a Flex for the look (its label is centred by layout) and a Pointer for the click, both 96 × 32 at the Entity's origin. */}
-          <Entity name="Button">
-            <Flex width={96} height={32} alignItems="center" justifyContent="center" background={clicks >= 3 ? "seagreen" : "slategray"}>
-              <Text size={16} color="white">
-                Clicks: {clicks}
-              </Text>
-            </Flex>
-            <Pointer
-              width={96}
-              height={32}
-              onPress={() => {
-                playClick();
-                setClicks((clicks) => clicks + 1);
-              }}
-            />
-          </Entity>
+          {/* The button is a Flex: its label is centred by layout, and a press on its box counts. */}
+          <Flex
+            width={96}
+            height={32}
+            alignItems="center"
+            justifyContent="center"
+            background={clicks >= 3 ? "seagreen" : "slategray"}
+            onPress={() => {
+              playClick();
+              setClicks((clicks) => clicks + 1);
+            }}
+          >
+            <Text size={16} color="white">
+              Clicks: {clicks}
+            </Text>
+          </Flex>
         </Flex>
       </Hud>
       {/* A camera follows its children, so this keeps the view on the player. */}

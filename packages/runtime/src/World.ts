@@ -1,6 +1,6 @@
 import { GameObject } from "./GameObject.ts";
 import { Collider } from "./components/Collider.ts";
-import { Pointer } from "./components/Pointer.ts";
+import type { Pressable } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 
 /**
@@ -72,7 +72,7 @@ export class World {
    * was hit. Dispatch only: renders happen in the next `tick`. Which pointer
    * to test (and in what order, for overlaps) is the input system's job.
    */
-  reportPress(pointer: Pointer, x: number, y: number): boolean {
+  reportPress(pointer: Pressable, x: number, y: number): boolean {
     if (pointer.world !== this || !pointer.contains(x, y)) return false;
     pointer.onPress?.();
     return true;
