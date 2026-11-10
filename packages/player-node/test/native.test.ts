@@ -68,6 +68,25 @@ describe("librge through koffi", { skip }, () => {
     assert.equal(native.keyCount(), KEYS.length);
   });
 
+  it("measures text and textures through librge", () => {
+    const png = join(scratch, "measured.png");
+    writePng(png, 6, [255, 0, 0]);
+    const backend = createNodeBackend(library);
+    try {
+      backend.open({ width: 64, height: 48, title: "measure", hidden: true, vsync: false });
+      const small = backend.measureText("Hello", 10);
+      const large = backend.measureText("Hello", 20);
+      assert.ok(small.width > 0 && large.width > 1.9 * small.width, `widths ${small.width} and ${large.width}`);
+      assert.ok(large.height >= 20, `line height ${large.height}`);
+      assert.equal(backend.measureText("", 20).width, 0);
+      const texture = backend.loadTexture(png);
+      assert.deepEqual(backend.textureSize(texture), { width: 6, height: 6 });
+      assert.throws(() => backend.textureSize(999), /no texture/);
+    } finally {
+      backend.close();
+    }
+  });
+
   it("draws a rect where the player put it, over the background", () => {
     const frame = render(() => {
       const root = new Entity();

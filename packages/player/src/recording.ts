@@ -15,10 +15,16 @@ import {
   RGE_KEY_DOWN,
   RGE_KEY_PRESSED,
   RGE_KEY_RELEASED,
+  RGE_OP_CANVAS,
+  RGE_OP_CANVAS_LEN,
   RGE_OP_ELLIPSE,
   RGE_OP_ELLIPSE_LEN,
   RGE_OP_RECT,
   RGE_OP_RECT_LEN,
+  RGE_OP_SCISSOR,
+  RGE_OP_SCISSOR_END,
+  RGE_OP_SCISSOR_END_LEN,
+  RGE_OP_SCISSOR_LEN,
   RGE_OP_SPRITE,
   RGE_OP_SPRITE_LEN,
   RGE_OP_TEXT,
@@ -37,6 +43,9 @@ interface Placed {
 
 /** A draw record in readable form; colours are `#rrggbbaa` and textures are the path they were loaded from. */
 export type DecodedRecord =
+  | { readonly op: "canvas"; readonly width: number; readonly height: number; readonly destX: number; readonly destY: number; readonly destW: number; readonly destH: number; readonly borderColor: string }
+  | { readonly op: "scissor"; readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+  | { readonly op: "scissorEnd" }
   | { readonly op: "view"; readonly a: number; readonly b: number; readonly c: number; readonly d: number; readonly e: number; readonly f: number }
   | ({ readonly op: "sprite"; readonly texture: string } & Placed)
   | ({ readonly op: "rect"; readonly width: number; readonly height: number; readonly color: string } & Placed)
@@ -137,9 +146,9 @@ export class RecordingBackend implements Backend {
   }
 
   /** The player's own estimate (`estimateTextWidth`), so layout tests have stable numbers without a font. */
-  measureText(text: string, size: number): number {
+  measureText(text: string, size: number): { width: number; height: number } {
     this.textMeasures.push(`${size}:${text}`);
-    return estimateTextWidth(text, size);
+    return { width: estimateTextWidth(text, size), height: size };
   }
 
   textureSize(handle: number): { width: number; height: number } {
@@ -187,6 +196,22 @@ export class RecordingBackend implements Backend {
           need(RGE_OP_VIEW_LEN);
           out.push({ op: "view", a: records[at + 1]!, b: records[at + 2]!, c: records[at + 3]!, d: records[at + 4]!, e: records[at + 5]!, f: records[at + 6]! });
           at += RGE_OP_VIEW_LEN;
+          break;
+        case RGE_OP_CANVAS:
+          need(RGE_OP_CANVAS_LEN);
+          if (at !== 0) throw new Error(`A canvas record must be the first record of a frame, not at ${at}.`);
+          out.push({ op: "canvas", width: records[at + 1]!, height: records[at + 2]!, destX: records[at + 3]!, destY: records[at + 4]!, destW: records[at + 5]!, destH: records[at + 6]!, borderColor: colorToHex(records[at + 7]!) });
+          at += RGE_OP_CANVAS_LEN;
+          break;
+        case RGE_OP_SCISSOR:
+          need(RGE_OP_SCISSOR_LEN);
+          out.push({ op: "scissor", x: records[at + 1]!, y: records[at + 2]!, width: records[at + 3]!, height: records[at + 4]! });
+          at += RGE_OP_SCISSOR_LEN;
+          break;
+        case RGE_OP_SCISSOR_END:
+          need(RGE_OP_SCISSOR_END_LEN);
+          out.push({ op: "scissorEnd" });
+          at += RGE_OP_SCISSOR_END_LEN;
           break;
         case RGE_OP_SPRITE: {
           need(RGE_OP_SPRITE_LEN);

@@ -122,7 +122,7 @@ This is the contract every milestone builds on. It is written out here in full s
  * Colours are packed 0xRRGGBBAA stored in a double (exact).
  */
 #define RGE_OP_VIEW     1  /* op, a, b, c, d, e, f: world → screen affine, already including
-                              the viewport-centre offset. Always the first record of a frame.   len 7 */
+                              the viewport-centre offset. A later VIEW replaces it (ABI v2).    len 7 */
 #define RGE_OP_SPRITE   2  /* op, x, y, rot, sx, sy, texture                                    len 7 */
 #define RGE_OP_RECT     3  /* op, x, y, rot, sx, sy, width, height, color                       len 9 */
 #define RGE_OP_ELLIPSE  4  /* op, x, y, rot, sx, sy, width, height, color (fills the w×h box)   len 9 */

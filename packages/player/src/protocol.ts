@@ -4,7 +4,7 @@
  * `test/protocol.test.ts` parses the header and fails if anything here differs.
  */
 
-export const RGE_ABI_VERSION = 1;
+export const RGE_ABI_VERSION = 2;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const RGE_OP_VIEW = 1;
@@ -12,6 +12,9 @@ export const RGE_OP_SPRITE = 2;
 export const RGE_OP_RECT = 3;
 export const RGE_OP_ELLIPSE = 4;
 export const RGE_OP_TEXT = 5;
+export const RGE_OP_SCISSOR = 6;
+export const RGE_OP_SCISSOR_END = 7;
+export const RGE_OP_CANVAS = 8;
 
 // Record lengths in doubles, op included.
 export const RGE_OP_VIEW_LEN = 7;
@@ -19,6 +22,9 @@ export const RGE_OP_SPRITE_LEN = 7;
 export const RGE_OP_RECT_LEN = 9;
 export const RGE_OP_ELLIPSE_LEN = 9;
 export const RGE_OP_TEXT_LEN = 9;
+export const RGE_OP_SCISSOR_LEN = 5;
+export const RGE_OP_SCISSOR_END_LEN = 1;
+export const RGE_OP_CANVAS_LEN = 8;
 
 // Input buffer, written by the backend's `frame`.
 export const RGE_IN_DT = 0;
@@ -49,11 +55,17 @@ export const PROTOCOL = {
   RGE_OP_RECT,
   RGE_OP_ELLIPSE,
   RGE_OP_TEXT,
+  RGE_OP_SCISSOR,
+  RGE_OP_SCISSOR_END,
+  RGE_OP_CANVAS,
   RGE_OP_VIEW_LEN,
   RGE_OP_SPRITE_LEN,
   RGE_OP_RECT_LEN,
   RGE_OP_ELLIPSE_LEN,
   RGE_OP_TEXT_LEN,
+  RGE_OP_SCISSOR_LEN,
+  RGE_OP_SCISSOR_END_LEN,
+  RGE_OP_CANVAS_LEN,
   RGE_IN_DT,
   RGE_IN_WIDTH,
   RGE_IN_HEIGHT,

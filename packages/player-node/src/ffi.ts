@@ -18,6 +18,10 @@ export interface Native {
   loadTexture(path: string): number;
   loadSound(path: string): number;
   playSound(handle: number): void;
+  /** Width and line height of `text` at `size`, or null when librge cannot say (no window open). */
+  measureText(text: string, size: number): { width: number; height: number } | null;
+  /** Width and height of a loaded texture, or null for an invalid handle. */
+  textureSize(handle: number): { width: number; height: number } | null;
   frame(clearColor: number, records: Float64Array, recordsLength: number, text: Uint8Array, textOffsets: Int32Array, textCount: number, input: Float64Array, keys: Uint8Array): void;
   /** Copies the last captured frame (RGBA8, top row first) into `rgba` if it fits; returns the bytes needed, 0 if there is none. */
   readPixels(rgba: Uint8Array | null, capacity: number): number;
@@ -73,6 +77,8 @@ export function loadNative(path: string): Native {
   const loadTexture = lib.func("int32_t rge_load_texture(const char *path)");
   const loadSound = lib.func("int32_t rge_load_sound(const char *path)");
   const playSound = lib.func("void rge_play_sound(int32_t handle)");
+  const measureText = lib.func("int32_t rge_measure_text(const char *text, double size, _Out_ double *out)");
+  const textureSize = lib.func("int32_t rge_texture_size(int32_t handle, _Out_ double *out)");
   const frame = lib.func(
     "void rge_frame(uint32_t clearColor, const double *records, int32_t recordsLength, const uint8_t *text, const int32_t *textOffsets, int32_t textCount, _Out_ double *input, _Out_ uint8_t *keys)",
   );
@@ -86,6 +92,14 @@ export function loadNative(path: string): Native {
     loadTexture: (path) => loadTexture(path) as number,
     loadSound: (path) => loadSound(path) as number,
     playSound: (handle) => void playSound(handle),
+    measureText: (text, size) => {
+      const out = new Float64Array(2);
+      return (measureText(text, size, out) as number) === 0 ? { width: out[0] as number, height: out[1] as number } : null;
+    },
+    textureSize: (handle) => {
+      const out = new Float64Array(2);
+      return (textureSize(handle, out) as number) === 0 ? { width: out[0] as number, height: out[1] as number } : null;
+    },
     frame: (clearColor, records, recordsLength, text, textOffsets, textCount, input, keys) =>
       void frame(clearColor, records, recordsLength, text, textOffsets, textCount, input, keys),
     readPixels: (rgba, capacity) => (rgba === null ? (readPixels(null, 0) as number) : (readPixels(rgba, capacity) as number)),

@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 1
+#define RGE_ABI_VERSION 2
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -17,17 +17,32 @@
  * Colours are packed 0xRRGGBBAA stored in a double (exact).
  *
  *   RGE_OP_VIEW     op, a, b, c, d, e, f         world -> screen affine, already including the
- *                                                viewport-centre offset. Always the first record.
+ *                                                viewport-centre offset. It applies to the drawables after it,
+ *                                                and a later VIEW record replaces it (it does not compose with it):
+ *                                                the HUD is drawn through a second view that ignores the camera.
+ *                                                Drawables before the first VIEW are drawn in target pixels.
  *   RGE_OP_SPRITE   op, x, y, rot, sx, sy, texture
  *   RGE_OP_RECT     op, x, y, rot, sx, sy, width, height, color
  *   RGE_OP_ELLIPSE  op, x, y, rot, sx, sy, width, height, color   (fills the width x height box)
  *   RGE_OP_TEXT     op, x, y, rot, sx, sy, textIndex, size, color
+ *   RGE_OP_SCISSOR  op, x, y, width, height      clip what follows to this rectangle, in target pixels (the window,
+ *                                                or the canvas when there is one), top-left origin, ignoring the view.
+ *                                                A later SCISSOR replaces it; they do not nest.
+ *   RGE_OP_SCISSOR_END  op                       stop clipping
+ *   RGE_OP_CANVAS   op, width, height, destX, destY, destW, destH, borderColor
+ *                                                Only as the first record of a frame. Everything after it is drawn
+ *                                                into an off-screen width x height texture (point filtered, cleared to
+ *                                                the frame's clear colour); the window is cleared to borderColor and
+ *                                                the texture is copied into the dest rectangle, right way up.
  */
 #define RGE_OP_VIEW     1
 #define RGE_OP_SPRITE   2
 #define RGE_OP_RECT     3
 #define RGE_OP_ELLIPSE  4
 #define RGE_OP_TEXT     5
+#define RGE_OP_SCISSOR      6
+#define RGE_OP_SCISSOR_END  7
+#define RGE_OP_CANVAS       8
 
 /* Record lengths in doubles, op included. */
 #define RGE_OP_VIEW_LEN    7
@@ -35,6 +50,9 @@
 #define RGE_OP_RECT_LEN    9
 #define RGE_OP_ELLIPSE_LEN 9
 #define RGE_OP_TEXT_LEN    9
+#define RGE_OP_SCISSOR_LEN     5
+#define RGE_OP_SCISSOR_END_LEN 1
+#define RGE_OP_CANVAS_LEN      8
 
 /* ---------- Input, written by rge_frame ---------- */
 #define RGE_IN_DT       0  /* seconds since the previous frame */
@@ -87,6 +105,11 @@ void    rge_close(void);
 int32_t rge_load_texture(const char *path); /* handle >= 0, or -1 if it could not be loaded */
 int32_t rge_load_sound(const char *path);   /* handle >= 0, or -1 */
 void    rge_play_sound(int32_t handle);     /* ignores -1 */
+
+/* Layout needs sizes. Both return 0 and write two doubles to `out`, or return nonzero (and write nothing) when
+ * they cannot answer: no window is open, the handle is invalid, or an argument is NULL. */
+int32_t rge_measure_text(const char *text, double size, double *out); /* out: width, line height, as RGE_OP_TEXT draws it */
+int32_t rge_texture_size(int32_t handle, double *out);                /* out: width, height in pixels */
 
 /* Draw one frame and present it, then poll devices and fill `input` (RGE_IN_LEN doubles) and
  * `keys` (rge_key_count() bytes). `text` holds `textCount` NUL-terminated UTF-8 strings back to

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { KEY_INDEX, KEYS, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_LEN, RGE_IN_MOUSE_X, RGE_IN_MOUSE_Y, RGE_IN_QUIT, RGE_IN_WHEEL, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, RGE_KEY_RELEASED } from "../src/protocol.ts";
 import { DrawList } from "../src/draw.ts";
 import { RecordingBackend } from "../src/recording.ts";
+import { RGE_OP_CANVAS, RGE_OP_CANVAS_LEN, RGE_OP_RECT, RGE_OP_SCISSOR, RGE_OP_SCISSOR_END, RGE_OP_VIEW } from "../src/protocol.ts";
 
 function present(backend: RecordingBackend, list = new DrawList()): { input: Float64Array; keys: Uint8Array } {
   const input = new Float64Array(RGE_IN_LEN);
@@ -12,6 +13,25 @@ function present(backend: RecordingBackend, list = new DrawList()): { input: Flo
 }
 
 describe("RecordingBackend", () => {
+  it("decodes ABI v2's records: a second view, a scissor, and a canvas first in the frame", () => {
+    const backend = new RecordingBackend();
+    backend.open({ width: 10, height: 10, title: "t" });
+    const view = [RGE_OP_VIEW, 1, 0, 0, 1, 5, 6];
+    const records = new Float64Array([RGE_OP_CANVAS, 32, 18, 0, 6, 128, 72, 0x000000ff, ...view, RGE_OP_SCISSOR, 1, 2, 3, 4, RGE_OP_RECT, 0, 0, 0, 1, 1, 2, 2, 0xff0000ff, RGE_OP_SCISSOR_END, ...view]);
+    backend.frame(0, records, records.length, [], new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+    assert.deepEqual(backend.lastFrame.records.map((record) => record.op), ["canvas", "view", "scissor", "rect", "scissorEnd", "view"]);
+    assert.deepEqual(backend.lastFrame.records[0], { op: "canvas", width: 32, height: 18, destX: 0, destY: 6, destW: 128, destH: 72, borderColor: "#000000ff" });
+    assert.deepEqual(backend.lastFrame.records[2], { op: "scissor", x: 1, y: 2, width: 3, height: 4 });
+  });
+
+  it("refuses a canvas that is not the first record, as librge does", () => {
+    const backend = new RecordingBackend();
+    backend.open({ width: 10, height: 10, title: "t" });
+    const records = new Float64Array([RGE_OP_VIEW, 1, 0, 0, 1, 0, 0, RGE_OP_CANVAS, 32, 18, 0, 0, 32, 18, 0]);
+    assert.throws(() => backend.frame(0, records, records.length, [], new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length)), /first record/);
+    assert.equal(RGE_OP_CANVAS_LEN, 8);
+  });
+
   it("records the window it was opened with and when it was closed", () => {
     const backend = new RecordingBackend();
     backend.open({ width: 320, height: 200, title: "t" });
