@@ -16,6 +16,78 @@ Phase 3 is done: a compiled game runs in a native window under Node and as a Qui
 
 Sizes are rough, for one engineer, in the style of the Phase 3 plan. Each priority below ends with a checklist that says when it is done.
 
+**What comes after these** is Phase 4, decided 2026-11-10: play the engine on a real machine, build a real small game and let it drive the backlog, then make it usable outside this repository. See "Phase 4: driven by a real game" below.
+
+## Phase 4: driven by a real game
+
+Decided 2026-11-10. Once priority 5 lands, every ranked item above is done or deliberately set aside, yet the engine has only been built against the demo: about 180 lines of TSX that nobody has played in a real window. Most of "Not now" below waits on the same trigger, "the first game that needs it". So the next phase is led by games, not by engine features.
+
+**Who it is for.** Mostly the author, making their own games; open-sourcing it is a goal for later, not now. That puts a real game first and readiness for other people second.
+
+**Local first.** Everything stays on the desktop: a game is written, played and packaged on one Linux machine. No web backend, hosted builds, other platforms or distribution yet (see "Not now").
+
+| # | Priority | Why now | Size (estimate) |
+| --- | --- | --- | --- |
+| 6 | Play it on a real machine (the rest of priority 1) | Window feel, keys, the HUD, scaling and sound have never been tried by a person; sound has never been heard | \~1 day |
+| 7 | A real small game, in its own package | The demo is too small to find what is missing; the "Not now" table is waiting for a game to ask | \~2–4 weeks |
+| 8 | Usable outside this repository | A game only builds as a workspace in this monorepo, and the docs are design notes, not a guide; this prepares for open-sourcing | \~1–2 weeks |
+
+**Order.** 6 can start now, alongside priority 5. 7 can start now too: a new game package mostly adds code, so it does not clash with the developer-loop work in the player, host and compiler, and the game is the first real user of hot reload and in-window errors. 8 waits until 5 settles, because it packages that loop, and until 7 has shown what a game's project layout looks like.
+
+### 6. Play it on a real machine
+
+This finishes priority 1. Most useful now that the HUD, `<Flex>`, the fixed resolution and full screen are in.
+
+**Work**
+
+- Run `npm run play:demo` on a Linux desktop: the window and resizing, the 3× default and `fit="expand"`, full screen, arrow keys and WASD, both Shift keys, a press on the HUD button while the camera moves, and the click sound.
+- Run the packaged build (`npm run package`) the same way, under both the default V8 build and `--engine quickjs`.
+
+**Done when**
+
+- [ ] The demo has been played on a Linux desktop, under Node and as a packaged build, with any findings filed or fixed
+- [ ] Sound plays
+- [ ] Whether `native-desktop` in CI builds raylib once is checked (the open item from priority 1)
+
+### 7. A real small game
+
+Pick something one size up from the demo: a short platformer or a top-down arena with several screens, a few kinds of enemy, a title and a game-over flow, music, and art from a sprite sheet. It lives in its own package beside `packages/demo`, and is written only through the public authoring API (`@rge/runtime/jsx`), as an outside author would. Every place it hurts becomes the backlog; an engine change is made when the game needs it, not before.
+
+**What it will likely pull in** (from "Not now" below; each is pulled in only when the game actually needs it)
+
+- Sprite sheets, tint, opacity and pivot on `Sprite`.
+- Looping music, volume and overlapping plays for sound, and a build-time asset check.
+- Switching between scenes or levels, and menus (priority 5 adds a scene as an entry point, but nothing moves between scenes yet).
+- A font of its own, and a fixed timestep if it has physics.
+- Custom hooks and context, once components repeat logic or pass the same prop down many levels.
+- Lifting diagnostics that reject spread props, conditionals in a `.map`, or forwarding `{children}`, if the game hits them.
+
+**Done when**
+
+- [ ] A game design of a page or less is written down (genre, screens, what makes it finished)
+- [ ] The game is playable from title to an ending, under Node and as a packaged build
+- [ ] Each engine change it needed has its own tests, and its "Not now" row is moved into the relevant plan
+- [ ] Its frame time is measured on a real scene and recorded in `NATIVE_PLAN.md` beside the bench numbers
+- [ ] A short list of what was hard to write, and what the engine should do about it, is added here
+
+### 8. Usable outside this repository
+
+Today a game is a workspace in this monorepo, compiled by a path into `packages/compiler/src/cli.ts`, and the docs explain the design rather than how to use it. This is the groundwork for open-sourcing, kept local: nothing is published to a registry yet.
+
+**Work**
+
+- One command line for a game wherever it lives: compile, play (with hot reload), and package.
+- A game template (or a `create` command) that makes a new game folder outside the repo and works with packed local packages (`npm pack` or a path dependency).
+- A getting-started guide (from an empty folder to a packaged game) and a reference for the built-ins, hooks, props and diagnostics, separate from `DESIGN.md`.
+- Choose a license, and check the repo for anything that should not be public before it ever is.
+
+**Done when**
+
+- [ ] A new game made from the template, in a folder outside this repository, compiles, plays and packages with the one command line
+- [ ] The guide takes a new reader from nothing to a packaged game, checked by following it from scratch
+- [ ] Every built-in and hook has a reference entry with an example
+- [ ] A license is chosen
+
 ## 1. Verify on real hardware, and cache CI builds
 
 Every Phase 3 milestone was built and tested only in a Linux cloud container, against a virtual display. Two things have never happened: a person playing in a real window, and a sound actually playing (hidden test windows have no audio device).
@@ -168,10 +240,10 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 | Sprite sheets, tint, opacity, pivot on `Sprite` | The demo needs none; each is a record field plus a prop | The first game with real art (likely right after priority 3) |
 | Fonts | The default font works for a demo; text measuring (U0) and alignment (U4) are now in [UI_PLAN.md](UI_PLAN.md) | A game whose look needs its own typeface |
 | Sound volume, looping music, overlapping plays, a build-time asset check | `useSound` takes one literal path and covers one-shot effects | Any game with background music |
-| Web backend (canvas) | Records map directly onto canvas calls, so it stays cheap to add later | Wanting a shareable browser build |
+| Web backend (canvas) | Phase 4 is local first (decided 2026-11-10); records map directly onto canvas calls, so it stays cheap to add later | Wanting a shareable browser build, after priority 8 |
 | Gamepads, high DPI, fixed timestep | Each slots into the ABI without rework | A controller game, a blurry Retina window, or physics |
 | macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
-| One-file executable, prebuilt librge, macOS signing | Packaging as a folder works | Handing a build to people outside the team |
+| One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
 | Custom hooks (`function useHealth(max) { … }`) | Inlining them at compile time fits "hooks are compiler intrinsics", but no game needs them yet | Repeated hook logic across components |
 | Context (`createContext` / `useContext`) | Props cover today's trees | Deep trees passing the same prop down many levels |
