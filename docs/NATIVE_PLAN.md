@@ -528,6 +528,25 @@ watching `Transform`'s fields. Same VM, same bench file, old and new code run al
   texts, pointers) over random renders, adds, removes, reorders, z changes and text changes. Breaking the implementation in four ways (ignoring a
   descendant's change, ignoring an ancestor's, not moving a copied child's offsets, not patching text indices) each fails them.
 
+### Performance pass two, an incremental collision check (2026-11-10)
+
+With draw records reused, a mostly-still frame was half collisions (about 10 ms of 11), because the tracker rebuilt, sorted and swept every collider each frame. The reused records also gave it the signal it lacked: a collider in a reused subtree comes with the *same entry object* as last frame, and any other collider gets a new one. So `CollisionTracker` now compares entries with last frame's, by identity, and when the list is the same colliders in the same order and at most an eighth of the entries are new, it tests only those: their old contacts are found from their old boxes (before anything is updated), their new ones from their new boxes against a list kept sorted by left edge from frame to frame, and the difference is the exits and enters. Pairs between colliders that did not change cannot have changed. Any other frame (a collider added, removed or with no area, a different collider in a place, more than an eighth moved, or ids being renumbered) takes the full sweep, which is the same code as before and gives the same reports in the same order.
+
+Same VM and bench file, old and new code run alternately; the middle of three runs.
+
+| Scene (2,000 objects) | Collisions, before | Collisions, after | Whole frame, before | Whole frame, after |
+| --- | --- | --- | --- | --- |
+| still, each with a collider | 10.4 ms | 0.1 ms | 9.9 ms | 0.3 ms |
+| with colliders, 20 moving | 9.9 ms | 1.2 ms | 12.0 ms | 2.6 ms |
+| with colliders, 20 moving by state | 10.2 ms | 1.1 ms | 11.4 ms | 2.8 ms |
+| moved by state, each with a collider (all move) | 10.1 ms | 10.1 ms | 27.2 ms | 27.4 ms |
+| 300 colliders in one pile (all move) | | | 31.2 ms | 31.0 ms |
+
+- **What the cost is where it cannot help.** When every collider moves the frame is the full sweep as before, plus a scan that gives up after an eighth of the entries differ, and a copy of the list: no change within noise.
+- **The 10 ms target.** "2,000 state-driven objects with colliders under 10 ms" is about objects that all move every frame, which neither this nor reusing draw records can help. Where most things stand still (tiles, platforms, a few actors) a frame is now about 3 ms of script for 2,000 objects with colliders.
+- **The contract.** An entry must not be changed after it is handed over; make a new one. The frame builder does. Tests that built a list once and edited its entries in place now make new entries.
+- **How it was checked.** A randomized test runs an incremental tracker beside a full-sweep one over the same lists (jumps, drifts, additions, removals, colliders losing and regaining their area, layer changes, two shared parents, a collider far wider than any before) and requires identical reports in identical order, and the same enters and exits as testing every pair by the rules. Another feeds both from the real frame builder over random changes. Seven deliberate bugs (no old contacts, no dedupe of two moved colliders on either side, layers not refreshed, order not re-sorted, a search window that never widens, a contact never forgotten) each fail them.
+
 The review also fixed: `console.log` in the Rust host panicking (and ending the game) when stdout is closed, as with `rge-host game.js | head`; the Rust host accepting a keys buffer longer than librge's table (rge.h and protocol.ts drifting apart, which the Node host already refused); librge casting draw-record doubles straight to integers (undefined behaviour in C for NaN or out-of-range values; a bad op now stops the frame, a bad index draws nothing, a bad colour is magenta); frame capture on the OpenGL path copying a screen image whose size need not match the buffer on a high-DPI display; and Shift, Control and Alt reporting a second press when the other side went down while one was held, and a release while still held.
 
 ## Later (not scheduled)

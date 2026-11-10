@@ -534,41 +534,97 @@ describe("CollisionTracker: layers and exits", () => {
     assert.deepEqual(log, ["in 10", "out 10", "in 12"], "the old pair's exit comes first, though neither of its colliders is in the list now");
   });
 
-  it("finds the same contacts as testing every pair when colliders jump around, so the sort's fallback runs too", () => {
-    let seed = 12345;
-    const random = (): number => ((seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
-    const entered: string[] = [];
-    const exited: string[] = [];
-    const key = (a: Collider, b: Collider): string => (a.width < b.width ? `${a.width}-${b.width}` : `${b.width}-${a.width}`);
-    const world = { reportCollision: (a: Collider, b: Collider) => void entered.push(key(a, b)), reportCollisionExit: (a: Collider, b: Collider) => void exited.push(key(a, b)) } as unknown as World;
-    const tracker = new CollisionTracker();
-    const entries: { collider: Collider; world: { x: number; y: number; rotation: number; scaleX: number; scaleY: number } }[] = [];
-    for (let i = 0; i < 120; i++) {
-      const c = new Collider({ width: 10 + i / 1000, height: 10 }); // each a width of its own, so a pair can be named
-      new Entity().addChild(c);
-      entries.push({ collider: c, world: { ...IDENTITY } });
-    }
-    let touching = new Set<string>();
-    for (let frame = 0; frame < 30; frame++) {
-      // Even frames: everything jumps. Odd frames: a small drift, which is the sort's usual case.
-      for (const e of entries) {
-        e.world.x = frame % 2 === 0 ? random() * 200 : e.world.x + random() - 0.5;
-        e.world.y = frame % 2 === 0 ? random() * 200 : e.world.y + random() - 0.5;
-      }
-      const expected = new Set<string>();
-      for (let i = 0; i < entries.length; i++) {
-        for (let j = i + 1; j < entries.length; j++) {
-          const a = entries[i]!;
-          const b = entries[j]!;
-          if (boundsOverlap(colliderBounds(a.collider.width, 10, a.world)!, colliderBounds(b.collider.width, 10, b.world)!)) expected.add(key(a.collider, b.collider));
+  it("reports what the full sweep and testing every pair report, through every kind of change, including frames that look only at what moved", () => {
+    for (const seed of [1, 2, 3, 4]) {
+      let state = seed * 7919;
+      const next = (): number => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+      const pick = <T>(items: readonly T[]): T => items[Math.floor(next() * items.length)] as T;
+      const names = new Map<Collider, string>();
+      const logs: string[][] = [[], []];
+      const worlds = logs.map(
+        (log) =>
+          ({
+            reportCollision: (a: Collider, b: Collider) => void log.push(`in ${names.get(a)} ${names.get(b)}`),
+            reportCollisionExit: (a: Collider, b: Collider) => void log.push(`out ${names.get(a)} ${names.get(b)}`),
+          }) as unknown as World,
+      );
+      const incremental = new CollisionTracker();
+      const full = new CollisionTracker(undefined, false);
+      const parents: Entity[] = Array.from({ length: 40 }, () => new Entity());
+      const make = (label: string): ColliderEntry => {
+        const c = new Collider({ width: 10, height: 10, layer: pick(["a", "b", ""]), hits: next() < 0.3 ? ["a"] : undefined });
+        names.set(c, label);
+        pick(parents).addChild(c); // 40 parents for ~120 colliders: some share one, and those never touch each other
+        return { collider: c, world: { ...IDENTITY, x: next() * 150, y: next() * 150 } };
+      };
+      let entries: ColliderEntry[] = Array.from({ length: 120 }, (_, i) => make(`c${i}`));
+      let serial = 120;
+      let touching = new Set<string>();
+      for (let frame = 0; frame < 300; frame++) {
+        // A collider with no area is put back the frame after, so most frames can take the path that looks only at what moved.
+        const restore = entries.findIndex((e) => e.collider.width === 0);
+        const kind = frame < 3 ? "same" : restore >= 0 ? "restore" : pick(["same", "same", "few", "few", "few", "few", "few", "few", "jump", "add", "remove", "area", "layer", "grow", "grow"]);
+        const replace = (i: number, at: Partial<typeof IDENTITY>, size?: number): void => {
+          const old = entries[i] as ColliderEntry;
+          if (size !== undefined) old.collider.width = size;
+          entries[i] = { collider: old.collider, world: { ...old.world, ...at } }; // a new entry, never a changed one
+        };
+        entries = entries.slice();
+        if (kind === "few") {
+          for (let k = Math.floor(next() * 12); k > 0; k--) {
+            const i = Math.floor(next() * entries.length);
+            const e = entries[i] as ColliderEntry;
+            replace(i, next() < 0.7 ? { x: e.world.x + next() * 4 - 2, y: e.world.y + next() * 4 - 2 } : { x: next() * 150, y: next() * 150 });
+          }
+        } else if (kind === "jump") entries.forEach((_, i) => replace(i, { x: next() * 150, y: next() * 150 }));
+        else if (kind === "add") entries.splice(Math.floor(next() * entries.length), 0, make(`c${serial++}`));
+        else if (kind === "remove" && entries.length > 20) entries.splice(Math.floor(next() * entries.length), 1);
+        else if (kind === "restore") replace(restore, {}, 10);
+        else if (kind === "grow") {
+          // One collider far wider than any box before, and two earlier in the list moved into it from its right: finding it
+          // means looking far to the left of them, which only a widened search window does.
+          const i = 3 + Math.floor(next() * (entries.length - 3));
+          const wide = entries[i] as ColliderEntry;
+          replace(i, {}, 60 + next() * 30);
+          for (let k = 0; k < 2; k++) replace(Math.floor(next() * i), { x: wide.world.x + 25 + next() * 20, y: wide.world.y + next() * 8 });
         }
+        else if (kind === "area") {
+          const i = Math.floor(next() * entries.length);
+          replace(i, {}, 0); // no area; the next frame puts it back
+        } else if (kind === "layer") {
+          const i = Math.floor(next() * entries.length);
+          (entries[i] as ColliderEntry).collider.layer = pick(["a", "b", ""]);
+          replace(i, {});
+        }
+        for (const log of logs) log.length = 0;
+        incremental.update(worlds[0] as World, entries);
+        full.update(worlds[1] as World, entries);
+        assert.deepEqual(logs[0], logs[1], `seed ${seed} frame ${frame} (${kind}): the same reports in the same order as the full sweep`);
+
+        // Testing every pair, by the rules.
+        const expected = new Set<string>();
+        for (let i = 0; i < entries.length; i++) {
+          for (let j = i + 1; j < entries.length; j++) {
+            const a = entries[i] as ColliderEntry;
+            const b = entries[j] as ColliderEntry;
+            const boxA = colliderBounds(a.collider.width, a.collider.height, a.world);
+            const boxB = colliderBounds(b.collider.width, b.collider.height, b.world);
+            if (boxA === null || boxB === null || !boundsOverlap(boxA, boxB)) continue;
+            if (a.collider.parent === b.collider.parent) continue;
+            if (!a.collider.hitsLayer(b.collider.layer) || !b.collider.hitsLayer(a.collider.layer)) continue;
+            expected.add(`${names.get(a.collider)} ${names.get(b.collider)}`);
+          }
+        }
+        const entered = logs[0]!.filter((l) => l.startsWith("in ")).map((l) => l.slice(3));
+        const exited = logs[0]!.filter((l) => l.startsWith("out ")).map((l) => l.slice(4));
+        const norm = (pair: string): string => pair.split(" ").sort().join(" ");
+        const was = new Set([...touching].map(norm));
+        const now = new Set([...expected].map(norm));
+        assert.deepEqual(entered.map(norm).sort(), [...now].filter((k) => !was.has(k)).sort(), `seed ${seed} frame ${frame} (${kind}): enters`);
+        assert.deepEqual(exited.map(norm).sort(), [...was].filter((k) => !now.has(k)).sort(), `seed ${seed} frame ${frame} (${kind}): exits`);
+        touching = expected;
       }
-      entered.length = 0;
-      exited.length = 0;
-      tracker.update(world, entries);
-      assert.deepEqual([...entered].sort(), [...expected].filter((k) => !touching.has(k)).sort(), `frame ${frame}: enters`);
-      assert.deepEqual([...exited].sort(), [...touching].filter((k) => !expected.has(k)).sort(), `frame ${frame}: exits`);
-      touching = expected;
+      assert.ok(incremental.incrementalFrames > 30, `seed ${seed}: the frames that look only at what moved ran (${incremental.incrementalFrames})`);
     }
   });
 });

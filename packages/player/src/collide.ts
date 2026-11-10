@@ -186,6 +186,14 @@ class ById {
  * Cost: a sweep over x (see `update`), so a spread-out scene costs about n log n and only boxes that overlap in x
  * are compared. A scene where most colliders share the same columns degrades towards every pair. Measured: see
  * `packages/player/bench/frame.ts`, and the numbers in `docs/NATIVE_PLAN.md`.
+ *
+ * **Only what moved is looked at again.** An entry that is the same object as the one for that collider last frame is
+ * taken to be unchanged: the frame builder reuses the entry of a collider in a subtree it reused (see `FrameBuilder`), and
+ * makes a new one otherwise. So when a frame's list is the same colliders in the same order and only a few entries are new,
+ * the pairs between colliders that did not change cannot have changed either, and only the new ones are tested, against a
+ * list kept sorted by left edge from frame to frame. Any other frame (a collider added, removed or without an area, or
+ * more than an eighth of them moved) takes the full sweep, which gives the same reports in the same order. An entry must
+ * therefore not be changed after it is handed over: make a new one.
  */
 export class CollisionTracker {
   #ids = new WeakMap<Collider, number>();
@@ -214,15 +222,40 @@ export class CollisionTracker {
   /** Pairs `#renumber` could not carry over because a collider left; their exit is reported by the `update` that renumbered. */
   #lost: Pair[] | undefined;
 
-  /** `compactAt` is for tests: renumber ids once they reach it (default 2^15, the most that make int32 pair keys). */
-  constructor(compactAt: number = SMALL_ID) {
+  readonly #incremental: boolean;
+  /** Last frame's entries (a copy of the list), to find which are new this frame; null when there is nothing to compare with. */
+  #last: ColliderEntry[] | null = null;
+  /** How many boxes last frame had, when that was every entry (so box index is list index); -1 when some entry had no area. */
+  #aligned = -1;
+  /** The widest box, which bounds how far left of a box another can start and still reach it; -1 until the first incremental frame needs it. */
+  #maxWidth = -1;
+  readonly #moved: number[] = [];
+  #fresh = new Float64Array(64);
+  #incrementalFrames = 0;
+
+  /** How many frames were handled by looking only at what moved (for tests and benchmarks). */
+  get incrementalFrames(): number {
+    return this.#incrementalFrames;
+  }
+
+  /**
+   * `compactAt` is for tests: renumber ids once they reach it (default 2^15, the most that make int32 pair keys).
+   * `incremental` false always takes the full sweep, which is what the incremental frames are tested against.
+   */
+  constructor(compactAt: number = SMALL_ID, incremental = true) {
     this.#compactAt = Math.min(compactAt, SMALL_ID);
+    this.#incremental = incremental;
   }
 
   /** Compare this frame's colliders with last frame's contacts and report new contacts and ended ones. Returns how many contacts started (exits are not counted). */
   update(world: World, colliders: readonly ColliderEntry[]): number {
     // Keep ids small, so pair keys stay int32. Only when it pays: not every frame when there are simply that many colliders.
-    if (this.#nextId + colliders.length > this.#compactAt && this.#nextId > 2 * colliders.length) this.#renumber(colliders);
+    const renumber = this.#nextId + colliders.length > this.#compactAt && this.#nextId > 2 * colliders.length;
+    if (!renumber && this.#incremental) {
+      const done = this.#updateMoved(world, colliders);
+      if (done >= 0) return done;
+    }
+    if (renumber) this.#renumber(colliders);
 
     if (this.#bounds.length < colliders.length * 4) this.#bounds = new Float64Array(colliders.length * 8);
     const bounds = this.#bounds;
@@ -300,8 +333,19 @@ export class CollisionTracker {
     this.#byIdNow = this.#byId;
     this.#byId = byIdNow;
 
-    // Exits first, then enters. Both orders are deterministic: exits by collider id (creation order, the best a
-    // collider that is gone still has), enters in draw order (the list's order).
+    if (this.#incremental) {
+      this.#last = colliders.slice();
+      this.#aligned = count === colliders.length ? count : -1;
+      this.#maxWidth = -1;
+    }
+    return this.#report(world, ended, started);
+  }
+
+  /**
+   * Report the pairs that ended and the pairs that started. Both orders are deterministic: exits by collider id (creation
+   * order, the best a collider that is gone still has), enters in draw order (the list's order, which is the box index).
+   */
+  #report(world: World, ended: Pair[] | undefined, started: [number, number][]): number {
     if (ended) {
       const idOf = (c: Collider): number => this.#ids.get(c) ?? 0;
       const ordered = ended
@@ -312,10 +356,157 @@ export class CollisionTracker {
 
     // In draw order (the list's order), earlier collider first, so reports are deterministic whatever the sweep found
     // first. The colliders are read out before any callback runs, since a callback may add colliders of its own.
+    const boxColliders = this.#colliders;
     started.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
     const pairs = started.map(([p, q]) => [boxColliders[p] as Collider, boxColliders[q] as Collider] as const);
     for (const [a, b] of pairs) world.reportCollision(a, b);
     return pairs.length;
+  }
+
+  /**
+   * The frame when the list is last frame's colliders in last frame's order and few of the entries are new: test only the
+   * colliders whose entries are new. Returns how many contacts started, or -1, having changed nothing, when this is not such
+   * a frame (the caller takes the full sweep).
+   *
+   * Every pair that does not involve a new entry is exactly as it was: the same two boxes, layers and parents. So a new
+   * entry's old contacts are found by looking at its old box in last frame's list (before anything is updated), and its new
+   * ones by looking at its new box in the updated list; the difference is its exits and enters. A pair of two new entries is
+   * dealt with from the lower index only.
+   */
+  #updateMoved(world: World, colliders: readonly ColliderEntry[]): number {
+    const last = this.#last;
+    const count = colliders.length;
+    if (last === null || this.#aligned !== count || last.length !== count || this.#lost !== undefined) return -1;
+    const moved = this.#moved;
+    moved.length = 0;
+    const limit = count >> 3;
+    for (let i = 0; i < count; i++) {
+      const entry = colliders[i] as ColliderEntry;
+      const before = last[i] as ColliderEntry;
+      if (entry === before) continue;
+      // A different collider in this place, or too many new entries to be worth it: the full sweep.
+      if (entry.collider !== before.collider || moved.length >= limit) return -1;
+      moved.push(i);
+    }
+    const total = moved.length;
+    if (total === 0) {
+      this.#incrementalFrames++;
+      return 0; // nothing changed: the contacts are as they were, and nothing starts or ends
+    }
+    // The new boxes, worked out first: a collider that lost its area leaves the list, which is the full sweep's business.
+    if (this.#fresh.length < total * 4) this.#fresh = new Float64Array(total * 8);
+    const fresh = this.#fresh;
+    for (let k = 0; k < total; k++) {
+      const entry = colliders[moved[k] as number] as ColliderEntry;
+      if (!writeBounds(entry.collider.width, entry.collider.height, entry.world, fresh, k * 4)) return -1;
+    }
+
+    const bounds = this.#bounds;
+    const order = this.#order;
+    const ids = this.#boxIds;
+    const layers = this.#layers;
+    const hitsOf = this.#hits;
+    const boxColliders = this.#colliders;
+    const touching = this.#touching;
+    let maxWidth = this.#maxWidth;
+    if (maxWidth < 0) {
+      maxWidth = 0;
+      for (let i = 0; i < count; i++) {
+        const width = (bounds[i * 4 + 2] as number) - (bounds[i * 4] as number);
+        if (width > maxWidth) maxWidth = width;
+      }
+    }
+    // The first place in `order` a box that reaches `minX` can start: nothing to its left is wider than `maxWidth`.
+    const firstReaching = (minX: number): number => {
+      const from = minX - maxWidth;
+      let lo = 0;
+      let hi = count;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if ((bounds[(order[mid] as number) * 4] as number) <= from) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo;
+    };
+
+    // Old contacts of each new entry: the boxes its old box overlaps that it was touching.
+    const oldFlat: number[] = [];
+    const oldAt: number[] = [];
+    for (let k = 0; k < total; k++) {
+      const m = moved[k] as number;
+      oldAt.push(oldFlat.length);
+      const minX = bounds[m * 4] as number;
+      const minY = bounds[m * 4 + 1] as number;
+      const maxX = bounds[m * 4 + 2] as number;
+      const maxY = bounds[m * 4 + 3] as number;
+      const idM = ids[m] as number;
+      for (let s = firstReaching(minX); s < count; s++) {
+        const q = order[s] as number;
+        if ((bounds[q * 4] as number) >= maxX) break;
+        if (q === m || !((bounds[q * 4 + 2] as number) > minX && minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
+        const idQ = ids[q] as number;
+        if (touching.has(idM < idQ ? pairKey(idM, idQ) : pairKey(idQ, idM))) oldFlat.push(q);
+      }
+    }
+    oldAt.push(oldFlat.length);
+
+    // Now the new boxes go in, and the order is put right (boxes barely move, so this is close to linear).
+    const isMoved = new Uint8Array(count);
+    for (let k = 0; k < total; k++) {
+      const m = moved[k] as number;
+      isMoved[m] = 1;
+      for (let j = 0; j < 4; j++) bounds[m * 4 + j] = fresh[k * 4 + j] as number;
+      const collider = boxColliders[m] as Collider;
+      layers[m] = collider.layer;
+      hitsOf[m] = collider.hits;
+      const width = (fresh[k * 4 + 2] as number) - (fresh[k * 4] as number);
+      if (width > maxWidth) maxWidth = width;
+    }
+    this.#maxWidth = maxWidth;
+    sortByLeftEdge(order, count, bounds);
+
+    // New contacts of each, against the rules, and the difference from the old ones.
+    const started: [number, number][] = [];
+    let ended: Pair[] | undefined;
+    for (let k = 0; k < total; k++) {
+      const m = moved[k] as number;
+      const minX = bounds[m * 4] as number;
+      const minY = bounds[m * 4 + 1] as number;
+      const maxX = bounds[m * 4 + 2] as number;
+      const maxY = bounds[m * 4 + 3] as number;
+      const idM = ids[m] as number;
+      const parent = (boxColliders[m] as Collider).parent;
+      const layerM = layers[m] as string;
+      const hitsM = hitsOf[m];
+      const now: number[] = [];
+      for (let s = firstReaching(minX); s < count; s++) {
+        const q = order[s] as number;
+        if ((bounds[q * 4] as number) >= maxX) break;
+        if (q === m || (isMoved[q] === 1 && q < m)) continue;
+        if (!((bounds[q * 4 + 2] as number) > minX && minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
+        if (parent === (boxColliders[q] as Collider).parent) continue;
+        const hitsQ = hitsOf[q];
+        if ((hitsM !== undefined && !hitsM.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerM))) continue;
+        now.push(q);
+      }
+      const before = oldFlat.slice(oldAt[k] as number, oldAt[k + 1] as number);
+      for (const q of now) {
+        if (before.includes(q)) continue;
+        const idQ = ids[q] as number;
+        touching.add(idM < idQ ? pairKey(idM, idQ) : pairKey(idQ, idM));
+        started.push(m < q ? [m, q] : [q, m]);
+      }
+      for (const q of before) {
+        if (isMoved[q] === 1 && q < m) continue; // dealt with from q
+        if (now.includes(q)) continue;
+        const idQ = ids[q] as number;
+        touching.delete(idM < idQ ? pairKey(idM, idQ) : pairKey(idQ, idM));
+        (ended ??= []).push([boxColliders[m] as Collider, boxColliders[q] as Collider]);
+      }
+    }
+    this.#last = colliders.slice();
+    this.#incrementalFrames++;
+    return this.#report(world, ended, started);
   }
 
   /**

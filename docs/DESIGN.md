@@ -1548,6 +1548,9 @@ in it, and no ancestor's own transform, was stamped since the frame the records 
 - **What the walk must see every frame is never reused**: a `<Camera>`, `<Pointer>`, `<Hud>`, `<Flex>` (they feed lists besides the
   draw records, or lay out their children) and anything with a non-zero `z`. A subtree containing one is rebuilt, and so are its
   ancestors, though their other children are still copied.
+- **Collisions follow it.** A collider in a reused subtree comes with the same `ColliderEntry` object as last frame, and one that is
+  not gets a new one, so `CollisionTracker` tests again only the colliders whose entry is new (see its doc comment). An entry must not be
+  changed after it is handed over.
 - `retain: false` (on `PlayerConfig` or `FrameBuilderOptions`) turns it off; `retain: "check"` also rebuilds each frame and
   throws when the two differ, which is how an unreported change is found. The player's tests run reuse against a full rebuild
   over random changes.
