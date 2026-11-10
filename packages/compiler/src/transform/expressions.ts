@@ -1,0 +1,369 @@
+// Layer 1 of ComponentLowering: lowers TypeScript expressions into ExprIR (reads, calls, array methods, handles).
+import { SyntaxKind, type ObjectLiteralExpression, type CallExpression, type Expression, type PropertyAccessExpression } from "typescript/ast";
+import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock } from "typescript/ast/is";
+import { unwrapParens } from "../analyzer/analyzer.ts";
+import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
+import { assertNever, ARRAY_METHODS, MUTATING_ARRAY_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
+import { MATH_FUNCTIONS } from "./handles.ts";
+import { lowerFunction } from "./statements.ts";
+import { BINARY_OPERATORS, UNARY_OPERATORS } from "./helpers.ts";
+import { LoweringBase } from "./lowering.ts";
+
+export class ExpressionLowering extends LoweringBase {
+  protected lowerNode(node: Expression): ExprIR | null {
+    if (isParenthesizedExpression(node)) return this.lowerNode(node.expression);
+    if (isNumericLiteral(node)) return { kind: "NumberLiteral", value: Number(node.text) };
+    if (isStringLiteral(node) || isNoSubstitutionTemplateLiteral(node)) return { kind: "StringLiteral", value: node.text };
+    switch (node.kind) {
+      case SyntaxKind.TrueKeyword: return { kind: "BooleanLiteral", value: true };
+      case SyntaxKind.FalseKeyword: return { kind: "BooleanLiteral", value: false };
+      case SyntaxKind.NullKeyword: return { kind: "NullLiteral" };
+    }
+    if (isIdentifier(node)) {
+      const binding = this.scope.get(node.text);
+      if (!binding) {
+        this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component.`, node);
+        return null;
+      }
+      if (binding.kind === "setter") {
+        this.report(DiagnosticCode.UnsupportedExpression, `State setter '${node.text}' cannot be used in an expression yet.`, node);
+        return null;
+      }
+      switch (binding.kind) {
+        case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
+        case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
+        case "state": return { kind: "StateRead", state: binding.id };
+        case "propsObject":
+          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`, node);
+          return null;
+        case "children":
+          this.report(DiagnosticCode.UnsupportedExpression, "`children` can only be used as a JSX child, `{children}`: it is the elements a parent passes, not a value.", node);
+          return null;
+        case "prop":
+          if (binding.role === "callback" && !this.allowCallbackRead) {
+            this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a callback prop: call it (\`${node.text}?.()\`) or forward it whole (\`onX={${node.text}}\`).`, node);
+            return null;
+          }
+          return { kind: "PropRead", name: binding.name };
+        // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
+        // in a handler it reads the current state, like recomputing it there.
+        case "derived": return binding.value;
+        case "sound":
+          this.report(DiagnosticCode.SoundOutsideHandler, `'${node.text}' is a sound: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
+          return null;
+        case "ref":
+          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a ref; read and write \`${node.text}.current\`.`, node);
+          return null;
+        case "action":
+          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a game-state action: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
+          return null;
+        default: return assertNever(binding, "binding");
+      }
+    }
+    if (isPrefixUnaryExpression(node)) {
+      const operator = UNARY_OPERATORS.get(node.operator);
+      if (!operator) {
+        this.report(DiagnosticCode.UnsupportedExpression, `Unsupported unary operator.`, node);
+        return null;
+      }
+      const operand = this.lowerNode(node.operand);
+      return operand && { kind: "Unary", operator, operand };
+    }
+    if (isBinaryExpression(node)) {
+      const operator = BINARY_OPERATORS.get(node.operatorToken.kind);
+      if (!operator) {
+        this.report(DiagnosticCode.UnsupportedExpression, `Unsupported binary operator '${node.operatorToken.getText(this.sourceFile)}'.`, node);
+        return null;
+      }
+      const left = this.lowerNode(node.left);
+      const right = this.lowerNode(node.right);
+      return left && right && { kind: "Binary", operator, left, right };
+    }
+    if (isConditionalExpression(node)) {
+      const test = this.lowerNode(node.condition);
+      const whenTrue = this.lowerNode(node.whenTrue);
+      const whenFalse = this.lowerNode(node.whenFalse);
+      return test && whenTrue && whenFalse && { kind: "Conditional", test, whenTrue, whenFalse };
+    }
+    if (isTemplateExpression(node)) {
+      const quasis = [node.head.text, ...node.templateSpans.map((span) => span.literal.text)];
+      const expressions: ExprIR[] = [];
+      for (const span of node.templateSpans) {
+        const e = this.lowerNode(span.expression);
+        if (!e) return null;
+        expressions.push(e);
+      }
+      return { kind: "TemplateLiteral", quasis, expressions };
+    }
+    if (isPropertyAccessExpression(node)) return this.lowerPropertyRead(node);
+    if (isCallExpression(node)) return this.lowerCall(node);
+    if (isArrayLiteralExpression(node)) {
+      const elements: ArrayElementIR[] = [];
+      for (const element of node.elements) {
+        const spread = isSpreadElement(element);
+        const value = this.lowerNode(spread ? element.expression : element);
+        if (!value) return null;
+        elements.push({ spread, value });
+      }
+      return { kind: "ArrayLiteral", elements };
+    }
+    if (isObjectLiteralExpression(node)) return this.lowerObjectLiteral(node);
+    if (isArrowFunction(node)) {
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        "An arrow function can only be a callback prop (`onX={() => …}`), a state updater (`setX((x) => …)`) or the argument of an array method (`items.filter((e) => …)`).",
+        node,
+      );
+      return null;
+    }
+    this.report(DiagnosticCode.UnsupportedExpression, `Unsupported expression (${SyntaxKind[node.kind]}).`, node);
+    return null;
+  }
+
+  /** `{ id, speed: 2, ...e }`: plain, shorthand and spread properties. */
+  protected lowerObjectLiteral(node: ObjectLiteralExpression): ExprIR | null {
+    const properties: ObjectPropertyIR[] = [];
+    let ok = true;
+    for (const property of node.properties) {
+      let entry: ObjectPropertyIR | null = null;
+      if (isPropertyAssignment(property) && (isIdentifier(property.name) || isStringLiteral(property.name))) {
+        const value = this.lowerNode(property.initializer);
+        entry = value && { kind: "Property", name: property.name.text, value };
+      } else if (isShorthandPropertyAssignment(property) && isIdentifier(property.name) && !property.objectAssignmentInitializer) {
+        const value = this.lowerNode(property.name);
+        entry = value && { kind: "Property", name: property.name.text, value };
+      } else if (isSpreadAssignment(property)) {
+        const value = this.lowerNode(property.expression);
+        entry = value && { kind: "Spread", value };
+      } else {
+        this.report(DiagnosticCode.UnsupportedExpression, "Object properties must be `name: value`, `name` (shorthand) or `...spread`; no methods, getters or computed names.", property);
+      }
+      if (entry) properties.push(entry);
+      else ok = false;
+    }
+    return ok ? { kind: "ObjectLiteral", properties } : null;
+  }
+
+  /**
+   * The callback of an array method: an expression-bodied arrow, lowered in
+   * its own scope. Its parameters are typed by the array, so they carry no
+   * annotation. A block body could set state or call callbacks while the
+   * array is being walked, so it is not allowed.
+   */
+  protected lowerArrow(node: Expression, method: string): ExprIR | null {
+    const fn = unwrapParens(node);
+    if (!isArrowFunction(fn)) {
+      this.report(DiagnosticCode.UnsupportedExpression, `\`${method}\` takes an inline arrow function: \`items.${method}((item) => …)\`.`, node);
+      return null;
+    }
+    if (isBlock(fn.body)) {
+      this.report(DiagnosticCode.UnsupportedExpression, `The \`${method}\` callback must be a single expression (\`(item) => item.alive\`), not a block.`, fn.body);
+      return null;
+    }
+    const lowered = lowerFunction(this, fn, { paramTypes: "contextual", returns: "value", what: `${method} callback` });
+    if (!lowered) return null;
+    const only = lowered.body[0];
+    if (lowered.body.length !== 1 || only?.kind !== "Return" || !only.value) throw new Error("expression-bodied arrow lowered to statements");
+    return { kind: "Arrow", params: lowered.params, body: only.value };
+  }
+
+  /** `ref.current`, or `param.name` where `param` is a handler parameter of a runtime handle type. */
+  protected lowerPropertyRead(node: PropertyAccessExpression): ExprIR | null {
+    const propsObject = this.propsObjectMember(node);
+    if (propsObject !== undefined) {
+      if (propsObject === null) return null;
+      if (propsObject.role === "callback" && !this.allowCallbackRead) {
+        this.report(DiagnosticCode.UnsupportedExpression, `'${propsObject.name}' is a callback prop: call it (\`props.${propsObject.name}?.()\`) or forward it whole (\`onX={props.${propsObject.name}}\`).`, node);
+        return null;
+      }
+      return { kind: "PropRead", name: propsObject.name };
+    }
+    const ref = this.refAccess(node);
+    if (ref === "error") return null;
+    if (ref) {
+      if (this.functionDepth === 0) {
+        this.report(
+          DiagnosticCode.HandleReadOutsideHandler,
+          "`ref.current` can only be read inside handlers: refs never cause a render, so a read here would go stale. Use state for values JSX depends on.",
+          node,
+        );
+        return null;
+      }
+      return { kind: "RefRead", ref };
+    }
+    const receiver = this.handleParam(node.expression);
+    const name = node.name.text;
+    if (receiver) {
+      if (!this.manifest.handleTypes[receiver.type]!.properties.includes(name)) {
+        this.report(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no readable property '${name}'.`, node.name);
+        return null;
+      }
+      return { kind: "PropertyRead", object: receiver.read, name };
+    }
+    // A member of a value (`e.id`, `enemies.length`): the type-check of the generated code validates it.
+    // Numbers and booleans have no members worth reading, so those are caught here.
+    const primitive = this.knownPrimitive(node.expression);
+    if (primitive === "number" || primitive === "boolean") {
+      this.report(DiagnosticCode.UnsupportedExpression, `'${node.expression.getText(this.sourceFile)}' is a ${primitive}; it has no member '${name}'.`, node.name);
+      return null;
+    }
+    const object = this.lowerNode(node.expression);
+    return object && { kind: "MemberRead", object, name, optional: node.questionDotToken !== undefined };
+  }
+
+  /** `Math.max(...)`, `clamp(...)`, or `param.method(...)` on a runtime handle parameter. */
+  protected lowerCall(node: CallExpression): ExprIR | null {
+    const callee = node.expression;
+    // `props.onDefeated?.()` on the props object.
+    if (isPropertyAccessExpression(callee)) {
+      const member = this.propsObjectMember(callee);
+      if (member === null) return null;
+      if (member) {
+        if (member.role !== "callback") {
+          this.report(DiagnosticCode.UnsupportedExpression, `Prop '${member.name}' is not a function, so it cannot be called.`, callee);
+          return null;
+        }
+        const args: ExprIR[] = [];
+        for (const argument of node.arguments) {
+          const lowered = this.lowerNode(argument);
+          if (!lowered) return null;
+          args.push(lowered);
+        }
+        return { kind: "Call", callee: { kind: "Prop", name: member.name, optional: node.questionDotToken !== undefined }, args };
+      }
+    }
+    // A callback prop: `onDefeated()` or `onDefeated?.()`. Arguments are not counted here; the type-check does that.
+    if (isIdentifier(callee)) {
+      const binding = this.scope.get(callee.text);
+      if (binding?.kind === "sound") {
+        this.report(DiagnosticCode.SoundOutsideHandler, `'${callee.text}()' plays a sound, so it is only valid as a statement in a handler: in JSX, a derived value or an expression it would play on every render.`, node);
+        return null;
+      }
+      if (binding?.kind === "action") {
+        this.report(DiagnosticCode.UnsupportedExpression, `'${callee.text}()' is a game-state action, so it is only valid as a statement in a handler: in JSX or a derived value it would run on every render.`, node);
+        return null;
+      }
+      if (binding?.kind === "prop") {
+        if (binding.role !== "callback") {
+          this.report(DiagnosticCode.UnsupportedExpression, `Prop '${callee.text}' is not a function, so it cannot be called.`, callee);
+          return null;
+        }
+        const args: ExprIR[] = [];
+        for (const argument of node.arguments) {
+          const lowered = this.lowerNode(argument);
+          if (!lowered) return null;
+          args.push(lowered);
+        }
+        return { kind: "Call", callee: { kind: "Prop", name: binding.name, optional: node.questionDotToken !== undefined }, args };
+      }
+    }
+    let result: { callee: CalleeIR; expected: number; label: string } | null = null;
+    if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
+      const name = `Math.${callee.name.text}`;
+      const expected = MATH_FUNCTIONS[name];
+      if (expected !== undefined) result = { callee: { kind: "Function", name }, expected, label: name };
+    } else if (isIdentifier(callee) && this.manifest.functions[callee.text] !== undefined && !this.scope.has(callee.text)) {
+      this.requireImport(callee.text, callee);
+      result = { callee: { kind: "Function", name: callee.text }, expected: this.manifest.functions[callee.text]!, label: callee.text };
+    } else if (isPropertyAccessExpression(callee) && !this.handleParam(callee.expression)) {
+      return this.lowerArrayMethod(node, callee);
+    } else if (isPropertyAccessExpression(callee)) {
+      const receiver = this.lowerHandle(callee.expression);
+      if (!receiver) return null;
+      const expected = this.manifest.handleTypes[receiver.type]!.methods[callee.name.text];
+      if (expected === undefined) {
+        this.report(DiagnosticCode.UnsupportedExpression, `'${receiver.type}' has no callable method '${callee.name.text}'.`, callee.name);
+        return null;
+      }
+      result = { callee: { kind: "Method", receiver: receiver.read, name: callee.name.text }, expected, label: callee.name.text };
+    }
+    if (!result) {
+      this.report(DiagnosticCode.UnsupportedExpression, "Only allowlisted calls are supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, runtime functions from the manifest, and methods of handler parameters.", node);
+      return null;
+    }
+    const count = node.arguments.length;
+    if (result.expected === -1 ? count < 1 : count !== result.expected) {
+      this.report(DiagnosticCode.UnsupportedExpression, `${result.label} expects ${result.expected === -1 ? "at least one" : result.expected} argument(s).`, node);
+      return null;
+    }
+    const args: ExprIR[] = [];
+    for (const argument of node.arguments) {
+      const lowered = this.lowerNode(argument);
+      if (!lowered) return null;
+      args.push(lowered);
+    }
+    return { kind: "Call", callee: result.callee, args };
+  }
+
+  /** `enemies.filter((e) => e.alive)`: an allowlisted array method that does not mutate its receiver. */
+  protected lowerArrayMethod(node: CallExpression, callee: PropertyAccessExpression): ExprIR | null {
+    const name = callee.name.text;
+    const code = DiagnosticCode.UnsupportedExpression;
+    if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
+      this.report(
+        code,
+        `\`${name}\` changes the array in place, which never re-renders (a setter only renders when it gets a new array). Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}.`,
+        callee.name,
+      );
+      return null;
+    }
+    if (!Object.hasOwn(ARRAY_METHODS, name)) {
+      this.report(
+        code,
+        `'${name}' is not an allowlisted call. Supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, runtime functions from the manifest, methods of handler parameters, and the array methods ${Object.keys(ARRAY_METHODS).join(", ")}.`,
+        callee.name,
+      );
+      return null;
+    }
+    if (callee.questionDotToken || node.questionDotToken) {
+      this.report(code, `Optional calls of array methods are not supported: check the value first.`, node);
+      return null;
+    }
+    const method = ARRAY_METHODS[name as ArrayMethodName];
+    const [min, max] = method.args;
+    const count = node.arguments.length;
+    if (count < min || count > max) {
+      const expected = min === max ? `${min}` : max === Infinity ? `at least ${min}` : `${min} to ${max}`;
+      this.report(code, `\`${name}\` expects ${expected} argument(s).`, node);
+      return null;
+    }
+    const receiver = this.lowerNode(callee.expression);
+    if (!receiver) return null;
+    const args: ExprIR[] = [];
+    for (const [i, argument] of node.arguments.entries()) {
+      const lowered = method.callback && i === 0 ? this.lowerArrow(argument, name) : this.lowerNode(argument);
+      if (!lowered) return null;
+      args.push(lowered);
+    }
+    return { kind: "Call", callee: { kind: "ArrayMethod", receiver, name: name as ArrayMethodName }, args };
+  }
+
+  /** Resolves an expression that must be a handler parameter of a named runtime type. */
+  protected lowerHandle(node: Expression): { type: string; read: ParamReadIR } | null {
+    const target = unwrapParens(node);
+    const binding = isIdentifier(target) ? this.scope.get(target.text) : undefined;
+    if (binding?.kind !== "param" || binding.type.kind !== "Named") {
+      this.report(DiagnosticCode.UnsupportedExpression, "Members can only be accessed on handler parameters of a runtime type (e.g. `input`).", node);
+      return null;
+    }
+    return { type: binding.type.name, read: { kind: "ParamRead", param: binding.id, name: binding.name } };
+  }
+
+  // -- LoweringContext --------------------------------------------------------
+
+  lowerExpression(node: Expression): ExprIR | null {
+    return this.lowerNode(node);
+  }
+
+  lowerAssignTarget(node: Expression): AssignTargetIR | null {
+    const ref = isPropertyAccessExpression(node) ? this.refAccess(node) : undefined;
+    if (ref === "error") return null;
+    if (ref) return { kind: "RefCurrent", ref };
+    this.report(
+      DiagnosticCode.UnsupportedStatement,
+      "Only `ref.current` can be assigned. Use the state setter to change state, including position (`transform={{ x }}`).",
+      node,
+    );
+    return null;
+  }
+}

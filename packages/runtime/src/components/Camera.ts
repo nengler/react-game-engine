@@ -6,7 +6,7 @@ export interface CameraProps {
   zoom?: number;
 }
 
-export const DEFAULT_ZOOM = 1;
+const DEFAULT_ZOOM = 1;
 
 /**
  * A 2D affine map from world space to view space, in the order a canvas takes

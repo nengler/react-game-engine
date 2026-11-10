@@ -24,8 +24,8 @@ export interface ScreenProps {
   border?: string;
 }
 
-export const DEFAULT_SCREEN_FIT: ScreenFit = "integer";
-export const DEFAULT_SCREEN_BORDER = "black";
+const DEFAULT_SCREEN_FIT: ScreenFit = "integer";
+const DEFAULT_SCREEN_BORDER = "black";
 
 /**
  * The game's screen: a fixed resolution (`<Screen width={320} height={180}>`), scaled to fit the window

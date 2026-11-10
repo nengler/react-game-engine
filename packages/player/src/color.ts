@@ -2,7 +2,6 @@
 export type PackedColor = number;
 
 export const MAGENTA: PackedColor = 0xff00ffff;
-export const BLACK: PackedColor = 0x000000ff;
 
 export function packColor(r: number, g: number, b: number, a: number): PackedColor {
   return (((r & 255) << 24) | ((g & 255) << 16) | ((b & 255) << 8) | (a & 255)) >>> 0;

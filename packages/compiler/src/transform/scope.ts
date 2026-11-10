@@ -1,6 +1,6 @@
 import type { ExprIR, LocalId, RefId, SoundId, StateId, TypeIR } from "../ir/types.ts";
 
-export type Binding =
+type Binding =
   | { readonly kind: "state"; readonly id: StateId }
   | { readonly kind: "setter"; readonly state: StateId; readonly name: string }
   | { readonly kind: "ref"; readonly id: RefId; readonly name: string }

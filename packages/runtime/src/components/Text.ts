@@ -8,8 +8,8 @@ export interface TextProps {
   color?: string;
 }
 
-export const DEFAULT_TEXT_SIZE = 16;
-export const DEFAULT_TEXT_COLOR = "white";
+const DEFAULT_TEXT_SIZE = 16;
+const DEFAULT_TEXT_COLOR = "white";
 
 /**
  * A line of text for HUDs, labels and menus. The mock draws nothing: a

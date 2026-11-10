@@ -9,7 +9,7 @@ export interface AnimatedSpriteProps {
   playing?: boolean;
 }
 
-export const DEFAULT_FPS = 10;
+const DEFAULT_FPS = 10;
 
 /**
  * A sprite that cycles through `frames` at `fps`, looping. The mock draws

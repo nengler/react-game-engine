@@ -10,7 +10,7 @@ built on top of it.
 A change that breaks one of these rules needs a design note first, as Phase 3's [NATIVE_PLAN.md](NATIVE_PLAN.md) was for the player. That document adds the player's own rules (the runtime stays backend-free; `@rge/player` and `@rge/runtime` import nothing from Node; `rge.h` is the source of truth for the protocol; the C side does no maths): see its [Ground rules](NATIVE_PLAN.md#ground-rules).
 
 - **Feel like ideal React.** A component is a function of state and props, hooks follow React's conventions, and imports, `key`, and callbacks-as-props look like React's. "Ideal" means React's model, not its accidents (stale closures, dependency arrays). A feature that makes authors learn an engine-specific API where a React one exists needs a design note first.
-- **IR first.** Each feature starts as new variants in `packages/compiler/src/ir/types.ts`. Code is generated only from IR, never from the AST.
+- **IR first.** Each feature starts as new variants in the `packages/compiler/src/ir/` files (`types.ts` re-exports them all). Code is generated only from IR, never from the AST.
 - **Exhaustive unions.** Add the variant, then let `assertNever` failures show every place that must handle it. Never add a `default:` that silently passes.
 - **No React, no virtual DOM, no signals, no ECS, no generic reconciler.** Updates stay direct: field assignments and queued add/remove on persistent instances.
 - **Hooks are compiler intrinsics.** New hooks follow the `useState` rule: top-level statement in the component body, rejected anywhere else.
@@ -173,7 +173,7 @@ ignored):
 
 ## IR
 
-Defined in `packages/compiler/src/ir/types.ts`. Highlights:
+Defined in `packages/compiler/src/ir/` (`types.ts` re-exports them). Highlights:
 
 * Every union is discriminated by `kind`; consumers `switch` on it with an
   `assertNever` default, so adding a variant is a compile error everywhere it
@@ -391,7 +391,7 @@ it. Members of a number or boolean parameter or state are still rejected
 early. Members of a runtime handle parameter (`input.pointerX`) remain
 `PropertyRead`, checked against the manifest.
 
-**Array methods** (`ARRAY_METHODS` in `ir/types.ts`): `filter`, `map`,
+**Array methods** (`ARRAY_METHODS` in `ir/expressions.ts`): `filter`, `map`,
 `some`, `every`, `find`, `findIndex` (each takes a callback), `includes`,
 `indexOf`, `slice` and `concat`. None changes its receiver. The mutating ones
 (`push`, `splice`, `sort`, `forEach`, …) are `RGE1301` with the immutable

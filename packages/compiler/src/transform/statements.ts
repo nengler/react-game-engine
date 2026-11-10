@@ -18,7 +18,6 @@ import {
   type AssignTargetIR,
   type ExprIR,
   type FunctionIR,
-  type LocalId,
   type ParamIR,
   type StateId,
   type StatementIR,
@@ -47,7 +46,7 @@ export interface LoweringContext {
   error(code: (typeof DiagnosticCode)[keyof typeof DiagnosticCode], message: string, node: Node): void;
 }
 
-export interface FunctionOptions {
+interface FunctionOptions {
   /**
    * Types of the parameters the caller will pass; the function may declare a
    * prefix of them. `"contextual"`: any number of parameters, none annotated
@@ -283,4 +282,3 @@ export function checkFreshName(ctx: LoweringContext, name: string, at: Node): bo
   return true;
 }
 
-export type { LocalId };

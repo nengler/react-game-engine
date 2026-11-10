@@ -37,10 +37,10 @@ compiles to [`packages/example/generated/Player.ts`](packages/example/generated/
 packages/
   compiler/   TSX → IR → TypeScript compiler (uses the TypeScript 7.1 API)
     src/parser/       TypeScript 7.1 parsing (typescript/sync)
-    src/analyzer/     component / hook / JSX discovery
-    src/ir/           IR types (types.ts) and hook/handler signatures (handlers.ts)
-    src/transform/    analysis → IR
-    src/generator/    IR → TypeScript
+    src/analyzer/     component / hook / JSX discovery (analyzer.ts; the rest in model.ts, matchers.ts, component.ts and util.ts)
+    src/ir/           IR types, split by kind (types.ts re-exports them) and hook/handler signatures (handlers.ts)
+    src/transform/    analysis → IR; ComponentLowering is layered over lowering.ts, expressions.ts, hooks.ts and elements.ts
+    src/generator/    IR → TypeScript; ComponentGenerator is layered over expressions.ts, handlers.ts and elements.ts
     src/typecheck/    type-checking generated code with TypeScript 7.1
     src/diagnostics/  diagnostic codes and formatting
     test/             end-to-end tests
