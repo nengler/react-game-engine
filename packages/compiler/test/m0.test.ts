@@ -240,10 +240,11 @@ function Player() {
     }
   });
 
-  it("treats a relative .ts import as the game state, so any other name from one says what to import instead", () => {
-    const [d] = compileErrors(`import { Entity } from "@rge/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" />; }`);
+  it("treats a relative .ts import named like a hook as the game state, so it says what to import instead; any other name is a plain function", () => {
+    const [d] = compileErrors(`import { Entity } from "@rge/runtime/jsx";\nimport { useHelper } from "./helper.ts";\nfunction S() { return <Entity name="S" />; }`);
     assert.equal(d!.code, DiagnosticCode.InvalidGameState);
-    assert.match(d!.message, /no game state to import `helper` from/);
+    assert.match(d!.message, /no game state to import `useHelper` from/);
+    assert.ok(getCompiler().compile("S.tsx", `import { Entity } from "@rge/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" transform={{ x: helper(1) }} />; }`).ok);
   });
 
   it("accepts `type` only on the authoring module's types, and requires it there", () => {

@@ -235,7 +235,7 @@ export function Settings() {
   });
 
   it("imports only the game state from a .ts module, and needs one to exist", () => {
-    assert.deepEqual(errors(`function A() { return <Entity />; }`, compiler, `import { other } from "./GameState.ts";\n`).map((d) => d.code), [DiagnosticCode.InvalidGameState]);
+    assert.deepEqual(errors(`function A() { return <Entity />; }`, compiler, `import { useOther } from "./GameState.ts";\n`).map((d) => d.code), [DiagnosticCode.InvalidGameState]);
     const none = errors(`function A() { const c = useGame((s) => s.coins); return <Entity />; }`, new Compiler());
     assert.deepEqual(none.map((d) => d.code), [DiagnosticCode.InvalidGameState]);
     assert.match(none[0]!.message, /no game state to import/);
