@@ -212,13 +212,18 @@ export class DrawList {
 
   #reserve(count: number): number {
     const at = this.length;
-    if (at + count > this.records.length) {
-      const grown = new Float64Array(Math.max(this.records.length * 2, at + count));
-      grown.set(this.records.subarray(0, at));
-      this.records = grown;
-    }
+    if (at + count > this.records.length) this.grow(count);
     this.length = at + count;
     return at;
+  }
+
+  /** Make room for `count` more doubles after `length`, for a caller that writes a record into `records` itself and then moves `length` on. */
+  grow(count: number): void {
+    const at = this.length;
+    if (at + count <= this.records.length) return;
+    const grown = new Float64Array(Math.max(this.records.length * 2, at + count));
+    grown.set(this.records.subarray(0, at));
+    this.records = grown;
   }
 
   #header(op: number, count: number, world: WorldTransform): number {
@@ -281,7 +286,10 @@ export class DrawList {
   }
 
   sprite(world: WorldTransform, texture: number): void {
-    this.records[this.#header(RGE_OP_SPRITE, RGE_OP_SPRITE_LEN, world)] = texture;
+    // In two steps: `this.records[this.#header(…)] = …` reads `records` before the header is written, so a record that made
+    // the buffer grow had its texture written into the old one, and was drawn with texture 0 for that frame.
+    const at = this.#header(RGE_OP_SPRITE, RGE_OP_SPRITE_LEN, world);
+    this.records[at] = texture;
   }
 
   rect(world: WorldTransform, width: number, height: number, color: PackedColor): void {
@@ -379,6 +387,13 @@ const FLAG_VOLATILE = 16;
 const FLAG_OPAQUE = 32;
 
 function kindCode(object: GameObject): number {
+  let code = object.drawKind;
+  if (code >= 0) return code;
+  code = object.drawKind = classCode(object);
+  return code;
+}
+
+function classCode(object: GameObject): number {
   let code = KINDS.get(object.constructor);
   if (code === undefined) {
     const kind =
@@ -406,6 +421,9 @@ function kindCode(object: GameObject): number {
 }
 
 const GameObjectPrototype = GameObject.prototype;
+
+/** A rect and an ellipse are records of one length, which the walk relies on when it writes a shape in place: this line stops compiling if they ever differ. */
+const SHAPE_LEN: typeof RGE_OP_RECT_LEN & typeof RGE_OP_ELLIPSE_LEN = RGE_OP_RECT_LEN;
 
 /** What `FrameBuilder`'s world walk says about a subtree (see there). */
 const WALK_CLEAN = 0;
@@ -582,6 +600,8 @@ export class FrameBuilder {
     let anyZ = false;
     // The z of the records being written, kept here so a frame with no z makes no call per record.
     let listZ = 0;
+    const colors = this.#colors;
+    const textures = this.#textures;
 
     /**
      * Copy last frame's records for `children[first]` and the siblings after it that can be copied in the same run (they were
@@ -656,7 +676,7 @@ export class FrameBuilder {
         : transform.global ? transform.z
         : placement.global ? placement.z + transform.z
         : parentZ + placement.z + transform.z;
-      const code = kindCode(node);
+      const code = node.drawKind >= 0 ? node.drawKind : kindCode(node);
       const kind = code & 15;
       const children = node.children;
       const count = children.length;
@@ -716,33 +736,94 @@ export class FrameBuilder {
         }
       }
 
-      const volatile = z !== 0 || code >= FLAG_VOLATILE;
-      if (count === 0) return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
-      return walkChildren(node, children, count, kind, code, at, z, parentSpace, parentZ, anc, oldStart, oldCol, oldText, startRel, colStart, textStart);
+      if (count === 0) return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : z !== 0 || code >= FLAG_VOLATILE ? WALK_VOLATILE : WALK_CLEAN;
+      const childAnc = (code & FLAG_OPAQUE) !== 0 ? Infinity : node.selfChangedAt > anc ? node.selfChangedAt : anc;
+      // Nothing above changed this frame: what is under is worth copying from last frame, and worth writing down for the next.
+      if (reuse && childAnc < lastSerial) return walkChildren(children, count, kind, code, at, z, parentSpace, parentZ, childAnc, oldStart, oldCol, oldText, startRel, colStart, textStart);
+
+      // This object changed this frame, or something above it did (or nothing is reused at all): everything under it is made
+      // again, and nothing is written down; a child that was is told its place is no longer known.
+      let volatile = z !== 0 || code >= FLAG_VOLATILE;
+      const isCamera = kind === KIND_CAMERA;
+      const childSpace = isCamera ? parentSpace : at;
+      const childZ = isCamera ? parentZ : z;
+      for (let i = 0; i < count; i++) {
+        const child = children[i] as GameObject;
+        let result = -1;
+        // A leaf that draws or collides where its parent put it (the `<Shape>`, `<Sprite>` and `<Collider>` of a component that
+        // moves) is most of what is here, so it is dealt with in place: what `walk` would do for it, without the call.
+        if (childZ === 0 && child.children.length === 0 && child.layoutX === 0 && child.layoutY === 0) {
+          const leaf = child.drawKind >= 0 ? child.drawKind : kindCode(child);
+          if (leaf === KIND_SHAPE || leaf === KIND_COLLIDER || leaf === KIND_SPRITE) {
+            const own = child.transform;
+            const placed = child.placement;
+            if (own.z === 0 && placed.z === 0 && placed.x === 0 && placed.y === 0 && placed.rotation === 0 && placed.scaleX === 1 && placed.scaleY === 1 && !placed.global) {
+              const world = own.x === 0 && own.y === 0 && own.rotation === 0 && own.scaleX === 1 && own.scaleY === 1 && !own.global ? childSpace : composeTransforms(childSpace, own);
+              if (leaf === KIND_COLLIDER) colliders.push({ collider: child as Collider, world });
+              else {
+                if (listZ !== 0) list.setZ((listZ = 0));
+                // `#sprite` and `#shape`, and the `DrawList` calls under them, written out.
+                const o = list.length;
+                if (leaf === KIND_SPRITE) {
+                  const image = (child as Sprite | AnimatedSprite).image;
+                  const handle = image === "" ? undefined : textures.get(image);
+                  // Nothing to draw, a texture not asked for yet, or one that could not be loaded: the general way.
+                  if (handle === undefined || handle < 0) this.#sprite(image, world);
+                  else {
+                    if (o + RGE_OP_SPRITE_LEN > list.records.length) list.grow(RGE_OP_SPRITE_LEN);
+                    const r = list.records;
+                    r[o] = RGE_OP_SPRITE;
+                    r[o + 1] = world.x;
+                    r[o + 2] = world.y;
+                    r[o + 3] = world.rotation;
+                    r[o + 4] = world.scaleX;
+                    r[o + 5] = world.scaleY;
+                    r[o + 6] = handle;
+                    list.length = o + RGE_OP_SPRITE_LEN;
+                  }
+                } else {
+                  const css = (child as Shape).color;
+                  let color = colors.get(css);
+                  if (color === undefined) color = this.#color(css);
+                  if (o + SHAPE_LEN > list.records.length) list.grow(SHAPE_LEN);
+                  const r = list.records;
+                  r[o] = (child as Shape).kind === "circle" ? RGE_OP_ELLIPSE : RGE_OP_RECT;
+                  r[o + 1] = world.x;
+                  r[o + 2] = world.y;
+                  r[o + 3] = world.rotation;
+                  r[o + 4] = world.scaleX;
+                  r[o + 5] = world.scaleY;
+                  r[o + 6] = (child as Shape).width;
+                  r[o + 7] = (child as Shape).height;
+                  r[o + 8] = color;
+                  list.length = o + SHAPE_LEN;
+                }
+              }
+              result = WALK_CLEAN;
+            }
+          }
+        }
+        if (result < 0) result = walk(child, childSpace, childZ, childAnc, -1, -1, -1);
+        if (result !== WALK_CLEAN) volatile = true;
+        if (reuse) {
+          const info = child.drawCache as DrawInfo | null;
+          if (info !== null) info.ok = false;
+        }
+      }
+      return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
     };
 
-    /** The part of `walk` for an object with children, apart so that the leaves, which are half of all objects, do not pay for its many locals (QuickJS sets up every local of a function at each call). */
-    const walkChildren = (node: GameObject, children: GameObject[], count: number, kind: number, code: number, at: WorldTransform, z: number, parentSpace: WorldTransform, parentZ: number, anc: number, oldStart: number, oldCol: number, oldText: number, startRel: number, colStart: number, textStart: number): number => {
+    /**
+     * The part of `walk` for an object whose children may be copied from last frame (nothing above them changed this frame),
+     * apart so that the other objects do not pay for its many locals (QuickJS sets up every local of a function at each call).
+     * `childAnc` is `anc` for the children: the newest stamp on this object or above it.
+     */
+    const walkChildren = (children: GameObject[], count: number, kind: number, code: number, at: WorldTransform, z: number, parentSpace: WorldTransform, parentZ: number, childAnc: number, oldStart: number, oldCol: number, oldText: number, startRel: number, colStart: number, textStart: number): number => {
       let volatile = z !== 0 || code >= FLAG_VOLATILE;
       const own = (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
       const isCamera = kind === KIND_CAMERA;
       const childSpace = isCamera ? parentSpace : at;
       const childZ = isCamera ? parentZ : z;
-      const childAnc = (code & FLAG_OPAQUE) !== 0 ? Infinity : node.selfChangedAt > anc ? node.selfChangedAt : anc;
-      // Nothing above changed this frame: what is under is worth copying from last frame, and worth writing down for the next.
-      const quiet = childAnc < lastSerial;
-      if (!reuse || !quiet) {
-        // Nothing under is reused, so nothing is written down; a child that was is told its place is no longer known.
-        for (let i = 0; i < count; i++) {
-          const child = children[i] as GameObject;
-          if (walk(child, childSpace, childZ, childAnc, -1, -1, -1) !== WALK_CLEAN) volatile = true;
-          if (reuse) {
-            const info = child.drawCache as DrawInfo | null;
-            if (info !== null) info.ok = false;
-          }
-        }
-        return own === WALK_OPAQUE ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
-      }
       const canCopy = oldStart >= 0;
       for (let i = 0; i < count; i++) {
         const child = children[i] as GameObject;
@@ -1048,11 +1129,12 @@ export class FrameBuilder {
 
   /** The texture handle for an image name, loading it the first time (-1, warned about once, if it cannot be loaded). */
   #texture(image: string): number {
-    const path = `${this.#assets}/${image}`;
-    let handle = this.#textures.get(path);
+    // By image name, not by path: the path would be put together again for every sprite of every frame.
+    let handle = this.#textures.get(image);
     if (handle === undefined) {
+      const path = `${this.#assets}/${image}`;
       handle = this.#loadTexture(path);
-      this.#textures.set(path, handle);
+      this.#textures.set(image, handle);
       if (handle < 0) this.#warner.once(`texture:${path}`, `Could not load the texture '${path}': drawing a magenta square instead.`);
     }
     return handle;

@@ -65,6 +65,8 @@ export class GameObject<P extends object = {}> {
   subtreeChangedAt = 0;
   /** The player's per-object bookkeeping for reusing draw records. Owned by `FrameBuilder`; nothing else reads or writes it. */
   drawCache: object | null = null;
+  /** What this object's class is to the player's frame builder (a sprite, a collider, …), kept here once it has asked so the walk reads a field; -1 until then. Owned by `FrameBuilder`. */
+  drawKind = -1;
 
   constructor(props?: P, defaults?: Partial<P>) {
     this.props = { ...defaults, ...definedOnly(props) } as P;
@@ -89,6 +91,8 @@ export class GameObject<P extends object = {}> {
   }
 
   #dirty = false;
+  /** The last pass of a World's `flush` that looked at this object (see `renderInPass`). */
+  #renderPass = 0;
   #pending: StructureOp[] = [];
   /** Source position among the parent's children (see `addChild`); `Infinity` for unslotted children. */
   #slot = Infinity;
@@ -302,6 +306,19 @@ export class GameObject<P extends object = {}> {
     }
     this.commitState();
     this.render();
+  }
+
+  /**
+   * What the World calls for each object in its list of renders asked for: `runRender` if this object is still in that
+   * world and still wants one. Returns whether it ran. `pass` is the World's number for this pass over its list, so an
+   * object that is in the list twice (it asks again when it joins a world while dirty) is looked at once per pass.
+   */
+  renderInPass(world: World, pass: number): boolean {
+    if (this.#renderPass === pass) return false;
+    this.#renderPass = pass;
+    if (this.world !== world || !this.#dirty) return false;
+    this.runRender();
+    return true;
   }
 
   /** Apply queued state updates. Generated code overrides this for components with state setters. */

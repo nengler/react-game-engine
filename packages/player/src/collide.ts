@@ -1,4 +1,4 @@
-import type { Collider, World, WorldTransform } from "@rge/runtime";
+import type { Collider, GameObject, World, WorldTransform } from "@rge/runtime";
 import type { ColliderEntry } from "./draw.ts";
 
 /** An axis-aligned box in world space. */
@@ -138,6 +138,18 @@ function sortByLeftEdge(order: number[], count: number, bounds: Float64Array): v
   }
 }
 
+/** The most bands the sweep is cut into (see `CollisionTracker.update`); past it the bands get taller instead. */
+const BAND_LIMIT = 1024;
+/** A band is this many times the mean height of a box: taller and each band tests more pairs, shorter and more boxes are in two bands. */
+const BAND_HEIGHT = 2;
+/** The plain sweep hands over to bands when it tested more than this many pairs per box (a band costs about five tests' time per box to set up). */
+const BAND_ENTER = 8;
+/** Bands are kept while they save at least this many tests per box. */
+const BAND_KEEP = 5;
+/** How many banded frames pass between checks that the bands still pay, and how long the plain sweep is kept after they did not (doubling up to `BAND_HOLD_LIMIT`). */
+const BAND_PROBE = 64;
+const BAND_HOLD_LIMIT = 4096;
+
 /** Two colliders that were touching last frame, kept so their exit can be reported after one has left the list. */
 type Pair = readonly [Collider, Collider];
 
@@ -183,9 +195,11 @@ class ById {
  *
  * Reports run after the frame's renders, so what a callback changes is rendered by the next tick.
  *
- * Cost: a sweep over x (see `update`), so a spread-out scene costs about n log n and only boxes that overlap in x
- * are compared. A scene where most colliders share the same columns degrades towards every pair. Measured: see
- * `packages/player/bench/frame.ts`, and the numbers in `docs/NATIVE_PLAN.md`.
+ * Cost: a sweep over x (see `update`), so only boxes that overlap in x are compared. That alone tests every box against
+ * the others in its column, however far apart in y (22 for each box in a square of 2,000), so when a sweep has tested many
+ * pairs for each box the next ones first deal the boxes into horizontal bands and sweep each band on its own. Boxes in a
+ * row or in a pile gain nothing from bands and are swept as one. Measured: see `packages/player/bench/frame.ts`, and the
+ * numbers in `docs/NATIVE_PLAN.md`.
  *
  * **Only what moved is looked at again.** An entry that is the same object as the one for that collider last frame is
  * taken to be unchanged: the frame builder reuses the entry of a collider in a subtree it reused (see `FrameBuilder`), and
@@ -219,6 +233,21 @@ export class CollisionTracker {
   #hits: (readonly string[] | undefined)[] = [];
   #order: number[] = [];
 
+  // The sweep in bands (see `update`). `#banded` is whether the next full sweep makes them.
+  readonly #bands: boolean | "always";
+  #banded: boolean;
+  #bandHold = 0;
+  #bandPenalty = BAND_PROBE;
+  #sinceProbe = 0;
+  #bandedFrames = 0;
+  /** Each box's first and last band, the boxes of each band one after another (by left edge), and where each band starts in that. */
+  #bandFirst = new Int32Array(256);
+  #bandLast = new Int32Array(256);
+  #bandSlots = new Int32Array(512);
+  #bandStarts = new Int32Array(65);
+  #bandFill = new Int32Array(64);
+  readonly #whole = new Int32Array(2);
+
   /** Pairs `#renumber` could not carry over because a collider left; their exit is reported by the `update` that renumbered. */
   #lost: Pair[] | undefined;
 
@@ -238,13 +267,22 @@ export class CollisionTracker {
     return this.#incrementalFrames;
   }
 
+  /** How many full sweeps ran in bands (for tests and benchmarks). */
+  get bandedFrames(): number {
+    return this.#bandedFrames;
+  }
+
   /**
    * `compactAt` is for tests: renumber ids once they reach it (default 2^15, the most that make int32 pair keys).
    * `incremental` false always takes the full sweep, which is what the incremental frames are tested against.
+   * `bands` false never cuts the sweep into bands, and `"always"` does whenever two or more can be made, which is how the
+   * banded sweep is tested against the plain one; the default decides by what the last sweeps cost.
    */
-  constructor(compactAt: number = SMALL_ID, incremental = true) {
+  constructor(compactAt: number = SMALL_ID, incremental = true, bands: boolean | "always" = true) {
     this.#compactAt = Math.min(compactAt, SMALL_ID);
     this.#incremental = incremental;
+    this.#bands = bands;
+    this.#banded = bands === "always";
   }
 
   /** Compare this frame's colliders with last frame's contacts and report new contacts and ended ones. Returns how many contacts started (exits are not counted). */
@@ -257,25 +295,93 @@ export class CollisionTracker {
     }
     if (renumber) this.#renumber(colliders);
 
-    if (this.#bounds.length < colliders.length * 4) this.#bounds = new Float64Array(colliders.length * 8);
+    const total = colliders.length;
+    if (this.#bounds.length < total * 4) this.#bounds = new Float64Array(total * 8);
     const bounds = this.#bounds;
     const boxColliders = this.#colliders;
     const ids = this.#boxIds;
     const layers = this.#layers;
     const hitsOf = this.#hits;
-    let count = 0;
     const byIdNow = this.#byIdNow;
-    byIdNow.clear();
-    for (const { collider, world: transform } of colliders) {
-      if (!writeBounds(collider.width, collider.height, transform, bounds, count * 4)) continue;
-      // The same collider at the same index as last frame (a steady scene) keeps its id: no `WeakMap` lookup.
-      const id = boxColliders[count] === collider ? (ids[count] as number) : this.#id(collider);
-      boxColliders[count] = collider;
-      ids[count] = id;
+    const banded = this.#banded;
+    const HIGH = Infinity; // a local: QuickJS looks a global up by name each time
+    const LOW = -Infinity;
+    let top = HIGH; // the boxes' range in y and their heights, for the bands
+    let bottom = LOW;
+    let heights = 0;
+    let count = 0;
+    // While this frame's boxes are last frame's colliders, box for box (a steady scene, moving or not), their ids and
+    // `#byId` are already right and are left alone.
+    let stable = true;
+    for (let i = 0; i < total; i++) {
+      const entry = colliders[i] as ColliderEntry;
+      const collider = entry.collider;
+      const transform = entry.world;
+      const width = collider.width;
+      const height = collider.height;
+      const at = count * 4;
+      let minY: number;
+      let maxY: number;
+      if (transform.rotation === 0 && width > 0 && height > 0) {
+        // `writeBounds` for an upright box (nearly all of them), without its calls: this runs for every collider.
+        const x = transform.x;
+        const y = transform.y;
+        const x2 = x + width * transform.scaleX;
+        const y2 = y + height * transform.scaleY;
+        let minX: number;
+        let maxX: number;
+        if (x < x2) {
+          minX = x;
+          maxX = x2;
+        } else {
+          minX = x2;
+          maxX = x;
+        }
+        if (y < y2) {
+          minY = y;
+          maxY = y2;
+        } else {
+          minY = y2;
+          maxY = y;
+        }
+        // Finite, with an area. (A NaN lands in one of the pair and fails its comparison.)
+        if (!(minX > LOW && maxX < HIGH && maxX > minX && minY > LOW && maxY < HIGH && maxY > minY)) continue;
+        bounds[at] = minX;
+        bounds[at + 1] = minY;
+        bounds[at + 2] = maxX;
+        bounds[at + 3] = maxY;
+      } else {
+        if (!writeBounds(width, height, transform, bounds, at)) continue;
+        minY = bounds[at + 1] as number;
+        maxY = bounds[at + 3] as number;
+      }
+      if (stable && boxColliders[count] !== collider) {
+        // From here on the list is not last frame's: this frame's colliders by id are collected, starting with those passed.
+        stable = false;
+        byIdNow.clear();
+        for (let k = 0; k < count; k++) byIdNow.set(ids[k] as number, boxColliders[k] as Collider);
+      }
+      if (!stable) {
+        // The same collider at the same index as last frame keeps its id: no `WeakMap` lookup.
+        const id = boxColliders[count] === collider ? (ids[count] as number) : this.#id(collider);
+        boxColliders[count] = collider;
+        ids[count] = id;
+        byIdNow.set(id, collider);
+      }
       layers[count] = collider.layer;
       hitsOf[count] = collider.hits;
-      byIdNow.set(id, collider);
+      if (banded) {
+        if (minY < top) top = minY;
+        if (maxY > bottom) bottom = maxY;
+        heights += maxY - minY;
+      }
       count++;
+    }
+    if (stable && boxColliders.length !== count) {
+      // Last frame's colliders, less some at the end.
+      stable = false;
+      byIdNow.clear();
+      for (let k = 0; k < count; k++) byIdNow.set(ids[k] as number, boxColliders[k] as Collider);
     }
     boxColliders.length = count;
     ids.length = count;
@@ -288,35 +394,72 @@ export class CollisionTracker {
     const order = this.#order;
     sortByLeftEdge(order, count, bounds);
 
+    // That sweep tests every pair of boxes that overlap in x, wherever they are in y: 22 for each box in a square of
+    // 2,000, none of them touching. So when the last sweep tested many pairs for each box, the boxes are first dealt
+    // into horizontal bands and each band is swept on its own. A box is in every band it reaches into, and a pair that
+    // shares several bands is taken in the first of them only.
+    let list: ArrayLike<number> = order;
+    let starts: ArrayLike<number> = this.#whole;
+    let bands = banded ? this.#makeBands(count, top, bottom, heights) : 1;
+    if (bands > 1) {
+      list = this.#bandSlots;
+      starts = this.#bandStarts;
+      this.#bandedFrames++;
+    } else {
+      bands = 1;
+      this.#whole[1] = count;
+    }
+    const firstBand = this.#bandFirst;
+
     const now = this.#now;
     now.clear();
     const touching = this.#touching;
     const started: [number, number][] = [];
     let kept = 0; // pairs that touched last frame and still do
-    for (let s = 0; s < count; s++) {
-      const p = order[s] as number;
-      const minY = bounds[p * 4 + 1] as number;
-      const maxX = bounds[p * 4 + 2] as number;
-      const maxY = bounds[p * 4 + 3] as number;
-      const parent = (boxColliders[p] as Collider).parent;
-      const layerP = layers[p] as string;
-      const hitsP = hitsOf[p];
-      const idP = ids[p] as number;
-      for (let t = s + 1; t < count; t++) {
-        const q = order[t] as number;
-        if ((bounds[q * 4] as number) >= maxX) break;
-        if (!(minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
-        const other = boxColliders[q] as Collider;
-        if (parent === other.parent) continue;
-        const hitsQ = hitsOf[q];
-        if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
-        const idQ = ids[q] as number;
-        const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
-        now.add(key);
-        if (touching.has(key)) kept++;
-        else started.push(p < q ? [p, q] : [q, p]);
+    let tests = 0; // pairs of boxes looked at
+    for (let band = 0; band < bands; band++) {
+      const end = starts[band + 1] as number;
+      for (let s = starts[band] as number; s < end; s++) {
+        const p = list[s] as number;
+        const minY = bounds[p * 4 + 1] as number;
+        const maxX = bounds[p * 4 + 2] as number;
+        const maxY = bounds[p * 4 + 3] as number;
+        // What the rules need of this box is read when the first box overlaps it: in a spread-out scene most boxes touch nothing.
+        let idP = -1;
+        let parent: GameObject | null = null;
+        let layerP = "";
+        let hitsP: readonly string[] | undefined;
+        let t = s + 1;
+        for (; t < end; t++) {
+          const q = list[t] as number;
+          if ((bounds[q * 4] as number) >= maxX) break;
+          if (!(minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
+          if (bands > 1) {
+            // Both are in this band; the first band both are in is where the later of the two starts.
+            const firstP = firstBand[p] as number;
+            const firstQ = firstBand[q] as number;
+            if ((firstP > firstQ ? firstP : firstQ) !== band) continue;
+          }
+          if (idP < 0) {
+            idP = ids[p] as number;
+            parent = (boxColliders[p] as Collider).parent;
+            layerP = layers[p] as string;
+            hitsP = hitsOf[p];
+          }
+          const other = boxColliders[q] as Collider;
+          if (parent === other.parent) continue;
+          const hitsQ = hitsOf[q];
+          if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
+          const idQ = ids[q] as number;
+          const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
+          now.add(key);
+          if (touching.has(key)) kept++;
+          else started.push(p < q ? [p, q] : [q, p]);
+        }
+        tests += t - s - 1;
       }
     }
+    if (this.#bands === true) this.#chooseSweep(count, bands > 1, tests);
     // Pairs that touched last frame and do not now. Collected before the swap; reported below, ahead of the enters.
     let ended: Pair[] | undefined = this.#lost;
     this.#lost = undefined;
@@ -330,8 +473,10 @@ export class CollisionTracker {
     }
     this.#now = touching;
     this.#touching = now;
-    this.#byIdNow = this.#byId;
-    this.#byId = byIdNow;
+    if (!stable) {
+      this.#byIdNow = this.#byId;
+      this.#byId = byIdNow;
+    }
 
     if (this.#incremental) {
       this.#last = colliders.slice();
@@ -339,6 +484,128 @@ export class CollisionTracker {
       this.#maxWidth = -1;
     }
     return this.#report(world, ended, started);
+  }
+
+  /**
+   * Deal the boxes into horizontal bands for the sweep: `#bandSlots[#bandStarts[b] .. #bandStarts[b + 1])` are the boxes that
+   * reach into band `b`, by left edge (they are dealt in the order of `#order`), and `#bandFirst` is each box's first band.
+   * Returns how many bands, or 1 when the boxes do not spread over two.
+   *
+   * A band is `BAND_HEIGHT` times the mean height of a box, so boxes are in one or two bands unless they are far taller than
+   * most, and all the entries together are at most a few times the boxes. Two boxes that overlap in y share a band: a
+   * point's band never decreases as y grows, so each box's first band is at most the other's last.
+   */
+  #makeBands(count: number, top: number, bottom: number, heights: number): number {
+    const range = bottom - top;
+    let height = (heights / count) * BAND_HEIGHT;
+    if (!(range < Infinity && height > 0 && range >= height)) return 1;
+    let bands = Math.floor(range / height) + 1;
+    if (bands > BAND_LIMIT) {
+      bands = BAND_LIMIT;
+      height = range / bands;
+    }
+    const inverse = 1 / height;
+    const lastBand = bands - 1;
+    if (this.#bandFirst.length < count) {
+      this.#bandFirst = new Int32Array(count * 2);
+      this.#bandLast = new Int32Array(count * 2);
+    }
+    if (this.#bandFill.length < bands) {
+      this.#bandFill = new Int32Array(bands);
+      this.#bandStarts = new Int32Array(bands + 1);
+    }
+    const bounds = this.#bounds;
+    const first = this.#bandFirst;
+    const last = this.#bandLast;
+    const fill = this.#bandFill;
+    const starts = this.#bandStarts;
+    for (let b = 0; b < bands; b++) fill[b] = 0;
+    let entries = 0;
+    for (let i = 0; i < count; i++) {
+      let a = (((bounds[i * 4 + 1] as number) - top) * inverse) | 0;
+      let b = (((bounds[i * 4 + 3] as number) - top) * inverse) | 0;
+      if (a > lastBand) a = lastBand;
+      if (b > lastBand) b = lastBand;
+      first[i] = a;
+      last[i] = b;
+      if (a === b) fill[a] = (fill[a] as number) + 1;
+      else for (let k = a; k <= b; k++) fill[k] = (fill[k] as number) + 1;
+      entries += b - a + 1;
+    }
+    let at = 0;
+    for (let b = 0; b < bands; b++) {
+      const size = fill[b] as number;
+      starts[b] = at;
+      fill[b] = at;
+      at += size;
+    }
+    starts[bands] = at;
+    if (this.#bandSlots.length < entries) this.#bandSlots = new Int32Array(entries * 2);
+    const slots = this.#bandSlots;
+    const order = this.#order;
+    for (let s = 0; s < count; s++) {
+      const p = order[s] as number;
+      const a = first[p] as number;
+      const b = last[p] as number;
+      if (a === b) {
+        const slot = fill[a] as number;
+        slots[slot] = p;
+        fill[a] = slot + 1;
+      } else {
+        for (let k = a; k <= b; k++) {
+          const slot = fill[k] as number;
+          slots[slot] = p;
+          fill[k] = slot + 1;
+        }
+      }
+    }
+    return bands;
+  }
+
+  /**
+   * Whether the next full sweep runs in bands, from what this one cost. The plain sweep counts the pairs it tested, and
+   * hands over when that is many for each box. Bands are checked now and then against an estimate of what the plain sweep
+   * would have tested, and dropped when they save little (boxes in a row, in a pile, or with one far away that stretches the
+   * bands until all the others share one); the plain sweep is then kept for a while, longer each time.
+   */
+  #chooseSweep(count: number, wasBanded: boolean, tests: number): void {
+    if (wasBanded) {
+      if (++this.#sinceProbe < BAND_PROBE) return;
+      this.#sinceProbe = 0;
+      if (this.#plainTests(count) - tests >= count * BAND_KEEP) {
+        this.#bandPenalty = BAND_PROBE;
+        return;
+      }
+      this.#banded = false;
+      this.#bandHold = this.#bandPenalty;
+      this.#bandPenalty = Math.min(this.#bandPenalty * 2, BAND_HOLD_LIMIT);
+    } else if (this.#banded) {
+      // Bands were wanted and the boxes did not spread over two.
+      this.#banded = false;
+      this.#bandHold = BAND_PROBE;
+    } else if (this.#bandHold > 0) this.#bandHold--;
+    else if (tests > count * BAND_ENTER) {
+      this.#banded = true;
+      this.#sinceProbe = 0;
+    }
+  }
+
+  /** About how many pairs the plain sweep would test: for each box, the boxes after it that start within a mean width of its left edge (exact when all are as wide). */
+  #plainTests(count: number): number {
+    const bounds = this.#bounds;
+    const order = this.#order;
+    let widths = 0;
+    for (let i = 0; i < count; i++) widths += (bounds[i * 4 + 2] as number) - (bounds[i * 4] as number);
+    const width = widths / count;
+    let tests = 0;
+    let t = 0;
+    for (let s = 0; s < count; s++) {
+      const reach = (bounds[(order[s] as number) * 4] as number) + width;
+      if (t <= s) t = s + 1;
+      while (t < count && (bounds[(order[t] as number) * 4] as number) < reach) t++;
+      tests += t - s - 1;
+    }
+    return tests;
   }
 
   /**
