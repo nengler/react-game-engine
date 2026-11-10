@@ -10,6 +10,9 @@ import { type RuntimeManifest } from "@rge/runtime";
 import { Scope } from "./scope.ts";
 import { type AuthoringImports, rootTag, unwrapTypeParens, literalValue, nearest } from "./helpers.ts";
 
+/** The CSS names of keyword values that the runtime spells differently. */
+const CSS_ALIASES: Readonly<Record<string, string>> = { "flex-start": "start", "flex-end": "end" };
+
 export class LoweringBase {
   readonly componentName: string;
   /** Component scope; function lowering nests scopes beneath it via `scope`. */
@@ -191,15 +194,40 @@ export class LoweringBase {
    * expression is left to the type-check, so `kind={big ? "rect" : "circle"}` works.
    */
   protected checkLiteralChoice(tag: string, name: string, value: ExprIR, at: Node): boolean {
+    if (this.manifest.intrinsicSizing[tag]?.includes(name)) return this.checkSizingLiteral(tag, name, value, at);
     const allowed = this.manifest.intrinsicLiterals[tag]?.[name];
     if (!allowed) return true;
     if (value.kind === "StringLiteral" && allowed.includes(value.value)) return true;
     if (value.kind !== "StringLiteral" && value.kind !== "NumberLiteral" && value.kind !== "BooleanLiteral" && value.kind !== "NullLiteral") return true;
     const given = value.kind === "StringLiteral" ? `'${value.value}'` : value.kind === "NullLiteral" ? "null" : String(value.value);
-    const near = value.kind === "StringLiteral" ? nearest(value.value, allowed) : null;
+    // CSS spells start and end `flex-start` and `flex-end`; say so rather than guess from the letters.
+    const css = value.kind === "StringLiteral" ? CSS_ALIASES[value.value] : undefined;
+    const near = value.kind === "StringLiteral" ? (css !== undefined && allowed.includes(css) ? css : nearest(value.value, allowed)) : null;
     this.report(
       DiagnosticCode.InvalidPropValue,
       `<${tag} ${name}> must be one of ${allowed.map((v) => `"${v}"`).join(", ")}, not ${given}${near ? ` (did you mean "${near}"?)` : ""}.`,
+      at,
+    );
+    return false;
+  }
+
+  /**
+   * A size prop (`<Flex width>`): a literal is a number, `"fit"`, `"grow"`, or a percentage between 0 and 100 such as
+   * `"50%"`. Any other expression is left to the type-check.
+   */
+  protected checkSizingLiteral(tag: string, name: string, value: ExprIR, at: Node): boolean {
+    if (value.kind === "NumberLiteral") return true;
+    if (value.kind !== "StringLiteral" && value.kind !== "BooleanLiteral" && value.kind !== "NullLiteral") return true;
+    if (value.kind === "StringLiteral") {
+      if (value.value === "fit" || value.value === "grow") return true;
+      const percent = /^(\d+(?:\.\d+)?)%$/.exec(value.value);
+      if (percent && Number(percent[1]) <= 100) return true;
+    }
+    const given = value.kind === "StringLiteral" ? `'${value.value}'` : value.kind === "NullLiteral" ? "null" : String(value.value);
+    const near = value.kind === "StringLiteral" ? nearest(value.value, ["fit", "grow"]) : null;
+    this.report(
+      DiagnosticCode.InvalidPropValue,
+      `<${tag} ${name}> must be a number of pixels, "fit", "grow", or a percentage from "0%" to "100%", not ${given}${near ? ` (did you mean "${near}"?)` : ""}.`,
       at,
     );
     return false;

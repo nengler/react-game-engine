@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
-import { Camera, Entity, Hud, Screen, Shape, Sprite, Text } from "@rge/runtime";
+import { Camera, Entity, Flex, Hud, Screen, Shape, Sprite, Text } from "@rge/runtime";
 import { createPlayer, KEYS, RGE_ABI_VERSION, type PlayerConfig } from "@rge/player";
 import { NodeBackend, checkAbi, createNodeBackend, findNativeLibrary, loadNative, type Pixels } from "../src/index.ts";
 
@@ -213,6 +213,45 @@ describe("librge through koffi", { skip }, () => {
       assert.equal(pixel(frame, 2 + 4 * 3, 6 + 2 * 3), "00ff00ff", `the badge's far corner (${pixelPerfect})`);
       assert.equal(pixel(frame, 2 + 5 * 3 + 1, 6 + 1 * 3), "ff0000ff", `the world next to it (${pixelPerfect})`);
       assert.equal(pixel(frame, 0, 0), "0000ffff", `the border (${pixelPerfect})`);
+    }
+  });
+
+  it("draws a <Flex> background and its laid-out children, through the real library", () => {
+    const frame = render(() => {
+      const row = new Flex({ background: "navy", padding: 4, gap: 6, alignItems: "center" });
+      row.transform.x = 10;
+      row.transform.y = 8;
+      row.addChild(new Shape({ kind: "rect", width: 8, height: 4, color: "lime" }));
+      row.addChild(new Shape({ kind: "rect", width: 8, height: 12, color: "red" }));
+      return row;
+    });
+    // The box is 4 + 8 + 6 + 8 + 4 = 30 wide and 4 + 12 + 4 = 20 high, at (10, 8).
+    assert.equal(pixel(frame, 10, 8), "000080ff", "the box's top-left corner");
+    assert.equal(pixel(frame, 39, 27), "000080ff", "and its bottom-right");
+    assert.equal(pixel(frame, 40, 27), "000000ff", "nothing past it");
+    assert.equal(pixel(frame, 9, 8), "000000ff");
+    // The lime one is centred on the cross axis: (12 - 4) / 2 = 4 below the padding.
+    assert.equal(pixel(frame, 14, 8 + 4 + 4), "00ff00ff", "the first child, centred vertically");
+    assert.equal(pixel(frame, 14, 8 + 4 + 3), "000080ff", "above it is the background");
+    assert.equal(pixel(frame, 10 + 4 + 8 + 6 + 1, 8 + 4 + 1), "ff0000ff", "the second child, after the gap");
+  });
+
+  it("lays out around text measured by librge, so a label's box fits its real width", () => {
+    const backend = createNodeBackend(library);
+    const warnings: string[] = [];
+    const label = new Text({ text: "Score: 100", size: 20, color: "white" });
+    const row = new Flex({ background: "navy", padding: 3 });
+    row.addChild(label);
+    const player = createPlayer(backend, { width: 200, height: 100, title: "t", hidden: true, vsync: false, root: () => row, warn: (m) => warnings.push(m) });
+    try {
+      player.step();
+      const width = backend.measureText("Score: 100", 20);
+      assert.equal(row.box.size[0], width.width + 6, "the box is the measured text plus padding");
+      assert.equal(row.box.size[1], width.height + 6);
+      assert.ok(width.width > 60 && width.width < 200, `text width ${width.width}`);
+      assert.deepEqual(warnings, []);
+    } finally {
+      player.close();
     }
   });
 

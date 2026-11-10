@@ -1611,6 +1611,19 @@ container. The HUD's pointers are listed after the world's, so they are pressed 
 HUD coordinates: the window point taken back through `BuiltFrame.hudView` (the screen's placement, or the
 identity), not through the camera.
 
+**Layout (`<Flex>`).** A `Flex` is a container that places its children in a row or a column; the algorithm is in
+`packages/player/src/layout.ts` and is Clay's, ported (docs/UI_PLAN.md has the rules and the reasons). The walk
+reaches a layout root (a `Flex` whose parent is not a `Flex`) and lays out everything under it before descending:
+fit sizes bottom-up, then sharing out space top-down, widths first and then heights, then positions, each child's
+`layoutX` / `layoutY` (composed before `placement` and `transform`, so a child's own `transform` moves it within its
+slot). Sizing is per axis: `"fit"`, `"grow"`, a number or a percentage, with min and max; free space goes to the
+smallest growing child first and stops at each maximum. Only a `Flex` is resized by layout; a `Shape`, `Sprite` or
+`Text` keeps its own size. An `Entity` or component child is sized by the bounding box of what it draws. A root that
+grows fills the game's area (the canvas, else the window). Layout runs every frame, so conditional children and keyed
+lists reflow with no extra work, and in steady state it allocates nothing. `background` is a rectangle drawn first,
+behind the children, at the box's size. Not built yet: shrinking when children overflow (U3), whole-pixel rounding and
+`onPress` (U4), floating boxes (U5), text wrapping.
+
 **Measuring.** `FrameBuilder.measure(object)` is the size layout will place an object by: a `Shape`'s,
 `Pointer`'s or `Collider`'s `width × height`, a `Text`'s measured width × its measured line height, a `Sprite`'s texture size
 (an `AnimatedSprite`'s first frame, so the size does not jitter; a texture that will not load measures as the

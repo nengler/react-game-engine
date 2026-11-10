@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Collider, Entity, GameObject, Hud, Pointer, Screen, Shape, Text, getSoundSink } from "@rge/runtime";
+import { Camera, Collider, Entity, Flex, GameObject, Hud, Pointer, Screen, Shape, Text, getSoundSink } from "@rge/runtime";
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
@@ -201,3 +201,72 @@ describe("<Hud>: pointers", () => {
     assert.deepEqual(presses, ["hud"]);
   });
 });
+
+describe("<Flex> in the frame", () => {
+  const rects = (records: readonly DecodedRecord[]) => records.flatMap((r) => (r.op === "rect" ? [[r.x, r.y, r.width, r.height, r.color] as const] : []));
+
+  it("draws its background first, behind its children, the size of the box, at the box's place", () => {
+    const row = new Flex({ background: "red", padding: 2, gap: 4 });
+    row.transform.x = 100;
+    row.addChild(box(0, 10));
+    row.addChild(box(0, 10));
+    const { records } = draw(row);
+    assert.deepEqual(rects(records), [
+      [100, 0, 2 + 10 + 4 + 10 + 2, 14, "#ff0000ff"],
+      [102, 2, 10, 10, "#ffffffff"],
+      [116, 2, 10, 10, "#ffffffff"],
+    ]);
+  });
+
+  it("draws nothing for a Flex without a background", () => {
+    const row = new Flex();
+    row.addChild(box(0, 10));
+    assert.deepEqual(rects(draw(row).records).length, 1);
+  });
+
+  it("fills the window with a growing root, and again at another size after a resize", () => {
+    const root = new Flex({ width: "grow", height: "grow", background: "blue", padding: 8 });
+    root.addChild(box(0, 4));
+    const builder = new FrameBuilder({ loadTexture: () => 0 });
+    const first = builder.build(root, 640, 360);
+    assert.deepEqual(rects(decode(first)).at(0)?.slice(2, 4), [640, 360]);
+    const second = builder.build(root, 1280, 720);
+    assert.deepEqual(rects(decode(second)).at(0)?.slice(2, 4), [1280, 720]);
+    assert.deepEqual([(root.children[0] as GameObject).layoutX, (root.children[0] as GameObject).layoutY], [8, 8]);
+  });
+
+  it("fills the game's canvas, not the window, under a <Screen>", () => {
+    const screen = new Screen({ width: 320, height: 180 });
+    const layer = hud(new Flex({ width: "grow", height: "grow", background: "blue" }));
+    screen.addChild(layer);
+    const { records } = draw(screen, 1280, 720);
+    assert.deepEqual(rects(records), [[0, 0, 320, 180, "#0000ffff"]]);
+  });
+
+  it("pins a corner of the HUD: a column that grows, with space between a top row and a bottom row", () => {
+    const top = new Shape({ kind: "rect", width: 30, height: 10 });
+    const bottom = new Shape({ kind: "rect", width: 30, height: 20 });
+    const column = new Flex({ direction: "column", width: "grow", height: "grow", justifyContent: "space-between", padding: 16 });
+    column.addChild(top);
+    column.addChild(bottom);
+    const screen = new Screen({ width: 320, height: 180 });
+    screen.addChild(hud(column));
+    draw(screen, 640, 360);
+    assert.deepEqual([top.layoutY, bottom.layoutY], [16, 180 - 16 - 20]);
+  });
+
+  it("lays out a Flex inside a Flex as part of its parent: the inner one grows into the outer's width", () => {
+    const inner = new Flex({ background: "green", width: "grow" });
+    inner.addChild(new Shape({ kind: "rect", width: 10, height: 5 }));
+    const outer = new Flex({ width: 100, background: "red" });
+    outer.addChild(inner);
+    const { records } = draw(outer);
+    assert.deepEqual(rects(records).map((r) => r.slice(0, 4)), [[0, 0, 100, 5], [0, 0, 100, 5], [0, 0, 10, 5]]);
+  });
+});
+
+function decode(built: ReturnType<FrameBuilder["build"]>): DecodedRecord[] {
+  const backend = new RecordingBackend();
+  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  return [...backend.lastFrame.records];
+}

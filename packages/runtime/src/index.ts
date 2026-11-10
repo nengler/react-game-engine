@@ -24,6 +24,7 @@ export { Text, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
 export { AnimatedSprite, type AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
+export { Flex, FlexBox, FLEX_ALIGN_ITEMS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, type FlexAlignItems, type FlexDirection, type FlexJustifyContent, type FlexProps, type FlexSizing } from "./components/Flex.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
