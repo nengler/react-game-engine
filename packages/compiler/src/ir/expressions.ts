@@ -10,6 +10,7 @@ import { type ParamIR } from "./values.ts";
 
 export type ExprIR =
   | StoreRefIR
+  | PlainRefIR
   | NumberLiteralIR
   | StringLiteralIR
   | BooleanLiteralIR
@@ -34,6 +35,15 @@ export type ExprIR =
  * `state={useGame}` on a `<Game>`: the project's game state itself (the imported store), handed to the runtime. It is
  * the only place a component uses the store as a value; the generated code writes the imported name.
  */
+/**
+ * A function imported from a relative `.ts` file, used as a value (`<Router transition={crossfade} />`): the generated code writes
+ * the imported name. The compiler does not look inside it.
+ */
+export interface PlainRefIR {
+  readonly kind: "PlainRef";
+  readonly name: string;
+}
+
 export interface StoreRefIR {
   readonly kind: "StoreRef";
 }
@@ -182,6 +192,8 @@ export interface CallIR {
 
 export type CalleeIR =
   | { readonly kind: "Function"; readonly name: string }
+  /** A call of a function imported from a relative `.ts` file: opaque and assumed pure, so its arguments are all it depends on. */
+  | { readonly kind: "Plain"; readonly name: string }
   | { readonly kind: "Method"; readonly receiver: ParamReadIR; readonly name: string }
   /** `enemies.filter((e) => …)`: an allowlisted, non-mutating array method (`ARRAY_METHODS`) on any value. */
   | { readonly kind: "ArrayMethod"; readonly receiver: ExprIR; readonly name: ArrayMethodName }

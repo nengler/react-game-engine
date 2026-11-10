@@ -37,6 +37,8 @@ export interface CompilerConfig {
   readonly cwd?: string;
   /** The project's game state, from `GameState.ts` (see `Compiler.parseGameState`): what a selector on the imported store may name. Default: none. */
   readonly gameState?: GameStateDefinition;
+  /** The path from the generated files to the source folder (`../src`): where a function imported from a relative `.ts` file is found. Default `..`. */
+  readonly sourceFromOutput?: string;
 }
 
 export type CompileResult =
@@ -64,12 +66,19 @@ export class Compiler {
   readonly #manifest: RuntimeManifest;
   #gameState: GameStateDefinition | undefined;
   #hookResolver: HookResolver | null = null;
+  #sourceFromOutput: string;
 
   constructor(config: CompilerConfig = {}) {
     this.#parser = new TsxParser({ cwd: config.cwd ?? process.cwd() });
     this.#runtimeModule = config.runtimeModule ?? "@rge/runtime";
     this.#manifest = config.manifest ?? runtimeManifest;
     this.#gameState = config.gameState;
+    this.#sourceFromOutput = config.sourceFromOutput ?? "..";
+  }
+
+  /** See `CompilerConfig.sourceFromOutput`: the CLI knows where it writes relative to where it reads. */
+  setSourceFromOutput(path: string): void {
+    this.#sourceFromOutput = path;
   }
 
   /** Parse and analyze only. The callback receives the analysis while its AST is alive. */
@@ -102,6 +111,7 @@ export class Compiler {
       const code = generateModule(transformed.module, {
         runtimeModule: this.#runtimeModule,
         runtimeFunctions: new Set(Object.keys(this.#manifest.functions)),
+        sourceFromOutput: this.#sourceFromOutput,
         requiredHostProps: this.#manifest.intrinsicRequired,
         intrinsicHooks: this.#manifest.intrinsicHooks,
         ...(this.#gameState ? { gameState: { name: this.#gameState.name, importFrom: this.#gameState.importFrom } } : {}),

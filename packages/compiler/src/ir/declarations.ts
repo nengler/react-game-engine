@@ -19,6 +19,15 @@ export interface IRModule {
    */
   readonly typeDeclarations: readonly TypeDeclarationIR[];
   readonly components: readonly ComponentIR[];
+  /** Functions imported from relative `.ts` files that components call or pass: the generator imports them from where they are. */
+  readonly plainImports: readonly PlainImportIR[];
+}
+
+/** `import { crossfade } from "./transitions.ts"`. */
+export interface PlainImportIR {
+  readonly name: string;
+  /** The specifier as written (`./transitions.ts`); the generator points it at the source folder. */
+  readonly module: string;
 }
 
 /** A source `interface Name { … }` or `type Name = { … }`, kept as text. */

@@ -21,6 +21,8 @@ export class ExpressionLowering extends LoweringBase {
     }
     if (isIdentifier(node)) {
       const binding = this.scope.get(node.text);
+      // A function imported from a relative .ts file, used as a value (a prop that takes a function).
+      if (!binding && this.plainImports.has(node.text)) return { kind: "PlainRef", name: node.text };
       if (!binding) {
         this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component.`, node);
         return null;
@@ -256,6 +258,16 @@ export class ExpressionLowering extends LoweringBase {
         }
         return { kind: "Call", callee: { kind: "Prop", name: binding.name, optional: node.questionDotToken !== undefined }, args };
       }
+    }
+    // A function imported from a relative .ts file: any arguments, opaque to the compiler and assumed pure.
+    if (isIdentifier(callee) && this.plainImports.has(callee.text) && !this.scope.has(callee.text)) {
+      const args: ExprIR[] = [];
+      for (const argument of node.arguments) {
+        const lowered = this.lowerNode(argument);
+        if (!lowered) return null;
+        args.push(lowered);
+      }
+      return { kind: "Call", callee: { kind: "Plain", name: callee.text }, args };
     }
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
     if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {

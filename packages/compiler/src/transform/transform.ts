@@ -93,18 +93,21 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
     }
   }
 
+  const plainNames = new Set(analysis.plainImports.map((i) => i.name));
+  const plainImports = analysis.plainImports.map((i) => ({ name: i.name, module: i.module }));
+
   const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
   const typeDeclarations: TypeDeclarationIR[] = analysis.typeDeclarations.map((t) => ({ kind: "TypeDeclaration", name: t.name, text: t.text }));
 
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
-    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, options.gameState, storeImports).lower();
+    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, options.gameState, storeImports, plainNames).lower();
     if (lowered) components.push(lowered);
   }
 
   checkStaticCycles(components, diagnostics);
 
-  return { module: { kind: "Module", sourceFile: analysis.fileName, typeDeclarations, components }, diagnostics };
+  return { module: { kind: "Module", sourceFile: analysis.fileName, typeDeclarations, components, plainImports }, diagnostics };
 }
 
 /** The component lowering: each layer in its own file (lowering, expressions, hooks, elements), each extending the one before. */

@@ -80,6 +80,7 @@ function main(argv: readonly string[]): number {
   }
 
   const compiler = new Compiler(runtimeModule ? { runtimeModule } : {});
+  compiler.setSourceFromOutput(relative(resolve(outDir), resolve(srcDir)).split(sep).join("/") || ".");
   // Custom hooks imported from a relative .tsx file are read from beside the file that imports them.
   compiler.setHookResolver((specifier, fromFile) => {
     const path = resolve(dirname(resolve(fromFile)), specifier);

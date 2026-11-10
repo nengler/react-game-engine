@@ -80,6 +80,7 @@ export class ExpressionEmitter {
     const wrap = (s: string): string => (top ? s : `(${s})`);
     switch (e.kind) {
       case "StoreRef": return this.storeName;
+      case "PlainRef": return e.name;
       case "NumberLiteral": return String(e.value);
       case "StringLiteral": return JSON.stringify(e.value);
       case "BooleanLiteral": return String(e.value);
@@ -106,6 +107,7 @@ export class ExpressionEmitter {
         const args = e.args.map((a) => this.expr(a, true)).join(", ");
         switch (e.callee.kind) {
           case "Function": return `${e.callee.name}(${args})`;
+          case "Plain": return `${e.callee.name}(${args})`;
           case "Method": return `${e.callee.receiver.name}.${e.callee.name}(${args})`;
           case "Prop": return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
           case "ArrayMethod": return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;
