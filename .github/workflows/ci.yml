@@ -70,6 +70,17 @@ jobs:
         run: node --test --test-concurrency=1 "packages/player-node/test/*.test.ts" "packages/demo/test/*.test.ts"
         env:
           RGE_REQUIRE_NATIVE: "1"
+      # The V8 build of a game: a Node single executable application. The parity run, packaged the same way, must print
+      # exactly what it prints under plain Node; then the demo runs from another folder until it is stopped (status 124).
+      - name: Package the demo with Node (V8) and run it
+        run: |
+          npm run package -- --engine node --headless
+          npm run package -- packages/demo/parity.ts parity --engine node --headless
+          node packages/demo/parity.ts > /tmp/parity-node.json
+          cd /tmp
+          "$GITHUB_WORKSPACE/dist/parity/parity" > /tmp/parity-packaged.json
+          cmp /tmp/parity-node.json /tmp/parity-packaged.json
+          timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
 
   # The same library on the real OpenGL path (GLFW), against Mesa's software GL on a virtual display.
   native-desktop:
@@ -123,10 +134,15 @@ jobs:
           cd /tmp
           # The game runs until its window closes, so stopping it after five seconds (status 124) is the pass.
           xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
+      - name: Package the demo with Node (V8) and run it under a virtual display
+        run: |
+          npm run package -- --engine node
+          cd /tmp
+          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
 
   # The shipping host: Rust + QuickJS-ng, linked statically against librge on raylib's software renderer.
   # The parity test plays the demo for 60 scripted frames under Node and under the host and requires
-  # byte-identical output; the bench prints script frame time under both (informational).
+  # byte-identical output; the bench times scripts under both and fails a scene over its budget (`npm run bench:check`).
   host:
     runs-on: ubuntu-latest
     steps:
@@ -156,13 +172,9 @@ jobs:
         env:
           RGE_HOST_BIN: ${{ github.workspace }}/host/target/release/rge-host
           RGE_REQUIRE_HOST: "1"
-      - name: Script frame time under Node and under the host
-        run: |
-          npm run bundle -- packages/player/bench/frame.ts host/dist/bench.js
-          echo "--- Node ---"
-          node packages/player/bench/frame.ts
-          echo "--- QuickJS-ng (rge-host) ---"
-          host/target/release/rge-host host/dist/bench.js
+      # Fails when a scene is over its budget in packages/player/bench/budget.json, or grows faster than its size.
+      - name: Script frame time under Node and under the host, against budgets
+        run: npm run bench:check -- --host host/target/release/rge-host
       - name: Package the demo and run it
         run: |
           npm run package -- --headless

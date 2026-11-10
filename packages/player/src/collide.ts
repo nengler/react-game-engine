@@ -242,6 +242,17 @@ export class CollisionTracker {
   #ordered = 0;
   /** The pairs of boxes the host's broad phase found, two indices each. */
   #pairs = new Int32Array(128);
+  /**
+   * The pairs of boxes this full sweep accepted (they overlap and the rules let them collide), two box indices each, in the
+   * order they were found; and last full sweep's, to compare with. When the colliders are last frame's box for box and the
+   * pairs are the same in the same order, the contacts are exactly `#touching`, and the sweep skips the `Set` work for each
+   * pair, which is most of what a pile costs (44,850 pairs: about 15 ms of 25 under QuickJS). `#acceptedValid` is whether
+   * `#touching` is still what that last sweep left (an incremental frame that changed it, or a renumbering, clears it).
+   */
+  #accepted = new Int32Array(128);
+  #lastAccepted = new Int32Array(128);
+  #lastAcceptedLength = -1;
+  #acceptedValid = false;
   readonly #overlaps: Overlaps | undefined;
 
   // The sweep in bands (see `update`). `#banded` is whether the next full sweep makes them.
@@ -409,10 +420,17 @@ export class CollisionTracker {
     }
     const order = this.#order;
     const now = this.#now;
-    now.clear();
     const touching = this.#touching;
     const started: [number, number][] = [];
     let kept = 0; // pairs that touched last frame and still do
+    // This sweep's pairs go into `accepted`, compared on the way with last sweep's (see `#accepted`).
+    let accepted = this.#accepted;
+    const last = this.#lastAccepted;
+    const lastLength = this.#lastAcceptedLength;
+    let same = stable && this.#acceptedValid;
+    if (!same) now.clear();
+    let n = 0;
+    let done = 0; // pairs before this one were found while they matched last sweep's, and are filed below if they turn out not to
     // What the rules need of a box is read when the first other box overlaps it: in a spread-out scene most boxes touch nothing.
     let idP = -1;
     let parent: GameObject | null = null;
@@ -427,6 +445,7 @@ export class CollisionTracker {
         found = overlaps(bounds, count, order, pairs);
       }
       const filled = Math.min(found * 2, pairs.length);
+      if (accepted.length < filled) accepted = this.#accepted = new Int32Array(filled * 2);
       // The rules for each pair, as in the sweep below. A box's pairs come one after another.
       let lastP = -1;
       for (let k = 0; k < filled; k += 2) {
@@ -443,11 +462,21 @@ export class CollisionTracker {
         if (parent === other.parent) continue;
         const hitsQ = hitsOf[q];
         if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
-        const idQ = ids[q] as number;
-        const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
-        now.add(key);
-        if (touching.has(key)) kept++;
-        else started.push(p < q ? [p, q] : [q, p]);
+        if (same && (n >= lastLength || last[n] !== p || last[n + 1] !== q)) {
+          same = false;
+          now.clear();
+          done = n;
+        }
+        accepted[n] = p;
+        accepted[n + 1] = q;
+        n += 2;
+        if (!same) {
+          const idQ = ids[q] as number;
+          const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
+          now.add(key);
+          if (touching.has(key)) kept++;
+          else started.push(p < q ? [p, q] : [q, p]);
+        }
       }
     } else {
       // Sweep over x: with the boxes sorted by their left edge, a box can only touch the ones after it that start
@@ -501,11 +530,26 @@ export class CollisionTracker {
             if (parent === other.parent) continue;
             const hitsQ = hitsOf[q];
             if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
-            const idQ = ids[q] as number;
-            const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
-            now.add(key);
-            if (touching.has(key)) kept++;
-            else started.push(p < q ? [p, q] : [q, p]);
+            if (same && (n >= lastLength || last[n] !== p || last[n + 1] !== q)) {
+              same = false;
+              now.clear();
+              done = n;
+            }
+            if (n + 2 > accepted.length) {
+              const grown = new Int32Array(accepted.length * 2);
+              grown.set(accepted);
+              accepted = this.#accepted = grown;
+            }
+            accepted[n] = p;
+            accepted[n + 1] = q;
+            n += 2;
+            if (!same) {
+              const idQ = ids[q] as number;
+              const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
+              now.add(key);
+              if (touching.has(key)) kept++;
+              else started.push(p < q ? [p, q] : [q, p]);
+            }
           }
           tests += t - s - 1;
         }
@@ -513,20 +557,42 @@ export class CollisionTracker {
       if (this.#bands === true) this.#chooseSweep(count, bands > 1, tests);
     }
     this.#ordered = count;
+    this.#accepted = last;
+    this.#lastAccepted = accepted;
+    this.#lastAcceptedLength = n;
+    this.#acceptedValid = true;
 
-    // Pairs that touched last frame and do not now. Collected before the swap; reported below, ahead of the enters.
     let ended: Pair[] | undefined = this.#lost;
     this.#lost = undefined;
-    // Nothing ended when every pair of last frame was kept: the common case, and it spares a scan of the whole set.
-    for (const key of kept === touching.size ? [] : touching) {
-      if (now.has(key)) continue;
-      const [low, high] = pairOf(key);
-      const a = this.#byId.get(low);
-      const b = this.#byId.get(high);
-      if (a && b) (ended ??= []).push([a, b]);
+    if (!(same && n === lastLength)) {
+      // The contacts changed. The pairs after the first difference were filed as they were found; file those before it
+      // (all of them, when the only difference is that last sweep had more), then find which ended.
+      if (same) {
+        now.clear();
+        done = n;
+      }
+      for (let k = 0; k < done; k += 2) {
+        const p = accepted[k] as number;
+        const q = accepted[k + 1] as number;
+        const idP = ids[p] as number;
+        const idQ = ids[q] as number;
+        const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
+        now.add(key);
+        if (touching.has(key)) kept++;
+        else started.push(p < q ? [p, q] : [q, p]);
+      }
+      // Pairs that touched last frame and do not now. Collected before the swap; reported below, ahead of the enters.
+      // Nothing ended when every pair of last frame was kept: the common case, and it spares a scan of the whole set.
+      for (const key of kept === touching.size ? [] : touching) {
+        if (now.has(key)) continue;
+        const [low, high] = pairOf(key);
+        const a = this.#byId.get(low);
+        const b = this.#byId.get(high);
+        if (a && b) (ended ??= []).push([a, b]);
+      }
+      this.#now = touching;
+      this.#touching = now;
     }
-    this.#now = touching;
-    this.#touching = now;
     if (!stable) {
       this.#byIdNow = this.#byId;
       this.#byId = byIdNow;
@@ -714,6 +780,7 @@ export class CollisionTracker {
       this.#incrementalFrames++;
       return 0; // nothing changed: the contacts are as they were, and nothing starts or ends
     }
+    this.#acceptedValid = false; // the contacts this frame finds are no longer last full sweep's
     // The new boxes, worked out first: a collider that lost its area leaves the list, which is the full sweep's business.
     if (this.#fresh.length < total * 4) this.#fresh = new Float64Array(total * 8);
     const fresh = this.#fresh;
@@ -872,6 +939,7 @@ export class CollisionTracker {
     this.#nextId = next;
     this.#touching = touching;
     this.#now.clear();
+    this.#acceptedValid = false; // a safeguard: renumbering also empties `#colliders`, so the next sweep is not `stable` anyway
   }
 
   #id(collider: Collider): number {

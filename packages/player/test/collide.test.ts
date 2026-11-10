@@ -335,6 +335,32 @@ describe("CollisionTracker against every-pair testing", () => {
     assert.ok(totalPairs > 200, `the scenes should produce plenty of contacts to compare, not ${totalPairs}`);
   });
 
+  it("reports a contact again when a full sweep finds last full sweep's pairs after a frame that looked only at what moved ended one", () => {
+    // 16 colliders, so a frame with one new entry looks only at what moved, and one with all new entries takes the full sweep.
+    const log: string[] = [];
+    const world = { reportCollision: (a: Collider) => void log.push(`in ${a.tag}`), reportCollisionExit: (a: Collider) => void log.push(`out ${a.tag}`) } as unknown as World;
+    const colliders = Array.from({ length: 16 }, (_, i) => {
+      const c = new Collider({ width: 10, height: 10, tag: `c${i}` });
+      new Entity().addChild(c);
+      return c;
+    });
+    // c0 and c1 overlap; the rest are far apart.
+    const at = (i: number, moved = false): ColliderEntry => ({ collider: colliders[i] as Collider, world: { ...IDENTITY, x: i === 1 ? (moved ? 500 : 5) : i * 40, y: 0 } });
+    const tracker = new CollisionTracker();
+    tracker.update(world, colliders.map((_, i) => at(i)));
+    tracker.update(world, colliders.map((_, i) => at(i))); // the same pairs as the frame before: nothing reported
+    assert.deepEqual(log, ["in c0"]);
+    const first = colliders.map((_, i) => at(i));
+    tracker.update(world, first);
+    const moved = first.slice();
+    moved[1] = at(1, true);
+    tracker.update(world, moved);
+    assert.equal(tracker.incrementalFrames > 0, true, "the move was handled by looking only at what moved");
+    assert.deepEqual(log, ["in c0", "out c0"]);
+    tracker.update(world, colliders.map((_, i) => at(i))); // every entry new: a full sweep, whose pairs are the last full sweep's
+    assert.deepEqual(log, ["in c0", "out c0", "in c0"], "touching again is a new contact, though the full sweep's pairs are what they were");
+  });
+
   it("keeps reporting the same contacts when it runs out of ids and renumbers, while colliders come and go", () => {
     const next = random(7);
     const reports = (log: string[]) => ({ reportCollision: (a: Collider, b: Collider) => void log.push(`${a.width}|${b.width}`), reportCollisionExit: () => {} }) as unknown as World;

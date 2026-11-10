@@ -9,6 +9,8 @@
  *
  *   node packages/player/bench/frame.ts
  *   npm run bundle -- packages/player/bench/frame.ts host/dist/bench.js && host/target/release/rge-host host/dist/bench.js
+ *
+ * `npm run bench:check` runs it under both and fails when a scene is over its budget in `budget.json` (CI does).
  */
 import { Collider, Entity, Shape, World } from "@rge/runtime";
 import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerInput, RGE_IN_DT, RGE_IN_QUIT, Warner, type Backend } from "@rge/player";
@@ -17,7 +19,9 @@ import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerI
  * The host's broad phase for collisions, when the bench runs under a host that has one (the Rust host): a player there asks
  * it which boxes overlap instead of sweeping in script. Under plain `node` there is no host, and the script's sweep is measured.
  */
-const hostOverlaps = (globalThis as { [HOST_BACKEND_KEY]?: Backend })[HOST_BACKEND_KEY]?.overlaps;
+const hostBackend = (globalThis as { [HOST_BACKEND_KEY]?: Backend })[HOST_BACKEND_KEY];
+// Bound: the Node host's backend is a class whose `overlaps` reads its own fields (the Rust host's is a plain function).
+const hostOverlaps = hostBackend?.overlaps?.bind(hostBackend);
 
 /** A backend that draws nothing and reports a steady 60 fps. */
 const nothing: Backend = {
@@ -182,8 +186,22 @@ if (hostOverlaps !== undefined) {
   scenes.push(["2000 by state with colliders, script sweep", { n: 2000, state: true, colliders: true, scriptSweep: true }]);
   scenes.push(["300 in one pile, script sweep", { n: 300, colliders: true, pile: true, scriptSweep: true }]);
 }
+/** How long building and mounting a scene takes (`createPlayer` up to the first frame), in ms: a mount that turns quadratic shows here. */
+function mount(scene: Scene): number {
+  const start = Date.now();
+  const player = createPlayer(nothing, { width: 800, height: 600, title: "bench", root: () => buildScene(scene) });
+  const elapsed = Date.now() - start;
+  player.close();
+  return elapsed;
+}
+
 console.log(hostOverlaps === undefined ? "collisions: the script's sweep" : "collisions: the host's broad phase");
 for (const [name, scene] of scenes) console.log(`${name.padEnd(35)}: ${measure(scene).toFixed(2)} ms per frame`);
+// The middle of three, since one mount is a single short measurement.
+for (const n of [5000, 20000]) {
+  const runs = [0, 1, 2].map(() => mount({ n })).sort((a, b) => a - b);
+  console.log(`${`mount ${n} rects`.padEnd(35)}: ${(runs[1] as number).toFixed(2)} ms once`);
+}
 for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8], ...scenes.slice(12, 13)] as [string, Scene][]) {
   const p = phases(scene);
   console.log(`  ${name} by phase: tick ${p.tick.toFixed(2)}, walk ${p.walk.toFixed(2)}, collisions ${p.collisions.toFixed(2)} ms`);
