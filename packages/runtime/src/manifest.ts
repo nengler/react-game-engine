@@ -104,7 +104,7 @@ export const runtimeManifest: RuntimeManifest = {
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
-    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "showFps", "fpsKey", "state"],
+    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "state"],
     Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
@@ -160,6 +160,7 @@ export const runtimeManifest: RuntimeManifest = {
     Shape: { kind: SHAPE_KINDS },
     Screen: { fit: SCREEN_FITS },
     Text: { align: TEXT_ALIGNS },
+    Game: { upscale: ["nearest", "sharp"] },
     Particles: { space: PARTICLE_SPACES },
     Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS },
   },

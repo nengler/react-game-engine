@@ -27,6 +27,8 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly fixedStep?: number;
   /** The gamepad stick's dead zone, as the `<Game>` prop `gamepadDeadzone`. */
   readonly gamepadDeadzone?: number;
+  /** How a pixel-perfect screen is scaled up at a scale that is not a whole number, as the `<Game>` prop `upscale`. */
+  readonly upscale?: "nearest" | "sharp";
   /** The frame-rate counter, as the `<Game>` props `showFps` and `fpsKey`. */
   readonly showFps?: boolean;
   readonly fpsKey?: string | false;
@@ -111,6 +113,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     vsync: game?.vsync ?? config.vsync,
     hidden: config.hidden,
     smooth: game?.smooth ?? config.smooth,
+    sharp: (game?.upscale ?? config.upscale) === "sharp" ? true : undefined,
   });
 
   const deadzone = game?.gamepadDeadzone ?? config.gamepadDeadzone;

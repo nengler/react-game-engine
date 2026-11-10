@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 5
+#define RGE_ABI_VERSION 6
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -114,6 +114,7 @@
 #define RGE_OPEN_VSYNC     2
 #define RGE_OPEN_HIDDEN    4  /* no visible window and no audio device: tests and CI. Frames are captured for rge_read_pixels */
 #define RGE_OPEN_SMOOTH    8  /* bilinear texture filtering; the default is nearest (pixel art) */
+#define RGE_OPEN_SHARP    16  /* a canvas shown at a scale that is not a whole number is scaled up by the next whole number with nearest filtering, then down to size with bilinear: edges stay crisp and no pixel is uneven */
 
 /* ---------- Functions ---------- */
 int32_t rge_abi_version(void);

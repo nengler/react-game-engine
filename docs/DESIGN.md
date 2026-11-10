@@ -1237,6 +1237,14 @@ The IR marks such a state `globalKey` (the dotted path) and has a `CallAction` s
 actions, which keeps what the compiler must understand small); save and restore of the store; arrays in the state;
 and more than one store per project (one store per process, one `createGameState` call per project).
 
+## Plain functions in components (priority 7)
+
+A component may import functions from a relative `.ts` file (`import { fadeThrough } from "./transitions.ts"`) and **call them in any expression** (a prop, a derived value, a handler) or **pass them as values** (`transition={fadeThrough}`). The compiler does not look inside them: TypeScript checks the call, the function is assumed pure, and a dynamic prop that calls one depends on the state in its arguments, so it is re-evaluated when those change. The function body is plain TypeScript with loops, arrays and anything else. This is the escape hatch from the restricted handler language: the logic goes in a `.ts` file, the component only wires it up.
+
+Rules: the name must not look like a hook (`use…`; those are the game state's store, which is the only hook-named import from a `.ts` file); a function that is a prop of a component (a callback) is still lowered as a handler as before. The generator imports the function from where it is (`../src/transitions.ts` from the generated file, through `rge-compile`'s knowledge of where it reads and writes), only if the component uses it. In the IR: `CalleeIR` kind `Plain`, `ExprIR` kind `PlainRef`, and `IRModule.plainImports`.
+
+**`useUpdate` takes the input.** `useUpdate((dt, input) => { step(input, dt); })`: the polled input of that step (under a fixed timestep, the per-step copy with exactly-once key edges), the same object `useInput` gets, and it can be handed to a game-state action or a plain function, which reads the keys with loops and tables (Kite's `rules/controls.ts`). A canonical `onUpdate` override (several handlers, or a root that implements the hook) declares `input` only when it passes it on.
+
 ## Custom hooks (priority 7)
 
 "Hooks are compiler intrinsics" extends to the ones an author writes. A function named `use…` (not a built-in hook, not the

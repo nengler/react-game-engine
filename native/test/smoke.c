@@ -425,6 +425,17 @@ int main(void) {
   reset(); view(1, 0, 0, 1, 0, 0); frame();
   for (int i = 0; i < rge_key_count(); i++) CHECK(keys[i] == 0, "key %d is idle with no input device (flags %d)", i, keys[i]);
 
+  /* Sharp scaling: a canvas shown at 2.5 times (not a whole number) is blown up by 3 with nearest filtering, then taken down with
+   * bilinear. Well inside a block is its pure colour, well outside is clear, and an integer scale or a scale below 1 still draws. */
+  rge_close();
+  CHECK(rge_open(W, H, "rge sharp", RGE_OPEN_HIDDEN | RGE_OPEN_SHARP) == 0, "open with sharp scaling");
+  reset(); canvas(16, 9, 0, 0, 40, 22.5, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(4, 2, 0, 1, 1, 4, 4, C_RED); frame();
+  expect(15, 10, C_RED, "inside a block at 2.5 times: its own colour, not blended");
+  expect(3, 3, CLEAR, "outside it");
+  reset(); canvas(16, 9, 0, 0, 32, 18, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(4, 2, 0, 1, 1, 4, 4, C_RED); frame();
+  expect(12, 6, C_RED, "an integer scale is untouched");
+  reset(); canvas(16, 9, 0, 0, 8, 4.5, C_GREEN); view(1, 0, 0, 1, 0, 0); rect(4, 2, 0, 1, 1, 4, 4, C_RED); frame();
+  expect(3, 2, C_RED, "a scale below 1 is not sharpened");
   rge_close();
   rge_close(); /* closing twice is harmless */
   rge_frame(CLEAR, rec, 0, NULL, NULL, 0, input, keys); /* a frame with no window is harmless */

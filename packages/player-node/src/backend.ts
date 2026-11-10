@@ -1,5 +1,5 @@
 import type { Backend, WindowConfig } from "@rge/player";
-import { RGE_IN_HEIGHT, RGE_IN_WIDTH, RGE_OPEN_HIDDEN, RGE_OPEN_RESIZABLE, RGE_OPEN_SMOOTH, RGE_OPEN_VSYNC } from "@rge/player";
+import { RGE_IN_HEIGHT, RGE_IN_WIDTH, RGE_OPEN_HIDDEN, RGE_OPEN_RESIZABLE, RGE_OPEN_SHARP, RGE_OPEN_SMOOTH, RGE_OPEN_VSYNC } from "@rge/player";
 import { findNativeLibrary, loadNative, type Native } from "./ffi.ts";
 
 export interface Pixels {
@@ -28,6 +28,7 @@ export class NodeBackend implements Backend {
     if (config.vsync ?? true) options |= RGE_OPEN_VSYNC;
     if (config.hidden ?? false) options |= RGE_OPEN_HIDDEN;
     if (config.smooth ?? false) options |= RGE_OPEN_SMOOTH;
+    if (config.sharp ?? false) options |= RGE_OPEN_SHARP;
     const code = this.#native.open(config.width, config.height, config.title, options);
     if (code !== 0) throw new Error(`Could not open the window (librge error ${code}).`);
     this.#width = config.width;

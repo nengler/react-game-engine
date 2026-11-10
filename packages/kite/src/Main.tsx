@@ -60,6 +60,7 @@ export default function Main() {
       vsync={false}
       name="Main"
       state={useGame}
+      upscale="sharp"
       title="Kite"
       width={960}
       height={540}

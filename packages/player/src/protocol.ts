@@ -4,7 +4,7 @@
  * `test/protocol.test.ts` parses the header and fails if anything here differs.
  */
 
-export const RGE_ABI_VERSION = 5;
+export const RGE_ABI_VERSION = 6;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const RGE_OP_VIEW = 1;
@@ -55,6 +55,7 @@ export const RGE_OPEN_RESIZABLE = 1;
 export const RGE_OPEN_VSYNC = 2;
 export const RGE_OPEN_HIDDEN = 4;
 export const RGE_OPEN_SMOOTH = 8;
+export const RGE_OPEN_SHARP = 16;
 
 /** Every numeric `#define RGE_*` in the header, by its name there. The parity test walks this. */
 export const PROTOCOL = {
@@ -95,6 +96,7 @@ export const PROTOCOL = {
   RGE_OPEN_VSYNC,
   RGE_OPEN_HIDDEN,
   RGE_OPEN_SMOOTH,
+  RGE_OPEN_SHARP,
 } as const;
 
 const LETTERS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));

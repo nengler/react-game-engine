@@ -11,6 +11,8 @@ export interface WindowConfig {
   readonly hidden?: boolean;
   /** Bilinear texture filtering. Default false, which keeps pixel art sharp. */
   readonly smooth?: boolean;
+  /** Sharp scaling of a pixel-perfect screen shown at a scale that is not a whole number (see `RGE_OPEN_SHARP`). Default false. */
+  readonly sharp?: boolean;
 }
 
 /**

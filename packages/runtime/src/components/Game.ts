@@ -27,6 +27,12 @@ export interface GameProps extends EntityProps {
    * Default `"F11"`; `false` turns the key off. Alt + Enter always works too.
    */
   fullscreenKey?: string | false;
+  /**
+   * How a pixel-perfect `<Screen>` is scaled up when its scale is not a whole number (`fit="contain"` or a window of any size): `"nearest"`
+   * (the default) makes some game pixels one window pixel wider than others, which shimmers when things move slowly; `"sharp"` scales up by
+   * the next whole number first and then down with a bilinear filter, so edges stay crisp and every game pixel looks the same size.
+   */
+  upscale?: "nearest" | "sharp";
   /** Show the frame rate and the script time of a frame in the top left corner, over everything: a debugging aid. Default false; the key `fpsKey` turns it on and off while playing. */
   showFps?: boolean;
   /** The key that toggles the frame-rate counter, by the name `useInput` uses. Default `"F3"`; `false` turns the key off. */
@@ -73,6 +79,7 @@ export class Game<P extends object = {}> extends Entity<P> {
   fullscreenKey: string | false | undefined;
   fixedStep: number | undefined;
   gamepadDeadzone: number | undefined;
+  upscale: "nearest" | "sharp" | undefined;
   showFps: boolean | undefined;
   fpsKey: string | false | undefined;
   state: GameStateHandle | undefined;
@@ -91,6 +98,7 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.fullscreenKey = hostProps.fullscreenKey;
     this.fixedStep = hostProps.fixedStep;
     this.gamepadDeadzone = hostProps.gamepadDeadzone;
+    this.upscale = hostProps.upscale;
     this.showFps = hostProps.showFps;
     this.fpsKey = hostProps.fpsKey;
     this.state = hostProps.state;

@@ -20,6 +20,8 @@ static struct {
   int32_t pixels_height;
   bool bad_frame_reported;
   RenderTexture2D canvas; /* the off-screen target of RGE_OP_CANVAS; id 0 when there is none */
+  RenderTexture2D upscaled; /* RGE_OPEN_SHARP: the canvas scaled up by a whole number, before the bilinear step down to the window */
+  bool sharp;
 } state;
 
 #define MAX_CANVAS 16384
@@ -56,6 +58,7 @@ int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t opti
   assets_init((options & RGE_OPEN_SMOOTH) != 0, (options & RGE_OPEN_HIDDEN) == 0);
   state.open = true;
   state.hidden = (options & RGE_OPEN_HIDDEN) != 0;
+  state.sharp = (options & RGE_OPEN_SHARP) != 0;
   state.bad_frame_reported = false;
   return 0;
 }
@@ -63,6 +66,7 @@ int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t opti
 void rge_close(void) {
   if (!state.open) return;
   if (state.canvas.id != 0) UnloadRenderTexture(state.canvas);
+  if (state.upscaled.id != 0) UnloadRenderTexture(state.upscaled);
   assets_shutdown();
   CloseWindow();
   free(state.pixels);
@@ -313,7 +317,31 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
   /* Render textures are upside down: a negative source height flips it. */
   Rectangle source = { 0.0f, 0.0f, (float)width, -(float)height };
   Rectangle dest = { (float)r[3], (float)r[4], (float)r[5], (float)r[6] };
-  DrawTexturePro(state.canvas.texture, source, dest, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
+  Texture2D shown = state.canvas.texture;
+  /* Sharp scaling: at a scale between two whole numbers, first blow the canvas up by the whole number above it with nearest
+   * filtering (so every texel is a crisp block), then let bilinear filtering take that down to the exact size. */
+  float scale = (float)(r[5] / (double)width);
+  if (state.sharp && scale > 1.0f && fabsf(scale - roundf(scale)) > 1e-3f) {
+    int32_t k = (int32_t)ceilf(scale);
+    int32_t uw = width * k, uh = height * k;
+    if (uw <= MAX_CANVAS && uh <= MAX_CANVAS) {
+      if (state.upscaled.id != 0 && (state.upscaled.texture.width != uw || state.upscaled.texture.height != uh)) {
+        UnloadRenderTexture(state.upscaled);
+        state.upscaled.id = 0;
+      }
+      if (state.upscaled.id == 0) state.upscaled = LoadRenderTexture(uw, uh);
+      if (state.upscaled.id != 0) {
+        BeginTextureMode(state.upscaled);
+        /* Stored upside down like the canvas, so it is copied as it is (no flip) and flipped once, when it is drawn to the window. */
+        DrawTexturePro(state.canvas.texture, (Rectangle){ 0.0f, 0.0f, (float)width, (float)height }, (Rectangle){ 0.0f, 0.0f, (float)uw, (float)uh }, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
+        EndTextureMode();
+        SetTextureFilter(state.upscaled.texture, TEXTURE_FILTER_BILINEAR);
+        shown = state.upscaled.texture;
+        source = (Rectangle){ 0.0f, 0.0f, (float)uw, -(float)uh };
+      }
+    }
+  }
+  DrawTexturePro(shown, source, dest, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
 }
 
 void rge_frame(uint32_t clear_color, const double *records, int32_t records_length,

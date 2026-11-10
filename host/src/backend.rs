@@ -53,6 +53,7 @@ fn open<'js>(ctx: Ctx<'js>, config: Object<'js>) -> JsResult<()> {
     if flag("vsync", true)? { options |= ffi::RGE_OPEN_VSYNC; }
     if flag("hidden", false)? { options |= ffi::RGE_OPEN_HIDDEN; }
     if flag("smooth", false)? { options |= ffi::RGE_OPEN_SMOOTH; }
+    if flag("sharp", false)? { options |= ffi::RGE_OPEN_SHARP; }
     let title = c_string(&title);
     let code = unsafe { ffi::rge_open(width, height, title.as_ptr(), options) };
     if code != 0 {
