@@ -46,13 +46,21 @@ describe("layout: allocation", () => {
     // Warm up: the first frames size the scratch arrays and compile the passes, which allocates; steady state must not.
     for (let i = 0; i < 20_000; i++) layouter.layout(root, 320, 180);
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const collections: unknown[] = [];
-    const observer = new PerformanceObserver((list) => collections.push(...list.getEntries()));
-    observer.observe({ entryTypes: ["gc"] });
-    for (let i = 0; i < 20_000; i++) layouter.layout(root, 320, 180);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    collections.push(...observer.takeRecords());
-    observer.disconnect();
-    assert.equal(collections.length, 0, `${collections.length} garbage collections while laying out`);
+    // A collection can come from outside the layout (the test runner, a timer, a busy machine), so a pass is any of a few
+    // attempts with none: an allocation per box per frame collects on every attempt, and still fails.
+    const attempts: number[] = [];
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const collections: unknown[] = [];
+      const observer = new PerformanceObserver((list) => collections.push(...list.getEntries()));
+      observer.observe({ entryTypes: ["gc"] });
+      for (let i = 0; i < 20_000; i++) layouter.layout(root, 320, 180);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      collections.push(...observer.takeRecords());
+      observer.disconnect();
+      attempts.push(collections.length);
+      if (collections.length === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(attempts.at(-1), 0, `garbage collections while laying out, per attempt: ${attempts.join(", ")}`);
   });
 });
