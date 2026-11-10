@@ -18,6 +18,7 @@ import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
 import type { CameraProps } from "./components/Camera.ts";
 import type { AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
+import type { FlexProps } from "./components/Flex.ts";
 import type { ScreenProps } from "./components/Screen.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
@@ -163,6 +164,16 @@ export function Camera(_props: CameraProps & { children?: Child }): JSX.Element 
  */
 export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
   return compileTimeOnly("AnimatedSprite");
+}
+
+/**
+ * A container that places its children in a row or a column. It takes the props of CSS flexbox (`direction`,
+ * `alignItems`, `justifyContent`, `gap`, `padding`) and sizes itself the way Clay does: each axis is `"fit"` (the
+ * default), `"grow"`, a number of pixels or a percentage such as `"50%"`, with optional `minWidth` / `maxWidth` /
+ * `minHeight` / `maxHeight`. A child's own `transform` moves it within its slot. `background` fills the box.
+ */
+export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
+  return compileTimeOnly("Flex");
 }
 
 /**

@@ -8,8 +8,8 @@
       "name": "Main",
       "span": {
         "fileName": "packages/demo/src/Main.tsx",
-        "start": 919,
-        "end": 2183,
+        "start": 926,
+        "end": 2458,
         "line": 17,
         "column": 1
       },
@@ -20,8 +20,8 @@
           "setterName": "setClicks",
           "span": {
             "fileName": "packages/demo/src/Main.tsx",
-            "start": 960,
-            "end": 993,
+            "start": 967,
+            "end": 1000,
             "line": 18,
             "column": 9
           }
@@ -51,8 +51,8 @@
           "path": "click.wav",
           "span": {
             "fileName": "packages/demo/src/Main.tsx",
-            "start": 1003,
-            "end": 1036,
+            "start": 1010,
+            "end": 1043,
             "line": 19,
             "column": 9
           }
@@ -145,8 +145,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1174,
-                "end": 1184,
+                "start": 1181,
+                "end": 1191,
                 "line": 23,
                 "column": 7
               }
@@ -194,8 +194,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1191,
-                "end": 1233,
+                "start": 1198,
+                "end": 1240,
                 "line": 24,
                 "column": 7
               }
@@ -235,8 +235,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1240,
-                "end": 1279,
+                "start": 1247,
+                "end": 1286,
                 "line": 25,
                 "column": 7
               }
@@ -276,8 +276,8 @@
               "children": [],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1286,
-                "end": 1322,
+                "start": 1293,
+                "end": 1329,
                 "line": 26,
                 "column": 7
               }
@@ -318,302 +318,332 @@
                   "element": {
                     "kind": "Element",
                     "id": "Main/4/0",
-                    "fieldName": "coinCounter",
-                    "component": {
-                      "kind": "Imported",
-                      "name": "CoinCounter",
-                      "module": "./CoinCounter.tsx",
-                      "isDefault": false
-                    },
-                    "props": [],
-                    "transform": [],
-                    "children": [],
-                    "span": {
-                      "fileName": "packages/demo/src/Main.tsx",
-                      "start": 1543,
-                      "end": 1558,
-                      "line": 29,
-                      "column": 9
-                    }
-                  }
-                },
-                {
-                  "kind": "StaticChild",
-                  "element": {
-                    "kind": "Element",
-                    "id": "Main/4/1",
-                    "fieldName": "shape",
+                    "fieldName": "flex2",
                     "component": {
                       "kind": "Intrinsic",
-                      "name": "Shape"
+                      "name": "Flex"
                     },
                     "props": [
                       {
                         "kind": "StaticProp",
-                        "name": "kind",
+                        "name": "direction",
                         "value": {
                           "kind": "StringLiteral",
-                          "value": "rect"
+                          "value": "column"
                         }
                       },
                       {
                         "kind": "StaticProp",
-                        "name": "width",
+                        "name": "gap",
                         "value": {
                           "kind": "NumberLiteral",
-                          "value": 96
+                          "value": 8
+                        }
+                      }
+                    ],
+                    "transform": [],
+                    "children": [
+                      {
+                        "kind": "StaticChild",
+                        "element": {
+                          "kind": "Element",
+                          "id": "Main/4/0/0",
+                          "fieldName": "coinCounter",
+                          "component": {
+                            "kind": "Imported",
+                            "name": "CoinCounter",
+                            "module": "./CoinCounter.tsx",
+                            "isDefault": false
+                          },
+                          "props": [],
+                          "transform": [],
+                          "children": [],
+                          "span": {
+                            "fileName": "packages/demo/src/Main.tsx",
+                            "start": 1585,
+                            "end": 1600,
+                            "line": 30,
+                            "column": 11
+                          }
                         }
                       },
                       {
-                        "kind": "StaticProp",
-                        "name": "height",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 32
-                        }
-                      },
-                      {
-                        "kind": "DynamicProp",
-                        "name": "color",
-                        "value": {
-                          "kind": "Conditional",
-                          "test": {
-                            "kind": "Binary",
-                            "operator": ">=",
-                            "left": {
-                              "kind": "StateRead",
-                              "state": "Main.clicks"
-                            },
-                            "right": {
-                              "kind": "NumberLiteral",
-                              "value": 3
+                        "kind": "StaticChild",
+                        "element": {
+                          "kind": "Element",
+                          "id": "Main/4/0/1",
+                          "fieldName": "entity",
+                          "component": {
+                            "kind": "Intrinsic",
+                            "name": "Entity"
+                          },
+                          "props": [
+                            {
+                              "kind": "StaticProp",
+                              "name": "name",
+                              "value": {
+                                "kind": "StringLiteral",
+                                "value": "Button"
+                              }
                             }
-                          },
-                          "whenTrue": {
-                            "kind": "StringLiteral",
-                            "value": "seagreen"
-                          },
-                          "whenFalse": {
-                            "kind": "StringLiteral",
-                            "value": "slategray"
-                          }
-                        },
-                        "dependencies": [
-                          {
-                            "kind": "State",
-                            "state": "Main.clicks"
-                          }
-                        ]
-                      }
-                    ],
-                    "transform": [
-                      {
-                        "kind": "StaticProp",
-                        "name": "x",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 0
-                        }
-                      },
-                      {
-                        "kind": "StaticProp",
-                        "name": "y",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 28
-                        }
-                      }
-                    ],
-                    "children": [],
-                    "span": {
-                      "fileName": "packages/demo/src/Main.tsx",
-                      "start": 1567,
-                      "end": 1686,
-                      "line": 30,
-                      "column": 9
-                    }
-                  }
-                },
-                {
-                  "kind": "StaticChild",
-                  "element": {
-                    "kind": "Element",
-                    "id": "Main/4/2",
-                    "fieldName": "pointer",
-                    "component": {
-                      "kind": "Intrinsic",
-                      "name": "Pointer"
-                    },
-                    "props": [
-                      {
-                        "kind": "StaticProp",
-                        "name": "width",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 96
-                        }
-                      },
-                      {
-                        "kind": "StaticProp",
-                        "name": "height",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 32
-                        }
-                      },
-                      {
-                        "kind": "CallbackProp",
-                        "name": "onPress",
-                        "handler": {
-                          "kind": "Function",
-                          "params": [],
-                          "body": [
+                          ],
+                          "transform": [],
+                          "children": [
                             {
-                              "kind": "PlaySound",
-                              "sound": "Main.playClick"
-                            },
-                            {
-                              "kind": "SetState",
-                              "state": "Main.clicks",
-                              "updater": {
-                                "kind": "Function",
-                                "params": [
+                              "kind": "StaticChild",
+                              "element": {
+                                "kind": "Element",
+                                "id": "Main/4/0/1/0",
+                                "fieldName": "flex",
+                                "component": {
+                                  "kind": "Intrinsic",
+                                  "name": "Flex"
+                                },
+                                "props": [
                                   {
-                                    "id": "Main.clicks#1",
-                                    "name": "clicks",
-                                    "type": {
-                                      "kind": "Primitive",
-                                      "name": "number"
+                                    "kind": "StaticProp",
+                                    "name": "width",
+                                    "value": {
+                                      "kind": "NumberLiteral",
+                                      "value": 96
                                     }
+                                  },
+                                  {
+                                    "kind": "StaticProp",
+                                    "name": "height",
+                                    "value": {
+                                      "kind": "NumberLiteral",
+                                      "value": 32
+                                    }
+                                  },
+                                  {
+                                    "kind": "StaticProp",
+                                    "name": "alignItems",
+                                    "value": {
+                                      "kind": "StringLiteral",
+                                      "value": "center"
+                                    }
+                                  },
+                                  {
+                                    "kind": "StaticProp",
+                                    "name": "justifyContent",
+                                    "value": {
+                                      "kind": "StringLiteral",
+                                      "value": "center"
+                                    }
+                                  },
+                                  {
+                                    "kind": "DynamicProp",
+                                    "name": "background",
+                                    "value": {
+                                      "kind": "Conditional",
+                                      "test": {
+                                        "kind": "Binary",
+                                        "operator": ">=",
+                                        "left": {
+                                          "kind": "StateRead",
+                                          "state": "Main.clicks"
+                                        },
+                                        "right": {
+                                          "kind": "NumberLiteral",
+                                          "value": 3
+                                        }
+                                      },
+                                      "whenTrue": {
+                                        "kind": "StringLiteral",
+                                        "value": "seagreen"
+                                      },
+                                      "whenFalse": {
+                                        "kind": "StringLiteral",
+                                        "value": "slategray"
+                                      }
+                                    },
+                                    "dependencies": [
+                                      {
+                                        "kind": "State",
+                                        "state": "Main.clicks"
+                                      }
+                                    ]
                                   }
                                 ],
-                                "body": [
+                                "transform": [],
+                                "children": [
                                   {
-                                    "kind": "Return",
-                                    "value": {
-                                      "kind": "Binary",
-                                      "operator": "+",
-                                      "left": {
-                                        "kind": "ParamRead",
-                                        "param": "Main.clicks#1",
-                                        "name": "clicks"
+                                    "kind": "StaticChild",
+                                    "element": {
+                                      "kind": "Element",
+                                      "id": "Main/4/0/1/0/0",
+                                      "fieldName": "text",
+                                      "component": {
+                                        "kind": "Intrinsic",
+                                        "name": "Text"
                                       },
-                                      "right": {
-                                        "kind": "NumberLiteral",
-                                        "value": 1
+                                      "props": [
+                                        {
+                                          "kind": "StaticProp",
+                                          "name": "size",
+                                          "value": {
+                                            "kind": "NumberLiteral",
+                                            "value": 16
+                                          }
+                                        },
+                                        {
+                                          "kind": "StaticProp",
+                                          "name": "color",
+                                          "value": {
+                                            "kind": "StringLiteral",
+                                            "value": "white"
+                                          }
+                                        },
+                                        {
+                                          "kind": "DynamicProp",
+                                          "name": "text",
+                                          "value": {
+                                            "kind": "TemplateLiteral",
+                                            "quasis": [
+                                              "Clicks: ",
+                                              ""
+                                            ],
+                                            "expressions": [
+                                              {
+                                                "kind": "StateRead",
+                                                "state": "Main.clicks"
+                                              }
+                                            ]
+                                          },
+                                          "dependencies": [
+                                            {
+                                              "kind": "State",
+                                              "state": "Main.clicks"
+                                            }
+                                          ]
+                                        }
+                                      ],
+                                      "transform": [],
+                                      "children": [],
+                                      "span": {
+                                        "fileName": "packages/demo/src/Main.tsx",
+                                        "start": 1937,
+                                        "end": 2022,
+                                        "line": 34,
+                                        "column": 15
                                       }
                                     }
                                   }
-                                ]
+                                ],
+                                "span": {
+                                  "fileName": "packages/demo/src/Main.tsx",
+                                  "start": 1797,
+                                  "end": 2042,
+                                  "line": 33,
+                                  "column": 13
+                                }
+                              }
+                            },
+                            {
+                              "kind": "StaticChild",
+                              "element": {
+                                "kind": "Element",
+                                "id": "Main/4/0/1/1",
+                                "fieldName": "pointer",
+                                "component": {
+                                  "kind": "Intrinsic",
+                                  "name": "Pointer"
+                                },
+                                "props": [
+                                  {
+                                    "kind": "StaticProp",
+                                    "name": "width",
+                                    "value": {
+                                      "kind": "NumberLiteral",
+                                      "value": 96
+                                    }
+                                  },
+                                  {
+                                    "kind": "StaticProp",
+                                    "name": "height",
+                                    "value": {
+                                      "kind": "NumberLiteral",
+                                      "value": 32
+                                    }
+                                  },
+                                  {
+                                    "kind": "CallbackProp",
+                                    "name": "onPress",
+                                    "handler": {
+                                      "kind": "Function",
+                                      "params": [],
+                                      "body": [
+                                        {
+                                          "kind": "PlaySound",
+                                          "sound": "Main.playClick"
+                                        },
+                                        {
+                                          "kind": "SetState",
+                                          "state": "Main.clicks",
+                                          "updater": {
+                                            "kind": "Function",
+                                            "params": [
+                                              {
+                                                "id": "Main.clicks#1",
+                                                "name": "clicks",
+                                                "type": {
+                                                  "kind": "Primitive",
+                                                  "name": "number"
+                                                }
+                                              }
+                                            ],
+                                            "body": [
+                                              {
+                                                "kind": "Return",
+                                                "value": {
+                                                  "kind": "Binary",
+                                                  "operator": "+",
+                                                  "left": {
+                                                    "kind": "ParamRead",
+                                                    "param": "Main.clicks#1",
+                                                    "name": "clicks"
+                                                  },
+                                                  "right": {
+                                                    "kind": "NumberLiteral",
+                                                    "value": 1
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ],
+                                "transform": [],
+                                "children": [],
+                                "span": {
+                                  "fileName": "packages/demo/src/Main.tsx",
+                                  "start": 2055,
+                                  "end": 2257,
+                                  "line": 38,
+                                  "column": 13
+                                }
                               }
                             }
-                          ]
-                        }
-                      }
-                    ],
-                    "transform": [
-                      {
-                        "kind": "StaticProp",
-                        "name": "x",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 0
-                        }
-                      },
-                      {
-                        "kind": "StaticProp",
-                        "name": "y",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 28
-                        }
-                      }
-                    ],
-                    "children": [],
-                    "span": {
-                      "fileName": "packages/demo/src/Main.tsx",
-                      "start": 1695,
-                      "end": 1907,
-                      "line": 31,
-                      "column": 9
-                    }
-                  }
-                },
-                {
-                  "kind": "StaticChild",
-                  "element": {
-                    "kind": "Element",
-                    "id": "Main/4/3",
-                    "fieldName": "text",
-                    "component": {
-                      "kind": "Intrinsic",
-                      "name": "Text"
-                    },
-                    "props": [
-                      {
-                        "kind": "StaticProp",
-                        "name": "size",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 16
-                        }
-                      },
-                      {
-                        "kind": "StaticProp",
-                        "name": "color",
-                        "value": {
-                          "kind": "StringLiteral",
-                          "value": "white"
-                        }
-                      },
-                      {
-                        "kind": "DynamicProp",
-                        "name": "text",
-                        "value": {
-                          "kind": "TemplateLiteral",
-                          "quasis": [
-                            "Clicks: ",
-                            ""
                           ],
-                          "expressions": [
-                            {
-                              "kind": "StateRead",
-                              "state": "Main.clicks"
-                            }
-                          ]
-                        },
-                        "dependencies": [
-                          {
-                            "kind": "State",
-                            "state": "Main.clicks"
+                          "span": {
+                            "fileName": "packages/demo/src/Main.tsx",
+                            "start": 1762,
+                            "end": 2277,
+                            "line": 32,
+                            "column": 11
                           }
-                        ]
-                      }
-                    ],
-                    "transform": [
-                      {
-                        "kind": "StaticProp",
-                        "name": "x",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 12
-                        }
-                      },
-                      {
-                        "kind": "StaticProp",
-                        "name": "y",
-                        "value": {
-                          "kind": "NumberLiteral",
-                          "value": 36
                         }
                       }
                     ],
-                    "children": [],
                     "span": {
                       "fileName": "packages/demo/src/Main.tsx",
-                      "start": 1916,
-                      "end": 2018,
-                      "line": 40,
+                      "start": 1541,
+                      "end": 2293,
+                      "line": 29,
                       "column": 9
                     }
                   }
@@ -621,8 +651,8 @@
               ],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 1500,
-                "end": 2031,
+                "start": 1498,
+                "end": 2306,
                 "line": 28,
                 "column": 7
               }
@@ -658,9 +688,9 @@
                     "children": [],
                     "span": {
                       "fileName": "packages/demo/src/Main.tsx",
-                      "start": 2138,
-                      "end": 2148,
-                      "line": 46,
+                      "start": 2413,
+                      "end": 2423,
+                      "line": 51,
                       "column": 9
                     }
                   }
@@ -668,9 +698,9 @@
               ],
               "span": {
                 "fileName": "packages/demo/src/Main.tsx",
-                "start": 2121,
-                "end": 2164,
-                "line": 45,
+                "start": 2396,
+                "end": 2439,
+                "line": 50,
                 "column": 7
               }
             }
@@ -678,8 +708,8 @@
         ],
         "span": {
           "fileName": "packages/demo/src/Main.tsx",
-          "start": 1054,
-          "end": 2176,
+          "start": 1061,
+          "end": 2451,
           "line": 22,
           "column": 5
         }

@@ -38,7 +38,7 @@ function summary(records: readonly DecodedRecord[]): unknown[] {
       case "sprite": return ["sprite", r.texture, r.x, r.y];
       case "rect": return ["rect", r.x, r.y, r.width, r.height, r.color];
       case "ellipse": return ["ellipse", r.x, r.y, r.width, r.height, r.color];
-      case "text": return ["text", r.text, r.x, r.y, r.size, r.color];
+      case "text": return ["text", r.text, Math.round(r.x * 1e6) / 1e6, Math.round(r.y * 1e6) / 1e6, r.size, r.color]; // layout adds halves: ignore the last bits
     }
   });
 }
@@ -79,8 +79,9 @@ describe("demo: the first frame", () => {
       ["rect", 0, 0, 24, 24, "#ffd700ff"],
       ["view", 0, 0],
       ["text", "Coins: 0", 16, 16, 16, "#ffd700ff"],
-      ["rect", 16, 44, 96, 32, "#708090ff"],
-      ["text", "Clicks: 0", 28, 52, 16, "#ffffffff"],
+      ["rect", 16, 40, 96, 32, "#708090ff"],
+      // The label is centred in the button by layout: 9 characters at 16 are 86.4 wide (the recorder's estimate) and 16 high.
+      ["text", "Clicks: 0", 20.8, 40 + (32 - 16) / 2, 16, "#ffffffff"],
     ]);
     assert.deepEqual(run.warnings, []);
     assert.equal(run.backend.lastFrame.clearColor, "#10131cff");
@@ -98,7 +99,7 @@ describe("demo: moving", () => {
     close(at.y, 180, "...vertically too");
     const spikesAt = onScreen(run, 84, 10);
     close(spikesAt.x, 84 + 320 - 70, "the rest of the world slides the other way");
-    assert.deepEqual([button(run).x, button(run).y], [16, 44], "the HUD's button stays where it is put");
+    assert.deepEqual([button(run).x, button(run).y], [16, 40], "the HUD's button stays where it is put");
   });
 
   it("moves with WASD and diagonally, and stops when the keys are released", () => {
@@ -121,7 +122,7 @@ describe("demo: the button", () => {
   const press = (x: number, y: number): InputFrame => ({ dt: 0.1, mouse: { x, y }, pressed: ["MouseLeft"] });
 
   it("counts clicks, plays the sound each time, and turns green at three", () => {
-    // The button is in the HUD at (16, 44) in window pixels, 96×32.
+    // The button is in the HUD at (16, 40) in window pixels, 96×32: below the coin count (16 high) and a gap of 8.
     const run = play([press(30, 50), IDLE, press(60, 60), IDLE, press(100, 70)], 6);
     assert.deepEqual(texts(run), ["Clicks: 3"]);
     assert.deepEqual(run.backend.plays, ["assets/click.wav", "assets/click.wav", "assets/click.wav"]);
@@ -144,7 +145,7 @@ describe("demo: the button", () => {
     const stopped = Array.from({ length: 10 }, () => MOVE_RIGHT);
     // Walk right for a second, stop, then click where the button would be in the world (misses), then on the HUD (hits).
     const walked = play([...stopped, IDLE, IDLE], 13);
-    assert.deepEqual([button(walked).x, button(walked).y], [16, 44], "the button did not move on the screen");
+    assert.deepEqual([button(walked).x, button(walked).y], [16, 40], "the button did not move on the screen");
     assert.ok(player(walked).x > 100, "the player walked");
     const run = play([...stopped, IDLE, IDLE, press(410, 150), IDLE, press(30, 50), IDLE], 17);
     assert.deepEqual(texts(run), ["Clicks: 1"], "only the click on the drawn button counts");
@@ -248,13 +249,13 @@ describe("demo: pixels from the real library", { skip }, () => {
     assert.equal(pixel(frame, 5, 5), "10131cff", "background");
     assert.equal(pixel(frame, 100, 240), "2b3550ff", "a ground rect");
     assert.equal(pixel(frame, 308, 68), "3a2b50ff", "a ground circle");
-    assert.equal(pixel(frame, 100, 72), "708090ff", "the button, below its label");
+    assert.equal(pixel(frame, 100, 68), "708090ff", "the button, below its label");
     assert.equal(pixel(frame, 332, 192), "ffd700ff", "the player, in the middle of the window");
     assert.equal(pixel(frame, 468, 308), "00aaaaff", "the plain sprite (teal) in the lower right");
     // The beacon is orange, teal or (on its missing frame) magenta, depending on how long 60 frames took.
     assert.ok(["ff8c00ff", "00aaaaff", "ff00ffff"].includes(pixel(frame, 208, 128)), `beacon pixel ${pixel(frame, 208, 128)}`);
     let white = 0;
-    for (let y = 52; y < 68; y++) for (let x = 28; x < 112; x++) if (pixel(frame, x, y) === "ffffffff") white++;
+    for (let y = 44; y < 68; y++) for (let x = 18; x < 112; x++) if (pixel(frame, x, y) === "ffffffff") white++;
     assert.ok(white > 10, `the label drew ${white} white pixels`);
     assert.ok(warnings.every((w) => /beacon-gone/.test(w)), `unexpected warnings: ${warnings.join("; ")}`);
   });

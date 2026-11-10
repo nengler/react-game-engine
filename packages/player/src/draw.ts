@@ -6,6 +6,7 @@ import {
   IDENTITY_TRANSFORM,
   offsetTransform,
   Pointer,
+  Flex,
   Game,
   Hud,
   Screen,
@@ -18,6 +19,7 @@ import {
   type WorldTransform,
 } from "@rge/runtime";
 import { MAGENTA, parseColor, type PackedColor } from "./color.ts";
+import { Layouter, type MeasuredSize } from "./layout.ts";
 import {
   RGE_OP_ELLIPSE,
   RGE_OP_ELLIPSE_LEN,
@@ -319,6 +321,7 @@ const KIND_POINTER = 5;
 const KIND_COLLIDER = 6;
 const KIND_SCREEN = 7;
 const KIND_HUD = 8;
+const KIND_FLEX = 9;
 /** What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven times per object. */
 const KINDS = new Map<Function, number>();
 
@@ -334,6 +337,7 @@ function kindOf(object: GameObject): number {
       : object instanceof Collider ? KIND_COLLIDER
       : object instanceof Screen ? KIND_SCREEN
       : object instanceof Hud ? KIND_HUD
+      : object instanceof Flex ? KIND_FLEX
       : KIND_NONE;
     KINDS.set(object.constructor, kind);
   }
@@ -388,6 +392,7 @@ export class FrameBuilder {
   readonly #textureSize: ((handle: number) => Size) | undefined;
   readonly #assets: string;
   readonly #warner: Warner;
+  readonly #layouter: Layouter;
 
   constructor(options: FrameBuilderOptions) {
     this.#loadTexture = options.loadTexture;
@@ -395,6 +400,10 @@ export class FrameBuilder {
     this.#textureSize = options.textureSize;
     this.#assets = options.assets ?? "assets";
     this.#warner = new Warner(options.warn);
+    this.#layouter = new Layouter({
+      measure: (object, out) => this.#measureInto(object, out),
+      warn: (key, message) => this.#warner.once(key, message),
+    });
   }
 
   /**
@@ -470,6 +479,10 @@ export class FrameBuilder {
         case KIND_HUD:
           huds.push({ world, object });
           break;
+        case KIND_FLEX:
+          if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
+          this.#flex(object as Flex, world, gameWidth, gameHeight);
+          break;
       }
     });
 
@@ -521,6 +534,10 @@ export class FrameBuilder {
                     this.#text(object as Text, world);
                   }
                   break;
+                case KIND_FLEX:
+                  if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
+                  this.#flex(object as Flex, world, gameWidth, gameHeight);
+                  break;
                 case KIND_POINTER:
                   hudPointers.push(object as Pointer);
                   hudPointerZs.push(z);
@@ -558,14 +575,37 @@ export class FrameBuilder {
    * once each and kept.
    */
   measure(object: GameObject): Size | null {
-    if (object instanceof Shape || object instanceof Pointer || object instanceof Collider) return { width: object.width, height: object.height };
-    if (object instanceof Text) {
-      if (object.text === "") return { width: 0, height: object.size };
-      return this.#textSize(object.text, object.size);
+    const out = { width: 0, height: 0 };
+    return this.#measureInto(object, out) ? out : null;
+  }
+
+  /** `measure`, written into `out` instead of a new object, for layout, which asks about every leaf every frame. Returns false for anything that draws nothing. */
+  #measureInto(object: GameObject, out: MeasuredSize): boolean {
+    let size: Size;
+    if (object instanceof Shape || object instanceof Pointer || object instanceof Collider) {
+      out.width = object.width;
+      out.height = object.height;
+      return true;
     }
-    if (object instanceof AnimatedSprite) return this.#imageSize(object.frames[0] ?? "");
-    if (object instanceof Sprite) return this.#imageSize(object.image);
-    return null;
+    if (object instanceof Text) {
+      if (object.text === "") {
+        out.width = 0;
+        out.height = object.size;
+        return true;
+      }
+      size = this.#textSize(object.text, object.size);
+    } else if (object instanceof AnimatedSprite) size = this.#imageSize(object.frames[0] ?? "");
+    else if (object instanceof Sprite) size = this.#imageSize(object.image);
+    else return false;
+    out.width = size.width;
+    out.height = size.height;
+    return true;
+  }
+
+  /** A `<Flex>` the walk has reached: lay it out if it is a layout root, then draw its background behind its children. */
+  #flex(flex: Flex, world: WorldTransform, availableWidth: number, availableHeight: number): void {
+    if (!(flex.parent instanceof Flex)) this.#layouter.layout(flex, availableWidth, availableHeight);
+    if (flex.background !== undefined) this.#list.rect(world, flex.box.size[0] as number, flex.box.size[1] as number, this.#color(flex.background));
   }
 
   #textSize(text: string, size: number): Size {

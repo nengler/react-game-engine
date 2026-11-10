@@ -289,18 +289,25 @@ So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI
 
 ### U2: `<Flex>`
 
-**Done when**
+**Done 2026-11-10**, with these differences from the text above:
 
-- [ ] `Flex` is a runtime class with the props above, and in the manifest; the compiler adds only the sizing check and the `flex-start` hint
-- [ ] `layout.ts` runs the steps above with one axis-parameterized sizing function, not one copy per axis; each sizing mode (`"fit"`, `"grow"`, fixed, percentage) and each bound is tested on both axes, with a fake measurer, against hand-computed sizes
-- [ ] Growing children share free space smallest first and stop at their maximum, and what a capped child cannot take goes to the others (tests taken from Clay's behaviour)
-- [ ] Every `direction` × `alignItems` × `justifyContent` combination, `gap` and every padding prop place children where hand-computed positions say
-- [ ] Nested `Flex`es, and component and `Entity` children sized by their bounding box, are tested
-- [ ] A child's own `transform` moves it within its slot without moving its neighbours (a test)
-- [ ] `background` draws a rectangle behind the children; a recording test and a pixel test show it
-- [ ] Conditional children and keyed lists inside a `Flex` reflow when they change
-- [ ] The video's final example, a context menu, lays out as it does there (see below)
-- [ ] Laying out allocates no object per node per frame (a test counts, or the bench shows no growth in garbage collection)
+- **`onPress` is not on `Flex` yet** (U4 adds it); every other prop in the table is.
+- **Shrinking came in U3** (below). Until text wraps nothing can shrink in a real game, so a row or label past its box overflows it, as this plan says it should: the context menu's long-label case overflows, and a growing child across the axis never goes below its minimum.
+- **A growing root takes the game's area**: the canvas under a `<Screen>`, else the window, whether it is under a `<Hud>` or in the world. That is U3's "HUD box" in effect; U3 adds the resize tests and the demo.
+- **The working numbers are one field**, `box` (a `FlexBox`), so a component rooted at a `Flex` reserves one name for them, not a dozen. `box.size` is the size the box was laid out at, last frame.
+- **The leaf rule for an `Entity`**: its extent is the union of its own measurable box (if it is a leaf) and its children at their `transform` + `placement` positions; layout puts the extent's top-left in the slot. A `Flex` inside one counts at its fit size, then is laid out for real when the walk reaches it, as a layout root of its own.
+- **Allocation:** laying out allocates nothing in steady state (`layout-allocation.test.ts` counts garbage collections over 20,000 layouts of a 50-box tree; it is its own file because other tests' varied inputs deoptimise the passes). A `Flex`'s `justifyContent` `space-*` values fall back to `"start"` when there is no free space; `"center"` and `"end"` overflow on both sides or one, as CSS does.
+
+- [x] `Flex` is a runtime class with the props above, and in the manifest; the compiler adds only the sizing check and the `flex-start` hint (`intrinsicSizing` in the manifest names the size props)
+- [x] `layout.ts` runs the steps above with one axis-parameterized sizing function, not one copy per axis; each sizing mode (`"fit"`, `"grow"`, fixed, percentage) and each bound is tested on both axes, with a fake measurer, against hand-computed sizes
+- [x] Growing children share free space smallest first and stop at their maximum, and what a capped child cannot take goes to the others
+- [x] Every `direction` × `alignItems` × `justifyContent` combination, `gap` and every padding prop place children where hand-computed positions say
+- [x] Nested `Flex`es, and component and `Entity` children sized by their bounding box, are tested
+- [x] A child's own `transform` moves it within its slot without moving its neighbours (a test)
+- [x] `background` draws a rectangle behind the children; a recording test and a pixel test (real library) show it
+- [x] Conditional children and keyed lists inside a `Flex` reflow when they change (compiled components, in `packages/compiler/test/flex.test.ts`)
+- [x] The video's final example, a context menu, lays out as it does there (see below)
+- [x] Laying out allocates no object per node per frame
 
 **The acceptance test: the video's context menu.** The video ends by building a right-click menu from nothing but the features above, and explains how every element lands where it does. U2 is done when the same menu, written as TSX, comes out as the video says, with a recording test checking the positions and sizes:
 
@@ -315,16 +322,16 @@ So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI
 </Flex>
 ```
 
-The test covers: the menu fitting its widest row; the minimum width holding when the labels are short; every row growing to the same width; the icon at the right edge while the label sits at the left; rows of equal minimum height with their contents centred vertically (the video uses a minimum height instead of vertical padding, so rows stay equal); and the gap between label and icon. The video's last step, a label wrapping when it reaches the maximum width, needs text wrapping and is tested when that arrives; until then a label past the maximum overflows.
+The test covers: the menu fitting its widest row; the minimum width holding when the labels are short; every row growing to the same width; the icon at the right edge while the label sits at the left; rows of equal minimum height with their contents centred vertically (the video uses a minimum height instead of vertical padding, so rows stay equal); and the gap between label and icon. The video's last step, a label wrapping when it reaches the maximum width, needs text wrapping and is tested when that arrives; until then a label past the maximum overflows (a test checks that it does).
 
 ### U3: the HUD box, shrinking, and the demo
 
-**Done when**
+**Done 2026-11-10.** The HUD's box needed no new code after U2 (a growing root fills the game's area, which is the canvas or the window), so its checkbox is tests. Shrinking is `Layouter.#shrink`, the grow loop turned around. One thing to know: **nothing shrinks yet in a real game.** A `<Flex>`'s minimum comes from its children's, a leaf's minimum is its size, and so a box can only get smaller than it asked to be once a leaf can report a smaller minimum: a wrapping text's widest word. `MeasuredSize` has optional `minWidth` / `minHeight` for that (tests use a `Squishy` shape that sets them), and the frame builder sets none until text wrapping exists. The demo's HUD, a column with the coin count and a button whose label is centred by layout, is in `Main.tsx`; the button is an `Entity` holding a `Flex` (the look) and a `Pointer` (the click) until U4 gives `Flex` an `onPress`.
 
-- [ ] A `Flex` growing under `<Hud>` takes the HUD's box, and a resize lays out again (a recording test with two window sizes)
-- [ ] Children that overflow a row or column shrink largest first, down to their minimum sizes; leaves never shrink, and what still does not fit overflows
-- [ ] The demo's click counter and button are a `Flex` row inside `<Hud>`, with the label centred by layout instead of by a guessed `x`
-- [ ] The parity run covers the demo's HUD under QuickJS
+- [x] A `Flex` growing under `<Hud>` takes the HUD's box, and a resize lays out again (`hud.test.ts`: two window sizes, and the canvas under a `<Screen>`)
+- [x] Children that overflow a row or column shrink largest first, down to their minimum sizes; leaves never shrink, and what still does not fit overflows
+- [x] The demo's click counter and button are a `Flex` row inside `<Hud>`, with the label centred by layout instead of by a guessed `x`
+- [x] The parity run covers the demo's HUD under QuickJS
 
 ### U4: polish
 

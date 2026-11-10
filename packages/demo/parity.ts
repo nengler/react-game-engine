@@ -15,7 +15,7 @@ for (let i = 0; i < 20; i++) script.push({ dt, down: ["ArrowRight"] }); // walk 
 for (let i = 0; i < 10; i++) script.push({ dt, down: ["ArrowDown", "D"] }); // and down
 script.push({ dt, mouse: { x: 300, y: 200 }, pressed: ["MouseLeft"] }); // a click that misses the button
 script.push({ dt });
-// The button is on the HUD, so walking has not moved it: it is at x 16-112, y 44-76.
+// The button is on the HUD, so walking has not moved it: it is at x 16-112, y 40-72.
 script.push({ dt, mouse: { x: 60, y: 60 }, pressed: ["MouseLeft"] }); // a click on the button
 for (let i = 0; i < 28; i++) script.push({ dt: 0.05, down: i % 2 === 0 ? ["A"] : ["W"] }); // wander; longer steps cycle the beacon
 

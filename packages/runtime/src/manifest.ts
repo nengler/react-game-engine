@@ -1,3 +1,4 @@
+import { FLEX_ALIGN_ITEMS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT } from "./components/Flex.ts";
 import { SCREEN_FITS } from "./components/Screen.ts";
 import { SHAPE_KINDS } from "./components/Shape.ts";
 
@@ -54,6 +55,12 @@ export interface RuntimeManifest {
    */
   readonly intrinsicLiterals: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>>;
   /**
+   * Props of an intrinsic that take a size: a number, `"fit"`, `"grow"` or a percentage string such as `"50%"` (`<Flex
+   * width>`), by intrinsic. The compiler checks a literal and suggests the nearest keyword for a typo; any other
+   * expression is left to the type-check.
+   */
+  readonly intrinsicSizing: Readonly<Record<string, readonly string[]>>;
+  /**
    * Callback props an intrinsic accepts, by intrinsic then prop name, with
    * the parameters its callback receives (a runtime handle type each).
    */
@@ -89,9 +96,9 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -105,6 +112,10 @@ export const runtimeManifest: RuntimeManifest = {
     AnimatedSprite: ["fps", "playing", "frame", "elapsed", "frames", "image"],
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
     Hud: [],
+    Flex: [
+      "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "box",
+    ],
   },
   intrinsicRequired: {
     Entity: [],
@@ -118,6 +129,7 @@ export const runtimeManifest: RuntimeManifest = {
     AnimatedSprite: ["frames"],
     Screen: ["width", "height"],
     Hud: [],
+    Flex: [],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
@@ -125,7 +137,9 @@ export const runtimeManifest: RuntimeManifest = {
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },
     Screen: { fit: SCREEN_FITS },
+    Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT },
   },
+  intrinsicSizing: { Flex: ["width", "height"] },
   intrinsicCallbacks: {
     Collider: {
       onCollisionEnter: [{ name: "other", type: "Contact" }],
@@ -146,7 +160,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },
