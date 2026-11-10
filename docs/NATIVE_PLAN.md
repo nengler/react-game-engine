@@ -492,6 +492,15 @@ Same bench, now with a by-phase breakdown (`tick` / `walk` / `collisions`) and s
 - **Version-counter setters on `Transform`, with each object's world transform kept while its inputs are unchanged, was a net loss.** Still scenes gained about 1.2 ms (2,000 still rects 6.1 to 4.7 ms) because the walk's cost is mostly writing the draw list and calling the visitor, not composing transforms; the accessors made every moving scene about 4 ms slower (2,000 moving rects 6.6 to 11.1 ms, by state 9.1 to 12.9 ms), since QuickJS calls a getter for every read and a setter for every write. Plain fields stay.
 - **What is left is per-node cost**: about 1.2 µs a node in the walk and about 1.5 µs a collider in `update`, mostly the interpreter's price for each statement. The ways to a large saving are structural: retained draw-list segments for subtrees that did not change (copy a cached range of records instead of rebuilding it), an incremental broad phase that tests only colliders that moved against the rest, and dependency-scoped `render()`; each needs a cheap "did this move" signal that does not slow the moving case, which plain-field comparison did not provide either.
 
+### Performance pass two, cheap fixes (2026-11-10)
+
+Measured on a VM about 1.4x slower than the one above, so read the changes, not the milliseconds. 2,000 rects with colliders, by phase, before and after:
+
+| Phase | Before | After | What changed |
+| --- | --- | --- | --- |
+| Tree walk and draw list | 12.6-13.3 ms | 9.9-10.8 ms | `walkTree` has no default parameters (QuickJS pays for each on every recursive call); it finds an object's kind once and hands it to the visitor, which used to look it up again; and it skips the `composeTransforms` call for an identity `placement` |
+| Collisions | 11.7-12.6 ms | 9.5-10.2 ms | The x-order is an insertion sort over last frame's order (boxes barely move; after too many shifts it falls back to `sort`), and a collider at the same index as last frame keeps its id without a `WeakMap` lookup |
+
 The review also fixed: `console.log` in the Rust host panicking (and ending the game) when stdout is closed, as with `rge-host game.js | head`; the Rust host accepting a keys buffer longer than librge's table (rge.h and protocol.ts drifting apart, which the Node host already refused); librge casting draw-record doubles straight to integers (undefined behaviour in C for NaN or out-of-range values; a bad op now stops the frame, a bad index draws nothing, a bad colour is magenta); frame capture on the OpenGL path copying a screen image whose size need not match the buffer on a high-DPI display; and Shift, Control and Alt reporting a second press when the other side went down while one was held, and a release while still held.
 
 ## Later (not scheduled)
