@@ -7,6 +7,10 @@ name: CI
 #   the compiler versions and the files that decide what gets built, so a toolchain upgrade or a change to
 #   CMakeLists.txt, Cargo.lock or build.rs starts from scratch; a change to the C or Rust sources rebuilds
 #   only those sources.
+# A game that throws shows its error in its window and waits for it to be closed; no one closes a CI window.
+env:
+  RGE_ON_ERROR: throw
+
 on:
   push:
     branches: [main]

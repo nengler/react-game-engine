@@ -121,7 +121,7 @@ When a handler throws, both hosts print the stack and exit with status 1. That i
 
 **Done when**
 
-- [ ] A thrown handler shows its message in the window under both hosts; headless runs still exit 1
+- [x] A thrown handler shows its message in the window under both hosts; headless runs still exit 1 (done 2026-11-10: `run` draws `errorScreen` until the window closes, then rethrows; `RGE_ON_ERROR=throw`, set for all of CI, or a `hidden` window or `onError: "throw"`, throws at once. The Rust host's half is written but was not compiled or run in the cloud container, which cannot build raylib; a person should check it, with a game that throws)
 - [ ] A game can start from a scene file and a prefab registry
 - [ ] Editing a component while `npm run play:demo` runs updates it in place, keeping its state
 - [ ] An unknown key name is a compile error with a suggestion

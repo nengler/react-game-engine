@@ -3,6 +3,7 @@ import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
 import { FrameBuilder, rootScreen } from "./draw.ts";
+import { errorScreen } from "./errorscreen.ts";
 import { PlayerInput } from "./input.ts";
 import { onScreen, type ScreenPlacement } from "./screen.ts";
 import { RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
@@ -29,6 +30,12 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly assets?: string;
   /** Where warnings go. Default `console.warn`. */
   readonly warn?: (message: string) => void;
+  /**
+   * What `run` does when a frame throws. `"window"` keeps the window open and draws the error until it is closed, then
+   * throws it (so the exit status is still 1); `"throw"` closes the window and throws at once. Default `"window"`, or
+   * `"throw"` for a `hidden` window, which nobody is looking at (tests, CI).
+   */
+  readonly onError?: "window" | "throw";
   /** Reuse last frame's draw records for what has not changed; `"check"` also rebuilds each frame and throws on a difference. See `FrameBuilderOptions.retain`. Default `true`. */
   readonly retain?: boolean | "check";
 }
@@ -37,6 +44,11 @@ export interface Player {
   readonly world: World;
   /** Run one frame. Returns false once the window has asked to close (that frame is still drawn). */
   step(): boolean;
+  /**
+   * Draw the error screen for `error` instead of the game and present it, for as long as the caller keeps calling it. Returns
+   * false once the window has asked to close. Use it after `step()` throws; the game is not stepped again.
+   */
+  showError(error: unknown): boolean;
   /** Close the window and detach from the runtime. Safe to call twice. */
   close(): void;
 }
@@ -122,6 +134,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   let hudView: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
   let screen: ScreenPlacement | null = null;
   let closed = false;
+  let errorBuilder: FrameBuilder | undefined;
   let fullscreen = false;
   const fullscreenSetting = game?.fullscreenKey ?? config.fullscreenKey ?? "F11";
   const fullscreenKey = fullscreenSetting === false ? undefined : KEY_INDEX.get(fullscreenSetting);
@@ -184,15 +197,36 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       backend.frame(background, built.list.records, built.list.length, built.list.texts, input.values, input.keys);
       return input.values[RGE_IN_QUIT] === 0;
     },
+    showError(error: unknown): boolean {
+      if (closed) throw new Error("The player is closed.");
+      errorBuilder ??= new FrameBuilder({ loadTexture: () => -1, measureText: backend.measureText ? (text, size) => backend.measureText!(text, size) : undefined, warn: () => {}, retain: false });
+      const built = errorBuilder.build(errorScreen(error, input.width, input.height), input.width, input.height);
+      backend.frame(ERROR_BACKGROUND, built.list.records, built.list.length, built.list.texts, input.values, input.keys);
+      return input.values[RGE_IN_QUIT] === 0;
+    },
     close,
   };
 }
 
+const ERROR_BACKGROUND = 0x2a0a0aff;
+
 /** Open the window, step until it is closed, then clean up (also when the game throws). */
 export function run(backend: Backend, config: PlayerConfig): void {
   const player = createPlayer(backend, config);
+  const show = (config.onError ?? backend.onError ?? (config.hidden ? "throw" : "window")) === "window";
   try {
-    while (player.step());
+    for (;;) {
+      let more: boolean;
+      try {
+        more = player.step();
+      } catch (error) {
+        if (!show) throw error;
+        // Keep the window up with the error in it, then fail as an uncaught error would: the host prints it and exits 1.
+        while (player.showError(error));
+        throw error;
+      }
+      if (!more) break;
+    }
   } finally {
     player.close();
   }

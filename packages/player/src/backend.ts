@@ -19,6 +19,12 @@ export interface WindowConfig {
  * for the record layout and the input and keys buffers.
  */
 export interface Backend {
+  /**
+   * What `run` does when a frame throws, if the game's config does not say: `"window"` keeps the window open on the error
+   * screen, `"throw"` closes and throws at once. Hosts set it from `RGE_ON_ERROR=throw`, so CI, which runs a game in a
+   * window nobody closes, fails instead of waiting.
+   */
+  readonly onError?: "window" | "throw";
   open(config: WindowConfig): void;
   close(): void;
   /**

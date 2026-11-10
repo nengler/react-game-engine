@@ -20,6 +20,9 @@ pub fn check_abi() -> Result<(), String> {
 
 pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     let backend = Object::new(ctx.clone())?;
+    if std::env::var("RGE_ON_ERROR").as_deref() == Ok("throw") {
+        backend.set("onError", "throw")?;
+    }
     backend.set("open", Function::new(ctx.clone(), open)?.with_name("open")?)?;
     backend.set("close", Function::new(ctx.clone(), close)?.with_name("close")?)?;
     backend.set("setFullscreen", Function::new(ctx.clone(), set_fullscreen)?.with_name("setFullscreen")?)?;

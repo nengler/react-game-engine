@@ -18,6 +18,9 @@ export class NodeBackend implements Backend {
   #width = 0;
   #height = 0;
 
+  /** `RGE_ON_ERROR=throw` makes a thrown error close the window at once instead of showing it (for CI). */
+  readonly onError: "window" | "throw" | undefined = process.env["RGE_ON_ERROR"] === "throw" ? "throw" : undefined;
+
   constructor(native: Native) {
     this.#native = native;
   }
