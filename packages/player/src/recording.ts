@@ -177,18 +177,7 @@ export class RecordingBackend implements Backend {
     if (keys.length < KEYS.length) throw new Error(`The keys buffer needs ${KEYS.length} entries, not ${keys.length}.`);
     this.frames.push({ clearColor: colorToHex(clearColor), records: this.#decode(records, length, texts) });
 
-    const next = this.#queue.shift() ?? {};
-    input[RGE_IN_DT] = next.dt ?? 1 / 60;
-    input[RGE_IN_WIDTH] = next.width ?? this.config?.width ?? 0;
-    input[RGE_IN_HEIGHT] = next.height ?? this.config?.height ?? 0;
-    input[RGE_IN_MOUSE_X] = next.mouse?.x ?? 0;
-    input[RGE_IN_MOUSE_Y] = next.mouse?.y ?? 0;
-    input[RGE_IN_WHEEL] = next.wheel ?? 0;
-    input[RGE_IN_QUIT] = next.quit ? 1 : 0;
-    keys.fill(0);
-    for (const name of next.down ?? []) keys[keyIndex(name)]! |= RGE_KEY_DOWN;
-    for (const name of next.pressed ?? []) keys[keyIndex(name)]! |= RGE_KEY_DOWN | RGE_KEY_PRESSED;
-    for (const name of next.released ?? []) keys[keyIndex(name)]! |= RGE_KEY_RELEASED;
+    applyInputFrame(this.#queue.shift() ?? {}, input, keys, this.config?.width ?? 0, this.config?.height ?? 0);
   }
 
   #decode(records: Float64Array, length: number, texts: readonly string[]): DecodedRecord[] {
@@ -252,6 +241,24 @@ export class RecordingBackend implements Backend {
     }
     return out;
   }
+}
+
+/**
+ * Write one scripted frame into the buffers a backend fills at the end of `frame`. A value the frame leaves out is zero
+ * (and no key is down), except `dt` (1/60) and the window size, which fall back to `width` and `height`.
+ */
+export function applyInputFrame(next: InputFrame, input: Float64Array, keys: Uint8Array, width: number, height: number): void {
+  input[RGE_IN_DT] = next.dt ?? 1 / 60;
+  input[RGE_IN_WIDTH] = next.width ?? width;
+  input[RGE_IN_HEIGHT] = next.height ?? height;
+  input[RGE_IN_MOUSE_X] = next.mouse?.x ?? 0;
+  input[RGE_IN_MOUSE_Y] = next.mouse?.y ?? 0;
+  input[RGE_IN_WHEEL] = next.wheel ?? 0;
+  input[RGE_IN_QUIT] = next.quit ? 1 : 0;
+  keys.fill(0);
+  for (const name of next.down ?? []) keys[keyIndex(name)]! |= RGE_KEY_DOWN;
+  for (const name of next.pressed ?? []) keys[keyIndex(name)]! |= RGE_KEY_DOWN | RGE_KEY_PRESSED;
+  for (const name of next.released ?? []) keys[keyIndex(name)]! |= RGE_KEY_RELEASED;
 }
 
 function handleFor(paths: string[], path: string): number {
