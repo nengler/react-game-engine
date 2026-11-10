@@ -107,16 +107,14 @@ function pairOf(key: number | string): [number, number] {
 }
 
 /**
- * Put `order` in the order the sweep wants: boxes by `minX`, ties by index (so draw order). `order` is last frame's, when it
- * is a permutation of the same size, and boxes barely move between frames, so an insertion sort over it is close to linear
- * (a comparator sort cost 1.6 ms for 2,000 colliders under QuickJS, this 0.4 ms). The order is total (no NaN gets here), so
- * both ways give the same answer; after too many shifts, which a teleport or a shuffled list causes, it hands over to `sort`.
+ * Put `order[0 .. count)` in the order the sweep wants: boxes by `minX`, ties by index (so draw order). `ordered` is how many
+ * entries of it are a permutation left by an earlier call; when that is `count`, it is last frame's order, and boxes barely
+ * move between frames, so an insertion sort over it is close to linear (a comparator sort cost 1.6 ms for 2,000 colliders
+ * under QuickJS, this 0.4 ms). The order is total (no NaN gets here), so both ways give the same answer; after too many
+ * shifts, which a teleport or a shuffled list causes, it hands over to `sort`.
  */
-function sortByLeftEdge(order: number[], count: number, bounds: Float64Array): void {
-  if (order.length !== count) {
-    order.length = count;
-    for (let i = 0; i < count; i++) order[i] = i;
-  }
+function sortByLeftEdge(order: Int32Array, ordered: number, count: number, bounds: Float64Array): void {
+  if (ordered !== count) for (let i = 0; i < count; i++) order[i] = i;
   let budget = count * 8;
   for (let i = 1; i < count; i++) {
     const v = order[i] as number;
@@ -130,13 +128,20 @@ function sortByLeftEdge(order: number[], count: number, bounds: Float64Array): v
       j--;
       if (--budget < 0) {
         order[j + 1] = v; // the array is still a permutation: finish with the general sort
-        order.sort((p, q) => (bounds[p * 4] as number) - (bounds[q * 4] as number) || p - q);
+        order.subarray(0, count).sort((p, q) => (bounds[p * 4] as number) - (bounds[q * 4] as number) || p - q);
         return;
       }
     }
     order[j + 1] = v;
   }
 }
+
+/**
+ * A host's own broad phase (`Backend.overlaps`, which is `rge_overlaps` in `librge`): the pairs of boxes in
+ * `boxes[0 .. count * 4)` that overlap, written to `pairs` two indices each, as many as fit; returns how many there are.
+ * `order[0 .. count)` comes back as the box indices by left edge, ties by index, and may hold anything going in.
+ */
+export type Overlaps = (boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array) => number;
 
 /** The most bands the sweep is cut into (see `CollisionTracker.update`); past it the bands get taller instead. */
 const BAND_LIMIT = 1024;
@@ -198,8 +203,9 @@ class ById {
  * Cost: a sweep over x (see `update`), so only boxes that overlap in x are compared. That alone tests every box against
  * the others in its column, however far apart in y (22 for each box in a square of 2,000), so when a sweep has tested many
  * pairs for each box the next ones first deal the boxes into horizontal bands and sweep each band on its own. Boxes in a
- * row or in a pile gain nothing from bands and are swept as one. Measured: see `packages/player/bench/frame.ts`, and the
- * numbers in `docs/NATIVE_PLAN.md`.
+ * row or in a pile gain nothing from bands and are swept as one. A host that can find the overlapping boxes itself
+ * (`Backend.overlaps`; both native hosts) is asked instead, and only the rules for each pair run in script. Measured: see
+ * `packages/player/bench/frame.ts`, and the numbers in `docs/NATIVE_PLAN.md`.
  *
  * **Only what moved is looked at again.** An entry that is the same object as the one for that collider last frame is
  * taken to be unchanged: the frame builder reuses the entry of a collider in a subtree it reused (see `FrameBuilder`), and
@@ -231,7 +237,12 @@ export class CollisionTracker {
   // Each box's layer and hits, read once per frame so the pair loop does no method calls (a pile tests thousands of pairs).
   #layers: string[] = [];
   #hits: (readonly string[] | undefined)[] = [];
-  #order: number[] = [];
+  /** The boxes by left edge (see `sortByLeftEdge`), and how many entries of it are in order: last full sweep's count, or 0. */
+  #order = new Int32Array(64);
+  #ordered = 0;
+  /** The pairs of boxes the host's broad phase found, two indices each. */
+  #pairs = new Int32Array(128);
+  readonly #overlaps: Overlaps | undefined;
 
   // The sweep in bands (see `update`). `#banded` is whether the next full sweep makes them.
   readonly #bands: boolean | "always";
@@ -277,12 +288,15 @@ export class CollisionTracker {
    * `incremental` false always takes the full sweep, which is what the incremental frames are tested against.
    * `bands` false never cuts the sweep into bands, and `"always"` does whenever two or more can be made, which is how the
    * banded sweep is tested against the plain one; the default decides by what the last sweeps cost.
+   * `overlaps` is the host's broad phase, when it has one (`Backend.overlaps`): the full sweep then asks it which boxes
+   * overlap instead of sweeping in script, and `bands` is not used.
    */
-  constructor(compactAt: number = SMALL_ID, incremental = true, bands: boolean | "always" = true) {
+  constructor(compactAt: number = SMALL_ID, incremental = true, bands: boolean | "always" = true, overlaps?: Overlaps) {
     this.#compactAt = Math.min(compactAt, SMALL_ID);
     this.#incremental = incremental;
     this.#bands = bands;
     this.#banded = bands === "always";
+    this.#overlaps = overlaps;
   }
 
   /** Compare this frame's colliders with last frame's contacts and report new contacts and ended ones. Returns how many contacts started (exits are not counted). */
@@ -303,7 +317,8 @@ export class CollisionTracker {
     const layers = this.#layers;
     const hitsOf = this.#hits;
     const byIdNow = this.#byIdNow;
-    const banded = this.#banded;
+    const overlaps = this.#overlaps;
+    const banded = overlaps === undefined && this.#banded;
     const HIGH = Infinity; // a local: QuickJS looks a global up by name each time
     const LOW = -Infinity;
     let top = HIGH; // the boxes' range in y and their heights, for the bands
@@ -388,78 +403,117 @@ export class CollisionTracker {
     layers.length = count;
     hitsOf.length = count;
 
-    // Sweep over x: with the boxes sorted by their left edge, a box can only touch the ones after it that start
-    // before it ends, so each inner loop stops at the first box that starts past `maxX`. Those boxes overlap in x
-    // by construction, so only y is left to test. (Ties in `minX` keep draw order.)
-    const order = this.#order;
-    sortByLeftEdge(order, count, bounds);
-
-    // That sweep tests every pair of boxes that overlap in x, wherever they are in y: 22 for each box in a square of
-    // 2,000, none of them touching. So when the last sweep tested many pairs for each box, the boxes are first dealt
-    // into horizontal bands and each band is swept on its own. A box is in every band it reaches into, and a pair that
-    // shares several bands is taken in the first of them only.
-    let list: ArrayLike<number> = order;
-    let starts: ArrayLike<number> = this.#whole;
-    let bands = banded ? this.#makeBands(count, top, bottom, heights) : 1;
-    if (bands > 1) {
-      list = this.#bandSlots;
-      starts = this.#bandStarts;
-      this.#bandedFrames++;
-    } else {
-      bands = 1;
-      this.#whole[1] = count;
+    if (this.#order.length < count) {
+      this.#order = new Int32Array(count * 2);
+      this.#ordered = 0;
     }
-    const firstBand = this.#bandFirst;
-
+    const order = this.#order;
     const now = this.#now;
     now.clear();
     const touching = this.#touching;
     const started: [number, number][] = [];
     let kept = 0; // pairs that touched last frame and still do
-    let tests = 0; // pairs of boxes looked at
-    for (let band = 0; band < bands; band++) {
-      const end = starts[band + 1] as number;
-      for (let s = starts[band] as number; s < end; s++) {
-        const p = list[s] as number;
-        const minY = bounds[p * 4 + 1] as number;
-        const maxX = bounds[p * 4 + 2] as number;
-        const maxY = bounds[p * 4 + 3] as number;
-        // What the rules need of this box is read when the first box overlaps it: in a spread-out scene most boxes touch nothing.
-        let idP = -1;
-        let parent: GameObject | null = null;
-        let layerP = "";
-        let hitsP: readonly string[] | undefined;
-        let t = s + 1;
-        for (; t < end; t++) {
-          const q = list[t] as number;
-          if ((bounds[q * 4] as number) >= maxX) break;
-          if (!(minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
-          if (bands > 1) {
-            // Both are in this band; the first band both are in is where the later of the two starts.
-            const firstP = firstBand[p] as number;
-            const firstQ = firstBand[q] as number;
-            if ((firstP > firstQ ? firstP : firstQ) !== band) continue;
-          }
-          if (idP < 0) {
-            idP = ids[p] as number;
-            parent = (boxColliders[p] as Collider).parent;
-            layerP = layers[p] as string;
-            hitsP = hitsOf[p];
-          }
-          const other = boxColliders[q] as Collider;
-          if (parent === other.parent) continue;
-          const hitsQ = hitsOf[q];
-          if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
-          const idQ = ids[q] as number;
-          const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
-          now.add(key);
-          if (touching.has(key)) kept++;
-          else started.push(p < q ? [p, q] : [q, p]);
-        }
-        tests += t - s - 1;
+    // What the rules need of a box is read when the first other box overlaps it: in a spread-out scene most boxes touch nothing.
+    let idP = -1;
+    let parent: GameObject | null = null;
+    let layerP = "";
+    let hitsP: readonly string[] | undefined;
+    if (overlaps !== undefined) {
+      // The host finds the boxes that overlap (`Backend.overlaps`: the sweep below, compiled), and puts `order` right on the way.
+      let pairs = this.#pairs;
+      let found = overlaps(bounds, count, order, pairs);
+      if (found * 2 > pairs.length) {
+        pairs = this.#pairs = new Int32Array(found * 3);
+        found = overlaps(bounds, count, order, pairs);
       }
+      const filled = Math.min(found * 2, pairs.length);
+      // The rules for each pair, as in the sweep below. A box's pairs come one after another.
+      let lastP = -1;
+      for (let k = 0; k < filled; k += 2) {
+        const p = pairs[k] as number;
+        const q = pairs[k + 1] as number;
+        if (p !== lastP) {
+          lastP = p;
+          idP = ids[p] as number;
+          parent = (boxColliders[p] as Collider).parent;
+          layerP = layers[p] as string;
+          hitsP = hitsOf[p];
+        }
+        const other = boxColliders[q] as Collider;
+        if (parent === other.parent) continue;
+        const hitsQ = hitsOf[q];
+        if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
+        const idQ = ids[q] as number;
+        const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
+        now.add(key);
+        if (touching.has(key)) kept++;
+        else started.push(p < q ? [p, q] : [q, p]);
+      }
+    } else {
+      // Sweep over x: with the boxes sorted by their left edge, a box can only touch the ones after it that start
+      // before it ends, so each inner loop stops at the first box that starts past `maxX`. Those boxes overlap in x
+      // by construction, so only y is left to test. (Ties in `minX` keep draw order.)
+      sortByLeftEdge(order, this.#ordered, count, bounds);
+
+      // That sweep tests every pair of boxes that overlap in x, wherever they are in y: 22 for each box in a square of
+      // 2,000, none of them touching. So when the last sweep tested many pairs for each box, the boxes are first dealt
+      // into horizontal bands and each band is swept on its own. A box is in every band it reaches into, and a pair that
+      // shares several bands is taken in the first of them only.
+      let list: ArrayLike<number> = order;
+      let starts: ArrayLike<number> = this.#whole;
+      let bands = banded ? this.#makeBands(count, top, bottom, heights) : 1;
+      if (bands > 1) {
+        list = this.#bandSlots;
+        starts = this.#bandStarts;
+        this.#bandedFrames++;
+      } else {
+        bands = 1;
+        this.#whole[1] = count;
+      }
+      const firstBand = this.#bandFirst;
+      let tests = 0; // pairs of boxes looked at
+      for (let band = 0; band < bands; band++) {
+        const end = starts[band + 1] as number;
+        for (let s = starts[band] as number; s < end; s++) {
+          const p = list[s] as number;
+          const minY = bounds[p * 4 + 1] as number;
+          const maxX = bounds[p * 4 + 2] as number;
+          const maxY = bounds[p * 4 + 3] as number;
+          idP = -1;
+          let t = s + 1;
+          for (; t < end; t++) {
+            const q = list[t] as number;
+            if ((bounds[q * 4] as number) >= maxX) break;
+            if (!(minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
+            if (bands > 1) {
+              // Both are in this band; the first band both are in is where the later of the two starts.
+              const firstP = firstBand[p] as number;
+              const firstQ = firstBand[q] as number;
+              if ((firstP > firstQ ? firstP : firstQ) !== band) continue;
+            }
+            if (idP < 0) {
+              idP = ids[p] as number;
+              parent = (boxColliders[p] as Collider).parent;
+              layerP = layers[p] as string;
+              hitsP = hitsOf[p];
+            }
+            const other = boxColliders[q] as Collider;
+            if (parent === other.parent) continue;
+            const hitsQ = hitsOf[q];
+            if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
+            const idQ = ids[q] as number;
+            const key = idP < idQ ? pairKey(idP, idQ) : pairKey(idQ, idP);
+            now.add(key);
+            if (touching.has(key)) kept++;
+            else started.push(p < q ? [p, q] : [q, p]);
+          }
+          tests += t - s - 1;
+        }
+      }
+      if (this.#bands === true) this.#chooseSweep(count, bands > 1, tests);
     }
-    if (this.#bands === true) this.#chooseSweep(count, bands > 1, tests);
+    this.#ordered = count;
+
     // Pairs that touched last frame and do not now. Collected before the swap; reported below, ahead of the enters.
     let ended: Pair[] | undefined = this.#lost;
     this.#lost = undefined;
@@ -730,7 +784,7 @@ export class CollisionTracker {
       if (width > maxWidth) maxWidth = width;
     }
     this.#maxWidth = maxWidth;
-    sortByLeftEdge(order, count, bounds);
+    sortByLeftEdge(order, this.#ordered, count, bounds);
 
     // New contacts of each, against the rules, and the difference from the old ones.
     const started: [number, number][] = [];

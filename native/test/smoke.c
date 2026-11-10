@@ -72,7 +72,108 @@ static void expect(int x, int y, uint32_t rgba, const char *what) {
   CHECK(is_color(x, y, rgba), "%s: pixel (%d,%d) is %02x%02x%02x%02x, expected %08x", what, x, y, p[0], p[1], p[2], p[3], rgba);
 }
 
+/* ---- rge_overlaps ---- */
+static uint32_t lcg_state;
+static double lcg(void) { lcg_state = lcg_state * 1664525u + 1013904223u; return (lcg_state >> 8) / 16777216.0; }
+
+/* Boxes the way games lay them out, each awkward for the sweep in its own way. */
+static void fill_boxes(double *boxes, int count, int layout) {
+  for (int i = 0; i < count; i++) {
+    double x = 0, y = 0, w = 10, h = 10;
+    switch (layout) {
+      case 0: x = lcg() * 300 - 50; y = lcg() * 300 - 150; w = 4 + lcg() * 20; h = lcg() < 0.08 ? 150 + lcg() * 300 : 4 + lcg() * 20; break; /* mixed, some very tall */
+      case 1: x = floor(lcg() * 12) * 16; y = floor(lcg() * 12) * 16 + (lcg() < 0.2 ? 8 : 0); w = 16; h = 16; break; /* tiles: edges on band edges */
+      case 2: x = lcg() * 40; y = lcg() * 9000; w = 6; h = 1 + lcg() * 3; break; /* deeper than the most bands */
+      case 3: x = lcg() * 120; y = lcg() < 0.02 ? 1e9 : lcg() * 120; break; /* one far away */
+      case 4: x = lcg() * 2000; y = 5; break; /* a row */
+      case 5: x = lcg() * 6; y = lcg() * 6; break; /* a pile */
+      case 6: x = 7; y = i * 3.0; break; /* a column: every left edge the same */
+    }
+    boxes[i * 4] = x; boxes[i * 4 + 1] = y; boxes[i * 4 + 2] = x + w; boxes[i * 4 + 3] = y + h;
+  }
+}
+
+static int pair_compare(const void *a, const void *b) {
+  const int32_t *p = (const int32_t *)a, *q = (const int32_t *)b;
+  return p[0] != q[0] ? (p[0] < q[0] ? -1 : 1) : (p[1] < q[1] ? -1 : p[1] > q[1]);
+}
+
+static void test_overlaps(void) {
+  enum { N = 400, ROOM = N * N };
+  static double boxes[N * 4];
+  static int32_t order[N], pairs[ROOM * 2], expected[ROOM * 2];
+
+  /* Two that overlap, one that only shares an edge with the first (and is above the second), one inside both, one far away. */
+  const double five[] = { 0, 0, 10, 10,   5, 5, 15, 15,   10, 0, 20, 4,   6, 6, 7, 7,   100, 100, 101, 101 };
+  for (int i = 0; i < 5; i++) order[i] = 0; /* not a permutation: it is put right */
+  int32_t found = rge_overlaps(five, 5, order, pairs, ROOM);
+  for (int i = 0; i < found; i++) if (pairs[i * 2] > pairs[i * 2 + 1]) { int32_t t = pairs[i * 2]; pairs[i * 2] = pairs[i * 2 + 1]; pairs[i * 2 + 1] = t; }
+  qsort(pairs, (size_t)found, 2 * sizeof(int32_t), pair_compare);
+  CHECK(found == 3, "five boxes: %d pairs", found);
+  CHECK(pairs[0] == 0 && pairs[1] == 1 && pairs[2] == 0 && pairs[3] == 3 && pairs[4] == 1 && pairs[5] == 3, "five boxes: which pairs");
+  CHECK(order[0] == 0 && order[1] == 1 && order[2] == 3 && order[3] == 2 && order[4] == 4, "order is by left edge: %d %d %d %d %d", order[0], order[1], order[2], order[3], order[4]);
+
+  /* Against testing every pair, over layouts and frames; the order is kept from frame to frame as the player keeps it. */
+  for (int layout = 0; layout <= 6; layout++) {
+    lcg_state = 12345u + (uint32_t)layout;
+    for (int frame = 0; frame < 12; frame++) {
+      const int count = frame == 5 ? 37 : frame == 9 ? 1 : N; /* fewer boxes than the order was left for, then more again */
+      if (frame % 4 == 0) fill_boxes(boxes, N, layout);
+      else for (int i = 0; i < N * 4; i += 4) { const double dx = lcg() * 6 - 3, dy = lcg() * 6 - 3; boxes[i] += dx; boxes[i + 2] += dx; boxes[i + 1] += dy; boxes[i + 3] += dy; }
+      int32_t want = 0;
+      for (int a = 0; a < count; a++) {
+        for (int b = a + 1; b < count; b++) {
+          const double *p = boxes + a * 4, *q = boxes + b * 4;
+          if (p[0] < q[2] && p[2] > q[0] && p[1] < q[3] && p[3] > q[1]) { expected[want * 2] = a; expected[want * 2 + 1] = b; want++; }
+        }
+      }
+      found = rge_overlaps(boxes, count, order, pairs, ROOM);
+      CHECK(found == want, "layout %d frame %d: %d pairs, expected %d", layout, frame, found, want);
+      if (found != want) continue;
+      for (int i = 0; i < found; i++) if (pairs[i * 2] > pairs[i * 2 + 1]) { int32_t t = pairs[i * 2]; pairs[i * 2] = pairs[i * 2 + 1]; pairs[i * 2 + 1] = t; }
+      qsort(pairs, (size_t)found, 2 * sizeof(int32_t), pair_compare);
+      CHECK(memcmp(pairs, expected, (size_t)found * 2 * sizeof(int32_t)) == 0, "layout %d frame %d: which pairs", layout, frame);
+      int sorted = 1;
+      for (int i = 1; i < count; i++) {
+        const double before = boxes[order[i - 1] * 4], here = boxes[order[i] * 4];
+        if (before > here || (before == here && order[i - 1] > order[i])) sorted = 0;
+      }
+      CHECK(sorted, "layout %d frame %d: order is by left edge, ties by index", layout, frame);
+    }
+  }
+
+  /* With less room than there are pairs, only what fits is written, and the count is still all of them. */
+  fill_boxes(boxes, 60, 5);
+  const int32_t all = rge_overlaps(boxes, 60, order, pairs, ROOM);
+  memset(pairs, 0xff, 64 * sizeof(int32_t));
+  CHECK(all == 60 * 59 / 2, "a pile of 60: %d pairs", all);
+  CHECK(rge_overlaps(boxes, 60, order, pairs, 10) == all, "the count does not depend on the room");
+  CHECK(pairs[19] >= 0 && pairs[20] == -1 && pairs[21] == -1, "nothing is written past the room given");
+  CHECK(rge_overlaps(boxes, 60, order, NULL, 0) == all && rge_overlaps(boxes, 60, order, pairs, -3) == all, "no room at all still counts");
+
+  /* Nothing to do, and arguments it cannot use. */
+  CHECK(rge_overlaps(boxes, 0, order, pairs, ROOM) == 0 && rge_overlaps(boxes, -5, order, pairs, ROOM) == 0, "no boxes");
+  CHECK(rge_overlaps(NULL, 10, order, pairs, ROOM) == 0 && rge_overlaps(boxes, 10, NULL, pairs, ROOM) == 0, "NULL boxes or order");
+
+  /* Boxes it was not promised (not finite, inside out, absurdly tall) and an order full of rubbish: it returns, and
+   * writes only box indices. */
+  for (int round = 0; round < 4; round++) {
+    fill_boxes(boxes, N, round);
+    for (int i = 0; i < N; i += 7) boxes[i * 4 + (i % 4)] = i % 3 == 0 ? NAN : i % 3 == 1 ? INFINITY : -INFINITY;
+    for (int i = 3; i < N; i += 11) { boxes[i * 4 + 1] = -1e300; boxes[i * 4 + 3] = 1e300; }
+    for (int i = 0; i < N; i++) order[i] = round == 0 ? -1 : round == 1 ? N + i : round == 2 ? 3 : N - 1 - i;
+    found = rge_overlaps(boxes, N, order, pairs, ROOM);
+    int valid = found >= 0;
+    for (int i = 0; i < found && i < ROOM; i++) if (pairs[i * 2] < 0 || pairs[i * 2] >= N || pairs[i * 2 + 1] < 0 || pairs[i * 2 + 1] >= N) valid = 0;
+    static uint8_t seen[N];
+    memset(seen, 0, sizeof(seen));
+    for (int i = 0; i < N; i++) { if (order[i] < 0 || order[i] >= N || seen[order[i]]) valid = 0; else seen[order[i]] = 1; }
+    CHECK(valid, "round %d: bad boxes and a bad order still give valid indices and a permutation", round);
+  }
+}
+
 int main(void) {
+  test_overlaps(); /* needs no window */
   CHECK(rge_abi_version() == RGE_ABI_VERSION, "abi version");
 #define COUNT(kind, code, name) +1
   CHECK(rge_key_count() == (0 RGE_KEYS(COUNT)), "key count %d", rge_key_count());

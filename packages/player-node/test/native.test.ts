@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
-import { Camera, Entity, Flex, Hud, Screen, Shape, Sprite, Text } from "@rge/runtime";
-import { createPlayer, KEYS, RGE_ABI_VERSION, type PlayerConfig } from "@rge/player";
+import { Camera, Collider, Entity, Flex, Hud, Screen, Shape, Sprite, Text, type World } from "@rge/runtime";
+import { CollisionTracker, createPlayer, KEYS, RGE_ABI_VERSION, type PlayerConfig } from "@rge/player";
 import { NodeBackend, checkAbi, createNodeBackend, findNativeLibrary, loadNative, type Pixels } from "../src/index.ts";
 
 /**
@@ -391,6 +391,123 @@ describe("librge through koffi", { skip }, () => {
     first.close();
     first.open({ width: 16, height: 16, title: "c", hidden: true });
     first.close();
+  });
+});
+
+describe("librge's broad phase through koffi", { skip }, () => {
+  const random = (seed: number): (() => number) => {
+    let state = seed * 7919;
+    return () => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+  };
+
+  it("finds the pairs that testing every pair finds, keeps the order it is handed, and counts past the room it is given", () => {
+    const backend = createNodeBackend(library);
+    const next = random(3);
+    const count = 300;
+    const boxes = new Float64Array(count * 4 + 40); // longer than the boxes: only `count` of them are read
+    const order = new Int32Array(count + 10).fill(-7);
+    const pairs = new Int32Array(4000);
+    for (let frame = 0; frame < 6; frame++) {
+      for (let i = 0; i < count; i++) {
+        const x = next() * 200;
+        const y = next() * 200;
+        boxes.set([x, y, x + 4 + next() * 20, y + 4 + next() * (i % 40 === 0 ? 300 : 20)], i * 4);
+      }
+      const expected: string[] = [];
+      for (let a = 0; a < count; a++) {
+        for (let b = a + 1; b < count; b++) {
+          if (boxes[a * 4]! < boxes[b * 4 + 2]! && boxes[a * 4 + 2]! > boxes[b * 4]! && boxes[a * 4 + 1]! < boxes[b * 4 + 3]! && boxes[a * 4 + 3]! > boxes[b * 4 + 1]!) expected.push(`${a} ${b}`);
+        }
+      }
+      const found = backend.overlaps(boxes, count, order, pairs);
+      assert.equal(found, expected.length, `frame ${frame}`);
+      const got = Array.from({ length: found }, (_, k) => [pairs[k * 2]!, pairs[k * 2 + 1]!].sort((a, b) => a - b)).sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!);
+      assert.deepEqual(got.map((pair) => pair.join(" ")), expected, `frame ${frame}`);
+      // The order comes back written into the caller's array: every box once, by left edge.
+      const sorted = [...order.subarray(0, count)];
+      assert.deepEqual([...sorted].sort((a, b) => a - b), Array.from({ length: count }, (_, i) => i));
+      for (let i = 1; i < count; i++) assert.ok(boxes[sorted[i - 1]! * 4]! <= boxes[sorted[i]! * 4]!, `frame ${frame}: order at ${i}`);
+      assert.equal(order[count], -7, "nothing past the boxes is touched");
+      // Less room than pairs: what fits is written, and the answer is still how many there are.
+      const small = new Int32Array(10).fill(-1);
+      assert.equal(backend.overlaps(boxes, count, order, small), expected.length);
+      assert.ok(small.every((index) => index >= 0 && index < count));
+    }
+    assert.equal(backend.overlaps(boxes, 0, order, pairs), 0);
+    assert.equal(backend.overlaps(boxes, 5000, new Int32Array(4), pairs) >= 0, true, "never more boxes than the arrays hold");
+  });
+
+  it("gives a CollisionTracker the reports its own sweep gives, in the same order, as colliders move, come and go", () => {
+    const backend = createNodeBackend(library);
+    const next = random(11);
+    const names = new Map<Collider, string>();
+    const parents = Array.from({ length: 60 }, () => new Entity());
+    const make = (label: string) => {
+      const collider = new Collider({ width: 4 + next() * 16, height: 4 + next() * 16, layer: next() < 0.3 ? "a" : "", hits: next() < 0.2 ? ["a"] : undefined });
+      names.set(collider, label);
+      parents[Math.floor(next() * parents.length)]!.addChild(collider);
+      return { collider, world: { x: next() * 250, y: next() * 250, rotation: 0, scaleX: 1, scaleY: 1 } };
+    };
+    let entries = Array.from({ length: 220 }, (_, i) => make(`c${i}`));
+    let serial = entries.length;
+    const logs: string[][] = [[], [], []];
+    const worlds = logs.map(
+      (log) =>
+        ({
+          reportCollision: (a: Collider, b: Collider) => void log.push(`in ${names.get(a)} ${names.get(b)}`),
+          reportCollisionExit: (a: Collider, b: Collider) => void log.push(`out ${names.get(a)} ${names.get(b)}`),
+        }) as unknown as World,
+    );
+    const overlaps = (boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array): number => backend.overlaps(boxes, count, order, pairs);
+    // The host's broad phase with and without the frames that look only at what moved, against the script's sweep.
+    const trackers = [new CollisionTracker(undefined, true, true, overlaps), new CollisionTracker(undefined, false, true, overlaps), new CollisionTracker(undefined, false, false)];
+    let reports = 0;
+    for (let frame = 0; frame < 120; frame++) {
+      const kind = frame === 0 ? "same" : (["drift", "drift", "few", "few", "few", "jump", "add", "remove", "same"] as const)[Math.floor(next() * 9)];
+      entries = entries.slice();
+      const move = (i: number, x: number, y: number): void => void (entries[i] = { collider: entries[i]!.collider, world: { ...entries[i]!.world, x, y } });
+      if (kind === "drift") entries.forEach((e, i) => move(i, e.world.x + next() * 6 - 3, e.world.y + next() * 6 - 3));
+      else if (kind === "few") for (let k = 0; k < 5; k++) move(Math.floor(next() * entries.length), next() * 250, next() * 250);
+      else if (kind === "jump") entries.forEach((_, i) => move(i, next() * 250, next() * 250));
+      else if (kind === "add") entries.splice(Math.floor(next() * (entries.length + 1)), 0, make(`c${serial++}`));
+      else if (kind === "remove") entries.splice(Math.floor(next() * entries.length), 1);
+      logs.forEach((log) => (log.length = 0));
+      trackers.forEach((tracker, k) => tracker.update(worlds[k]!, entries));
+      assert.deepEqual(logs[0], logs[2], `frame ${frame} (${kind})`);
+      assert.deepEqual(logs[1], logs[2], `frame ${frame} (${kind}), every frame a full sweep`);
+      reports += logs[2]!.length;
+    }
+    assert.ok(reports > 2000, `contacts come and go (${reports} reports)`);
+    assert.ok(trackers[0]!.incrementalFrames > 20, "frames that look only at what moved ran between the host's sweeps");
+  });
+
+  it("is what a player on this backend uses: two colliders that meet are told once", () => {
+    const met: string[] = [];
+    const backend = createNodeBackend(library);
+    let asked = 0;
+    const real = backend.overlaps.bind(backend);
+    backend.overlaps = (...args: Parameters<NodeBackend["overlaps"]>) => (asked++, real(...args));
+    const player = createPlayer(backend, {
+      width: 64, height: 48, title: "test", hidden: true, vsync: false,
+      root: () => {
+        const root = new Entity();
+        for (const x of [0, 5]) {
+          const actor = new Entity();
+          actor.transform.x = x;
+          actor.addChild(new Collider({ width: 10, height: 10, onCollisionEnter: () => void met.push(`x${x}`) }));
+          root.addChild(actor);
+        }
+        return root;
+      },
+    });
+    try {
+      player.step();
+      player.step();
+    } finally {
+      player.close();
+    }
+    assert.deepEqual(met, ["x0", "x5"]);
+    assert.ok(asked >= 1, "the tracker asked the backend");
   });
 });
 

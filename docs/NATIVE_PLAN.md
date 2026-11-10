@@ -98,10 +98,10 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 The compiler's rules ([DESIGN.md](DESIGN.md#ground-rules-and-settled-decisions)) still apply. Two change, and three are added:
 
 - **Changed: "Runtime stays a mock" → "Runtime stays backend-free."** `@rge/runtime` never draws, plays or polls anything. It gains only hooks a backend plugs into (the sound sink). Drawing, input and audio live in `@rge/player` and the hosts. The mock tests keep passing unchanged.
-- **Changed: TypeScript-only.** `native/` (C) and `host/` (Rust) are new languages in the repo. Keep them small; logic goes in TypeScript unless it needs the GPU, the OS or audio.
+- **Changed: TypeScript-only.** `native/` (C) and `host/` (Rust) are new languages in the repo. Keep them small; logic goes in TypeScript unless it needs the GPU, the OS or audio. *(One exception since ABI v4: `rge_overlaps`, the search for the boxes that overlap. It needs none of those; it is there because the interpreter spent more of a busy frame on it than on anything else. See "Performance pass three, the broad phase in librge".)*
 - **New: `@rge/player` and `@rge/runtime` import no `node:` modules and no native packages.** They run in QuickJS. A test enforces this (N1).
 - **New: `rge.h` is the single source of truth for the protocol.** `packages/player/src/protocol.ts` mirrors it, and a test parses `rge.h` and fails if any constant or key name differs (N1). Change the header first.
-- **New: the C side does no maths beyond applying the transform it is given and drawing the shape a record describes.** Anything else a record needs (a world position, a view, a colour) is computed in TypeScript.
+- **New: the C side does no maths beyond applying the transform it is given and drawing the shape a record describes.** Anything else a record needs (a world position, a view, a colour) is computed in TypeScript. *(`rge_overlaps`, ABI v4, is the exception: it compares boxes the script worked out, and decides nothing about the game. Which pairs collide, by parent and layer, and what starts and ends, stays in script.)*
 
 ## The ABI: `native/include/rge.h`
 
@@ -191,6 +191,14 @@ void rge_frame(uint32_t clearColor,
 int32_t rge_read_pixels(uint8_t *rgba, int32_t capacity);
 
 #endif
+```
+
+**ABI v4** adds one function, for collisions (the header has the full contract):
+
+```c
+/* The pairs of the `count` boxes (minX, minY, maxX, maxY each) that overlap, two box indices a pair, up to `capacity`
+ * of them; returns how many there are. `order` is the caller's to keep: it comes back as the boxes by minX. */
+int32_t rge_overlaps(const double *boxes, int32_t count, int32_t *order, int32_t *pairs, int32_t capacity);
 ```
 
 Notes for the C implementer (N3):
@@ -600,6 +608,26 @@ The bench's stand-in component moves the way the compiler now writes it. Before 
 
 - **What is left of the tick** is `markDirty`, the render list, `runRender`, `commitState` and `render`: five calls for an object that moved, about 1.4 µs.
 - **How it was checked.** A component with every case (two updaters chained, a parameter named like a state, like a local and like the hook's own parameter, an updater that changes nothing, one that makes a new array, one with statements, one in a callback) is compiled, type-checked and run; the example and demo are generated again, and their golden draw lists and the Node/QuickJS parity test are unchanged.
+
+### Performance pass three, the broad phase in librge (2026-11-10)
+
+The second of the three things pass three left, and the first logic that is not drawing to move out of script. After the banded sweep, collisions for 2,000 moving colliders were 4.3 ms: 1.7 ms working out each collider's box, and 2.3 ms finding which boxes overlap (the sort by left edge, the bands and the sweep), which is a few thousand comparisons that compiled code does in microseconds.
+
+- **`rge_overlaps` (ABI v4)** takes the boxes in the `Float64Array` the tracker already fills and writes back the pairs that overlap, as box indices. It is the script's sweep in C: an insertion sort over the order the caller keeps from last frame, then horizontal bands, each swept on its own. It needs no window and keeps no state but its working memory.
+- **What stays in script** is everything about the game: the box of each collider, the rules for a pair (same parent, layers and `hits`), which contacts started and ended, and the reports. The tracker's frames that look only at what moved do not ask the host at all; they use the order the last full sweep left, which the host now writes.
+- **A backend without it** (the test recorder, any host that does not implement `Backend.overlaps`) gets the script's sweep, unchanged. Both find the same pairs, so reports are the same in the same order, and the Node/QuickJS parity test passes with the Node host on koffi and the Rust host linked statically.
+- **It trusts nothing.** The order may hold anything (it is checked to be a permutation, or started again), a count larger than the arrays is cut down by each host, and boxes that are not finite still return valid indices. Its tests run under the address and undefined-behaviour sanitizers.
+
+The bench under the Rust host now uses the host's broad phase, as a player there does, and prints two scenes with the script's sweep to compare; under plain `node` it measures the script's sweep. The middle of three runs, 2,000 objects:
+
+| Scene | Collisions, script sweep | Collisions, host | Whole frame, script sweep | Whole frame, host |
+| --- | --- | --- | --- | --- |
+| moved by state, each with a collider | 4.3 ms | 2.2 ms | 16.0 ms | 15.0 ms |
+| 300 colliders in one pile | | | 36.1 ms | 33.0 ms |
+
+- **What is left of collisions** when everything moves is the box and id of each collider (about 1 µs each), in script. Writing the boxes during the tree walk, which already has each collider's world transform in hand, would take most of that.
+- **The pile hardly changes**, as expected: its time is the `Set` of touching pairs, in script.
+- **How it was checked.** `smoke.c` compares `rge_overlaps` with testing every pair over seven layouts (mixed sizes with boxes that reach through every band, tiles on band edges, a world deeper than the most bands, a far-away box, a row, a pile, a column) and twelve frames each, with the order carried over, a shorter and a longer list, too little room, and rubbish for boxes and order. Seven deliberate bugs in the C each fail it. The Node host's tests do the same through koffi, and run a tracker on the host's broad phase beside one on the script's sweep over 120 frames of moves, adds and removals: the same reports in the same order. The player's tests do that again with a stand-in broad phase that returns its pairs in another order and too many for the first buffer.
 
 ## Later (not scheduled)
 

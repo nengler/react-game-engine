@@ -39,6 +39,15 @@ export interface Backend {
   /** The size in pixels of a loaded texture, for layout. Optional; both native hosts implement it (ABI v2). */
   textureSize?(handle: number): { readonly width: number; readonly height: number };
   /**
+   * The pairs of boxes that overlap, for collisions: `boxes[0 .. count * 4)` is minX, minY, maxX, maxY for each box, all
+   * finite and with an area. Each overlapping pair is written to `pairs` as two box indices, as many as fit, one first
+   * index's pairs together; returns how many pairs there are, which may be more than fit. `order[0 .. count)` is the
+   * caller's to keep between calls: it comes back as the box indices by minX, ties by index, and may hold anything going in.
+   * Optional: without it the player sweeps in script (`CollisionTracker`), which finds the same pairs. Both native hosts
+   * implement it (ABI v4), because an interpreter spends most of a busy frame's collision time there.
+   */
+  overlaps?(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array): number;
+  /**
    * Draw and present `records[0, length)` (text records index into `texts`), then poll the
    * devices and write the next frame's input into `input` and `keys`. Blocks until vsync
    * when the window has it.

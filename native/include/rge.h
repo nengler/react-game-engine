@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 3
+#define RGE_ABI_VERSION 4
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -121,6 +121,18 @@ void rge_frame(uint32_t clearColor,
                const double *records, int32_t recordsLength,
                const char *text, const int32_t *textOffsets, int32_t textCount,
                double *input, uint8_t *keys);
+
+/* Collisions: which boxes overlap. `boxes` holds `count` boxes of four doubles each (minX, minY, maxX, maxY), all
+ * finite, with maxX > minX and maxY > minY. Two boxes overlap when they share an area: boxes that only share an edge
+ * or a corner do not. Each overlapping pair is found once and written to `pairs` as two box indices, in no promised
+ * order except that the pairs of one first index come together; at most `capacity` pairs are written (`pairs` holds
+ * 2 * capacity entries), and the return value is how many there are, which may be more: call again with more room.
+ *
+ * `order` is `count` entries the caller keeps from one call to the next: on return it is the box indices by minX
+ * (ties by index), and a call that finds last frame's order there sorts it in about linear time. It may hold anything
+ * on entry. Needs no window. With boxes that are not finite it still returns and writes only valid indices, but
+ * which pairs it finds is not defined. */
+int32_t rge_overlaps(const double *boxes, int32_t count, int32_t *order, int32_t *pairs, int32_t capacity);
 
 /* Tests only: copy the last presented frame as RGBA8, top row first. Returns the bytes needed
  * (0 when there is no frame to read); copies only when capacity is enough. Frames are captured only

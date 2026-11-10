@@ -115,7 +115,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   });
   const sink = createSoundSink(backend, assets, warner);
   const world = new World();
-  const collisions = new CollisionTracker();
+  // The host's broad phase when it has one; the tracker sweeps in script otherwise.
+  const collisions = new CollisionTracker(undefined, true, true, backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined);
   let pointers: readonly Pressable[] = [];
   let hudPointersFrom = 0;
   let hudView: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };

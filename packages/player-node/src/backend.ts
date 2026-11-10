@@ -66,6 +66,12 @@ export class NodeBackend implements Backend {
     return size;
   }
 
+  overlaps(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array): number {
+    // Only what holds the boxes is handed over (koffi copies each array in, and the two it writes back out), and never more boxes than there is room for.
+    const boxCount = Math.max(0, Math.min(count, Math.floor(boxes.length / 4), order.length));
+    return this.#native.overlaps(boxes.subarray(0, boxCount * 4), boxCount, order.subarray(0, boxCount), pairs, Math.floor(pairs.length / 2));
+  }
+
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
     const count = this.#packTexts(texts);
     this.#native.frame(clearColor, records.subarray(0, length), length, this.#text, this.#offsets, count, input, keys);

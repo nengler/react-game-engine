@@ -25,6 +25,8 @@ export interface Native {
   /** Width and height of a loaded texture, or null for an invalid handle. */
   textureSize(handle: number): { width: number; height: number } | null;
   frame(clearColor: number, records: Float64Array, recordsLength: number, text: Uint8Array, textOffsets: Int32Array, textCount: number, input: Float64Array, keys: Uint8Array): void;
+  /** `rge_overlaps`: the pairs of the `count` boxes that overlap, into `pairs` (`capacity` pairs of room); `order` goes in and comes back sorted. Returns how many pairs there are. */
+  overlaps(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array, capacity: number): number;
   /** Copies the last captured frame (RGBA8, top row first) into `rgba` if it fits; returns the bytes needed, 0 if there is none. */
   readPixels(rgba: Uint8Array | null, capacity: number): number;
 }
@@ -86,6 +88,7 @@ export function loadNative(path: string): Native {
     "void rge_frame(uint32_t clearColor, const double *records, int32_t recordsLength, const uint8_t *text, const int32_t *textOffsets, int32_t textCount, _Out_ double *input, _Out_ uint8_t *keys)",
   );
   const readPixels = lib.func("int32_t rge_read_pixels(_Out_ uint8_t *rgba, int32_t capacity)");
+  const overlaps = lib.func("int32_t rge_overlaps(const double *boxes, int32_t count, _Inout_ int32_t *order, _Out_ int32_t *pairs, int32_t capacity)");
 
   const native: Native = {
     abiVersion: () => abiVersion() as number,
@@ -106,6 +109,7 @@ export function loadNative(path: string): Native {
     },
     frame: (clearColor, records, recordsLength, text, textOffsets, textCount, input, keys) =>
       void frame(clearColor, records, recordsLength, text, textOffsets, textCount, input, keys),
+    overlaps: (boxes, count, order, pairs, capacity) => overlaps(boxes, count, order, pairs, capacity) as number,
     readPixels: (rgba, capacity) => (rgba === null ? (readPixels(null, 0) as number) : (readPixels(rgba, capacity) as number)),
   };
   checkAbi(native);

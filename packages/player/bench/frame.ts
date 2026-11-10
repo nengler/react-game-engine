@@ -11,10 +11,17 @@
  *   npm run bundle -- packages/player/bench/frame.ts host/dist/bench.js && host/target/release/rge-host host/dist/bench.js
  */
 import { Collider, Entity, Shape, World } from "@rge/runtime";
-import { CollisionTracker, createPlayer, FrameBuilder, PlayerInput, RGE_IN_DT, RGE_IN_QUIT, Warner, type Backend } from "@rge/player";
+import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerInput, RGE_IN_DT, RGE_IN_QUIT, Warner, type Backend } from "@rge/player";
+
+/**
+ * The host's broad phase for collisions, when the bench runs under a host that has one (the Rust host): a player there asks
+ * it which boxes overlap instead of sweeping in script. Under plain `node` there is no host, and the script's sweep is measured.
+ */
+const hostOverlaps = (globalThis as { [HOST_BACKEND_KEY]?: Backend })[HOST_BACKEND_KEY]?.overlaps;
 
 /** A backend that draws nothing and reports a steady 60 fps. */
 const nothing: Backend = {
+  overlaps: hostOverlaps,
   open() {},
   close() {},
   loadTexture: () => 0,
@@ -84,6 +91,8 @@ interface Scene {
   readonly pile?: boolean;
   /** How many of the `n` entities move; the rest are still. Default all of them. */
   readonly moving?: number;
+  /** Sweep in script even under a host with a broad phase of its own. */
+  readonly scriptSweep?: boolean;
 }
 
 function buildScene({ n, colliders: withColliders = false, state = false, pile = false, moving = n }: Scene): Entity {
@@ -108,7 +117,7 @@ function buildScene({ n, colliders: withColliders = false, state = false, pile =
 
 function measure(scene: Scene): number {
   const { n } = scene;
-  const player = createPlayer(nothing, { width: 800, height: 600, title: "bench", root: () => buildScene(scene) });
+  const player = createPlayer(scene.scriptSweep ? { ...nothing, overlaps: undefined } : nothing, { width: 800, height: 600, title: "bench", root: () => buildScene(scene) });
   for (let i = 0; i < 10; i++) player.step(); // warm up
   const frames = n >= 5000 ? 30 : 100;
   const start = Date.now();
@@ -122,7 +131,7 @@ function measure(scene: Scene): number {
 function phases(scene: Scene): { tick: number; walk: number; collisions: number } {
   const world = new World();
   const builder = new FrameBuilder({ loadTexture: () => 0 });
-  const tracker = new CollisionTracker();
+  const tracker = new CollisionTracker(undefined, true, true, scene.scriptSweep ? undefined : hostOverlaps);
   world.mount(buildScene(scene));
   const input = new PlayerInput(new Warner());
   const run = (): [number, number, number] => {
@@ -155,8 +164,14 @@ const scenes: [string, Scene][] = [
   ["2000 moving rects with colliders", { n: 2000, colliders: true }],
   ["300 colliders in one pile", { n: 300, colliders: true, pile: true }],
 ];
+// Under a host with a broad phase, the same scenes with the script's sweep, to compare.
+if (hostOverlaps !== undefined) {
+  scenes.push(["2000 by state with colliders, script sweep", { n: 2000, state: true, colliders: true, scriptSweep: true }]);
+  scenes.push(["300 in one pile, script sweep", { n: 300, colliders: true, pile: true, scriptSweep: true }]);
+}
+console.log(hostOverlaps === undefined ? "collisions: the script's sweep" : "collisions: the host's broad phase");
 for (const [name, scene] of scenes) console.log(`${name.padEnd(35)}: ${measure(scene).toFixed(2)} ms per frame`);
-for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8]] as [string, Scene][]) {
+for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8], ...scenes.slice(12, 13)] as [string, Scene][]) {
   const p = phases(scene);
   console.log(`  ${name} by phase: tick ${p.tick.toFixed(2)}, walk ${p.walk.toFixed(2)}, collisions ${p.collisions.toFixed(2)} ms`);
 }
