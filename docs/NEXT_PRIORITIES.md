@@ -22,14 +22,14 @@ Sizes are rough, for one engineer, in the style of the Phase 3 plan. Each priori
 
 Decided 2026-11-10. Once priority 5 lands, every ranked item above is done or deliberately set aside, yet the engine has only been built against the demo: about 180 lines of TSX that nobody has played in a real window. Most of "Not now" below waits on the same trigger, "the first game that needs it". So the next phase is led by games, not by engine features.
 
-**Who it is for.** Mostly the author, making their own games; open-sourcing it is a goal for later, not now. That puts a real game first and readiness for other people second.
+**Who it is for.** Mostly the author, making their own games; open-sourcing it is a goal for later, not now. That puts a real game first and readiness for other people second. The game is an original precision platformer; see priority 7.
 
 **Local first.** Everything stays on the desktop: a game is written, played and packaged on one Linux machine. No web backend, hosted builds, other platforms or distribution yet (see "Not now").
 
 | # | Priority | Why now | Size (estimate) |
 | --- | --- | --- | --- |
 | 6 | Play it on a real machine (the rest of priority 1) | Window feel, keys, the HUD, scaling and sound have never been tried by a person; sound has never been heard | \~1 day |
-| 7 | A real small game, in its own package | The demo is too small to find what is missing; the "Not now" table is waiting for a game to ask | \~2–4 weeks |
+| 7 | A real game: the first level of a precision platformer, and the engine features it needs | The demo is too small to find what is missing; the "Not now" table is waiting for a game to ask | \~4–6 weeks |
 | 8 | Usable outside this repository | A game only builds as a workspace in this monorepo, and the docs are design notes, not a guide; this prepares for open-sourcing | \~1–2 weeks |
 
 **Order.** 6 can start now, alongside priority 5. 7 can start now too: a new game package mostly adds code, so it does not clash with the developer-loop work in the player, host and compiler, and the game is the first real user of hot reload and in-window errors. 8 waits until 5 settles, because it packages that loop, and until 7 has shown what a game's project layout looks like.
@@ -49,26 +49,63 @@ This finishes priority 1. Most useful now that the HUD, `<Flex>`, the fixed reso
 - [ ] Sound plays
 - [ ] Whether `native-desktop` in CI builds raylib once is checked (the open item from priority 1)
 
-### 7. A real small game
+### 7. A real game: the first level of a precision platformer
 
-Pick something one size up from the demo: a short platformer or a top-down arena with several screens, a few kinds of enemy, a title and a game-over flow, music, and art from a sprite sheet. It lives in its own package beside `packages/demo`, and is written only through the public authoring API (`@rge/runtime/jsx`), as an outside author would. Every place it hurts becomes the backlog; an engine change is made when the game needs it, not before.
+Decided 2026-11-10: the game is an original precision platformer, in the spirit of tight-control mountain-climbing platformers: run, jump, a mid-air dash, wall slide and wall jump, short single-screen rooms, instant respawn, and a camera that moves room to room. The first milestone is **one complete level**: a title screen, 5–8 rooms that teach and then combine the mechanics, and an end screen, with music, sound and gamepad support. The character, art, rooms, music and name are all original; the genre is the reference for feel, not a source to copy.
 
-**What it will likely pull in** (from "Not now" below; each is pulled in only when the game actually needs it)
+It lives in its own package beside `packages/demo`, and is written only through the public authoring API (`@rge/runtime/jsx`), as an outside author would. Unlike the "pull it in when needed" rule elsewhere in this document, the engine features below are planned up front: any game with a level, a character and music needs them, and this level is what tests each one.
 
-- Sprite sheets, tint, opacity and pivot on `Sprite`.
-- Looping music, volume and overlapping plays for sound, and a build-time asset check.
-- Switching between scenes or levels, and menus (priority 5 adds a scene as an entry point, but nothing moves between scenes yet).
-- A font of its own, and a fixed timestep if it has physics.
-- Custom hooks and context, once components repeat logic or pass the same prop down many levels.
-- Lifting diagnostics that reject spread props, conditionals in a `.map`, or forwarding `{children}`, if the game hits them.
+**Goals, in order:** it feels good to control; it is a complete, playable level; the engine gains the features below, each designed, tested and documented; and the gaps it still finds are written down.
+
+**Not in this level:** a save system, settings or key rebinding, dialogue, cutscenes, a level editor, a web build or other platforms.
+
+**Movement and collision stay in game code.** `<Collider>` reports overlaps but stops nothing, so the player moves one axis at a time against the tilemap's solid grid, with whole-pixel positions and a sub-pixel remainder. Colliders handle hazards, room exits and pickups. Run, variable jump, coyote time, the jump buffer, an 8-direction dash, wall slide and wall jump are tuned by playing, from one module of constants. If that code is worth sharing, it becomes the first custom hook.
+
+**Engine additions, Tier 1: needed for the level to work**
+
+- **Fixed timestep.** `useUpdate` runs at a fixed rate (60 Hz) from an accumulator; drawing stays once per frame. A `<Game>` prop turns it on, and no input pressed between steps is lost.
+- **Sound that loops, with volume, and overlapping plays.** `useSound` gains a volume and can play over itself. Looping music (a `useMusic` hook or `<Music>` built-in) streams, loops, stops and fades, and keeps playing across room changes. A build-time check finds missing sound and image paths.
+- **Sprite sheets and sprite options.** A sprite draws one frame of a sheet; `<AnimatedSprite>` plays named animations from a sheet, with a frame rate and a loop setting. `Sprite` gains `flipX` / `flipY`, an origin (pivot), tint and opacity.
+- **A tilemap.** A `<Tilemap>` built-in draws a grid from a tile sheet without a game object per tile, can be queried as a solid grid by movement code, and loads from Tiled layers, filling the importer's gaps (`visible`, tile flip flags) on the way.
+- **Rooms and the camera.** Camera bounds that clamp to the current room, a short slide between rooms done by the camera, and switching from title to level to end screen. The switching is agreed with priority 5's "scenes as an entry point", not built twice.
+
+**Engine additions, Tier 2: what makes it feel like a game**
+
+- **Gamepad input.** Buttons and the left stick through `useInput`, with names in the style of key names (`"PadA"`, `"PadLeft"`) and a deadzone; a new ABI call over raylib's gamepad functions.
+- **Freeze frames and screen shake.** Pause the world's update for N steps (the dash, a death), and a camera shake with a strength and duration.
+- **Particles.** A `<Particles>` emitter (rate, lifetime, speed, gravity, color, shrink or fade) for dust, the dash trail and death, with no game object per particle.
+- **Screen fades** to and from a color on the HUD layer, for death and room or scene changes.
+- **A pixel font** for the title, the end screen and the HUD.
+- **Custom hooks** (`function usePlatformerBody(...) { ... }`), inlined at compile time to match "hooks are compiler intrinsics".
+
+**Tier 3: only if the level asks for them.** Context, spread props, conditionals inside a list's `.map`, and forwarding `{children}`. A diagnostic is lifted only when the level hits it, and each case is recorded as a finding.
+
+Each addition gets a design section in the matching doc (`DESIGN.md`, `NATIVE_PLAN.md` or `UI_PLAN.md`), compiler and runtime tests, and a recording or pixel test where it draws, and keeps the parity test byte-identical. Native changes are batched so `RGE_ABI_VERSION` moves once per batch. Engine and game changes go in separate commits.
+
+**Order of work**
+
+1. Greybox: the player and tiles as `<Shape>`s, rooms as in-code tile strings, a variable step; movement roughly right, with headless tests for its rules.
+2. Fixed timestep, then retune movement under it.
+3. Tilemap, rooms and camera; the rooms move into Tiled.
+4. Sprite sheets and sprite options: the character's animations, facing left and right.
+5. Sound: effects with volume and overlap, then looping music.
+6. Gamepad.
+7. Feel: freeze frames, screen shake, particles, fades.
+8. Title and end screens with the pixel font; play it start to finish and as a packaged build.
+9. Custom hooks whenever the movement code is ready to be pulled out, by step 7 at the latest.
+
+Someone plays it on a Linux desktop after step 1 and at the end (priority 6). Steps 1–4 are a natural place to stop and review before the rest.
 
 **Done when**
 
-- [ ] A game design of a page or less is written down (genre, screens, what makes it finished)
-- [ ] The game is playable from title to an ending, under Node and as a packaged build
-- [ ] Each engine change it needed has its own tests, and its "Not now" row is moved into the relevant plan
-- [ ] Its frame time is measured on a real scene and recorded in `NATIVE_PLAN.md` beside the bench numbers
-- [ ] A short list of what was hard to write, and what the engine should do about it, is added here
+- [ ] A one-page design note in the game's package covers the mechanics, the room list and what "finished" means for the level
+- [ ] The level is playable from title to end with keyboard or gamepad, under Node and as a packaged build, with music and sound
+- [ ] Every Tier 1 and Tier 2 addition is in, each with its design notes and tests, and its "Not now" row is removed or updated
+- [ ] The movement constants are tuned by playing, and the final values are recorded in the design note
+- [ ] Headless tests cover the movement rules (coyote time, the jump buffer, the dash refill, a wall jump) under the fixed timestep
+- [ ] The parity test passes and `npm run bench:check` stays within budget; frame time on the busiest room is recorded in `NATIVE_PLAN.md`
+- [ ] A "Findings from the first level" section is added here: each gap beyond the planned additions, its workaround or fix, and what it should become
+- [ ] `npm test` and `npm run typecheck` pass
 
 ### 8. Usable outside this repository
 
@@ -233,19 +270,15 @@ flowchart LR
 
 ## Not now, and what would pull it in
 
-The rest of the backlog (the player's and the compiler's) waits because nothing above depends on it, or because no game has asked for it yet. Each row names what would move it up.
+The rest of the backlog (the player's and the compiler's) waits because nothing above depends on it, or because no game has asked for it yet. Each row names what would move it up. Sprite sheets and sprite options, fonts, sound volume and looping music, gamepads, a fixed timestep and custom hooks used to be listed here; priority 7 plans them now.
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| Sprite sheets, tint, opacity, pivot on `Sprite` | The demo needs none; each is a record field plus a prop | The first game with real art (likely right after priority 3) |
-| Fonts | The default font works for a demo; text measuring (U0) and alignment (U4) are now in [UI_PLAN.md](UI_PLAN.md) | A game whose look needs its own typeface |
-| Sound volume, looping music, overlapping plays, a build-time asset check | `useSound` takes one literal path and covers one-shot effects | Any game with background music |
 | Web backend (canvas) | Phase 4 is local first (decided 2026-11-10); records map directly onto canvas calls, so it stays cheap to add later | Wanting a shareable browser build, after priority 8 |
-| Gamepads, high DPI, fixed timestep | Each slots into the ABI without rework | A controller game, a blurry Retina window, or physics |
+| High DPI | Slots into the ABI without rework; gamepads and a fixed timestep moved to priority 7 | A blurry Retina window |
 | macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
 | One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
-| Custom hooks (`function useHealth(max) { … }`) | Inlining them at compile time fits "hooks are compiler intrinsics", but no game needs them yet | Repeated hook logic across components |
-| Context (`createContext` / `useContext`) | Props cover today's trees | Deep trees passing the same prop down many levels |
-| Spread props, conditionals inside a list's `.map`, forwarding `{children}`, children on list items | Each is rejected today with a clear diagnostic | An author hitting one of those diagnostics in a real game |
-| Tiled importer gaps (`visible`, tile flip flags, whole-number `int` checks, template properties) | The importer covers the example maps | A map that uses them |
+| Context (`createContext` / `useContext`) | Props cover today's trees; it is Tier 3 in priority 7 | Deep trees passing the same prop down many levels, in the platformer or later |
+| Spread props, conditionals inside a list's `.map`, forwarding `{children}`, children on list items | Each is rejected today with a clear diagnostic; Tier 3 in priority 7 | An author hitting one of those diagnostics while writing the platformer |
+| Tiled importer gaps (whole-number `int` checks, template properties) | The importer covers the example maps; `visible` and tile flip flags moved to priority 7's tilemap | A map that uses them |
