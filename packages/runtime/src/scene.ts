@@ -69,6 +69,13 @@ export type PrefabRegistry = Readonly<Record<string, PrefabDefinition>>;
  * every object, nested ones included, by scene id.
  */
 export function loadScene(world: World, scene: Scene, prefabs: PrefabRegistry): Map<string, GameObject> {
+  const { roots, byId } = buildScene(scene, prefabs);
+  for (const root of roots) world.mount(root);
+  return byId;
+}
+
+/** `loadScene` without the mounting: the scene's top-level objects, built and placed, and every object by scene id. */
+export function buildScene(scene: Scene, prefabs: PrefabRegistry): { readonly roots: GameObject[]; readonly byId: Map<string, GameObject> } {
   const byId = new Map<string, GameObject>();
   const build = (entity: SceneEntity): GameObject => {
     const prefab = Object.hasOwn(prefabs, entity.prefab) ? prefabs[entity.prefab] : undefined;
@@ -85,7 +92,5 @@ export function loadScene(world: World, scene: Scene, prefabs: PrefabRegistry): 
     }
     return object;
   };
-  const roots = scene.entities.map(build);
-  for (const root of roots) world.mount(root);
-  return byId;
+  return { roots: scene.entities.map(build), byId };
 }

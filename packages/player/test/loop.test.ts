@@ -459,3 +459,39 @@ describe("sounds", () => {
     assert.equal(sound.plays, 1);
   });
 });
+
+describe("starting from a scene", () => {
+  afterEach(() => {
+    assert.equal(getSoundSink(), null);
+  });
+
+  const prefabs = {
+    Marker: { props: [], create: () => new Entity({ name: "marker" }) },
+    Window: { props: [], create: () => new Game({ title: "from a scene", width: 123, height: 45 }) },
+  };
+
+  it("builds the scene's entities from the prefabs and mounts them", () => {
+    const backend = new RecordingBackend();
+    const p = createPlayer(backend, { scene: { version: 1, entities: [{ id: "a", prefab: "Marker", transform: { x: 3 } }, { id: "b", prefab: "Marker" }] }, prefabs });
+    const container = p.world.root.children[0] as Entity;
+    assert.deepEqual(container.children.map((c) => (c as Entity).name), ["marker", "marker"]);
+    assert.equal(container.children[0]?.placement.x, 3);
+    p.close();
+  });
+
+  it("takes a lone <Game> entity as the root, so its window settings apply", () => {
+    const backend = new RecordingBackend();
+    const p = createPlayer(backend, { scene: () => ({ version: 1, entities: [{ id: "g", prefab: "Window" }] }), prefabs });
+    assert.deepEqual([backend.config?.width, backend.config?.height, backend.config?.title], [123, 45, "from a scene"]);
+    p.close();
+  });
+
+  it("says what is wrong with the config", () => {
+    const scene = { version: 1 as const, entities: [] };
+    assert.throws(() => createPlayer(new RecordingBackend(), {}), /needs a `root` or a `scene`/);
+    assert.throws(() => createPlayer(new RecordingBackend(), { scene }), /needs `prefabs`/);
+    assert.throws(() => createPlayer(new RecordingBackend(), { scene, prefabs, root: () => new Entity() }), /not both/);
+    assert.throws(() => createPlayer(new RecordingBackend(), { scene: { version: 1, entities: [{ id: "x", prefab: "Nope" }] }, prefabs }), /unknown prefab 'Nope'/);
+    assert.equal(getSoundSink(), null);
+  });
+});

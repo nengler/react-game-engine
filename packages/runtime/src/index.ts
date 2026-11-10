@@ -7,6 +7,7 @@ export {
   loadScene,
   type PrefabDefinition,
   type PrefabProp,
+  buildScene,
   type PrefabPropType,
   type PrefabRegistry,
   type Scene,

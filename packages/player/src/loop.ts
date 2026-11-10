@@ -1,4 +1,4 @@
-import { Game, World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pressable, type SoundSink, type ViewTransform } from "@rge/runtime";
+import { Entity, Game, World, buildScene, type PrefabRegistry, type Scene, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pressable, type SoundSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -21,7 +21,15 @@ export interface PlayerConfig extends Partial<WindowConfig> {
    * Builds the root object. It is built **before** the window opens, because a root that is a `<Game>` says what window to
    * open; sounds it creates are recorded and preloaded as soon as the window is open.
    */
-  readonly root: () => GameObject;
+  readonly root?: () => GameObject;
+  /**
+   * Start from a scene instead of `root`: the scene's entities are built from `prefabs` (compiled components, by name; see
+   * `loadScene`) and mounted as the root. A scene with one top-level entity that is a `<Game>` uses that as the root,
+   * so its settings apply; any other scene is wrapped in a plain entity. Give `root` or `scene`, not both.
+   */
+  readonly scene?: Scene | (() => Scene);
+  /** The prefab registry `scene`'s entities are built from. Required with `scene`. */
+  readonly prefabs?: PrefabRegistry;
   /** The key that toggles full screen, as the `<Game>` prop of the same name; `false` turns it off. Default `"F11"` (Alt + Enter always works). */
   readonly fullscreenKey?: string | false;
   /** A CSS colour. Default `"black"`. */
@@ -89,7 +97,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   resetGameState();
   let root: GameObject;
   try {
-    root = config.root();
+    root = buildRoot(config);
   } catch (error) {
     if (getSoundSink() === collector) setSoundSink(null);
     throw error;
@@ -259,4 +267,20 @@ function createSoundSink(backend: Backend, assets: string, warner: Warner): Soun
       if (handle >= 0) backend.playSound(handle);
     },
   };
+}
+
+/** The root object: `config.root()`, or the scene built from the prefabs. */
+function buildRoot(config: PlayerConfig): GameObject {
+  if (config.scene === undefined) {
+    if (config.root === undefined) throw new Error("The player needs a `root` or a `scene` (with `prefabs`) to start from.");
+    return config.root();
+  }
+  if (config.root !== undefined) throw new Error("Give the player a `root` or a `scene`, not both.");
+  if (config.prefabs === undefined) throw new Error("A `scene` needs `prefabs`: the registry of compiled components its entities name.");
+  const scene = typeof config.scene === "function" ? config.scene() : config.scene;
+  const { roots } = buildScene(scene, config.prefabs);
+  if (roots.length === 1 && roots[0] instanceof Game) return roots[0];
+  const container = new Entity();
+  for (const object of roots) container.addChild(object);
+  return container;
 }
