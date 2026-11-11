@@ -327,6 +327,35 @@ class ComponentGenerator extends ElementEmitter {
         });
       }
 
+      // Hot reload: the component's own state and refs, by their stable ids, so a rebuilt tree can take them back
+      // (see `captureHotState` in the runtime). A value whose type no longer matches is skipped.
+      const local = c.state.filter((s) => s.globalKey === undefined);
+      if (local.length > 0 || c.refs.length > 0) {
+        w.blank();
+        w.block("override saveHotState(): Record<string, unknown>", () => {
+          const entries = [
+            ...local.map((s) => `${JSON.stringify(s.id)}: ${this.hasSetter(s.id) ? pendingRef(s) : `this.${s.name}`}`),
+            ...c.refs.map((r) => `${JSON.stringify(r.id)}: this.${r.name}`),
+          ];
+          w.line(`return { ${entries.join(", ")} };`);
+        });
+        w.blank();
+        w.block("override loadHotState(saved: Record<string, unknown>): void", () => {
+          w.line("let value: unknown;");
+          for (const s of local) {
+            const target = this.hasSetter(s.id) ? pendingRef(s) : `this.${s.name}`;
+            w.line(`value = saved[${JSON.stringify(s.id)}];`);
+            w.line(`if (this.hotFits(value, ${target})) ${target} = value as ${typeText(s.type)};`);
+          }
+          for (const r of c.refs) {
+            w.line(`value = saved[${JSON.stringify(r.id)}];`);
+            w.line(`if (this.hotFits(value, this.${r.name})) this.${r.name} = value as ${r.type};`);
+          }
+          // A setter's value reaches its field, and a field's value reaches what is drawn, on the next render.
+          if (hasRender || settable.length > 0) w.line("this.markDirty();");
+        });
+      }
+
       this.emitHandlerMethods();
 
       if (hasRender) {

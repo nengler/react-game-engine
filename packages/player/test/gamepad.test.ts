@@ -12,7 +12,7 @@ class Pad extends Entity {
 
 describe("gamepad keys", () => {
   it("are keys like any other: PadA..PadStart and the four directions, readable in useInput and scriptable", () => {
-    for (const name of ["PadA", "PadB", "PadX", "PadY", "PadLB", "PadRB", "PadBack", "PadStart", "PadLeft", "PadRight", "PadUp", "PadDown"]) assert.ok(KEYS.includes(name), name);
+    for (const name of ["PadA", "PadB", "PadX", "PadY", "PadLB", "PadRB", "PadBack", "PadStart", "PadLeft", "PadRight", "PadUp", "PadDown"] as const) assert.ok(KEYS.includes(name), name);
     const pad = new Pad();
     const backend = new RecordingBackend();
     for (const f of parseInputScript("PadA*2+PadLeft*3, PadStart, _")) backend.queueInput(f);

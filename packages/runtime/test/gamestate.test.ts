@@ -135,3 +135,36 @@ describe("createGameState", () => {
     assert.equal(useGame.getState().coins, 1, "its actions still work");
   });
 });
+
+describe("carrying a game state across a hot reload", () => {
+  it("takes the old values that still fit and keeps the new actions", () => {
+    const older = createGameState<{ coins: number; player: { hp: number; name: string }; gone: number; add: () => void }>()((set) => ({
+      coins: 0,
+      player: { hp: 10, name: "a" },
+      gone: 1,
+      add: () => set((s) => ({ coins: s.coins + 1 })),
+    }));
+    older.getState().add();
+    older.setState({ player: { hp: 3, name: "b" } });
+
+    const newer = createGameState<{ coins: number; player: { hp: number; name: number; mp: number }; list: number[]; add: () => void }>()((set) => ({
+      coins: 0,
+      player: { hp: 10, name: 0, mp: 5 },
+      list: [1],
+      add: () => set((s) => ({ coins: s.coins + 10 })),
+    }));
+    newer.store.carryFrom(older.store as never);
+    const state = newer.getState();
+    assert.equal(state.coins, 1);
+    assert.deepEqual(state.player, { hp: 3, name: 0, mp: 5 }, "a leaf whose type changed, and a new leaf, keep the new values");
+    assert.deepEqual(state.list, [1]);
+    assert.equal("gone" in state, false);
+    state.add();
+    assert.equal(newer.getState().coins, 11, "the new build's action runs on the carried value");
+
+    // The old store is forgotten: a reset no longer touches it, while the new one goes back to its own initial values.
+    resetGameState();
+    assert.equal(older.getState().coins, 1);
+    assert.equal(newer.getState().coins, 0);
+  });
+});

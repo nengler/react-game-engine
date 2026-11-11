@@ -1,6 +1,7 @@
 export { GameObject } from "./GameObject.ts";
 export { Transform, composeTransforms, offsetTransform, IDENTITY_TRANSFORM, type WorldTransform } from "./Transform.ts";
 export { freeze, World } from "./World.ts";
+export { captureHotState, restoreHotState, type HotState } from "./hot.ts";
 export { createGameState, GameStore, resetGameState, type GameState, type GameStateCreator, type GetGameState, type SetGameState, type GameStateValue } from "./GameState.ts";
 export type { Child } from "./jsx-runtime.ts";
 export {
@@ -44,7 +45,7 @@ export { Fade, type FadeProps } from "./components/Fade.ts";
 export { Route, Router, type RouteProps, type RouterProps, type Transition, type TransitionFrame } from "./components/Router.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
-export { actionAware, Controls, createControls, createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
+export { actionAware, Controls, createControls, createInputState, KEY_NAMES, NO_INPUT, type InputState, type InputSnapshot, type KeyName } from "./input.ts";
 export { clamp, NO_SHAKE, shakeOn, springBack, type ShakeState, type Vector2 } from "./math.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
