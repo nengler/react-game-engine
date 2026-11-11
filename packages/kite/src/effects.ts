@@ -1,11 +1,11 @@
-import { createEvents, createParticles, createShake, createSounds, freeze } from "@rge/runtime";
+import { createParticles, createShake, createSounds, freeze, type Scale2 } from "@rge/runtime";
 import type { GameEvent } from "./rules/events.ts";
 import { freezeFor } from "./rules/playback.ts";
 
 /**
  * The game's one-off effects, kept like a toast library's store: the looks and sounds are named here once, `Main.tsx` mounts
  * what draws them (`<ParticleLayer particles={fx} />` next to the camera, `<Camera shake={shake}>`), and anything calls them.
- * What belongs to one entity (the character's squash) is that component's own, and it hears the events on `gameEvents`.
+ * The character calls `playEvents` with what each step reports; what belongs to it alone (its squash) it sets itself.
  */
 export const fx = createParticles({
   /** Dust thrown up where the character lands. */
@@ -27,13 +27,9 @@ export const sfx = createSounds({
 
 export const shake = createShake({ strength: 3, duration: 0.25 });
 
-/** What happened in each step, in world pixels, for components that answer events themselves (`<EventListener>`). */
-export const gameEvents = createEvents<GameEvent>();
-
 /**
- * Answer what the rules say happened in a step: a sound, a burst at the place it happened, a shake, a freeze; then send each
- * on `gameEvents` for components that answer their own. The events are in the room's pixels; the room's top left in the world
- * is (`originX`, `originY`).
+ * Answer what the rules say happened in a step: a sound, a burst at the place it happened, a shake, a freeze. The events are in
+ * the room's pixels; the room's top left in the world is (`originX`, `originY`).
  */
 export function playEvents(events: readonly GameEvent[], originX: number, originY: number): void {
   for (const e of events) {
@@ -70,7 +66,23 @@ export function playEvents(events: readonly GameEvent[], originX: number, origin
         break;
     }
   }
-  for (const e of events) gameEvents.emit({ ...e, x: originX + e.x, y: originY + e.y });
   const frozen = freezeFor(events);
   if (frozen > 0) freeze(frozen);
+}
+
+/**
+ * The squash and stretch a step's events call for, Celeste's: thin and tall leaving the ground, wide and flat landing hard (all
+ * the way at 240 pixels a second), wide ducking, tall standing up. Null when nothing in the step changes it.
+ */
+export function squashFor(events: readonly GameEvent[]): Scale2 | null {
+  let squash: Scale2 | null = null;
+  for (const e of events) {
+    if (e.type === "jump" || e.type === "wallJump") squash = { scaleX: 0.6, scaleY: 1.4 };
+    else if (e.type === "land") {
+      const k = Math.min(e.speed / 240, 1);
+      squash = { scaleX: 1 + 0.6 * k, scaleY: 1 - 0.6 * k };
+    } else if (e.type === "duck") squash = { scaleX: 1.4, scaleY: 0.6 };
+    else if (e.type === "stand") squash = { scaleX: 0.8, scaleY: 1.2 };
+  }
+  return squash;
 }

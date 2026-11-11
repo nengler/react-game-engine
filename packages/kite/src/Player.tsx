@@ -1,27 +1,29 @@
-import { AfterimageLayer, AnimatedSprite, Collider, Entity, EventListener, Particles, createAfterimages, useSquash, useState } from "@rge/runtime/jsx";
-import { gameEvents } from "./effects.ts";
+import { AnimatedSprite, Collider, Entity, Particles, useSquash, useUpdate } from "@rge/runtime/jsx";
+import { playEvents, squashFor } from "./effects.ts";
 import { useGame } from "./GameState.ts";
 import { animationOf, heightOf } from "./rules/body.ts";
 
 /**
- * The character: the rules' body drawn as an animated sprite, with what a dash leaves (afterimages, a trail) and its own squash and stretch,
- * which it answers from the game's events (Celeste's numbers: thin and tall leaving the ground, wide and flat landing hard).
- * The sounds, dust and death burst belong to the game, not to this component (`effects.ts`).
+ * The character: it runs the game's step with each fixed step's input, answers what happened (sound, dust, shake and freeze,
+ * from `effects.ts`; its own squash and stretch), and draws the rules' body as an animated sprite with the trail a dash leaves.
  */
 export function Player() {
-  const body = useGame((s) => s.run.player);
-  const originX = useGame((s) => s.run.originX);
-  const originY = useGame((s) => s.run.originY);
-  const dead = useGame((s) => s.run.dead);
-
+  const { player: body, originX, originY, dead } = useGame((s) => s.run);
+  const step = useGame((s) => s.step);
   const [squash, setSquash] = useSquash(1.75);
-  const [trail] = useState(() => createAfterimages({ lifetime: 0.3, color: "#ff9a7aa0" }));
   const height = heightOf(body);
+
+  useUpdate((dt, input) => {
+    const events = step(input, dt);
+    playEvents(events, originX, originY);
+    const next = squashFor(events);
+    if (next !== null) {
+      setSquash(next);
+    }
+  });
 
   return (
     <Entity name="Player" transform={{ x: originX + body.x, y: originY + body.y }}>
-      {/* Copies of the character left behind while dashing, drawn where each was taken (so it can sit here), under the character. */}
-      <AfterimageLayer afterimages={trail} emitting={body.dashing} interval={0.08} />
       {/* The hitbox is 8 × 11 (8 × 6 ducking); the picture is 12 × 12 with its origin at the feet, so it sits centred on the hitbox's bottom. */}
       <AnimatedSprite
         sheet="hero.png"
@@ -42,24 +44,8 @@ export function Player() {
         originY={12}
         tint={body.dashes > 0 || dead ? "#ffffff" : "#9db4ff"}
         transform={{ x: 4, y: height, scaleX: squash.scaleX, scaleY: squash.scaleY }}
-        afterimages={trail}
       />
       <Collider width={8} height={height} tag="player" layer="player" />
-      <EventListener
-        events={gameEvents}
-        onEvent={(e) => {
-          if (e.type === "jump" || e.type === "wallJump") {
-            setSquash({ scaleX: 0.6, scaleY: 1.4 });
-          } else if (e.type === "land") {
-            // The harder the landing, the flatter: all the way at 240 pixels a second.
-            setSquash({ scaleX: 1 + 0.6 * Math.min(e.speed / 240, 1), scaleY: 1 - 0.6 * Math.min(e.speed / 240, 1) });
-          } else if (e.type === "duck") {
-            setSquash({ scaleX: 1.4, scaleY: 0.6 });
-          } else if (e.type === "stand") {
-            setSquash({ scaleX: 0.8, scaleY: 1.2 });
-          }
-        }}
-      />
       {/* A trail while dashing: state, not a moment, so it is an emitter that is on while `dashing` is. */}
       <Particles rate={120} lifetime={0.25} speed={6} spread={180} size={3} shrink fade color="#ff9a7a" space="world" emitting={body.dashing} transform={{ x: 4, y: 6 }} max={24} />
     </Entity>

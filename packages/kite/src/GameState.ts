@@ -1,5 +1,5 @@
 import { createGameState, type InputState } from "@rge/runtime";
-import { playEvents, sfx } from "./effects.ts";
+import { sfx } from "./effects.ts";
 import { readControls } from "./rules/controls.ts";
 import type { GameEvent } from "./rules/events.ts";
 import { newRun, stepRun, type Run } from "./rules/level.ts";
@@ -7,15 +7,16 @@ import { newRun, stepRun, type Run } from "./rules/level.ts";
 /**
  * The game's state, shared by every component: which screen is showing, the run of the level (`Run`, see `rules/level.ts`)
  * and the actions that move it on. All the rules are plain functions in `rules/`; this file keeps their state where components
- * can read it, and calls them. `step` is one fixed step of the game (the root component calls it with the step's input): the
- * rules report what happened as events, and `playEvents` answers them with sound, dust, a shake and a freeze.
+ * can read it, and calls them. `step` is one fixed step of the game: the character calls it with the step's input, and it
+ * returns what happened, for the character to answer (`effects.ts`).
  */
 interface State {
   screen: "title" | "play" | "end";
   run: Run;
   /** Gems collected: there is one in the level. */
   gems: number;
-  step: (input: InputState, dt: number) => void;
+  /** One fixed step of the run, given the step's input: what happened in it (nothing off the play screen). */
+  step: (input: InputState, dt: number) => GameEvent[];
   /** Start a new run: the first room, no deaths, no gems. */
   begin: () => void;
   /** Back to the title screen. */
@@ -29,11 +30,11 @@ export const useGame = createGameState<State>()((set, get) => ({
   gems: 0,
   step: (input, dt) => {
     const { screen, run } = get();
-    if (screen !== "play") return;
     const events: GameEvent[] = [];
+    if (screen !== "play") return events;
     const next = stepRun(run, readControls(input), dt, events);
     set({ run: next, screen: next.finished ? "end" : "play" });
-    playEvents(events, run.originX, run.originY);
+    return events;
   },
   begin: () => {
     sfx.play("start");

@@ -5,8 +5,7 @@ import { Label } from "./Label.tsx";
 /** The end screen: how the climb went, and a way back to the title, in a centred column on the HUD layer. */
 export function End() {
   const toTitle = useGame((s) => s.toTitle);
-  const deaths = useGame((s) => s.run.deaths);
-  const steps = useGame((s) => s.run.steps);
+  const { deaths, steps } = useGame((s) => s.run);
   const gems = useGame((s) => s.gems);
   const seconds = Math.floor(steps / 60);
 

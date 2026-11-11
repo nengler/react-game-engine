@@ -1,4 +1,5 @@
-import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Route, Router, Screen, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Route, Router, Screen } from "@rge/runtime/jsx";
+import { DashTrail } from "./DashTrail.tsx";
 import { fx, shake } from "./effects.ts";
 import { End } from "./End.tsx";
 import { Gem } from "./Gem.tsx";
@@ -13,17 +14,15 @@ import { fadeThrough } from "./transitions.ts";
 
 /** What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, the bursts the game makes, and the HUD. */
 function Play() {
-  const originX = useGame((s) => s.run.originX);
-  const originY = useGame((s) => s.run.originY);
-  const room = useGame((s) => s.run.room);
-  const deaths = useGame((s) => s.run.deaths);
-  const dead = useGame((s) => s.run.dead);
+  const { originX, originY, room, deaths, dead } = useGame((s) => s.run);
   const gems = useGame((s) => s.gems);
 
   return (
     <Entity name="Play">
       <Level />
       <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />
+      {/* Copies of the character a dash leaves, under it, in the world. */}
+      <DashTrail />
       {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it (effects.ts). */}
       <Camera bounds={[originX, originY, 320, 180]} slide={0.4} shake={shake}>
         <Player />
@@ -47,19 +46,12 @@ function Play() {
 /** The game's root: a 320 × 180 screen showing the title, the level or the end, with the music playing under all of it. */
 export default function Main() {
   const screen = useGame((s) => s.screen);
-  const step = useGame((s) => s.step);
-
-  // The game runs from the root, which is never removed: each fixed step hands its input to the game state (which does
-  // nothing off the play screen), so no screen has to stay mounted for the world to move on.
-  useUpdate((dt, input) => {
-    step(input, dt);
-  });
 
   return (
     <Game
       vsync={false}
       name="Main"
-      state={useGame}
+     
       controls={controls}
       upscale="sharp"
       title="Kite"
