@@ -261,15 +261,14 @@ export function Swarm() {
     assert.deepEqual(typeErrors(compiled), []);
   });
 
-  it("accepts only a plain path as the selector, bound with const, at the top level", () => {
+  it("accepts one expression-bodied selector, bound with const, at the top level", () => {
+    assert.ok(errors(`function A() { const c = useGame((s) => other.coins); return <Entity />; }`).some((d) => d.code === DiagnosticCode.UnknownIdentifier));
     for (const call of [
-      `useGame((s) => s.coins + 1)`,
       `useGame((s) => { return s.coins; })`,
       `useGame((s, t) => s.coins)`,
       `useGame(select)`,
       `useGame()`,
       `useGame((s) => s)`,
-      `useGame((s) => other.coins)`,
       `useGame<number>((s) => s.coins)`,
     ]) {
       const found = errors(`function A() { const select = null; const c = ${call}; return <Entity />; }`);
@@ -451,5 +450,51 @@ export function Count() {
     resetGameState();
     assert.equal(store.get("coins"), 0);
     void scorer;
+  });
+});
+
+describe("a computed selector", () => {
+  it("subscribes to each path it reads and works the value out again when one changes", async () => {
+    const compiled = build(`
+interface RowProps { id: number; }
+export function Row({ id }: RowProps) {
+  const rich = useGame((s) => s.coins >= id * 2);
+  const label = useGame((s) => \`\${s.player.name}:\${s.coins + s.player.hp}\`);
+  const count = useGame((s) => s.enemies.length);
+  return <Text size={12}>{rich ? "rich" : "poor"} {label} {count}</Text>;
+}`);
+    const component = compiled.ir.components[0]!;
+    assert.deepEqual(component.state.map((st) => [st.name, st.globalKey]), [["$coins", "coins"], ["$playerName", "player.name"], ["$playerHp", "player.hp"], ["$enemies", "enemies"]], "one snapshot per path, shared");
+    assert.deepEqual(typeErrors(compiled), []);
+    const { Row } = await load<{ Row: new (props: { id: number }) => Text }>(generated(compiled));
+    const world = new World();
+    const row = new Row({ id: 2 });
+    world.mount(row);
+    world.flush();
+    assert.equal(row.text, "poor Ada:10 0");
+    act("collect", 4);
+    act("spawn", 1);
+    world.flush();
+    assert.equal(row.text, "rich Ada:14 1");
+  });
+
+  it("reuses a path the component already selected by name", () => {
+    const compiled = build(`
+export function A() {
+  const coins = useGame((s) => s.coins);
+  const doubled = useGame((s) => s.coins * 2);
+  return <Text size={12}>{coins} {doubled}</Text>;
+}`);
+    assert.deepEqual(compiled.ir.components[0]!.state.map((st) => st.name), ["coins"]);
+    assert.deepEqual(typeErrors(compiled), []);
+  });
+
+  it("may call a function from a .ts file and read props, and its names are checked against the schema", () => {
+    const found = errors(`function A() { const c = useGame((s) => s.coinz > 1); return <Entity />; }`);
+    assert.deepEqual(found.map((d) => d.code), [DiagnosticCode.InvalidGameState]);
+    assert.match(found[0]!.message, /did you mean "coins"/);
+    const action = errors(`function A() { const c = useGame((s) => s.hurt === null); return <Entity />; }`);
+    assert.deepEqual(action.map((d) => d.code), [DiagnosticCode.UnsupportedExpression]);
+    assert.match(action[0]!.message, /select it by itself/);
   });
 });

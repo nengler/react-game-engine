@@ -1,5 +1,5 @@
 // Recognisers for the statements of a component body: state, render constants, stores, refs, sounds and handlers.
-import { NodeFlags, type CallExpression, type Node, type Statement } from "typescript/ast";
+import { NodeFlags, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
 import { isArrayBindingPattern, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isPropertyAccessExpression, isVariableStatement } from "typescript/ast/is";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import { type UseStoreCallAnalysis, type RenderConstAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type UseStateCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
@@ -69,10 +69,29 @@ export function matchRenderConst(statement: Statement): RenderConstAnalysis | nu
 }
 
 type StoreMatch =
-  | { readonly kind: "ok"; readonly hook: UseStoreCallAnalysis }
+  | { readonly kind: "ok"; readonly hooks: readonly UseStoreCallAnalysis[] }
   | { readonly kind: "invalid"; readonly message: string; readonly call: CallExpression };
 
-/** Recognises `const hp = useGame((s) => s.player.hp)` on an imported store; null if the statement is not a call of one. */
+/** `s.player.hp` from the selector's parameter: the path, or null when the expression is not a plain path (`s` alone is `[]`). */
+function plainPath(node: Node, parameter: string): string[] | null {
+  const path: string[] = [];
+  let at: Node = unwrapParens(node as Expression);
+  while (isPropertyAccessExpression(at) && !at.questionDotToken) {
+    path.unshift(at.name.text);
+    at = unwrapParens(at.expression);
+  }
+  return isIdentifier(at) && at.text === parameter ? path : null;
+}
+
+/**
+ * Recognises a read of the game state on an imported store; null if the statement is not a call of one.
+ *
+ * - `const hp = useGame((s) => s.player.hp)`: a plain path, the component subscribes to exactly that path.
+ * - `const selected = useGame((s) => s.cursor === id)`: any expression of the state (a computed selector). Each path it reads is
+ *   subscribed to, and the expression is a derived value, worked out again when one of them changes.
+ *
+ * Destructuring (`const { gold, lives } = useGame((s) => s.battle)`) reaches here split into one statement per name.
+ */
 export function matchStoreStatement(statement: Statement, storeNames: ReadonlySet<string>): StoreMatch | null {
   if (storeNames.size === 0 || !isVariableStatement(statement)) return null;
   const list = statement.declarationList;
@@ -84,22 +103,25 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   const invalid = (message: string): StoreMatch => ({ kind: "invalid", message, call: init });
   const example = `const hp = ${storeName}((s) => s.player.hp);`;
   if ((list.flags & NodeFlags.Const) === 0) return invalid(`${storeName}(…) must be bound with \`const\`: \`${example}\``);
-  if (!isIdentifier(declaration.name)) return invalid(`${storeName}(…) binds one plain name: \`${example}\``);
   const selector = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
   if (init.arguments.length !== 1 || !selector || !isArrowFunction(selector) || selector.parameters.length !== 1 || !isIdentifier(selector.parameters[0]!.name) || init.typeArguments?.length) {
     return invalid(`${storeName} takes one selector, an arrow with one parameter: \`${example}\``);
   }
+  if (isBlock(selector.body)) return invalid(`The selector must be an expression, not a block: \`(s) => s.player.hp\` or \`(s) => s.cursor === id\`.`);
   const parameter = (selector.parameters[0]!.name as { text: string }).text;
-  const path: string[] = [];
-  let at: Node = isBlock(selector.body) ? selector.body : unwrapParens(selector.body);
-  while (isPropertyAccessExpression(at)) {
-    path.unshift(at.name.text);
-    at = unwrapParens(at.expression);
-  }
-  if (!isIdentifier(at) || (at as { text: string }).text !== parameter || path.length === 0) {
-    return invalid(`The selector must be a plain path from its parameter, like \`(${parameter}) => ${parameter}.player.hp\`: the compiler subscribes the component to exactly that path.`);
-  }
-  return { kind: "ok", hook: { kind: "useStore", storeName, valueName: declaration.name.text, path, selector, call: init, declaration } };
+  const body = unwrapParens(selector.body);
+  const read = (valueName: string, expression: Expression, at: Node): UseStoreCallAnalysis | string => {
+    let path = plainPath(expression, parameter);
+    // The store tells readers of an array about its items, not its `length`: `s.enemies.length` is worked out from `s.enemies`.
+    if (path !== null && path.length > 1 && path[path.length - 1] === "length") path = null;
+    if (path !== null && path.length === 0) return `'${valueName}' selects the whole state: select a path (\`(${parameter}) => ${parameter}.player\`) or destructure names from it (\`const { coins, collect } = ${storeName}((${parameter}) => ${parameter})\`).`;
+    return { kind: "useStore", storeName, valueName, path: path ?? [], body: path === null ? expression : null, parameter, selector: at, call: init, declaration };
+  };
+
+  // Destructuring (`const { gold, lives } = useGame((s) => s.battle)`) was split into one selector per name before this (hooks/inline.ts).
+  if (!isIdentifier(declaration.name)) return invalid(`${storeName}(…) binds one plain name: \`${example}\``);
+  const one = read(declaration.name.text, body, selector);
+  return typeof one === "string" ? invalid(one) : { kind: "ok", hooks: [one] };
 }
 
 type HandleMatch =

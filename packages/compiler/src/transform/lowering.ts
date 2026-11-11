@@ -3,7 +3,7 @@ import { SyntaxKind, type Expression, type PropertyAccessExpression, type Node, 
 import { isPropertyAccessExpression, isIdentifier, isArrayTypeNode, isUnionTypeNode } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType } from "../ir/types.ts";
+import { type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType, type StateIR, type HookIR } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
 import { type GameStateDefinition } from "../gamestate/schema.ts";
 import { type RuntimeManifest } from "@rge/runtime";
@@ -56,6 +56,10 @@ export class LoweringBase {
   protected readonly plainImports: ReadonlySet<string>;
   /** State made once per instance by a factory (`useState(() => createSquash())`), whose methods handlers may call. */
   protected readonly handleStates = new Set<string>();
+  /** Every path of the game state this component reads, to the snapshot that holds it (see `storePathState`). */
+  protected readonly storePaths = new Map<string, StateId>();
+  /** Set while a computed selector is lowered: where the snapshots of the paths it reads go. */
+  protected storeReads: { readonly state: StateIR[]; readonly hooks: HookIR[]; readonly storeName: string } | null = null;
 
   constructor(
     component: ComponentAnalysis,

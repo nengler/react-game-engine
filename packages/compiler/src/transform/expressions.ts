@@ -1,5 +1,5 @@
 // Layer 1 of ComponentLowering: lowers TypeScript expressions into ExprIR (reads, calls, array methods, handles).
-import { SyntaxKind, type ObjectLiteralExpression, type CallExpression, type Expression, type PropertyAccessExpression } from "typescript/ast";
+import { SyntaxKind, type Node, type ObjectLiteralExpression, type CallExpression, type Expression, type PropertyAccessExpression } from "typescript/ast";
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock } from "typescript/ast/is";
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
@@ -59,6 +59,8 @@ export class ExpressionLowering extends LoweringBase {
         case "action":
           this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a game-state action: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
           return null;
+        case "storeRoot":
+          return this.lowerStoreRead([], node);
         default: return assertNever(binding, "binding");
       }
     }
@@ -171,6 +173,14 @@ export class ExpressionLowering extends LoweringBase {
 
   /** `ref.current`, or `param.name` where `param` is a handler parameter of a runtime handle type. */
   protected lowerPropertyRead(node: PropertyAccessExpression): ExprIR | null {
+    // `s.battle.gold` in a computed selector: the snapshot of that path.
+    const storePath: string[] = [];
+    let root: Expression = node;
+    while (isPropertyAccessExpression(root)) {
+      storePath.unshift(root.name.text);
+      root = unwrapParens(root.expression);
+    }
+    if (isIdentifier(root) && this.scope.get(root.text)?.kind === "storeRoot") return this.lowerStoreRead(storePath, node);
     const propsObject = this.propsObjectMember(node);
     if (propsObject !== undefined) {
       if (propsObject === null) return null;
@@ -391,6 +401,12 @@ export class ExpressionLowering extends LoweringBase {
       return null;
     }
     return { type: binding.type.name, read: { kind: "ParamRead", param: binding.id, name: binding.name } };
+  }
+
+  /** `s.battle.gold` in a computed selector; overridden where the hooks are lowered. */
+  protected lowerStoreRead(_path: readonly string[], at: Node): ExprIR | null {
+    this.report(DiagnosticCode.UnsupportedExpression, "The game state is read with a selector.", at);
+    return null;
   }
 
   // -- LoweringContext --------------------------------------------------------

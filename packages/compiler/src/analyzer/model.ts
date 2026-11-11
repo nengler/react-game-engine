@@ -87,15 +87,20 @@ export interface ComponentAnalysis {
 
 /**
  * `const hp = useGame((s) => s.player.hp)`: a read of one path of the game state, or (`useGame((s) => s.collect)`) a
- * binding of one action. The selector is a plain property path: that is all the compiler resolves.
+ * binding of one action. The selector is a plain property path, or (`body`) any expression of the state, which subscribes to each
+ * path it reads. A destructuring statement makes one of these per name.
  */
 export interface UseStoreCallAnalysis {
   readonly kind: "useStore";
   /** The imported store the call is made on (`useGame`). */
   readonly storeName: string;
   readonly valueName: string;
-  /** The selector's path: `["player", "hp"]`. */
+  /** The selector's path: `["player", "hp"]`. Empty for a computed selector. */
   readonly path: readonly string[];
+  /** A computed selector's expression (`s.cursor === id`), or null for a plain path. */
+  readonly body: Expression | null;
+  /** The selector's parameter (`s`), which `body` reads the state through. */
+  readonly parameter: string;
   /** The selector's parameter, and the path's node, for diagnostics. */
   readonly selector: Node;
   readonly call: CallExpression;

@@ -3,12 +3,13 @@ import { SyntaxKind, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type TypeIR, collectDependencies, stateReads, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
+import { type StateId, type TypeIR, collectDependencies, stateReads, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { lowerFunction } from "./statements.ts";
 import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
 import { ExpressionLowering } from "./expressions.ts";
+import { Scope } from "./scope.ts";
 
 export class HookLowering extends ExpressionLowering {
   /**
@@ -210,29 +211,67 @@ export class HookLowering extends ExpressionLowering {
    * `const hp = useGame((s) => s.player.hp)`: a state mirroring one leaf of the game state (a snapshot, refreshed
    * when the leaf changes), or `const collect = useGame((s) => s.collect)`: an action, called as a statement in a
    * handler. The path is checked against the state tree `GameState.ts` declares.
+   *
+   * A computed selector (`useGame((s) => s.cursor === id)`) is a derived value: each path it reads becomes a snapshot of
+   * its own (shared with any other read of the same path in this component), and the expression reads those, so it is
+   * worked out again whenever one of them changes, as a React selector is.
    */
   protected lowerStore(hook: UseStoreCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
     const definition = this.gameState;
-    const at = (node: Node = hook.call): Node => node;
     if (!definition || !this.storeImports.has(hook.storeName)) return; // already reported where the import was checked
-    if (this.componentScope.hasOwn(hook.valueName) || !this.claimName(hook.valueName, hook.declaration)) {
-      if (this.componentScope.hasOwn(hook.valueName)) this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component.`, hook.declaration);
+    if (hook.body !== null) {
+      if (this.componentScope.hasOwn(hook.valueName) || this.isCallableName(hook.valueName)) {
+        this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component (or reserved).`, hook.declaration);
+        return;
+      }
+      const outer = this.scope;
+      this.scope = new Scope(outer);
+      this.scope.declare(hook.parameter, { kind: "storeRoot", name: hook.parameter });
+      const previous = this.storeReads;
+      this.storeReads = { state, hooks, storeName: hook.storeName };
+      let value: ExprIR | null;
+      try {
+        value = this.lowerNode(hook.body);
+      } finally {
+        this.scope = outer;
+        this.storeReads = previous;
+      }
+      if (value) this.componentScope.declare(hook.valueName, { kind: "derived", name: hook.valueName, value });
+      return;
+    }
+    if (this.componentScope.hasOwn(hook.valueName)) {
+      this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component.`, hook.declaration);
       return;
     }
     const first = hook.path[0] as string;
     if (hook.path.length === 1 && definition.actions.includes(first)) {
+      if (!this.claimName(hook.valueName, hook.declaration)) return;
       this.componentScope.declare(hook.valueName, { kind: "action", name: hook.valueName, action: first });
       return;
     }
+    if (this.usedNames.has(hook.valueName)) {
+      this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared or is reserved by the runtime.`, hook.declaration);
+      return;
+    }
+    const id = this.storePathState(hook.path, hook.valueName, hook.selector, state, hooks);
+    if (id) this.componentScope.declare(hook.valueName, { kind: "state", id });
+  }
+
+  /**
+   * The snapshot of one path of the game state, named `name` (claimed here), after checking the path against the schema.
+   * Null when the path is wrong (reported).
+   */
+  protected storePathState(path: readonly string[], name: string, at: Node, state: StateIR[], hooks: HookIR[]): StateId | null {
+    const definition = this.gameState!;
     // Walk the state tree; a typo is reported with the nearest key at the level it went wrong. Below a value the compiler
     // cannot see into (an array, `newRun()`), the path is left to the type-check of the generated code.
     let node: GameStateEntry = definition.tree;
     const walked: string[] = [];
-    for (const key of hook.path) {
+    for (const key of path) {
       if (node.kind === "value") break;
       if (node.kind === "leaf") {
-        this.report(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is a ${node.type}, so it has no '${key}'.`, at(hook.selector));
-        return;
+        this.report(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is a ${node.type}, so it has no '${key}'.`, at);
+        return null;
       }
       const child: GameStateEntry | undefined = Object.hasOwn(node.children, key) ? node.children[key] : undefined;
       if (!child) {
@@ -241,25 +280,57 @@ export class HookLowering extends ExpressionLowering {
         this.report(
           DiagnosticCode.InvalidGameState,
           `'${[...walked, key].join(".")}' is not in the game state${near ? ` (did you mean "${[...walked, near].join(".")}"?)` : ""}. ${walked.length === 0 ? "State" : `'${walked.join(".")}' has`}: ${options.length > 0 ? options.join(", ") : "nothing"}.`,
-          at(hook.selector),
+          at,
         );
-        return;
+        return null;
       }
       walked.push(key);
       node = child;
     }
-    const id = stateId(this.component.name, hook.valueName);
+    if (!this.claimName(name, at)) return null;
+    const id = stateId(this.component.name, name);
     // A leaf the schema knows keeps its primitive type; an object, an array or a computed value is typed by TypeScript, from
     // the store itself: it re-renders when any value under it changes.
-    const leaf = node.kind === "leaf" && walked.length === hook.path.length ? node : null;
+    const leaf = node.kind === "leaf" && walked.length === path.length ? node : null;
     const initialValue: ExprIR = leaf === null ? { kind: "NullLiteral" } : leaf.type === "number" ? { kind: "NumberLiteral", value: leaf.initial as number } : leaf.type === "string" ? { kind: "StringLiteral", value: leaf.initial as string } : { kind: "BooleanLiteral", value: leaf.initial as boolean };
-    const type: TypeIR = leaf === null ? { kind: "SourceType", text: `ReturnType<typeof ${definition.name}.getState>${hook.path.map((k) => `[${JSON.stringify(k)}]`).join("")}` } : { kind: "Primitive", name: leaf.type };
-    state.push({ kind: "State", id, name: hook.valueName, type, initialValue, globalKey: hook.path.join(".") });
+    const type: TypeIR = leaf === null ? { kind: "SourceType", text: `ReturnType<typeof ${definition.name}.getState>${path.map((k) => `[${JSON.stringify(k)}]`).join("")}` } : { kind: "Primitive", name: leaf.type };
+    const globalKey = path.join(".");
+    state.push({ kind: "State", id, name, type, initialValue, globalKey });
     this.stateTypes.set(id, type);
-    hooks.push({ kind: "UseState", state: id, setterName: null, span: this.span(hook.declaration) });
-    this.componentScope.declare(hook.valueName, { kind: "state", id });
+    hooks.push({ kind: "UseState", state: id, setterName: null, span: this.span(at) });
+    if (!this.storePaths.has(globalKey)) this.storePaths.set(globalKey, id);
+    return id;
   }
 
+  /**
+   * `s.battle.gold` inside a computed selector: the snapshot of that path (made the first time this component reads it).
+   * A trailing `.length` reads the array's snapshot, since the store tells readers about an array's items, not its length.
+   */
+  protected override lowerStoreRead(path: readonly string[], at: Node): ExprIR | null {
+    const reads = this.storeReads;
+    if (!reads || path.length === 0) {
+      this.report(DiagnosticCode.UnsupportedExpression, "Read a path of the game state (`s.player.hp`), not the whole state.", at);
+      return null;
+    }
+    if (path.length > 1 && path[path.length - 1] === "length") {
+      const array = this.lowerStoreRead(path.slice(0, -1), at);
+      return array && { kind: "MemberRead", object: array, name: "length", optional: false };
+    }
+    if (path.length === 1 && this.gameState!.actions.includes(path[0]!)) {
+      this.report(DiagnosticCode.UnsupportedExpression, `'${path[0]}' is an action: select it by itself (\`const ${path[0]} = ${reads.storeName}((s) => s.${path[0]})\`) and call it in a handler.`, at);
+      return null;
+    }
+    const key = path.join(".");
+    let id = this.storePaths.get(key);
+    if (!id) {
+      const base = "$" + path.map((k, i) => (i === 0 ? k : k.charAt(0).toUpperCase() + k.slice(1))).join("");
+      let name = base;
+      for (let n = 2; this.usedNames.has(name); n++) name = `${base}${n}`;
+      id = this.storePathState(path, name, at, reads.state, reads.hooks) ?? undefined;
+      if (!id) return null;
+    }
+    return { kind: "StateRead", state: id };
+  }
   /**
    * `const cooldown = useRef(0)` / `useRef<number>(0)`: a value that persists
    * but never renders. The initial value is evaluated once and must not read state.

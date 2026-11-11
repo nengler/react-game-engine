@@ -17,6 +17,8 @@ type Binding =
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
   | { readonly kind: "local"; readonly id: LocalId; readonly name: string }
+  /** The parameter of a computed `useGame` selector (`s` in `(s) => s.cursor === id`): only read as a path, `s.cursor`. */
+  | { readonly kind: "storeRoot"; readonly name: string }
   | { readonly kind: "param"; readonly id: LocalId; readonly name: string; readonly type: TypeIR };
 
 /** Lexical scope chain: component scope (state, setters) → function scope (params) → block scopes (locals). */

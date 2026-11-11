@@ -148,8 +148,8 @@ export function analyzeComponent(
     const store = matchStoreStatement(statement, storeNames);
     if (store) {
       if (store.kind === "ok") {
-        hooks.push(store.hook);
-        acceptedHookCalls.add(store.hook.call);
+        hooks.push(...store.hooks);
+        for (const hook of store.hooks) acceptedHookCalls.add(hook.call);
       } else {
         diagnostics.push(error(DiagnosticCode.InvalidUseState, store.message, span(statement)));
         acceptedHookCalls.add(store.call);
