@@ -18,7 +18,8 @@ export function assertNever(value: never, what = "value"): never {
 /** Direct sub-expressions of an expression, in evaluation order. */
 export function childExpressions(e: ExprIR): readonly ExprIR[] {
   switch (e.kind) {
-    case "StoreRef":
+    case "PlainRef":
+    case "ElementRead":
     case "NumberLiteral":
     case "StringLiteral":
     case "BooleanLiteral":
@@ -39,7 +40,7 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "Arrow":
       return [e.body];
     case "Call":
-      return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" ? [e.callee.receiver, ...e.args] : e.args;
+      return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod" ? [e.callee.receiver, ...e.args] : e.args;
     case "TemplateLiteral":
       return e.expressions;
     case "Unary":
@@ -92,7 +93,7 @@ export function walkFunction(fn: FunctionIR, visit: (e: ExprIR) => void): void {
         case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
         case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit); else walkExpr(stmt.value, visit); break;
         case "Assign": walkExpr(stmt.value, visit); break;
-        case "PlaySound": break;
+        case "PlaySound": if (stmt.volume) walkExpr(stmt.volume, visit); break;
         case "CallAction": for (const arg of stmt.args) walkExpr(arg, visit); break;
         default: assertNever(stmt, "statement");
       }

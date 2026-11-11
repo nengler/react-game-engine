@@ -11,7 +11,11 @@ void assets_init(bool smooth, bool audio);
 void assets_shutdown(void);
 /* Handles are indices; an invalid handle returns false / does nothing. */
 bool assets_texture(int32_t handle, Texture2D *out);
-void assets_play(int32_t handle);
+void assets_play(int32_t handle, double volume);
+/* Feeds every playing music stream: called once a frame. */
+void assets_update_music(void);
+/* Sets the stick dead zone (keys.c). */
+void keys_set_deadzone(double deadzone);
 bool assets_audio_ready(void);
 
 /* ---------- keys.c ---------- */

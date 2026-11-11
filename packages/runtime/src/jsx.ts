@@ -9,6 +9,7 @@
  * test checks that this module exports exactly what the compiler accepts.
  */
 import type { InputState } from "./input.ts";
+import type { ShakeState, Vector2 } from "./math.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { GameProps } from "./components/Game.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
@@ -20,11 +21,17 @@ import type { CameraProps } from "./components/Camera.ts";
 import type { AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
 import type { FlexProps } from "./components/Flex.ts";
 import type { ScreenProps } from "./components/Screen.ts";
+import type { TilemapProps } from "./components/Tilemap.ts";
+import type { ParticlesProps } from "./components/Particles.ts";
+import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
+import type { FadeProps } from "./components/Fade.ts";
+import type { MusicProps } from "./components/Music.ts";
+import type { RouteProps, RouterProps } from "./components/Router.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
 
-export { clamp } from "./math.ts";
+export { clamp, shakeOn, springBack } from "./math.ts";
 
 // -- state and refs -----------------------------------------------------------
 
@@ -47,16 +54,43 @@ function compileTimeOnly(name: string): never {
  * renders when it is given a new value, so `setItems([...items, item])`, never
  * a mutation of `items`.
  */
-export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>] {
+export function useState<T>(_initial: () => T): [Widen<T>, Setter<Widen<T>>];
+export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>];
+/** `useState(() => makeThing())`: React's lazy initial value, made once per instance (an object with methods, such as an effect). */
+export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>>] {
   return compileTimeOnly("useState");
 }
 
 /**
+ * Squash and stretch: a scale set at a moment that springs back to 1 at \`recover\` a second (default 1.75), as state.
+ *
+ *     const [squash, setSquash] = useSquash();
+ *     setSquash({ x: 0.6, y: 1.4 });                 // in a handler: thin and tall
+ *     <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} … />   // scales about the sprite's origin
+ *
+ * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ */
+export function useSquash(_recover?: number): [Vector2, Setter<Vector2>] {
+  return compileTimeOnly("useSquash");
+}
+
+/**
+ * A shake of the view, as state: `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, and it runs down by
+ * itself in this component's update. Give it to the camera: `<Camera shake={shake}>`.
+ *
+ * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ */
+export function useShake(): [ShakeState, Setter<ShakeState>] {
+  return compileTimeOnly("useShake");
+}
+
+/**
  * A sound, played by calling the returned function in a handler:
- * `const playHit = useSound("hit.wav");` then `playHit();`. The path must be a
+ * `const playHit = useSound("hit.wav");` then `playHit();`, or `playHit(0.5)` at half volume (0 to 1). A sound played again
+ * while it still sounds plays over itself, up to four at once, then the oldest is cut off. The path must be a
  * string literal. Sounds are not placed, so there is no `transform`.
  */
-export function useSound(_path: string): () => void {
+export function useSound(_path: string): (volume?: number) => void {
   return compileTimeOnly("useSound");
 }
 
@@ -67,8 +101,11 @@ export function useRef<T extends Primitive>(_initial: T): { current: Widen<T> } 
 
 // -- per-frame hooks ----------------------------------------------------------
 
-/** Runs every frame, after `useInput`. `dt` is the frame time in seconds. */
-export function useUpdate(_handler: (dt: number) => void): void {
+/**
+ * Runs every frame, after `useInput`. `dt` is the frame time in seconds (the fixed step, with a fixed timestep). `input` is the same
+ * polled input `useInput` gets, for a game that reads its buttons where it steps: `useUpdate((dt, input) => { step(input, dt); })`.
+ */
+export function useUpdate(_handler: (dt: number, input: InputState) => void): void {
   return compileTimeOnly("useUpdate");
 }
 
@@ -103,8 +140,8 @@ export function Entity(_props: EntityProps & { children?: Child }): JSX.Element 
 }
 
 /**
- * The root of a game and its configuration: the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`, `fullscreenKey`),
- * the `background`, the `assets` folder and the game `state` (`state={useGame}`). A container, like `<Entity>`, and
+ * The root of a game and its configuration: the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`, `fullscreenKey`, `fixedStep`, `gamepadDeadzone`, `upscale`, `showFps`, `fpsKey`),
+ * the `background`, the `assets` folder and the `controls`. A container, like `<Entity>`, and
  * optional: a component whose root is `<Game …>` overrides the defaults, each prop only where it is written. Its
  * `width` and `height` are the window's; put a `<Screen width height>` inside it for the resolution the game is drawn
  * at. Settings are literals, and it is only ever a component's root.
@@ -174,6 +211,73 @@ export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
  */
 export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Flex");
+}
+
+/**
+ * A grid of tiles from a sheet, with no object per tile: `<Tilemap map="room1" image="tiles.png" />` draws the registered Tiled map
+ * `room1` with the tiles of `tiles.png`. The same map, as `getTilemap("room1")`, is the solid grid that movement code reads.
+ * Placed by `transform` at the map's top left; `layer` draws one layer only. A leaf.
+ */
+export function Tilemap(_props: TilemapProps): JSX.Element {
+  return compileTimeOnly("Tilemap");
+}
+
+/**
+ * An emitter of small squares for dust, a dash's trail or a death, with no game object per particle: `rate` a second while `emitting`,
+ * `burst` at once when it turns on (or when it is made), each living `lifetime` seconds, thrown at `speed` toward `angle` ± `spread`,
+ * pulled by `gravity`, fading or shrinking. `space="world"` leaves them where they were made. A leaf, placed by `transform`.
+ */
+export function Particles(_props: ParticlesProps): JSX.Element {
+  return compileTimeOnly("Particles");
+}
+
+/**
+ * Where a particle store's bursts are drawn, as a `<Toaster />` is for toasts: `const fx = createParticles({ dust: { … } })` in a
+ * `.ts` module, `<ParticleLayer particles={fx} />` once (inside the `<Camera>`, for bursts at world positions), then
+ * `fx.burst("dust", x, y)` from an action, a plain function or a handler. A leaf.
+ */
+export function ParticleLayer(_props: ParticleLayerProps): JSX.Element {
+  return compileTimeOnly("ParticleLayer");
+}
+
+/**
+ * A cover that fades the screen to a colour and back: put it in a `<Hud>` and switch `on`. `duration` is the seconds a full fade
+ * takes. For a death, a room change, a scene change.
+ */
+export function Fade(_props: FadeProps): JSX.Element {
+  return compileTimeOnly("Fade");
+}
+
+/**
+ * Music that streams from a file, loops, fades and stops: `<Music src="theme.ogg" volume={0.6} playing={!paused} />`. It plays for as
+ * long as it is mounted, so put it in the root, where room and screen changes do not touch it. `fade` is the seconds a full
+ * fade takes, in and out. A leaf with no position.
+ */
+export function Music(_props: MusicProps): JSX.Element {
+  return compileTimeOnly("Music");
+}
+
+/**
+ * The screens of a game, and which one shows: `<Router route={screen} transition={slide}><Route name="title"><Title /></Route>…</Router>`.
+ * Only the shown `<Route>` is in the world. When `route` changes, `transition` (a function you write in a `.ts` file, called with the
+ * progress from 0 to 1 and the two route names, returning where each screen is, whether it is visible and how far a cover colour
+ * is over the screen) runs for `duration` seconds with both screens in the world; without one the screens switch at once.
+ */
+export function Router(_props: RouterProps & { children?: Child }): JSX.Element {
+  return compileTimeOnly("Router");
+}
+
+/** One screen of a `<Router>`, named for its `route`. It is in the world only while shown (or being left or entered). */
+export function Route(_props: RouteProps & { children?: Child }): JSX.Element {
+  return compileTimeOnly("Route");
+}
+
+/**
+ * Pause every `useUpdate` for the next `steps` fixed steps: the freeze frames of a hit or a dash. Call it as a statement in a
+ * handler. `useInput` keeps running and a press during the freeze is kept for the first step after it.
+ */
+export function freeze(_steps: number): void {
+  return compileTimeOnly("freeze");
 }
 
 /**

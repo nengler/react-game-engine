@@ -108,15 +108,45 @@ Someone plays it on a Linux desktop after step 1 and at the end (priority 6); th
 
 **Done when**
 
-- [ ] A one-page design note in the game's package covers the mechanics, the room list and what "finished" means for the level
-- [ ] The level is playable from title to end with keyboard or gamepad, under Node and as a packaged build, with music and sound
-- [ ] Every Tier 1 and Tier 2 addition is in, each with its design notes and tests, and its "Not now" row is removed or updated
-- [ ] The movement constants are recorded in the design note, with untested guesses marked; a person tunes them by playing (priority 6)
-- [ ] The headless tooling works on the demo and the game: screenshots and contact sheets, the harness with input scripts, and one check command
-- [ ] Headless tests cover the movement rules (coyote time, the jump buffer, the dash refill, a wall jump) under the fixed timestep, and a scripted run finishes every room
-- [ ] The parity test passes and `npm run bench:check` stays within budget; frame time on the busiest room is recorded in `NATIVE_PLAN.md`
-- [ ] A "Findings from the first level" section is added here: each gap beyond the planned additions, its workaround or fix, and what it should become
-- [ ] `npm test` and `npm run typecheck` pass
+- [x] A one-page design note in the game's package covers the mechanics, the room list and what "finished" means for the level (`packages/kite/DESIGN.md`)
+- [x] The level is playable from title to end with keyboard or gamepad, under Node and as a packaged build, with music and sound. *Verified headlessly only*: a scripted run plays title to end through the game under Node and the first rooms under the Rust host, and `npm run package:kite` builds both the Node/V8 and the QuickJS folders and they start. Nobody has played it in a window, and no sound has been heard (priority 6)
+- [x] Every Tier 1 and Tier 2 addition is in, each with its design notes and tests, and its "Not now" row is removed or updated
+- [x] The movement constants are recorded in the design note, with untested guesses marked; a person tunes them by playing (priority 6)
+- [x] The headless tooling works on the demo and the game: screenshots and contact sheets, the harness with input scripts, and one check command
+- [x] Headless tests cover the movement rules (coyote time, the jump buffer, the dash refill, a wall jump) under the fixed timestep, and a scripted run finishes every room
+- [x] The parity test passes and `npm run bench:check` stays within budget; frame time on the busiest room is recorded in `NATIVE_PLAN.md` ("What a frame of the level costs")
+- [x] A "Findings from the first level" section is added here: each gap beyond the planned additions, its workaround or fix, and what it should become
+- [x] `npm test` and `npm run typecheck` pass
+
+**Built 2026-11-10** in `packages/kite` (a game, "Kite: The Foothills"; `npm run check:kite`, `npm run play:kite`, `npm run package:kite`). Order of work as planned, one commit per step. Scene switching (title, level, end) is a `screen` leaf in the game state and three conditions in the root, so priority 5's scenes-as-an-entry-point was not needed and nothing was built twice; whoever does priority 5 should read it as the first real use of switching.
+
+### Findings from the first level
+
+What writing a real game found, beyond the planned additions. Each says what the workaround was and what it should become.
+
+1. **A compiled component can hold almost no logic.** Handlers have no loops, `let`, or calls beyond an allowlist, and the game state holds only numbers, strings and booleans (no arrays). *Workaround:* every rule is a plain function in `src/rules/`, the game state keeps the run as leaves and its actions call the rules, and a component passes the buttons as one packed number (`step(buttons, dt)`). This worked well, and is what made the rules testable without the engine. *Should become:* say it as the intended shape in the guide (priority 8); consider arrays in the game state, and an `input.any("ArrowLeft", "A", "PadLeft")` helper or an action map, since the button reading is a long `||` chain.
+2. **Custom hooks cannot return refs, setters or functions, and take no callbacks.** They are inlined text, so only values come out, and a parameter that is a function has nowhere to go. A literal argument is substituted, which is how `useSoundOnCount("jump.wav", …)` gets a path. *Workaround:* three hooks (`usePlatformerBody`, `useSoundOnCount`, `useBurst`) that take values and return a value or nothing. *Should become:* positions in diagnostics point into the expanded text, not the source (a source map), and a hook may want a shorthand for "play this sound when a counter changes".
+3. **Events are counters.** There is no way to call a sound from a store action or to react to a state *change*, so the rules count what happened (`jumps`, `lands`, `deathCount`) and the component compares with a ref (`useSoundOnCount`, `useBurst`). It works and is one step late. *Should become:* an event or change-subscription hook, or `useGame` selectors that fire a handler on change.
+4. **Freeze frames and deterministic replays interact.** `freeze()` skips `onUpdate` for some steps, so a replay's frames and the rules' steps no longer line up; the solver and the rule-level test needed `playback.ts` to model what the engine does (skip, keep presses). The engine side keeps key edges for the first step after a freeze. *Should become:* the fixed-step driver (accumulator, freeze, edge carry) as a function a test can use without a player, so nobody models it twice.
+5. **Colliders report one frame late, and are the wrong tool for tiles.** Hazards, exits and the start are tiles the rules read in the same step; only the gem is a `<Collider>`. *Should become:* a `<Tilemap>` option that makes colliders from tile properties, if a game wants callbacks for them.
+6. **Wall jumping a single wall is a ladder.** Room 3 (the dash) can be crossed by wall jumping out of its pit. Not a bug in the rules, but it says wall jump needs a limit or a cost if "needs the dash" is to hold. *Should become:* a design call after someone plays it (priority 6).
+7. **Room seams are not continuous.** The character is placed standing on the next room's floor a little inside it, under the camera's slide; a continuous world would need the neighbouring room's tiles and hazards to be live during the slide. *Should become:* decide when levels get bigger than one screen (the camera's `bounds` and `slide` already allow it).
+8. **The importer was never run on a map saved by Tiled.** The maps are written by `tools/make-rooms.ts` in Tiled's JSON format, and the tests use hand-written maps; real files from Tiled (other layer formats, external tilesets, more than one tileset, tile objects) may differ. *Should become:* open a room in Tiled and fix what breaks (priority 6 or 8).
+9. **Styled sprites leave the fast path.** A sprite with a frame, a flip or a tint is written by the general walk and is not moved as a block; fine for a handful, measurable for hundreds. `<Tilemap>` has no culling (the level draws the room and its neighbours only, by conditions). *Should become:* measure with a scene of many animated sprites before optimising.
+10. **Frame time spikes when a room changes** (about 25 ms for one step on the cloud VM): a `<Tilemap>` is made and the bounds change. Not noticeable during a 0.4 s slide that the world waits through, but it is the first thing to look at if a person sees a hitch. *Should become:* build the next room's tilemap one step early.
+11. **Sound has never been heard**, and music streaming has run only against a recording backend and a silent librge. Priority 6.
+12. **Room 4 was unplayable** (found by playing, not by the tests): the search found a contrived route, and the natural dash-up never worked. Fixed by redesigning the room and by testing a window of dash timings for the two dash rooms. *Should become:* a margin check for every room's key move, not only those two, and the search preferring routes a person would take.
+13. **Particles in an emitter that is removed are removed with it.** The first version mounted a burst emitter for 0.1 s and unmounted it, which cut the particles off, and kept them in the character's space, so they stuck to it. Emitters now stay mounted, switch on, and use `space="world"`. *Should become:* the guide should say this, and `<Particles>` may deserve a one-shot `burst` trigger that is not a prop toggled twice.
+14. **A router** was asked for, and built: `<Router route transition>` with `<Route name>` screens, transitions as plain functions (finding 1's escape hatch, now real: plain `.ts` functions are callable from components and passable as props). `useUpdate` takes the input, and an action can take it, so Kite's controls are read in plain TypeScript. Sharp scaling (ABI v6) fixes uneven pixels at fractional scales. See NATIVE_PLAN.md and DESIGN.md.
+15. **Smaller things.** The title's "press Z" prompt blinks from a counter in `useInput` (fine, but `useUpdate` would be more honest); `Particles` `emitting` and `burst` together mean "burst when it turns on, including when mounted", which reads oddly until you know it; the bitmap font has one case; TypeScript 7's strip-only mode in Node rejects parameter properties and enums, so the asset tool uses plain classes; `tools/screenshot.ts` needs the headless build and is slow on a cold cache; `npm run check:<game>` runs the Rust host comparison only if `host/target/release/rge-host` exists. The Tier 3 items (context, spread props, conditionals in `.map`, forwarding `{children}`) were **not hit**: the level has no lists and no deep trees, so their diagnostics stay and their rows in "Not now" stay too.
+
+16. **Code that did not read like React** (reviewed after the level was done, 2026-11-11), and what replaced it:
+    - *Counters as events* (`jumps`, `lands`, `deathCount` in the state, compared with refs every frame by `useSoundOnCount`, `useBurst`, `shake={deathCount}`). Now the rules push `GameEvent`s and the game state answers them through **effect stores** (`createParticles` + `<ParticleLayer>`, `createSounds`, `createShake`), called from anywhere like a toast library. No `useEffect` was added: watching state to fire events is the pattern React advises against. This also closes finding 13.
+    - *Eighteen leaf selectors and a `RUN_KEYS` copy loop.* The game state now holds objects, arrays and computed values (`run: newRun()`), and a selector may name an object (`useGame((s) => s.run.player)`), re-rendering when anything under it changes.
+    - *Eight hand-written rooms in `Level.tsx`.* Constants import from `.ts` files: `ROOM_LIST.filter(…).map(…)`; the gem is placed from the room data.
+    - *Key lists in three places.* `createControls` and `<Game controls>`: `input.pressed("confirm")` anywhere.
+    - *Smaller.* A fragment may be a condition's branch (`{!taken && <>…</>}`); the gem owns its collision; screens write with a `<Label>`; animations are a table; the title blinks from time in `useUpdate`; the game loop (`step`) is called by the `Play` screen, not a hook in the character.
+    *Still open:* asset names in a `.ts` file (`createSounds`) are not checked at build time; a selected object is trusted not to be changed in place.
 
 ### 8. Usable outside this repository
 
@@ -281,15 +311,15 @@ flowchart LR
 
 ## Not now, and what would pull it in
 
-The rest of the backlog (the player's and the compiler's) waits because nothing above depends on it, or because no game has asked for it yet. Each row names what would move it up. Sprite sheets and sprite options, fonts, sound volume and looping music, gamepads, a fixed timestep and custom hooks used to be listed here; priority 7 plans them now.
+The rest of the backlog (the player's and the compiler's) waits because nothing above depends on it, or because no game has asked for it yet. Each row names what would move it up. Sprite sheets and sprite options, fonts, sound volume and looping music, gamepads, a fixed timestep and custom hooks used to be listed here; priority 7 built them (2026-11-10).
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
 | Web backend (canvas) | Phase 4 is local first (decided 2026-11-10); records map directly onto canvas calls, so it stays cheap to add later | Wanting a shareable browser build, after priority 8 |
-| High DPI | Slots into the ABI without rework; gamepads and a fixed timestep moved to priority 7 | A blurry Retina window |
+| High DPI | Slots into the ABI without rework; gamepads and a fixed timestep were built in priority 7 | A blurry Retina window |
 | macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
 | One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
 | Context (`createContext` / `useContext`) | Props cover today's trees; it is Tier 3 in priority 7 | Deep trees passing the same prop down many levels, in the platformer or later |
 | Spread props, conditionals inside a list's `.map`, forwarding `{children}`, children on list items | Each is rejected today with a clear diagnostic; Tier 3 in priority 7 | An author hitting one of those diagnostics while writing the platformer |
-| Tiled importer gaps (whole-number `int` checks, template properties) | The importer covers the example maps; `visible` and tile flip flags moved to priority 7's tilemap | A map that uses them |
+| Tiled importer gaps (whole-number `int` checks, template properties, external and multiple tilesets, base64 layers) | `visible` and tile flip flags are done (priority 7); the rest each say so when met | A map that uses them, or the first map saved by Tiled itself (finding 8) |

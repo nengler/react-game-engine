@@ -21,6 +21,8 @@ export class ExpressionLowering extends LoweringBase {
     }
     if (isIdentifier(node)) {
       const binding = this.scope.get(node.text);
+      // A function imported from a relative .ts file, used as a value (a prop that takes a function).
+      if (!binding && this.plainImports.has(node.text)) return { kind: "PlainRef", name: node.text };
       if (!binding) {
         this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component.`, node);
         return null;
@@ -257,6 +259,33 @@ export class ExpressionLowering extends LoweringBase {
         return { kind: "Call", callee: { kind: "Prop", name: binding.name, optional: node.questionDotToken !== undefined }, args };
       }
     }
+    // A function imported from a relative .ts file: any arguments, opaque to the compiler and assumed pure.
+    if (isIdentifier(callee) && this.plainImports.has(callee.text) && !this.scope.has(callee.text)) {
+      const args: ExprIR[] = [];
+      for (const argument of node.arguments) {
+        const lowered = this.lowerNode(argument);
+        if (!lowered) return null;
+        args.push(lowered);
+      }
+      return { kind: "Call", callee: { kind: "Plain", name: callee.text }, args };
+    }
+    // A method of a value imported from a relative .ts file (`fx.burst("dust", x, y)`): opaque too. An array method on an
+    // imported array (`ROOMS.filter(…)`) stays an array method, so its callback is lowered.
+    if (
+      isPropertyAccessExpression(callee) &&
+      isIdentifier(callee.expression) &&
+      this.plainImports.has(callee.expression.text) &&
+      !this.scope.has(callee.expression.text) &&
+      !Object.hasOwn(ARRAY_METHODS, callee.name.text)
+    ) {
+      const args: ExprIR[] = [];
+      for (const argument of node.arguments) {
+        const lowered = this.lowerNode(argument);
+        if (!lowered) return null;
+        args.push(lowered);
+      }
+      return { kind: "Call", callee: { kind: "Plain", name: `${callee.expression.text}.${callee.name.text}` }, args };
+    }
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
     if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
       const name = `Math.${callee.name.text}`;
@@ -282,7 +311,7 @@ export class ExpressionLowering extends LoweringBase {
       return null;
     }
     const count = node.arguments.length;
-    if (result.expected === -1 ? count < 1 : count !== result.expected) {
+    if (result.expected === -2 ? false : result.expected === -1 ? count < 1 : count !== result.expected) {
       this.report(DiagnosticCode.UnsupportedExpression, `${result.label} expects ${result.expected === -1 ? "at least one" : result.expected} argument(s).`, node);
       return null;
     }
@@ -299,6 +328,21 @@ export class ExpressionLowering extends LoweringBase {
   protected lowerArrayMethod(node: CallExpression, callee: PropertyAccessExpression): ExprIR | null {
     const name = callee.name.text;
     const code = DiagnosticCode.UnsupportedExpression;
+    // A method of a per-instance object (state a factory made): opaque, like a plain function.
+    if (isIdentifier(callee.expression) && !Object.hasOwn(ARRAY_METHODS, name)) {
+      const binding = this.scope.get(callee.expression.text);
+      if (binding?.kind === "state" && this.handleStates.has(binding.id)) {
+        const receiver = this.lowerNode(callee.expression);
+        if (!receiver) return null;
+        const args: ExprIR[] = [];
+        for (const argument of node.arguments) {
+          const lowered = this.lowerNode(argument);
+          if (!lowered) return null;
+          args.push(lowered);
+        }
+        return { kind: "Call", callee: { kind: "ValueMethod", receiver, name }, args };
+      }
+    }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
       this.report(
         code,

@@ -19,6 +19,8 @@ export interface SourceAnalysis {
   readonly authoringImports: readonly ImportAnalysis[];
   /** Names imported from a relative `.ts` module: the project's game state (`import { useGame } from "./GameState.ts"`). Checked in the transform. */
   readonly storeImports: readonly ImportAnalysis[];
+  /** Functions imported from a relative `.ts` file (not named like a hook): components may call them and pass them as values. */
+  readonly plainImports: readonly ImportAnalysis[];
   /** Top-level `interface` / `type` declarations, which a component's props type names. */
   readonly typeDeclarations: readonly TypeDeclarationAnalysis[];
   readonly diagnostics: readonly CompilerDiagnostic[];

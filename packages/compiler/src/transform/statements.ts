@@ -152,7 +152,24 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
       ctx.error(DiagnosticCode.UnsupportedStatement, "Only `const name = expression;` declarations are supported in handlers.", statement);
       return null;
     }
-    const value = ctx.lowerExpression(decl.initializer); // lowered before the name exists: no self-reference
+    // `const events = step(input, dt);`: a game-state action whose result the handler uses (only here, in a handler, where it
+    // runs once; in JSX or a derived value it would run on every render).
+    const init = unwrapParens(decl.initializer);
+    const action = isCallExpression(init) && isIdentifier(init.expression) ? ctx.scope.get(init.expression.text) : undefined;
+    let value: ExprIR | null;
+    if (action?.kind === "action" && isCallExpression(init)) {
+      if (!ctx.canPlaySound()) {
+        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${action.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler.`, init);
+        return null;
+      }
+      const args: ExprIR[] = [];
+      for (const argument of init.arguments) {
+        const lowered = ctx.lowerExpression(argument);
+        if (!lowered) return null;
+        args.push(lowered);
+      }
+      value = { kind: "Call", callee: { kind: "Action", name: action.action }, args };
+    } else value = ctx.lowerExpression(decl.initializer); // lowered before the name exists: no self-reference
     const name = decl.name.text;
     if (!value || !checkFreshName(ctx, name, decl.name)) return null;
     const id = localId(ctx.componentName, name, ctx.nextSerial());
@@ -199,15 +216,17 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
     if (callee?.kind === "sound") {
-      if (call.arguments.length !== 0) {
-        ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes no arguments: the sound and its path are fixed where it is declared.`, call);
+      if (call.arguments.length > 1) {
+        ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes at most one argument, the volume from 0 to 1: the sound and its path are fixed where it is declared.`, call);
         return null;
       }
       if (!ctx.canPlaySound()) {
         ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Play the sound in the handler, next to the setter call.`, call);
         return null;
       }
-      return { kind: "PlaySound", sound: callee.id };
+      const volume = call.arguments.length === 1 ? ctx.lowerExpression(call.arguments[0]!) : null;
+      if (call.arguments.length === 1 && volume === null) return null;
+      return { kind: "PlaySound", sound: callee.id, volume };
     }
     if (callee?.kind === "action") {
       if (!ctx.canPlaySound()) {

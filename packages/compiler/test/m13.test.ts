@@ -107,20 +107,20 @@ describe("M13: IR and generated code", () => {
   });
 
   it("calls super first in a hook override on a component rooted at one that implements the hook", () => {
-    assert.match(compiled.code, /override onUpdate\(dt: number\): void \{\n\s+super\.onUpdate\(dt\);\n\s+this\.#onUpdate0\(\);\n\s+\}/);
+    assert.match(compiled.code, /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(\);\n\s+\}/);
     assert.match(compiled.code, /#onUpdate0\(\): void \{\n\s+this\.ticks \+= 1;/);
   });
 
   it("calls super once, then each handler in order, when there are several", () => {
-    assert.match(compiled.code, /override onUpdate\(dt: number\): void \{\n\s+super\.onUpdate\(dt\);\n\s+this\.#onUpdate0\(dt\);\n\s+this\.#onUpdate1\(\);\n\s+\}/);
+    assert.match(compiled.code, /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);\n\s+this\.#onUpdate1\(\);\n\s+\}/);
   });
 
   it("does not add super to a component whose root does not implement the hook", () => {
-    const plain = compile(`function C() { const r = useRef(0); useUpdate(() => { r.current += 1; }); return <Sprite image="a.png" />; }`);
+    const plain = compile(`function C() { const r = useRef(0); useUpdate(() => { r.current += 1; }); return <Shape kind="rect" width={1} height={1} />; }`);
     assert.doesNotMatch(plain.code, /super\.onUpdate/);
     assert.match(plain.code, /override onUpdate\(\): void \{/);
-    const mount = compile(`function C() { const r = useRef(0); useMount(() => { r.current += 1; }); return <AnimatedSprite frames={["a.png"]} />; }`);
-    assert.doesNotMatch(mount.code, /super\.onMount/, "the sprite does not implement onMount");
+    const mount = compile(`function C() { const r = useRef(0); useMount(() => { r.current += 1; }); return <Camera />; }`);
+    assert.doesNotMatch(mount.code, /super\.onMount/, "the camera does not implement onMount");
   });
 
   it("type-checks the generated module", () => {
@@ -143,8 +143,8 @@ describe("M13: authored source type-checks", () => {
     assert.deepEqual(check(`<AnimatedSprite frames={names} transform={{ x: 4 }} />`), []);
   });
 
-  it("rejects frames that are missing, a string, or not images, and a wrong fps or playing", () => {
-    assert.ok(check(`<AnimatedSprite />`).length > 0, "frames is required");
+  it("rejects frames that are a string, or not images, and a wrong fps or playing", () => {
+    assert.deepEqual(check(`<AnimatedSprite />`), [], "frames is optional since a sprite can play a sheet instead; with neither it draws nothing");
     assert.ok(check(`<AnimatedSprite frames="a.png" />`).length > 0);
     assert.ok(check(`<AnimatedSprite frames={[1, 2]} />`).length > 0);
     assert.ok(check(`<AnimatedSprite frames={["a.png"]} fps="fast" />`).length > 0);
@@ -223,8 +223,8 @@ describe("M13: runtime behaviour", () => {
     assert.equal(flame.image, "f2.png");
   });
 
-  it("works as a root whose frames come from a prop: the required prop is a placeholder until the first render", () => {
-    assert.match(compile(SOURCE, "Anim.tsx").code, /super\(\{ fps: 2, frames: undefined as never \}, props\);/);
+  it("works as a root whose frames come from a prop: they are set in the first render", () => {
+    assert.match(compile(SOURCE, "Anim.tsx").code, /super\(\{ fps: 2 \}, props\);/);
     const world = new World();
     const loop = new Loop({ frames: ["a.png", "b.png"] });
     world.mount(loop);
@@ -262,15 +262,23 @@ describe("M13: runtime behaviour", () => {
 });
 
 describe("M13: the manifest says which hooks a built-in implements", () => {
-  it("lists onUpdate for AnimatedSprite and no other built-in", () => {
-    assert.deepEqual(runtimeManifest.intrinsicHooks, { AnimatedSprite: ["onUpdate"] });
+  it("lists onUpdate for the built-ins that advance themselves (AnimatedSprite, Camera, Particles, Fade, Music, Router), and ParticleLayer's mount hooks", () => {
+    assert.deepEqual(runtimeManifest.intrinsicHooks, {
+      AnimatedSprite: ["onUpdate"],
+      Camera: ["onUpdate"],
+      Particles: ["onUpdate"],
+      ParticleLayer: ["onMount", "onUnmount"],
+      Fade: ["onUpdate"],
+      Music: ["onUpdate"],
+      Router: ["onUpdate"],
+    });
   });
 
   it("is driven by the manifest, not by AnimatedSprite: any intrinsic can be marked", () => {
     const withSuper = (manifest: typeof runtimeManifest) => {
       const compiler = new (getCompiler().constructor as new (config: object) => ReturnType<typeof getCompiler>)({ manifest });
       try {
-        const result = compiler.compile("C.tsx", `import { Sprite, useUpdate, useRef } from "@rge/runtime/jsx";\nfunction C() { const r = useRef(0); useUpdate((dt) => { r.current += dt; }); return <Sprite image="a.png" />; }`);
+        const result = compiler.compile("C.tsx", `import { Shape, useUpdate, useRef } from "@rge/runtime/jsx";\nfunction C() { const r = useRef(0); useUpdate((dt) => { r.current += dt; }); return <Shape kind="rect" width={1} height={1} />; }`);
         assert.ok(result.ok, JSON.stringify(result.diagnostics));
         return result.code;
       } finally {
@@ -278,7 +286,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
       }
     };
     assert.doesNotMatch(withSuper(runtimeManifest), /super\.onUpdate/);
-    assert.match(withSuper({ ...runtimeManifest, intrinsicHooks: { Sprite: ["onUpdate"] } }), /override onUpdate\(dt: number\): void \{\n\s+super\.onUpdate\(dt\);\n\s+this\.#onUpdate0\(dt\);/);
+    assert.match(withSuper({ ...runtimeManifest, intrinsicHooks: { Shape: ["onUpdate"] } }), /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/);
   });
 
   it("reserves the sprite's own names for a component rooted at it", () => {
@@ -288,5 +296,48 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
         .diagnostics.map((d) => d.code);
       assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
     }
+  });
+});
+
+describe("sprite sheets and sprite options", () => {
+  const check = (body: string) =>
+    getCompiler().typeCheckSources([
+      {
+        fileName: `${process.cwd()}/.test-output/M13s${Math.random()}.tsx`,
+        text: `import { Entity, Sprite, AnimatedSprite, useState } from "@rge/runtime/jsx";\nfunction C() { const [n] = useState(0); const [left] = useState(false); const [anim] = useState("idle"); return <Entity name="C">${body}</Entity>; }`,
+      },
+    ]);
+
+  it("accepts a frame of a sheet and the sprite options, as literals and as state", () => {
+    assert.deepEqual(check(`<Sprite image="a.png" frameWidth={12} frameHeight={12} frame={n} flipX={left} originX={6} originY={12} tint="red" opacity={0.5} />`), []);
+    assert.deepEqual(check(`<AnimatedSprite sheet="a.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={anim} loop={false} flipX={left} />`), []);
+  });
+
+  it("rejects options of the wrong type", () => {
+    assert.ok(check(`<Sprite image="a.png" flipX="yes" />`).length > 0);
+    assert.ok(check(`<Sprite image="a.png" opacity="half" />`).length > 0);
+    assert.ok(check(`<AnimatedSprite sheet="a.png" animation={1} />`).length > 0);
+  });
+
+  it("builds a sprite that follows state: the options are set in render, and only when they change", async () => {
+    const compiled = compile(
+      `function Hero() { const [left, setLeft] = useState(false); const [anim, setAnim] = useState("idle");
+        return <AnimatedSprite sheet="hero.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={anim} flipX={left} />; }`,
+      "Hero.tsx",
+    );
+    assert.match(compiled.code, /super\(\{ sheet: "hero\.png", frameWidth: 12, frameHeight: 12, animations: "idle:0-1@4, run:2-7@12" \}\);/);
+    assert.match(compiled.code, /if \(this\.animation !== \$1 \|\| this\.flipX !== \$2\) \{\s+this\.animation = \$1;\s+this\.flipX = \$2;/);
+    const { Hero } = await load<{ Hero: new () => AnimatedSprite & { setAnim(v: string): void; setLeft(v: boolean): void } }>(compiled);
+    const world = new World();
+    const hero = new Hero();
+    world.mount(hero);
+    assert.equal(hero.sheetFrame, 0);
+    hero.setAnim("run");
+    world.flush();
+    assert.equal(hero.current?.name, "run");
+    assert.equal(hero.sheetFrame, 2);
+    hero.setLeft(true);
+    world.flush();
+    assert.equal(hero.flipX, true);
   });
 });

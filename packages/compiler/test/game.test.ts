@@ -48,33 +48,40 @@ function errors(source: string, c: Compiler = compiler): { code: string; message
 
 const MAIN = `export default function Main() {
   return (
-    <Game name="Main" state={useGame} title="Test" width={320} height={200} background="#112233" assets="art" resizable={false} smooth>
+    <Game name="Main" title="Test" width={320} height={200} background="#112233" assets="art" resizable={false} smooth>
       <Entity name="child" />
     </Game>
   );
 }`;
 
 describe("<Game> as a component's root", () => {
-  it("makes a class that extends Game, passing its settings and the store to the runtime", async () => {
+  it("makes a class that extends Game, passing its settings to the runtime", async () => {
     const compiled = build(MAIN);
     assert.match(compiled.code, /import \{ Entity, Game, type PrefabDefinition \} from "@rge\/runtime";/);
-    assert.match(compiled.code, /import \{ useGame \} from "\.\.\/\.\.\/GameState\.ts";/);
     assert.match(compiled.code, /export class Main extends Game \{/);
-    assert.match(compiled.code, /super\(\{ name: "Main", state: useGame, title: "Test", width: 320, height: 200, background: "#112233", assets: "art", resizable: false, smooth: true \}\);/);
+    assert.match(compiled.code, /super\(\{ name: "Main", title: "Test", width: 320, height: 200, background: "#112233", assets: "art", resizable: false, smooth: true \}\);/);
     const g = compiler.typeCheck([{ fileName: compiled.fileName, text: compiled.code }]);
     assert.deepEqual(g, []);
     const { Main } = await load<{ Main: new () => Game }>(compiled);
     const main = new Main();
     assert.deepEqual([main.title, main.width, main.height, main.background, main.assets, main.resizable, main.smooth, main.vsync], ["Test", 320, 200, "#112233", "art", false, true, undefined], "a setting not written stays undefined, so the player can fall back");
-    assert.equal(main.state && typeof main.state.store.reset, "function");
     assert.equal(main.children.length, 1);
     assert.ok(main instanceof Entity, "it is still a container, named like any entity");
   });
 
-  it("lowers state={useGame} to the store itself, and needs nothing else", () => {
-    const compiled = build(`function Main() { return <Game state={useGame} />; }`);
-    const root = compiled.ir.components[0]!.root;
-    assert.deepEqual(root.props, [{ kind: "StaticProp", name: "state", value: { kind: "StoreRef" } }]);
+  it("takes fixedStep, the rate of the fixed timestep, as a literal setting", async () => {
+    const compiled = build(`function Main() { return <Game fixedStep={60} />; }`);
+    assert.match(compiled.code, /super\(\{ fixedStep: 60 \}\);/);
+    const { Main } = await load<{ Main: new () => Game }>(compiled);
+    assert.equal(new Main().fixedStep, 60);
+    assert.equal(new Game().fixedStep, undefined, "off unless written");
+    assert.match(errors(`function A() { const [n] = useState(60); return <Game fixedStep={n} />; }`)[0]!.message, /<Game fixedStep> must be a literal/);
+  });
+
+  it("has no state prop (every game state starts fresh with the game): it is not one of its settings", () => {
+    const found = errors(`function Main() { return <Game state={useGame} />; }`);
+    assert.equal(found[0]!.code, DiagnosticCode.UnsupportedAttribute);
+    assert.match(found[0]!.message, /<Game> has no prop 'state'/);
     const bare = build(`function Main() { return <Game />; }`);
     assert.deepEqual(bare.ir.components[0]!.root.props, []);
     assert.doesNotMatch(bare.code, /GameState/);
@@ -105,17 +112,8 @@ describe("<Game> as a component's root", () => {
   it("rejects a prop it does not have, and a transform, saying what its settings are", () => {
     const unknown = errors(`function A() { return <Game fps={30} />; }`);
     assert.equal(unknown[0]!.code, DiagnosticCode.UnsupportedAttribute);
-    assert.match(unknown[0]!.message, /<Game> has no prop 'fps'\. Its settings: title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, state\./);
+    assert.match(unknown[0]!.message, /<Game> has no prop 'fps'\. Its settings: title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, gamepadDeadzone, upscale, showFps, fpsKey, controls\./);
     assert.deepEqual(errors(`function A() { return <Game transform={{ x: 1 }} />; }`).map((d) => d.code), [DiagnosticCode.InvalidTransformAttribute]);
-  });
-
-  it("takes only the game state as its state", () => {
-    const notStore = errors(`function A() { const [s] = useState(0); return <Game state={s} />; }`);
-    assert.equal(notStore[0]!.code, DiagnosticCode.InvalidGameState);
-    assert.match(notStore[0]!.message, /`state=\{useGame\}`, imported from GameState\.ts/);
-    assert.equal(errors(`function A() { return <Game state="x" />; }`)[0]!.code, DiagnosticCode.InvalidGameState);
-    const none = errors(`function A() { return <Game state={useGame} />; }`, new Compiler());
-    assert.ok(none.some((d) => d.code === DiagnosticCode.InvalidGameState));
   });
 
   it("does not let a component use the store as a value anywhere else", () => {
@@ -127,12 +125,11 @@ describe("<Game> as a component's root", () => {
     assert.deepEqual(errors(`function Game() { return <Entity />; }`).map((d) => d.code), [DiagnosticCode.DuplicateComponent]);
   });
 
-  it("is checked in the authored source too: the store is the right type, a setting the right type", () => {
+  it("is checked in the authored source too: a setting the right type", () => {
     const file = (text: string) => [{ fileName: join(ROOT, "Src.tsx"), text }];
-    const good = `import { Game } from "@rge/runtime/jsx";\nimport { useGame } from "./GameState.ts";\nexport function Main() { return <Game state={useGame} title="t" width={320} />; }`;
+    const good = `import { Game } from "@rge/runtime/jsx";\nexport function Main() { return <Game title="t" width={320} />; }`;
     assert.deepEqual(compiler.typeCheckSources(file(good)).map((d) => d.message), []);
     assert.ok(compiler.typeCheckSources(file(good.replace('width={320}', 'width="320"'))).length > 0, "width is a number");
     assert.ok(compiler.typeCheckSources(file(good.replace('title="t"', 'title={5}'))).length > 0, "title is a string");
-    assert.ok(compiler.typeCheckSources(file(good.replace('state={useGame}', 'state={5}'))).length > 0, "state is a game state");
   });
 });

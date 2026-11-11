@@ -16,7 +16,9 @@ interface State {
   coins: number;
   player: { hp: number; name: string };
   muted: boolean;
+  enemies: { id: number; hp: number }[];
   collect: (n: number) => void;
+  spawn: (id: number) => void;
   hurt: () => void;
   rename: (name: string) => void;
   noop: () => void;
@@ -26,7 +28,9 @@ export const useGame = createGameState<State>()((set) => ({
   coins: 0,
   player: { hp: 10, name: "Ada" },
   muted: false,
+  enemies: [],
   collect: (n) => set((s) => ({ coins: s.coins + n })),
+  spawn: (id) => set((s) => ({ enemies: [...s.enemies, { id, hp: 3 }] })),
   hurt: () => set((s) => ({ player: { ...s.player, hp: s.player.hp - 1 } })),
   rename: (name) => set((s) => ({ player: { ...s.player, name } })),
   noop: () => set({}),
@@ -129,15 +133,23 @@ describe("GameState.ts", () => {
     }
   });
 
+  it("keeps an array or a value made by code as a value whose type TypeScript knows", () => {
+    const { schema, diagnostics } = read(wrap(`{ items: [], run: newRun(), total: 1 + 1, base, nested: { list: [1, 2] } }`));
+    assert.deepEqual(diagnostics, []);
+    assert.deepEqual(schema!.tree, {
+      kind: "node",
+      children: { items: { kind: "value" }, run: { kind: "value" }, total: { kind: "value" }, base: { kind: "value" }, nested: { kind: "node", children: { list: { kind: "value" } } } },
+    });
+  });
+
   it("rejects what it cannot understand, saying why", () => {
     const codes = (text: string) => read(text).diagnostics.map((d) => d.code);
     for (const text of [
-      wrap(`{ items: [] }`),
       wrap(`{ a: 1, a: 2 }`),
       wrap(`{ a: 1, a() {} }`),
       wrap(`{ "a.b": 1 }`),
-      wrap(`{ a }`),
-      wrap(`{ a: 1 + 1 }`),
+      wrap(`{ ...base }`),
+      wrap(`{ [key]: 1 }`),
       wrap(`{ nested: { act: () => 1 } }`),
       wrap(`makeState()`),
       `export const useGame = createGameState(makeCreator);`,
@@ -195,17 +207,58 @@ export function Settings() {
   it("reports a wrong path with the nearest key at the level it went wrong", () => {
     const [top] = errors(`function A() { const c = useGame((s) => s.coin); return <Entity />; }`);
     assert.equal(top!.code, DiagnosticCode.InvalidGameState);
-    assert.match(top!.message, /'coin' is not in the game state \(did you mean "coins"\?\)\. State: coins, player, muted, collect, hurt, rename, noop\./);
+    assert.match(top!.message, /'coin' is not in the game state \(did you mean "coins"\?\)\. State: coins, player, muted, enemies, collect, spawn, hurt, rename, noop\./);
     const [nested] = errors(`function A() { const c = useGame((s) => s.player.hpp); return <Entity />; }`);
     assert.match(nested!.message, /'player\.hpp' is not in the game state \(did you mean "player\.hp"\?\)\. 'player' has: hp, name\./);
     const [through] = errors(`function A() { const c = useGame((s) => s.coins.total); return <Entity />; }`);
     assert.match(through!.message, /'coins' is a number, so it has no 'total'/);
   });
 
-  it("asks for a leaf when the selector names an object", () => {
-    const [d] = errors(`function A() { const p = useGame((s) => s.player); return <Entity />; }`);
-    assert.equal(d!.code, DiagnosticCode.InvalidGameState);
-    assert.match(d!.message, /'player' is an object: select one of its values \(player\.hp, player\.name\)/);
+  it("selects an object, typed by TypeScript from the store, and reads its members", () => {
+    const compiled = build(`
+export function Badge() {
+  const player = useGame((s) => s.player);
+  return <Text size={12}>{player.name} {player.hp}</Text>;
+}`);
+    const state = compiled.ir.components[0]!.state[0]!;
+    assert.equal(state.globalKey, "player");
+    assert.deepEqual(state.type, { kind: "SourceType", text: 'ReturnType<typeof useGame.getState>["player"]' });
+    assert.match(compiled.code, /player: ReturnType<typeof useGame\.getState>\["player"\] = useGame\.store\.get<ReturnType<typeof useGame\.getState>\["player"\]>\("player"\);/);
+    assert.deepEqual(typeErrors(compiled), []);
+    const typo = build(`function A() { const p = useGame((s) => s.player); return <Text size={12}>{p.hpp}</Text>; }`);
+    assert.match(typeErrors(typo).map((d) => d.message).join("\n"), /hpp/, "a member the object does not have is a type error");
+  });
+
+  it("picks several values at once, each its own selector: from a path, an object literal or an array literal", async () => {
+    const compiled = build(`
+export function Card() {
+  const { hp, name: who } = useGame((s) => s.player);
+  const { c, quiet: m } = useGame((s) => ({ c: s.coins, quiet: s.muted }));
+  const [total, health] = useGame((s) => [s.coins, s.player.hp]);
+  return <Text size={12}>{who} {hp} {c} {m ? "m" : "-"} {total} {health}</Text>;
+}`);
+    const keys = compiled.ir.components[0]!.state.map((st) => st.globalKey);
+    assert.deepEqual(keys, ["player.hp", "player.name", "coins", "muted", "coins", "player.hp"], "one leaf subscription each");
+    assert.deepEqual(typeErrors(compiled), []);
+    const { Card } = await load<{ Card: new () => Text }>(generated(compiled));
+    const world = new World();
+    const card = new Card();
+    world.mount(card);
+    world.flush();
+    assert.equal(card.text, "Ada 10 0 - 0 10");
+    act("collect", 3);
+    act("hurt");
+    world.flush();
+    assert.equal(card.text, "Ada 9 3 - 3 9");
+  });
+
+  it("selects an array and renders it as a keyed list", () => {
+    const compiled = build(`
+export function Swarm() {
+  const enemies = useGame((s) => s.enemies);
+  return <Entity name="Swarm">{enemies.map((e) => <Text key={e.id} size={8}>{e.hp}</Text>)}</Entity>;
+}`);
+    assert.deepEqual(typeErrors(compiled), []);
   });
 
   it("accepts only a plain path as the selector, bound with const, at the top level", () => {
@@ -235,7 +288,7 @@ export function Settings() {
   });
 
   it("imports only the game state from a .ts module, and needs one to exist", () => {
-    assert.deepEqual(errors(`function A() { return <Entity />; }`, compiler, `import { other } from "./GameState.ts";\n`).map((d) => d.code), [DiagnosticCode.InvalidGameState]);
+    assert.deepEqual(errors(`function A() { return <Entity />; }`, compiler, `import { useOther } from "./GameState.ts";\n`).map((d) => d.code), [DiagnosticCode.InvalidGameState]);
     const none = errors(`function A() { const c = useGame((s) => s.coins); return <Entity />; }`, new Compiler());
     assert.deepEqual(none.map((d) => d.code), [DiagnosticCode.InvalidGameState]);
     assert.match(none[0]!.message, /no game state to import/);
@@ -351,6 +404,42 @@ describe("running a game state", () => {
     world.mount(early);
     world.flush();
     assert.equal(early.text, "Coins: 9", "mounted after a change it missed: caught up on mounting");
+  });
+
+  it("re-renders a reader of an object or an array when a value under it changes, and only then", async () => {
+    const { Badge } = await make<{ Badge: new () => Reader }>(`
+export function Badge() {
+  const player = useGame((s) => s.player);
+  return <Text size={12}>{player.name} {player.hp}</Text>;
+}`, "Badge.tsx");
+    const { Count } = await make<{ Count: new () => Reader }>(`
+export function Count() {
+  const enemies = useGame((s) => s.enemies);
+  return <Text size={12}>{enemies.length} {enemies.filter((e) => e.hp === 3).length}</Text>;
+}`, "Count.tsx");
+    const world = new World();
+    const root = new Entity({ name: "root" });
+    const badge = new Badge();
+    const count = new Count();
+    root.addChild(badge);
+    root.addChild(count);
+    world.mount(root);
+    world.flush();
+    assert.equal(badge.text, "Ada 10");
+    assert.equal(count.text, "0 0");
+    act("collect", 1);
+    assert.equal(badge.isDirty, false, "coins is not under player");
+    act("hurt");
+    assert.equal(badge.isDirty, true, "player.hp is");
+    assert.equal(count.isDirty, false);
+    act("spawn", 1);
+    act("spawn", 2);
+    assert.equal(count.isDirty, true);
+    world.flush();
+    assert.equal(badge.text, "Ada 9");
+    assert.equal(count.text, "2 2");
+    useGame.setState((s) => ({ player: { ...s.player } }));
+    assert.equal(badge.isDirty, false, "an equal copy changes no value");
   });
 
   it("stops telling a component that left the world, and resetGameState puts everything back", async () => {

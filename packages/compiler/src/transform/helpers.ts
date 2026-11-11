@@ -124,7 +124,7 @@ export const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["transform"]);
 
 /** A list's source: a state or prop array, optionally followed by `.filter(…)` calls. */
 export function isListSource(e: ExprIR): boolean {
-  if (e.kind === "StateRead" || e.kind === "PropRead") return true;
+  if (e.kind === "StateRead" || e.kind === "PropRead" || e.kind === "PlainRef") return true;
   return e.kind === "Call" && e.callee.kind === "ArrayMethod" && e.callee.name === "filter" && isListSource(e.callee.receiver);
 }
 

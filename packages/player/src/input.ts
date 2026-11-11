@@ -1,4 +1,4 @@
-import type { InputState, Point, ViewTransform } from "@rge/runtime";
+import type { Controls, InputState, Point, ViewTransform } from "@rge/runtime";
 import {
   KEYS,
   KEY_INDEX,
@@ -25,8 +25,15 @@ const IDENTITY_VIEW: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 export class PlayerInput implements InputState {
   readonly values = new Float64Array(RGE_IN_LEN);
   readonly keys = new Uint8Array(KEYS.length);
+  /**
+   * The key flags handlers read (`pressed`, `down`, `released`). The raw `keys` unless a fixed timestep is on, when the player
+   * swaps in a per-step copy so an edge is seen by exactly one step (see `createPlayer`).
+   */
+  handlerKeys: Uint8Array = this.keys;
   /** Set by the player after each frame is built. */
   view: ViewTransform = IDENTITY_VIEW;
+  /** The game's actions (`<Game controls>`): a name of one of them is answered for any of its keys. */
+  controls: Controls | undefined = undefined;
   readonly #warner: Warner;
 
   constructor(warner: Warner) {
@@ -91,13 +98,21 @@ export class PlayerInput implements InputState {
     return pointThrough(view, x, y);
   }
 
-  #flags(key: string, flag: number): boolean {
+  #flags(name: string, flag: number): boolean {
+    const keys = this.controls?.keysOf(name);
+    if (keys === undefined) return this.#keyFlags(name, flag);
+    if (flag === RGE_KEY_RELEASED) return keys.some((k) => this.#keyFlags(k, RGE_KEY_RELEASED)) && !keys.some((k) => this.#keyFlags(k, RGE_KEY_DOWN));
+    return keys.some((k) => this.#keyFlags(k, flag));
+  }
+
+  #keyFlags(key: string, flag: number): boolean {
     const index = KEY_INDEX.get(key);
     if (index === undefined) {
-      this.#warner.once(`key:${key}`, `Unknown key '${key}': it is never pressed. Known keys: ${KEYS.join(", ")}.`);
+      const actions = this.controls ? Object.keys(this.controls.bindings) : [];
+      this.#warner.once(`key:${key}`, `Unknown key '${key}': it is never pressed. ${actions.length > 0 ? `Actions: ${actions.join(", ")}. ` : ""}Known keys: ${KEYS.join(", ")}.`);
       return false;
     }
-    return ((this.keys[index] as number) & flag) !== 0;
+    return ((this.handlerKeys[index] as number) & flag) !== 0;
   }
 }
 

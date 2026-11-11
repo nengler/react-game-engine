@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include "internal.h"
+#include "rge.h"
 
 /* Textures and sounds are kept in growable tables; a handle is an index and is never reused. The
  * TypeScript side loads each path once, so this side does not look paths up. */
@@ -13,12 +14,23 @@ typedef struct {
 typedef struct {
   Sound *items;
   bool *loaded; /* false for a sound that exists but cannot play (no audio device) */
+  Sound **voices; /* per sound: aliases of it, made on first use, so one sound can play over itself */
+  int32_t *voice_count;
+  int32_t *next_voice; /* which voice to take when all are playing: the oldest */
   int32_t count;
   int32_t capacity;
 } SoundTable;
 
+typedef struct {
+  Music *items;
+  bool *loaded;
+  int32_t count;
+  int32_t capacity;
+} MusicTable;
+
 static TextureTable textures;
 static SoundTable sounds;
+static MusicTable musics;
 static bool smooth_filter;
 static bool audio_ready;
 
@@ -37,7 +49,19 @@ bool assets_audio_ready(void) {
 
 void assets_shutdown(void) {
   for (int32_t i = 0; i < textures.count; i++) UnloadTexture(textures.items[i]);
-  for (int32_t i = 0; i < sounds.count; i++) if (sounds.loaded[i]) UnloadSound(sounds.items[i]);
+  for (int32_t i = 0; i < sounds.count; i++) {
+    if (!sounds.loaded[i]) continue;
+    for (int32_t v = 0; v < sounds.voice_count[i]; v++) UnloadSoundAlias(sounds.voices[i][v]);
+    free(sounds.voices[i]);
+    UnloadSound(sounds.items[i]);
+  }
+  for (int32_t i = 0; i < musics.count; i++) if (musics.loaded[i]) UnloadMusicStream(musics.items[i]);
+  free(musics.items);
+  free(musics.loaded);
+  musics = (MusicTable){0};
+  free(sounds.voices);
+  free(sounds.voice_count);
+  free(sounds.next_voice);
   free(textures.items);
   free(sounds.items);
   free(sounds.loaded);
@@ -53,9 +77,95 @@ bool assets_texture(int32_t handle, Texture2D *out) {
   return true;
 }
 
-void assets_play(int32_t handle) {
+static double clamp_volume(double volume) {
+  return volume >= 0.0 && volume <= 1.0 ? volume : (volume > 1.0 ? 1.0 : 0.0); /* NaN reads as 0 */
+}
+
+/* Play a sound on a voice that is free: the sound itself, then aliases of it made as needed, up to RGE_SOUND_VOICES; with
+ * all of them busy the oldest is cut off and used again. */
+void assets_play(int32_t handle, double volume) {
   if (handle < 0 || handle >= sounds.count || !sounds.loaded[handle]) return;
-  PlaySound(sounds.items[handle]);
+  Sound *voice = &sounds.items[handle];
+  if (IsSoundPlaying(*voice)) {
+    voice = NULL;
+    for (int32_t v = 0; v < sounds.voice_count[handle]; v++) {
+      if (!IsSoundPlaying(sounds.voices[handle][v])) {
+        voice = &sounds.voices[handle][v];
+        break;
+      }
+    }
+    if (voice == NULL && sounds.voice_count[handle] < RGE_SOUND_VOICES - 1) {
+      Sound *grown = realloc(sounds.voices[handle], (size_t)(sounds.voice_count[handle] + 1) * sizeof(Sound));
+      if (grown != NULL) {
+        sounds.voices[handle] = grown;
+        grown[sounds.voice_count[handle]] = LoadSoundAlias(sounds.items[handle]);
+        voice = &grown[sounds.voice_count[handle]++];
+      }
+    }
+    if (voice == NULL) {
+      /* Every voice is busy: the primary and the aliases take turns being cut off. */
+      int32_t total = sounds.voice_count[handle] + 1;
+      int32_t pick = sounds.next_voice[handle] % total;
+      sounds.next_voice[handle] = (pick + 1) % total;
+      voice = pick == 0 ? &sounds.items[handle] : &sounds.voices[handle][pick - 1];
+      StopSound(*voice);
+    }
+  }
+  SetSoundVolume(*voice, (float)clamp_volume(volume));
+  PlaySound(*voice);
+}
+
+void assets_update_music(void) {
+  for (int32_t i = 0; i < musics.count; i++) if (musics.loaded[i] && IsMusicStreamPlaying(musics.items[i])) UpdateMusicStream(musics.items[i]);
+}
+
+int32_t rge_load_music(const char *path) {
+  if (path == NULL || !FileExists(path)) return -1;
+  Music music = {0};
+  bool loaded = false;
+  if (audio_ready) {
+    music = LoadMusicStream(path);
+    if (!IsMusicValid(music)) return -1;
+    loaded = true;
+  }
+  if (musics.count == musics.capacity) {
+    int32_t capacity = musics.capacity ? musics.capacity * 2 : 4;
+    Music *grown_items = realloc(musics.items, (size_t)capacity * sizeof(Music));
+    if (grown_items == NULL) {
+      if (loaded) UnloadMusicStream(music);
+      return -1;
+    }
+    musics.items = grown_items;
+    bool *grown_loaded = realloc(musics.loaded, (size_t)capacity * sizeof(bool));
+    if (grown_loaded == NULL) {
+      if (loaded) UnloadMusicStream(music);
+      return -1;
+    }
+    musics.loaded = grown_loaded;
+    musics.capacity = capacity;
+  }
+  musics.items[musics.count] = music;
+  musics.loaded[musics.count] = loaded;
+  return musics.count++;
+}
+
+void rge_music_play(int32_t handle, double volume, int32_t loop) {
+  if (handle < 0 || handle >= musics.count || !musics.loaded[handle]) return;
+  Music *music = &musics.items[handle];
+  music->looping = loop != 0;
+  StopMusicStream(*music);
+  SetMusicVolume(*music, (float)clamp_volume(volume));
+  PlayMusicStream(*music);
+}
+
+void rge_music_set_volume(int32_t handle, double volume) {
+  if (handle < 0 || handle >= musics.count || !musics.loaded[handle]) return;
+  SetMusicVolume(musics.items[handle], (float)clamp_volume(volume));
+}
+
+void rge_music_stop(int32_t handle) {
+  if (handle < 0 || handle >= musics.count || !musics.loaded[handle]) return;
+  StopMusicStream(musics.items[handle]);
 }
 
 int32_t rge_load_texture(const char *path) {
@@ -101,13 +211,30 @@ int32_t rge_load_sound(const char *path) {
       return -1;
     }
     sounds.loaded = grown_loaded;
+    Sound **grown_voices = realloc(sounds.voices, (size_t)capacity * sizeof(Sound *));
+    int32_t *grown_counts = realloc(sounds.voice_count, (size_t)capacity * sizeof(int32_t));
+    int32_t *grown_next = realloc(sounds.next_voice, (size_t)capacity * sizeof(int32_t));
+    if (grown_voices != NULL) sounds.voices = grown_voices;
+    if (grown_counts != NULL) sounds.voice_count = grown_counts;
+    if (grown_next != NULL) sounds.next_voice = grown_next;
+    if (grown_voices == NULL || grown_counts == NULL || grown_next == NULL) {
+      if (loaded) UnloadSound(sound);
+      return -1;
+    }
     sounds.capacity = capacity;
   }
   sounds.items[sounds.count] = sound;
   sounds.loaded[sounds.count] = loaded;
+  sounds.voices[sounds.count] = NULL;
+  sounds.voice_count[sounds.count] = 0;
+  sounds.next_voice[sounds.count] = 0;
   return sounds.count++;
 }
 
 void rge_play_sound(int32_t handle) {
-  assets_play(handle);
+  assets_play(handle, 1.0);
+}
+
+void rge_play_sound_ex(int32_t handle, double volume) {
+  assets_play(handle, volume);
 }

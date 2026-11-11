@@ -9,7 +9,8 @@ import { type ParamIR } from "./values.ts";
 // ---------------------------------------------------------------------------
 
 export type ExprIR =
-  | StoreRefIR
+  | PlainRefIR
+  | ElementReadIR
   | NumberLiteralIR
   | StringLiteralIR
   | BooleanLiteralIR
@@ -31,11 +32,22 @@ export type ExprIR =
   | ConditionalExprIR;
 
 /**
- * `state={useGame}` on a `<Game>`: the project's game state itself (the imported store), handed to the runtime. It is
- * the only place a component uses the store as a value; the generated code writes the imported name.
+ * A function imported from a relative `.ts` file, used as a value (`<Router transition={crossfade} />`): the generated code writes
+ * the imported name. The compiler does not look inside it.
  */
-export interface StoreRefIR {
-  readonly kind: "StoreRef";
+/**
+ * A field of one of this component's own elements, by its field name: `this.route2.active`. Only the compiler writes it (a
+ * `<Route>`'s children are shown while the route is active); it is read fresh on every render, so it has no dependencies.
+ */
+export interface ElementReadIR {
+  readonly kind: "ElementRead";
+  readonly field: string;
+  readonly member: string;
+}
+
+export interface PlainRefIR {
+  readonly kind: "PlainRef";
+  readonly name: string;
 }
 
 export interface NumberLiteralIR {
@@ -182,9 +194,18 @@ export interface CallIR {
 
 export type CalleeIR =
   | { readonly kind: "Function"; readonly name: string }
+  /**
+   * A call of a function imported from a relative `.ts` file, or of a method of a value imported from one (`fx.burst`, the
+   * name then has a dot): opaque, so its arguments are all it depends on.
+   */
+  | { readonly kind: "Plain"; readonly name: string }
   | { readonly kind: "Method"; readonly receiver: ParamReadIR; readonly name: string }
   /** `enemies.filter((e) => …)`: an allowlisted, non-mutating array method (`ARRAY_METHODS`) on any value. */
   | { readonly kind: "ArrayMethod"; readonly receiver: ExprIR; readonly name: ArrayMethodName }
+  /** `const events = step(input, dt)` in a handler: a game-state action whose result the handler uses. */
+  | { readonly kind: "Action"; readonly name: string }
+  /** `squash.start(0.6, 1.4)`: a method of a per-instance object, state made by a factory (`useState(() => createSquash())`). Opaque. */
+  | { readonly kind: "ValueMethod"; readonly receiver: ExprIR; readonly name: string }
   /** A callback prop: `onDefeated()` or `onDefeated?.()`. Argument counts and types are left to the type-check. */
   | { readonly kind: "Prop"; readonly name: string; readonly optional: boolean };
 

@@ -114,6 +114,7 @@ describe("IR construction", () => {
       kind: "Module",
       sourceFile: "Player.tsx",
       typeDeclarations: [],
+      plainImports: [],
       components: [
         {
           kind: "Component",

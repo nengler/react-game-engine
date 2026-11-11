@@ -1,9 +1,27 @@
 import { GameObject } from "../GameObject.ts";
+import type { InputState } from "../input.ts";
 import { IDENTITY_TRANSFORM, type WorldTransform } from "../Transform.ts";
+import type { ShakeState } from "../math.ts";
 
 export interface CameraProps {
   /** Magnification of the view: 2 draws everything twice as large. Must be positive. Default 1. */
   zoom?: number;
+  /**
+   * How the view shakes now: a shake as state, from `useShake` (`const [shake, setShake] = useShake()`, then
+   * `setShake({ strength: 3, duration: 0.25 })` in a handler). The view is thrown by up to `strength` pixels, less as the shake
+   * goes on, in whole pixels from a fixed random sequence so a run repeats exactly.
+   */
+  shake?: ShakeState;
+  /**
+   * The area the view may show, `[x, y, width, height]` in world pixels: the camera never shows outside it, so the view
+   * stops at its edge (a view larger than the area is centred on it). Needs the size of the screen, which the player gives it.
+   */
+  bounds?: readonly number[];
+  /**
+   * Seconds the view takes to slide when `bounds` change to another area (a room change): it eases from where it was to where
+   * the new bounds put it, instead of jumping. Default 0: no slide.
+   */
+  slide?: number;
 }
 
 const DEFAULT_ZOOM = 1;
@@ -48,11 +66,53 @@ export class Camera<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 
   zoom: number;
+  shake: ShakeState | undefined;
+  bounds: readonly number[] | undefined;
+  slide: number;
+  /** Where the view is now, as a movement away from where the bounds put it: it eases to 0 during a slide. Pixels. */
+  slideX = 0;
+  slideY = 0;
+  #lastBounds: readonly number[] | undefined;
+  #lastCentre: Point | null = null;
+  /** The size of the view in world pixels at zoom 1, set by the player before it asks for the view (the screen's size). */
+  viewWidth = 0;
+  viewHeight = 0;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: CameraProps = {}, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
     this.zoom = hostProps.zoom ?? DEFAULT_ZOOM;
+    this.shake = hostProps.shake;
+    this.bounds = hostProps.bounds;
+    this.slide = hostProps.slide ?? 0;
+  }
+
+  /** The shake's offset now, in whole pixels: strong at first, dying to 0, from a fixed sequence. */
+  get shakeOffset(): Point {
+    const shake = this.shake;
+    if (shake === undefined || !(shake.duration > 0)) return { x: 0, y: 0 };
+    const elapsed = shake.elapsed ?? 0;
+    if (elapsed >= shake.duration) return { x: 0, y: 0 };
+    const k = 1 - elapsed / shake.duration;
+    const strength = shake.strength;
+    const f = Math.round(elapsed * 60) + 1;
+    // A fixed pseudo-random walk over frames: no Math.random, so every run and every engine shakes the same.
+    const rx = Math.sin(f * 12.9898 + 78.233) * 43758.5453;
+    const ry = Math.sin(f * 39.3468 + 11.135) * 24634.6345;
+    return { x: Math.round((rx - Math.floor(rx) - 0.5) * 2 * strength * k), y: Math.round((ry - Math.floor(ry) - 0.5) * 2 * strength * k) };
+  }
+
+  /** Advance the slide. (The shake is state: its owner's `useShake` moves it on, and a new value redraws the view.) */
+  override onUpdate(dt: number, _input?: InputState): void {
+    let changed = false;
+    if ((this.slideX !== 0 || this.slideY !== 0) && dt > 0) {
+      // Ease out: a fraction of what is left each step, so the view arrives smoothly and never overshoots, and has come to rest in about the slide time.
+      const k = 1 - Math.exp((-7 * dt) / Math.max(this.slide, 1e-3));
+      this.slideX = Math.abs(this.slideX) < 0.5 ? 0 : this.slideX * (1 - k);
+      this.slideY = Math.abs(this.slideY) < 0.5 ? 0 : this.slideY * (1 - k);
+      changed = true;
+    }
+    if (changed) this.markChanged();
   }
 
   /**
@@ -98,6 +158,31 @@ export class Camera<P extends object = {}> extends GameObject<P> {
       x += target.x - anchor.x;
       y += target.y - anchor.y;
     }
+    // Bounds: the view stays inside the area (centred on it when the area is smaller than the view). A change of bounds starts a slide.
+    const area = this.bounds;
+    if (area !== undefined && area.length === 4 && this.viewWidth > 0 && this.viewHeight > 0) {
+      const halfW = this.viewWidth / this.zoom / 2;
+      const halfH = this.viewHeight / this.zoom / 2;
+      const bx = area[0] as number;
+      const by = area[1] as number;
+      const bw = area[2] as number;
+      const bh = area[3] as number;
+      x = bw <= halfW * 2 ? bx + bw / 2 : Math.min(Math.max(x, bx + halfW), bx + bw - halfW);
+      y = bh <= halfH * 2 ? by + bh / 2 : Math.min(Math.max(y, by + halfH), by + bh - halfH);
+      const last = this.#lastBounds;
+      if (last !== undefined && (last[0] !== bx || last[1] !== by || last[2] !== bw || last[3] !== bh) && this.slide > 0 && this.#lastCentre !== null) {
+        // Start where the view was last shown (slide and all), and ease to where the new bounds put it.
+        this.slideX = this.#lastCentre.x + this.slideX - x;
+        this.slideY = this.#lastCentre.y + this.slideY - y;
+      }
+      this.#lastBounds = [bx, by, bw, bh];
+    } else this.#lastBounds = undefined;
+    this.#lastCentre = { x, y };
+    x += this.slideX;
+    y += this.slideY;
+    const shake = this.shakeOffset;
+    x += shake.x;
+    y += shake.y;
     for (const [name, value] of Object.entries({ x, y, rotation: world.rotation, scaleX: world.scaleX, scaleY: world.scaleY })) {
       if (!Number.isFinite(value)) throw new RangeError(`A camera's ${name} must be a finite number, not ${value}.`);
     }

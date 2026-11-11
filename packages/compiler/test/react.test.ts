@@ -81,6 +81,38 @@ describe("React idioms", () => {
     assert.deepEqual(describe(), ["hurt.png", "warning.png"]);
   });
 
+  it("takes a fragment as a condition's branch or a child: its elements come and go together, in an implicit Entity", async () => {
+    const compiled = compile(`
+function Pickup() {
+  const [taken, setTaken] = useState(false);
+  useUpdate(() => setTaken(true));
+  return (
+    <Entity name="Pickup">
+      {!taken && (
+        <>
+          <Sprite image="gem.png" />
+          <Sprite image="shine.png" />
+        </>
+      )}
+      {taken ? <><Sprite image="empty.png" /></> : null}
+      <>
+        <Sprite image="base.png" />
+      </>
+    </Entity>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Pickup } = await load<{ Pickup: new () => Entity }>(compiled);
+    const world = new World();
+    const pickup = new Pickup();
+    world.mount(pickup);
+    const images = () => pickup.children.map((c) => c.children.map((s) => (s as Sprite).image));
+    assert.deepEqual(images(), [["gem.png", "shine.png"], ["base.png"]]);
+    world.tick(0.1);
+    world.flush();
+    assert.deepEqual(images(), [["empty.png"], ["base.png"]]);
+  });
+
   it("rejects consts that are redeclared, read before declaration, or not plain expressions", () => {
     const codes = (body: string) =>
       compileErrors(`function C() {

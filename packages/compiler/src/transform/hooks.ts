@@ -1,10 +1,10 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type Node } from "typescript/ast";
-import { isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
+import { isArrowFunction, isBlock, isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type TypeIR, collectDependencies, stateReads, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
-import { type GameStateLeaf, type GameStateNode } from "../gamestate/schema.ts";
+import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { lowerFunction } from "./statements.ts";
 import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
@@ -174,8 +174,18 @@ export class HookLowering extends ExpressionLowering {
             continue;
           }
           // Initial values are evaluated before any state exists: lower with the scope as it is so far,
-          // then reject any state reads.
-          const initialValue = this.lowerNode(hook.initializer);
+          // then reject any state reads. `useState(() => make())` is React's lazy initializer: the generated field is evaluated
+          // once per instance anyway, so the arrow's body is the initial value (a per-instance object, such as an effect).
+          const lazy = unwrapParens(hook.initializer);
+          let initializer = hook.initializer;
+          if (isArrowFunction(lazy)) {
+            if (lazy.parameters.length > 0 || isBlock(lazy.body)) {
+              this.report(DiagnosticCode.InvalidUseState, "A lazy initial value is an arrow with no parameters returning the value: `useState(() => createSquash())`.", lazy);
+              continue;
+            }
+            initializer = lazy.body as typeof initializer;
+          }
+          const initialValue = this.lowerNode(initializer);
           if (!initialValue) continue;
           if (stateReads(initialValue).length > 0) {
             this.report(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state (it may read props).", hook.initializer);
@@ -183,6 +193,7 @@ export class HookLowering extends ExpressionLowering {
           }
           const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
           if (!type) continue;
+          if (type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain")) this.handleStates.add(id);
           state.push({ kind: "State", id, name: hook.valueName, type, initialValue });
           this.stateTypes.set(id, type);
           hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.span(hook.declaration) });
@@ -213,15 +224,17 @@ export class HookLowering extends ExpressionLowering {
       this.componentScope.declare(hook.valueName, { kind: "action", name: hook.valueName, action: first });
       return;
     }
-    // Walk the state tree; a typo is reported with the nearest key at the level it went wrong.
-    let node: GameStateLeaf | GameStateNode = definition.tree;
+    // Walk the state tree; a typo is reported with the nearest key at the level it went wrong. Below a value the compiler
+    // cannot see into (an array, `newRun()`), the path is left to the type-check of the generated code.
+    let node: GameStateEntry = definition.tree;
     const walked: string[] = [];
     for (const key of hook.path) {
+      if (node.kind === "value") break;
       if (node.kind === "leaf") {
         this.report(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is a ${node.type}, so it has no '${key}'.`, at(hook.selector));
         return;
       }
-      const child: GameStateLeaf | GameStateNode | undefined = Object.hasOwn(node.children, key) ? node.children[key] : undefined;
+      const child: GameStateEntry | undefined = Object.hasOwn(node.children, key) ? node.children[key] : undefined;
       if (!child) {
         const options = [...Object.keys(node.children), ...(walked.length === 0 ? definition.actions : [])];
         const near = nearest(key, options);
@@ -235,13 +248,12 @@ export class HookLowering extends ExpressionLowering {
       walked.push(key);
       node = child;
     }
-    if (node.kind === "node") {
-      this.report(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is an object: select one of its values (${Object.keys(node.children).map((k) => `${walked.join(".")}.${k}`).join(", ")}). A component reads leaves, so it re-renders only when one it uses changes.`, at(hook.selector));
-      return;
-    }
     const id = stateId(this.component.name, hook.valueName);
-    const initialValue: ExprIR = node.type === "number" ? { kind: "NumberLiteral", value: node.initial as number } : node.type === "string" ? { kind: "StringLiteral", value: node.initial as string } : { kind: "BooleanLiteral", value: node.initial as boolean };
-    const type: TypeIR = { kind: "Primitive", name: node.type };
+    // A leaf the schema knows keeps its primitive type; an object, an array or a computed value is typed by TypeScript, from
+    // the store itself: it re-renders when any value under it changes.
+    const leaf = node.kind === "leaf" && walked.length === hook.path.length ? node : null;
+    const initialValue: ExprIR = leaf === null ? { kind: "NullLiteral" } : leaf.type === "number" ? { kind: "NumberLiteral", value: leaf.initial as number } : leaf.type === "string" ? { kind: "StringLiteral", value: leaf.initial as string } : { kind: "BooleanLiteral", value: leaf.initial as boolean };
+    const type: TypeIR = leaf === null ? { kind: "SourceType", text: `ReturnType<typeof ${definition.name}.getState>${hook.path.map((k) => `[${JSON.stringify(k)}]`).join("")}` } : { kind: "Primitive", name: leaf.type };
     state.push({ kind: "State", id, name: hook.valueName, type, initialValue, globalKey: hook.path.join(".") });
     this.stateTypes.set(id, type);
     hooks.push({ kind: "UseState", state: id, setterName: null, span: this.span(hook.declaration) });
@@ -314,6 +326,10 @@ export class HookLowering extends ExpressionLowering {
     if (initial.kind === "PropRead") {
       const decl = this.propDecls.find((p) => p.name === initial.name);
       if (decl?.role === "value") return propTypeToType(decl.type);
+    }
+    // Made by a function (a runtime factory, or one from a .ts file): typed by what the function returns.
+    if (initial.kind === "Call" && (initial.callee.kind === "Function" || initial.callee.kind === "Plain") && !initial.callee.name.startsWith("Math.")) {
+      return { kind: "SourceType", text: `ReturnType<typeof ${initial.callee.name}>` };
     }
     const code = DiagnosticCode.UnsupportedStateType;
     if (initial.kind === "ArrayLiteral" || initial.kind === "ObjectLiteral") {

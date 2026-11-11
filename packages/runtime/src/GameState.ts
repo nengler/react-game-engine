@@ -1,6 +1,6 @@
 import type { GameObject } from "./GameObject.ts";
 
-/** What a leaf of the game state holds. Arrays are not supported yet. */
+/** What a leaf of the game state holds. Objects and arrays hold more of these. */
 export type GameStateValue = number | string | boolean;
 
 /**
@@ -81,14 +81,17 @@ export class GameStore<S = object> {
     this.#notify(changedPaths(before as Tree, this.#state as Tree, "", []));
   }
 
-  /** The latest value of one leaf, by dotted path (`"player.hp"`). What a compiled component's snapshot reads. */
-  get<T extends GameStateValue>(path: string): T {
+  /**
+   * The latest value at a dotted path (`"player.hp"`, `"player"`, `"enemies"`): a leaf, or an object or array as the state
+   * holds it. What a compiled component's snapshot reads. Treat an object you get as read-only: change it with `set`.
+   */
+  get<T = unknown>(path: string): T {
     let at: unknown = this.#state;
     for (const key of path.split(".")) {
-      if (typeof at !== "object" || at === null) throw new Error(`The game state has nothing at '${path}'.`);
+      if (typeof at !== "object" || at === null || !(key in at)) throw new Error(`The game state has nothing at '${path}'.`);
       at = (at as Tree)[key];
     }
-    if (at === undefined || typeof at === "object" || typeof at === "function") throw new Error(`The game state has no value at '${path}'.`);
+    if (typeof at === "function") throw new Error(`'${path}' is an action, not a value of the game state.`);
     return at as T;
   }
 
@@ -112,10 +115,20 @@ export class GameStore<S = object> {
     this.#notify(changedPaths(before as Tree, this.#state as Tree, "", []));
   }
 
+  /** Mark dirty every reader of a changed leaf, and every reader of an object or array that holds one. */
   #notify(changed: readonly string[]): void {
+    if (changed.length === 0 || this.#subscribers.size === 0) return;
+    const told = new Set<string>();
     for (const path of changed) {
-      const subscribers = this.#subscribers.get(path);
-      if (subscribers) for (const object of [...subscribers]) object.markDirty();
+      for (let at = path; ; ) {
+        if (told.has(at)) break;
+        told.add(at);
+        const subscribers = this.#subscribers.get(at);
+        if (subscribers) for (const object of [...subscribers]) object.markDirty();
+        const dot = at.lastIndexOf(".");
+        if (dot < 0) break;
+        at = at.slice(0, dot);
+      }
     }
   }
 }
@@ -130,16 +143,26 @@ export function resetGameState(): void {
   for (const store of stores) store.reset();
 }
 
-/** The dotted path of every leaf whose value differs between two states (functions are not leaves; a leaf in only one counts). */
+/**
+ * The dotted path of every leaf whose value differs between two states (functions are not leaves; a leaf in only one
+ * counts). Arrays are walked like objects, by index, so an equal copy changes nothing. An object that is the same object
+ * on both sides is not walked. One that turns into a leaf (or back) changes every leaf it had, so their readers hear of it.
+ */
 function changedPaths(before: Tree, after: Tree, prefix: string, out: string[]): string[] {
+  if (before === after) return out;
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   for (const key of keys) {
     const a = before[key];
     const b = after[key];
     if (typeof a === "function" || typeof b === "function") continue;
     const path = prefix === "" ? key : `${prefix}.${key}`;
-    if (typeof a === "object" && a !== null && typeof b === "object" && b !== null) changedPaths(a as Tree, b as Tree, path, out);
-    else if (a !== b) out.push(path);
+    const aObject = typeof a === "object" && a !== null;
+    const bObject = typeof b === "object" && b !== null;
+    if (aObject && bObject) changedPaths(a as Tree, b as Tree, path, out);
+    else if (aObject || bObject) {
+      out.push(path);
+      changedPaths(aObject ? (a as Tree) : {}, bObject ? (b as Tree) : {}, path, out);
+    } else if (a !== b) out.push(path);
   }
   return out;
 }

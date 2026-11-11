@@ -1,5 +1,5 @@
 // Layer 3 of ComponentLowering: the JSX tree (elements, props, transforms, children, keyed lists) into ElementIR.
-import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type Node } from "typescript/ast";
+import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type JsxFragment, type Node } from "typescript/ast";
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isConditionalExpression, isIdentifier, isJsxAttribute, isJsxElement, isJsxExpression, isJsxSelfClosingElement, isJsxText, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isJsxFragment, isStringLiteral, isBlock, isReturnStatement } from "typescript/ast/is";
 import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
@@ -34,6 +34,23 @@ export class ElementLowering extends HookLowering {
    * The root is a built-in element (the component's class extends it) or a
    * fragment, which is an implicit container: a bare `<Entity>` with no props.
    */
+  /**
+   * A fragment `<>…</>` as a child, or as a branch of a condition: an implicit container, a bare `<Entity>` with no props,
+   * so `{alive && <>…</>}` adds and removes its children together.
+   */
+  protected lowerFragment(jsx: JsxFragment, path: readonly number[]): ElementIR {
+    return {
+      kind: "Element",
+      id: elementId(this.component.name, path),
+      fieldName: this.allocateFieldName(this.hostIntrinsic, null),
+      component: { kind: "Intrinsic", name: this.hostIntrinsic },
+      props: [],
+      transform: [],
+      children: this.lowerChildren(jsx.children, path, { slot: false, passed: false }),
+      span: this.span(jsx),
+    };
+  }
+
   protected lowerRoot(jsx: JsxRoot): HostElementIR | null {
     if (isJsxFragment(jsx)) {
       return {
@@ -279,10 +296,17 @@ export class ElementLowering extends HookLowering {
     }
     if (!isComponent) this.checkContainer(tag.text, children.length, jsx);
 
+    const fieldName = this.allocateFieldName(tag.text, listItem ? "Items" : null);
+    // A <Route>'s children exist only while the route is active (shown, or being left or entered): made fresh each time it
+    // comes, and gone once it has left, as React Router's are. `keepAlive` keeps them (and their state) between visits.
+    if (component.kind === "Intrinsic" && tag.text === ROUTE_TAG && !hasTrueAttribute(opening.attributes, "keepAlive")) {
+      children = children.map((child) => whileActive(child, fieldName));
+    }
+
     return {
       kind: "Element",
       id: elementId(this.component.name, path),
-      fieldName: this.allocateFieldName(tag.text, listItem ? "Items" : null),
+      fieldName,
       component,
       props,
       transform,
@@ -418,24 +442,20 @@ export class ElementLowering extends HookLowering {
   }
 
   /**
-   * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`),
-   * and `state={useGame}` is the project's game state, the imported store. Anything else (a state read, an expression)
+   * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`), and
+   * `controls={controls}` the game's actions, imported from a .ts module. Anything else (a state read, an expression)
    * would not exist yet, so it is `RGE1210`.
    */
   protected lowerGameSetting(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
-    if (name === "state") {
+    if (name === "controls") {
+      // `controls={controls}`: the game's actions, a `createControls(…)` imported from a .ts module. Made when that module
+      // loads, so it exists before the tree is built, as a literal does.
       const expression = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
-      if (!expression || !isIdentifier(expression) || !this.storeImports.has(expression.text)) {
-        this.report(
-          DiagnosticCode.InvalidGameState,
-          this.gameState
-            ? `<Game state> is the game state itself: \`state={${this.gameState.name}}\`, imported from GameState.ts.`
-            : "<Game state> needs the project's game state: add GameState.ts next to the components and import its store.",
-          at,
-        );
+      if (!expression || !isIdentifier(expression) || !this.plainImports.has(expression.text) || this.scope.has(expression.text)) {
+        this.report(DiagnosticCode.InvalidPropValue, `<${GAME_TAG} controls> takes the game's controls, imported from a .ts module: \`export const controls = createControls({ jump: ["Z", "PadA"] })\`, then \`controls={controls}\`.`, at);
         return null;
       }
-      return { kind: "StoreRef" };
+      return { kind: "PlainRef", name: expression.text };
     }
     const allowed = this.manifest.intrinsicMembers[GAME_TAG] ?? [];
     if (!allowed.includes(name) || name === "name") {
@@ -485,6 +505,10 @@ export class ElementLowering extends HookLowering {
         if (element) out.push({ kind: "StaticChild", element });
         continue;
       }
+      if (isJsxFragment(child)) {
+        out.push({ kind: "StaticChild", element: this.lowerFragment(child, path) });
+        continue;
+      }
       if (isJsxExpression(child) && child.expression) {
         const expression = unwrapParens(child.expression);
         if (this.isChildrenReference(expression)) {
@@ -498,9 +522,9 @@ export class ElementLowering extends HookLowering {
         }
         if (isBinaryExpression(expression) && expression.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken) {
           const right = unwrapParens(expression.right);
-          if (isJsxElement(right) || isJsxSelfClosingElement(right)) {
+          if (isJsxElement(right) || isJsxSelfClosingElement(right) || isJsxFragment(right)) {
             const condition = this.lowerNode(expression.left);
-            const element = this.lowerElement(right, path);
+            const element = isJsxFragment(right) ? this.lowerFragment(right, path) : this.lowerElement(right, path);
             if (condition && element) {
               out.push({ kind: "ConditionalChild", condition, dependencies: collectDependencies(condition), element });
             }
@@ -512,25 +536,47 @@ export class ElementLowering extends HookLowering {
           // second on `!c`. Each branch keeps its own identity, so switching recreates, as React does
           // for different element types.
           const branches = [unwrapParens(expression.whenTrue), unwrapParens(expression.whenFalse)];
-          const usable = branches.every((b) => isJsxElement(b) || isJsxSelfClosingElement(b) || b.kind === SyntaxKind.NullKeyword);
+          const usable = branches.every((b) => isJsxElement(b) || isJsxSelfClosingElement(b) || isJsxFragment(b) || b.kind === SyntaxKind.NullKeyword);
           if (usable) {
             const condition = this.lowerNode(expression.condition);
             if (!condition) continue;
             const conditions: ExprIR[] = [condition, { kind: "Unary", operator: "!", operand: condition }];
             branches.forEach((branch, i) => {
-              if (!(isJsxElement(branch) || isJsxSelfClosingElement(branch))) return;
-              const element = this.lowerElement(branch, i === 0 ? path : [...parentPath, index++]);
+              if (!(isJsxElement(branch) || isJsxSelfClosingElement(branch) || isJsxFragment(branch))) return;
+              const at = i === 0 ? path : [...parentPath, index++];
+              const element = isJsxFragment(branch) ? this.lowerFragment(branch, at) : this.lowerElement(branch, at);
               const when = conditions[i]!;
               if (element) out.push({ kind: "ConditionalChild", condition: when, dependencies: collectDependencies(when), element });
             });
             continue;
           }
         }
-        this.report(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`) or `{items.map((item) => <Element key={item.id} />)}`.", child);
+        this.report(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`, and an element may be a fragment `<>…</>`) or `{items.map((item) => <Element key={item.id} />)}`.", child);
         continue;
       }
       this.report(DiagnosticCode.UnsupportedJsxChild, `Unsupported JSX child (${SyntaxKind[child.kind]}).`, child);
     }
     return out;
   }
+}
+
+const ROUTE_TAG = "Route";
+
+/** Is the attribute written as `name` or `name={true}`? */
+function hasTrueAttribute(attributes: JsxAttributes, name: string): boolean {
+  const attribute = findAttribute(attributes, name);
+  if (!attribute) return false;
+  const init = attribute.initializer;
+  if (!init) return true;
+  return isJsxExpression(init) && init.expression !== undefined && init.expression.kind === SyntaxKind.TrueKeyword;
+}
+
+/** A route's child, made to exist only while the route (the element in field `route`) is active. */
+function whileActive(child: ChildIR, route: string): ChildIR {
+  const active: ExprIR = { kind: "ElementRead", field: route, member: "active" };
+  if (child.kind === "StaticChild") return { kind: "ConditionalChild", condition: active, dependencies: [], element: child.element };
+  if (child.kind === "ConditionalChild") {
+    return { ...child, condition: { kind: "Binary", operator: "&&", left: active, right: child.condition } };
+  }
+  return child; // a list or a slot keeps its own rules
 }

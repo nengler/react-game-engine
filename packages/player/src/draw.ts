@@ -13,7 +13,17 @@ import {
   Screen,
   Shape,
   Sprite,
+  isStyled,
   Text,
+  Tilemap,
+  Particles,
+  Fade,
+  Route,
+  Router,
+  findTilemap,
+  TILE_FLIP_D,
+  TILE_FLIP_H,
+  TILE_FLIP_V,
   type Pressable,
   type ScreenFit,
   type ViewTransform,
@@ -28,6 +38,10 @@ import {
   RGE_OP_RECT_LEN,
   RGE_OP_SPRITE,
   RGE_OP_SPRITE_LEN,
+  RGE_OP_SPRITE_REGION,
+  RGE_OP_SPRITE_REGION_LEN,
+  RGE_SPRITE_FLIP_X,
+  RGE_SPRITE_FLIP_Y,
   RGE_OP_TEXT,
   RGE_OP_TEXT_LEN,
   RGE_OP_VIEW,
@@ -111,6 +125,7 @@ function recordLength(op: number): number {
   switch (op) {
     case RGE_OP_VIEW: return RGE_OP_VIEW_LEN;
     case RGE_OP_SPRITE: return RGE_OP_SPRITE_LEN;
+    case RGE_OP_SPRITE_REGION: return RGE_OP_SPRITE_REGION_LEN;
     case RGE_OP_RECT: return RGE_OP_RECT_LEN;
     case RGE_OP_ELLIPSE: return RGE_OP_ELLIPSE_LEN;
     case RGE_OP_TEXT: return RGE_OP_TEXT_LEN;
@@ -292,6 +307,33 @@ export class DrawList {
     this.records[at] = texture;
   }
 
+  /** One region of a texture (a frame of a sheet), with its origin, mirroring and tint: the record `RGE_OP_SPRITE_REGION`. */
+  spriteRegion(world: WorldTransform, texture: number, srcX: number, srcY: number, srcW: number, srcH: number, originX: number, originY: number, flags: number, tint: PackedColor): void {
+    this.spriteRegionAt(world.x, world.y, world.rotation, world.scaleX, world.scaleY, texture, srcX, srcY, srcW, srcH, originX, originY, flags, tint);
+  }
+
+  /** `spriteRegion` with the transform as numbers, for a tilemap's many records (no object per tile). */
+  spriteRegionAt(x: number, y: number, rotation: number, scaleX: number, scaleY: number, texture: number, srcX: number, srcY: number, srcW: number, srcH: number, originX: number, originY: number, flags: number, tint: PackedColor): void {
+    const base = this.#reserve(RGE_OP_SPRITE_REGION_LEN);
+    const r = this.records;
+    r[base] = RGE_OP_SPRITE_REGION;
+    r[base + 1] = x;
+    r[base + 2] = y;
+    r[base + 3] = rotation;
+    r[base + 4] = scaleX;
+    r[base + 5] = scaleY;
+    const at = base + 6;
+    r[at] = texture;
+    r[at + 1] = srcX;
+    r[at + 2] = srcY;
+    r[at + 3] = srcW;
+    r[at + 4] = srcH;
+    r[at + 5] = originX;
+    r[at + 6] = originY;
+    r[at + 7] = flags;
+    r[at + 8] = tint;
+  }
+
   rect(world: WorldTransform, width: number, height: number, color: PackedColor): void {
     const at = this.#header(RGE_OP_RECT, RGE_OP_RECT_LEN, world);
     this.records[at] = width;
@@ -376,6 +418,11 @@ const KIND_COLLIDER = 6;
 const KIND_SCREEN = 7;
 const KIND_HUD = 8;
 const KIND_FLEX = 9;
+const KIND_TILEMAP = 10;
+const KIND_PARTICLES = 11;
+const KIND_FADE = 12;
+const KIND_ROUTE = 13;
+const KIND_ROUTER = 14;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
@@ -406,14 +453,23 @@ function classCode(object: GameObject): number {
       : object instanceof Screen ? KIND_SCREEN
       : object instanceof Hud ? KIND_HUD
       : object instanceof Flex ? KIND_FLEX
+      : object instanceof Tilemap ? KIND_TILEMAP
+      : object instanceof Particles ? KIND_PARTICLES
+      : object instanceof Fade ? KIND_FADE
+      : object instanceof Route ? KIND_ROUTE
+      : object instanceof Router ? KIND_ROUTER
       : KIND_NONE;
     code = kind;
-    if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX) code |= FLAG_VOLATILE;
+    if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX || kind === KIND_ROUTER) code |= FLAG_VOLATILE;
     if (kind === KIND_FLEX) code |= FLAG_OPAQUE;
     // A class that overrides a per-tick hook may write its own transform or colour from it, which nothing reports, unless it is
     // a built-in or a compiled component (the compiler marks those `managed`; the marker is an own property, so a hand-written subclass of one is not).
     const ownProperty = (name: string): boolean => Object.prototype.hasOwnProperty.call(object.constructor, name);
-    const hooked = object.onInput !== GameObjectPrototype.onInput || object.onUpdate !== GameObjectPrototype.onUpdate;
+    // Compared with the built-in it extends, whose own hooks (a sprite springing back its squash) report what they change.
+    let builtIn = Object.getPrototypeOf(object) as { constructor: unknown; onInput: unknown; onUpdate: unknown } | null;
+    while (builtIn !== null && !Object.prototype.hasOwnProperty.call(builtIn.constructor, "intrinsic")) builtIn = Object.getPrototypeOf(builtIn) as typeof builtIn;
+    const base = builtIn ?? GameObjectPrototype;
+    const hooked = object.onInput !== base.onInput || object.onUpdate !== base.onUpdate;
     if (hooked && !ownProperty("intrinsic") && !ownProperty("managed")) code |= FLAG_VOLATILE | FLAG_OPAQUE;
     KINDS.set(object.constructor, code);
   }
@@ -432,6 +488,11 @@ function worldIn(parentSpace: WorldTransform, object: GameObject): WorldTransfor
       : composeTransforms(laidOut, placement),
     object.transform,
   );
+}
+
+/** A sprite that is drawn as a region of its image, with options, instead of as the whole image at its top left. */
+function styledSprite(node: Sprite | AnimatedSprite): boolean {
+  return node instanceof AnimatedSprite ? node.styled : node.frameWidth !== undefined || node.frameHeight !== undefined || node.frame !== 0 || isStyled(node);
 }
 
 /** A rect and an ellipse are records of one length, which the walk relies on when it writes a shape in place: this line stops compiling if they ever differ. */
@@ -459,6 +520,10 @@ export function rootScreen(root: GameObject): Screen | null {
   }
   return null;
 }
+
+/** A bitmap font sheet holds the characters 32 to 127 in this many columns and rows. */
+const FONT_COLUMNS = 16;
+const FONT_ROWS = 6;
 
 /** The size of the square drawn where a texture could not be loaded. */
 const MISSING_TEXTURE_SIZE = 16;
@@ -541,6 +606,8 @@ export class FrameBuilder {
   readonly #retain: boolean;
   readonly #options: FrameBuilderOptions;
   #reference: FrameBuilder | undefined;
+  readonly #particle = { x: 0, y: 0, t: 0 };
+  readonly #placed = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
   // What reusing needs from the last frame (see `DrawInfo`): its world records in tree order, before the z sort, its texts and colliders.
   #token: object = {};
   #lastRoot: GameObject | null = null;
@@ -620,6 +687,7 @@ export class FrameBuilder {
     const pointerZs: number[] = [];
     const colliders: ColliderEntry[] = [];
     const huds: { readonly world: WorldTransform; readonly object: GameObject }[] = [];
+    const covers: Router[] = [];
     let anyZ = false;
     // The z of the records being written, kept here so a frame with no z makes no call per record.
     let listZ = 0;
@@ -721,7 +789,7 @@ export class FrameBuilder {
       switch (kind) {
         case KIND_SPRITE:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
-          this.#sprite((node as Sprite | AnimatedSprite).image, at);
+          this.#spriteNode(node as Sprite | AnimatedSprite, at);
           break;
         case KIND_SHAPE:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
@@ -732,6 +800,24 @@ export class FrameBuilder {
             if (drawZ !== listZ) list.setZ((listZ = drawZ));
             this.#text(node as Text, at);
           }
+          break;
+        case KIND_TILEMAP:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#tilemap(node as Tilemap, at);
+          break;
+        case KIND_PARTICLES:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#particles(node as Particles, at);
+          break;
+        case KIND_ROUTE:
+          // A screen a transition has hidden is not drawn, pressed or collided with: its children are not walked at all.
+          if (!(node as Route).visible) return WALK_VOLATILE;
+          break;
+        case KIND_ROUTER:
+          if ((node as Router).cover > 0) covers.push(node as Router);
+          break;
+        case KIND_FADE:
+          this.#warner.once("fade-world", "A <Fade> only draws inside a <Hud>: this one, in the world, does nothing.");
           break;
         case KIND_CAMERA:
           if (camera === null) camera = node as Camera;
@@ -763,7 +849,7 @@ export class FrameBuilder {
       }
 
       // An entity, sprite, shape or collider writes what it writes at `at`; a text may shift it, and the rest are not plain drawing.
-      const plainKind = kind < KIND_TEXT || kind === KIND_COLLIDER;
+      const plainKind = (kind < KIND_TEXT && !(kind === KIND_SPRITE && styledSprite(node as Sprite | AnimatedSprite))) || kind === KIND_COLLIDER;
       if (count === 0) {
         flatWalk = plainKind;
         return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : z !== 0 || code >= FLAG_VOLATILE ? WALK_VOLATILE : WALK_CLEAN;
@@ -790,7 +876,7 @@ export class FrameBuilder {
         // moves) is most of what is here, so it is dealt with in place: what `walk` would do for it, without the call.
         if (childZ === 0 && child.children.length === 0 && child.layoutX === 0 && child.layoutY === 0) {
           const leaf = child.drawKind >= 0 ? child.drawKind : kindCode(child);
-          if (leaf === KIND_SHAPE || leaf === KIND_COLLIDER || leaf === KIND_SPRITE) {
+          if (leaf === KIND_SHAPE || leaf === KIND_COLLIDER || (leaf === KIND_SPRITE && !styledSprite(child as Sprite | AnimatedSprite))) {
             const own = child.transform;
             const placed = child.placement;
             if (own.z === 0 && placed.z === 0 && placed.x === 0 && placed.y === 0 && placed.rotation === 0 && placed.scaleX === 1 && placed.scaleY === 1 && !placed.global) {
@@ -979,6 +1065,10 @@ export class FrameBuilder {
     }
 
     // The camera centres on the middle of the game's area; a screen's placement then takes game pixels to the window.
+    if (camera !== null) {
+      (camera as Camera).viewWidth = gameWidth;
+      (camera as Camera).viewHeight = gameHeight;
+    }
     const cameraView = this.#view(camera, gameWidth, gameHeight);
     const view = placement === null ? cameraView : viewToWindow(cameraView, placement);
     const hudView = placement === null ? IDENTITY_VIEW : viewToWindow(IDENTITY_VIEW, placement);
@@ -1007,11 +1097,23 @@ export class FrameBuilder {
               switch (kind) {
                 case KIND_SPRITE:
                   if (z !== listZ) list.setZ((listZ = z));
-                  this.#sprite((object as Sprite | AnimatedSprite).image, world);
+                  this.#spriteNode(object as Sprite | AnimatedSprite, world);
                   break;
                 case KIND_SHAPE:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#shape(object as Shape, world);
+                  break;
+                case KIND_TILEMAP:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#tilemap(object as Tilemap, world);
+                  break;
+                case KIND_PARTICLES:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#particles(object as Particles, world);
+                  break;
+                case KIND_FADE:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#fade(object as Fade, gameWidth, gameHeight);
                   break;
                 case KIND_TEXT:
                   if ((object as Text).text !== "") {
@@ -1049,6 +1151,19 @@ export class FrameBuilder {
           if (order !== null) ordered = order.map((i) => hudPointers[i] as Pressable);
         }
         for (const pointer of ordered) pointers.push(pointer);
+      }
+    }
+
+    // A router's transition may cover the whole screen with a colour, over the world and the HUD.
+    if (covers.length > 0) {
+      list.view(pixelPerfect ? IDENTITY_VIEW : hudView);
+      const place = this.#placed;
+      place.x = 0;
+      place.y = 0;
+      for (const router of covers) {
+        const color = this.#color(router.coverColor);
+        const alpha = Math.round((color & 255) * Math.min(1, router.cover));
+        if (alpha > 0) list.rect(place, gameWidth, gameHeight, ((color & 0xffffff00) | alpha) >>> 0);
       }
     }
 
@@ -1108,14 +1223,17 @@ export class FrameBuilder {
         out.height = object.size;
         return true;
       }
-      size = this.#textSize(object.text, object.size);
+      size = object.font === undefined ? this.#textSize(object.text, object.size) : this.#bitmapSize(object.font, object.text, object.size);
       if (object.width !== undefined) {
         out.width = object.width;
         out.height = size.height;
         return true;
       }
-    } else if (object instanceof AnimatedSprite) size = this.#imageSize(object.frames[0] ?? "");
-    else if (object instanceof Sprite) size = this.#imageSize(object.image);
+    } else if (object instanceof AnimatedSprite) {
+      // A sheet measures as one frame, a set of files as the first of them (so layout does not jitter as frames change).
+      if (object.isSheet) size = object.frameWidth !== undefined && object.frameHeight !== undefined ? { width: object.frameWidth, height: object.frameHeight } : this.#imageSize(object.image);
+      else size = this.#imageSize(object.frames[0] ?? "");
+    } else if (object instanceof Sprite) size = object.frameWidth !== undefined && object.frameHeight !== undefined ? { width: object.frameWidth, height: object.frameHeight } : this.#imageSize(object.image);
     else return false;
     out.width = size.width;
     out.height = size.height;
@@ -1189,7 +1307,52 @@ export class FrameBuilder {
     else this.#list.rect(world, shape.width, shape.height, color);
   }
 
+  /** The size of a text drawn with a bitmap font: a cell's width for each character, the size as its height. */
+  #bitmapSize(font: string, text: string, size: number): Size {
+    const sheet = this.#imageSize(font);
+    if (sheet.width === 0 || sheet.height === 0) return { width: estimateTextWidth(text, size), height: size };
+    const scale = size / (sheet.height / FONT_ROWS);
+    let characters = 0;
+    for (const _ of text) characters++;
+    return { width: characters * (sheet.width / FONT_COLUMNS) * scale, height: size };
+  }
+
+  /** Text drawn from a bitmap font: one region of the font sheet for each character, in the text's colour. */
+  #bitmapText(text: Text, at: WorldTransform): void {
+    const font = text.font as string;
+    const handle = this.#texture(font);
+    const sheet = this.#imageSize(font);
+    if (handle < 0 || sheet.width === 0 || sheet.height === 0) {
+      if (handle >= 0) this.#warner.once(`font-size:${font}`, `The font '${font}' has no known size (this backend cannot report texture sizes): its text is not drawn.`);
+      return;
+    }
+    const cellW = sheet.width / FONT_COLUMNS;
+    const cellH = sheet.height / FONT_ROWS;
+    const scale = text.size / cellH;
+    const color = this.#color(text.color);
+    const cos = Math.cos(at.rotation);
+    const sin = Math.sin(at.rotation);
+    let x = 0;
+    if (text.width !== undefined && text.align !== "left") {
+      const room = text.width - this.#bitmapSize(font, text.text, text.size).width;
+      x = text.align === "center" ? Math.round(room / 2) : Math.round(room);
+    }
+    for (const ch of text.text) {
+      const code = ch.codePointAt(0) as number;
+      const glyph = code >= 32 && code < 128 ? code - 32 : 63 - 32; // anything else is a "?"
+      if (glyph !== 0) {
+        const lx = x * at.scaleX;
+        this.#list.spriteRegionAt(at.x + cos * lx, at.y + sin * lx, at.rotation, at.scaleX * scale, at.scaleY * scale, handle, (glyph % FONT_COLUMNS) * cellW, Math.floor(glyph / FONT_COLUMNS) * cellH, cellW, cellH, 0, 0, 0, color);
+      }
+      x += cellW * scale;
+    }
+  }
+
   #text(text: Text, world: WorldTransform): void {
+    if (text.font !== undefined) {
+      this.#bitmapText(text, world);
+      return;
+    }
     let at = world;
     if (text.width !== undefined && text.align !== "left") {
       // Aligned inside its own width: shift along the text's own x axis, by whole pixels.
@@ -1229,6 +1392,162 @@ export class FrameBuilder {
     return handle;
   }
 
+  /** A sprite or animated sprite: the whole image, or, when it has a sheet frame or options, a region of it. */
+  #spriteNode(node: Sprite | AnimatedSprite, world: WorldTransform): void {
+    if (!styledSprite(node)) {
+      this.#sprite(node.image, world);
+      return;
+    }
+    let tint = node.tint === undefined ? 0xffffffff : this.#color(node.tint);
+    const opacity = node.opacity;
+    if (opacity !== 1) {
+      const alpha = Math.round(((tint & 255) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity))));
+      tint = ((tint & 0xffffff00) | alpha) >>> 0;
+    }
+    const at = world;
+    const sheet = node instanceof AnimatedSprite ? node.isSheet : node.frameWidth !== undefined || node.frameHeight !== undefined;
+    const frame = node instanceof AnimatedSprite ? node.sheetFrame : node.frame;
+    this.#region(node.image, sheet, node.frameWidth, node.frameHeight, frame, node.originX, node.originY, node.flipX, node.flipY, tint, at);
+  }
+
+  /** One frame of an image (or all of it), as a sprite-region record. */
+  #region(
+    image: string, sheet: boolean, sheetWidth: number | undefined, sheetHeight: number | undefined, frame: number,
+    originX: number, originY: number, flipX: boolean, flipY: boolean, tint: number, at: WorldTransform,
+  ): void {
+    if (image === "") return;
+    const handle = this.#texture(image);
+    if (handle < 0) {
+      this.#list.rect(at, MISSING_TEXTURE_SIZE, MISSING_TEXTURE_SIZE, MAGENTA);
+      return;
+    }
+    const texture = this.#imageSize(image);
+    const frameWidth = sheet ? (sheetWidth ?? texture.width) : texture.width;
+    const frameHeight = sheet ? (sheetHeight ?? texture.height) : texture.height;
+    let srcX = 0;
+    let srcY = 0;
+    if (sheet && frame > 0 && frameWidth > 0) {
+      const columns = Math.max(1, Math.floor(texture.width / frameWidth));
+      srcX = (frame % columns) * frameWidth;
+      srcY = Math.floor(frame / columns) * frameHeight;
+    }
+    if (!(frameWidth > 0 && frameHeight > 0)) {
+      this.#warner.once(`sprite-size:${image}`, `The sprite '${image}' has no known size (this backend cannot report texture sizes and no frameWidth and frameHeight are set): it is not drawn.`);
+      return;
+    }
+    this.#list.spriteRegion(at, handle, srcX, srcY, frameWidth, frameHeight, originX, originY, (flipX ? RGE_SPRITE_FLIP_X : 0) | (flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
+  }
+
+  /** A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer, culled to none (a map is a room, not a world). */
+  #tilemap(node: Tilemap, at: WorldTransform): void {
+    const grid = findTilemap(node.map);
+    if (grid === undefined) {
+      this.#warner.once(`tilemap:${node.map}`, `<Tilemap map="${node.map}">: no map of that name is registered (registerTilemaps(tilemaps) with the compiler's generated table, before the game starts).`);
+      return;
+    }
+    if (node.image === "") return;
+    const handle = this.#texture(node.image);
+    if (handle < 0) return;
+    const sheet = this.#imageSize(node.image);
+    const tw = grid.tileWidth;
+    const th = grid.tileHeight;
+    if (!(sheet.width >= tw && tw > 0 && th > 0)) {
+      this.#warner.once(`tilemap-sheet:${node.image}`, `The tile sheet '${node.image}' (${sheet.width} × ${sheet.height}) is smaller than one ${tw} × ${th} tile (or this backend cannot report texture sizes): the map is not drawn.`);
+      return;
+    }
+    const columns = Math.floor(sheet.width / tw);
+    const cos = Math.cos(at.rotation);
+    const sin = Math.sin(at.rotation);
+    const sx = at.scaleX;
+    const sy = at.scaleY;
+    let tint = 0xffffffff;
+    if (node.opacity !== 1) tint = ((tint & 0xffffff00) | Math.round(255 * Math.min(1, Math.max(0, node.opacity)))) >>> 0;
+    const firstGid = grid.data.firstGid;
+    const width = grid.width;
+    for (const layer of grid.data.layers) {
+      if (!layer.visible || (node.layer !== undefined && layer.name !== node.layer)) continue;
+      const data = layer.data;
+      const flips = layer.flips;
+      for (let i = 0; i < data.length; i++) {
+        const gid = data[i] as number;
+        if (gid === 0) continue;
+        const frame = gid - firstGid;
+        if (frame < 0) continue;
+        const col = i % width;
+        const row = (i - col) / width;
+        const srcX = (frame % columns) * tw;
+        const srcY = Math.floor(frame / columns) * th;
+        const flip = flips === undefined ? 0 : (flips[i] as number);
+        let lx = col * tw;
+        let ly = row * th;
+        let rotation = at.rotation;
+        let flags = 0;
+        let ox = 0;
+        let oy = 0;
+        if (flip !== 0) {
+          // Mirrored tiles turn about their middle. Tiled applies the diagonal flip first, then horizontal, then vertical; each
+          // combination is a quarter turn and at most one mirror, which is what a record can say.
+          lx += tw / 2;
+          ly += th / 2;
+          ox = tw / 2;
+          oy = th / 2;
+          const h = (flip & TILE_FLIP_H) !== 0;
+          const v = (flip & TILE_FLIP_V) !== 0;
+          if ((flip & TILE_FLIP_D) === 0) flags = (h ? RGE_SPRITE_FLIP_X : 0) | (v ? RGE_SPRITE_FLIP_Y : 0);
+          else if (!h && !v) {
+            rotation += Math.PI / 2;
+            flags = RGE_SPRITE_FLIP_Y;
+          } else if (h && !v) rotation += Math.PI / 2;
+          else if (!h && v) rotation += (3 * Math.PI) / 2;
+          else {
+            rotation += (3 * Math.PI) / 2;
+            flags = RGE_SPRITE_FLIP_Y;
+          }
+        }
+        const px = at.x + cos * lx * sx - sin * ly * sy;
+        const py = at.y + sin * lx * sx + cos * ly * sy;
+        this.#list.spriteRegionAt(px, py, rotation, sx, sy, handle, srcX, srcY, tw, th, ox, oy, flags, tint);
+      }
+    }
+  }
+
+  /** A `<Particles>`: a small filled square for each live particle, aged toward its end colour, smaller or fainter. */
+  #particles(node: Particles, at: WorldTransform): void {
+    const count = node.count;
+    if (count === 0) return;
+    const start = this.#color(node.color);
+    const end = node.endColor === undefined ? start : this.#color(node.endColor);
+    const scratch = this.#particle;
+    const place = this.#placed;
+    const world = node.space === "world";
+    for (let i = 0; i < count; i++) {
+      node.read(i, scratch);
+      const t = scratch.t;
+      const size = node.shrink ? node.size * (1 - t) : node.size;
+      if (!(size > 0.01)) continue;
+      let color = start;
+      if (end !== start) color = mixColors(start, end, t);
+      if (node.fade) color = ((color & 0xffffff00) | Math.round((color & 255) * (1 - t))) >>> 0;
+      if ((color & 255) === 0) continue;
+      // Whole pixels, so particles stay crisp under a pixel-perfect screen.
+      place.x = Math.round((world ? scratch.x : at.x + scratch.x * at.scaleX) - size / 2);
+      place.y = Math.round((world ? scratch.y : at.y + scratch.y * at.scaleY) - size / 2);
+      this.#list.rect(place, Math.max(1, Math.round(size)), Math.max(1, Math.round(size)), color);
+    }
+  }
+
+  /** A `<Fade>` in a `<Hud>`: the colour, as faint as the fade is far along, over the whole screen. */
+  #fade(node: Fade, width: number, height: number): void {
+    if (!(node.amount > 0)) return;
+    const color = this.#color(node.color);
+    const alpha = Math.round((color & 255) * Math.min(1, node.amount));
+    if (alpha === 0) return;
+    const place = this.#placed;
+    place.x = 0;
+    place.y = 0;
+    this.#list.rect(place, width, height, ((color & 0xffffff00) | alpha) >>> 0);
+  }
+
   #sprite(image: string, world: WorldTransform): void {
     if (image === "") return;
     const handle = this.#texture(image);
@@ -1246,4 +1565,10 @@ export class FrameBuilder {
     }
     return color;
   }
+}
+
+/** The colour `t` of the way (0 to 1) from `a` to `b`, channel by channel. */
+function mixColors(a: PackedColor, b: PackedColor, t: number): PackedColor {
+  const mix = (shift: number): number => Math.round(((a >>> shift) & 255) * (1 - t) + ((b >>> shift) & 255) * t);
+  return (((mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | mix(0)) >>> 0);
 }

@@ -17,6 +17,13 @@ export interface TextProps {
   width?: number;
   /** Where the text sits inside `width`: `"left"` (the default), `"center"` or `"right"`. */
   align?: TextAlign;
+  /**
+   * A bitmap font: the name of an image holding the glyphs of the ASCII characters 32 to 127 in a grid of 16 columns and 6 rows,
+   * left to right, then down. Each glyph cell is the image's width ÷ 16 by its height ÷ 6, and the text is drawn from them with
+   * no smoothing, so it stays crisp. `size` is then the height in pixels of a glyph cell: a whole multiple of the cell's height
+   * keeps pixels square. Without `font` the text uses the built-in font.
+   */
+  font?: string;
 }
 
 const DEFAULT_TEXT_SIZE = 16;
@@ -36,6 +43,7 @@ export class Text<P extends object = {}> extends GameObject<P> {
   color: string;
   width: number | undefined;
   align: TextAlign;
+  font: string | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: TextProps, props?: P, defaults?: Partial<P>) {
@@ -45,5 +53,6 @@ export class Text<P extends object = {}> extends GameObject<P> {
     this.color = hostProps.color ?? DEFAULT_TEXT_COLOR;
     this.width = hostProps.width;
     this.align = hostProps.align ?? "left";
+    this.font = hostProps.font;
   }
 }

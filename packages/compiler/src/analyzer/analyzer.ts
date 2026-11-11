@@ -5,6 +5,7 @@ import { spanOf } from "../parser/parser.ts";
 import { type SourceAnalysis, type ImportAnalysis, type TypeDeclarationAnalysis, type ComponentAnalysis } from "./model.ts";
 import { unwrapParens } from "./util.ts";
 import { analyzeNamedImport, analyzeComponent } from "./component.ts";
+import { HOOK_NAME } from "./model.ts";
 
 
 
@@ -24,7 +25,7 @@ export function analyzeSourceFile(
   const components: ComponentAnalysis[] = [];
   const imports: ImportAnalysis[] = [];
   const authoringImports: ImportAnalysis[] = [];
-  const storeImports: ImportAnalysis[] = [];
+  const relativeImports: ImportAnalysis[] = [];
   const typeDeclarations: TypeDeclarationAnalysis[] = [];
   const defaultExports: { name: string; node: Node }[] = [];
   const span = (node: Node) => spanOf(node, sourceFile, fileName);
@@ -34,7 +35,7 @@ export function analyzeSourceFile(
   for (const statement of sourceFile.statements) {
     if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || !/^\.\.?\/.*\.ts$/.test(statement.moduleSpecifier.text)) continue;
     const bindings = statement.importClause?.namedBindings;
-    if (bindings && isNamedImports(bindings)) for (const element of bindings.elements) storeNames.add(element.name.text);
+    if (bindings && isNamedImports(bindings)) for (const element of bindings.elements) if (HOOK_NAME.test(element.name.text)) storeNames.add(element.name.text);
   }
   for (const statement of sourceFile.statements) {
     if (isImportDeclaration(statement)) {
@@ -44,7 +45,7 @@ export function analyzeSourceFile(
       if (specifier !== null && /^\.\.?\/.*\.tsx$/.test(specifier)) {
         analyzeNamedImport(statement, specifier, imports, diagnostics, span, "Component imports", `import { Name } from "${specifier}"`, true);
       } else if (specifier !== null && /^\.\.?\/.*\.ts$/.test(specifier)) {
-        analyzeNamedImport(statement, specifier, storeImports, diagnostics, span, "Game state imports", `import { useGame } from "${specifier}"`, false);
+        analyzeNamedImport(statement, specifier, relativeImports, diagnostics, span, "Imports from a .ts file", `import { useGame } from "${specifier}"`, false);
       } else if (specifier !== null && specifier === authoringModule) {
         analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity, type Child } from "${specifier}"`, false, true);
       } else {
@@ -130,7 +131,10 @@ export function analyzeSourceFile(
     }
   }
 
-  return { fileName, sourceFile, components: resolved, imports, authoringImports, storeImports, typeDeclarations, diagnostics };
+  // From a relative .ts file come the game state (a name that looks like a hook, `useGame`) and plain functions, which components may call.
+  const storeImports = relativeImports.filter((i) => HOOK_NAME.test(i.name));
+  const plainImports = relativeImports.filter((i) => !HOOK_NAME.test(i.name));
+  return { fileName, sourceFile, components: resolved, imports, authoringImports, storeImports, plainImports, typeDeclarations, diagnostics };
 }
 
 

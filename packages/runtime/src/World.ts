@@ -3,6 +3,20 @@ import { Collider } from "./components/Collider.ts";
 import type { Pressable } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 
+/** Steps the world is asked to freeze for by `freeze`: taken up by the next tick that is not already frozen. */
+let freezeRequest = 0;
+
+/**
+ * Pause the world's `onUpdate` for the next `steps` ticks: a hit, a dash, a death, which feels heavier for a few frames of
+ * stillness. Things drawn keep drawing, `onInput` still runs, and renders still happen, so state set by the step that
+ * called this still shows. The player keeps the key edges of a frozen step for the first step after it, so a press during
+ * the freeze is not lost. Asking again while frozen extends it to the longer of the two. Any code in a tick can call it,
+ * including a game state action.
+ */
+export function freeze(steps: number): void {
+  if (steps > freezeRequest) freezeRequest = Math.floor(steps);
+}
+
 /** Numbers each pass of any World's `flush` over its list of renders (see `GameObject.renderInPass`): one counter for all worlds, so an object that moves between them is never mistaken for one already seen. */
 let passes = 0;
 
@@ -27,6 +41,8 @@ export class World {
   #structure = new Set<GameObject>();
   #onInput = new Set<GameObject>();
   #onUpdate = new Set<GameObject>();
+  readonly #inert = new Set<GameObject>();
+  #frozen = 0;
 
   constructor() {
     this.root.attachToWorld(this);
@@ -53,10 +69,22 @@ export class World {
    */
   tick(dt: number, input: InputState = NO_INPUT): number {
     const inputs = [...this.#onInput];
-    const updates = [...this.#onUpdate];
-    for (const object of inputs) if (object.world === this) object.onInput(input);
-    for (const object of updates) if (object.world === this) object.onUpdate(dt);
+    const anyInert = this.#hasInert();
+    for (const object of inputs) if (object.world === this) object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
+    if (this.#frozen > 0) this.#frozen--;
+    else {
+      const updates = [...this.#onUpdate];
+      for (const object of updates) if (object.world === this) object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
+    }
+    // A freeze asked for during this tick starts with the next.
+    if (freezeRequest > this.#frozen) this.#frozen = freezeRequest;
+    freezeRequest = 0;
     return this.flush();
+  }
+
+  /** How many more ticks `onUpdate` will be skipped for (see `freeze`). */
+  get frozenSteps(): number {
+    return this.#frozen;
   }
 
   /**
@@ -88,8 +116,32 @@ export class World {
    */
   reportPress(pointer: Pressable, x: number, y: number): boolean {
     if (pointer.world !== this || !pointer.contains(x, y)) return false;
+    if (this.#hasInert() && this.isInert(pointer as unknown as GameObject)) return false;
     pointer.onPress?.();
     return true;
+  }
+
+  /**
+   * Make a subtree inert, or not, as the HTML attribute does: it still updates, draws and collides, but hears no input (its
+   * `useInput` and `useUpdate` get no keys pressed) and none of its pointers can be pressed. A router makes the screen it is
+   * leaving inert for the transition, so a button pressed during a fade acts only on the screen being entered.
+   */
+  setInert(object: GameObject, inert: boolean): void {
+    if (inert) this.#inert.add(object);
+    else this.#inert.delete(object);
+  }
+
+  /** Whether `object` is in a subtree made inert (see `setInert`). */
+  isInert(object: GameObject): boolean {
+    if (this.#inert.size === 0) return false;
+    for (let at: GameObject | null = object; at !== null; at = at.parent) if (this.#inert.has(at)) return true;
+    return false;
+  }
+
+  #hasInert(): boolean {
+    if (this.#inert.size === 0) return false;
+    for (const object of this.#inert) if (object.world !== this) this.#inert.delete(object);
+    return this.#inert.size > 0;
   }
 
   /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */
