@@ -107,7 +107,7 @@ the second game".
 | Spread props | `<Tower key={p.id} id={p.id} x={p.x} y={p.y} {...p.tower} />`, `<Enemy key={e.id} {...e} />`, `<Shot {...s} />` | built |
 | Conditional inside a list's map | `pads.map((p) => p.tower ? <Tower/> : <EmptyPad/>)`, `shots.map((s) => s.live && <Shot/>)` | built |
 | Forwarding `{children}` | `Modal` → `Panel` → its column | built |
-| Children on list items | `TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)` | **not built**: `BuildOption` is a component that draws its own button (marked `WORKAROUND(tier3-list-children)`) |
+| Children on list items | `TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)` | built (flat children only) |
 | Context | one value per tower for `Barrel`, `RangeRing`, `LevelPips`, `MuzzleFlash` | **not built, not needed**: each takes two or three props from `Tower` |
 
 ## Performance

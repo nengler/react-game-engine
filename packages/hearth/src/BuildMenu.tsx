@@ -1,6 +1,8 @@
 import { Flex } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
-import { BuildOption } from "./BuildOption.tsx";
+import { Icon } from "./Icon.tsx";
+import { Label } from "./Label.tsx";
+import { MenuButton } from "./MenuButton.tsx";
 import { Panel } from "./Panel.tsx";
 import { TOWER_LIST } from "./rules/towers.ts";
 import { iconOf } from "./rules/view.ts";
@@ -14,7 +16,10 @@ export function BuildMenu() {
     <Flex direction="column" width="grow">
       <Panel title="BUILD">
         {TOWER_LIST.map((d) => (
-          <BuildOption key={d.kind} icon={iconOf(d.kind)} text={`${d.key} ${d.name} ${d.cost}`} enabled={gold >= d.cost} onPress={() => build(d.kind)} />
+          <MenuButton key={d.kind} enabled={gold >= d.cost} onPress={() => build(d.kind)}>
+            <Icon frame={iconOf(d.kind)} />
+            <Label text={`${d.key} ${d.name} ${d.cost}`} color={gold >= d.cost ? "#fff1d6" : "#8e9ac2"} />
+          </MenuButton>
         ))}
       </Panel>
     </Flex>

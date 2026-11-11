@@ -30,7 +30,7 @@ Decided 2026-11-10. Once priority 5 lands, every ranked item above is done or de
 | --- | --- | --- | --- |
 | 6 | Play it on a real machine (the rest of priority 1) | Window feel, keys, the HUD, scaling and sound have never been tried by a person; sound has never been heard | \~1 day |
 | 7 | A real game: the first level of a precision platformer, and the engine features it needs | The demo is too small to find what is missing; the "Not now" table is waiting for a game to ask | \~4–6 weeks |
-| 7b | A second, small game in a different genre: a tower defense ([TOWER_DEFENSE_PLAN.md](TOWER_DEFENSE_PLAN.md)) (**built**, `packages/hearth`; three of five Tier 3 items built, see below) | Kite hit no Tier 3 item and never measured finding 9; a game of lists, menus and many sprites tests both, so priority 8 describes a shape that has worked twice | \~3–4 weeks |
+| 7b | A second, small game in a different genre: a tower defense ([TOWER_DEFENSE_PLAN.md](TOWER_DEFENSE_PLAN.md)) (**built**, `packages/hearth`; four of five Tier 3 items built, see below) | Kite hit no Tier 3 item and never measured finding 9; a game of lists, menus and many sprites tests both, so priority 8 describes a shape that has worked twice | \~3–4 weeks |
 | 8 | Usable outside this repository | A game only builds as a workspace in this monorepo, and the docs are design notes, not a guide; this prepares for open-sourcing | \~1–2 weeks |
 
 **Order.** 6 can start now, alongside priority 5. 7 can start now too: a new game package mostly adds code, so it does not clash with the developer-loop work in the player, host and compiler, and the game is the first real user of hot reload and in-window errors. 8 waits until 5 settles, because it packages that loop, and until 7 and 7b have shown what a game's project layout looks like.
@@ -160,9 +160,9 @@ priority 8.
 **Built 2026-11-11** in `packages/hearth` ("Hearth"; `npm run check:hearth`, `npm run play:hearth`, `npm run package:hearth`; its design note is
 `packages/hearth/DESIGN.md`). In the order of the plan: input scripts can click (`click@x,y`, `mouse@x,y`); the design note and the rules, with
 headless tests; the game written the React way with marked workarounds; the Tier 3 items the game hit, one commit each (spread props,
-conditionals in a list's `.map`, forwarding `{children}`), each removing its workaround; art, sound, the balance tool and the wave
-replays; the two bench scenes and wave 10's frame time. **Not done:** children on list items and context (below), packaging under both engines
-(`package:hearth` exists but was not run), and nobody has played it in a window.
+conditionals in a list's `.map`, forwarding `{children}`, children on list items), each removing its workaround; art, sound, the balance tool and the wave
+replays; the two bench scenes and wave 10's frame time. **Not done:** context (below, recorded as not needed), a real-window and Node-engine package (`package:hearth -- --engine quickjs --headless` builds and starts;
+the window builds need GL dev packages this VM lacks), and nobody has played it in a window. `check:hearth` agrees between Node and the Rust host.
 
 ### Findings from the second game
 
@@ -179,10 +179,11 @@ What building Hearth found, and which of Kite's findings held a second time.
    narrows because the generated branches test the condition itself.
 3. **Forwarding `{children}`** was hit by the modal (`<Panel title={title}>{children}</Panel>`) and is **built**, with option A decided in the plan (the
    forwarded `{children}` is the only child passed on). The game never wanted anything beside it. See DESIGN.md, "Forwarding".
-4. **Children on list items were hit and are not built.** `TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)` is `RGE1209`. The workaround is
-   one small component (`BuildOption`) that draws its own button, so the list still has a callback that reads the item; it cost one file and a
-   little duplication of `MenuButton`'s styling. This is the one Tier 3 item the game would still like; the plan's implementation map (an owner
-   expression and a per-key record for each item's child instances) is the way to build it.
+4. **Children on list items** were hit by the build menu (`TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)`, `RGE1209`), worked around for a while with one
+   component per item, and are **built** for the first cut: an item (a component or a built-in) may have plain child elements that read the item. Each item's children are made
+   with it, kept in the list's per-key record (`kids`) and given the item's current value on every render, attached with `attachPassedChild` (or `addChild` on a built-in), and go
+   with the item. Still rejected: a condition, a list, `{children}` or nested children inside an item's children, and children on a `? :` item that switches between two
+   elements. See DESIGN.md, "Children on list items".
 5. **Context was not needed, and is not built.** Each tower's `Barrel`, `RangeRing`, `LevelPips` and `MuzzleFlash` take two or three props from `Tower`, one level
    of nesting; the only per-tower thing read deeper is the cursor, a store selector. The plan's reason to build it (one value per list item that a single
    global store cannot hold without ids) did not arise at this size. Its row in "Not now" stays, with a sharper pull: a component tree three or more levels
@@ -406,6 +407,6 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 | One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
 | Context (`createContext` / `useContext`) | Props covered Hearth's trees (one level of nesting under each tower), so priority 7b did not need it (second-game finding 5) | A tree three or more levels deep passing the same props through |
-| Children on list items (`items.map((i) => <Button key …><Icon/></Button>)`) | Hearth hit it once and worked around it with a component per item (second-game finding 4); still `RGE1209` | A second use, or someone tired of the extra component; the plan's implementation map says how |
+| Children on list items that are conditional, lists, or nested | Built flat only (second-game finding 4): `RGE1209` for the rest | An author needing `{ok && <Icon/>}` inside a list item's children |
 | Forwarding `{children}` beside other passed children, spread onto a built-in | Built: only a forwarded `{children}` that is the whole of what is passed (option A), and spread onto components only | A game writing `<Panel><Title/>{children}<Footer/></Panel>` (then a wrapper `<Flex>` first, order ranges second) or `<Shape {...p}/>` |
 | Tiled importer gaps (whole-number `int` checks, template properties, external and multiple tilesets, base64 layers) | `visible` and tile flip flags are done (priority 7); the rest each say so when met | A map that uses them, or the first map saved by Tiled itself (finding 8) |

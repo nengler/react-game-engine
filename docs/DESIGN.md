@@ -559,6 +559,16 @@ TypeScript narrows what it reads (`p.tower ? new Tower({ …p.tower })`). A frag
 be used when the items are conditional (it would count the items left out). The `&&` form is a filter, so TypeScript does not narrow
 inside it: spread a non-null source there.
 
+### Children on list items (2026-11-11)
+
+`items.map((d) => <MenuButton key={d.kind}><Icon frame={d.icon} /><Label text={d.name} /></MenuButton>)`. The item's children are plain elements
+(no conditions, lists, `{children}` or children of their own) that may read the item and index like its props do (an `Item` dependency). The
+list's per-key record, which already held the item's current value for callbacks, also holds the children: `{ current: Item; kids: [Icon, Label] }`.
+When a key is new the generator makes the item, then each child (`const $c0 = new Icon(…)`), attaches them (`$item.attachPassedChild($c0, 0)` for a
+component item, `$item.addChild($c0, 0)` for a built-in) and stores them; on later renders it applies each child's props (and transform) from the
+record, so a child updates when the item's object changes. The children belong to the item's subtree, so they go with it when the item is removed.
+Not built: children on an item that switches (`cond ? <A/> : <B/>`), and conditions, lists or nested children inside the children.
+
 **Runtime.** Children are sorted by `(slot, order)`: `addChild(child, slot,
 order = 0)` and `queueAddChild(child, slot, order)` insert after every sibling
 with a lower slot, or the same slot and a lower or equal order.

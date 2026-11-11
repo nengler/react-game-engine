@@ -280,11 +280,23 @@ export class ElementLowering extends HookLowering {
           warning(code, `\`key\` reads only the index, so an item keeps its instance by position, not by identity: removing or reordering items moves state between them. Prefer an id from the item.`, this.span(keyNode)),
         );
       }
-      if (lowered.children.length > 0 || (alternate !== null && alternate.children.length > 0)) {
-        this.report(code, "A list item cannot have children yet: make the item a component that renders them.", jsx);
+      if (alternate !== null && alternate.children.length > 0) {
+        this.report(code, "A list item that switches between two elements cannot have children yet: make the branch a component that renders them.", jsx);
         return null;
       }
-      const element = this.asListItem(lowered, item, index);
+      // The item's children are plain elements (no conditions, lists, `{children}` or children of their own yet); they may read the item.
+      const plainChildren = lowered.children.every((c) => c.kind === "StaticChild" && c.element.children.length === 0);
+      if (!plainChildren) {
+        this.report(code, "A list item's children must be plain elements for now (no conditions, lists or nested children inside them): make the item a component that renders them.", jsx);
+        return null;
+      }
+      const children: ChildIR[] = [];
+      for (const c of lowered.children) {
+        const child = c.kind === "StaticChild" ? this.asListItem(c.element, item, index) : null;
+        if (!child) return null;
+        children.push({ kind: "StaticChild", element: child });
+      }
+      const element = this.asListItem({ ...lowered, children }, item, index);
       const alternateElement = alternate && this.asListItem(alternate, item, index);
       if (!element || (alternate && !alternateElement)) return null;
       const dependencies = [...collectDependencies(source), ...(condition ? collectDependencies(condition) : [])];

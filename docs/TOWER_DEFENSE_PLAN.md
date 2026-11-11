@@ -391,7 +391,7 @@ movement feel to tune), and the compiler work is most of it.
 - [~] The game is playable from the title through ten waves to a win or a loss, with mouse, keyboard or gamepad, under
       Node and as a packaged build (headless verification at least; a person plays it in priority 6's spirit). *Verified headless under Node; not packaged, not played.*
 - [~] Each Tier 3 item is either built (design section, compiler and runtime tests, used by the game) or recorded as a
-      finding saying why the game did not need it; the matching "Not now" rows are removed or updated. *Built: spread props, conditionals in a list's map, forwarding `{children}`. Context: recorded as not needed. Children on list items: hit, not built.*
+      finding saying why the game did not need it; the matching "Not now" rows are removed or updated. *Built: spread props, conditionals in a list's map, forwarding `{children}`, children on list items (flat). Context: recorded as not needed.*
 - [x] Input scripts can click, and a wave replay builds towers by clicking and wins
 - [x] Headless tests cover targeting, splash, slow, the economy, leaking, and the balance tool's output
 - [x] The many-sprites bench scenario is in `bench/budget.json`, wave 10's frame time is recorded in `NATIVE_PLAN.md`,
@@ -453,9 +453,8 @@ then C if the wrapper proves awkward. D and E only if several games ask. The "No
 ## Status (2026-11-11)
 
 Done: step 0 (clicks in input scripts), 1 (design note, rules, headless tests), 2 (greybox, React way), 3 for spread props, conditionals in
-`.map` and forwarding `{children}` (one commit each, workarounds removed), 4 to 7 (input and panel, screens, art and sound, the ten waves, the
+`.map`, forwarding `{children}` and children on list items (one commit each, workarounds removed), 4 to 7 (input and panel, screens, art and sound, the ten waves, the
 balance tool and the wave replays), 8 (bench scenes; wave 10 measured; no fix needed) and the findings in NEXT_PRIORITIES.md. Not done: Tier 3
-items 3 (children on list items, a workaround stands: `BuildOption`) and 5 (context, recorded as not needed), packaging under both engines,
-and a person playing it. Where the game differs from this plan: HP grows 20 % a wave and gold rewards are halved (the balance tool), wave 10
+item 5 (context, recorded as not needed), a real-window package, and a person playing it. Where the game differs from this plan: HP grows 20 % a wave and gold rewards are halved (the balance tool), wave 10
 has 136 enemies, the range ring shows for the selected tower (no hover), and a `focus` object in the game state stands in for
 index reads in render expressions.
