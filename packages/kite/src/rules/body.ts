@@ -109,6 +109,15 @@ export function heightOf(b: Body): number {
   return b.ducking ? DUCK_H : BODY_H;
 }
 
+/** Which animation of the character's sheet shows this body (`dead`: the run's, not the body's). */
+export function animationOf(b: Body, dead: boolean): string {
+  if (dead) return "die";
+  if (b.dashing) return "dash";
+  if (b.climbing || b.sliding) return "wall";
+  if (!b.onGround) return b.vy < 0 ? "jump" : "fall";
+  return Math.abs(b.vx) > 12 && !b.ducking ? "run" : "idle";
+}
+
 /** Is any pixel of a hitbox `h` tall with its top left at (x, y) solid? */
 export function hits(solid: SolidAt, x: number, y: number, h: number = BODY_H): boolean {
   // The hitbox is smaller than a tile on both axes, so its corners and the middles of its edges are enough.
@@ -447,7 +456,7 @@ class Stepper {
   }
 
   dashUpdate(): void {
-    const { b, c, dt } = this;
+    const { b, dt } = this;
     // Jumps out of a dash: a super jump on the ground, a wall bounce going straight up, a wall jump otherwise.
     if (b.buffer > 0 && this.canUnDuck) {
       if (b.dashY === 0) {
@@ -497,7 +506,6 @@ class Stepper {
       }
       this.endDashState();
     }
-    void c;
   }
 
   dashSlide(): void {

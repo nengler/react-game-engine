@@ -7,7 +7,7 @@ import { newRun, stepRun, type Run } from "./rules/level.ts";
 /**
  * The game's state, shared by every component: which screen is showing, the run of the level (`Run`, see `rules/level.ts`)
  * and the actions that move it on. All the rules are plain functions in `rules/`; this file keeps their state where components
- * can read it, and calls them. `step` is one fixed step of the game (the `Play` screen calls it with the step's input): the
+ * can read it, and calls them. `step` is one fixed step of the game (the root component calls it with the step's input): the
  * rules report what happened as events, and `playEvents` answers them with sound, dust, a shake and a freeze.
  */
 interface State {
@@ -35,15 +35,10 @@ export const useGame = createGameState<State>()((set, get) => ({
     set({ run: next, screen: next.finished ? "end" : "play" });
     playEvents(events, run.originX, run.originY);
   },
-  // Each only from its own screen: a screen fading out still hears the buttons, and a jump early in the first room must not
-  // start the run again.
   begin: () => {
-    if (get().screen !== "title") return;
     sfx.play("start");
     set({ run: newRun(), screen: "play", gems: 0 });
   },
-  toTitle: () => {
-    if (get().screen === "end") set({ run: newRun(), screen: "title", gems: 0 });
-  },
+  toTitle: () => set({ run: newRun(), screen: "title", gems: 0 }),
   collect: () => set((s) => ({ gems: s.gems + 1 })),
 }));

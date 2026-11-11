@@ -11,22 +11,14 @@ import { GEM_AT } from "./rules/rooms.ts";
 import { Title } from "./Title.tsx";
 import { fadeThrough } from "./transitions.ts";
 
-/**
- * What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, the bursts
- * the game makes, and the HUD. It runs the game too: each fixed step hands its input to the game state's `step`.
- */
+/** What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, the bursts the game makes, and the HUD. */
 function Play() {
-  const step = useGame((s) => s.step);
   const originX = useGame((s) => s.run.originX);
   const originY = useGame((s) => s.run.originY);
   const room = useGame((s) => s.run.room);
   const deaths = useGame((s) => s.run.deaths);
   const dead = useGame((s) => s.run.dead);
   const gems = useGame((s) => s.gems);
-
-  useUpdate((dt, input) => {
-    step(input, dt);
-  });
 
   return (
     <Entity name="Play">
@@ -55,6 +47,13 @@ function Play() {
 /** The game's root: a 320 × 180 screen showing the title, the level or the end, with the music playing under all of it. */
 export default function Main() {
   const screen = useGame((s) => s.screen);
+  const step = useGame((s) => s.step);
+
+  // The game runs from the root, which is never removed: each fixed step hands its input to the game state (which does
+  // nothing off the play screen), so no screen has to stay mounted for the world to move on.
+  useUpdate((dt, input) => {
+    step(input, dt);
+  });
 
   return (
     <Game

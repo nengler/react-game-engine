@@ -1,10 +1,12 @@
-import { AnimatedSprite, Collider, Entity, Particles } from "@rge/runtime/jsx";
-import { squash } from "./effects.ts";
+import { AnimatedSprite, Collider, Entity, EventListener, Particles, createSquash, useState } from "@rge/runtime/jsx";
+import { gameEvents } from "./effects.ts";
 import { useGame } from "./GameState.ts";
+import { animationOf, heightOf } from "./rules/body.ts";
 
 /**
- * The character: the rules' body drawn as an animated sprite, with the trail a dash leaves. Its sounds, dust and death burst
- * are not here: the rules report them as events and the game state plays them (`effects.ts`), so they outlive this frame.
+ * The character: the rules' body drawn as an animated sprite, with the trail a dash leaves and its own squash and stretch,
+ * which it answers from the game's events (Celeste's numbers: thin and tall leaving the ground, wide and flat landing hard).
+ * The sounds, dust and death burst belong to the game, not to this component (`effects.ts`).
  */
 export function Player() {
   const body = useGame((s) => s.run.player);
@@ -12,20 +14,8 @@ export function Player() {
   const originY = useGame((s) => s.run.originY);
   const dead = useGame((s) => s.run.dead);
 
-  const height = body.ducking ? 6 : 11;
-  const animation = dead
-    ? "die"
-    : body.dashing
-      ? "dash"
-      : body.climbing || body.sliding
-        ? "wall"
-        : !body.onGround
-          ? body.vy < 0
-            ? "jump"
-            : "fall"
-          : Math.abs(body.vx) > 12 && !body.ducking
-            ? "run"
-            : "idle";
+  const [squash] = useState(() => createSquash({ recover: 1.75 }));
+  const height = heightOf(body);
 
   return (
     <Entity name="Player" transform={{ x: originX + body.x, y: originY + body.y }}>
@@ -43,7 +33,7 @@ export function Player() {
           dash: { frames: 11 },
           die: { frames: "12-15", fps: 16, once: true },
         }}
-        animation={animation}
+        animation={animationOf(body, dead)}
         flipX={body.facing < 0}
         originX={6}
         originY={12}
@@ -52,6 +42,21 @@ export function Player() {
         squash={squash}
       />
       <Collider width={8} height={height} tag="player" layer="player" />
+      <EventListener
+        events={gameEvents}
+        onEvent={(e) => {
+          if (e.type === "jump" || e.type === "wallJump") {
+            squash.start(0.6, 1.4);
+          } else if (e.type === "land") {
+            // The harder the landing, the flatter: all the way at 240 pixels a second.
+            squash.start(1 + 0.6 * Math.min(e.speed / 240, 1), 1 - 0.6 * Math.min(e.speed / 240, 1));
+          } else if (e.type === "duck") {
+            squash.start(1.4, 0.6);
+          } else if (e.type === "stand") {
+            squash.start(0.8, 1.2);
+          }
+        }}
+      />
       {/* A trail while dashing: state, not a moment, so it is an emitter that is on while `dashing` is. */}
       <Particles rate={120} lifetime={0.25} speed={6} spread={180} size={3} shrink fade color="#ff9a7a" space="world" emitting={body.dashing} transform={{ x: 4, y: 6 }} max={24} />
     </Entity>
