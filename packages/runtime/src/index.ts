@@ -34,13 +34,16 @@ export {
   createParticles,
   createShake,
   createSounds,
+  createSquash,
   ParticleStore,
   Shake,
   SoundStore,
+  Squash,
   type BurstOptions,
   type ParticlePreset,
   type ParticleRenderer,
   type SoundEntry,
+  type SquashOwner,
 } from "./effects.ts";
 export { Fade, type FadeProps } from "./components/Fade.ts";
 export { Route, Router, type RouteProps, type RouterProps, type Transition, type TransitionFrame } from "./components/Router.ts";

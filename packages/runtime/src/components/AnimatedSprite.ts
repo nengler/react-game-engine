@@ -1,6 +1,7 @@
 import { GameObject } from "../GameObject.ts";
 import type { InputState } from "../input.ts";
-import { isStyled, type SpriteLook, type SpriteOptions } from "./Sprite.ts";
+import type { Squash } from "../effects.ts";
+import { isStyled, squashHooks, type SpriteLook, type SpriteOptions } from "./Sprite.ts";
 
 export interface AnimatedSpriteProps extends SpriteOptions {
   /** The images to cycle through, in order, one image file per frame. Leave it out to play a sheet (`sheet`). */
@@ -123,6 +124,7 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
   originY: number;
   tint: string | undefined;
   opacity: number;
+  squash: Squash | undefined;
   #frames: readonly string[];
   #animationsText: string | AnimationTable;
   /** What the animations were last read from, to tell a new table from the same one written again. */
@@ -148,6 +150,7 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
     this.originY = hostProps.originY ?? 0;
     this.tint = hostProps.tint;
     this.opacity = hostProps.opacity ?? 1;
+    this.squash = hostProps.squash;
     this.#animationsText = "";
     this.#animation = "";
     if (hostProps.animations !== undefined) this.animations = hostProps.animations;
@@ -222,7 +225,16 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
   }
 
   /** Advance by `dt` seconds while playing. The World calls this every tick, since the class overrides it. */
+  override onMount(): void {
+    squashHooks.mount(this);
+  }
+
+  override onUnmount(): void {
+    squashHooks.unmount(this);
+  }
+
   override onUpdate(dt: number, _input?: InputState): void {
+    squashHooks.update(this, dt);
     const current = this.current;
     const count = current === null ? this.#frames.length : current.frames.length;
     const fps = current === null ? this.fps : current.fps;

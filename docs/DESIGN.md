@@ -1321,6 +1321,12 @@ step: (input, dt) => {
   a `.ts` file are not checked at build time (only literals in components are).
 - **`createShake({ strength, duration })`** → `Shake`: `start(strength?, duration?)`. `<Camera shake={shake}>` starts a shake
   each time it is started (a number still works as before: the view shakes when it changes).
+- **`createSquash({ recover })`** → `Squash`: `start(x, y)` throws a sprite's scale to (x, y), and it springs back to 1 at
+  `recover` a second (Celeste's 1.75). `<Sprite squash={squash}>` and `<AnimatedSprite squash={squash}>` draw it about the
+  sprite's origin, on top of the transform's scale (the hitbox is not scaled). The sprite that has it while mounted advances
+  it in `onUpdate`, so it follows the fixed timestep and freezes with the world, and marks itself changed while it moves.
+  `Sprite` and `AnimatedSprite` now implement `onMount`, `onUnmount` and `onUpdate` (the manifest's `intrinsicHooks`); the
+  frame builder compares a hand-written subclass's hooks with its built-in's, so that does not make every sprite volatile.
 - **Continuous effects stay JSX.** A trail "while dashing" is state, so it is `<Particles emitting={dashing}>` in the component.
   The stores are for moments.
 - **Rules stay pure.** Kite's `stepRun` reports events and never calls a store, so the solver and the tests step it with no

@@ -105,14 +105,14 @@ export const runtimeManifest: RuntimeManifest = {
   intrinsicMembers: {
     Entity: ["name"],
     Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "state", "controls"],
-    Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
+    Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity", "squash"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
     Text: ["text", "size", "color", "width", "align", "font"],
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "shake", "shakeStrength", "shakeDuration", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: [
-      "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity",
+      "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity", "squash",
       "animations", "animation", "isSheet", "current", "sheetFrame", "styled", "finished",
     ],
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
@@ -151,7 +151,8 @@ export const runtimeManifest: RuntimeManifest = {
     Route: ["name"],
   },
   intrinsicHooks: {
-    AnimatedSprite: ["onUpdate"],
+    Sprite: ["onMount", "onUnmount", "onUpdate"],
+    AnimatedSprite: ["onMount", "onUnmount", "onUpdate"],
     Camera: ["onUpdate"],
     Particles: ["onUpdate"],
     ParticleLayer: ["onMount", "onUnmount"],

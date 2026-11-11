@@ -1,4 +1,6 @@
 import { GameObject } from "../GameObject.ts";
+import type { Squash } from "../effects.ts";
+import type { InputState } from "../input.ts";
 
 /** What can change how a sprite is drawn, beyond which image it is. All optional; a sprite that sets none is drawn plainly, as it always was. */
 export interface SpriteOptions {
@@ -13,6 +15,8 @@ export interface SpriteOptions {
   tint?: string;
   /** 0 (invisible) to 1 (the default); multiplies the tint's alpha. */
   opacity?: number;
+  /** Squash and stretch about the origin: a `createSquash()` started from anywhere, which this sprite draws and springs back. */
+  squash?: Squash;
 }
 
 export interface SpriteProps extends SpriteOptions {
@@ -32,12 +36,27 @@ export interface SpriteLook {
   readonly originY: number;
   readonly tint: string | undefined;
   readonly opacity: number;
+  readonly squash: Squash | undefined;
 }
 
 /** Whether a sprite's look is anything but the plain, whole-image, top-left one. */
 export function isStyled(look: SpriteLook): boolean {
-  return look.flipX || look.flipY || look.originX !== 0 || look.originY !== 0 || look.tint !== undefined || look.opacity !== 1;
+  return look.flipX || look.flipY || look.originX !== 0 || look.originY !== 0 || look.tint !== undefined || look.opacity !== 1 || look.squash !== undefined;
 }
+
+/** What a sprite does with its squash: take it on mounting, spring it back each update, and draw again while it moves. */
+export const squashHooks = {
+  mount(sprite: GameObject & SpriteLook): void {
+    sprite.squash?.attach(sprite);
+  },
+  unmount(sprite: GameObject & SpriteLook): void {
+    sprite.squash?.detach(sprite);
+  },
+  update(sprite: GameObject & SpriteLook, dt: number): void {
+    const squash = sprite.squash;
+    if (squash !== undefined && squash.owns(sprite) && squash.advance(dt)) sprite.markChanged();
+  },
+};
 
 export class Sprite<P extends object = {}> extends GameObject<P> implements SpriteLook {
   static override readonly intrinsic = true;
@@ -52,6 +71,7 @@ export class Sprite<P extends object = {}> extends GameObject<P> implements Spri
   originY: number;
   tint: string | undefined;
   opacity: number;
+  squash: Squash | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: SpriteProps, props?: P, defaults?: Partial<P>) {
@@ -66,5 +86,18 @@ export class Sprite<P extends object = {}> extends GameObject<P> implements Spri
     this.originY = hostProps.originY ?? 0;
     this.tint = hostProps.tint;
     this.opacity = hostProps.opacity ?? 1;
+    this.squash = hostProps.squash;
+  }
+
+  override onMount(): void {
+    squashHooks.mount(this);
+  }
+
+  override onUnmount(): void {
+    squashHooks.unmount(this);
+  }
+
+  override onUpdate(dt: number, _input?: InputState): void {
+    squashHooks.update(this, dt);
   }
 }

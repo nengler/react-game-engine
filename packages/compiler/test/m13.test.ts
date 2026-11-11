@@ -116,11 +116,11 @@ describe("M13: IR and generated code", () => {
   });
 
   it("does not add super to a component whose root does not implement the hook", () => {
-    const plain = compile(`function C() { const r = useRef(0); useUpdate(() => { r.current += 1; }); return <Sprite image="a.png" />; }`);
+    const plain = compile(`function C() { const r = useRef(0); useUpdate(() => { r.current += 1; }); return <Shape kind="rect" width={1} height={1} />; }`);
     assert.doesNotMatch(plain.code, /super\.onUpdate/);
     assert.match(plain.code, /override onUpdate\(\): void \{/);
-    const mount = compile(`function C() { const r = useRef(0); useMount(() => { r.current += 1; }); return <AnimatedSprite frames={["a.png"]} />; }`);
-    assert.doesNotMatch(mount.code, /super\.onMount/, "the sprite does not implement onMount");
+    const mount = compile(`function C() { const r = useRef(0); useMount(() => { r.current += 1; }); return <Camera />; }`);
+    assert.doesNotMatch(mount.code, /super\.onMount/, "the camera does not implement onMount");
   });
 
   it("type-checks the generated module", () => {
@@ -264,7 +264,8 @@ describe("M13: runtime behaviour", () => {
 describe("M13: the manifest says which hooks a built-in implements", () => {
   it("lists onUpdate for the built-ins that advance themselves (AnimatedSprite, Camera, Particles, Fade, Music, Router), and ParticleLayer's mount hooks", () => {
     assert.deepEqual(runtimeManifest.intrinsicHooks, {
-      AnimatedSprite: ["onUpdate"],
+      Sprite: ["onMount", "onUnmount", "onUpdate"],
+      AnimatedSprite: ["onMount", "onUnmount", "onUpdate"],
       Camera: ["onUpdate"],
       Particles: ["onUpdate"],
       ParticleLayer: ["onMount", "onUnmount"],
@@ -278,7 +279,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
     const withSuper = (manifest: typeof runtimeManifest) => {
       const compiler = new (getCompiler().constructor as new (config: object) => ReturnType<typeof getCompiler>)({ manifest });
       try {
-        const result = compiler.compile("C.tsx", `import { Sprite, useUpdate, useRef } from "@rge/runtime/jsx";\nfunction C() { const r = useRef(0); useUpdate((dt) => { r.current += dt; }); return <Sprite image="a.png" />; }`);
+        const result = compiler.compile("C.tsx", `import { Shape, useUpdate, useRef } from "@rge/runtime/jsx";\nfunction C() { const r = useRef(0); useUpdate((dt) => { r.current += dt; }); return <Shape kind="rect" width={1} height={1} />; }`);
         assert.ok(result.ok, JSON.stringify(result.diagnostics));
         return result.code;
       } finally {
@@ -286,7 +287,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
       }
     };
     assert.doesNotMatch(withSuper(runtimeManifest), /super\.onUpdate/);
-    assert.match(withSuper({ ...runtimeManifest, intrinsicHooks: { Sprite: ["onUpdate"] } }), /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/);
+    assert.match(withSuper({ ...runtimeManifest, intrinsicHooks: { Shape: ["onUpdate"] } }), /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/);
   });
 
   it("reserves the sprite's own names for a component rooted at it", () => {

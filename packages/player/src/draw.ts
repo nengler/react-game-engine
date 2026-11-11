@@ -465,7 +465,11 @@ function classCode(object: GameObject): number {
     // A class that overrides a per-tick hook may write its own transform or colour from it, which nothing reports, unless it is
     // a built-in or a compiled component (the compiler marks those `managed`; the marker is an own property, so a hand-written subclass of one is not).
     const ownProperty = (name: string): boolean => Object.prototype.hasOwnProperty.call(object.constructor, name);
-    const hooked = object.onInput !== GameObjectPrototype.onInput || object.onUpdate !== GameObjectPrototype.onUpdate;
+    // Compared with the built-in it extends, whose own hooks (a sprite springing back its squash) report what they change.
+    let builtIn = Object.getPrototypeOf(object) as { constructor: unknown; onInput: unknown; onUpdate: unknown } | null;
+    while (builtIn !== null && !Object.prototype.hasOwnProperty.call(builtIn.constructor, "intrinsic")) builtIn = Object.getPrototypeOf(builtIn) as typeof builtIn;
+    const base = builtIn ?? GameObjectPrototype;
+    const hooked = object.onInput !== base.onInput || object.onUpdate !== base.onUpdate;
     if (hooked && !ownProperty("intrinsic") && !ownProperty("managed")) code |= FLAG_VOLATILE | FLAG_OPAQUE;
     KINDS.set(object.constructor, code);
   }
@@ -1423,7 +1427,9 @@ export class FrameBuilder {
       const alpha = Math.round(((tint & 255) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity))));
       tint = ((tint & 0xffffff00) | alpha) >>> 0;
     }
-    this.#list.spriteRegion(world, handle, srcX, srcY, frameWidth, frameHeight, node.originX, node.originY, (node.flipX ? RGE_SPRITE_FLIP_X : 0) | (node.flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
+    const squash = node.squash;
+    const at = squash === undefined || squash.resting ? world : { x: world.x, y: world.y, rotation: world.rotation, scaleX: world.scaleX * squash.x, scaleY: world.scaleY * squash.y };
+    this.#list.spriteRegion(at, handle, srcX, srcY, frameWidth, frameHeight, node.originX, node.originY, (node.flipX ? RGE_SPRITE_FLIP_X : 0) | (node.flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
   }
 
   /** A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer, culled to none (a map is a room, not a world). */

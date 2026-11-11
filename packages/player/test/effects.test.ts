@@ -1,7 +1,7 @@
 /** Effect stores: particle bursts drawn by a <ParticleLayer>, sounds played by name, and a camera shake started from anywhere. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Entity, ParticleLayer, World, createParticles, createShake, createSounds, freeze, getSoundSink, setSoundSink, type SoundSink } from "@rge/runtime";
+import { AnimatedSprite, Camera, Entity, ParticleLayer, Sprite, World, createParticles, createShake, createSounds, createSquash, freeze, getSoundSink, setSoundSink, type SoundSink } from "@rge/runtime";
 import { createPlayer, RecordingBackend, type DecodedRecord } from "../src/index.ts";
 
 const ofOp = <T extends DecodedRecord["op"]>(frame: readonly DecodedRecord[], op: T): Extract<DecodedRecord, { op: T }>[] => frame.filter((r): r is Extract<DecodedRecord, { op: T }> => r.op === op);
@@ -117,5 +117,57 @@ describe("createShake and <Camera shake>", () => {
     assert.ok(a.slice(-10).every((e) => e === 0), "over after 0.2 seconds");
     const long = run((i) => i === 2 && shake.start(4, 0.4));
     assert.ok(long.slice(16, 20).some((e) => e !== 0), "a longer start lasts longer");
+  });
+});
+
+describe("createSquash and <Sprite squash>", () => {
+  it("throws the sprite's scale and springs it back at its rate, only while the sprite that has it is in the world", () => {
+    const squash = createSquash({ recover: 2 });
+    const world = new World();
+    const root = new Entity();
+    const sprite = new AnimatedSprite({ sheet: "s.png", frameWidth: 4, frameHeight: 4, animations: "idle:0", squash });
+    root.addChild(sprite);
+    world.mount(root);
+    squash.start(0.6, 1.4);
+    world.tick(0.1);
+    assert.ok(Math.abs(squash.x - 0.8) < 1e-9 && Math.abs(squash.y - 1.2) < 1e-9);
+    freeze(3);
+    world.tick(0.1); // the freeze is taken when this tick ends
+    const before = squash.x;
+    world.tick(0.1);
+    world.tick(0.1);
+    assert.equal(squash.x, before, "frozen with the world");
+    for (let i = 0; i < 10; i++) world.tick(0.1);
+    assert.equal(squash.resting, true);
+    root.removeChild(sprite);
+    squash.start(0.5, 0.5);
+    world.tick(0.1);
+    assert.equal(squash.x, 0.5, "with no sprite in a world, nothing springs it back");
+  });
+
+  it("is drawn as the sprite's scale about its origin, on top of the transform's, and drawn again each step it moves", () => {
+    const squash = createSquash();
+    const backend = new RecordingBackend({ textureSizes: { "assets/s.png": { width: 12, height: 12 } } });
+    for (let i = 0; i < 4; i++) backend.queueInput({ dt: 1 / 60 });
+    let sprite: Sprite | null = null;
+    const player = createPlayer(backend, {
+      root: () => {
+        sprite = new Sprite({ image: "s.png", originX: 6, originY: 12, squash });
+        sprite.transform.scaleX = 2;
+        return sprite;
+      },
+      retain: "check",
+    });
+    player.step();
+    squash.start(0.5, 1.5);
+    player.step();
+    player.step();
+    player.close();
+    const region = (frame: number) => ofOp(backend.frames[frame]?.records ?? [], "spriteRegion")[0];
+    assert.deepEqual([region(0)?.scaleX, region(0)?.scaleY], [2, 1]);
+    const squashed = region(1)!;
+    assert.ok(squashed.scaleX < 2 && squashed.scaleY > 1, JSON.stringify(squashed));
+    assert.ok(region(2)!.scaleX > squashed.scaleX, "springing back, frame by frame");
+    assert.deepEqual([squashed.originX, squashed.originY], [6, 12]);
   });
 });
