@@ -60,7 +60,7 @@ function controlsFor(burst: Burst, frame: number, jumpWasHeld: boolean): Control
 function key(play: Playback): string {
   const run = play.run;
   const b = run.player;
-  return [Math.round(b.x / 2), Math.round(b.y / 2), Math.round(b.vx / 30), Math.round(b.vy / 30), b.onGround ? 1 : 0, b.dashes, b.varJump > 0 ? 1 : 0, b.dashing ? 1 : 0, b.forceMoveTime > 0 ? 1 : 0, b.coyote > 0 ? 1 : 0, b.ducking ? 1 : 0, b.autoJump ? 1 : 0, Math.round(b.wallSlideTimer * 2), b.dashCooldown > 0 ? 1 : 0, play.frozen].join(",");
+  return [Math.round(b.x / 2), Math.round(b.y / 2), Math.round(b.vx / 30), Math.round(b.vy / 30), b.onGround ? 1 : 0, b.dashes, b.varJump > 0 ? 1 : 0, b.state, b.forceMoveTime > 0 ? 1 : 0, b.coyote > 0 ? 1 : 0, b.ducking ? 1 : 0, b.autoJump ? 1 : 0, Math.round(b.wallSlideTimer * 2), b.dashCooldown > 0 ? 1 : 0, play.frozen].join(",");
 }
 
 /** Distance to the nearest exit tile: how promising a state looks. */

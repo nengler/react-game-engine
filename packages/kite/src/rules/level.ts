@@ -95,7 +95,7 @@ export function stepRun(run: Run, c: Controls, dt: number, events: GameEvent[] =
     next.deathTimer = RESPAWN_DELAY;
     next.deaths++;
     events.push({ type: "death", x: body.x + BODY_W / 2, y: body.y + BODY_H / 2 });
-    next.player = { ...body, vx: 0, vy: 0, dashing: false, dashTime: 0 };
+    next.player = { ...body, vx: 0, vy: 0, state: "normal", dashTime: 0 };
     return next;
   }
   if (inExit(room, body)) {

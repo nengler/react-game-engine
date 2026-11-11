@@ -24,7 +24,7 @@ export function DashTrail() {
   useUpdate((dt) => {
     wait.current -= dt;
     const aged = ghosts.map((g) => ({ ...g, age: g.age + dt })).filter((g) => g.age < 0.3);
-    if (body.dashing && wait.current <= 0) {
+    if (body.state === "dash" && wait.current <= 0) {
       wait.current = 0.08;
       made.current += 1;
       setGhosts([...aged, { id: made.current, x: originX + body.x + 4, y: originY + body.y + heightOf(body), flipX: body.facing < 0, age: 0 }]);

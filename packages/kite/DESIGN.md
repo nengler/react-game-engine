@@ -19,8 +19,11 @@ the room's start 0.45 s later. Leaving a room by its exit moves to the next, wit
 
 ## How it is built
 
-- **Rules are plain functions** (`src/rules/`), which know nothing of the engine's drawing: `body.ts` (the body: movement, jump,
-  dash, walls), `level.ts` (a run: deaths, respawn, room changes), `rooms.ts` (rooms read from the Tiled maps), `playback.ts` (what
+- **Rules are plain functions** (`src/rules/`), which know nothing of the engine's drawing: `body.ts` (one step of the body,
+  read top to bottom: timers, what carries over, the state's rules, moving), with the parts in `body/`: `types.ts` (the body,
+  whose `state` is `"normal"`, `"dash"` or `"climb"`), `normal.ts` (run, fall, duck, grab, jump), `dash.ts`, `climb.ts`,
+  `jumps.ts` (every kind of jump), `collide.ts` (moving, and what happens when blocked) and `step.ts` (what a step shares);
+  `level.ts` (a run: deaths, respawn, room changes), `rooms.ts` (rooms read from the Tiled maps), `playback.ts` (what
   the engine does around the rules, for a driver without an engine), `constants.ts` (every number). `GameState.ts` keeps the run
   where components can read it; `Player.tsx` and the other components only draw it.
 - **Rooms are Tiled maps** (`scenes/room1.tmj` …: a tile layer `Tiles`, a hidden layer `Markers`), 32 × 18 tiles of 10 px; the

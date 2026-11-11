@@ -216,9 +216,9 @@ describe("climbing", () => {
 
   it("holds onto a wall with grab, climbs at the climb speed, and runs out of stamina in about two and a half seconds", () => {
     const bodies = play(() => ({ grab: true, up: true }), 200, { ...beside, y: 60 }, (x) => x >= WALL_X);
-    assert.ok(bodies[2]!.climbing);
+    assert.ok(bodies[2]!.state === "climb");
     assert.ok(Math.abs((bodies[30]?.vy ?? 0) + K.CLIMB_UP_SPEED) < 1, `climbs up at ${bodies[30]?.vy}`);
-    const letGo = bodies.findIndex((b) => !b.climbing);
+    const letGo = bodies.findIndex((b) => b.state !== "climb");
     assert.ok(letGo > 130 && letGo < 160, `let go after ${letGo} steps`);
     assert.ok(bodies[letGo - 1]!.stamina < 1);
   });
@@ -229,7 +229,7 @@ describe("climbing", () => {
     const still = play(() => ({ grab: true }), 40, beside, tall);
     assert.equal(still[39]?.y, beside.y);
     const released = play((i) => ({ grab: i < 10 }), 20, beside, tall);
-    assert.ok(released[9]!.climbing && !released[11]!.climbing);
+    assert.ok(released[9]!.state === "climb" && released[11]!.state !== "climb");
   });
 
   it("hops up and over the top of a wall", () => {
@@ -267,7 +267,7 @@ describe("Celeste's tech", () => {
   it("wavedashes: a dash down at an angle from just above the ground lands as a slide, and a jump from it is a hyper", () => {
     let jumped = -1;
     const bodies = play((i, b) => {
-      if (jumped < 0 && b.onGround && b.dashing && i > 3) jumped = i;
+      if (jumped < 0 && b.onGround && b.state === "dash" && i > 3) jumped = i;
       return { right: true, down: i < 8, dashPressed: i === 2, jumpPressed: i === jumped, jumpHeld: i === jumped };
     }, 30, { y: STAND_Y - 6, vy: 0 });
     const hyper = bodies.findIndex((b) => b.vx > K.SUPER_JUMP_H);
@@ -276,10 +276,10 @@ describe("Celeste's tech", () => {
 
   it("keeps a downward dash's speed when it ends, and floats after any dash as if jump were held", () => {
     const down = play((i) => ({ down: true, dashPressed: i === 1 }), 14, { y: 0 }, () => false);
-    const over = down.findIndex((b, i) => i > 2 && !b.dashing);
+    const over = down.findIndex((b, i) => i > 2 && b.state !== "dash");
     assert.equal(down[over]?.vy, K.DASH_SPEED, "a dash down is not slowed when it ends");
     const up = play((i) => ({ up: true, dashPressed: i === 1 }), 14, { y: 50 }, () => false);
-    const ended = up.findIndex((b, i) => i > 2 && !b.dashing);
+    const ended = up.findIndex((b, i) => i > 2 && b.state !== "dash");
     assert.ok(up[ended]!.autoJump);
     assert.equal(up[ended]?.vy, -K.END_DASH_SPEED * K.END_DASH_UP_MULT);
   });

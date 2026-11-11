@@ -197,10 +197,10 @@ describe("the dash moves have room to spare", () => {
           phase = "grab";
         } else if (phase === "grab") {
           c = { left: true, grab: true, up: true, jumpHeld: true };
-          if (b.climbing) [phase, wait] = ["up", 0];
+          if (b.state === "climb") [phase, wait] = ["up", 0];
         } else if (phase === "up") {
           // Climb jumps while there is stamina for one, climbing in between.
-          press = b.climbing && --wait <= 0 && b.stamina > 35;
+          press = b.state === "climb" && --wait <= 0 && b.stamina > 35;
           if (press) wait = 24;
           c = { left: true, grab: true, up: true };
           if (b.y <= 15) phase = "out";
