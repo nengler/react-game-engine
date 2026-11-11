@@ -187,9 +187,12 @@ The order is the order the game is expected to hit them; build each when it is h
 
 4. **Forwarding `{children}`** (`function Modal({ title, children }) { return <Panel title={title}>{children}</Panel>; }`).
    Today not supported ("Forwarding to another component … is not supported yet"). The receiver's slot is itself a
-   passed-children slot: at construction, `Modal` sets its `passedChildrenHost` to wherever `Panel` mounts *its*
-   passed children, so the outer parent's `attachPassedChild` lands in the innermost container in one step. Forwarding
-   through two levels (Modal → Panel → Flex) must work. A forwarded slot inside a condition stays a diagnostic.
+   passed-children slot: at construction, `Modal` records `Panel` as where its passed children go, and the runtime
+   hands each one on, so the outer parent's `attachPassedChild` ends in the innermost container. Forwarding through two
+   levels (Modal → Panel → Flex) must work. A forwarded slot inside a condition stays a diagnostic.
+   **Decided 2026-11-11: the forwarded `{children}` must be the only child passed to the inner component** (open
+   decision 5, option A). `<Panel title={title}>{children}</Panel>` is allowed; `<Panel><Title/>{children}<Footer/></Panel>`
+   is a diagnostic.
 
 5. **Context** (`createContext`, a provider element, `useContext`). Today: an unknown hook. The proposed shape:
    - `export const TowerContext = createContext<TowerView>(defaultValue)` in a `.ts` file.
@@ -299,11 +302,11 @@ item to live.
 
 | File | Change |
 | --- | --- |
-| `compiler/src/transform/lowering.ts` (`lowerChildrenSlot`) | When `context.passed` (the slot is among the children passed to another component) and the slot is the only child of that block, accept it and record the forwarding target (that component element). Otherwise keep today's diagnostic with the reason (beside other passed children: open decision 5) |
+| `compiler/src/transform/lowering.ts` (`lowerChildrenSlot`) | When `context.passed` (the slot is among the children passed to another component) and the slot is the only child of that block, accept it and record the forwarding target (that component element). Beside other passed children (open decision 5, decided: option A) it is `RGE1202`: "`{children}` forwarded to <Panel> must be the only child passed to it: put the other children inside <Panel> itself, or pass them through `{children}` from the parent." Inside a condition or a list, keep today's diagnostic |
 | `compiler/src/ir/elements.ts`, `ir/declarations.ts` | `ChildrenSlotChildIR` gains `forwardedTo: string \| null` (the inner element's field). `ComponentIR` records it for the generator |
 | `compiler/src/generator/generator.ts` (the constructor's slot wiring at `findChildrenSlot`) | For a forwarding component, emit `this.passedChildrenForward = this.<inner>;` instead of host and slot |
 | `runtime/src/GameObject.ts` | `passedChildrenForward: GameObject \| null`. `attachPassedChild`, `queueAttachPassedChild`, `queueDetachPassedChild` and `queueReorderPassedChildren` delegate to it when set, so two levels (Modal → Panel → Flex) resolve in a chain. `acceptsPassedChildren` is true when either is set |
-| Tests | Modal → Panel → Flex with static, conditional and list children; the runtime error for a component that does not render `{children}` still reads well through a forward |
+| Tests | Modal → Panel → Flex with static, conditional and list children; the runtime error for a component that does not render `{children}` still reads well through a forward; a forwarded `{children}` with a sibling in the same block rejected with `RGE1202` |
 
 ### 5. Context
 
@@ -407,7 +410,42 @@ movement feel to tune), and the compiler work is most of it.
    map.
 4. **Pads or free placement.** Default: pads. Free placement needs a click-to-tile query and path blocking rules, which
    add nothing to what this game is meant to test.
-5. **Forwarded `{children}` beside other passed children** (`<Panel><Title/>{children}</Panel>` inside `Modal`). Passed
-   children are ordered by one number, so siblings around a forwarded block need a compound order. Default: the first
-   cut requires the forwarded `{children}` to be the only child passed to the inner component, which covers every use
-   Hearth plans; anything else stays a diagnostic.
+5. ~~**Forwarded `{children}` beside other passed children.**~~ **Decided 2026-11-11: option A**, see below.
+
+## Decided: forwarded `{children}` beside other passed children
+
+**The problem.** When `Modal` forwards its children to `Panel` and also passes `Panel` children of its own:
+
+```tsx
+function Modal({ title, children }: ModalProps) {
+  return (
+    <Panel>
+      <Title text={title} />
+      {children}
+      <Footer />
+    </Panel>
+  );
+}
+```
+
+all of `Panel`'s passed children share one slot in its container and are sorted there by one number, `order`
+(`GameObject.addChild` sorts by `(slot, order)`). `Modal` gives `Title` order 0 and `Footer` order 2. The forwarded
+children are numbered 0, 1, 2… by the outer parent, so they mix with `Title` and `Footer` instead of landing between
+them. One number cannot hold a whole list between two siblings.
+
+**The options:**
+
+| | Option | What it takes | Trade-off |
+| --- | --- | --- | --- |
+| A | Keep the restriction: the forwarded `{children}` is the only child passed to the inner component | Nothing beyond forwarding itself | Every use Hearth plans fits (`<Panel title={title}>{children}</Panel>`); anything else is a diagnostic, and the author restructures |
+| B | Allow `{children}` in a wrapper element that is passed to the inner component (`<Panel><Title/><Flex direction="column">{children}</Flex><Footer/></Panel>`) | A small compiler change: that wrapper is always present, so it can hold the slot, and the slot's host is `Modal`'s own element. No runtime change | One more level in the tree; the wrapper must be a `<Flex>` for layout to apply to the children, and authors have to know to write it |
+| C | Order ranges: forwarded children get order `position × K + i` (K about 2²⁰), the block's own children `position × K`; a reorder rewrites orders inside the range | A change in `GameObject`'s passed-children methods and in the generated orders | Any mix of siblings, with no extra objects; at most K − 1 items per forwarded block; order numbers become harder to read when debugging |
+| D | Compound order: `order` becomes a path (`[1, 3]`) compared item by item | Changes `addChild` and the reorder code | The most general, but `addChild` runs on every mount and priority 4 tuned it, so the cost needs measuring |
+| E | An automatic wrapper: the compiler inserts B's wrapper, and layout treats it as transparent | A "transparent container" in layout (`UI_PLAN.md`) as well as B | The best for authors, and the most work |
+
+**Decision: A.** Hearth does not need more, and the rule from priority 7 is to build syntax only when a game hits it.
+The diagnostic names the restriction and what to do instead (see the implementation map, step 4).
+
+**If a game hits it:** B first (local to the compiler, no runtime cost; the diagnostic can then suggest the wrapper),
+then C if the wrapper proves awkward. D and E only if several games ask. The "Not now" row for forwarding in
+`NEXT_PRIORITIES.md` says the same once forwarding lands.
