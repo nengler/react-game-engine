@@ -1,6 +1,6 @@
 # A third game, made outside this repository: a small top-down adventure (plan)
 
-Planned 2026-11-11. This is priority 8 in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md), merged with a third game: the work that makes
+Planned 2026-11-11; the implementation map (M0–M8) was added the same day. This is priority 8 in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md), merged with a third game: the work that makes
 the engine usable outside this repository is tested by writing a game outside it, and the game is chosen to hit what Kite and
 Hearth never touched.
 
@@ -91,107 +91,391 @@ The shape both games settled on stays the same:
 - **Effect stores** answer the rules' events (sounds, particles, shake), as in both earlier games.
 - **The router** has the screens; the play screen steps the world through one action.
 
-## What has to be built
+## Implementation map
 
-### Priority 8: a game outside this repository
+Eight milestones, each split into steps that fit one PR. Engine and game changes go in separate commits. Every engine addition
+gets a design section (`DESIGN.md`, `NATIVE_PLAN.md` or `UI_PLAN.md`), tests, and an entry in the guide's reference
+(`docs/reference.html`). Kite's and Hearth's parity runs stay byte-identical unless a step changes what they draw on purpose;
+then that step re-baselines them in a commit of its own and says why. `npm run bench:check` stays within budget throughout.
 
-- **One command line** for a game wherever it lives: `rge dev` (compile, play, hot reload), `rge check` (compile, type-check,
-  tests, the parity run), `rge build` (compile only), `rge package`, and `rge screenshot` with an input script. It replaces the
-  per-game scripts in the root `package.json`, which then call it, so Kite and Hearth are its first users.
-- **A template** (`rge create <folder>`): `package.json`, `tsconfig.json`, `main.ts`, a `<Game>` root with one screen, one
-  asset, one rules file with one test, and a `.gitignore`. Its packages come from `npm pack` tarballs of `@rge/runtime`,
-  `@rge/compiler`, `@rge/player`, `@rge/player-node` (or a path dependency), never a relative import into this repository.
-- **Where the game lives.** In `games/bramble`, which is *not* one of the workspaces (`packages/*`), so it installs the packed
-  packages like an outside game would. A CI step and `npm run check:outside` copy it to a temporary folder outside the
-  repository, install from fresh tarballs, and run `rge check`, so a relative path or a missing export fails there.
-- **The guide** (`docs/index.html` and its pages) gets a getting-started page, from an empty folder to a packaged game, written
-  by following it from scratch while making Bramble, and a reference entry with an example for every built-in and hook.
-- **A license**, and a check of the repository for anything that should not be public.
+```mermaid
+flowchart LR
+  M0["M0 Engine as packages<br/>rge CLI, template,<br/>games/bramble outside check"] --> M1["M1 Greybox<br/>rules + headless tests"]
+  M1 --> M2["M2 Large world<br/>chunked tilemap, camera follow"]
+  M1 --> M3["M3 Saving and settings<br/>ABI v7 storage"]
+  M1 --> M4["M4 Text and inventory UI"]
+  M1 --> M5["M5 Enemies<br/>findPath"]
+  M2 --> M6["M6 Tiled for real<br/>(needs a person)"]
+  M2 & M3 & M4 & M5 & M6 --> M7["M7 Content, replays,<br/>frame time"]
+  M7 --> M8["M8 Guide, reference,<br/>license"]
+```
 
-### Engine: a large world
+M2 to M5 do not depend on each other and can go in any order after M1. The order below is the suggested one: the large world
+first, because it is the biggest gap and changes the draw path that M6 builds on.
 
-- **`<Tilemap>` draws only what the camera sees**, in chunks (for example 16 × 16 cells), so an 80 × 48 map costs what a
-  screen costs. The records for a chunk are kept until the chunk or the tiles change.
-- **A camera that follows**: `<Camera follow>` (a ref or a position), `deadzone`, and `smoothing`, still in whole pixels and still
-  clamped by `bounds`. A `slide` on a `bounds` change stays for Kite.
-- **Map changes without the hitch** (Kite finding 10): the next map's tilemap is made a step early or kept, and the measured
-  step time on a door is recorded.
-- **Layers above the character**: a `<Tilemap layer>` with a `z`, already possible, checked with a real map.
-- **Off-screen entities**, measured first: if a map with its enemies and NPCs (about 40) costs too much off screen, a way to skip
-  rendering what is far from the view.
+### M0. The engine as packages a game outside the repo can install (\~1.5 weeks)
 
-### Engine: maps saved by Tiled
+**Two things found while planning, which set this milestone's shape:**
 
-- External tilesets (`.tsx`, which are XML), more than one tileset per map, and whatever layer format Tiled saves by default.
-- Object layers as data for the rules (NPCs, doors with a target map and door name, chests with an item, spawns, shrines),
-  with custom properties typed, alongside the tile layers that already work.
-- **A person opens and saves at least one map in Tiled**, since an agent cannot run it; the importer is fixed for what that file
-  holds. Until then, the maps can be written by a tool the way Kite's are.
+- Every `@rge/*` package's `exports` point at `.ts` source (`"./src/index.ts"`). That works in the workspace because the files
+  are not under `node_modules`. **Node refuses to strip types from files under `node_modules`**
+  (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so an installed package has to ship JavaScript and `.d.ts` files.
+- `findNativeLibrary` (`packages/player-node/src/ffi.ts`) looks only in `native/build*` beside the repository root, and
+  `tools/package.ts` builds librge with CMake and the Rust host with cargo from the repository. An outside game has neither.
 
-### Engine: saving
+**0.1 Packs that build.** `npm run pack` (`tools/pack.ts`) writes `dist/packs/rge-<name>-<version>.tgz` for `runtime`, `compiler`,
+`player`, `player-node`, `native` and `cli`.
 
-- **Storage in librge, written once** (decided 2026-11-11): `rge_storage_read`, `rge_storage_write` and `rge_storage_remove`
-  for a named entry, written whole and atomically (a temporary file, then rename), in the platform's user data folder
-  (`$XDG_DATA_HOME/<game>` on Linux), named by `<Game id>`. Both hosts already reach librge (koffi under Node, linked into the
-  Rust host), so neither host writes its own. The player wraps it in a small `Storage` interface (read, write, remove, exists),
-  which is the seam a web backend would fill with `localStorage` if a web build is ever decided on.
-- **`createSave({ version, pick, apply, migrate })`**, an effect-store-style module like `createSounds`: `save.write(slot)`,
-  `save.read(slot)`, `save.exists(slot)`. What is saved is JSON; a save from an older version is passed through `migrate`.
-- **A memory store** for tests and the recording backend, so the harness can save, load and compare without a disk, and a
-  replay can start from a save.
-- Settings use the same storage under their own name, read before the window opens (full screen, volumes).
+- For each package it makes a staging copy: JavaScript from esbuild (one file per source file, ESM, no bundling, so the
+  module structure and `import.meta.url` stay as they are), `.d.ts` from `tsc --emitDeclarationOnly`, and a `package.json`
+  whose `exports` name the built files (`{ "types": "./dist/index.d.ts", "default": "./dist/index.js" }`). Then it runs `npm pack`.
+- The workspace keeps exporting source, so nothing changes for Kite, Hearth or the tests.
+- `.ts` imports in the source (`./foo.ts`) are rewritten to `.js` by esbuild (`rewriteRelativeImportExtensions`, or a small
+  plugin if needed).
+- `@rge/compiler`'s `cli.ts` is shipped as `cli.js` with a `bin`. `dev.ts` finds the compiler through
+  `import.meta.resolve("@rge/compiler")` plus `cli.ts`, which becomes "the package's `bin`".
+- **Test:** `packages/cli/test/packs.test.ts` packs into a temporary folder, installs the tarballs into an empty project, and
+  imports each entry point (`@rge/runtime/jsx`, `@rge/player`, `@rge/player-node`, `@rge/compiler`) under plain Node.
 
-### Engine: UI for text and inventory
+**0.2 `@rge/native`: librge and the host, prebuilt.** A package with no code of its own beyond one `paths.js`:
+`lib/linux-x64/{desktop,headless}/librge.so` and `bin/linux-x64/{desktop,headless}/rge-host`, built by `npm run pack` from
+the CMake and cargo builds it already knows how to make. Only `linux-x64`: other platforms stay in "Not now".
 
-- **Wrapped text**: `<Text maxWidth>` breaks on spaces (and inside a word only when a word alone is too wide), with `lines` and
-  `align`; `<Flex>` measures it as wrapped.
-- **Revealed text**: `<Text reveal={n}>` draws the first `n` characters but lays out the whole, so the box does not grow as
-  the text appears. The rules count `n`.
-- **Inventory slots**: `{item && <Icon/>}` inside a list item's children (`RGE1209` today). Built when hit.
-- **Context**, if the settings screen's nested panels pass the same props through three levels. Built when hit, or recorded as
-  not needed again.
-- **A slider** for volumes, if `<Flex>` with focus and `pressKey` does not cover it cleanly. Probably a component in the game, not
-  a built-in; recorded either way.
+- `findNativeLibrary` looks in this order: `RGE_NATIVE_LIB`, then `@rge/native` (through `import.meta.resolve`), then the
+  repository's build folders. The repository order is unchanged, so `npm test` behaves as before.
+- The same applies to `rge-host` (`RGE_HOST_BIN`, then `@rge/native`, then `host/target/release`).
+- The ABI check at load already says clearly when the library and the player disagree.
 
-### Engine: entities that think
+**0.3 `@rge/cli`: one command line.** A new package with bin `rge` that takes over `tools/check-game.ts`, `tools/package.ts`,
+`tools/bundle.ts`, `tools/screenshot.ts` and `packages/player-node/src/play.ts`. It runs in a game's folder, or the folder
+given as the first argument (`rge check packages/kite`).
 
-- **`findPath(grid, from, to, options)`** in `@rge/runtime`: A* over a `TileGrid`'s solid cells (four or eight directions, a
-  limit on the search), returning cells. Plain TypeScript, callable from rules and tests.
-- **Moving against solid actors**, not only tiles: the `blocked` function `moveActorX`/`moveActorY` take already allows it; the
-  game writes it first, and it moves into `@rge/runtime` only if it is the same code in two places.
-- Enemy behaviour stays in the game's rules. No behaviour trees or state-machine built-in.
+- **A game's settings** live in its `package.json`'s `"rge"` field: `name`, `entry` (default `main.ts`), `src` (`src`),
+  `generated` (`generated`), `scenes` and `assets` (used when the folders exist, as `check-game.ts` does now), and
+  `checkAssets` (already used by the demo).
+- **Commands:**
 
-### Engine: settings and controls
+  | Command | Does | From |
+  | --- | --- | --- |
+  | `rge build` | Compile `src` to `generated` (with scenes and assets) | `rge-compile` |
+  | `rge dev [--no-watch]` | Compile, open the window, hot reload | `play.ts`, `dev.ts` |
+  | `rge check` | Compile, type-check the game's `tsconfig.json`, `node --test test/`, parity under Node twice and under `rge-host` | `check-game.ts` |
+  | `rge package [--engine node\|quickjs] [--headless]` | The folder build, with librge and `rge-host` from `@rge/native` | `package.ts`, `bundle.ts` |
+  | `rge screenshot <script> [--frames …]` | PNGs and a contact sheet of a scripted run | `screenshot.ts` |
+  | `rge create <folder>` | A new game from the template (0.4) | new |
 
-- **Rebinding at run time**: `controls.bind(action, keys)` and `controls.bindings()`, saved and loaded as plain data.
-- **Capturing a key**: `input.lastPressed()`, the key or button pressed this step, for "press a key for Jump".
-- **Volume groups**: a master volume for music and one for effects, applied on top of each sound's own volume, in the player
-  (not librge).
+- `tsc`, `esbuild` and `postject` are the CLI's own dependencies, resolved from its own folder, not the repository's
+  `node_modules/.bin`. The repository-wide `tsc -p tsconfig.json` that `check-game.ts` runs stays in the root's `check:*`
+  scripts.
+- **The root scripts become thin:** `"check:kite": "rge check packages/kite"`, `"play:kite": "rge dev packages/kite"`,
+  `"package:kite": "rge package packages/kite"`. Kite and Hearth are the command line's first users, and their checks must
+  print the same results as before.
+- **Tests:** each command against a small fixture game in a temporary folder; `npm run check:kite` and `check:hearth` pass
+  through it.
 
-### The game itself
+**0.4 The template and `rge create`.** `packages/cli/template/`:
 
-The design note (`games/bramble/DESIGN.md`), the rules with headless tests, the components, the maps, art, sound and music, a
-scripted replay that plays it from the title to the end (and one that saves, quits, continues and finishes), and the frame time
-on the busiest part of the overworld.
+- `package.json` (with `"rge"` and the `@rge/*` dependencies), `tsconfig.json`, `main.ts`, `game.ts` (bindings and screen),
+  `src/Main.tsx` (a `<Game>`, a `<Screen>`, a `<Router>` with one route), `src/GameState.ts`, `src/rules/move.ts` with one
+  test, `assets/` with one image, `parity.ts` and `.gitignore` (`generated/`, `node_modules/`, `dist/`).
+- `rge create <folder> [--name] [--packs <dir>]` copies it and fills in the name. `--packs` writes `file:` dependencies on
+  the tarballs, which is how everything is tested before anything is published.
+- **Test:** create, install and `rge check` in a temporary folder pass; the template's own test passes.
 
-## Order of work
+**0.5 `games/bramble`, checked from outside.**
 
-0. **Priority 8 groundwork:** the `rge` command line (with Kite and Hearth moved onto it), the template, packed packages, and
-   `games/bramble` made from the template and checked from a folder outside the repository.
-1. **Design note and greybox:** the rules (moving, the map as a solid grid, doors, talking, items, shrines) with headless tests,
-   on a map written as text in a tool, the character as a `<Shape>`. A person plays it here if they can.
-2. **The large world:** the camera's follow, the tilemap's chunks and culling, map changes without a hitch; the overworld at full
-   size.
-3. **Saving and settings:** storage in librge (ABI bump), `createSave`, the memory store, rebinding, volume groups, the settings screen.
-4. **Dialogue and inventory:** wrapped and revealed text, the dialogue box, the inventory grid; Tier 3 items as they are hit.
-5. **Enemies:** `findPath`, the two enemies, damage and knockback.
-6. **Tiled:** a person draws or re-saves the overworld in Tiled; the importer is fixed for it; object layers replace the tool's
-   markers.
-7. **Art, sound and music**; replays from title to end and through a save; frame time on the busiest view.
-8. **The guide**: the getting-started page checked by following it in an empty folder; reference entries.
+- `games/bramble` is made with `rge create`. It is **not** one of the workspaces (`packages/*`), and the root's `generate`,
+  `test` and `typecheck` do not include it. Its `node_modules` is ignored by git.
+- `npm run bramble:install` repacks the engine and reinstalls the tarballs into `games/bramble`. This is the in-repo loop when
+  the engine changes. It is slower than a workspace on purpose: it is the loop an outside author has.
+- `npm run check:outside` (`tools/check-outside.ts`) packs the engine, copies `games/bramble` to a temporary folder outside the
+  repository, points its dependencies at the tarballs, runs `npm install`, `rge check`, and `rge package --headless`, then runs
+  the packaged build for 120 frames.
+- A CI job, `outside`, runs it after the `native` job (it needs librge and `rge-host` built to pack `@rge/native`). A
+  relative import into `packages/`, an export that is missing from a package, or a file left out of a pack fails there.
 
-Engine and game changes go in separate commits, as before. Native changes are batched so `RGE_ABI_VERSION` moves once: storage
-is the one planned (step 3), and anything else native that the game asks for goes in the same batch if it can.
+**Done when:** Kite and Hearth check through `rge`; `rge create` gives a game that passes `rge check` from a temporary folder;
+`check:outside` passes locally and in CI on the empty Bramble.
+
+### M1. Bramble's greybox (game; \~1 week)
+
+No engine work is planned here. Bramble is written from the guide, and every snag goes into `games/bramble/DESIGN.md`
+under "Findings while writing", as Kite and Hearth did. The engine is fixed only when a finding is worth it.
+
+- **The design note:** mechanics, the map list, the NPCs and their lines, the items, what "finished" means, and every number
+  in `rules/constants.ts`, with untested guesses marked.
+- **Rules** (`src/rules/`, plain TypeScript, headless tests for each):
+
+  | File | What it holds |
+  | --- | --- |
+  | `world.ts` | Maps as solid grids; the overworld and interiors written as text by `tools/make-maps.ts` until M6 |
+  | `actor.ts` | Eight-way movement through `moveActorX`/`moveActorY`, diagonals normalised, a sub-pixel remainder, facing |
+  | `doors.ts` | Stepping on a door, and which map and door the character arrives at |
+  | `talk.ts` | What is in front of the character, which NPC, which page of their lines for the current progress |
+  | `items.ts` | Chests, pickups, the inventory, using an item on a tile (lantern, key, shears) |
+  | `shrines.ts` | Touching a shrine: the save point and refilled hearts; dying sends the character back to it |
+  | `run.ts` | `newRun()`, `step(run, input, dt)`, which returns the run and a list of `GameEvent`s, as Hearth's `stepBattle` does |
+
+- **Components:**
+  - `Main`: `<Game>`, `<Screen>`, and `<Router>` for title, play, pause and end.
+  - `Play`: the world: `<Tilemap>`s, the character and NPCs as `<Shape>`s, and a camera following the character.
+  - A one-line `<Text>` dialogue box as a placeholder until M4.
+- **Tests:** the rules, plus one replay: the title, walking to an NPC, talking, and going through a door.
+- A person plays it here if one is available.
+
+**Done when:** the greybox can be walked, talked to and played through its doors; `rge check` passes from outside; the
+findings are written down.
+
+### M2. The large world (engine; \~1 week)
+
+**2.1 `<Tilemap>` draws only what the view shows.** Today `#tilemap` in `packages/player/src/draw.ts` writes one sprite-region
+record for every filled cell ("culled to none (a map is a room, not a world)").
+
+- **Which cells are drawn:** the player already knows the view transform and the screen size when it walks the tree. From
+  them it works out the visible rectangle in the map's cells, and draws only the **chunks** (16 × 16 cells) that touch it.
+- **Caching:** each chunk's records are cached as a `Float64Array`, keyed by map, layer and chunk. The records are in world
+  space and the camera is a separate VIEW record, so moving the camera never invalidates a chunk; it only changes which
+  chunks are written.
+- **What invalidates a chunk:** a change to the tilemap's transform, opacity, map or image, and the new
+  `TileGrid.set(x, y, gid, layer?)` (bushes cut by shears), which bumps a version on the chunk it touches.
+- **A rotated or scaled tilemap** keeps today's path (every cell), so nothing that works now draws differently.
+- **Kite's parity:** Kite's neighbouring rooms are mounted by conditions, so their off-screen cells disappear from the
+  records. That is expected; the step re-baselines Kite's parity and says why.
+- **Bench:** a new scene, a 200 × 200 map scrolled across, with a budget in `packages/player/bench/budget.json`.
+
+**2.2 A camera that follows smoothly.** `<Camera>` already follows its children's centre.
+
+- **New props:**
+  - `deadzone={[w, h]}`: the followed point can move inside a box around the centre without moving the view.
+  - `smoothing={seconds}`: the view eases towards the point, exponentially, as `slide` does.
+- **How it works:** the camera keeps where its view is in `onUpdate` (stepped, so a replay repeats), and `viewTransform()`
+  reads it instead of the target. The view is rounded to whole pixels at the end, as now.
+- **On a door:** a `bounds` change with no `slide` snaps the view at once, so going through a door needs no new prop.
+- **Tests:** runtime tests of the dead zone, smoothing and snapping; a recording test of a scroll.
+
+**2.3 A door without a hitch.**
+
+- **Measure first.** Bramble's `tools/frame-time.ts` (copied from Kite's) times the step that changes map.
+- **Then fix the cause:**
+  - If it is the first draw of the new map's chunks, write them during the fade out (`<Tilemap>` mounted while the screen is
+    dark, or a `preload` that warms the chunk cache).
+  - If it is building the subtree, mount the next map one step early, as Kite finding 10 suggested.
+- **Target:** no step over 16.7 ms under Node on the cloud VM, recorded in `NATIVE_PLAN.md`.
+
+**2.4 Entities off screen, measured.** One overworld map holds about 40 enemies and NPCs. Measure the busiest view first. If
+rendering the ones off screen costs too much:
+
+- **First**, the game filters its lists by distance to the view, with a computed selector (no engine change).
+- **Only if** both a filter and a second game need it, an engine way to skip a subtree outside the view.
+
+**Done when:** the overworld scrolls continuously at full size, the bench scene is in budget, and the door's step time is
+recorded.
+
+### M3. Saving and settings (engine; one native batch, ABI v7; \~1 week)
+
+**3.1 Storage in librge.** New in `native/include/rge.h`:
+
+```c
+/* Saved data: small named entries in the platform's user data folder, each written whole and atomically. Needs no window. */
+int32_t rge_storage_open(const char *game_id);  /* 0 ok; makes the folder if missing. Before any other storage call. */
+int32_t rge_storage_read(const char *name, uint8_t *out, int32_t capacity); /* bytes the entry holds, -1 if there is none; copies only when it fits */
+int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length); /* 0 ok */
+int32_t rge_storage_remove(const char *name);   /* 0 ok, also when it did not exist */
+```
+
+- **The folder:** `$RGE_DATA_DIR` if set (tests and CI), else `$XDG_DATA_HOME/<game_id>`, else
+  `~/.local/share/<game_id>`. The macOS and Windows folders are written but unverified, like `host/build.rs`'s link lists.
+- **Names:** `[A-Za-z0-9_-]{1,64}`, stored as `<name>.dat`. Anything else is refused, so a name can never become a path.
+- **Writing:** to `<name>.tmp`, flushed and `fsync`ed, then `rename`d over the old file. A crash leaves the old save or
+  the new one, never half of one.
+- **Reading:** the two-call pattern `rge_read_pixels` already uses (ask for the size, then copy).
+- **Tests:** a C test in `native/test` for write, read, overwrite, remove, a missing entry, a bad name, and `RGE_DATA_DIR`.
+
+**Both hosts:**
+
+- `protocol.ts` mirrors the header, and the header test checks it.
+- `ffi.ts` (`Native`) and `player-node/src/backend.ts` add the calls; `host/src/ffi.rs` and `backend.rs` add the same four.
+- `Backend` gains an optional `storage?: { read(name): string | null; write(name, text): boolean; remove(name): void }`
+  (UTF-8 text), opened with the game's `id`.
+- `RecordingBackend` gets an in-memory store, with an option to start from given entries, so a replay can start from a save.
+
+**3.2 Runtime: `createSave` and `createSettings`,** effect-store style in `packages/runtime/src/storage.ts`, with a
+`setStorage` sink installed by the player as `setSoundSink` is.
+
+```ts
+export const save = createSave({
+  name: "save",
+  version: 2,
+  pick: (s: State) => ({ map: s.run.map, at: s.run.shrine, items: s.run.items, npcs: s.run.npcs, opened: s.run.opened }),
+  apply: (data) => useGame.getState().continueFrom(data),
+  migrate: { 1: (old) => ({ ...old, opened: [] }) },
+});
+save.write(); save.exists(); save.load(); save.remove();
+
+export const settings = createSettings({ name: "settings", defaults: { music: 0.6, effects: 0.8, fullscreen: false, bindings: null } });
+settings.get(); settings.set({ music: 0.4 });
+```
+
+- **What is stored:** JSON with `{ version, data }`.
+- **Reading problems:**
+  - A file that does not parse warns once and reads as no save.
+  - A save from a newer version than the game is refused with a clear message.
+  - `migrate` steps run in order up to the current version.
+- **Calls are synchronous:** the entries are small and the native calls are blocking. They are made from game-state
+  actions, like `sfx.play`.
+- **Game id:** `<Game id="bramble">` names the folder (a new `<Game>` prop, a literal).
+- **Applying settings:** they are read before the first frame. Full screen goes through `setFullscreen`; volumes and
+  bindings are applied at once.
+- **Tests:** runtime tests on the memory store (round trip, migrate, corrupt, too new); a player test through
+  `RecordingBackend`; a Node host test against the real library with a temporary `RGE_DATA_DIR`; a parity line under the
+  Rust host that writes and reads an entry.
+
+**3.3 Rebinding.**
+
+- **`Controls`:**
+  - It gains `bind(action, keys)`, `reset()`, `toJSON()` and `load(data)`. Its `bindings` are read every time an action is
+    asked about (`actionAware`), so a change applies at once.
+  - `load` checks each key is a `KeyName` and ignores unknown actions, so an old settings file cannot break the controls.
+  - The settings screen keeps its labels in the game state, so a rebind re-renders them.
+- **`InputState`** gains `lastPressed(): KeyName | undefined`, the first key or button pressed this step, for "press a key
+  for Jump". The player and `createInputState` both fill it.
+- **Input scripts:** they keep working with rebinding, because the harness and the script map their names through the
+  bindings.
+
+**3.4 Volume groups.**
+
+- `setVolume("music" | "effects", v)` in `packages/runtime/src/Sound.ts`, multiplied in on top of each sound's own volume.
+- **Effects:** `SoundStore.play` and `Sound.play` multiply by the effects volume.
+- **Music:** `<Music>` multiplies by the music volume in the same place it applies its fade, so a change is heard at once.
+- **Tests:** the counts and volumes the mock sink records.
+
+**Done when:** a save survives quitting under both hosts; the settings screen's choices persist; a rebinding is used by
+`input.pressed`; ABI v7 is in `NATIVE_PLAN.md`.
+
+### M4. Text and inventory UI (engine where hit; \~4–6 days)
+
+**4.1 Wrapped text.**
+
+- **New props:** `<Text maxWidth={n} lineGap={px}>`. The player breaks the text into lines:
+  - It breaks at spaces, and inside a word only when the word alone is too wide.
+  - `\n` always breaks.
+  - Words are measured with the measure cache it already has (`measureText`, or the bitmap font's cell widths).
+- **Drawing:** each line is its own TEXT record (or its own run of sprite regions for a bitmap font), so `rge.h` does not
+  change.
+- **Layout:** `<Flex>` measures the wrapped size (the widest line by the line count). `align` applies per line.
+- **Caching:** line breaks are cached by text, size, font and `maxWidth`.
+- **Tests:** recording tests for both kinds of font, a `<Flex>` column holding a wrapped text, and a word longer than
+  `maxWidth`.
+
+**4.2 Revealed text.** `<Text reveal={n}>` draws the first `n` characters but lays out the whole text, so the box neither grows
+nor rewraps as the text appears. The game's rules count `n`; the engine has no timer for it.
+
+**4.3 Tier 3, as hit.** Each is built only when Bramble hits it, one commit each, with compiler tests and a DESIGN.md
+section; otherwise recorded as not needed:
+
+- **The inventory grid:** slots that may be empty, `{item && <Icon/>}` inside a list item's children. Today that is `RGE1209`.
+- **Context:** if the settings screen passes the same props three levels down.
+
+**4.4 A slider.** A component in the game first (a focusable `<Flex>` whose left and right keys call an action). It becomes
+a built-in only if it is awkward, and the outcome is recorded either way.
+
+**Done when:** the dialogue box shows wrapped, revealed pages; the inventory and settings screens work with keyboard, gamepad
+and mouse.
+
+### M5. Enemies (engine and game; \~4 days)
+
+**5.1 `findPath` and `lineOfSight`** in `packages/runtime/src/path.ts`, exported from `@rge/runtime`:
+
+```ts
+findPath(grid: TileGrid, from: Cell, to: Cell, options?: { diagonal?: boolean; maxNodes?: number; blocked?: (x: number, y: number) => boolean }): Cell[] | null
+lineOfSight(grid: TileGrid, from: Point, to: Point): boolean
+```
+
+- **`findPath`:** A* with a binary heap. Ties break by a fixed order, so the same search always returns the same path, under
+  V8 and QuickJS alike, and a parity run stays identical. Diagonals never cut a solid corner. `maxNodes` bounds a search that
+  cannot finish.
+- **Tests:** shortest paths, no path, corners, determinism, and a bench scene (100 searches on an 80 × 48 map) with a QuickJS
+  budget.
+
+**5.2 The game's enemies** (rules):
+
+- **Beetle:** wanders and turns at walls.
+- **Wisp:** notices the character within range and in sight (`lineOfSight`), paths to them, finds a new path every 0.5 s
+  (not every step), and gives up 4 s after losing sight.
+- **Combat:** the swing knocks an enemy back; contact damages the character, who then gets a moment of invulnerability.
+- **Actors block each other:** the `blocked` function passed to `moveActorX`/`moveActorY` checks tiles, then other actors'
+  boxes. It moves into `@rge/runtime` only if it turns out to be the same code twice.
+
+**Done when:** both enemies work on the overworld, a replay shows a wisp chasing around a wall, and the bench is in budget.
+
+### M6. Maps saved by Tiled (engine and a person; \~4 days plus the person's time)
+
+**6.1 The importer** (`packages/compiler/src/scenes/tilemap.ts`):
+
+- **Layer data:** base64 layers, uncompressed, zlib and gzip (`node:zlib`). zstd stays a diagnostic.
+- **External tilesets:** `.tsj` (JSON), and `.tsx` (XML) through a small reader in `scenes/tsx.ts` that knows only Tiled's
+  tileset elements: `tileset`, `image`, `tile`, `properties`, `property`.
+- **More than one tileset:**
+  - `TilemapData` gains `tilesets: { firstGid, image, columns, tileWidth, tileHeight, solid }[]`.
+  - Each cell names its tileset.
+  - `<Tilemap image>` becomes optional: without it the images come from the map, relative to the assets folder.
+  - `#tilemap` picks the sheet per cell. With `image` given, Kite and Hearth draw as before.
+- **Tests:** a fixture map for each case.
+
+**6.2 Objects as data for the rules.**
+
+- **Generated data:** `generated/tilemaps.ts` also exports each map's objects:
+  `{ id, name, type, x, y, width, height, properties }`, with properties as `string | number | boolean`.
+- **The game** reads its doors, NPCs, chests, spawns and shrines from them through one validating function, with a test
+  that every map passes it. Its text maps and `make-maps.ts` markers go away.
+- **The scene importer** (`importTiled`) stays as it is for prefab scenes.
+
+**6.3 The person's step.**
+
+1. Someone opens the overworld in Tiled (a recent 1.x), draws or re-saves it, and commits the file.
+2. The importer is fixed for whatever that file holds.
+3. The file becomes a test fixture.
+
+This is the one step an agent cannot do. Until it happens, M7 can go ahead on the tool-written maps.
+
+**Done when:** at least one map saved by Tiled imports without changes by hand, and Kite finding 8's row in "Not now" is
+updated.
+
+### M7. Content, replays and frame time (game; \~1 week)
+
+- **Art, sound and music** from `tools/make-assets.ts`: tiles, the character's eight-way walk and swing, the NPCs, both
+  enemies, the bells, the UI frame, a pixel font with lower case if the dialogue needs it, overworld and cave music, and
+  sound effects.
+- **Feel:** particles, shake and fades through the effect stores, as in Kite and Hearth.
+- **Replays** (`test/replays.ts`):
+  - One plays from the title to the end.
+  - One saves at a shrine, quits, starts again from that save with `RecordingBackend` storage, continues and finishes.
+  - One loses all hearts and returns to the shrine.
+- **Frame time:** `tools/frame-time.ts` on the busiest view and on each door, under Node and QuickJS, recorded in
+  `NATIVE_PLAN.md`.
+- **Findings:** the "Findings from the third game" section of `NEXT_PRIORITIES.md`, including which of Kite's and Hearth's
+  findings held a third time.
+
+### M8. The guide, the reference and the license (\~4 days)
+
+- **A getting-started page** (`docs/start.html`, linked first from `docs/index.html`), written by doing it: an empty folder,
+  `rge create`, a moving square, a sprite, a sound, a second screen, a test, `rge check`, `rge package`. Then it is followed
+  again from scratch by someone (or an agent) who did not write it.
+- **A reference entry for every built-in and hook,** each with an example. A test lists the runtime manifest's built-ins and
+  hooks and fails when `docs/reference.html` lacks one, so it cannot fall behind.
+- **The license** is your choice. Then a pass over the repository for anything that should not be public: secrets, large
+  files, private names.
+
+### Risks
+
+| Risk | What happens then |
+| --- | --- |
+| TypeScript 7.1 beta's declaration output is incomplete for some file | Hand-write that `.d.ts` or adjust the source; the packs test catches it |
+| Packing slows the loop when the engine and the game change together | Engine changes land with their own tests in `packages/` first, then `bramble:install`; the slower loop is what an outside author has, so it is worth feeling |
+| Culling and chunks change Kite's records | Expected; Kite's parity is re-baselined once, in its own commit |
+| Nobody is available to save a map in Tiled | M6.3 waits; nothing else does |
+| Synchronous storage hitches on a slow disk | The entries are a few KB; measure the write in the frame-time tool, and move it after the frame only if it shows |
+| Storage on macOS and Windows | Written but unverified, as the rest of those platforms are |
 
 ## Done when
 
