@@ -85,6 +85,12 @@ export class FlexBox {
   childMinimum: Float64Array[] = [new Float64Array(8), new Float64Array(8)];
   /** Where a leaf child's own drawing starts relative to its origin (a sprite drawn centred, say), per axis. */
   childOrigin: Float64Array[] = [new Float64Array(8), new Float64Array(8)];
+  /**
+   * The children layout places, in order: `children` itself, or (when one is `layoutContents`, see `GameObject`) `flat`, the
+   * children with each such child replaced by its own.
+   */
+  kids: readonly GameObject[] = [];
+  readonly flat: GameObject[] = [];
   /** 0 a leaf, 1 a `<Flex>`. */
   childKind = new Uint8Array(8);
   /** Indices of the children still taking part in sharing out space. */

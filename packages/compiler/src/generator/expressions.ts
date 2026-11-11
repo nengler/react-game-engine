@@ -80,6 +80,7 @@ export class ExpressionEmitter {
     const wrap = (s: string): string => (top ? s : `(${s})`);
     switch (e.kind) {
       case "PlainRef": return e.name;
+      case "ActionRef": return `${this.storeName}.getState().${e.name}`;
       case "ElementRead": return `this.${e.field}.${e.member}`;
       case "NumberLiteral": return String(e.value);
       case "StringLiteral": return JSON.stringify(e.value);

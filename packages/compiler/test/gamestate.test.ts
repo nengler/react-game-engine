@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Entity, Text, World, resetGameState, type GameState, type GameStore } from "@rge/runtime";
+import { Entity, Flex, Text, World, resetGameState, type GameState, type GameStore } from "@rge/runtime";
 import { Compiler, DiagnosticCode, formatDiagnostic } from "../src/index.ts";
 import { OUTPUT_ROOT, cleanOutput, closeCompiler, load, withAuthoringImports, type CompiledModule } from "./helpers.ts";
 
@@ -496,5 +496,36 @@ export function A() {
     const action = errors(`function A() { const c = useGame((s) => s.hurt === null); return <Entity />; }`);
     assert.deepEqual(action.map((d) => d.code), [DiagnosticCode.UnsupportedExpression]);
     assert.match(action[0]!.message, /select it by itself/);
+  });
+});
+
+describe("an action passed as a value", () => {
+  it("is a press handler on a built-in and a callback prop of a component, as `onPress={() => collect(1)}` would be", async () => {
+    const compiled = build(`
+interface ButtonProps { onPress: () => void; }
+export function Button({ onPress }: ButtonProps) {
+  return <Flex onPress={onPress} />;
+}
+export function Bar() {
+  const hurt = useGame((s) => s.hurt);
+  const noop = useGame((s) => s.noop);
+  return (
+    <Flex onPress={hurt}>
+      <Button onPress={hurt} />
+      <Pointer width={4} height={4} onPress={noop} />
+    </Flex>
+  );
+}`);
+    assert.deepEqual(typeErrors(compiled), []);
+    assert.match(compiled.code, /onPress: useGame\.getState\(\)\.hurt/);
+    const { Bar } = await load<{ Bar: new () => Flex & { children: (Flex & { children: Flex[] })[] } }>(generated(compiled));
+    const world = new World();
+    const bar = new Bar();
+    world.mount(bar);
+    world.flush();
+    bar.onPress!();
+    const button = bar.children[0]!;
+    button.onPress!();
+    assert.equal(useGame.getState().player.hp, 8);
   });
 });

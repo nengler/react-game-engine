@@ -183,7 +183,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
     // `updateProps` is generated into every component that has props, so a field may not take the name.
     "name", "props", "applyProps", "updateProps", "transform", "placement", "layoutX", "layoutY", "worldTransform", "parent", "children", "world",
-    "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys",
+    "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys", "layoutContents",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "markChanged", "markMoved", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",

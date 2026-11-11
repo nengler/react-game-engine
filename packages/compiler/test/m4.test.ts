@@ -688,9 +688,9 @@ function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }}
     assert.doesNotThrow(() => compile(`function A() { const [image, setImage] = useState(0); return <Collider width={1} height={1} />; }`));
   });
 
-  it("rejects a component as a root and children on a leaf built-in (a nested fragment is an implicit Entity)", () => {
+  it("takes a component as a root (a see-through container), and rejects children on a leaf built-in (a nested fragment is an implicit Entity)", () => {
     const run = (source: string) => compileErrors(source).map((d) => d.code);
-    assert.deepEqual(run(`function B() { return <Entity />; } function A() { return <B />; }`), [DiagnosticCode.RootMustBeEntity]);
+    assert.match(compile(`function B() { return <Entity />; } function A() { return <B />; }`).code, /class A extends Entity \{\s+static readonly managed = true;\s+protected override readonly reportsChanges = true;\s+override readonly layoutContents = true;/);
     assert.deepEqual(run(`function A() { return <Sprite image="a"><Entity /></Sprite>; }`), [DiagnosticCode.UnsupportedJsxChild]);
     assert.deepEqual(run(`function A() { return <Entity><Collider width={1} height={1}><Entity /></Collider></Entity>; }`), [DiagnosticCode.UnsupportedJsxChild]);
     assert.ok(compile(`function A() { return <Entity><><Sprite image="a" /></></Entity>; }`).code.includes("new Entity()"));

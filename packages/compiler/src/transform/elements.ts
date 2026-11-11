@@ -1,9 +1,9 @@
 // Layer 3 of ComponentLowering: the JSX tree (elements, props, transforms, children, keyed lists) into ElementIR.
-import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type JsxFragment, type Node } from "typescript/ast";
+import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type JsxFragment, type JsxSelfClosingElement, type Node } from "typescript/ast";
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isConditionalExpression, isIdentifier, isJsxAttribute, isJsxSpreadAttribute, isJsxElement, isJsxExpression, isJsxSelfClosingElement, isJsxText, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isJsxFragment, isStringLiteral, isBlock, isReturnStatement } from "typescript/ast/is";
 import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
-import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR } from "../ir/types.ts";
+import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
 import { Scope } from "./scope.ts";
 import { checkFreshName, lowerFunction } from "./statements.ts";
 import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, isListSource, findAttribute } from "./helpers.ts";
@@ -52,6 +52,20 @@ export class ElementLowering extends HookLowering {
   }
 
   protected lowerRoot(jsx: JsxRoot): HostElementIR | null {
+    // `return <Panel …>…</Panel>`, `return open ? <Menu /> : null`, `return null`: the component is a bare container that layout
+    // sees through (`layoutContents`), holding that one child, so a `<Flex>` above it lays out the panel as its own child.
+    const isElement = isJsxElement(jsx) || isJsxSelfClosingElement(jsx);
+    const elementTag = isElement ? (isJsxElement(jsx) ? jsx.openingElement : jsx).tagName : null;
+    if (!isElement && !isJsxFragment(jsx) || (elementTag !== null && isIdentifier(elementTag) && !this.intrinsics.has(elementTag.text) && (this.locals.has(elementTag.text) || this.imported.has(elementTag.text)))) {
+      const children: ChildIR[] = [];
+      const expression = unwrapParens(jsx as Expression);
+      if (isElement) children.push(...this.lowerChildren([jsx as JsxElementNode], [], { slot: true, passed: false }));
+      else if (expression.kind !== SyntaxKind.NullKeyword) {
+        let index = 1;
+        this.lowerExpressionChild(expression, jsx, [0], () => [index++], { slot: true, passed: false }, children);
+      }
+      return { kind: "HostElement", component: { kind: "Intrinsic", name: this.hostIntrinsic }, props: [], transform: [], children, layoutContents: true, span: this.span(jsx) };
+    }
     if (isJsxFragment(jsx)) {
       return {
         kind: "HostElement",
@@ -62,12 +76,12 @@ export class ElementLowering extends HookLowering {
         span: this.span(jsx),
       };
     }
-    const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
+    const opening = isJsxElement(jsx) ? jsx.openingElement : (jsx as JsxSelfClosingElement);
     const tag = opening.tagName;
     if (!isIdentifier(tag) || !this.intrinsics.has(tag.text)) {
       this.report(
         DiagnosticCode.RootMustBeEntity,
-        `The root of component '${this.component.name}' must be a built-in element (${this.manifest.intrinsics.map((t) => `<${t}>`).join(", ")}) or a fragment \`<>…</>\`; a component cannot be the root of another.`,
+        `The root of component '${this.component.name}' must be a built-in element (${this.manifest.intrinsics.map((t) => `<${t}>`).join(", ")}), a component, a fragment \`<>…</>\`, a condition (\`open ? <Menu /> : null\`) or \`null\`.`,
         tag,
       );
       return null;
@@ -493,6 +507,32 @@ export class ElementLowering extends HookLowering {
           if (callback) props.push(callback);
           continue;
         }
+        // `onPress={resume}` (a game-state action) or, to a built-in, `onPress={onPress}` (a callback prop): a function passed whole.
+        const passed = this.functionValue(expression);
+        if (passed === null) continue;
+        if (passed !== undefined) {
+          if (toComponent) {
+            if (passed.kind === "action") {
+              props.push({ kind: "StaticProp", name, value: { kind: "ActionRef", name: passed.action } });
+              continue;
+            }
+          } else {
+            const params = this.manifest.intrinsicCallbacks[tag]?.[name];
+            if (!params) {
+              this.report(DiagnosticCode.UnsupportedAttribute, `<${tag}> has no callback prop '${name}': callbacks can be passed to components, and to the built-in callback props the runtime lists.`, attribute);
+              continue;
+            }
+            // Written as the arrow an author would write by hand: `onPress={() => resume()}`.
+            const handlerParams = params.map((p) => ({ id: localId(this.component.name, p.name, this.nextSerial()), name: p.name, type: { kind: "Named" as const, name: p.type } }));
+            const args: ExprIR[] = handlerParams.map((p) => ({ kind: "ParamRead", param: p.id, name: p.name }));
+            const body: StatementIR[] =
+              passed.kind === "action"
+                ? [{ kind: "CallAction", action: passed.action, args }]
+                : [{ kind: "ExpressionStatement", expression: { kind: "Call", callee: { kind: "Prop", name: passed.name, optional: true }, args } }];
+            props.push({ kind: "CallbackProp", name, handler: { kind: "Function", params: handlerParams, body } });
+            continue;
+          }
+        }
         // `onX={onX}` forwards a callback prop whole.
         this.allowCallbackRead = toComponent && (isIdentifier(expression) || isPropertyAccessExpression(expression));
         try {
@@ -510,6 +550,25 @@ export class ElementLowering extends HookLowering {
       props.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
     }
     return props;
+  }
+
+  /**
+   * A function passed whole as an attribute: a game-state action (`resume`) or a callback prop (`onPress`, `props.onPress`).
+   * Undefined when the expression is neither; null when it is a callback prop that cannot be read (reported).
+   */
+  protected functionValue(expression: Expression): { kind: "action"; action: string } | { kind: "prop"; name: string } | null | undefined {
+    if (isIdentifier(expression)) {
+      const binding = this.scope.get(expression.text);
+      if (binding?.kind === "action") return { kind: "action", action: binding.action };
+      if (binding?.kind === "prop" && binding.role === "callback") return { kind: "prop", name: binding.name };
+      return undefined;
+    }
+    if (isPropertyAccessExpression(expression)) {
+      const member = this.propsObjectMember(expression);
+      if (member === null) return null;
+      if (member?.role === "callback") return { kind: "prop", name: member.name };
+    }
+    return undefined;
   }
 
   /**
@@ -581,53 +640,67 @@ export class ElementLowering extends HookLowering {
         continue;
       }
       if (isJsxExpression(child) && child.expression) {
-        const expression = unwrapParens(child.expression);
-        if (this.isChildrenReference(expression)) {
-          if (this.lowerChildrenSlot(child, context)) out.push({ kind: "ChildrenSlot" });
-          continue;
-        }
-        if (isCallExpression(expression) && isPropertyAccessExpression(expression.expression) && expression.expression.name.text === "map") {
-          const list = this.lowerList(expression, path);
-          if (list) out.push(list);
-          continue;
-        }
-        if (isBinaryExpression(expression) && expression.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken) {
-          const right = unwrapParens(expression.right);
-          if (isJsxElement(right) || isJsxSelfClosingElement(right) || isJsxFragment(right)) {
-            const condition = this.lowerNode(expression.left);
-            const element = isJsxFragment(right) ? this.lowerFragment(right, path) : this.lowerElement(right, path);
-            if (condition && element) {
-              out.push({ kind: "ConditionalChild", condition, dependencies: collectDependencies(condition), element });
-            }
-            continue;
-          }
-        }
-        if (isConditionalExpression(expression)) {
-          // `{c ? <A /> : <B />}` (either branch may be `null`): one conditional child per branch, the
-          // second on `!c`. Each branch keeps its own identity, so switching recreates, as React does
-          // for different element types.
-          const branches = [unwrapParens(expression.whenTrue), unwrapParens(expression.whenFalse)];
-          const usable = branches.every((b) => isJsxElement(b) || isJsxSelfClosingElement(b) || isJsxFragment(b) || b.kind === SyntaxKind.NullKeyword);
-          if (usable) {
-            const condition = this.lowerNode(expression.condition);
-            if (!condition) continue;
-            const conditions: ExprIR[] = [condition, { kind: "Unary", operator: "!", operand: condition }];
-            branches.forEach((branch, i) => {
-              if (!(isJsxElement(branch) || isJsxSelfClosingElement(branch) || isJsxFragment(branch))) return;
-              const at = i === 0 ? path : [...parentPath, index++];
-              const element = isJsxFragment(branch) ? this.lowerFragment(branch, at) : this.lowerElement(branch, at);
-              const when = conditions[i]!;
-              if (element) out.push({ kind: "ConditionalChild", condition: when, dependencies: collectDependencies(when), element });
-            });
-            continue;
-          }
-        }
-        this.report(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`, and an element may be a fragment `<>…</>`) or `{items.map((item) => <Element key={item.id} />)}`.", child);
+        this.lowerExpressionChild(unwrapParens(child.expression), child, path, () => [...parentPath, index++], context, out);
         continue;
       }
       this.report(DiagnosticCode.UnsupportedJsxChild, `Unsupported JSX child (${SyntaxKind[child.kind]}).`, child);
     }
     return out;
+  }
+
+  /**
+   * `{…}` among the children (or a component's root when it is an expression, `cond ? <A /> : null`): `{children}`, a list,
+   * `cond && <El />` or `cond ? <A /> : <B />`. `next` gives the path of a second element (a condition's other branch).
+   */
+  protected lowerExpressionChild(
+    expression: Expression,
+    child: Node,
+    path: readonly number[],
+    next: () => readonly number[],
+    context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean },
+    out: ChildIR[],
+  ): void {
+    if (this.isChildrenReference(expression)) {
+      if (this.lowerChildrenSlot(child, context)) out.push({ kind: "ChildrenSlot" });
+      return;
+    }
+    if (isCallExpression(expression) && isPropertyAccessExpression(expression.expression) && expression.expression.name.text === "map") {
+      const list = this.lowerList(expression, path);
+      if (list) out.push(list);
+      return;
+    }
+    if (isBinaryExpression(expression) && expression.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken) {
+      const right = unwrapParens(expression.right);
+      if (isJsxElement(right) || isJsxSelfClosingElement(right) || isJsxFragment(right)) {
+        const condition = this.lowerNode(expression.left);
+        const element = isJsxFragment(right) ? this.lowerFragment(right, path) : this.lowerElement(right, path);
+        if (condition && element) {
+          out.push({ kind: "ConditionalChild", condition, dependencies: collectDependencies(condition), element });
+        }
+        return;
+      }
+    }
+    if (isConditionalExpression(expression)) {
+      // `{c ? <A /> : <B />}` (either branch may be `null`): one conditional child per branch, the
+      // second on `!c`. Each branch keeps its own identity, so switching recreates, as React does
+      // for different element types.
+      const branches = [unwrapParens(expression.whenTrue), unwrapParens(expression.whenFalse)];
+      const usable = branches.every((b) => isJsxElement(b) || isJsxSelfClosingElement(b) || isJsxFragment(b) || b.kind === SyntaxKind.NullKeyword);
+      if (usable) {
+        const condition = this.lowerNode(expression.condition);
+        if (!condition) return;
+        const conditions: ExprIR[] = [condition, { kind: "Unary", operator: "!", operand: condition }];
+        branches.forEach((branch, i) => {
+          if (!(isJsxElement(branch) || isJsxSelfClosingElement(branch) || isJsxFragment(branch))) return;
+          const at = i === 0 ? path : next();
+          const element = isJsxFragment(branch) ? this.lowerFragment(branch, at) : this.lowerElement(branch, at);
+          const when = conditions[i]!;
+          if (element) out.push({ kind: "ConditionalChild", condition: when, dependencies: collectDependencies(when), element });
+        });
+        return;
+      }
+    }
+    this.report(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`, and an element may be a fragment `<>…</>`) or `{items.map((item) => <Element key={item.id} />)}`.", child);
   }
 }
 

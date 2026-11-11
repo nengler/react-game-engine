@@ -123,7 +123,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
   const visitExpr = (expr: ExprIR): void =>
     walkExpr(expr, (e) => {
       if (e.kind === "Call" && e.callee.kind === "Function" && runtimeFunctions.has(e.callee.name)) values.add(e.callee.name);
-      if (e.kind === "Call" && e.callee.kind === "Action") usage.store = true;
+      if ((e.kind === "Call" && e.callee.kind === "Action") || e.kind === "ActionRef") usage.store = true;
       if (e.kind === "PlainRef") usage.plain.add(e.name);
       if (e.kind === "Call" && e.callee.kind === "Plain") usage.plain.add(e.callee.name.split(".")[0]!);
     });
@@ -237,6 +237,8 @@ class ComponentGenerator extends ElementEmitter {
       // Its `render()` writes only what differs and says what it wrote to (`markMoved`, `markChanged`), so the runtime does not
       // take every render for a change: the player keeps what it drew for a render that changed nothing, and for one that only moved it.
       w.line("protected override readonly reportsChanges = true;");
+      // Its root was another component or a condition: layout sees through it to what it holds.
+      if (c.root.layoutContents) w.line("override readonly layoutContents = true;");
       // Persistent state.
       for (const s of c.state) {
         if (s.globalKey !== undefined) {

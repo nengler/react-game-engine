@@ -1,7 +1,7 @@
 // Shared declarations of the component lowering: constants, helper functions and types used by transform.ts and
 // the layers (lowering.ts, expressions.ts, hooks.ts, elements.ts).
 import { SyntaxKind, type JsxElement, type JsxSelfClosingElement, type JsxAttribute, type JsxAttributes, type Node } from "typescript/ast";
-import { isIdentifier, isJsxAttribute, isJsxElement, isNumericLiteral, isParenthesizedTypeNode, isLiteralTypeNode, isJsxFragment, isStringLiteral } from "typescript/ast/is";
+import { isIdentifier, isJsxAttribute, isJsxElement, isNumericLiteral, isParenthesizedTypeNode, isLiteralTypeNode, isJsxFragment, isJsxSelfClosingElement, isStringLiteral } from "typescript/ast/is";
 import { type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { assertNever, type TypeIR, type PropTypeIR, type BinaryOperator, type ChildIR, type ComponentIR, type ExprIR, type UnaryOperator } from "../ir/types.ts";
@@ -48,7 +48,7 @@ export const RESERVED_PROP_NAMES: ReadonlySet<string> = new Set(["key", "ref", "
 
 /** The built-in a component's root is: its tag, or the host intrinsic for a fragment. */
 export function rootTag(jsx: JsxRoot, hostIntrinsic: string): string {
-  if (isJsxFragment(jsx)) return hostIntrinsic;
+  if (isJsxFragment(jsx) || !(isJsxElement(jsx) || isJsxSelfClosingElement(jsx))) return hostIntrinsic;
   const tag = (isJsxElement(jsx) ? jsx.openingElement : jsx).tagName;
   return isIdentifier(tag) ? tag.text : hostIntrinsic;
 }

@@ -24,6 +24,7 @@ export type ExprIR =
   | MemberReadIR
   | IndexReadIR
   | NonNullIR
+  | ActionRefIR
   | ArrayLiteralIR
   | ObjectLiteralIR
   | ArrowIR
@@ -45,6 +46,15 @@ export interface ElementReadIR {
   readonly kind: "ElementRead";
   readonly field: string;
   readonly member: string;
+}
+
+/**
+ * A game-state action passed whole to a component's callback prop (`onPress={resume}`): the store's own function, which
+ * never changes, so it is a static prop.
+ */
+export interface ActionRefIR {
+  readonly kind: "ActionRef";
+  readonly name: string;
 }
 
 export interface PlainRefIR {

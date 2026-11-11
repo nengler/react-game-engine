@@ -43,7 +43,8 @@ export interface ImportAnalysis {
 /** Types the authoring module exports: written `import { type Child }`, never values. */
 export const AUTHORING_TYPES: readonly string[] = ["Child"];
 
-export type JsxRoot = JsxElement | JsxSelfClosingElement | JsxFragment;
+/** What a component returns: an element, a fragment, or (`open ? <Menu /> : null`, `ok && <X />`, `null`) an expression of them. */
+export type JsxRoot = JsxElement | JsxSelfClosingElement | JsxFragment | Expression;
 
 /** `interface EnemyProps { … }` or `type EnemyProps = { … }`. The transform reads its members for the props. */
 export interface TypeDeclarationAnalysis {

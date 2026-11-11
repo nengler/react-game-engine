@@ -54,6 +54,12 @@ export class GameObject<P extends object = {}> {
    */
   readonly gameStateStore: GameStore | null = null;
   readonly gameStateKeys: readonly string[] = NO_KEYS;
+  /**
+   * True for an object that takes no part in `<Flex>` layout itself, like CSS's `display: contents`: a `<Flex>` above it lays out
+   * its children as if they were its own. A compiled component whose root is another component is one (`BuildMenu` rendering
+   * `<Panel>`), so the panel still grows to the column it sits in. Such an object should sit at its parent's origin.
+   */
+  readonly layoutContents: boolean = false;
   readonly children: GameObject[] = [];
   world: World | null = null;
   /**

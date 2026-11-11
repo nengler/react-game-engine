@@ -292,7 +292,7 @@ describe("IR construction", () => {
 
 describe("diagnostics", () => {
   const cases: [string, string, string][] = [
-    ["root is another component", DiagnosticCode.RootMustBeEntity, `function B() { return <Entity />; } function A() { return <B />; }`],
+    ["root is an unknown tag", DiagnosticCode.RootMustBeEntity, `function A() { return <Missing />; }`],
     ["unknown component", DiagnosticCode.UnknownComponent, `function A() { return <Entity><Missing /></Entity>; }`],
     ["text child", DiagnosticCode.UnsupportedJsxChild, `function A() { return <Entity>hello</Entity>; }`],
     ["unknown identifier", DiagnosticCode.UnknownIdentifier, `function A() { return <Entity name={other} />; }`],

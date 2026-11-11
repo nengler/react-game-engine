@@ -5,9 +5,9 @@
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Sprite, Text, World } from "@rge/runtime";
+import { Entity, Flex, Shape, Sprite, Text, World } from "@rge/runtime";
 import { DiagnosticCode } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, compileProject, load, loadProject, typeCheck, typeCheckProject } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -72,5 +72,99 @@ export function Icon({ kind, angles, at }: IconProps) {
     world.flush();
     assert.equal(icon.frame, 2);
     assert.equal(icon.transform.rotation, 1 + Math.PI);
+  });
+});
+
+describe("a component whose root is another component, a condition or null", () => {
+  it("is a container layout sees through, holding that component, which gets {children} and props", async () => {
+    const project = compileProject({
+      "Panel.tsx": `
+interface PanelProps { title: string; children: Child; }
+export function Panel({ title, children }: PanelProps) {
+  return <Flex direction="column" width="grow"><Text size={8}>{title}</Text>{children}</Flex>;
+}`,
+      "Menu.tsx": `
+import { Panel } from "./Panel.tsx";
+interface MenuProps { title: string; }
+export function Menu({ title }: MenuProps) {
+  return <Panel title={title}><Text size={8}>item</Text></Panel>;
+}`,
+    });
+    assert.deepEqual(typeCheckProject(project), []);
+    assert.match(project["Menu.tsx"]!.code, /override readonly layoutContents = true;/);
+    const { Menu } = await loadProject<{ Menu: new (p: { title: string }) => Entity & { updateProps(p: { title: string }): void } }>(project, "Menu.tsx");
+    const world = new World();
+    const menu = new Menu({ title: "BUILD" });
+    world.mount(menu);
+    world.flush();
+    assert.equal(menu.layoutContents, true);
+    const panel = menu.children[0] as Flex;
+    assert.ok(panel instanceof Flex);
+    assert.deepEqual(panel.children.map((c) => (c as Text).text), ["BUILD", "item"]);
+    menu.updateProps({ title: "SELL" });
+    world.flush();
+    assert.equal((panel.children[0] as Text).text, "SELL");
+  });
+
+  it("renders a condition of elements, or nothing", async () => {
+    const compiled = compile(`
+interface FlashProps { on: boolean; big: boolean; }
+export function Flash({ on, big }: FlashProps) {
+  return on ? <Text size={big ? 16 : 8}>on</Text> : null;
+}
+export function Spark({ on }: FlashProps) {
+  return on && <Text size={8}>spark</Text>;
+}
+export function Either({ on }: FlashProps) {
+  return on ? <Text size={8}>yes</Text> : <Shape kind="rect" width={2} height={2} />;
+}
+export function Nothing() {
+  return null;
+}`, "Flash.tsx");
+    assert.deepEqual(typeCheck(compiled), []);
+    type C = new (p?: { on: boolean; big: boolean }) => Entity & { updateProps(p: { on: boolean; big: boolean }): void };
+    const { Flash, Spark, Either, Nothing } = await load<{ Flash: C; Spark: C; Either: C; Nothing: C }>(compiled);
+    const world = new World();
+    const flash = new Flash({ on: false, big: true });
+    const spark = new Spark({ on: true, big: false });
+    const either = new Either({ on: true, big: false });
+    const nothing = new Nothing();
+    for (const c of [flash, spark, either, nothing]) world.mount(c);
+    world.flush();
+    assert.equal(flash.children.length, 0);
+    assert.deepEqual(spark.children.map((c) => (c as Text).text), ["spark"]);
+    assert.ok(either.children[0] instanceof Text);
+    assert.equal(nothing.children.length, 0);
+    flash.updateProps({ on: true, big: true });
+    either.updateProps({ on: false, big: false });
+    world.flush();
+    assert.equal((flash.children[0] as Text).size, 16);
+    assert.ok(either.children[0] instanceof Shape);
+    assert.equal(either.children.length, 1);
+  });
+});
+
+describe("a callback prop forwarded to a built-in", () => {
+  it("is written as the arrow that calls it: `<Flex onPress={onPress}>`, `props.onPress` too", async () => {
+    const compiled = compile(`
+interface ButtonProps { onPress: () => void; label: string; }
+export function Button({ onPress, label }: ButtonProps) {
+  return <Flex onPress={onPress}><Text size={8}>{label}</Text></Flex>;
+}
+export function Plain(props: ButtonProps) {
+  return <Pointer width={4} height={4} onPress={props.onPress} />;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Button, Plain } = await load<{ Button: new (p: { onPress: () => void; label: string }) => Flex; Plain: new (p: { onPress: () => void; label: string }) => Entity & { onPress?: () => void } }>(compiled);
+    let presses = 0;
+    const world = new World();
+    const button = new Button({ onPress: () => presses++, label: "go" });
+    const plain = new Plain({ onPress: () => (presses += 10), label: "x" });
+    world.mount(button);
+    world.mount(plain);
+    world.flush();
+    button.onPress!();
+    plain.onPress!();
+    assert.equal(presses, 11);
   });
 });

@@ -43,6 +43,8 @@ export interface HostElementIR {
   /** `transform={{ x, y }}`: the instance's own transform. See `ElementIR.transform`. */
   readonly transform: readonly TransformPropIR[];
   readonly children: readonly ChildIR[];
+  /** The root was another component or a condition: the component is a container `<Flex>` layout sees through. */
+  readonly layoutContents?: boolean;
   readonly span: SourceSpan;
 }
 

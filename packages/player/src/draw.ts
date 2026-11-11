@@ -1243,7 +1243,10 @@ export class FrameBuilder {
   /** A `<Flex>` the walk has reached: lay it out if it is a layout root, then draw its background behind its children. */
   #flex(flex: Flex, world: WorldTransform, availableWidth: number, availableHeight: number): WorldTransform | undefined {
     let placed: WorldTransform | undefined;
-    if (!(flex.parent instanceof Flex)) {
+    // A parent that is `layoutContents` is transparent: the Flex above it lays this one out.
+    let parent = flex.parent;
+    while (parent !== null && parent.layoutContents) parent = parent.parent;
+    if (!(parent instanceof Flex)) {
       this.#layouter.layout(flex, availableWidth, availableHeight);
       // The world was worked out before layout; a floating root's own offset is only known now.
       if (flex.float) world = placed = flex.worldTransform();
