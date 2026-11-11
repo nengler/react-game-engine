@@ -130,69 +130,6 @@ export function createShake(options: { strength?: number; duration?: number } = 
   return new Shake(options.strength ?? 2, options.duration ?? 0.2);
 }
 
-/** What a squash tells when it starts: the sprite that draws it, so the frame is drawn again. */
-export interface SquashOwner {
-  markChanged(): void;
-}
-
-/**
- * Squash and stretch: a sprite's scale thrown away from 1 at a moment (`squash.start(0.6, 1.4)` as a jump leaves the ground,
- * `start(1.6, 0.4)` on a hard landing) that springs back to 1 at `recover` a second, as Celeste's character does. Given to a
- * sprite as `<AnimatedSprite squash={squash}>`, it scales about the sprite's origin (put the origin at the feet), on top of
- * the transform's scale, and only the drawing: the hitbox does not change. The sprite that has it advances it, in `onUpdate`,
- * so it follows the fixed timestep and stops while the world is frozen.
- */
-export class Squash {
-  x = 1;
-  y = 1;
-  /** How fast each axis goes back to 1, in scale a second. */
-  recover: number;
-  #owner: SquashOwner | null = null;
-
-  constructor(recover: number) {
-    this.recover = recover;
-  }
-
-  /** Throw the scale to (`x`, `y`) now; it springs back from there. */
-  start(x: number, y: number): void {
-    this.x = x;
-    this.y = y;
-    this.#owner?.markChanged();
-  }
-
-  /** Back at 1 on both axes. */
-  get resting(): boolean {
-    return this.x === 1 && this.y === 1;
-  }
-
-  /** Spring back by `dt` seconds. Returns whether it moved. */
-  advance(dt: number): boolean {
-    if (this.resting || !(dt > 0)) return false;
-    const step = this.recover * dt;
-    this.x = this.x < 1 ? Math.min(1, this.x + step) : Math.max(1, this.x - step);
-    this.y = this.y < 1 ? Math.min(1, this.y + step) : Math.max(1, this.y - step);
-    return true;
-  }
-
-  /** The sprite drawing it now (the last one mounted), which is the one that advances it. */
-  attach(owner: SquashOwner): void {
-    this.#owner = owner;
-  }
-
-  detach(owner: SquashOwner): void {
-    if (this.#owner === owner) this.#owner = null;
-  }
-
-  owns(owner: SquashOwner): boolean {
-    return this.#owner === owner;
-  }
-}
-
-/** Make a squash for a sprite. Keep the result in a module (`export const squash = createSquash()`). Celeste springs back at 1.75. */
-export function createSquash(options: { recover?: number } = {}): Squash {
-  return new Squash(options.recover ?? 1.75);
-}
-
 /**
  * A channel of events a game sends and components listen to (`createEvents<GameEvent>()`): the game state's actions, the
  * rules or a plain function `emit` what happened, and every mounted `<EventListener events={channel} onEvent={…} />` hears it

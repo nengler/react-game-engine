@@ -82,7 +82,7 @@ export interface RuntimeManifest {
   readonly handleTypes: Readonly<Record<string, HandleTypeManifest>>;
   /**
    * Runtime functions component code may call, imported from the runtime module. Name → argument count: -1 at least one,
-   * -2 any. The `create…` factories make a per-instance effect in a lazy `useState(() => createSquash())`.
+   * -2 any. The `create…` factories make a per-instance object in a lazy `useState(() => createAfterimages())`.
    */
   readonly functions: Readonly<Record<string, number>>;
 }
@@ -109,14 +109,14 @@ export const runtimeManifest: RuntimeManifest = {
   intrinsicMembers: {
     Entity: ["name"],
     Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "state", "controls"],
-    Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity", "squash", "afterimages", "snapshot"],
+    Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity", "afterimages", "snapshot"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
     Text: ["text", "size", "color", "width", "align", "font"],
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "shake", "shakeStrength", "shakeDuration", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: [
-      "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity", "squash", "afterimages", "snapshot",
+      "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity", "afterimages", "snapshot",
       "animations", "animation", "isSheet", "current", "sheetFrame", "styled", "finished",
     ],
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
@@ -159,7 +159,7 @@ export const runtimeManifest: RuntimeManifest = {
     Route: ["name"],
   },
   intrinsicHooks: {
-    Sprite: ["onMount", "onUnmount", "onUpdate"],
+    Sprite: ["onMount", "onUnmount"],
     AnimatedSprite: ["onMount", "onUnmount", "onUpdate"],
     Camera: ["onUpdate"],
     Particles: ["onUpdate"],
@@ -210,5 +210,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },
   },
-  functions: { clamp: 3, freeze: 1, createSquash: -2, createShake: -2, createEvents: 0, createAfterimages: -2 },
+  functions: { clamp: 3, freeze: 1, springBack: 3, createShake: -2, createEvents: 0, createAfterimages: -2 },
 };

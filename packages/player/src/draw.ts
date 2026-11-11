@@ -1415,8 +1415,7 @@ export class FrameBuilder {
       const alpha = Math.round(((tint & 255) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity))));
       tint = ((tint & 0xffffff00) | alpha) >>> 0;
     }
-    const squash = node.squash;
-    const at = squash === undefined || squash.resting ? world : { x: world.x, y: world.y, rotation: world.rotation, scaleX: world.scaleX * squash.x, scaleY: world.scaleY * squash.y };
+    const at = world;
     const sheet = node instanceof AnimatedSprite ? node.isSheet : node.frameWidth !== undefined || node.frameHeight !== undefined;
     const frame = node instanceof AnimatedSprite ? node.sheetFrame : node.frame;
     this.#region(node.image, sheet, node.frameWidth, node.frameHeight, frame, node.originX, node.originY, node.flipX, node.flipY, tint, at);

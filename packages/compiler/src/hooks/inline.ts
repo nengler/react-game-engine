@@ -52,6 +52,10 @@ import {
 import { AUTHORING_HOOKS } from "../analyzer/model.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { spanOf, type TsxParser } from "../parser/parser.ts";
+import { LIBRARY_FILE, LIBRARY_HOOKS, LIBRARY_SOURCE } from "./library.ts";
+
+/** Where components import built-in hooks from; the engine's own custom hooks (`useSquash`) are imported from there too. */
+const AUTHORING_MODULE = "@rge/runtime/jsx";
 
 export interface HookSource {
   readonly fileName: string;
@@ -212,6 +216,13 @@ function collectHooks(parser: TsxParser, sf: SourceFile, fileName: string, text:
   const hooks = new Map<string, Hook>();
   for (const statement of sf.statements) {
     if (isFunctionDeclaration(statement) && statement.name && isCustomName(statement.name.text, stores)) hooks.set(statement.name.text, { name: statement.name.text, fileName, text });
+    // The engine's own hooks, imported from the authoring module.
+    if (isImportDeclaration(statement) && isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === AUTHORING_MODULE) {
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings && isNamedImports(bindings)) {
+        for (const element of bindings.elements) if (LIBRARY_HOOKS.includes(element.name.text)) hooks.set(element.name.text, { name: element.name.text, fileName: LIBRARY_FILE, text: LIBRARY_SOURCE });
+      }
+    }
     if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || !/^\.\.?\/.*\.tsx$/.test(statement.moduleSpecifier.text)) continue;
     const bindings = statement.importClause?.namedBindings;
     if (!bindings || !isNamedImports(bindings)) continue;
@@ -237,10 +248,11 @@ function removeHookDeclarations(sf: SourceFile, text: string, stores: ReadonlySe
   for (const statement of sf.statements) {
     if (isFunctionDeclaration(statement) && statement.name && isCustomName(statement.name.text, stores)) {
       edits.push({ start: statement.getFullStart(), end: statement.getEnd(), text: "" });
-    } else if (isImportDeclaration(statement) && isStringLiteral(statement.moduleSpecifier) && /^\.\.?\/.*\.tsx$/.test(statement.moduleSpecifier.text)) {
+    } else if (isImportDeclaration(statement) && isStringLiteral(statement.moduleSpecifier) && (/^\.\.?\/.*\.tsx$/.test(statement.moduleSpecifier.text) || statement.moduleSpecifier.text === AUTHORING_MODULE)) {
+      const library = statement.moduleSpecifier.text === AUTHORING_MODULE;
       const bindings = statement.importClause?.namedBindings;
       if (!bindings || !isNamedImports(bindings)) continue;
-      const keep = bindings.elements.filter((e) => !isCustomName(e.name.text, stores));
+      const keep = bindings.elements.filter((e) => (library ? !LIBRARY_HOOKS.includes(e.name.text) : !isCustomName(e.name.text, stores)));
       if (keep.length === bindings.elements.length) continue;
       if (keep.length === 0 && !statement.importClause?.name) edits.push({ start: statement.getFullStart(), end: statement.getEnd(), text: "" });
       else edits.push({ start: bindings.getStart(sf), end: bindings.getEnd(), text: `{ ${keep.map((e) => e.name.text).join(", ")} }` });
@@ -296,7 +308,34 @@ function expandCall(parser: TsxParser, statement: Statement, call: HookCall, hoo
         }
       }
     }
-    const rename = (name: string): string => literals.get(name) ?? `${prefix}${name}`;
+    // A name the hook returns as it is (`return [squash, setSquash]`) takes the caller's name instead of a copy, so a hook can
+    // return a setter, as in React, and its value is the caller's own state.
+    const aliases = new Map<string, string>();
+    const returned = returnStatement !== null && isReturnStatement(returnStatement) ? returnStatement.expression : undefined;
+    if (returned !== undefined && call.binding.kind === "array" && isArrayLiteralExpression(returned)) {
+      const targets = (call.binding.node as unknown as { elements: readonly Node[] }).elements;
+      returned.elements.forEach((value, i) => {
+        const target = targets[i] as unknown as { name?: Node } | undefined;
+        if (target?.name !== undefined && isIdentifier(target.name) && isIdentifier(value) && declared.has(value.text) && !params.some((p) => isIdentifier(p.name) && p.name.text === value.text) && !aliases.has(value.text)) {
+          aliases.set(value.text, target.name.text);
+        }
+      });
+    } else if (returned !== undefined && call.binding.kind === "object" && isObjectLiteralExpression(returned)) {
+      const wanted = new Map<string, string>();
+      for (const element of (call.binding.node as unknown as { elements: readonly { name: Node; propertyName?: Node }[] }).elements) {
+        if (!isIdentifier(element.name)) continue;
+        wanted.set(element.propertyName !== undefined ? (element.propertyName as unknown as { text: string }).text : element.name.text, element.name.text);
+      }
+      for (const property of returned.properties) {
+        const key = isShorthandPropertyAssignment(property) || (isPropertyAssignment(property) && isIdentifier(property.name)) ? (property.name as unknown as { text: string }).text : null;
+        const value = isShorthandPropertyAssignment(property) ? property.name : isPropertyAssignment(property) ? property.initializer : null;
+        const target = key === null ? undefined : wanted.get(key);
+        if (target !== undefined && value !== null && isIdentifier(value) && declared.has(value.text) && !params.some((p) => isIdentifier(p.name) && p.name.text === value.text) && !aliases.has(value.text)) {
+          aliases.set(value.text, target);
+        }
+      }
+    }
+    const rename = (name: string): string => aliases.get(name) ?? literals.get(name) ?? `${prefix}${name}`;
 
     const args = call.call.arguments;
     if (args.length > params.length) {
@@ -341,6 +380,7 @@ function expandCall(parser: TsxParser, statement: Statement, call: HookCall, hoo
         for (const element of (call.binding.node as unknown as { elements: readonly { name: Node; propertyName?: Node; initializer?: Node }[] }).elements) {
           const key = element.propertyName !== undefined ? (element.propertyName as unknown as { text: string }).text : (element.name as unknown as { text: string }).text;
           const value = values.get(key);
+          if (value === (element.name as unknown as { text: string }).text) continue; // the hook's own name, renamed to this one
           if (value === undefined) {
             diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}' does not return '${key}'.`, at));
             return null;
@@ -357,6 +397,7 @@ function expandCall(parser: TsxParser, statement: Statement, call: HookCall, hoo
           const target = elements[i] as unknown as { name?: { text: string } };
           const value = expr.elements[i];
           if (target.name === undefined || value === undefined) continue;
+          if (isIdentifier(value) && aliases.get(value.text) === target.name.text) continue; // renamed in place
           lines.push(`${call.binding.keyword} ${target.name.text} = ${renameIn(value, sf, hook.text, declared, rename)};`);
         }
       }

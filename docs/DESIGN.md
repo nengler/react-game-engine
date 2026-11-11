@@ -1321,25 +1321,28 @@ step: (input, dt) => {
   a `.ts` file are not checked at build time (only literals in components are).
 - **`createShake({ strength, duration })`** → `Shake`: `start(strength?, duration?)`. `<Camera shake={shake}>` starts a shake
   each time it is started (a number still works as before: the view shakes when it changes).
-- **`createSquash({ recover })`** → `Squash`: `start(x, y)` throws a sprite's scale to (x, y), and it springs back to 1 at
-  `recover` a second (Celeste's 1.75). `<Sprite squash={squash}>` and `<AnimatedSprite squash={squash}>` draw it about the
-  sprite's origin, on top of the transform's scale (the hitbox is not scaled). The sprite that has it while mounted advances
-  it in `onUpdate`, so it follows the fixed timestep and freezes with the world, and marks itself changed while it moves.
-  `Sprite` and `AnimatedSprite` now implement `onMount`, `onUnmount` and `onUpdate` (the manifest's `intrinsicHooks`); the
-  frame builder compares a hand-written subclass's hooks with its built-in's, so that does not make every sprite volatile.
+- **Squash and stretch is state: `const [squash, setSquash] = useSquash(1.75)`** (decided 2026-11-11, replacing a
+  `createSquash()` object with a `start` method, which was the imperative shape). `setSquash({ scaleX: 0.6, scaleY: 1.4 })` in a
+  handler, and `transform={{ scaleX: squash.scaleX, scaleY: squash.scaleY }}` on the sprite, which scales about its origin. It
+  springs back to 1 at `recover` a second in the component's own `useUpdate` (`springBack`, a runtime function that returns
+  the same object at rest, so the state stops changing). `useSquash` is an **engine-shipped custom hook**: ordinary source
+  (`useState` + `useUpdate`, in `compiler/src/hooks/library.ts`), inlined like any custom hook when a component imports it
+  from `@rge/runtime/jsx`, where it is declared for TypeScript.
 - **Per-instance effects.** A store in a module is global; what belongs to one entity is that component's own, made with
-  React's lazy initializer: `const [squash] = useState(() => createSquash())`. The arrow's body is the initial value (the
-  generated field is evaluated once per instance anyway), typed `ReturnType<typeof createSquash>`, and a handler may call its
-  methods (`squash.start(0.6, 1.4)`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function
-  from the manifest, or a function from a `.ts` file), so arrays and records keep their messages. The manifest's
-  `functions` table now includes `createSquash`, `createShake` and `createEvents` (`-2`: any number of arguments).
+  React's lazy initializer: `const [trail] = useState(() => createAfterimages())`. The arrow's body is the initial value (the
+  generated field is evaluated once per instance anyway), typed `ReturnType<typeof createAfterimages>`, and a handler may call
+  its methods (`trail.capture()`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function from
+  the manifest, or a function from a `.ts` file), so arrays and records keep their messages. This is for objects that are
+  not values (a set of afterimages, a camera's shake); a value that changes over time is state (`useSquash`). The manifest's
+  `functions` table includes `createShake`, `createEvents`, `createAfterimages` (`-2`: any number of arguments) and
+  `springBack`.
 - **`createEvents<T>()`** → `EventChannel<T>`: `emit(event)`, `subscribe(listener)`. **`<EventListener events={channel}
   onEvent={(e) => …} />`** listens while it is in the world, so a component answers events with its own state in an ordinary
   handler; the parameter's type comes from the channel (the manifest marks the callback parameter `"*"`, lowered as
   contextual). Kite's game state emits each step's events on `gameEvents`, and the character squashes itself from them.
 - **`createAfterimages({ lifetime, color, max })`** → `Afterimages`: copies of one sprite, left where it was and fading
   (a dash, a burst of speed, a teleport). Per instance, like a squash: the sprite takes it (`afterimages={trail}`, so it can
-  be copied: its frame, flips, origin, world transform and squash), and **`<AfterimageLayer afterimages={trail} emitting
+  be copied: its frame, flips, origin and world transform, scale included), and **`<AfterimageLayer afterimages={trail} emitting
   interval>`** draws the copies in the world, taking one when `emitting` turns on and every `interval` after; `capture()` takes
   one from a handler. The layer ages them in `onUpdate` and draws each as a sprite-region record tinted with the colour, its
   alpha falling to 0 over `lifetime`. Put the layer next to a camera, not in it.
@@ -1366,7 +1369,7 @@ export function Player() { usePlatformerBody(); … }
 
 - **Names.** What the hook declares at its top level (its `const`s, its `[x, setX]` state, its parameters) is given a prefix unique to the call, `_useName3_x`, so two calls make two separate states and nothing clashes with the component's own names. Properties, keys and JSX attribute names are left alone; `{ x }` becomes `{ x: _useName3_x }`.
 - **Parameters.** A literal argument (a string, number or boolean) is written into the hook where the parameter is used, so a parameter can be a `useSound` path; any other argument is bound with `const _useName3_p = (argument);`. A missing argument takes the parameter's default. A destructured parameter is a diagnostic.
-- **Results.** `const v = useX()`, `const { a, b } = useX()` (the hook returns an object literal) and `const [a, b] = useX()` (an array literal) become `const` declarations of the returned expressions. A hook can return only values: state-derived expressions, not refs (they are not readable outside handlers) and not setters.
+- **Results.** `const v = useX()`, `const { a, b } = useX()` (the hook returns an object literal) and `const [a, b] = useX()` (an array literal) become `const` declarations of the returned expressions. A name the hook declares and returns as it is (`return [count, setCount]`, `return { on, toggle: setOn }`) is not copied: the hook's own declaration takes the caller's name, so a hook can return a setter, as in React (decided 2026-11-11). Anything else returned is a value (a state-derived expression); refs cannot be returned (they are not readable outside handlers).
 - **Where.** In the component's file, or imported from a relative `.tsx` (`import { useClock } from "./hooks.tsx"`, read by the CLI; the hook's imports from the authoring module are added to the file that uses it). Hooks may call hooks, to a depth of six, which also stops recursion. A call anywhere but as a statement of the component body (in a condition, a callback, an expression) is `RGE1101` with the hook's name.
 - **What is left.** After expansion the hook's declaration and its import are removed, so a hooks-only file compiles to an empty module. Positions in later diagnostics are those of the expanded text. An unknown `use…` name is left alone, so the retired hooks keep their messages.
 

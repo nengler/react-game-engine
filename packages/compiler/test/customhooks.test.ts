@@ -89,6 +89,37 @@ describe("custom hooks", () => {
     assert.deepEqual([c.transform.x, c.transform.y], [4, 10], "the first counter steps by its default of 2, the second by 5");
   });
 
+  it("return their own state and setter, as React's do: the caller's names are the hook's state, one per call", async () => {
+    const compiled = compile(`
+function useCounter(start: number) {
+  const [count, setCount] = useState(start);
+  return [count, setCount];
+}
+function useNamed() {
+  const [on, setOn] = useState(false);
+  return { on, toggle: setOn };
+}
+function Two() {
+  const [a, setA] = useCounter(1);
+  const [b, setB] = useCounter(10);
+  const { on, toggle } = useNamed();
+  useUpdate(() => {
+    setA((n) => n + 1);
+    setB(b + 5);
+    toggle(!on);
+  });
+  return <Entity name="Two" transform={{ x: a, y: b }} />;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Two } = await load<{ Two: new () => Entity & { a: number; b: number; on: boolean } }>(compiled);
+    const world = new World();
+    const two = new Two();
+    world.mount(two);
+    world.tick(0.1);
+    assert.deepEqual([two.a, two.b, two.on], [2, 15, true]);
+    assert.deepEqual([two.transform.x, two.transform.y], [2, 15]);
+  });
+
   it("write a literal argument into the hook, so a parameter can be a sound's path", () => {
     const compiled = compile(
       `function useBeep(path: string, volume: number, count: number) {

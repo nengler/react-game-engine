@@ -38,26 +38,23 @@ export {
   createParticles,
   createShake,
   createSounds,
-  createSquash,
   Afterimages,
   EventChannel,
   ParticleStore,
   Shake,
   SoundStore,
-  Squash,
   type AfterimageSnapshot,
   type AfterimageSource,
   type BurstOptions,
   type ParticlePreset,
   type ParticleRenderer,
   type SoundEntry,
-  type SquashOwner,
 } from "./effects.ts";
 export { Fade, type FadeProps } from "./components/Fade.ts";
 export { Route, Router, type RouteProps, type RouterProps, type Transition, type TransitionFrame } from "./components/Router.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { actionAware, Controls, createControls, createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
-export { clamp } from "./math.ts";
+export { clamp, springBack, type Scale2 } from "./math.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
