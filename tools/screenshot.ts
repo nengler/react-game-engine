@@ -6,7 +6,7 @@
  *   npm run screenshot -- packages/demo --script "right*30" --at 0,15,29 --out /tmp/shots
  *
  * The game folder holds `game.ts`, which exports `gameConfig` (what `run` takes) and may export `bindings` (the action names a
- * script may use, `jump`, `right`; see `parseInputScript`). The script is run with the folder as the working directory, so
+ * script may use, `jump`, `right`; see `parseInputScript`) and `screen` (how the canvas sits in the window, for `click@x,y`). The script is run with the folder as the working directory, so
  * the game's `assets/` resolve as when it is played.
  *
  * Options:
@@ -21,7 +21,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseInputScript, type InputBindings, type PlayerConfig } from "@rge/player";
+import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@rge/player";
 import { contactSheet, encodePng, renderRun, type Pixels } from "@rge/player-node";
 
 const usage = 'usage: npm run screenshot -- <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N]';
@@ -60,10 +60,10 @@ async function main(argv: readonly string[]): Promise<number> {
     return 2;
   }
   const gameDir = resolve(folder);
-  const mod = (await import(pathToFileURL(join(gameDir, "game.ts")).href)) as { gameConfig: PlayerConfig; bindings?: InputBindings };
+  const mod = (await import(pathToFileURL(join(gameDir, "game.ts")).href)) as { gameConfig: PlayerConfig; bindings?: InputBindings; screen?: ScriptOptions["screen"] };
   process.chdir(gameDir);
   const script = flags.get("script-file") !== undefined ? readFileSync(flags.get("script-file") as string, "utf8") : (flags.get("script") ?? "_");
-  const frames = parseInputScript(script, { bindings: mod.bindings });
+  const frames = parseInputScript(script, { bindings: mod.bindings, screen: mod.screen });
   let at: number[] | undefined;
   if (flags.has("at")) at = (flags.get("at") as string).split(",").map(Number);
   else if (flags.has("every")) {

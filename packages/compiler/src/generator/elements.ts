@@ -202,6 +202,7 @@ export class ElementEmitter extends HandlerEmitter {
     while (base.kind === "Call" && base.callee.kind === "ArrayMethod") base = base.callee.receiver;
     if (base.kind === "StateRead") return `${this.c.name}[${JSON.stringify(this.state(base.state).name)}][number]`;
     if (base.kind === "PropRead" && this.c.propsType) return `NonNullable<${this.c.propsType}[${JSON.stringify(base.name)}]>[number]`;
+    if (base.kind === "PlainRef") return `(typeof ${base.name})[number]`;
     throw new Error(`Unexpected list source in component ${this.c.name}`);
   }
 
