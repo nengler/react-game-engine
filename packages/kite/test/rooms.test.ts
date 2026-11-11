@@ -140,7 +140,8 @@ describe("the dash moves have room to spare", () => {
     for (const walk of [70, 80, 90]) {
       let window = 0;
       for (let dash = 0; dash <= 30; dash++) if (attempt(3, walk, dash, { up: true }, (p) => p.run.player.onGround && p.run.player.y < 105 && p.run.player.x > 185)) window++;
-      assert.ok(window >= 10, `walking ${walk} frames: ${window} frames of dash timing work`);
+      // With Celeste's dash (straight up cancels the run), jumping from the far left (70) leaves 7 frames; from 80 and 90, 16 and 17.
+      assert.ok(window >= 7, `walking ${walk} frames: ${window} frames of dash timing work`);
     }
   });
 

@@ -7,11 +7,15 @@ music and name are original and made for this repository (see `assets/README.md`
 
 ## Mechanics
 
-Controls: arrows, WASD, the d-pad or the left stick move; Z, C, Space or `A` jump; X, Shift, `B`, `X` or the right bumper dash.
-Held jump goes higher (a tap is about a third of it). Coyote time and a jump buffer forgive small mistakes. One dash, refilled on
-the ground; the character turns blue-grey while it is spent. A wall within 3 px lets you slide (holding toward it) or jump off
-it. Touching spikes or falling out of the room is a death: the world freezes for a moment, the screen shakes and dims, and the
-character is back at the room's start 0.45 s later. Leaving a room by its exit moves to the next, with a 0.4 s camera slide.
+Controls: arrows, WASD, the d-pad or the left stick move; Z, Space or `A` jump; X, `X` or `B` dash; C, Shift, V or a bumper grab.
+**The character moves the way Celeste's does** (an experiment, 2026-11-11): its numbers and its rules are those of Celeste's
+`Player.cs`. Held jump goes higher; coyote time (0.1 s) and an input buffer (0.08 s) forgive small mistakes. One dash in eight
+directions, refilled on the ground; the character turns blue-grey while it is spent. Wall slides start slow and speed up;
+wall jumps push away for a moment. Grab holds onto a wall to climb it, on 110 stamina (about 2.4 s climbing up). And the
+tech: super jumps (jump during a dash along the ground), hypers and wavedashes (a dash down at an angle into the ground, then
+jump), wall bounces (jump off a wall during a dash straight up), corner corrections for jumps and dashes. Touching spikes or
+falling out of the room is a death: the world freezes for a moment, the screen shakes and dims, and the character is back at
+the room's start 0.45 s later. Leaving a room by its exit moves to the next, with a 0.4 s camera slide.
 
 ## How it is built
 
@@ -56,25 +60,26 @@ out of the pit (a finding: one wall is a ladder).
 
 ## The movement constants (`src/rules/constants.ts`)
 
-All set from the genre's usual ranges, **none felt yet**. What the tests check is in the third column; the rest are guesses.
+Celeste's values, by Celeste's names where it has one (see the file; `test/movement.test.ts` checks each behaviour).
+Kite's tiles are 10 px and Celeste's 8, so the same jump is about 2.8 Kite tiles where it is 3.5 of Celeste's. **None felt
+yet** in this engine.
 
-| Constant | Value | Checked by a test | Try first when playing |
-| --- | --- | --- | --- |
-| run speed / accel / friction | 90 px/s, 1000, 1000 | reaches 90, stops | how quickly it stops (friction); air control 0.65 |
-| gravity / max fall / fast fall | 900, 160, 240 | jump heights follow | max fall; whether fast fall is wanted |
-| jump speed / hold time | 105, 0.2 s | held jump 27–30 px, tap 6–14 px | hold time (jump height) |
-| jump boost | +40 px/s toward the held direction | running jump 58–66 px | none first |
-| coyote / buffer | 0.1 s, 0.1 s | both windows, in and out | both, a little longer if it feels strict |
-| dash speed / time / end speed | 240, 0.15 s, 160 | ≈ 5 tiles; 8 directions equal | dash time; end speed |
-| dash count / cooldown | 1, 0.2 s | refill on landing, none in the air | cooldown |
-| dash freeze | 3 steps (50 ms) | replays play through it | 2 to 4 steps |
-| wall slide / reach / jump / lock | 40 px/s, 3 px, 130 px/s, 0.16 s | slide speed, jump direction and lock | slide speed; lock |
-| corner forgiveness | 3 px | a clipped ceiling corner does not stop a jump | none first |
-| respawn delay / transition | 0.45 s, 0.4 s | – | respawn delay |
+| Group | Values | Checked by a test |
+| --- | --- | --- |
+| run | 90 px/s, accel 1000, reduce 400, air × 0.65, duck friction 500 | reaches 90, stops |
+| fall | gravity 900 (half below 40 px/s with jump held), max 160, fast fall to 240 at 300/s² | jump heights; fast fall ramps |
+| jump | 105 px/s held 0.2 s, +40 toward the held direction, coyote 0.1 s, buffer 0.08 s, corner correction 4 px | held 26–30 px; windows |
+| super jumps | super 260 px/s; hyper × 1.25 across, × 0.5 up; wall bounce 170 across, 160 up | each, from its inputs |
+| dash | 240 px/s for 0.15 s, a step to read the direction, ends at 160 (× 0.75 up; down keeps 240), cooldown 0.2 s, refill after 0.1 s, freeze 3 steps | 8 ways equal; ends; refill |
+| walls | jump check 3 px, push 130 px/s held away 0.16 s, slide from 20 px/s to 160 over 1.2 s, speed kept 0.06 s | slide, jump, reach |
+| climb | stamina 110: up 45 px/s at 45/s, still 10/s, climb jump 27.5; down 80, slip 30, hop 120 up and 100 over | climb, let go, hop, climb jump |
 
 The geometry the rooms need from them: a four-tile gap has a margin of at least 40 % of a running jump; an eight-tile gap
-(room 3) is more than a jump (64 px) and less than a jump plus a dash (85 px, 11 px of margin); a ledge six tiles up needs the
-dash. If any constant changes, `npm run kite:solve` and the tests say which room it breaks.
+(room 3) is more than a jump (64 px) and less than a jump plus a dash; a ledge six tiles up needs the dash. With Celeste's
+moves the rooms are easier than they were designed to be: a super jump crosses room 3's gap, grabbing climbs walls, and the
+solver (which never grabs) finds every room in seconds where room 6 used to need millions of states. The rooms were made for
+the simpler body and have not been redesigned for this one. If any constant changes, `npm run kite:solve` and the tests say
+which room it breaks.
 
 ## Known limits
 

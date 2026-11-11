@@ -17,4 +17,5 @@ export const bindings: InputBindings = {
   down: ["ArrowDown"],
   jump: ["Z"],
   dash: ["X"],
+  grab: ["C"],
 };

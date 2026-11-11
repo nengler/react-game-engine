@@ -1,4 +1,4 @@
-import { newBody, stepBody, type Body, type Controls } from "./body.ts";
+import { heightOf, newBody, stepBody, type Body, type Controls } from "./body.ts";
 import { BODY_H, BODY_W, ENTRY_LIFT, RESPAWN_DELAY, ROOM_H, ROOM_W, TILE, TRANSITION_TIME, VOID_MARGIN } from "./constants.ts";
 import type { GameEvent } from "./events.ts";
 import { gridOf, hazardRect, overlapsRect, ROOM_LIST, type Room, type RoomGrid } from "./rooms.ts";
@@ -41,27 +41,27 @@ export function newRun(): Run {
 }
 
 /** Which of a room's tiles the hitbox at (x, y) touches, as the characters found. */
-function touching(room: Room, x: number, y: number, want: (ch: string, col: number, row: number) => boolean): boolean {
+function touching(room: Room, x: number, y: number, h: number, want: (ch: string, col: number, row: number) => boolean): boolean {
   const grid = gridFor(room);
   const c0 = Math.floor(x / TILE);
   const c1 = Math.floor((x + BODY_W - 1) / TILE);
   const r0 = Math.floor(y / TILE);
-  const r1 = Math.floor((y + BODY_H - 1) / TILE);
+  const r1 = Math.floor((y + h - 1) / TILE);
   for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (want(grid.tile(c, r), c, r)) return true;
   return false;
 }
 
 /** Is the body on spikes? */
 export function onSpikes(room: Room, b: Body): boolean {
-  return touching(room, b.x, b.y, (ch, c, r) => {
+  return touching(room, b.x, b.y, heightOf(b), (ch, c, r) => {
     const rect = hazardRect(ch, c, r);
-    return rect !== null && overlapsRect(b.x, b.y, rect);
+    return rect !== null && overlapsRect(b.x, b.y, rect, heightOf(b));
   });
 }
 
 /** Is the body in the room's exit? */
 export function inExit(room: Room, b: Body): boolean {
-  return touching(room, b.x, b.y, (ch) => ch === "E");
+  return touching(room, b.x, b.y, heightOf(b), (ch) => ch === "E");
 }
 
 /** Out of the room by more than the margin, below it or past its sides (above it is fine: that is how a room is left). */

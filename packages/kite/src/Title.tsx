@@ -1,5 +1,4 @@
 import { useInput, useState, useUpdate, Flex, Hud } from "@rge/runtime/jsx";
-import { sfx } from "./effects.ts";
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
 
@@ -14,7 +13,6 @@ export function Title() {
 
   useInput((input) => {
     if (input.pressed("confirm")) {
-      sfx.play("start");
       begin();
     }
   });
@@ -24,7 +22,7 @@ export function Title() {
       <Flex direction="column" alignItems="center" justifyContent="center" width="grow" height="grow" gap={12}>
         <Label text="KITE" size={40} color="#ffb15e" />
         <Label text="THE FOOTHILLS" color="#8e9ac2" />
-        <Label text="ARROWS MOVE   Z JUMP   X DASH" />
+        <Label text="ARROWS MOVE  Z JUMP  X DASH  C GRAB" />
         {/* The prompt blinks by changing colour, not by leaving, so the column does not move. */}
         <Label text="PRESS Z TO START" color={clock % 1 < 0.66 ? "#7de3ff" : "#12151f"} />
       </Flex>

@@ -141,9 +141,9 @@ export function hazardRect(ch: string, col: number, row: number): { x: number; y
   }
 }
 
-/** Does the hitbox at (x, y) overlap a rectangle? */
-export function overlapsRect(x: number, y: number, rect: { x: number; y: number; w: number; h: number }): boolean {
-  return x < rect.x + rect.w && x + BODY_W > rect.x && y < rect.y + rect.h && y + BODY_H > rect.y;
+/** Does a hitbox `h` tall (standing, by default) at (x, y) overlap a rectangle? */
+export function overlapsRect(x: number, y: number, rect: { x: number; y: number; w: number; h: number }, h: number = BODY_H): boolean {
+  return x < rect.x + rect.w && x + BODY_W > rect.x && y < rect.y + rect.h && y + h > rect.y;
 }
 
 /** Every tile in the room with the given character, as `[col, row]`. */

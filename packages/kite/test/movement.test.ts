@@ -4,7 +4,8 @@ import { newBody, NO_CONTROLS, stepBody, type Body, type Controls, type SolidAt 
 import type { GameEvent } from "../src/rules/events.ts";
 import { createInputState } from "@rge/runtime";
 import { controls, readControls } from "../src/rules/controls.ts";
-import { BODY_H, COYOTE, DASH_SPEED, JUMP_BUFFER, TILE, WALL_SLIDE_SPEED } from "../src/rules/constants.ts";
+import * as K from "../src/rules/constants.ts";
+import { BODY_H, COYOTE, DASH_SPEED, JUMP_BUFFER, TILE } from "../src/rules/constants.ts";
 
 const DT = 1 / 60;
 const FLOOR = 100;
@@ -58,7 +59,7 @@ describe("jumping", () => {
   it("rises about two and three quarter tiles when the button is held, and about one when tapped", () => {
     const held = rise(play((i) => ({ jumpPressed: i === 1, jumpHeld: i >= 1 }), 80));
     const tapped = rise(play((i) => ({ jumpPressed: i === 1, jumpHeld: i >= 1 && i < 4 }), 80));
-    assert.ok(held >= 27 && held <= 30, `held jump rises ${held}`);
+    assert.ok(held >= 26 && held <= 30, `held jump rises ${held}`);
     assert.ok(tapped >= 6 && tapped <= 14, `tapped jump rises ${tapped}`);
     assert.ok(held > 2 * TILE, "clears a two-tile ledge");
     assert.ok(held < 3 * TILE, "but not a three-tile one: ledges of three tiles are the dash's job");
@@ -156,7 +157,8 @@ describe("the dash", () => {
   });
 
   it("with a jump first, reaches what neither can alone: a ledge over six tiles up, and a gap of eight", () => {
-    const up = play((i) => ({ jumpPressed: i === 1, jumpHeld: i >= 1 && i < 20, up: i === 18, dashPressed: i === 18 }), 90);
+    // The dash reads its direction on the step after the press (after the freeze, in the game), so up is still held then.
+    const up = play((i) => ({ jumpPressed: i === 1, jumpHeld: i >= 1 && i < 20, up: i >= 18 && i < 22, dashPressed: i === 18 }), 90);
     assert.ok(rise(up) >= 65, `a jump then a dash up rises ${rise(up)}`);
     const across = play((i) => ({ right: true, jumpPressed: i === 1, jumpHeld: i >= 1 && i < 14, dashPressed: i === 14 }), 120);
     const down = landing(across, 3);
@@ -172,29 +174,126 @@ describe("the dash", () => {
 describe("walls", () => {
   const WALL_X = 140;
   const wall: SolidAt = (x, y) => y >= FLOOR || x >= WALL_X;
-  const atWall = { x: WALL_X - 8 - 1, y: 40 };
+  const atWall = { x: WALL_X - 8, y: 20 };
 
-  it("slides down slowly while held toward it, and falls freely otherwise", () => {
-    const sliding = play(() => ({ right: true }), 40, { ...atWall, vy: 100 }, wall);
-    assert.equal(sliding.at(-1)?.vy, WALL_SLIDE_SPEED);
-    assert.ok(sliding.at(-1)?.sliding);
+  it("slides slowly at first while held toward it, faster the longer it lasts, and falls freely otherwise", () => {
+    const sliding = play(() => ({ right: true }), 70, { ...atWall, vy: 100 }, (x) => x >= WALL_X);
+    assert.ok(sliding[10]!.sliding);
+    assert.ok(sliding[8]!.vy <= 40, `slow at the start: ${sliding[8]!.vy}`);
+    assert.ok(sliding[69]!.vy > sliding[12]!.vy + 20, `faster after a second: ${sliding[69]!.vy}`);
     const falling = play(() => ({}), 40, { ...atWall, vy: 100 }, (x) => x >= WALL_X);
-    assert.ok((falling.at(-1)?.vy ?? 0) > WALL_SLIDE_SPEED);
+    assert.equal(falling.at(-1)?.vy, K.MAX_FALL);
   });
 
-  it("jumps away from the wall, with the speed away from it, and ignores steering back into it for a moment", () => {
+  it("jumps away from the wall, holding the direction away for a moment whatever is held", () => {
     const bodies = play((i) => ({ right: true, jumpPressed: i === 2, jumpHeld: i >= 2 }), 20, { ...atWall, vy: 20 }, wall);
     assert.equal(happened(bodies, "wallJump", 2), 1);
-    assert.ok((bodies[2]?.vx ?? 0) < 0 && (bodies[2]?.vy ?? 0) < 0);
-    assert.ok((bodies[6]?.x ?? 999) < atWall.x, "still moving away while the player holds toward the wall");
+    assert.equal(bodies[2]?.vx, -K.WALL_JUMP_H_SPEED);
+    assert.ok((bodies[8]?.x ?? 999) < atWall.x - 8, "still moving away while the player holds toward the wall");
     assert.equal(bodies[6]?.facing, -1);
   });
 
-  it("jumps off a wall just after leaving it (within reach), not from far away", () => {
-    const far = play((i) => ({ jumpPressed: i === 2 }), 6, { x: WALL_X - 8 - 6, y: 40, vy: 20 }, wall);
+  it("jumps off a wall up to three pixels away, not from further", () => {
+    const far = play((i) => ({ jumpPressed: i === 2 }), 6, { x: WALL_X - 8 - 5, y: 20, vy: 20 }, wall);
     assert.equal(happened(far, "wallJump"), 0);
-    const near = play((i) => ({ jumpPressed: i === 2 }), 6, { x: WALL_X - 8 - 2, y: 40, vy: 20 }, wall);
+    const near = play((i) => ({ jumpPressed: i === 2 }), 6, { x: WALL_X - 8 - 2, y: 20, vy: 20 }, wall);
     assert.equal(happened(near, "wallJump"), 1);
+  });
+
+  it("bounces high off a wall when jumping during a dash straight up beside it (a wall bounce)", () => {
+    const bodies = play((i) => ({ up: i >= 1, dashPressed: i === 1, jumpPressed: i === 5, jumpHeld: i >= 5 }), 8, { ...atWall, x: WALL_X - 8 - 1, y: 60 }, wall);
+    const bounce = bodies.findIndex((_, i) => bodies.events[i]!.some((e) => e.type === "wallJump"));
+    assert.ok(bounce > 0);
+    assert.equal(bodies[bounce]?.vx, -K.SUPER_WALL_JUMP_H);
+    assert.equal(bodies[bounce]?.vy, -K.SUPER_WALL_JUMP_SPEED);
+  });
+});
+
+describe("climbing", () => {
+  const WALL_X = 140;
+  const tall: SolidAt = (x, y) => y >= FLOOR || x >= WALL_X;
+  const beside = { x: WALL_X - 8, y: 40, facing: 1 };
+
+  it("holds onto a wall with grab, climbs at the climb speed, and runs out of stamina in about two and a half seconds", () => {
+    const bodies = play(() => ({ grab: true, up: true }), 200, { ...beside, y: 60 }, (x) => x >= WALL_X);
+    assert.ok(bodies[2]!.climbing);
+    assert.ok(Math.abs((bodies[30]?.vy ?? 0) + K.CLIMB_UP_SPEED) < 1, `climbs up at ${bodies[30]?.vy}`);
+    const letGo = bodies.findIndex((b) => !b.climbing);
+    assert.ok(letGo > 130 && letGo < 160, `let go after ${letGo} steps`);
+    assert.ok(bodies[letGo - 1]!.stamina < 1);
+  });
+
+  it("slides down holding down, stays still holding nothing, and lets go when grab is released", () => {
+    const down = play((i) => ({ grab: true, down: i > 10 }), 40, beside, tall);
+    assert.ok((down[39]?.y ?? 0) > beside.y + 10);
+    const still = play(() => ({ grab: true }), 40, beside, tall);
+    assert.equal(still[39]?.y, beside.y);
+    const released = play((i) => ({ grab: i < 10 }), 20, beside, tall);
+    assert.ok(released[9]!.climbing && !released[11]!.climbing);
+  });
+
+  it("hops up and over the top of a wall", () => {
+    const top = 50;
+    const ledge: SolidAt = (x, y) => y >= FLOOR || (x >= WALL_X && y >= top);
+    const bodies = play((i) => ({ grab: true, up: true, right: i > 30 }), 90, { ...beside, y: top + 10 }, ledge);
+    assert.ok(bodies.some((b) => b.onGround && b.x >= WALL_X && b.y + BODY_H === top), "standing on the top");
+  });
+
+  it("jumps up the wall from a hold, spending stamina; pushing away straight after makes it a wall jump", () => {
+    const up = play((i) => ({ grab: true, jumpPressed: i === 5, jumpHeld: i >= 5 }), 8, beside, tall);
+    assert.equal(happened(up, "jump"), 1);
+    assert.ok(up[5]!.stamina < K.CLIMB_MAX_STAMINA - K.CLIMB_JUMP_COST + 1);
+    const away = play((i) => ({ grab: i < 5, jumpPressed: i === 5, jumpHeld: i >= 5, left: i === 7 }), 9, beside, tall);
+    assert.ok((away[7]?.vx ?? 0) < -K.RUN_SPEED - 30, `pushed away at wall-jump speed (less a step of air drag): ${away[7]?.vx}`);
+    assert.ok(away[7]!.stamina > away[5]!.stamina, "the stamina comes back");
+  });
+});
+
+describe("Celeste's tech", () => {
+  it("super jumps: a jump during a dash along the ground goes far and low", () => {
+    const bodies = play((i) => ({ right: i >= 1, dashPressed: i === 1, jumpPressed: i === 4, jumpHeld: i >= 4 && i < 6 }), 6);
+    assert.equal(bodies[4]?.vx, K.SUPER_JUMP_H);
+    assert.equal(bodies[4]?.vy, -K.JUMP_SPEED);
+  });
+
+  it("hypers: a jump while sliding from a dash down at an angle on the ground is longer and flatter", () => {
+    const bodies = play((i) => ({ right: i >= 1, down: i >= 1 && i < 4, dashPressed: i === 1, jumpPressed: i === 4, jumpHeld: i >= 4 && i < 6 }), 6);
+    assert.ok(bodies[2]!.ducking, "the dash became a slide");
+    assert.equal(bodies[4]?.vx, K.SUPER_JUMP_H * K.DUCK_SUPER_JUMP_X_MULT);
+    assert.equal(bodies[4]?.vy, -K.JUMP_SPEED * K.DUCK_SUPER_JUMP_Y_MULT);
+    assert.ok(!bodies[4]!.ducking);
+  });
+
+  it("wavedashes: a dash down at an angle from just above the ground lands as a slide, and a jump from it is a hyper", () => {
+    let jumped = -1;
+    const bodies = play((i, b) => {
+      if (jumped < 0 && b.onGround && b.dashing && i > 3) jumped = i;
+      return { right: true, down: i < 8, dashPressed: i === 2, jumpPressed: i === jumped, jumpHeld: i === jumped };
+    }, 30, { y: STAND_Y - 6, vy: 0 });
+    const hyper = bodies.findIndex((b) => b.vx > K.SUPER_JUMP_H);
+    assert.ok(hyper > 0, "a jump out of the landing went faster than a super jump");
+  });
+
+  it("keeps a downward dash's speed when it ends, and floats after any dash as if jump were held", () => {
+    const down = play((i) => ({ down: true, dashPressed: i === 1 }), 14, { y: 0 }, () => false);
+    const over = down.findIndex((b, i) => i > 2 && !b.dashing);
+    assert.equal(down[over]?.vy, K.DASH_SPEED, "a dash down is not slowed when it ends");
+    const up = play((i) => ({ up: true, dashPressed: i === 1 }), 14, { y: 50 }, () => false);
+    const ended = up.findIndex((b, i) => i > 2 && !b.dashing);
+    assert.ok(up[ended]!.autoJump);
+    assert.equal(up[ended]?.vy, -K.END_DASH_SPEED * K.END_DASH_UP_MULT);
+  });
+
+  it("raises the fall cap gradually while holding down", () => {
+    const bodies = play(() => ({ down: true }), 60, { y: 0, vy: K.MAX_FALL }, () => false);
+    assert.ok(bodies[5]!.vy < K.FAST_MAX_FALL && bodies[5]!.vy > K.MAX_FALL);
+    assert.equal(bodies[59]?.vy, K.FAST_MAX_FALL);
+  });
+
+  it("slides a horizontal dash past a corner it clips by a few pixels", () => {
+    const lip: SolidAt = (x, y) => y >= FLOOR || (x >= 140 && y >= 40 && y < 43);
+    const bodies = play((i) => ({ right: true, dashPressed: i === 1 }), 12, { x: 120, y: 40 - 11 + 2 }, lip);
+    assert.ok((bodies.at(-1)?.x ?? 0) > 140, "went past the lip instead of stopping");
   });
 });
 
@@ -207,7 +306,8 @@ describe("controls", () => {
     assert.deepEqual(readControls(input(["D", "S"])), { ...NO_CONTROLS, right: true, down: true });
     assert.deepEqual(readControls(input(["PadA"], ["PadA"])), { ...NO_CONTROLS, jumpHeld: true, jumpPressed: true });
     assert.deepEqual(readControls(input(["Space"])), { ...NO_CONTROLS, jumpHeld: true }, "held, not pressed");
-    for (const key of ["X", "Shift", "PadX", "PadB", "PadRB"]) assert.equal(readControls(input([key], [key])).dashPressed, true, key);
+    for (const key of ["X", "PadX", "PadB"]) assert.equal(readControls(input([key], [key])).dashPressed, true, key);
+    for (const key of ["C", "Shift", "PadRB"]) assert.equal(readControls(input([key])).grab, true, key);
     assert.equal(readControls(input(["X"])).dashPressed, false, "a dash is a press");
   });
 });

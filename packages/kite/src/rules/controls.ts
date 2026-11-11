@@ -10,8 +10,10 @@ export const controls = createControls({
   right: ["ArrowRight", "D", "PadRight"],
   up: ["ArrowUp", "W", "PadUp"],
   down: ["ArrowDown", "S", "PadDown"],
-  jump: ["Z", "C", "Space", "PadA"],
-  dash: ["X", "Shift", "PadX", "PadB", "PadRB"],
+  jump: ["Z", "Space", "PadA"],
+  dash: ["X", "PadX", "PadB"],
+  /** Held to hold onto a wall and climb it. */
+  grab: ["C", "Shift", "V", "PadRB", "PadLB", "PadY"],
   /** Start, and back to the title. */
   confirm: ["Enter", "Z", "C", "Space", "PadA", "PadStart"],
 });
@@ -26,5 +28,6 @@ export function readControls(input: InputState): Controls {
     jumpHeld: input.down("jump"),
     jumpPressed: input.pressed("jump"),
     dashPressed: input.pressed("dash"),
+    grab: input.down("grab"),
   };
 }

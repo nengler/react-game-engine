@@ -11,11 +11,24 @@ export function Player() {
   const originY = useGame((s) => s.run.originY);
   const dead = useGame((s) => s.run.dead);
 
-  const animation = dead ? "die" : body.dashing ? "dash" : body.sliding ? "wall" : !body.onGround ? (body.vy < 0 ? "jump" : "fall") : Math.abs(body.vx) > 12 ? "run" : "idle";
+  const height = body.ducking ? 6 : 11;
+  const animation = dead
+    ? "die"
+    : body.dashing
+      ? "dash"
+      : body.climbing || body.sliding
+        ? "wall"
+        : !body.onGround
+          ? body.vy < 0
+            ? "jump"
+            : "fall"
+          : Math.abs(body.vx) > 12 && !body.ducking
+            ? "run"
+            : "idle";
 
   return (
     <Entity name="Player" transform={{ x: originX + body.x, y: originY + body.y }}>
-      {/* The hitbox is 8 × 11; the picture is 12 × 12 with its origin at the feet, so it sits centred on the hitbox's bottom. */}
+      {/* The hitbox is 8 × 11 (8 × 6 ducking); the picture is 12 × 12 with its origin at the feet, so it sits centred on the hitbox's bottom. */}
       <AnimatedSprite
         sheet="hero.png"
         frameWidth={12}
@@ -34,9 +47,9 @@ export function Player() {
         originX={6}
         originY={12}
         tint={body.dashes > 0 || dead ? "#ffffff" : "#9db4ff"}
-        transform={{ x: 4, y: 11 }}
+        transform={{ x: 4, y: height }}
       />
-      <Collider width={8} height={11} tag="player" layer="player" />
+      <Collider width={8} height={height} tag="player" layer="player" />
       {/* A trail while dashing: state, not a moment, so it is an emitter that is on while `dashing` is. */}
       <Particles rate={120} lifetime={0.25} speed={6} spread={180} size={3} shrink fade color="#ff9a7a" space="world" emitting={body.dashing} transform={{ x: 4, y: 6 }} max={24} />
     </Entity>

@@ -1,5 +1,5 @@
 import { createGameState, type InputState } from "@rge/runtime";
-import { playEvents } from "./effects.ts";
+import { playEvents, sfx } from "./effects.ts";
 import { readControls } from "./rules/controls.ts";
 import type { GameEvent } from "./rules/events.ts";
 import { newRun, stepRun, type Run } from "./rules/level.ts";
@@ -35,7 +35,15 @@ export const useGame = createGameState<State>()((set, get) => ({
     set({ run: next, screen: next.finished ? "end" : "play" });
     playEvents(events, run.originX, run.originY);
   },
-  begin: () => set({ run: newRun(), screen: "play", gems: 0 }),
-  toTitle: () => set({ run: newRun(), screen: "title", gems: 0 }),
+  // Each only from its own screen: a screen fading out still hears the buttons, and a jump early in the first room must not
+  // start the run again.
+  begin: () => {
+    if (get().screen !== "title") return;
+    sfx.play("start");
+    set({ run: newRun(), screen: "play", gems: 0 });
+  },
+  toTitle: () => {
+    if (get().screen === "end") set({ run: newRun(), screen: "title", gems: 0 });
+  },
   collect: () => set((s) => ({ gems: s.gems + 1 })),
 }));
