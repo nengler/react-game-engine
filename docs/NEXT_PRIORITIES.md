@@ -195,15 +195,17 @@ What building Hearth found, and which of Kite's findings held a second time.
 **Compiler subset, found by writing a game the React way** (each is a clear diagnostic; the workaround and what it should become):
 
 7. **No constants or tables at the top of a component file** (`RGE1001`), **no index reads in render expressions** (`KIND_INDEX[kind]`, `pads[cursor]`) and **selectors must
-   be plain paths** (`s.battle.pads[s.cursor]`, `s.cursor === id` are `RGE1103`). *Workaround:* tables and lookups are plain functions in `rules/view.ts`
-   (`towerFrame(kind, level)`, `iconOf(kind)`), and the store keeps a `focus` object (the cursor's pad as the panel needs it) that `act` recomputes each step.
-   *Should become:* the same shape is fine and Kite's rules-in-`.ts` finding 1 already says it; the guide should list these three together, and
-   `Math.PI` should join the allowed `Math` names (it is why `Shot` writes `3.14159`).
-8. **A component cannot be the root of another** (`RGE1003`): `BuildMenu` rendering `<Panel>` directly is rejected, so it wraps it in a `<Flex>`. *Should become:* allowed
-   (the root's class would extend the inner component), or the message should say "wrap it in a built-in".
-9. **A game-state action cannot be passed as a value** (`onPress={startWave}` is rejected; `onPress={() => startWave()}`), and **a callback prop can be forwarded whole only to a
-   component**: `MenuButton` forwarding `onPress` to a `<Flex onPress>` has to write `onPress={() => onPress()}`. Both are small and the diagnostics say so, but a React author
-   writes the short form first.
+   be plain paths** (`s.battle.pads[s.cursor]`, `s.cursor === id` were `RGE1103`). **Built** after review: top-level `const`s and helper functions in a component file,
+   index reads and `!`, `Math.PI`, and computed selectors (each path read is its own subscription; the expression is a derived value). Hearth's `rules/view.ts` lost
+   `towerFrame`, `iconOf` and `PIPS` to the components that use them, and the store lost its `focus` copy: `useGame((s) => focusOf(s.battle, s.cursor))`.
+   See DESIGN.md, "Computed selectors" and "Constants, helpers and index reads beside components". Found on the way: `useGame((s) => s.enemies.length)`
+   subscribed to a path the store never reports (fixed: `.length` reads the array).
+8. **A component cannot be the root of another** (`RGE1003`): `BuildMenu` rendering `<Panel>` directly was rejected, so it wrapped it in a `<Flex>`. **Built**:
+   a component, a condition (`on ? <X/> : null`) or `null` may be the root; the component is a see-through container (`layoutContents`, CSS's
+   `display: contents` for `<Flex>` layout), so the panel still grows to the column. See DESIGN.md, "Component, condition and null roots".
+9. **A game-state action cannot be passed as a value** (`onPress={startWave}`), and **a callback prop could be forwarded whole only to a component**. **Built**:
+   both are accepted (`onPress={resume}`, `<Flex onPress={onPress}>`). Note: destructuring several values from the store
+   (`const { gold, lives } = useGame((s) => s.battle)`) already worked when Hearth was written; `SidePanel` now uses it.
 10. **A compiler bug found and fixed:** a keyed list over an imported constant (`TOWER_LIST.map(…)`) whose item has a callback that reads the item crashed the generator
     (`Unexpected list source`), because the item's type was only known for state and prop sources. It now reads `(typeof TOWER_LIST)[number]`.
 11. **`<Pointer>` has no hover**, so the plan's "range ring while the mouse is over a tower" is the selected tower's ring instead. A `useHover`-style event would be

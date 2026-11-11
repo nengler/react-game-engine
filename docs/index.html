@@ -496,9 +496,9 @@ rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
   /* ---------- diagnostics ---------- */
   var DIAG = [
     ["Project and syntax", [
-      ["RGE1001", "Unsupported syntax, or an import that is not from the authoring module or a <code>.tsx</code> component."],
+      ["RGE1001", "Unsupported syntax, an import that is not from the authoring module, a <code>.tsx</code> component or a <code>.ts</code> file, or a top-level value that is not a <code>const</code> (or holds JSX or the game state)."],
       ["RGE1002", "A component body that is not hooks, derived <code>const</code>s, then one <code>return</code>."],
-      ["RGE1003", "The root is not a built-in element or fragment (for example it is another component)."],
+      ["RGE1003", "The root is not a built-in element, a component, a fragment, a condition of elements or <code>null</code>."],
       ["RGE1004", "A name imported from <code>@rge/runtime/jsx</code> that it does not export, or <code>type</code> misused."],
       ["RGE1005", "A hook, element or runtime function used without importing it."]]],
     ["Hooks and state", [

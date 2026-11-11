@@ -1233,11 +1233,21 @@ const hp = useGame((s) => s.player.hp);          const hurt = useGame((s) => s.h
 
 **Access.** `const hp = useGame((s) => s.player.hp)` returns the value, exactly as in Zustand. A component imports the
 store (`import { useGame } from "./GameState.ts"`; the only thing it may import from a relative `.ts` module,
-`RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. The selector must be a **plain path**
-from its parameter: that is all the compiler resolves, and it is what makes subscriptions exact. A typo is `RGE1108`
+`RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. A **plain path** from its parameter
+subscribes to exactly that path; any other expression is a computed selector (below). A typo is `RGE1108`
 with the nearest key at the level it went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`).
 `hp` then behaves as `useState` state does: a snapshot of the last render, usable in JSX and handlers, with the leaf's
 type.
+
+**Computed selectors** (2026-11-11, second-game finding 7). The selector may be any expression of the state:
+`const selected = useGame((s) => s.cursor === id)`, `const focus = useGame((s) => focusOf(s.battle, s.cursor))`,
+`useGame((s) => s.battle.pads[s.cursor]?.tower != null)`. Each path it reads (`s.cursor`, `s.battle`) becomes a snapshot of its
+own, `$cursor`, `$battle` (one per path, shared with a plain selector of the same path in the component), and the expression is
+a derived value over them, inlined where it is read like any `const` in the body. So the component re-renders when one of the paths
+it reads changes, and works the value out again then: coarser than Zustand, which compares the selector's result, but the same
+answer. A trailing `.length` (`s.enemies.length`) reads the array's snapshot, since the store reports an array's items, not its
+length; before this, `useGame((s) => s.enemies.length)` subscribed to a path nothing ever reported. An action read inside a
+computed selector is `RGE1301` ("select it by itself"), and `(s) => s` alone is still `RGE1103`.
 
 **Several values at once** (2026-11-11), as Zustand allows: `const { originX, room } = useGame((s) => s.run)` (a path,
 destructured), `const { a, b: c } = useGame((s) => ({ a: s.x, b: s.y.z }))` (an object literal of paths) and
@@ -1551,6 +1561,17 @@ Not supported: a spread onto a **built-in** (`<Shape {...p} />`): its render wri
 keys, from the manifest's `intrinsicMembers`. It is `RGE1203` with that reason, until a game spreads onto a built-in (Hearth does not).
 `<Box x={5} {...o} />` is TypeScript's own error (`x` is overwritten) when `o` always has `x`.
 
+### Constants, helpers and index reads beside components (2026-11-11)
+
+Second-game finding 7. A component file may hold top-level `const` values and lower-case `function` helpers, as a React file
+does: `const ROW = { bolt: 0, mortar: 1, frost: 2 } as const;`, `function labelOf(kind, n) { … }`. The analyzer keeps each as a
+`ModuleDeclaration` (its text and the names it mentions), the generator copies it into the module before the components (importing
+what it reads from a `.ts` file or the runtime), and components read it like a plain import, in JSX, lists, derived values and
+handlers. One that holds JSX or reads the game state is `RGE1001` (that belongs in a component); `let` is `RGE1001` (a value that
+changes belongs in state). Render expressions may index (`ROW[kind] * 3 + level`, `pads[cursor]`, `found?.[i]`; `IndexRead`) and
+use TypeScript's `!` (`NonNull`, so the generated code type-checks as the source did). `Math.PI`, `Math.E` and `Math.SQRT2` are
+values, and `atan2`, `atan`, `tan`, `pow`, `hypot` and `trunc` join the allowed `Math` calls.
+
 ## Roots and component forms
 
 **Forms.** A component is a `function` declaration or a `const` arrow
@@ -1599,10 +1620,27 @@ like any component. Details:
   built-ins' sections list theirs): the manifest's `intrinsicMembers`, `RGE1103`.
 * Only containers (the manifest's `containerIntrinsics`, today `Entity` and `Camera`) may
   have JSX children; a child under a leaf such as a `Sprite`, `Collider` or `Pointer`, at the root or
-  anywhere, is `RGE1202`. A component as a root (`return <Other />`) is
-  `RGE1003`; a fragment nested as a child is an implicit `<Entity>`.
+  anywhere, is `RGE1202`. A fragment nested as a child is an implicit `<Entity>`. A component, a condition or `null` as the
+  root is "Component, condition and null roots" below.
+
+### Component, condition and null roots (2026-11-11)
+
+`return <Panel title="BUILD">…</Panel>`, `return on ? <Sprite …/> : null`, `return open && <Menu />` and `return null` are
+accepted (they were `RGE1003` / `RGE1002`; found by Hearth, second-game finding 8). The component's class extends the host
+intrinsic (`Entity`), holds that one child (or the condition's children, as `{…}` children are), and sets
+`override readonly layoutContents = true`. `GameObject.layoutContents` is CSS's `display: contents` for `<Flex>` layout: a
+`Flex` lays out such a child's children as its own (`FlexBox.kids`, flattened in `#measureChildren`; when no child is see-through,
+`kids` is `children` itself, so the no-allocation path is unchanged), and a `Flex` under one is not a layout root. So
+`BuildMenu` returning `<Panel>` inside the side panel's column still grows to the column's width. The wrapper sits at its
+parent's origin; a `transform` passed to such a component moves what it holds.
 
 **Element callbacks.** `<Pointer onPress={() => …} />` is the same mechanism with no parameters.
+
+**Functions passed whole** (2026-11-11, second-game finding 9). `onPress={resume}` where `resume` is a game-state action, and
+`<Flex onPress={onPress}>` where `onPress` is the component's own callback prop (or `props.onPress`): to a built-in, the
+compiler writes the arrow the author would have (`() => useGame.getState().resume()`, `() => this.props.onPress?.()`), with the
+parameters the manifest lists; to a component, an action is the store's own function (`ActionRef`), a static prop, since an action
+never changes. A sound or a setter is still not a value.
 
 **Collider callbacks.** `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`
 is a callback prop on a built-in, which the manifest lists in
