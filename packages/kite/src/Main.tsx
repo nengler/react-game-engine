@@ -6,6 +6,7 @@ import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
 import { Level } from "./Level.tsx";
 import { Player } from "./Player.tsx";
+import { controls } from "./rules/controls.ts";
 import { GEM_AT } from "./rules/rooms.ts";
 import { Title } from "./Title.tsx";
 import { fadeThrough } from "./transitions.ts";
@@ -60,6 +61,7 @@ export default function Main() {
       vsync={false}
       name="Main"
       state={useGame}
+      controls={controls}
       upscale="sharp"
       title="Kite"
       width={960}

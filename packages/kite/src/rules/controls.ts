@@ -1,29 +1,30 @@
-import type { InputState } from "@rge/runtime";
+import { createControls, type InputState } from "@rge/runtime";
 import type { Controls } from "./body.ts";
 
 /**
- * Which keys and gamepad buttons are which control. Plain TypeScript, so it can use arrays and loops: the game state's `step`
- * action receives the polled input itself and reads the controls here, which is where rebinding would go.
+ * The game's actions and the keys and gamepad buttons that do each: the one place to rebind. `Main.tsx` hands it to
+ * `<Game controls={controls}>`, so anywhere in the game `input.down("left")` means any of the left keys.
  */
-const LEFT = ["ArrowLeft", "A", "PadLeft"];
-const RIGHT = ["ArrowRight", "D", "PadRight"];
-const UP = ["ArrowUp", "W", "PadUp"];
-const DOWN = ["ArrowDown", "S", "PadDown"];
-const JUMP = ["Z", "C", "Space", "PadA"];
-const DASH = ["X", "Shift", "PadX", "PadB", "PadRB"];
+export const controls = createControls({
+  left: ["ArrowLeft", "A", "PadLeft"],
+  right: ["ArrowRight", "D", "PadRight"],
+  up: ["ArrowUp", "W", "PadUp"],
+  down: ["ArrowDown", "S", "PadDown"],
+  jump: ["Z", "C", "Space", "PadA"],
+  dash: ["X", "Shift", "PadX", "PadB", "PadRB"],
+  /** Start, and back to the title. */
+  confirm: ["Enter", "Z", "C", "Space", "PadA", "PadStart"],
+});
 
-const anyDown = (input: InputState, keys: readonly string[]): boolean => keys.some((key) => input.down(key));
-const anyPressed = (input: InputState, keys: readonly string[]): boolean => keys.some((key) => input.pressed(key));
-
-/** The controls this step's input asks for. */
+/** What the rules need from this step's input. */
 export function readControls(input: InputState): Controls {
   return {
-    left: anyDown(input, LEFT),
-    right: anyDown(input, RIGHT),
-    up: anyDown(input, UP),
-    down: anyDown(input, DOWN),
-    jumpHeld: anyDown(input, JUMP),
-    jumpPressed: anyPressed(input, JUMP),
-    dashPressed: anyPressed(input, DASH),
+    left: input.down("left"),
+    right: input.down("right"),
+    up: input.down("up"),
+    down: input.down("down"),
+    jumpHeld: input.down("jump"),
+    jumpPressed: input.pressed("jump"),
+    dashPressed: input.pressed("dash"),
   };
 }

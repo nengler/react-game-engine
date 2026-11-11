@@ -13,7 +13,7 @@ export function Title() {
   });
 
   useInput((input) => {
-    if (input.pressed("Enter") || input.pressed("Z") || input.pressed("C") || input.pressed("Space") || input.pressed("PadA") || input.pressed("PadStart")) {
+    if (input.pressed("confirm")) {
       sfx.play("start");
       begin();
     }

@@ -11,7 +11,7 @@ export function End() {
   const seconds = Math.floor(steps / 60);
 
   useInput((input) => {
-    if (input.pressed("Enter") || input.pressed("Z") || input.pressed("Space") || input.pressed("PadA") || input.pressed("PadStart")) {
+    if (input.pressed("confirm")) {
       toTitle();
     }
   });

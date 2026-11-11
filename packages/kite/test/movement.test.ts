@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { newBody, NO_CONTROLS, stepBody, type Body, type Controls, type SolidAt } from "../src/rules/body.ts";
 import type { GameEvent } from "../src/rules/events.ts";
 import { createInputState } from "@rge/runtime";
-import { readControls } from "../src/rules/controls.ts";
+import { controls, readControls } from "../src/rules/controls.ts";
 import { BODY_H, COYOTE, DASH_SPEED, JUMP_BUFFER, TILE, WALL_SLIDE_SPEED } from "../src/rules/constants.ts";
 
 const DT = 1 / 60;
@@ -199,7 +199,7 @@ describe("walls", () => {
 });
 
 describe("controls", () => {
-  const input = (down: string[], pressed: string[] = []) => createInputState({ down, pressed });
+  const input = (down: string[], pressed: string[] = []) => createInputState({ down, pressed }, controls);
 
   it("read keyboard, gamepad and d-pad alike, and tell a press from a hold", () => {
     assert.deepEqual(readControls(input(["ArrowLeft"])), { ...NO_CONTROLS, left: true });
