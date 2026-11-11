@@ -1,4 +1,4 @@
-import { createParticles, createSounds, freeze, type Scale2 } from "@rge/runtime";
+import { createParticles, createSounds, freeze, type Vector2 } from "@rge/runtime";
 import type { GameEvent } from "./rules/events.ts";
 import { freezeFor } from "./rules/playback.ts";
 
@@ -73,15 +73,15 @@ export function playEvents(events: readonly GameEvent[], originX: number, origin
  * The squash and stretch a step's events call for, Celeste's: thin and tall leaving the ground, wide and flat landing hard (all
  * the way at 240 pixels a second), wide ducking, tall standing up. Null when nothing in the step changes it.
  */
-export function squashFor(events: readonly GameEvent[]): Scale2 | null {
-  let squash: Scale2 | null = null;
+export function squashFor(events: readonly GameEvent[]): Vector2 | null {
+  let squash: Vector2 | null = null;
   for (const e of events) {
-    if (e.type === "jump" || e.type === "wallJump") squash = { scaleX: 0.6, scaleY: 1.4 };
+    if (e.type === "jump" || e.type === "wallJump") squash = { x: 0.6, y: 1.4 };
     else if (e.type === "land") {
       const k = Math.min(e.speed / 240, 1);
-      squash = { scaleX: 1 + 0.6 * k, scaleY: 1 - 0.6 * k };
-    } else if (e.type === "duck") squash = { scaleX: 1.4, scaleY: 0.6 };
-    else if (e.type === "stand") squash = { scaleX: 0.8, scaleY: 1.2 };
+      squash = { x: 1 + 0.6 * k, y: 1 - 0.6 * k };
+    } else if (e.type === "duck") squash = { x: 1.4, y: 0.6 };
+    else if (e.type === "stand") squash = { x: 0.8, y: 1.2 };
   }
   return squash;
 }

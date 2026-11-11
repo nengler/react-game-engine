@@ -1,4 +1,4 @@
-import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Route, Router, Screen, useShake } from "@rge/runtime/jsx";
+import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Particles, Route, Router, Screen, useShake } from "@rge/runtime/jsx";
 import { DashTrail } from "./DashTrail.tsx";
 import { fx } from "./effects.ts";
 import { End } from "./End.tsx";
@@ -20,6 +20,25 @@ function Play() {
 
   return (
     <Entity name="Play">
+      {/* Dust hanging in the room's air (behind the rock, so only the air shows it), drifting up: it is there when the room is, and it stops when the world freezes (a dash,
+          a death), which is how a freeze is felt. In the world, so a room change leaves the old room's dust behind it. */}
+      <Particles
+        rate={10}
+        lifetime={6}
+        speed={5}
+        angle={270}
+        spread={60}
+        gravity={-1}
+        size={1}
+        fade
+        color="#a9b6dcc8"
+        width={320}
+        height={180}
+        prewarm
+        space="world"
+        max={64}
+        transform={{ x: originX, y: originY }}
+      />
       <Level />
       <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />
       {/* Copies of the character a dash leaves, under it, in the world. */}

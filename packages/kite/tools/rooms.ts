@@ -115,16 +115,23 @@ const ROOMS: readonly RoomSpec[] = [
       .rows(),
   },
   {
-    // 6. Walls and spikes: a wider shaft with spikes on both walls, then out along the top.
+    // 6. Walls and spikes: a shaft six tiles wide with spikes on both walls, then out along the top. The right wall is safe
+    // below its spikes and the left wall above its own, and the two safe stretches overlap (rows 8 to 10): climb the right
+    // wall, wall jump across onto the ledge on the left (standing gives the stamina back), and go up the left wall, through the
+    // opening in the corridor's floor above it. Re-made
+    // 2026-11-11 for the Celeste body: the old shaft was eight tiles wide and its spikes left no overlap, so a wall jump across
+    // always landed on spikes, and climbing all of it took more stamina than there is.
     name: "Spikes on the wall",
     exit: "right",
     rows: draft()
       .rect(1, 0, 11, 17, "#")
-      .rect(20, 4, 30, 17, "#")
-      .rect(19, 4, 19, 8, "<")
-      .rect(12, 10, 12, 13, ">")
+      .rect(18, 4, 30, 17, "#")
+      .rect(14, 4, 17, 4, "#")
+      .rect(17, 5, 17, 7, "<")
+      .rect(12, 11, 12, 14, ">")
+      .rect(12, 9, 13, 9, "#")
       .rect(31, 1, 31, 3, "E")
-      .rect(12, 15, 19, 15, ".")
+      .rect(12, 15, 17, 15, ".")
       .set(15, 15, "@")
       .rows(),
   },

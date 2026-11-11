@@ -41,11 +41,11 @@ the room's start 0.45 s later. Leaving a room by its exit moves to the next, wit
 | 3 | Dash across | an 8-tile gap, too wide to jump | jump + dash |
 | 4 | Dash up | a ledge 4 tiles up on the right, a second 5 above it on the left, the ceiling opening over that | up-dash, twice |
 | 5 | The shaft | wall jumps up a 6-wide shaft | walls |
-| 6 | Spikes on the wall | the same, with spikes on both walls | walls + dash |
+| 6 | Spikes on the wall | a shaft six tiles wide: spikes low on the left wall and high on the right, a ledge on the left between them, out along the top | climb or wall jump the right wall, wall jump onto the ledge, rest, up the left wall |
 | 7 | Gem ledge | a spiked pit with a pillar; the **optional gem** is up and to the right | everything |
 | 8 | Summit | stepping stones, a dash across, up the wall, the exit | everything |
 
-A solver finding a route is not the same as a person finding one: room 4 was first built with a ledge whose only route was a contrived one, and was effectively impossible to play. `test/rooms.test.ts` now also checks that the two dash moves (rooms 3 and 4) work over a window of dash timings, not a single frame (three tests: floor to the first ledge, first to second, and the exit; each checks a window of at least a tenth of a second). Rooms 1 and 2 are solved by the search with no dash; 4 and 6 cannot be solved without one. Room 3 can be crossed by wall jumping
+A solver finding a route is not the same as a person finding one (room 6 was the second time: after the switch to the Celeste body its only route was the solver's, a dash past the spike tips; it was re-made with overlapping safe stretches, a ledge to rest on and a lip at the top, and a test now plays a person's route from a range of heights): room 4 was first built with a ledge whose only route was a contrived one, and was effectively impossible to play. `test/rooms.test.ts` now also checks that the two dash moves (rooms 3 and 4) work over a window of dash timings, not a single frame (three tests: floor to the first ledge, first to second, and the exit; each checks a window of at least a tenth of a second). Rooms 1 and 2 are solved by the search with no dash; 4 and 6 cannot be solved without one. Room 3 can be crossed by wall jumping
 out of the pit (a finding: one wall is a ladder).
 
 ## What "finished" means for the level

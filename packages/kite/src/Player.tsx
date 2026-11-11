@@ -51,7 +51,7 @@ export function Player({ onDie }: PlayerProps) {
         originX={6}
         originY={12}
         tint={body.dashes > 0 || dead ? "#ffffff" : "#9db4ff"}
-        transform={{ x: 4, y: height, scaleX: squash.scaleX, scaleY: squash.scaleY }}
+        transform={{ x: 4, y: height, scaleX: squash.x, scaleY: squash.y }}
       />
       <Collider width={8} height={height} tag="player" layer="player" />
       {/* A trail while dashing: state, not a moment, so it is an emitter that is on while `dashing` is. */}

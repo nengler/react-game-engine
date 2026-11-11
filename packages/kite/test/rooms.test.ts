@@ -164,6 +164,64 @@ describe("the dash moves have room to spare", () => {
     }
   });
 
+  it("room 6: a person's way (climb the right wall, wall jump onto the ledge, rest, climb the left wall) works from a stretch of heights", () => {
+    const r = ROOM_LIST[5]!;
+    /** The route, wall jumping across once the climb reaches `jumpAt`; how it ended. */
+    const route = (jumpAt: number): "out" | "dead" | "stuck" => {
+      let p = startPlayback({ ...newRun(), room: 5, originX: r.ox, originY: r.oy, player: { ...newRun().player, x: r.spawnX, y: r.spawnY } });
+      let phase = "walk";
+      let wait = 0;
+      let held = false;
+      for (let f = 0; f < 900; f++) {
+        const b = p.run.player;
+        let c: Partial<typeof NO_CONTROLS> = {};
+        let press = false;
+        if (phase === "walk") {
+          c = { right: true };
+          if (b.x >= 168) phase = "climb";
+        } else if (phase === "climb") {
+          c = { right: true, grab: true, up: true };
+          if (b.y <= jumpAt) phase = "jump";
+        } else if (phase === "jump") {
+          c = { left: true, grab: true };
+          press = true;
+          phase = "across";
+        } else if (phase === "across") {
+          c = { left: true, jumpHeld: b.vy < 0 };
+          if (b.onGround) [phase, wait] = ["rest", 10];
+        } else if (phase === "rest") {
+          if (--wait <= 0) phase = "hop";
+        } else if (phase === "hop") {
+          c = { left: true };
+          press = true;
+          phase = "grab";
+        } else if (phase === "grab") {
+          c = { left: true, grab: true, up: true, jumpHeld: true };
+          if (b.climbing) [phase, wait] = ["up", 0];
+        } else if (phase === "up") {
+          // Climb jumps while there is stamina for one, climbing in between.
+          press = b.climbing && --wait <= 0 && b.stamina > 35;
+          if (press) wait = 24;
+          c = { left: true, grab: true, up: true };
+          if (b.y <= 15) phase = "out";
+        } else {
+          c = { right: true };
+          press = phase === "out";
+          phase = "run";
+        }
+        const jumpHeld = press || (c.jumpHeld ?? false);
+        p = playFrame(p, { ...NO_CONTROLS, ...c, jumpPressed: press && !held, jumpHeld }, 1 / 60);
+        held = jumpHeld;
+        if (p.run.dead) return "dead";
+        if (p.run.room !== 5) return "out";
+      }
+      return "stuck";
+    };
+    const heights = [110, 105, 100, 95, 90, 85, 80];
+    const works = heights.filter((y) => route(y) === "out");
+    assert.ok(works.length >= 5, `the wall jump across works from ${works.join(", ")}: at least 20 pixels of the climb (half a second)`);
+  });
+
   it("room 3: crossing the gap works for a dash timed anywhere in a tenth of a second or more, jumping from the edge", () => {
     let best = 0;
     for (let walk = 40; walk <= 70; walk += 2) {

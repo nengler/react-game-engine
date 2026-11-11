@@ -15,9 +15,9 @@ export const REPLAYS: readonly string[] = [
   // 5. The shaft
   "left*4, right*4+jump*4, jump*12, _*4, dash, _*3, up+dash, up*3, _*8, right*8, right*4+jump*4, jump*12, left*4, left*8+jump*8, _*4, left*4+jump*4, jump*12, _*25",
   // 6. Spikes on the wall
-  "right*4, right*8+jump*8, right*4, right*4+jump*4, jump*12, _*4, jump*12, right*4+jump*4, right*4, right*4+jump*4, right*4, jump*12, right*4+jump*4, right*4, dash, _*3, up+dash, up*3, _*8, right*20, right*4+jump*4, right*20, right*4+jump*4, right*20, right*4+jump*4, right*4, _*4, _*25",
+  "right*4, right*4+jump*4, right*4, jump*12, right*4+jump*4, right*8, jump*12, right*4+jump*4, right*4, right*4+jump*4, _*4, jump*4, left*8+jump*8, left*4, _*8, right*4+jump*4, jump*8, left*4+jump*4, left*4, jump*4, dash, _*3, up+dash, up*3, _*8, right*16, right*4+jump*4, right*20, right*4+jump*4, right*20, right*4+jump*4, right*20, right*4+jump*4, right*16, _*4, _*25",
   // 7. Gem ledge
-  "right*52, right*16+jump*16, right*4, right*4+jump*4, right*4, dash, _*3, up+dash, up*3, _*4, right*60, dash, _*11, jump*4, right*4, _*4, right*8, _*4, _*25",
+  "right*52, right*28+jump*28, _*4, right*4+jump*4, jump*8, left*4+jump*4, dash, _*3, right+up+dash, right*3+up*3, _*8, right*20, down+dash, down*3, _*4, left*8, left+down+dash, left*3+down*3, left*4+jump*4, jump*8, right*4+jump*4, right*4, right*8+jump*8, right*20, jump*12, right*4+jump*4, right*4, right*4+jump*4, right*8, right*4+jump*4, right*20, right*4+jump*4, right*8, _*4, _*25",
   // 8. Summit
-  "right*16+jump*16, right*4, right*4+jump*4, dash, _*3, right+up+dash, right*3+up*3, _*4, right*32, right*16+jump*16, right*4, right*4+jump*4, jump*4, dash, _*3, jump*4, right*12+jump*12, right*4, jump*16, right*12, jump*8, _*4, right*12+jump*12, right*4, right*4+jump*4, right*12, _*4",
+  "dash, _*3, right+up+dash, right*3+up*3, _*12, right*12, _*4, down+dash, down*3, down+dash, down*3, left*4+jump*4, jump*8, right*4+jump*4, right*4, right*8+jump*8, right*4, right*16+jump*16, right*4, right*8+jump*8, dash, _*3, right+up+dash, right*3+up*3, _*8, right*8, _*4, right*4, _*8, right*4+jump*4, jump*12, _*4, jump*12, right*4+jump*4, right*4, right*4+jump*4, right*4, jump*8, _*4, right*8+jump*8, right*4, right*12+jump*12, right*8",
 ];
