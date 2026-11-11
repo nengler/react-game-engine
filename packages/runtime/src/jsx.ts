@@ -24,6 +24,7 @@ import type { TilemapProps } from "./components/Tilemap.ts";
 import type { ParticlesProps } from "./components/Particles.ts";
 import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
 import type { EventListenerProps } from "./components/EventListener.ts";
+import type { AfterimageLayerProps } from "./components/AfterimageLayer.ts";
 import type { FadeProps } from "./components/Fade.ts";
 import type { MusicProps } from "./components/Music.ts";
 import type { RouteProps, RouterProps } from "./components/Router.ts";
@@ -32,7 +33,7 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 export type { TransformProps, Child } from "./jsx-runtime.ts";
 
 export { clamp } from "./math.ts";
-export { createEvents, createShake, createSquash } from "./effects.ts";
+export { createAfterimages, createEvents, createShake, createSquash } from "./effects.ts";
 
 // -- state and refs -----------------------------------------------------------
 
@@ -224,6 +225,14 @@ export function ParticleLayer(_props: ParticleLayerProps): JSX.Element {
  */
 export function EventListener<T>(_props: EventListenerProps<T>): JSX.Element {
   return compileTimeOnly("EventListener");
+}
+
+/**
+ * Where a sprite's afterimages are drawn, in the world: `<AfterimageLayer afterimages={trail} emitting={dashing} interval={0.08} />`,
+ * with the same `createAfterimages()` given to the sprite (`afterimages={trail}`). A leaf; put it next to a camera, not in it.
+ */
+export function AfterimageLayer(_props: AfterimageLayerProps): JSX.Element {
+  return compileTimeOnly("AfterimageLayer");
 }
 
 /**

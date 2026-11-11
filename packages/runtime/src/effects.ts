@@ -226,3 +226,90 @@ export class EventChannel<T> {
 export function createEvents<T>(): EventChannel<T> {
   return new EventChannel<T>();
 }
+
+/** A sprite as it was drawn at one moment: what an afterimage draws again, fading. Positions are in the world. */
+export interface AfterimageSnapshot {
+  readonly image: string;
+  /** Drawn as a frame of a sheet (`frameWidth` × `frameHeight`, frame `frame`), or as the whole image. */
+  readonly sheet: boolean;
+  readonly frameWidth: number | undefined;
+  readonly frameHeight: number | undefined;
+  readonly frame: number;
+  readonly originX: number;
+  readonly originY: number;
+  readonly flipX: boolean;
+  readonly flipY: boolean;
+  readonly x: number;
+  readonly y: number;
+  readonly rotation: number;
+  readonly scaleX: number;
+  readonly scaleY: number;
+  /** Seconds since it was taken. */
+  age: number;
+}
+
+/** What a sprite gives an afterimage: how it is drawn now, and where. */
+export interface AfterimageSource {
+  readonly world: unknown;
+  snapshot(): Omit<AfterimageSnapshot, "age"> | null;
+}
+
+/**
+ * Afterimages of one sprite: copies of how it looked, left where it was and fading, as a dash, a burst of speed or a teleport
+ * leaves behind. Made per instance (`const [trail] = useState(() => createAfterimages({ lifetime: 0.3, color: "#ff9a7a" }))`),
+ * given to the sprite they copy (`<AnimatedSprite afterimages={trail}>`) and to the layer that draws them in the world
+ * (`<AfterimageLayer afterimages={trail} emitting={dashing} interval={0.08} />`). `capture()` takes one now, from a handler.
+ */
+export class Afterimages {
+  /** Seconds an afterimage lasts, fading from `color` to nothing. */
+  lifetime: number;
+  /** A CSS colour the copies are tinted with; its alpha is where the fade starts. */
+  color: string;
+  /** The most kept at once (the oldest goes). */
+  max: number;
+  readonly images: AfterimageSnapshot[] = [];
+  #source: AfterimageSource | null = null;
+  #changed = false;
+
+  constructor(lifetime: number, color: string, max: number) {
+    this.lifetime = lifetime;
+    this.color = color;
+    this.max = max;
+  }
+
+  /** Copy the sprite as it is now. Nothing happens while the sprite is not in a world. */
+  capture(): void {
+    const source = this.#source;
+    if (source === null || source.world === null) return;
+    const snapshot = source.snapshot();
+    if (snapshot === null) return;
+    this.images.push({ ...snapshot, age: 0 });
+    if (this.images.length > this.max) this.images.shift();
+    this.#changed = true;
+  }
+
+  /** Age the copies by `dt` seconds and drop the faded ones. Returns whether anything changed. */
+  advance(dt: number): boolean {
+    let changed = this.#changed;
+    this.#changed = false;
+    if (this.images.length === 0 || !(dt > 0)) return changed;
+    for (const image of this.images) image.age += dt;
+    while (this.images.length > 0 && (this.images[0] as AfterimageSnapshot).age >= this.lifetime) this.images.shift();
+    changed = true;
+    return changed;
+  }
+
+  /** The sprite they copy (the last one mounted with them). */
+  attach(source: AfterimageSource): void {
+    this.#source = source;
+  }
+
+  detach(source: AfterimageSource): void {
+    if (this.#source === source) this.#source = null;
+  }
+}
+
+/** Make afterimages for a sprite. Default: 0.3 seconds, white, 16 at most. */
+export function createAfterimages(options: { lifetime?: number; color?: string; max?: number } = {}): Afterimages {
+  return new Afterimages(options.lifetime ?? 0.3, options.color ?? "#ffffff", Math.max(1, Math.floor(options.max ?? 16)));
+}

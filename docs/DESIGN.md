@@ -1337,6 +1337,16 @@ step: (input, dt) => {
   onEvent={(e) => …} />`** listens while it is in the world, so a component answers events with its own state in an ordinary
   handler; the parameter's type comes from the channel (the manifest marks the callback parameter `"*"`, lowered as
   contextual). Kite's game state emits each step's events on `gameEvents`, and the character squashes itself from them.
+- **`createAfterimages({ lifetime, color, max })`** → `Afterimages`: copies of one sprite, left where it was and fading
+  (a dash, a burst of speed, a teleport). Per instance, like a squash: the sprite takes it (`afterimages={trail}`, so it can
+  be copied: its frame, flips, origin, world transform and squash), and **`<AfterimageLayer afterimages={trail} emitting
+  interval>`** draws the copies in the world, taking one when `emitting` turns on and every `interval` after; `capture()` takes
+  one from a handler. The layer ages them in `onUpdate` and draws each as a sprite-region record tinted with the colour, its
+  alpha falling to 0 over `lifetime`. Put the layer next to a camera, not in it.
+- **`moveActorX` / `moveActorY`** (runtime `move.ts`, for a game's rules): move any `{ x, y, rx, ry }` a pixel at a time
+  against a `blocked(x, y)` test, carrying the sub-pixel remainder; on a block the remainder is dropped, `onBlocked(direction)`
+  is called (it may move the actor, which is how a game adds corner rules) and the move stops. Kite's body uses it, with its
+  corner corrections as the callbacks.
 - **Continuous effects stay JSX.** A trail "while dashing" is state, so it is `<Particles emitting={dashing}>` in the component.
   The stores are for moments.
 - **Rules stay pure.** Kite's `stepRun` reports events and never calls a store, so the solver and the tests step it with no

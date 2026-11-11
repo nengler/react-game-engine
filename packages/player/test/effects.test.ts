@@ -1,7 +1,7 @@
 /** Effect stores: particle bursts drawn by a <ParticleLayer>, sounds played by name, and a camera shake started from anywhere. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { AnimatedSprite, Camera, Entity, ParticleLayer, Sprite, World, createParticles, createShake, createSounds, createSquash, freeze, getSoundSink, setSoundSink, type SoundSink } from "@rge/runtime";
+import { AfterimageLayer, AnimatedSprite, Camera, Entity, ParticleLayer, Sprite, World, createAfterimages, createParticles, createShake, createSounds, createSquash, freeze, getSoundSink, setSoundSink, type SoundSink } from "@rge/runtime";
 import { createPlayer, RecordingBackend, type DecodedRecord } from "../src/index.ts";
 
 const ofOp = <T extends DecodedRecord["op"]>(frame: readonly DecodedRecord[], op: T): Extract<DecodedRecord, { op: T }>[] => frame.filter((r): r is Extract<DecodedRecord, { op: T }> => r.op === op);
@@ -169,5 +169,67 @@ describe("createSquash and <Sprite squash>", () => {
     assert.ok(squashed.scaleX < 2 && squashed.scaleY > 1, JSON.stringify(squashed));
     assert.ok(region(2)!.scaleX > squashed.scaleX, "springing back, frame by frame");
     assert.deepEqual([squashed.originX, squashed.originY], [6, 12]);
+  });
+});
+
+describe("createAfterimages and <AfterimageLayer>", () => {
+  it("copies the sprite where it is when emitting starts and every interval, and fades and drops each copy after its lifetime", () => {
+    const trail = createAfterimages({ lifetime: 0.25, color: "#ff000080" });
+    const world = new World();
+    const root = new Entity();
+    const sprite = new AnimatedSprite({ sheet: "s.png", frameWidth: 4, frameHeight: 4, animations: "run:0-3@10", flipX: true, afterimages: trail });
+    const layer = new AfterimageLayer({ afterimages: trail, interval: 0.1 });
+    root.addChild(sprite);
+    root.addChild(layer);
+    world.mount(root);
+    world.tick(0.05);
+    assert.equal(trail.images.length, 0, "nothing while not emitting");
+    layer.emitting = true;
+    for (let i = 0; i < 5; i++) {
+      sprite.transform.x = i * 10;
+      world.tick(0.05);
+    }
+    assert.deepEqual(trail.images.map((s) => s.x), [0, 20, 40], "on starting, then every 0.1 s, where the sprite was");
+    assert.equal(trail.images[0]?.flipX, true);
+    layer.emitting = false;
+    for (let i = 0; i < 10; i++) world.tick(0.05);
+    assert.equal(trail.images.length, 0, "faded and gone");
+    sprite.parent!.removeChild(sprite);
+    trail.capture();
+    assert.equal(trail.images.length, 0, "a sprite out of the world is not copied");
+  });
+
+  it("is drawn by the player as tinted copies of the sprite's frame, fainter as they age, at the sprite's place then", () => {
+    const trail = createAfterimages({ lifetime: 1, color: "#00ff00" });
+    const backend = new RecordingBackend({ textureSizes: { "assets/s.png": { width: 8, height: 4 } } });
+    for (let i = 0; i < 6; i++) backend.queueInput({ dt: 1 / 60 });
+    let sprite: Sprite | null = null;
+    const player = createPlayer(backend, {
+      root: () => {
+        const root = new Entity();
+        sprite = new Sprite({ image: "s.png", frameWidth: 4, frameHeight: 4, frame: 1, afterimages: trail });
+        sprite.transform.x = 30;
+        root.addChild(new AfterimageLayer({ afterimages: trail }));
+        root.addChild(sprite);
+        return root;
+      },
+      retain: "check",
+    });
+    player.step();
+    trail.capture();
+    sprite!.transform.x = 60;
+    sprite!.markMoved();
+    player.step();
+    player.step();
+    player.step();
+    player.close();
+    const regions = (frame: number) => ofOp(backend.frames[frame]?.records ?? [], "spriteRegion");
+    const [copy, live] = regions(1);
+    assert.equal(copy?.x, 30, "the copy stays where it was taken");
+    assert.equal(live?.x, 60);
+    assert.equal(copy?.srcX, 4, "the same frame of the sheet");
+    assert.ok(copy?.tint.startsWith("#00ff00"));
+    const later = regions(3)[0]!;
+    assert.ok(parseInt(later.tint.slice(7), 16) < parseInt(copy!.tint.slice(7), 16), "fainter with age");
   });
 });

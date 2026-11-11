@@ -17,6 +17,7 @@ import {
   Text,
   Tilemap,
   Particles,
+  AfterimageLayer,
   Fade,
   Route,
   Router,
@@ -423,6 +424,7 @@ const KIND_PARTICLES = 11;
 const KIND_FADE = 12;
 const KIND_ROUTE = 13;
 const KIND_ROUTER = 14;
+const KIND_AFTERIMAGES = 15;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
@@ -458,6 +460,7 @@ function classCode(object: GameObject): number {
       : object instanceof Fade ? KIND_FADE
       : object instanceof Route ? KIND_ROUTE
       : object instanceof Router ? KIND_ROUTER
+      : object instanceof AfterimageLayer ? KIND_AFTERIMAGES
       : KIND_NONE;
     code = kind;
     if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX || kind === KIND_ROUTER) code |= FLAG_VOLATILE;
@@ -809,6 +812,10 @@ export class FrameBuilder {
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
           this.#particles(node as Particles, at);
           break;
+        case KIND_AFTERIMAGES:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#afterimages(node as AfterimageLayer);
+          break;
         case KIND_ROUTE:
           // A screen a transition has hidden is not drawn, pressed or collided with: its children are not walked at all.
           if (!(node as Route).visible) return WALK_VOLATILE;
@@ -1111,6 +1118,10 @@ export class FrameBuilder {
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#particles(object as Particles, world);
                   break;
+                case KIND_AFTERIMAGES:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#afterimages(object as AfterimageLayer);
+                  break;
                 case KIND_FADE:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#fade(object as Fade, gameWidth, gameHeight);
@@ -1398,18 +1409,33 @@ export class FrameBuilder {
       this.#sprite(node.image, world);
       return;
     }
-    const image = node.image;
+    let tint = node.tint === undefined ? 0xffffffff : this.#color(node.tint);
+    const opacity = node.opacity;
+    if (opacity !== 1) {
+      const alpha = Math.round(((tint & 255) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity))));
+      tint = ((tint & 0xffffff00) | alpha) >>> 0;
+    }
+    const squash = node.squash;
+    const at = squash === undefined || squash.resting ? world : { x: world.x, y: world.y, rotation: world.rotation, scaleX: world.scaleX * squash.x, scaleY: world.scaleY * squash.y };
+    const sheet = node instanceof AnimatedSprite ? node.isSheet : node.frameWidth !== undefined || node.frameHeight !== undefined;
+    const frame = node instanceof AnimatedSprite ? node.sheetFrame : node.frame;
+    this.#region(node.image, sheet, node.frameWidth, node.frameHeight, frame, node.originX, node.originY, node.flipX, node.flipY, tint, at);
+  }
+
+  /** One frame of an image (or all of it), as a sprite-region record: a sprite's, or an afterimage's. */
+  #region(
+    image: string, sheet: boolean, sheetWidth: number | undefined, sheetHeight: number | undefined, frame: number,
+    originX: number, originY: number, flipX: boolean, flipY: boolean, tint: number, at: WorldTransform,
+  ): void {
     if (image === "") return;
     const handle = this.#texture(image);
     if (handle < 0) {
-      this.#list.rect(world, MISSING_TEXTURE_SIZE, MISSING_TEXTURE_SIZE, MAGENTA);
+      this.#list.rect(at, MISSING_TEXTURE_SIZE, MISSING_TEXTURE_SIZE, MAGENTA);
       return;
     }
     const texture = this.#imageSize(image);
-    const sheet = node instanceof AnimatedSprite ? node.isSheet : node.frameWidth !== undefined || node.frameHeight !== undefined;
-    const frameWidth = sheet ? (node.frameWidth ?? texture.width) : texture.width;
-    const frameHeight = sheet ? (node.frameHeight ?? texture.height) : texture.height;
-    const frame = node instanceof AnimatedSprite ? node.sheetFrame : node.frame;
+    const frameWidth = sheet ? (sheetWidth ?? texture.width) : texture.width;
+    const frameHeight = sheet ? (sheetHeight ?? texture.height) : texture.height;
     let srcX = 0;
     let srcY = 0;
     if (sheet && frame > 0 && frameWidth > 0) {
@@ -1421,15 +1447,21 @@ export class FrameBuilder {
       this.#warner.once(`sprite-size:${image}`, `The sprite '${image}' has no known size (this backend cannot report texture sizes and no frameWidth and frameHeight are set): it is not drawn.`);
       return;
     }
-    let tint = node.tint === undefined ? 0xffffffff : this.#color(node.tint);
-    const opacity = node.opacity;
-    if (opacity !== 1) {
-      const alpha = Math.round(((tint & 255) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity))));
-      tint = ((tint & 0xffffff00) | alpha) >>> 0;
+    this.#list.spriteRegion(at, handle, srcX, srcY, frameWidth, frameHeight, originX, originY, (flipX ? RGE_SPRITE_FLIP_X : 0) | (flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
+  }
+
+  /** An `<AfterimageLayer>`: each copy where it was taken, in the world, tinted with the colour and fading with age. */
+  #afterimages(node: AfterimageLayer): void {
+    const set = node.afterimages;
+    if (set.images.length === 0) return;
+    const color = this.#color(set.color);
+    const alpha = color & 255;
+    for (const image of set.images) {
+      const left = 1 - image.age / set.lifetime;
+      if (!(left > 0)) continue;
+      const tint = ((color & 0xffffff00) | Math.round(alpha * left)) >>> 0;
+      this.#region(image.image, image.sheet, image.frameWidth, image.frameHeight, image.frame, image.originX, image.originY, image.flipX, image.flipY, tint, image);
     }
-    const squash = node.squash;
-    const at = squash === undefined || squash.resting ? world : { x: world.x, y: world.y, rotation: world.rotation, scaleX: world.scaleX * squash.x, scaleY: world.scaleY * squash.y };
-    this.#list.spriteRegion(at, handle, srcX, srcY, frameWidth, frameHeight, node.originX, node.originY, (node.flipX ? RGE_SPRITE_FLIP_X : 0) | (node.flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
   }
 
   /** A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer, culled to none (a map is a room, not a world). */

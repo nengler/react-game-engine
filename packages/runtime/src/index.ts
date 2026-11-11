@@ -31,17 +31,22 @@ export { Music, type MusicProps } from "./components/Music.ts";
 export { Particles, PARTICLE_SPACES, type ParticlesProps } from "./components/Particles.ts";
 export { ParticleLayer, type ParticleLayerProps } from "./components/ParticleLayer.ts";
 export { EventListener, type EventListenerProps } from "./components/EventListener.ts";
+export { AfterimageLayer, type AfterimageLayerProps } from "./components/AfterimageLayer.ts";
 export {
+  createAfterimages,
   createEvents,
   createParticles,
   createShake,
   createSounds,
   createSquash,
+  Afterimages,
   EventChannel,
   ParticleStore,
   Shake,
   SoundStore,
   Squash,
+  type AfterimageSnapshot,
+  type AfterimageSource,
   type BurstOptions,
   type ParticlePreset,
   type ParticleRenderer,
@@ -54,4 +59,5 @@ export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { actionAware, Controls, createControls, createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
 export { clamp } from "./math.ts";
+export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";

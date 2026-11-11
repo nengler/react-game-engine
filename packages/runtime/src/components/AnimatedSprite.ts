@@ -1,7 +1,7 @@
 import { GameObject } from "../GameObject.ts";
 import type { InputState } from "../input.ts";
-import type { Squash } from "../effects.ts";
-import { isStyled, squashHooks, type SpriteLook, type SpriteOptions } from "./Sprite.ts";
+import type { AfterimageSnapshot, Afterimages, Squash } from "../effects.ts";
+import { isStyled, snapshotOf, squashHooks, type SpriteLook, type SpriteOptions } from "./Sprite.ts";
 
 export interface AnimatedSpriteProps extends SpriteOptions {
   /** The images to cycle through, in order, one image file per frame. Leave it out to play a sheet (`sheet`). */
@@ -125,6 +125,7 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
   tint: string | undefined;
   opacity: number;
   squash: Squash | undefined;
+  afterimages: Afterimages | undefined;
   #frames: readonly string[];
   #animationsText: string | AnimationTable;
   /** What the animations were last read from, to tell a new table from the same one written again. */
@@ -151,6 +152,7 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
     this.tint = hostProps.tint;
     this.opacity = hostProps.opacity ?? 1;
     this.squash = hostProps.squash;
+    this.afterimages = hostProps.afterimages;
     this.#animationsText = "";
     this.#animation = "";
     if (hostProps.animations !== undefined) this.animations = hostProps.animations;
@@ -225,6 +227,11 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
   }
 
   /** Advance by `dt` seconds while playing. The World calls this every tick, since the class overrides it. */
+  /** How it is drawn now, in the world (for an afterimage). */
+  snapshot(): Omit<AfterimageSnapshot, "age"> | null {
+    return snapshotOf(this, this.image, this.isSheet, this.frameWidth, this.frameHeight, this.isSheet ? this.sheetFrame : 0);
+  }
+
   override onMount(): void {
     squashHooks.mount(this);
   }

@@ -270,6 +270,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
       Particles: ["onUpdate"],
       ParticleLayer: ["onMount", "onUnmount"],
       EventListener: ["onMount", "onUnmount"],
+      AfterimageLayer: ["onUpdate"],
       Fade: ["onUpdate"],
       Music: ["onUpdate"],
       Router: ["onUpdate"],
