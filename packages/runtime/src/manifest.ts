@@ -185,7 +185,7 @@ export const runtimeManifest: RuntimeManifest = {
     "name", "props", "applyProps", "updateProps", "transform", "placement", "layoutX", "layoutY", "worldTransform", "parent", "children", "world",
     "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
-    "passedChildrenHost", "passedChildrenSlot", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
+    "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "markChanged", "markMoved", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
     "onInput", "onUpdate", "onMount", "onUnmount",
     "attachToWorld", "detachFromWorld",

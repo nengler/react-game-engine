@@ -1041,10 +1041,13 @@ describe("M8: diagnostics", () => {
     assert.deepEqual(diag(box("children: Child", `<Sprite image="a">{children}</Sprite>`)), [DiagnosticCode.UnsupportedJsxChild]);
   });
 
-  it("does not forward children to another component yet", () => {
+  it("forwards children to another component only as the whole of what it passes (see tier3.test.ts)", () => {
     const source = `${box("children: Child", "{children}")}
-function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
+function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box><Sprite image="a" />{children}</Box></Entity>; }`;
     assert.deepEqual(diag(source), [DiagnosticCode.UnsupportedJsxChild]);
+    const ok = `${box("children: Child", "{children}")}
+function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
+    assert.deepEqual(diag(ok), []);
   });
 
   it("does not read children as a value", () => {
