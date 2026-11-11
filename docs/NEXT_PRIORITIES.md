@@ -12,7 +12,7 @@ Phase 3 is done: a compiled game runs in a native window under Node and as a Qui
 | 2 | Collisions gameplay can use: readable `other`, layers, exit events (**done**, #34) | A handler could not tell a coin from an enemy, which blocked almost any game | Done |
 | 3 | ABI v2 with a HUD layer, plus `z` draw order (`z` **done**, #36) | A score drawn in the world moves with the camera; layout and `pixelPerfect` need the same ABI change | \~1–1.5 weeks, `z` done |
 | 4 | Performance pass two: dependency-scoped `render()`, cached transforms, a collision grid | 2,000 state-driven objects with colliders still take 18 ms of a 16.7 ms frame under QuickJS | \~1.5–2 weeks |
-| 5 | Developer loop: errors in the window, scenes as an entry point, hot reload | A crash today closes the window and prints to a terminal the player may not see | \~1.5 weeks |
+| 5 | Developer loop: errors in the window and hot reload (**done**), key names checked by type (scenes as an entry point dropped) | A crash today closes the window and prints to a terminal the player may not see | \~1.5 weeks |
 
 Sizes are rough, for one engineer, in the style of the Phase 3 plan. Each priority below ends with a checklist that says when it is done.
 
@@ -46,7 +46,7 @@ This finishes priority 1. Most useful now that the HUD, `<Flex>`, the fixed reso
 **Done when**
 
 - [ ] The demo has been played on a Linux desktop, under Node and as a packaged build, with any findings filed or fixed
-- [ ] Sound plays
+- [x] Sound plays (the author, playing Kite on a Linux desktop, 2026-11-11)
 - [ ] Whether `native-desktop` in CI builds raylib once is checked (the open item from priority 1)
 
 ### 7. A real game: the first level of a precision platformer
@@ -109,7 +109,7 @@ Someone plays it on a Linux desktop after step 1 and at the end (priority 6); th
 **Done when**
 
 - [x] A one-page design note in the game's package covers the mechanics, the room list and what "finished" means for the level (`packages/kite/DESIGN.md`)
-- [x] The level is playable from title to end with keyboard or gamepad, under Node and as a packaged build, with music and sound. *Verified headlessly only*: a scripted run plays title to end through the game under Node and the first rooms under the Rust host, and `npm run package:kite` builds both the Node/V8 and the QuickJS folders and they start. Nobody has played it in a window, and no sound has been heard (priority 6)
+- [x] The level is playable from title to end with keyboard or gamepad, under Node and as a packaged build, with music and sound. *Verified headlessly only*: a scripted run plays title to end through the game under Node and the first rooms under the Rust host, and `npm run package:kite` builds both the Node/V8 and the QuickJS folders and they start. Played on a Linux desktop by the author on 2026-11-11, with sound working (priority 6)
 - [x] Every Tier 1 and Tier 2 addition is in, each with its design notes and tests, and its "Not now" row is removed or updated
 - [x] The movement constants are recorded in the design note, with untested guesses marked; a person tunes them by playing (priority 6)
 - [x] The headless tooling works on the demo and the game: screenshots and contact sheets, the harness with input scripts, and one check command
@@ -134,7 +134,7 @@ What writing a real game found, beyond the planned additions. Each says what the
 8. **The importer was never run on a map saved by Tiled.** The maps are written by `tools/make-rooms.ts` in Tiled's JSON format, and the tests use hand-written maps; real files from Tiled (other layer formats, external tilesets, more than one tileset, tile objects) may differ. *Should become:* open a room in Tiled and fix what breaks (priority 6 or 8).
 9. **Styled sprites leave the fast path.** A sprite with a frame, a flip or a tint is written by the general walk and is not moved as a block; fine for a handful, measurable for hundreds. `<Tilemap>` has no culling (the level draws the room and its neighbours only, by conditions). *Should become:* measure with a scene of many animated sprites before optimising.
 10. **Frame time spikes when a room changes** (about 25 ms for one step on the cloud VM): a `<Tilemap>` is made and the bounds change. Not noticeable during a 0.4 s slide that the world waits through, but it is the first thing to look at if a person sees a hitch. *Should become:* build the next room's tilemap one step early.
-11. **Sound has never been heard**, and music streaming has run only against a recording backend and a silent librge. Priority 6.
+11. ~~**Sound has never been heard**~~ It has: the author played Kite on a Linux desktop (2026-11-11), and its sound and music worked.
 12. **Room 4 was unplayable** (found by playing, not by the tests): the search found a contrived route, and the natural dash-up never worked. Fixed by redesigning the room and by testing a window of dash timings for the two dash rooms. *Should become:* a margin check for every room's key move, not only those two, and the search preferring routes a person would take.
 13. **Particles in an emitter that is removed are removed with it.** The first version mounted a burst emitter for 0.1 s and unmounted it, which cut the particles off, and kept them in the character's space, so they stuck to it. Emitters now stay mounted, switch on, and use `space="world"`. *Should become:* the guide should say this, and `<Particles>` may deserve a one-shot `burst` trigger that is not a prop toggled twice.
 14. **A router** was asked for, and built: `<Router route transition>` with `<Route name>` screens, transitions as plain functions (finding 1's escape hatch, now real: plain `.ts` functions are callable from components and passable as props). `useUpdate` takes the input, and an action can take it, so Kite's controls are read in plain TypeScript. Sharp scaling (ABI v6) fixes uneven pixels at fractional scales. See NATIVE_PLAN.md and DESIGN.md.
@@ -180,7 +180,7 @@ Every Phase 3 milestone was built and tested only in a Linux cloud container, ag
 **Done when**
 
 - [ ] The demo has been played on a Linux desktop, with any findings filed
-- [ ] Sound plays
+- [x] Sound plays (the author, playing Kite on a Linux desktop, 2026-11-11)
 - [x] Cargo and the raylib CMake build are cached in CI (#32); whether `native-desktop` builds raylib once is unchecked
 
 ## 2. Collisions that gameplay can use
@@ -265,18 +265,20 @@ When a handler throws, both hosts print the stack and exit with status 1. That i
 **Work**
 
 - **Errors in the window.** Catch an exception from a step, keep the window open, and draw the message and stack in screen space (on priority 3's layer) until it is closed. Keep exit status 1 for headless runs and CI.
-- **Scenes as an entry point.** `loadScene` and the Tiled importer exist, but `PlayerConfig` only takes `root: () => GameObject`. Add `scene` and `prefabs` options, which the Phase 3 plan already suggested if `root` turned out awkward.
 - **Hot reload in the Node host.** Recompile a changed `.tsx`, swap its class, and keep state by element id. The IR's stable element ids and scene ids were designed for this.
-- **Key names checked at compile time.** `input.pressed("Spcae")` warns once at run time today. The compiler can report it with a did-you-mean, as it already does for shape kinds.
+- **Key names checked by type.** Since `createControls`, a game writes its key names in one place, the bindings table, and everything else asks about actions (`input.pressed("confirm")`). A typo there (`jump: ["Spcae"]`) is only a warning at run time, on the first press. Type each binding as a union of the key names the player knows (`KeyName`, kept equal to `protocol.ts`'s `KEYS` by a test), so the editor and `tsc` report it. A key name written straight into `input.pressed("…")` can take the same type where the argument is not an action.
 
 **Done when**
 
 - [x] A thrown handler shows its message in the window under both hosts; headless runs still exit 1 (2026-11-11: drawn by the TypeScript player, so the Rust host needed no change; see DESIGN.md, "Errors in the window")
-- [ ] A game can start from a scene file and a prefab registry
 - [x] Editing a component while `npm run play:demo` runs updates it in place, keeping its state (2026-11-11: `play.ts` hot reloads by default, keeping each component's `useState` and refs by tree path and carrying the game state over; compile errors show in the window; see DESIGN.md, "Hot reload", and NATIVE_PLAN.md, `packages/player-node`)
-- [ ] An unknown key name is a compile error with a suggestion
+- [ ] A misspelt key name in `createControls` is a type error
 
-**Started 2026-11-11** with errors in the window and hot reload, the two that matter most for working on a game. Scenes as an entry point may no longer be needed: Kite switches screens with `<Router>`, and nothing has asked to start a game from a scene file. The key-name check now has to know a game's action names too (`createControls`, `input.pressed("confirm")`).
+**Started 2026-11-11** with errors in the window and hot reload, the two that matter most for working on a game.
+
+**Dropped 2026-11-11:**
+- *Scenes as an entry point* (`scene` and `prefabs` options on `PlayerConfig`). It was planned before `<Router>`: Kite switches its title, level and end screens in code, and nothing has asked to start a game from a scene file. `loadScene` and the Tiled importer stay as they are. Pull it back in if a game wants its levels to be data a tool writes.
+- *A compiler diagnostic, with a did-you-mean, for every `input.pressed("…")`.* Most of those now name actions, so the compiler would have to follow a game's action names through the hooks and into its plain `.ts` rules, for a typo the run time already reports once. The type on the bindings above catches the case that matters.
 
 ## Order of work
 
