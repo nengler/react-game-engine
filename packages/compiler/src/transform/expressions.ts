@@ -311,7 +311,7 @@ export class ExpressionLowering extends LoweringBase {
       return null;
     }
     const count = node.arguments.length;
-    if (result.expected === -1 ? count < 1 : count !== result.expected) {
+    if (result.expected === -2 ? false : result.expected === -1 ? count < 1 : count !== result.expected) {
       this.report(DiagnosticCode.UnsupportedExpression, `${result.label} expects ${result.expected === -1 ? "at least one" : result.expected} argument(s).`, node);
       return null;
     }
@@ -328,6 +328,21 @@ export class ExpressionLowering extends LoweringBase {
   protected lowerArrayMethod(node: CallExpression, callee: PropertyAccessExpression): ExprIR | null {
     const name = callee.name.text;
     const code = DiagnosticCode.UnsupportedExpression;
+    // A method of a per-instance object (state a factory made): opaque, like a plain function.
+    if (isIdentifier(callee.expression) && !Object.hasOwn(ARRAY_METHODS, name)) {
+      const binding = this.scope.get(callee.expression.text);
+      if (binding?.kind === "state" && this.handleStates.has(binding.id)) {
+        const receiver = this.lowerNode(callee.expression);
+        if (!receiver) return null;
+        const args: ExprIR[] = [];
+        for (const argument of node.arguments) {
+          const lowered = this.lowerNode(argument);
+          if (!lowered) return null;
+          args.push(lowered);
+        }
+        return { kind: "Call", callee: { kind: "ValueMethod", receiver, name }, args };
+      }
+    }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
       this.report(
         code,

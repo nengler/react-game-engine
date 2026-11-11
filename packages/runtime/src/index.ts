@@ -30,11 +30,14 @@ export { findTilemap, getTilemap, registerTilemaps, TileGrid, TILE_FLIP_D, TILE_
 export { Music, type MusicProps } from "./components/Music.ts";
 export { Particles, PARTICLE_SPACES, type ParticlesProps } from "./components/Particles.ts";
 export { ParticleLayer, type ParticleLayerProps } from "./components/ParticleLayer.ts";
+export { EventListener, type EventListenerProps } from "./components/EventListener.ts";
 export {
+  createEvents,
   createParticles,
   createShake,
   createSounds,
   createSquash,
+  EventChannel,
   ParticleStore,
   Shake,
   SoundStore,

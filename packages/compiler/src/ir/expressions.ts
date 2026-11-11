@@ -200,6 +200,8 @@ export type CalleeIR =
   | { readonly kind: "Method"; readonly receiver: ParamReadIR; readonly name: string }
   /** `enemies.filter((e) => …)`: an allowlisted, non-mutating array method (`ARRAY_METHODS`) on any value. */
   | { readonly kind: "ArrayMethod"; readonly receiver: ExprIR; readonly name: ArrayMethodName }
+  /** `squash.start(0.6, 1.4)`: a method of a per-instance object, state made by a factory (`useState(() => createSquash())`). Opaque. */
+  | { readonly kind: "ValueMethod"; readonly receiver: ExprIR; readonly name: string }
   /** A callback prop: `onDefeated()` or `onDefeated?.()`. Argument counts and types are left to the type-check. */
   | { readonly kind: "Prop"; readonly name: string; readonly optional: boolean };
 

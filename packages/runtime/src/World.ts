@@ -41,6 +41,7 @@ export class World {
   #structure = new Set<GameObject>();
   #onInput = new Set<GameObject>();
   #onUpdate = new Set<GameObject>();
+  readonly #inert = new Set<GameObject>();
   #frozen = 0;
 
   constructor() {
@@ -68,11 +69,12 @@ export class World {
    */
   tick(dt: number, input: InputState = NO_INPUT): number {
     const inputs = [...this.#onInput];
-    for (const object of inputs) if (object.world === this) object.onInput(input);
+    const anyInert = this.#hasInert();
+    for (const object of inputs) if (object.world === this) object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
     if (this.#frozen > 0) this.#frozen--;
     else {
       const updates = [...this.#onUpdate];
-      for (const object of updates) if (object.world === this) object.onUpdate(dt, input);
+      for (const object of updates) if (object.world === this) object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
     }
     // A freeze asked for during this tick starts with the next.
     if (freezeRequest > this.#frozen) this.#frozen = freezeRequest;
@@ -114,8 +116,32 @@ export class World {
    */
   reportPress(pointer: Pressable, x: number, y: number): boolean {
     if (pointer.world !== this || !pointer.contains(x, y)) return false;
+    if (this.#hasInert() && this.isInert(pointer as unknown as GameObject)) return false;
     pointer.onPress?.();
     return true;
+  }
+
+  /**
+   * Make a subtree inert, or not, as the HTML attribute does: it still updates, draws and collides, but hears no input (its
+   * `useInput` and `useUpdate` get no keys pressed) and none of its pointers can be pressed. A router makes the screen it is
+   * leaving inert for the transition, so a button pressed during a fade acts only on the screen being entered.
+   */
+  setInert(object: GameObject, inert: boolean): void {
+    if (inert) this.#inert.add(object);
+    else this.#inert.delete(object);
+  }
+
+  /** Whether `object` is in a subtree made inert (see `setInert`). */
+  isInert(object: GameObject): boolean {
+    if (this.#inert.size === 0) return false;
+    for (let at: GameObject | null = object; at !== null; at = at.parent) if (this.#inert.has(at)) return true;
+    return false;
+  }
+
+  #hasInert(): boolean {
+    if (this.#inert.size === 0) return false;
+    for (const object of this.#inert) if (object.world !== this) this.#inert.delete(object);
+    return this.#inert.size > 0;
   }
 
   /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */

@@ -22,7 +22,8 @@ export class ElementLowering extends HookLowering {
   ): CallbackPropIR | null {
     this.functionDepth++;
     const handler = lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
-      paramTypes: params ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
+      // A parameter typed "*" by the manifest takes its type from the element's other props (an event channel's event type).
+      paramTypes: params && !params.some((p) => p.type === "*") ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
       returns: "void",
       what: `${name} callback`,
     });

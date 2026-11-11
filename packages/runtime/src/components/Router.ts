@@ -150,6 +150,8 @@ export class Router<P extends object = {}> extends GameObject<P> {
       return;
     }
     this.#leaving = leaving;
+    // The screen being left still animates but no longer hears the buttons: they are the next screen's.
+    this.world?.setInert(leaving, true);
     this.#elapsed = 0;
     this.#apply(0, from, to);
   }
@@ -159,6 +161,7 @@ export class Router<P extends object = {}> extends GameObject<P> {
     const leaving = this.#leaving;
     if (leaving === null) return;
     this.#leaving = null;
+    this.world?.setInert(leaving, false);
     this.queueRemoveChild(leaving);
     this.#settle(leaving);
     if (this.#current !== null) this.#settle(this.#current);

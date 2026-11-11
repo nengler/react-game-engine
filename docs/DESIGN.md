@@ -1327,6 +1327,16 @@ step: (input, dt) => {
   it in `onUpdate`, so it follows the fixed timestep and freezes with the world, and marks itself changed while it moves.
   `Sprite` and `AnimatedSprite` now implement `onMount`, `onUnmount` and `onUpdate` (the manifest's `intrinsicHooks`); the
   frame builder compares a hand-written subclass's hooks with its built-in's, so that does not make every sprite volatile.
+- **Per-instance effects.** A store in a module is global; what belongs to one entity is that component's own, made with
+  React's lazy initializer: `const [squash] = useState(() => createSquash())`. The arrow's body is the initial value (the
+  generated field is evaluated once per instance anyway), typed `ReturnType<typeof createSquash>`, and a handler may call its
+  methods (`squash.start(0.6, 1.4)`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function
+  from the manifest, or a function from a `.ts` file), so arrays and records keep their messages. The manifest's
+  `functions` table now includes `createSquash`, `createShake` and `createEvents` (`-2`: any number of arguments).
+- **`createEvents<T>()`** → `EventChannel<T>`: `emit(event)`, `subscribe(listener)`. **`<EventListener events={channel}
+  onEvent={(e) => …} />`** listens while it is in the world, so a component answers events with its own state in an ordinary
+  handler; the parameter's type comes from the channel (the manifest marks the callback parameter `"*"`, lowered as
+  contextual). Kite's game state emits each step's events on `gameEvents`, and the character squashes itself from them.
 - **Continuous effects stay JSX.** A trail "while dashing" is state, so it is `<Particles emitting={dashing}>` in the component.
   The stores are for moments.
 - **Rules stay pure.** Kite's `stepRun` reports events and never calls a store, so the solver and the tests step it with no

@@ -54,6 +54,8 @@ export class LoweringBase {
   protected readonly storeImports: ReadonlySet<string>;
   /** Names of functions imported from relative `.ts` files, which a component may call and pass. */
   protected readonly plainImports: ReadonlySet<string>;
+  /** State made once per instance by a factory (`useState(() => createSquash())`), whose methods handlers may call. */
+  protected readonly handleStates = new Set<string>();
 
   constructor(
     component: ComponentAnalysis,

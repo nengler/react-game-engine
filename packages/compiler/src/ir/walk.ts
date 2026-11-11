@@ -40,7 +40,7 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "Arrow":
       return [e.body];
     case "Call":
-      return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" ? [e.callee.receiver, ...e.args] : e.args;
+      return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod" ? [e.callee.receiver, ...e.args] : e.args;
     case "TemplateLiteral":
       return e.expressions;
     case "Unary":

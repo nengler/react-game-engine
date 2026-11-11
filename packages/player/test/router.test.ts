@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Route, Router, Shape, World, type Transition } from "@rge/runtime";
+import { createInputState, Entity, Route, Router, Shape, World, type InputState, type Transition } from "@rge/runtime";
 import { createPlayer, RecordingBackend, type DecodedRecord } from "../src/index.ts";
 
 const box = (color: string): Shape => new Shape({ kind: "rect", width: 4, height: 4, color });
@@ -58,6 +58,41 @@ describe("<Router>", () => {
     world.tick(0.4);
     assert.deepEqual(inWorld(a, b), [false, true], "the old screen leaves");
     assert.deepEqual([b.transform.x, b.visible, router.cover, router.transitioning], [0, true, 0, false], "the new one is where it belongs");
+  });
+
+  it("makes the screen being left inert while the transition runs: it still updates, but hears no buttons", () => {
+    const heard: string[] = [];
+    class Listener extends Entity {
+      readonly label: string;
+      constructor(label: string) {
+        super();
+        this.label = label;
+      }
+      override onInput(input: InputState): void {
+        if (input.pressed("Z")) heard.push(`${this.label} input`);
+      }
+      override onUpdate(_dt: number, input?: InputState): void {
+        if (input?.pressed("Z")) heard.push(`${this.label} update`);
+      }
+    }
+    const { router, a, b } = screens("a", () => ({ cover: 0 }), 1);
+    a.addChild(new Listener("a"));
+    b.addChild(new Listener("b"));
+    const world = new World();
+    world.mount(router);
+    const z = createInputState({ pressed: ["Z"], down: ["Z"] });
+    router.route = "b";
+    world.tick(0.1);
+    world.tick(0.1, z);
+    assert.deepEqual(heard, ["b input", "b update"], "the leaving screen is in the world, and deaf");
+    assert.equal(world.isInert(a.children[0]!), true);
+    for (let i = 0; i < 12; i++) world.tick(0.1);
+    assert.equal(world.isInert(a.children[0]!), false, "no longer inert once it has left");
+    heard.length = 0;
+    router.route = "a";
+    world.tick(0.1);
+    world.tick(0.1, z);
+    assert.deepEqual(heard, ["a input", "a update"]);
   });
 
   it("finishes a running transition before starting the next, and rejects a route that does not exist", () => {

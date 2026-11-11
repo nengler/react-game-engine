@@ -1,6 +1,6 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type Node } from "typescript/ast";
-import { isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
+import { isArrowFunction, isBlock, isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type TypeIR, collectDependencies, stateReads, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
@@ -174,8 +174,18 @@ export class HookLowering extends ExpressionLowering {
             continue;
           }
           // Initial values are evaluated before any state exists: lower with the scope as it is so far,
-          // then reject any state reads.
-          const initialValue = this.lowerNode(hook.initializer);
+          // then reject any state reads. `useState(() => make())` is React's lazy initializer: the generated field is evaluated
+          // once per instance anyway, so the arrow's body is the initial value (a per-instance object, such as an effect).
+          const lazy = unwrapParens(hook.initializer);
+          let initializer = hook.initializer;
+          if (isArrowFunction(lazy)) {
+            if (lazy.parameters.length > 0 || isBlock(lazy.body)) {
+              this.report(DiagnosticCode.InvalidUseState, "A lazy initial value is an arrow with no parameters returning the value: `useState(() => createSquash())`.", lazy);
+              continue;
+            }
+            initializer = lazy.body as typeof initializer;
+          }
+          const initialValue = this.lowerNode(initializer);
           if (!initialValue) continue;
           if (stateReads(initialValue).length > 0) {
             this.report(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state (it may read props).", hook.initializer);
@@ -183,6 +193,7 @@ export class HookLowering extends ExpressionLowering {
           }
           const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
           if (!type) continue;
+          if (type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain")) this.handleStates.add(id);
           state.push({ kind: "State", id, name: hook.valueName, type, initialValue });
           this.stateTypes.set(id, type);
           hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.span(hook.declaration) });
@@ -315,6 +326,10 @@ export class HookLowering extends ExpressionLowering {
     if (initial.kind === "PropRead") {
       const decl = this.propDecls.find((p) => p.name === initial.name);
       if (decl?.role === "value") return propTypeToType(decl.type);
+    }
+    // Made by a function (a runtime factory, or one from a .ts file): typed by what the function returns.
+    if (initial.kind === "Call" && (initial.callee.kind === "Function" || initial.callee.kind === "Plain") && !initial.callee.name.startsWith("Math.")) {
+      return { kind: "SourceType", text: `ReturnType<typeof ${initial.callee.name}>` };
     }
     const code = DiagnosticCode.UnsupportedStateType;
     if (initial.kind === "ArrayLiteral" || initial.kind === "ObjectLiteral") {

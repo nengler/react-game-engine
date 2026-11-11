@@ -23,6 +23,7 @@ import type { ScreenProps } from "./components/Screen.ts";
 import type { TilemapProps } from "./components/Tilemap.ts";
 import type { ParticlesProps } from "./components/Particles.ts";
 import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
+import type { EventListenerProps } from "./components/EventListener.ts";
 import type { FadeProps } from "./components/Fade.ts";
 import type { MusicProps } from "./components/Music.ts";
 import type { RouteProps, RouterProps } from "./components/Router.ts";
@@ -31,6 +32,7 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 export type { TransformProps, Child } from "./jsx-runtime.ts";
 
 export { clamp } from "./math.ts";
+export { createEvents, createShake, createSquash } from "./effects.ts";
 
 // -- state and refs -----------------------------------------------------------
 
@@ -53,7 +55,10 @@ function compileTimeOnly(name: string): never {
  * renders when it is given a new value, so `setItems([...items, item])`, never
  * a mutation of `items`.
  */
-export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>] {
+export function useState<T>(_initial: () => T): [Widen<T>, Setter<Widen<T>>];
+export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>];
+/** `useState(() => createSquash())`: React's lazy initial value, made once per instance (an object with methods, such as an effect). */
+export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>>] {
   return compileTimeOnly("useState");
 }
 
@@ -211,6 +216,14 @@ export function Particles(_props: ParticlesProps): JSX.Element {
  */
 export function ParticleLayer(_props: ParticleLayerProps): JSX.Element {
   return compileTimeOnly("ParticleLayer");
+}
+
+/**
+ * Listens to an event channel while it is in the world: `<EventListener events={gameEvents} onEvent={(e) => { if (e.type === "land") … }} />`.
+ * The event's type comes from the channel. A leaf that draws nothing.
+ */
+export function EventListener<T>(_props: EventListenerProps<T>): JSX.Element {
+  return compileTimeOnly("EventListener");
 }
 
 /**

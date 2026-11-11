@@ -192,3 +192,37 @@ export class Squash {
 export function createSquash(options: { recover?: number } = {}): Squash {
   return new Squash(options.recover ?? 1.75);
 }
+
+/**
+ * A channel of events a game sends and components listen to (`createEvents<GameEvent>()`): the game state's actions, the
+ * rules or a plain function `emit` what happened, and every mounted `<EventListener events={channel} onEvent={…} />` hears it
+ * at once, in the order they joined. For what one component must answer itself (its own sprite's squash, its own sound), where
+ * a store of effects is for what belongs to the whole game.
+ */
+export class EventChannel<T> {
+  readonly #listeners: ((event: T) => void)[] = [];
+
+  /** Tell every listener, now. */
+  emit(event: T): void {
+    for (const listener of [...this.#listeners]) listener(event);
+  }
+
+  /** Listen until the returned function is called. */
+  subscribe(listener: (event: T) => void): () => void {
+    this.#listeners.push(listener);
+    return () => {
+      const at = this.#listeners.indexOf(listener);
+      if (at >= 0) this.#listeners.splice(at, 1);
+    };
+  }
+
+  /** How many are listening: what a test checks. */
+  get listeners(): number {
+    return this.#listeners.length;
+  }
+}
+
+/** Make an event channel. Keep it in a module (`export const gameEvents = createEvents<GameEvent>()`). */
+export function createEvents<T>(): EventChannel<T> {
+  return new EventChannel<T>();
+}

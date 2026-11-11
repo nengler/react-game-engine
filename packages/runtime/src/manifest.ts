@@ -80,10 +80,14 @@ export interface RuntimeManifest {
   readonly transformIntrinsics: readonly string[];
   /** Runtime types handler parameters may have, with the members handler code may use. */
   readonly handleTypes: Readonly<Record<string, HandleTypeManifest>>;
-  /** Runtime functions handler code may call, imported from the runtime module. Name → argument count. */
+  /**
+   * Runtime functions component code may call, imported from the runtime module. Name → argument count: -1 at least one,
+   * -2 any. The `create…` factories make a per-instance effect in a lazy `useState(() => createSquash())`.
+   */
   readonly functions: Readonly<Record<string, number>>;
 }
 
+/** A callback parameter: a runtime handle type by name, or "*" for a type the element's other props give (an event channel's). */
 export interface CallbackParamManifest {
   readonly name: string;
   /** A key of `handleTypes`. */
@@ -98,7 +102,7 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "EventListener", "Fade", "Music", "Router", "Route"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route"],
   textContent: { Text: "text" },
@@ -120,6 +124,7 @@ export const runtimeManifest: RuntimeManifest = {
     Tilemap: ["map", "image", "layer", "opacity"],
     Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "count", "read", "emit", "emitAt"],
     ParticleLayer: ["particles", "emitBurst"],
+    EventListener: ["events", "onEvent"],
     Fade: ["color", "on", "duration", "amount"],
     Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
@@ -145,6 +150,7 @@ export const runtimeManifest: RuntimeManifest = {
     Tilemap: ["map", "image"],
     Particles: [],
     ParticleLayer: ["particles"],
+    EventListener: ["events", "onEvent"],
     Fade: [],
     Music: ["src"],
     Router: ["route"],
@@ -156,6 +162,7 @@ export const runtimeManifest: RuntimeManifest = {
     Camera: ["onUpdate"],
     Particles: ["onUpdate"],
     ParticleLayer: ["onMount", "onUnmount"],
+    EventListener: ["onMount", "onUnmount"],
     Fade: ["onUpdate"],
     Music: ["onUpdate"],
     Router: ["onUpdate"],
@@ -175,6 +182,8 @@ export const runtimeManifest: RuntimeManifest = {
       onCollisionExit: [{ name: "other", type: "Contact" }],
     },
     Pointer: { onPress: [] },
+    // "*": the parameter's type comes from the element's other props (the channel's event type), not from the manifest.
+    EventListener: { onEvent: [{ name: "event", type: "*" }] },
     Flex: { onPress: [] },
   },
   reservedMembers: [
@@ -198,5 +207,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },
   },
-  functions: { clamp: 3, freeze: 1 },
+  functions: { clamp: 3, freeze: 1, createSquash: -2, createShake: -2, createEvents: 0 },
 };
