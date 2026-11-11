@@ -14,16 +14,28 @@ export interface AnimatedSpriteProps extends SpriteOptions {
   frameWidth?: number;
   frameHeight?: number;
   /**
-   * The named animations of the sheet, as text: `"idle:0-1@4, run:2-7@12, die:8-12@10~"`. Each is a name, a colon, frames
-   * (`3`, `2-7`, or several joined by `+`: `1+2+3+2`), `@` and the frames per second, and a `~` at the end to play once and stay on the last
-   * frame instead of looping. See `parseAnimations`.
+   * The named animations of the sheet, as an object (`{ idle: { frames: "0-1", fps: 4 }, die: { frames: "8-12", fps: 10, once: true } }`)
+   * or as text (`"idle:0-1@4, run:2-7@12, die:8-12@10~"`: a name, a colon, frames, `@` and the frames per second, and a `~` at the end
+   * to play once). Frames are a number, a list of numbers, or text: `3`, `2-7`, or several joined by `+` (`1+2+3+2`). See
+   * `parseAnimations`.
    */
-  animations?: string;
+  animations?: string | AnimationTable;
   /** Which animation plays. Changing it restarts at its first frame; setting the same one again changes nothing. */
   animation?: string;
   /** Whether an animation without a `~` loops. Default true: false plays each once. */
   loop?: boolean;
 }
+
+/** One animation, written as an object: its frames, its rate (default 10 a second), and whether it plays once. */
+export interface AnimationEntry {
+  readonly frames: number | string | readonly number[];
+  readonly fps?: number;
+  /** Play once and stay on the last frame, instead of following the sprite's `loop`. */
+  readonly once?: boolean;
+}
+
+/** The animations of a sheet, by name: `{ idle: { frames: "0-1", fps: 3 }, run: { frames: "2-7", fps: 14 } }`. */
+export type AnimationTable = Readonly<Record<string, AnimationEntry>>;
 
 /** One named animation of a sheet. */
 export interface SheetAnimation {
@@ -39,26 +51,44 @@ export interface SheetAnimation {
  * Read `"idle:0-1@4, run:2-7@12, die:8-12@10~"` into animations. Throws a readable error for a malformed entry, so a typo shows up
  * the moment the sprite is made (and at build time for a literal).
  */
-export function parseAnimations(text: string): SheetAnimation[] {
+export function parseAnimations(text: string | AnimationTable): SheetAnimation[] {
+  if (typeof text !== "string") return animationsOf(text);
   const out: SheetAnimation[] = [];
   for (const entry of text.split(",")) {
     const item = entry.trim();
     if (item === "") continue;
     const match = /^([A-Za-z_][\w-]*)\s*:\s*([\d+\-\s]+?)\s*(?:@\s*(\d+(?:\.\d+)?))?\s*(~?)$/.exec(item);
     if (match === null) throw new Error(`Cannot read the animation '${item}': expected name:frames@fps, as in "run:2-7@12" (a trailing ~ plays it once).`);
-    const frames: number[] = [];
-    for (const part of (match[2] as string).split("+")) {
-      const range = /^\s*(\d+)(?:\s*-\s*(\d+))?\s*$/.exec(part);
-      if (range === null) throw new Error(`Cannot read the frames '${match[2] as string}' of the animation '${match[1] as string}': expected 3, 2-7 or 1+2+3+2.`);
-      const from = Number(range[1]);
-      const to = range[2] === undefined ? from : Number(range[2]);
-      if (to < from) for (let f = from; f >= to; f--) frames.push(f);
-      else for (let f = from; f <= to; f++) frames.push(f);
-    }
+    const frames = framesOf(match[2] as string, match[1] as string);
     if (out.some((a) => a.name === match[1])) throw new Error(`The animation '${match[1] as string}' is listed twice.`);
     out.push({ name: match[1] as string, frames, fps: match[3] === undefined ? 10 : Number(match[3]), once: match[4] === "~" });
   }
   return out;
+}
+
+/** `3`, `2-7` (or `7-2`, backwards) or `1+2+3+2` as frame numbers. */
+function framesOf(text: string, name: string): number[] {
+  const frames: number[] = [];
+  for (const part of text.split("+")) {
+    const range = /^\s*(\d+)(?:\s*-\s*(\d+))?\s*$/.exec(part);
+    if (range === null) throw new Error(`Cannot read the frames '${text}' of the animation '${name}': expected 3, 2-7 or 1+2+3+2.`);
+    const from = Number(range[1]);
+    const to = range[2] === undefined ? from : Number(range[2]);
+    if (to < from) for (let f = from; f >= to; f--) frames.push(f);
+    else for (let f = from; f <= to; f++) frames.push(f);
+  }
+  return frames;
+}
+
+/** An animation table as animations, checked as the text form is. */
+function animationsOf(table: AnimationTable): SheetAnimation[] {
+  return Object.entries(table).map(([name, entry]) => {
+    const frames = typeof entry.frames === "number" ? [entry.frames] : typeof entry.frames === "string" ? framesOf(entry.frames, name) : [...entry.frames];
+    if (frames.length === 0 || frames.some((f) => !Number.isInteger(f) || f < 0)) throw new Error(`The animation '${name}' needs frames: whole numbers from 0.`);
+    const fps = entry.fps ?? DEFAULT_FPS;
+    if (!(fps > 0)) throw new Error(`The animation '${name}' needs a positive fps, not ${fps}.`);
+    return { name, frames, fps, once: entry.once ?? false };
+  });
 }
 
 const DEFAULT_FPS = 10;
@@ -94,7 +124,9 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
   tint: string | undefined;
   opacity: number;
   #frames: readonly string[];
-  #animationsText: string;
+  #animationsText: string | AnimationTable;
+  /** What the animations were last read from, to tell a new table from the same one written again. */
+  #animationsKey = "";
   #animations: SheetAnimation[] = [];
   #animation: string;
 
@@ -134,13 +166,15 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
     this.elapsed = 0;
   }
 
-  get animations(): string {
+  get animations(): string | AnimationTable {
     return this.#animationsText;
   }
 
-  set animations(text: string | undefined) {
-    const next = text ?? "";
-    if (next === this.#animationsText) return;
+  set animations(value: string | AnimationTable | undefined) {
+    const next = value ?? "";
+    const key = typeof next === "string" ? next : JSON.stringify(next);
+    if (key === this.#animationsKey) return;
+    this.#animationsKey = key;
     this.#animationsText = next;
     this.#animations = parseAnimations(next);
     this.frame = 0;

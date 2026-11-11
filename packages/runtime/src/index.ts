@@ -23,7 +23,7 @@ export { Pointer, type PointerProps, type Pressable } from "./components/Pointer
 export { Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
-export { AnimatedSprite, parseAnimations, type AnimatedSpriteProps, type SheetAnimation } from "./components/AnimatedSprite.ts";
+export { AnimatedSprite, parseAnimations, type AnimatedSpriteProps, type AnimationEntry, type AnimationTable, type SheetAnimation } from "./components/AnimatedSprite.ts";
 export { Flex, FlexBox, FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, type FlexAlignItems, type FlexAnchor, type FlexDirection, type FlexJustifyContent, type FlexProps, type FlexSizing } from "./components/Flex.ts";
 export { Tilemap, type TilemapProps } from "./components/Tilemap.ts";
 export { findTilemap, getTilemap, registerTilemaps, TileGrid, TILE_FLIP_D, TILE_FLIP_H, TILE_FLIP_V, type TilemapData, type TilemapLayerData } from "./tilemap.ts";
