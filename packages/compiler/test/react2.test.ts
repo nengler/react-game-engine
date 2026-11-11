@@ -261,3 +261,19 @@ export function Pads({ onWave }: PadsProps) {
     assert.equal((pads.children[1] as Pointer).contains(-4, -4), true);
   });
 });
+
+describe("types imported from a .ts file", () => {
+  it("are imported by the generated module as types, renamed or not, when it uses them", async () => {
+    const project = compileProject({
+      "Card.tsx": `
+import type { Tower as TowerData } from "./rules.ts";
+import { type Kind } from "./rules.ts";
+interface CardProps { tower: TowerData | null; kind: Kind; }
+export function Card({ tower, kind }: CardProps) {
+  return <Entity>{tower !== null && <Text size={8}>{\`\${kind} \${tower.level}\`}</Text>}</Entity>;
+}`,
+    });
+    const code = project["Card.tsx"]!.code;
+    assert.match(code, /import type \{ Tower as TowerData, Kind \} from "\.\.\/rules\.ts";/);
+  });
+});

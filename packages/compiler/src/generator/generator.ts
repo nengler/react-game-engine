@@ -62,6 +62,8 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
     const from = options.sourceFromOutput ?? "..";
     w.line(`import { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};`);
   }
+  // Types from .ts files (a props type may name one) are imported as types once the rest is written, those it mentions only.
+  const typesAt = w.toString().length;
   for (const [specifier, { defaultName, names }] of collectComponentImports(module)) {
     const clause = [defaultName, names.length > 0 ? `{ ${names.join(", ")} }` : null].filter((part) => part !== null).join(", ");
     w.line(`import ${clause} from ${JSON.stringify(specifier)};`);
@@ -83,7 +85,16 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
     }
   }
   emitPrefabs(module, w);
-  return w.toString();
+  const text = w.toString();
+  const body = text.slice(typesAt);
+  const typesByModule = new Map<string, string[]>();
+  for (const i of module.typeImports) {
+    if (!new RegExp(`\\b${i.name}\\b`).test(body)) continue;
+    (typesByModule.get(i.module) ?? typesByModule.set(i.module, []).get(i.module)!).push(i.importedName !== undefined ? `${i.importedName} as ${i.name}` : i.name);
+  }
+  const from = options.sourceFromOutput ?? "..";
+  const lines = [...typesByModule].map(([specifier, names]) => `import type { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};\n`).join("");
+  return text.slice(0, typesAt) + lines + body;
 }
 
 /**

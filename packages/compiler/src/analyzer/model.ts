@@ -21,6 +21,8 @@ export interface SourceAnalysis {
   readonly storeImports: readonly ImportAnalysis[];
   /** Functions imported from a relative `.ts` file (not named like a hook): components may call them and pass them as values. */
   readonly plainImports: readonly ImportAnalysis[];
+  /** Types imported from a relative `.ts` file (`import type { Tower } from "./rules/battle.ts"`), for props types and state types. */
+  readonly typeImports: readonly ImportAnalysis[];
   /** Top-level `interface` / `type` declarations, which a component's props type names. */
   readonly typeDeclarations: readonly TypeDeclarationAnalysis[];
   /** Top-level constants and lower-case helper functions, which components read like plain imports. */
@@ -35,8 +37,13 @@ export interface ImportAnalysis {
   readonly isDefault: boolean;
   /** The specifier as written, e.g. `./WarningIcon.tsx`. */
   readonly module: string;
-  /** `import { type Child } from "@rge/runtime/jsx"`: a type, erased from the output (allowed from the authoring module only). */
+  /**
+   * `import { type Child } from "@rge/runtime/jsx"` or `import type { Tower } from "./rules/battle.ts"`: a type. One from the
+   * authoring module is erased; one from a `.ts` file is imported by the generated module as a type.
+   */
   readonly isTypeOnly: boolean;
+  /** `import type { Tower as TowerData }`: the name it has in its module, when it is renamed here. */
+  readonly importedName?: string;
   readonly node: Node;
 }
 

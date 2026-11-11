@@ -45,6 +45,8 @@ export class World {
   /** Every `<Pointer>` and `<Flex>` in this world: what a `pressKey`, the focus and the confirm key look through. */
   readonly #pressables = new Set<GameObject & Pressable>();
   #focused: (GameObject & Pressable) | null = null;
+  readonly #live: (GameObject & Pressable)[] = [];
+  readonly #focusables: (GameObject & Pressable)[] = [];
   #frozen = 0;
 
   constructor() {
@@ -189,10 +191,17 @@ export class World {
    * d-pad when the controls have no such action) to the nearest focusable that way, and `confirm` (or Enter and PadA) presses it.
    */
   #keys(input: InputState, anyInert: boolean): void {
-    const live: (GameObject & Pressable)[] = [];
-    for (const p of this.#pressables) if (p.world === this && !(anyInert && this.isInert(p))) live.push(p);
+    // Scratch lists kept between ticks, so a tick allocates nothing here once warm.
+    const live = this.#live;
+    const focusables = this.#focusables;
+    live.length = 0;
+    focusables.length = 0;
+    for (const p of this.#pressables) {
+      if (p.world !== this || (anyInert && this.isInert(p))) continue;
+      live.push(p);
+      if (p.focusable === true) focusables.push(p);
+    }
     const ask = (action: string, keys: readonly string[]): boolean => (input.isAction?.(action) ? input.pressed(action) : keys.some((k) => input.pressed(k)));
-    const focusables = live.filter((p) => p.focusable === true);
     if (this.#focused !== null && !focusables.includes(this.#focused)) this.focus(null);
     if (this.#focused === null) {
       const auto = focusables.find((p) => p.autoFocus === true);

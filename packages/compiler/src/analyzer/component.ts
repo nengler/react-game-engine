@@ -46,21 +46,26 @@ export function analyzeNamedImport(
     );
     return;
   }
-  // `import type {…}` (and the `defer` / `source` phases) carry a phase modifier on the whole clause.
-  if (clause.phaseModifier !== undefined) {
+  // `import type {…}` (and the `defer` / `source` phases) carry a phase modifier on the whole clause. Where types may be
+  // imported, `import type { Tower }` is every name as a type.
+  const typeClause = clause.phaseModifier === SyntaxKind.TypeKeyword && allowTypeSpecifiers && !clause.name && module.endsWith(".ts");
+  if (clause.phaseModifier !== undefined && !typeClause) {
     diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(statement)));
     return;
   }
   if (clause.name) imports.push({ name: clause.name.text, isDefault: true, isTypeOnly: false, module, node: clause });
   if (bindings && isNamedImports(bindings)) {
     for (const element of bindings.elements) {
-      if ((element.isTypeOnly && !allowTypeSpecifiers) || element.propertyName) {
+      const typeOnly = typeClause || element.isTypeOnly;
+      // A type may be renamed (`type Tower as TowerData`): the generated module imports it the same way.
+      if ((element.isTypeOnly && !allowTypeSpecifiers) || (element.propertyName && !(typeOnly && allowTypeSpecifiers && module.endsWith(".ts")))) {
         diagnostics.push(
           error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(element)),
         );
         continue;
       }
-      imports.push({ name: element.name.text, isDefault: false, isTypeOnly: element.isTypeOnly, module, node: element });
+      const importedName = element.propertyName && isIdentifier(element.propertyName) ? element.propertyName.text : undefined;
+      imports.push({ name: element.name.text, isDefault: false, isTypeOnly: typeOnly, module, node: element, ...(importedName !== undefined ? { importedName } : {}) });
     }
   }
 }

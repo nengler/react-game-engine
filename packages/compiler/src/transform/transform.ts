@@ -109,7 +109,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
 
   checkStaticCycles(components, diagnostics);
 
-  return { module: { kind: "Module", sourceFile: analysis.fileName, typeDeclarations, components, plainImports, moduleDeclarations }, diagnostics };
+  return { module: { kind: "Module", sourceFile: analysis.fileName, typeDeclarations, components, plainImports, moduleDeclarations, typeImports: analysis.typeImports.map((i) => ({ name: i.name, module: i.module, ...(i.importedName !== undefined ? { importedName: i.importedName } : {}) })) }, diagnostics };
 }
 
 /** The component lowering: each layer in its own file (lowering, expressions, hooks, elements), each extending the one before. */

@@ -52,9 +52,10 @@ export class Text<P extends object = {}> extends GameObject<P> {
     return this.#size;
   }
 
-  set size(value: number) {
-    this.#size = value;
-    this.#sized = true;
+  /** `undefined` (an optional prop passed on unset) goes back to no size given. */
+  set size(value: number | undefined) {
+    this.#sized = value !== undefined;
+    this.#size = value ?? DEFAULT_TEXT_SIZE;
   }
 
   /** Whether a size was given. Text in a bitmap font without one is drawn at the font's own cell height, one pixel per pixel. */

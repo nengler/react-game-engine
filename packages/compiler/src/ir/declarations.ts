@@ -26,6 +26,8 @@ export interface IRModule {
    * copied into the generated module as written, before the components, which read them as they read a plain import.
    */
   readonly moduleDeclarations: readonly ModuleDeclarationIR[];
+  /** Types imported from relative `.ts` files: the generated module imports them as types, from where they are. */
+  readonly typeImports: readonly { readonly name: string; readonly importedName?: string; readonly module: string }[];
 }
 
 /** `const ICON = { gold: 3 } as const;` or `function towerFrame(kind: TowerKind, level: number) { … }` at the top of a component file. */

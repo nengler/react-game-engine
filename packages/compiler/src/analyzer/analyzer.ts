@@ -67,7 +67,7 @@ export function analyzeSourceFile(
       if (specifier !== null && /^\.\.?\/.*\.tsx$/.test(specifier)) {
         analyzeNamedImport(statement, specifier, imports, diagnostics, span, "Component imports", `import { Name } from "${specifier}"`, true);
       } else if (specifier !== null && /^\.\.?\/.*\.ts$/.test(specifier)) {
-        analyzeNamedImport(statement, specifier, relativeImports, diagnostics, span, "Imports from a .ts file", `import { useGame } from "${specifier}"`, false);
+        analyzeNamedImport(statement, specifier, relativeImports, diagnostics, span, "Imports from a .ts file", `import { useGame } from "${specifier}"`, false, true);
       } else if (specifier !== null && specifier === authoringModule) {
         analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity, type Child } from "${specifier}"`, false, true);
       } else {
@@ -171,9 +171,10 @@ export function analyzeSourceFile(
   }
 
   // From a relative .ts file come the game state (a name that looks like a hook, `useGame`) and plain functions, which components may call.
-  const storeImports = relativeImports.filter((i) => HOOK_NAME.test(i.name));
-  const plainImports = relativeImports.filter((i) => !HOOK_NAME.test(i.name));
-  return { fileName, sourceFile, components: resolved, imports, authoringImports, storeImports, plainImports, typeDeclarations, moduleDeclarations, diagnostics };
+  const typeImports = relativeImports.filter((i) => i.isTypeOnly);
+  const storeImports = relativeImports.filter((i) => !i.isTypeOnly && HOOK_NAME.test(i.name));
+  const plainImports = relativeImports.filter((i) => !i.isTypeOnly && !HOOK_NAME.test(i.name));
+  return { fileName, sourceFile, components: resolved, imports, authoringImports, storeImports, plainImports, typeImports, typeDeclarations, moduleDeclarations, diagnostics };
 }
 
 

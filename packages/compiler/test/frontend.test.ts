@@ -116,6 +116,7 @@ describe("IR construction", () => {
       typeDeclarations: [],
       plainImports: [],
       moduleDeclarations: [],
+      typeImports: [],
       components: [
         {
           kind: "Component",
