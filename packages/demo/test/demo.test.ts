@@ -329,3 +329,12 @@ describe("demo: the headless harness", () => {
     assert.deepEqual(result.warnings, []);
   });
 });
+
+describe("demo: scripted clicks", () => {
+  it("clicks the HUD button from an input script (click@x,y)", () => {
+    const frames = parseInputScript("_, click@30,50, _, click@60,60, _", { bindings, screen: { ...WINDOW, windowWidth: WINDOW.width, windowHeight: WINDOW.height, fit: "expand" } });
+    const run = runScript(gameConfig, frames, () => 0);
+    const last = run.backend.lastFrame.records.flatMap((r) => (r.op === "text" && r.text.startsWith("Clicks") ? [r.text] : []));
+    assert.deepEqual(last, ["Clicks: 2"]);
+  });
+});
