@@ -1,3 +1,4 @@
+import { moveActorX, moveActorY } from "@rge/runtime";
 import * as K from "./constants.ts";
 import { BODY_H, BODY_W, DUCK_H } from "./constants.ts";
 import type { GameEvent } from "./events.ts";
@@ -612,34 +613,21 @@ class Stepper {
     b.forceMoveTime = K.CLIMB_HOP_FORCE_TIME;
   }
 
-  // -- moving, a pixel at a time, with Celeste's collision rules ---------------------------------------------------
+  // -- moving, a pixel at a time (the engine's mover), with Celeste's collision rules as its callbacks ----------------
+
+  readonly blocked = (x: number, y: number): boolean => hits(this.solid, x, y, heightOf(this.b));
 
   moveH(amount: number): void {
-    const b = this.b;
-    b.rx += amount;
-    let steps = Math.round(b.rx);
-    b.rx -= steps;
-    const dir = steps < 0 ? -1 : 1;
-    while (steps !== 0) {
-      if (!this.hitsAt(dir, 0)) {
-        b.x += dir;
-        steps -= dir;
-        continue;
-      }
-      if (this.onCollideH(dir)) continue;
-      b.rx = 0;
-      return;
-    }
+    moveActorX(this.b, amount, this.blocked, (dir) => this.onCollideH(dir));
   }
 
-  /** Blocked moving sideways. True when the body was moved around the corner and may carry on. */
-  onCollideH(dir: number): boolean {
+  /** Blocked moving sideways: a dash may duck into a low gap or slide past a corner; otherwise the speed stops (and is kept a moment). */
+  onCollideH(dir: number): void {
     const b = this.b;
     if (b.dashing) {
-      // A dash along the ground into a low gap ducks into it; a dash into a corner slides past it.
       if (b.onGround && !b.ducking && !hits(this.solid, b.x + dir, b.y + BODY_H - DUCK_H, DUCK_H)) {
         this.duck();
-        return true;
+        return;
       }
       if (b.vy === 0 && b.vx !== 0) {
         for (let i = 1; i <= K.DASH_CORNER_CORRECTION; i++) {
@@ -647,7 +635,7 @@ class Stepper {
             if (!this.hitsAt(dir, i * j)) {
               b.y += i * j;
               b.x += dir;
-              return true;
+              return;
             }
           }
         }
@@ -659,36 +647,19 @@ class Stepper {
     }
     b.vx = 0;
     b.dashAttack = 0;
-    return false;
   }
 
   moveV(amount: number, fall: number, wasOnGround: boolean): void {
     const b = this.b;
-    b.ry += amount;
-    let steps = Math.round(b.ry);
-    b.ry -= steps;
-    const dir = steps < 0 ? -1 : 1;
-    while (steps !== 0) {
-      if (!this.hitsAt(0, dir)) {
-        b.y += dir;
-        steps -= dir;
-        continue;
-      }
-      if (this.onCollideV(dir)) {
-        steps -= dir;
-        continue;
-      }
-      b.ry = 0;
-      break;
-    }
+    moveActorY(b, amount, this.blocked, (dir) => this.onCollideV(dir));
     // Where the body stands now, and a landing.
     b.onGround = b.vy >= 0 && this.hitsAt(0, 1);
     if (b.onGround && !wasOnGround && fall > 0 && !b.climbing) this.events.push({ type: "land", x: b.x + BODY_W / 2, y: b.y + heightOf(b), speed: fall });
     if (b.onGround) b.sliding = false;
   }
 
-  /** Blocked moving up or down. True when the body was moved around the corner (it has taken that step). */
-  onCollideV(dir: number): boolean {
+  /** Blocked moving up or down: a dash landing by a ledge slides off it, a jump into a corner slides past it; otherwise the speed stops. */
+  onCollideV(dir: number): void {
     const b = this.b;
     if (dir > 0) {
       // A dash landing just past a ledge slides off it instead of landing on its corner.
@@ -698,7 +669,7 @@ class Stepper {
             if (!this.hitsAt(side * i, 1) && !this.hitsAt(side * i, 0)) {
               b.x += side * i;
               b.y += 1;
-              return true;
+              return;
             }
           }
         }
@@ -713,7 +684,7 @@ class Stepper {
           if (!this.hitsAt(side * i, -1)) {
             b.x += side * i;
             b.y -= 1;
-            return true;
+            return;
           }
         }
       }
@@ -721,6 +692,5 @@ class Stepper {
     }
     b.vy = 0;
     b.dashAttack = 0;
-    return false;
   }
 }

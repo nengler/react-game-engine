@@ -19,5 +19,5 @@ export const REPLAYS: readonly string[] = [
   // 7. Gem ledge
   "right*52, right*16+jump*16, right*4, right*4+jump*4, right*4, dash, _*3, up+dash, up*3, _*4, right*60, dash, _*11, jump*4, right*4, _*4, right*8, _*4, _*25",
   // 8. Summit
-  "right*16+jump*16, right*4, right*4+jump*4, dash, _*3, right+up+dash, right*3+up*3, _*4, right*32, right*16+jump*16, right*4, right*4+jump*4, jump*4, dash, _*3, jump*4, right*12+jump*12, _*4, jump*12, right*4+jump*4, right*8, jump*8, _*4, right*12+jump*12, right*4, right*4+jump*4, right*8, right*4+jump*4, _*4",
+  "right*16+jump*16, right*4, right*4+jump*4, dash, _*3, right+up+dash, right*3+up*3, _*4, right*32, right*16+jump*16, right*4, right*4+jump*4, jump*4, dash, _*3, jump*4, right*12+jump*12, right*4, jump*16, right*12, jump*8, _*4, right*12+jump*12, right*4, right*4+jump*4, right*12, _*4",
 ];
