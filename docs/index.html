@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RGE Docs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: sticky searchable sidebar + one reading column; reference tables scroll inside their own wrappers. */
+:root {
+  --bg: #f6f6f2;
+  --panel: #ffffff;
+  --fg: #1c2430;
+  --muted: #5b6676;
+  --line: #dcdcd2;
+  --accent: #b4540a;
+  --accent-soft: #f7e6d6;
+  --code-bg: #eef0ee;
+  --code-fg: #1c2430;
+  --tok-kw: #7a3ea8;
+  --tok-str: #1f7a4d;
+  --tok-com: #7b8794;
+  --tok-num: #b4540a;
+  --tok-tag: #1b5fa8;
+  --good: #1f7a4d;
+  --bad: #b3261e;
+  --font-head: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --panel: #181e27; --fg: #e3e7ee; --muted: #94a0b2; --line: #2a3340;
+    --accent: #f0a050; --accent-soft: #3a2a18; --code-bg: #1d2530; --code-fg: #e3e7ee;
+    --tok-kw: #c79bf0; --tok-str: #7fd3a3; --tok-com: #7b8794; --tok-num: #f0a050; --tok-tag: #7fb4f0;
+    --good: #7fd3a3; --bad: #f08a82; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #181e27; --fg: #e3e7ee; --muted: #94a0b2; --line: #2a3340;
+  --accent: #f0a050; --accent-soft: #3a2a18; --code-bg: #1d2530; --code-fg: #e3e7ee;
+  --tok-kw: #c79bf0; --tok-str: #7fd3a3; --tok-com: #7b8794; --tok-num: #f0a050; --tok-tag: #7fb4f0;
+  --good: #7fd3a3; --bad: #f08a82; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--font-body); margin: 0; }
+.shell { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1220px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); gap: 40px; }
+aside { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 24px 4px 24px 0; }
+.brand { font: 700 20px/1 var(--font-head); letter-spacing: -0.01em; }
+.brand small { display: block; margin-top: 6px; font: 400 12px/1.4 var(--font-body); color: var(--muted); }
+#q { width: 100%; margin: 16px 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; }
+#q:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav h4 { margin: 18px 0 4px; font: 600 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+nav a { display: block; padding: 3px 8px; margin-left: -8px; border-radius: 5px; color: var(--fg); text-decoration: none; font-size: 14px; }
+nav a:hover { background: var(--accent-soft); }
+nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+nav .none { color: var(--muted); font-size: 13px; padding: 8px 0; }
+main { min-width: 0; padding: 32px 0 96px; }
+.intro { font-size: 17px; max-width: 64ch; }
+section { padding-top: 40px; border-top: 1px solid var(--line); margin-top: 40px; }
+section:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+h1 { font: 700 40px/1.1 var(--font-head); letter-spacing: -0.02em; margin: 0 0 12px; text-wrap: balance; }
+h2 { font: 700 27px/1.2 var(--font-head); letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance; }
+h3 { font: 700 18px/1.3 var(--font-head); margin: 28px 0 8px; }
+h3 code, h2 code { font-size: .9em; }
+p, li { max-width: 74ch; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+li { margin: 4px 0; }
+a { color: var(--accent); }
+code { font: 13px/1.5 var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre.code { position: relative; background: var(--code-bg); color: var(--code-fg); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin: 14px 0; overflow-x: auto; font: 13px/1.6 var(--font-mono); }
+pre.code code { background: none; padding: 0; font: inherit; overflow-wrap: normal; }
+pre.code .lang { position: absolute; top: 6px; right: 10px; font: 500 10px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+pre.code button.copy { position: absolute; top: 22px; right: 8px; font: 500 11px/1 var(--font-body); padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--muted); cursor: pointer; opacity: 0; }
+pre.code:hover button.copy, pre.code button.copy:focus-visible { opacity: 1; }
+.k { color: var(--tok-kw); } .s { color: var(--tok-str); } .c { color: var(--tok-com); font-style: italic; } .n { color: var(--tok-num); } .t { color: var(--tok-tag); }
+.tablewrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 11px/1.2 var(--font-body); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; }
+td.type { font: 12.5px/1.5 var(--font-mono); color: var(--tok-tag); }
+.req { color: var(--bad); font-weight: 600; font-size: 11px; margin-left: 4px; }
+.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; max-width: 78ch; }
+.callout p { margin: 4px 0; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pair > div { min-width: 0; }
+.pair h5 { margin: 6px 0 0; font: 600 12px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
+.pair .yes h5 { color: var(--good); } .pair .no h5 { color: var(--bad); }
+.tag { display: inline-block; font: 600 10.5px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); vertical-align: middle; margin-left: 6px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card b { font-family: var(--font-head); }
+.card p { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 16px 0; }
+.pipeline div { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; flex: 1 1 140px; min-width: 0; }
+.pipeline b { display: block; font: 700 14px var(--font-head); margin-bottom: 2px; }
+.pipeline .arr { flex: 0 0 auto; min-width: 0; padding: 0; border: 0; background: none; align-self: center; color: var(--muted); font-size: 18px; }
+.menu-btn { display: none; }
+mark { background: var(--accent-soft); color: inherit; }
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  aside { position: static; height: auto; padding: 16px 0 0; }
+  nav { display: none; }
+  nav.open, #q:not(:placeholder-shown) ~ nav { display: block; }
+  .menu-btn { display: inline-block; margin: 0 0 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; cursor: pointer; }
+  .pair { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 32px; }
+  .pipeline .arr { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+
+</head>
+<body>
+<div class="shell">
+<aside>
+  <div class="brand">react-game-engine<small>Authoring guide and reference</small></div>
+  <input id="q" type="search" placeholder="Search the docs (hook, prop, error code…)" aria-label="Search the docs" autocomplete="off">
+  <button class="menu-btn" id="menu" type="button">Sections</button>
+  <nav id="nav"></nav>
+</aside>
+
+<main>
+
+<section id="overview" data-group="Start here" data-title="Overview">
+  <h1>Write games as components.</h1>
+  <p class="intro">react-game-engine is a native-first 2D engine with React-like TSX authoring. There is no React and no virtual DOM. A compiler turns each component into an ordinary TypeScript class. Its children are persistent instances that are updated in place when state changes.</p>
+
+  <div class="pipeline">
+    <div><b>Component.tsx</b>Your TSX: state, hooks, elements.</div><div class="arr">→</div>
+    <div><b>Compiler</b>Checks the rules, lowers to an IR, emits a class.</div><div class="arr">→</div>
+    <div><b>Generated .ts</b>One class per component, committed next to an <code>.ir.json</code>.</div><div class="arr">→</div>
+    <div><b>Player</b>Runs the frame loop, draws via raylib, reads input.</div>
+  </div>
+
+  <h3>The mental model in five lines</h3>
+  <ol>
+    <li>A component is a function with hooks, then <strong>one</strong> <code>return</code> of JSX. It is compiled, never executed as written.</li>
+    <li>Its root element is a built-in (<code>Entity</code>, <code>Sprite</code>, <code>Game</code>…) and the generated class <em>extends</em> it.</li>
+    <li>State is a snapshot, as in React. Setters batch into <strong>one render per frame</strong>.</li>
+    <li>Position is state: <code>transform={{ x, y }}</code> on any element, usually driven by <code>useState</code>.</li>
+    <li>Each frame runs <code>useInput</code> → <code>useUpdate</code> → render dirty components → commit structure → draw.</li>
+  </ol>
+
+  <div class="callout"><p><strong>The rule of thumb.</strong> Anything outside the supported subset is a compiler diagnostic (<code>RGE####</code>), never silently ignored. If it compiles, it does what it says. See <a href="#diagnostics">Error codes</a>.</p></div>
+
+  <h3>A whole component</h3>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+import { useState, useInput, useUpdate, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { WarningIcon } from "./WarningIcon.tsx";
+
+export function Player() {
+  const [x, setX] = useState(0);
+  const [health, setHealth] = useState(100);
+
+  useInput((input) => {
+    if (input.pressed("Space")) setHealth((h) => h - 10);
+  });
+  useUpdate((dt) => {
+    setX((x) => x + 60 * dt);               // 60 px per second
+  });
+
+  return (
+    <Entity name="Player" transform={{ x, y: 40 }}>
+      <Sprite image={health > 50 ? "normal.png" : "hurt.png"} />
+      <Collider width={16} height={24} tag="player" />
+      {health < 25 && <WarningIcon />}
+    </Entity>
+  );
+}
+</script></pre>
+</section>
+
+<section id="quickstart" data-group="Start here" data-title="Quick start">
+  <h2>Quick start</h2>
+  <p>Requires Node.js ≥ 22.18. TypeScript files run directly via type stripping.</p>
+<pre class="code" data-lang="sh"><script type="text/plain">
+npm install
+npm test               # full pipeline tests
+npm run typecheck      # tsc over compiler, runtime, tests and generated output
+
+# Compile components: <srcDir> <outDir>
+node packages/compiler/src/cli.ts packages/demo/src packages/demo/generated
+npm run demo           # same, for the demo
+npm run example        # recompile the example and check its scenes
+
+# The native player (needs cmake + a C compiler; X11/GL dev packages on Linux)
+npm run native:build   # librge with a real window
+npm run play:demo      # play the demo under Node
+
+# Ship it
+npm run package                          # Node single-executable, ~125 MB, fast script
+npm run package -- --engine quickjs      # Rust + QuickJS host, a few MB, no JIT
+</script></pre>
+  <h3>Project setup</h3>
+  <p>Component sources are <code>.tsx</code> files in one folder. Add a <code>tsconfig.json</code> that makes the JSX types resolve:</p>
+<pre class="code" data-lang="json"><script type="text/plain">
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@rge/runtime"
+  }
+}
+</script></pre>
+  <h3>The compiler CLI</h3>
+<pre class="code" data-lang="sh"><script type="text/plain">
+rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
+</script></pre>
+  <div class="tablewrap"><table>
+    <tr><th>Flag</th><th>Effect</th></tr>
+    <tr><td><code>--no-check</code></td><td>Skip both type-checks (source <code>RGE9002</code>, generated <code>RGE9001</code>).</td></tr>
+    <tr><td><code>--scenes &lt;dir&gt;</code></td><td>Validate every <code>.json</code> scene against the compiled prefabs, and import every Tiled <code>.tmj</code> map to <code>&lt;outDir&gt;/scenes/&lt;name&gt;.scene.json</code>.</td></tr>
+    <tr><td><code>--runtime &lt;module&gt;</code></td><td>Where generated code imports the runtime from.</td></tr>
+  </table></div>
+  <p>Output: one <code>.ts</code> and <code>.ir.json</code> per component, plus <code>prefabs.ts</code> and <code>prefabs.json</code> (written only when every file compiled). A missing flag value or unknown option exits with code 2. CI regenerates the example and fails if the committed output changed, so <strong>commit regenerated output with any codegen change</strong>.</p>
+</section>
+
+<section id="layout" data-group="Start here" data-title="Repository layout">
+  <h2>Repository layout</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Package</th><th>What it is</th></tr>
+    <tr><td><code>packages/compiler</code></td><td>TSX → IR → TypeScript. Parser, analyzer, transform, generator, type-check, diagnostics.</td></tr>
+    <tr><td><code>packages/runtime</code></td><td>The authoring entry point (<code>@rge/runtime/jsx</code>), the built-in elements, <code>World</code>, <code>GameObject</code>, <code>createGameState</code>, <code>loadScene</code>, <code>Sound</code>.</td></tr>
+    <tr><td><code>packages/player</code></td><td>Pure-TypeScript half of the player: object tree → draw records, collisions, layout, the frame loop.</td></tr>
+    <tr><td><code>packages/player-node</code></td><td>Node host: koffi binding to <code>librge</code>, and <code>play.ts</code>.</td></tr>
+    <tr><td><code>host/</code>, <code>native/</code></td><td>The Rust + QuickJS-ng host and the C library <code>librge</code> (raylib window, audio, input).</td></tr>
+    <tr><td><code>packages/demo</code></td><td>A small playable game. <strong>The best reference for real usage.</strong></td></tr>
+    <tr><td><code>packages/example</code></td><td>Example components that exercise every feature, with committed generated output and scenes.</td></tr>
+  </table></div>
+  <p>Deeper design notes: <code>docs/DESIGN.md</code> (architecture, IR, decisions), <code>docs/UI_PLAN.md</code> (Flex, Hud), <code>docs/NATIVE_PLAN.md</code> (player and ABI), <code>docs/NEXT_PRIORITIES.md</code> (roadmap).</p>
+</section>
+
+<section id="decide" data-group="Start here" data-title="What do I use for…?">
+  <h2>What do I use for…?</h2>
+  <p>The quick answer table. Each row links to the detail.</p>
+  <div class="tablewrap"><table>
+    <tr><th>I want to…</th><th>Use</th></tr>
+    <tr><td>Keep a value that changes and shows on screen</td><td><a href="#hook-usestate"><code>useState</code></a> (per component) or <a href="#gamestate"><code>useGame</code></a> (shared by the game)</td></tr>
+    <tr><td>Keep a value that must <em>not</em> re-render (timers, held direction)</td><td><a href="#hook-useref"><code>useRef</code></a>, read and written as <code>.current</code> in handlers</td></tr>
+    <tr><td>Move something</td><td><code>transform={{ x, y }}</code> driven by state, changed in <a href="#hook-useupdate"><code>useUpdate</code></a></td></tr>
+    <tr><td>React to keys or the mouse position</td><td><a href="#hook-useinput"><code>useInput</code></a> → <code>input.down / pressed / released</code></td></tr>
+    <tr><td>Do something every frame</td><td><a href="#hook-useupdate"><code>useUpdate((dt) =&gt; …)</code></a></td></tr>
+    <tr><td>Do something once when it appears or disappears</td><td><a href="#hook-usemount"><code>useMount</code></a> / <code>useUnmount</code></td></tr>
+    <tr><td>Play a sound</td><td><a href="#hook-usesound"><code>useSound("hit.wav")</code></a>, called in a handler</td></tr>
+    <tr><td>Draw an image / animation / text / debug box</td><td><code>Sprite</code> / <code>AnimatedSprite</code> / <code>Text</code> / <code>Shape</code></td></tr>
+    <tr><td>Detect that two things touched</td><td><a href="#collisions"><code>Collider</code></a> with <code>onCollisionEnter</code> / <code>onCollisionExit</code>, plus <code>layer</code> and <code>hits</code></td></tr>
+    <tr><td>A clickable thing in the world</td><td><a href="#el-Pointer"><code>Pointer</code></a> + <code>onPress</code></td></tr>
+    <tr><td>A button or panel on screen (score, health, menus)</td><td><a href="#ui"><code>Hud</code> + <code>Flex</code></a>, with <code>Flex onPress</code> for buttons</td></tr>
+    <tr><td>Follow the player</td><td><code>&lt;Camera&gt;&lt;Player /&gt;&lt;/Camera&gt;</code></td></tr>
+    <tr><td>A fixed pixel-art resolution</td><td><code>&lt;Screen width height&gt;</code> inside <code>&lt;Game&gt;</code></td></tr>
+    <tr><td>Window title, size, background, assets folder</td><td>Props of <a href="#el-Game"><code>&lt;Game&gt;</code></a></td></tr>
+    <tr><td>Spawn and remove many of the same thing</td><td>A <a href="#lists">keyed list</a> over array state</td></tr>
+    <tr><td>Show or hide something</td><td><code>{cond &amp;&amp; &lt;X /&gt;}</code> or <code>{cond ? &lt;A /&gt; : &lt;B /&gt;}</code></td></tr>
+    <tr><td>Let a parent tell a child something happened</td><td>A callback prop (<code>onDefeated</code>) — see <a href="#props">Props</a></td></tr>
+    <tr><td>Wrap whatever the parent passes (a frame, a panel)</td><td><code>children: Child</code> and <code>{children}</code></td></tr>
+    <tr><td>Place levels from data, or import from Tiled</td><td><a href="#scenes">Scenes and prefabs</a></td></tr>
+  </table></div>
+</section>
+
+<section id="components" data-group="Language" data-title="Components">
+  <h2>Components</h2>
+  <p>A component is a top-level <code>function</code> declaration or <code>const</code> arrow with a <strong>capitalised name</strong>, optionally exported (one per module may be the default export, and it needs a name). Its body is, in this order:</p>
+  <ol>
+    <li>Hooks: <code>useState</code>, <code>useRef</code>, <code>useSound</code>, <code>useGame(...)</code>, and the handler hooks.</li>
+    <li>Derived values: <code>const hurt = health &lt; 25;</code>. These are inlined where used, so JSX and handlers always see current state.</li>
+    <li>One <code>return</code> of JSX.</li>
+  </ol>
+  <p>An arrow with an expression body is just its return: <code>const Dot = () =&gt; &lt;Sprite image="dot.png" /&gt;</code>.</p>
+
+  <h3>The root is a built-in</h3>
+  <p>The root element (or a fragment <code>&lt;&gt;…&lt;/&gt;</code>, which is an implicit <code>Entity</code>) is a built-in and never another component. The generated class <em>extends</em> it, so the root's props apply to the component itself and its children become the component's children.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+// This class extends Sprite: the component *is* a sprite.
+const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : "coin.png"} />;
+</script></pre>
+  <div class="callout"><p>Because a component extends its root, its state, refs and props <strong>cannot reuse that built-in's member names</strong> (for example a prop called <code>width</code> on a <code>Collider</code> root, or <code>name</code> on an <code>Entity</code> root). The compiler tells you.</p></div>
+
+  <h3>Imports</h3>
+  <ul>
+    <li>Hooks, built-in elements, <code>clamp</code> and the <code>Child</code> type come from <code>"@rge/runtime/jsx"</code>. The type form is <code>import { type Child }</code>, the one place <code>type</code> is accepted.</li>
+    <li>Components come from <code>"./Name.tsx"</code>, named or default (<code>import Monster from "./Enemy.tsx"</code>). No namespace imports, no <code>as</code>.</li>
+    <li>The game state comes from <code>"./GameState.ts"</code> — the only relative <code>.ts</code> import a component may have.</li>
+    <li>Imports are <strong>mandatory</strong>, as in React: using a hook or element without importing it is <code>RGE1005</code>.</li>
+    <li><code>Math</code> is a global and needs no import.</li>
+  </ul>
+
+  <h3>Allowed in a component body</h3>
+  <div class="pair">
+    <div class="yes"><h5>Allowed</h5><ul>
+      <li>Number, string, boolean, <code>null</code> literals</li>
+      <li>State and prop reads</li>
+      <li>Unary <code>! - +</code>, binary arithmetic, comparison, logical</li>
+      <li><code>a ? b : c</code>, parentheses, template literals</li>
+      <li>Array and object literals, with spreads</li>
+      <li>Member reads (<code>e.id</code>, <code>items.length</code>, <code>found?.hp</code>)</li>
+      <li>Non-mutating array methods (<code>map</code>, <code>filter</code>, <code>some</code>…)</li>
+    </ul></div>
+    <div class="no"><h5>Not allowed</h5><ul>
+      <li>Loops, <code>try</code>, <code>let</code>, <code>await</code>, <code>this</code></li>
+      <li>Calling arbitrary functions</li>
+      <li>Text children and spread attributes in JSX</li>
+      <li><code>useEffect</code>, <code>ref={…}</code>, <code>useContext</code></li>
+      <li>Hooks inside conditions, loops or handlers</li>
+      <li>Passing the bare <code>props</code> object on or spreading it</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="hooks" data-group="Language" data-title="Hooks">
+  <h2>Hooks</h2>
+  <p>Hooks are top-level statements only (<code>RGE1101</code> otherwise). A <code>use*</code> call that is not on this list is <code>RGE1102</code>. Every hook comes from <code>@rge/runtime/jsx</code> except <code>useGame</code>.</p>
+
+  <div class="tablewrap"><table>
+    <tr><th>Hook</th><th>Signature</th><th>When it runs</th></tr>
+    <tr><td><code>useState</code></td><td class="type">const [v, setV] = useState(init)</td><td>Render; setters batch into one render per frame</td></tr>
+    <tr><td><code>useRef</code></td><td class="type">const r = useRef(0)</td><td>Never renders; plain read and write of <code>r.current</code></td></tr>
+    <tr><td><code>useInput</code></td><td class="type">useInput((input) =&gt; …)</td><td>Every frame, first</td></tr>
+    <tr><td><code>useUpdate</code></td><td class="type">useUpdate((dt) =&gt; …)</td><td>Every frame, after <code>useInput</code></td></tr>
+    <tr><td><code>useMount</code></td><td class="type">useMount(() =&gt; …)</td><td>Once, when joining the world (children first)</td></tr>
+    <tr><td><code>useUnmount</code></td><td class="type">useUnmount(() =&gt; …)</td><td>Once, when leaving the world (parent first)</td></tr>
+    <tr><td><code>useSound</code></td><td class="type">const play = useSound("hit.wav")</td><td>You call <code>play()</code> in a handler</td></tr>
+    <tr><td><code>useGame</code></td><td class="type">useGame((s) =&gt; s.player.hp)</td><td>Re-renders when that leaf changes</td></tr>
+  </table></div>
+
+  <h3 id="hook-usestate"><code>useState</code></h3>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+const [health, setHealth] = useState(100);        // number (literal widens to number)
+const [name, setName] = useState("Ada");           // string
+const [paused, setPaused] = useState(false);       // boolean
+const [spawns, setSpawns] = useState<Spawn[]>([]); // arrays and records need a type
+
+setHealth(90);
+setHealth((h) => h - 10);                          // updater form: chains within a frame
+setSpawns((list) => [...list, { id: "a", x: 0 }]); // immutable update
+</script></pre>
+  <ul>
+    <li>Must be a top-level <code>const [a, setA] = useState(...)</code> (<code>RGE1103</code>).</li>
+    <li>The initial value is a <strong>constant or a prop</strong> (<code>RGE1303</code>).</li>
+    <li><strong>Snapshot semantics.</strong> <code>setN(n + 1); setN(n + 1)</code> adds 1. <code>setN((n) =&gt; n + 1)</code> twice adds 2. All handlers in a frame see the same state whichever runs first.</li>
+    <li>Arrays and records are <strong>immutable</strong>. A setter only renders when given a <em>new</em> value, so never mutate <code>items</code>. <code>useState([])</code> without a type is <code>RGE1104</code>.</li>
+    <li>The type you write (<code>Spawn</code>, <code>Item | null</code>) must be declared in the same file.</li>
+  </ul>
+
+  <h3 id="hook-useref"><code>useRef</code></h3>
+  <p>A primitive (number, string, boolean) that survives frames and never renders. Reach for it for things like the direction held this frame or a one-shot flag. Read and write <code>.current</code> <strong>only inside handlers</strong>.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+const moveX = useRef(0);
+useInput((input) => {
+  moveX.current = (input.down("D") ? 1 : 0) - (input.down("A") ? 1 : 0);
+});
+useUpdate((dt) => setX((x) => x + moveX.current * 140 * dt));
+</script></pre>
+  <p>Assignments allowed on a ref: <code>=</code>, <code>+=</code>, <code>-=</code>, <code>*=</code>, <code>/=</code>. Writing the same ref from two handlers in conflicting ways is <code>RGE1404</code>.</p>
+
+  <h3 id="hook-useinput"><code>useInput</code> and <code>InputState</code></h3>
+  <p>Input is <strong>polled</strong> each frame, not delivered as events. There are no <code>onKeyDown</code> props.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Member</th><th>Type</th><th>Meaning</th></tr>
+    <tr><td><code>input.pressed(key)</code></td><td class="type">boolean</td><td>True only on the frame the key went down</td></tr>
+    <tr><td><code>input.down(key)</code></td><td class="type">boolean</td><td>True while the key is held</td></tr>
+    <tr><td><code>input.released(key)</code></td><td class="type">boolean</td><td>True only on the frame the key went up</td></tr>
+    <tr><td><code>input.pointerX</code>, <code>input.pointerY</code></td><td class="type">number</td><td>Mouse position</td></tr>
+  </table></div>
+  <p>The key name must be a string that is one of these (an unknown name warns once and is never pressed):</p>
+  <div id="keys"></div>
+
+  <h3 id="hook-useupdate"><code>useUpdate</code></h3>
+  <p><code>dt</code> is the frame time in <strong>seconds</strong>, clamped to 0 – 0.1 so a stall cannot teleport things. The first frame's <code>dt</code> is 0. Always multiply speeds by <code>dt</code>.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+useUpdate((dt) => {
+  setX((x) => clamp(x + speed * dt, 0, 600));
+});
+</script></pre>
+  <p><code>useInput</code>, <code>useUpdate</code>, <code>useMount</code> and <code>useUnmount</code> may each appear several times; they run in source order. A <code>return;</code> in one does not skip the others.</p>
+
+  <h3 id="hook-usemount"><code>useMount</code> / <code>useUnmount</code></h3>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+function Banner({ text, onDone }: BannerProps) {
+  const [shown, setShown] = useState(false);
+  useMount(() => setShown(true));      // may set state: renders in the same frame
+  useUnmount(() => onDone?.());        // may NOT set state (RGE1402); tell the parent instead
+  return <Sprite image={shown ? `banner-${text}.png` : "banner-hidden.png"} />;
+}
+</script></pre>
+  <ul>
+    <li>No cleanup function to return, and no <code>useEffect</code>. React to a change where the change happens.</li>
+    <li>A component mounts when it is attached to the world (a condition turning on, a list item added) and unmounts when detached. Each hook runs once per stay.</li>
+    <li>Takes one arrow function with <strong>no parameters</strong>.</li>
+  </ul>
+
+  <h3 id="hook-usesound"><code>useSound</code></h3>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+const playHit = useSound("hit.wav");   // path must be a string literal
+useInput((input) => { if (input.pressed("Space")) playHit(); });
+</script></pre>
+  <p>Call the returned function as a statement in a handler. Calling it in JSX or a derived value is <code>RGE1305</code>. Sounds are preloaded when the window opens, so the first play does not hitch. Paths are relative to the <code>&lt;Game assets&gt;</code> folder.</p>
+
+  <h3>What handler code may contain</h3>
+  <p>Handlers (the bodies of the hooks above and of callback props) are lowered to a small statement language. It is deliberately narrow so the compiler can track state exactly.</p>
+  <div class="pair">
+    <div class="yes"><h5>Statements</h5><ul>
+      <li>Calling a setter: <code>setX(5)</code>, <code>setX((x) =&gt; x + 1)</code></li>
+      <li><code>if</code> / <code>else</code>, early <code>return</code></li>
+      <li><code>const</code> locals</li>
+      <li>Ref assignment: <code>r.current = …</code></li>
+      <li>Calling a sound function or a <code>useGame</code> action</li>
+      <li>Calling a callback prop: <code>onDone?.()</code></li>
+    </ul></div>
+    <div class="yes"><h5>Calls and members</h5><ul>
+      <li><code>Math.abs floor ceil round sign sqrt sin cos min max</code></li>
+      <li><code>clamp(value, min, max)</code> (3 args)</li>
+      <li><code>input.pressed / down / released</code>, <code>input.pointerX / pointerY</code></li>
+      <li><code>other.tag</code>, <code>other.owner</code> in collision callbacks</li>
+      <li>Template literals</li>
+    </ul></div>
+  </div>
+  <p>Everything else (<code>let</code>, loops, <code>try</code>, other function calls, assigning to anything but <code>ref.current</code>) is <code>RGE1301</code>, <code>RGE1401</code> or <code>RGE1402</code>. Position is never assigned: it is state.</p>
+</section>
+
+<section id="transform" data-group="Language" data-title="Transform and drawing order">
+  <h2>Transform and drawing order</h2>
+  <p>Every element except <code>Game</code>, <code>Screen</code> and a sound accepts <code>transform</code>. All fields are optional, and values may come from state.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+<Entity transform={{ x: 100, y: 40, rotation: Math.PI / 4, scaleX: 2, z: 5 }} />
+<Sprite image="flag.png" transform={{ x: 0, y: 0, global: true }} />
+</script></pre>
+  <div class="tablewrap"><table>
+    <tr><th>Field</th><th>Default</th><th>Meaning</th></tr>
+    <tr><td><code>x</code>, <code>y</code></td><td class="type">0</td><td>Pixels, relative to the parent. <strong>y points down.</strong></td></tr>
+    <tr><td><code>rotation</code></td><td class="type">0</td><td>Radians. Positive turns clockwise.</td></tr>
+    <tr><td><code>scaleX</code>, <code>scaleY</code></td><td class="type">1</td><td>Per-axis scale. Negative flips.</td></tr>
+    <tr><td><code>z</code></td><td class="type">0</td><td>Draw order: higher is drawn later, so on top. Negative is behind. <strong>Adds to the parent's</strong>, so raising a component raises everything in it.</td></tr>
+    <tr><td><code>global</code></td><td class="type">false</td><td>True: the transform is in world space and ignores the parent.</td></tr>
+  </table></div>
+  <ul>
+    <li><strong>Origin is the top-left corner</strong> of a <code>Sprite</code>, <code>AnimatedSprite</code>, <code>Shape</code>, <code>Text</code>, <code>Collider</code>, <code>Pointer</code>; rotation and scale are about it.</li>
+    <li>A child at <code>{ x: 10 }</code> inside a parent at <code>x: 100</code> is at 110 in the world, and turns and scales with the parent.</li>
+    <li>Equal <code>z</code> keeps tree order (parent first, then children in order). Ordering is global across the tree, not per parent.</li>
+    <li>On a <strong>component</strong> element, <code>transform</code> places the whole component. The component's props type never declares it.</li>
+    <li>A malformed <code>transform</code>, or one on an element with none, is <code>RGE1207</code>.</li>
+  </ul>
+</section>
+
+<section id="props" data-group="Language" data-title="Props, callbacks and children">
+  <h2>Props, callbacks and children</h2>
+  <p>A component takes props through a destructured parameter annotated with a props type <strong>declared in the same file</strong>. A parent passes them as attributes. A changed value updates the existing child <strong>in place</strong>; the child is never recreated.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+interface EnemyProps {
+  speed: number;
+  tint?: "red" | "blue";          // optional; literal unions become scene-settable choices
+  onDefeated?: () => void;        // callback prop
+}
+
+export function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
+  useUpdate(() => { if (hp <= 0) onDefeated?.(); });
+  return <Entity name="Enemy"><Sprite image={tint === "red" ? "red.png" : "blue.png"} /></Entity>;
+}
+
+// parent
+<Enemy speed={score > 10 ? 2 : 1} onDefeated={() => setScore((s) => s + 1)} transform={{ x: 40 }} />
+</script></pre>
+  <ul>
+    <li><code>function Enemy(props: EnemyProps)</code> also works: read <code>props.speed</code>, call <code>props.onDefeated?.()</code>. The bare <code>props</code> cannot be passed on or spread.</li>
+    <li>Defaults go in the destructuring (<code>tint = "red"</code>).</li>
+    <li>Use callback props for child → parent messages. Call them with <code>?.()</code> if optional.</li>
+    <li>A bad props parameter or a wrongly passed prop is <code>RGE1208</code>.</li>
+  </ul>
+
+  <h3>Passing children</h3>
+  <p>Declare <code>children: Child</code> and say where they mount with <code>{children}</code>, once, as a direct child of a container (the root, a fragment, or a static <code>&lt;Entity&gt;</code> below it). The <em>parent</em> owns what it passes: elements are built from, and updated by, the parent's state.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+import { type Child, Entity, Sprite } from "@rge/runtime/jsx";
+
+interface PanelProps { title: string; children: Child }
+
+export function Panel({ title, children }: PanelProps) {
+  return (
+    <Entity name="Panel">
+      <Sprite image={title + ".png"} />
+      <Entity name="Content" transform={{ y: 16 }}>{children}</Entity>
+    </Entity>
+  );
+}
+
+// usage: the children follow `score` without Panel knowing
+<Panel title="hud">
+  <Coin value={score} />
+  {score > 10 && <Sprite image="star.png" />}
+</Panel>
+</script></pre>
+</section>
+
+<section id="control" data-group="Language" data-title="Conditions and lists">
+  <h2>Conditions and lists</h2>
+  <p>JSX children are elements, conditionals or keyed lists. Text children, fragments inside children, and other expressions are <code>RGE1202</code> (the one exception is text inside <code>&lt;Text&gt;</code>).</p>
+  <h3>Conditionals</h3>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+{health < 25 && <WarningIcon />}
+{taken ? null : <Coin />}
+{open ? <Menu /> : <Button />}          // either branch may be null
+</script></pre>
+  <p>A condition turning off <strong>unmounts</strong> the child (<code>useUnmount</code> runs); turning on creates it and mounts it.</p>
+
+  <h3 id="lists">Keyed lists</h3>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+{enemies.map((e) => (
+  <Enemy key={e.id} speed={e.speed} onDefeated={() => remove(e.id)} />
+))}
+</script></pre>
+  <div class="tablewrap"><table>
+    <tr><th>Rule (otherwise <code>RGE1209</code>)</th></tr>
+    <tr><td>The source is a state or prop array, optionally followed by <code>.filter((e) =&gt; …)</code>.</td></tr>
+    <tr><td><code>map</code> takes one inline arrow (item, optionally index) returning exactly <strong>one element</strong>: an expression body, or a block with only <code>return &lt;X … /&gt;</code>.</td></tr>
+    <tr><td>No conditionals, fragments or children inside the arrow. A richer item is a component.</td></tr>
+    <tr><td>The element has a <code>key</code> that reads the item (<code>key={e.id}</code>). A key reading only the index compiles with a warning; one reading neither is an error. <code>key</code> anywhere else is <code>RGE1203</code>.</td></tr>
+    <tr><td>A callback on the item may read the item but not the index.</td></tr>
+  </table></div>
+  <p>Instances follow keys: adding, removing or reordering items mounts, unmounts and moves instances, and keeps each one's own state.</p>
+</section>
+
+<section id="gamestate" data-group="Language" data-title="Game state (useGame)">
+  <h2>Game state: <code>createGameState</code></h2>
+  <p><code>useState</code> is one component's own state. The <strong>game state</strong> belongs to the whole game (score, hit points, a mute switch) and is shaped like a <strong>Zustand store</strong>: you read with a selector, and you change it with actions that call <code>set</code>.</p>
+<pre class="code" data-lang="ts"><script type="text/plain">
+// GameState.ts, in the source directory
+import { createGameState } from "@rge/runtime";
+
+interface State {
+  stats: { coins: number; hits: number };
+  collect: () => void;
+}
+
+export const useGame = createGameState<State>()((set, get) => ({
+  stats: { coins: 0, hits: 0 },
+  collect: () => set((s) => ({ stats: { ...s.stats, coins: s.stats.coins + 1 } })),
+}));
+</script></pre>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+import { useGame } from "./GameState.ts";
+
+function CoinCounter() {
+  const coins = useGame((s) => s.stats.coins);       // read: re-renders when this leaf changes
+  return <Text size={16} color="gold">Coins: {coins}</Text>;
+}
+
+function Player() {
+  const collect = useGame((s) => s.collect);          // pick an action; reading nothing
+  // ...onCollisionEnter={() => collect()}
+}
+
+// On <Game>: start from the initial values each run
+<Game state={useGame}> … </Game>
+</script></pre>
+  <h3>Rules</h3>
+  <ul>
+    <li><strong>Selectors are plain paths</strong> (<code>s.stats.coins</code>) to a <em>leaf</em>. Naming an object is an error, and a typo gets a "did you mean" (<code>RGE1108</code>).</li>
+    <li>Call <code>useGame(...)</code> at the top level, bound with <code>const</code> to one name.</li>
+    <li>An action is called as a <strong>statement in a handler</strong>, not in JSX, a derived value, or a state updater.</li>
+    <li><code>set</code> <strong>shallow-merges</strong>: a nested object is replaced whole, so spread the rest (<code>{ ...s.stats, coins: … }</code>).</li>
+    <li>Only components that read a leaf that <em>changed</em> re-render. A <code>set</code> that changes nothing renders nothing.</li>
+    <li><code>GameState.ts</code> must be an arrow/function returning an object literal of number, string, boolean literals, nested objects of those, and top-level functions (actions). No arrays yet. Anything else is <code>RGE1109</code>.</li>
+    <li><code>useGame.getState()</code> and <code>useGame.setState(…)</code> exist for non-component code (tests, tools).</li>
+  </ul>
+  <div class="callout"><p><strong>useState or useGame?</strong> Use <code>useState</code> for what one component owns (its position, a flag). Use <code>useGame</code> for what several components must share, or what the HUD shows about the player.</p></div>
+</section>
+
+<section id="collisions" data-group="Systems" data-title="Collisions and pointer presses">
+  <h2>Collisions and presses</h2>
+  <p>There is no physics. The player finds boxes that start and stop touching and calls your callbacks. <code>Collider</code> is an axis-aligned box (top-left at the object's position, scaled and rotated by its world transform) that draws nothing. Pair it with a <code>Shape</code> to see it.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+<Collider
+  width={24} height={24}
+  tag="player"                    // a label handlers read on the *other* side: other.tag
+  layer="player"                  // which group this collider is in
+  hits={["item", "enemy"]}        // which layers it can touch (omit = all)
+  onCollisionEnter={(other) => {
+    if (other.tag === "coin") collect();
+    else if (other.owner === "Spikes") setHurt(true);
+  }}
+  onCollisionExit={(other) => { if (other.tag === "spikes") setHurt(false); }}
+/>
+</script></pre>
+  <div class="tablewrap"><table>
+    <tr><th>Concept</th><th>Meaning</th></tr>
+    <tr><td><code>other.tag</code></td><td>The other collider's <code>tag</code> (<code>""</code> when none). Tells apart colliders on one prefab.</td></tr>
+    <tr><td><code>other.owner</code></td><td>The <code>name</code> of the nearest <code>&lt;Entity name&gt;</code> at or above the other collider, or its component's class name. Tells apart prefabs.</td></tr>
+    <tr><td><code>layer</code> / <code>hits</code></td><td>A pair is tested only when <strong>each side's</strong> <code>hits</code> allows the other's <code>layer</code>. Use them to skip pairs cheaply (bullets ignore bullets). Unrelated to <code>tag</code>.</td></tr>
+    <tr><td><code>onCollisionExit</code></td><td>Fires once when a touching pair separates, or when the other leaves the world. It does not fire for a collider that itself left.</td></tr>
+    <tr><td>In a <code>&lt;Hud&gt;</code></td><td>Colliders never touch anything.</td></tr>
+  </table></div>
+  <p>Handlers can read exactly <code>tag</code> and <code>owner</code> on <code>other</code>, nothing else.</p>
+  <h3>Pointer presses</h3>
+  <p>A left click goes to the <strong>topmost</strong> pressable (a <code>Pointer</code> or a <code>Flex</code> with <code>onPress</code>) under the mouse, in draw order. One press, one target; if the topmost misses, the one below is tried. A press inside a <code>&lt;Hud&gt;</code> uses HUD coordinates, so HUD buttons work however the camera moves.</p>
+</section>
+
+<section id="ui" data-group="Systems" data-title="UI: Hud, Flex, Screen, Camera">
+  <h2>UI, screen and camera</h2>
+  <h3>The shape of a game root</h3>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+export default function Main() {
+  return (
+    <Game name="Main" state={useGame} title="my game" width={640} height={360} background="#10131c" assets="assets">
+      <Screen width={640} height={360} fit="expand">
+        <World />                              {/* your world: Ground, Coin, … */}
+        <Hud transform={{ x: 16, y: 16 }}>     {/* stays put while the camera moves */}
+          <Flex direction="column" gap={8}>
+            <CoinCounter />
+          </Flex>
+        </Hud>
+        <Camera><Player /></Camera>            {/* the view follows its children */}
+      </Screen>
+    </Game>
+  );
+}
+</script></pre>
+  <h3>Layout with <code>Flex</code></h3>
+  <p>UI is laid out, not placed by hand. A <code>&lt;Flex&gt;</code> places its children in a row or column with CSS-flexbox props and Clay-style sizing. A child's own <code>transform</code> still moves it within its slot. Only a <code>Flex</code> is resized by layout; a <code>Sprite</code>, <code>Shape</code> or <code>Text</code> keeps its own size.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Size value</th><th>Meaning</th></tr>
+    <tr><td><code>"fit"</code> (default)</td><td>The children plus padding and gaps.</td></tr>
+    <tr><td><code>"grow"</code></td><td>The fit size plus a share of the parent's free space.</td></tr>
+    <tr><td><code>120</code></td><td>Fixed pixels.</td></tr>
+    <tr><td><code>"50%"</code></td><td>A percentage of the parent's inner size.</td></tr>
+  </table></div>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+<Flex width="grow" height="grow" direction="column" justifyContent="space-between" padding={16}>
+  <Flex alignItems="center" gap={8}>
+    <Sprite image="coin.png" />
+    <Text size={20}>{coins}</Text>
+    <Flex width="grow" />                       {/* a spacer */}
+  </Flex>
+  <Flex width={96} height={32} alignItems="center" justifyContent="center"
+        background="slategray" onPress={() => setPaused((p) => !p)}>
+    <Text>{paused ? "Resume" : "Pause"}</Text>  {/* a button */}
+  </Flex>
+</Flex>
+</script></pre>
+  <p><strong>Floating</strong> boxes (<code>float</code>) leave the flow and attach to a point of the parent with <code>anchor</code>, <code>to</code>, <code>offsetX</code>, <code>offsetY</code>, for tooltips and corner badges. Draw them above neighbours with <code>z</code>.</p>
+
+  <h3><code>Screen</code>: fixed resolution</h3>
+  <div class="tablewrap"><table>
+    <tr><th><code>fit</code></th><th>Behaviour</th></tr>
+    <tr><td><code>"integer"</code> (default)</td><td>Largest <strong>whole-number</strong> scale that fits. Every game pixel is the same size. Bars fill the rest with <code>border</code>.</td></tr>
+    <tr><td><code>"contain"</code></td><td>Largest scale that fits, fractional allowed.</td></tr>
+    <tr><td><code>"stretch"</code></td><td>Each axis scaled on its own to fill the window.</td></tr>
+    <tr><td><code>"expand"</code></td><td>Like <code>"integer"</code>, but the game is widened to the window's shape. A wide window shows more world instead of bars. Lay out with <code>grow</code> and percentages, not fixed x positions.</td></tr>
+  </table></div>
+  <p>Only the root's <code>&lt;Screen&gt;</code> does this, and it cannot be placed with <code>transform</code>. Everything inside is in game pixels: transforms, camera, mouse. Without a Screen, coordinates are window pixels.</p>
+
+  <h3><code>Hud</code></h3>
+  <p>A layer drawn after the world through a view that ignores the camera. Coordinates are screen pixels (game pixels under a <code>Screen</code>), top-left is 0, 0. Put it directly inside the game's root. Its <code>transform</code> moves the whole layer; <code>z</code> orders things inside.</p>
+
+  <h3><code>Camera</code></h3>
+  <ul>
+    <li><strong>It follows its children.</strong> <code>&lt;Camera&gt;&lt;Player /&gt;&lt;/Camera&gt;</code> keeps the view on the player. With several children it centres on their middle. With no children it stays where it is.</li>
+    <li>The camera is transparent to its children's transforms: they are placed as if it were not there. Its own <code>transform</code> is an offset from the followed point.</li>
+    <li><code>zoom</code> magnifies (2 = twice as large, must be positive).</li>
+    <li>The <strong>first</strong> camera in draw order is the view; a second is ignored with one warning. With no camera, the world origin is the window's top-left.</li>
+  </ul>
+</section>
+
+<section id="scenes" data-group="Systems" data-title="Scenes and prefabs">
+  <h2>Scenes and prefabs</h2>
+  <p>Every <strong>exported</strong> component is a <em>prefab</em>: the compiler records its name and props so data files can place it. A scene is JSON.</p>
+<pre class="code" data-lang="json"><script type="text/plain">
+{
+  "version": 1,
+  "entities": [
+    {
+      "id": "boss-1",                          // unique in the scene, stable across edits
+      "prefab": "Enemy",                       // exported component name
+      "props": { "speed": 2, "tint": "blue" }, // value props only
+      "transform": { "x": 120, "y": 40, "z": 1 },
+      "children": [ { "id": "hat", "prefab": "Hat" } ]
+    }
+  ]
+}
+</script></pre>
+<pre class="code" data-lang="ts"><script type="text/plain">
+import { loadScene } from "@rge/runtime";
+import { prefabs } from "./generated/prefabs.ts";
+
+const byId = loadScene(world, scene, prefabs);   // Map of scene id → object, nested ones included
+</script></pre>
+  <ul>
+    <li>Callbacks cannot come from data, and <code>children</code> is passed, not set.</li>
+    <li>Children mount after the prefab's own children, or at its <code>{children}</code> slot if it renders one.</li>
+    <li>Validate with <code>rge-compile src out --scenes scenes</code>. Errors are <code>RGE1501–RGE1509</code> with the exact JSON location.</li>
+    <li>Tiled <code>.tmj</code> maps in the scenes folder are imported to scene JSON automatically.</li>
+    <li>Exported names must be unique across files (<code>RGE1206</code>) since scenes refer to them by name.</li>
+  </ul>
+</section>
+
+<section id="frame" data-group="Systems" data-title="How a frame works">
+  <h2>How a frame works</h2>
+  <ol>
+    <li><strong>Presses.</strong> A new left click goes to the topmost <code>Pointer</code> / <code>Flex onPress</code> under the mouse.</li>
+    <li><strong><code>world.tick(dt, input)</code></strong>: all <code>useInput</code> handlers, then all <code>useUpdate</code> handlers, then every dirty component renders once, then structural changes commit (conditions and list items mount and unmount).</li>
+    <li><strong>Draw.</strong> The tree is walked depth-first into draw records in tree order (or <code>z</code> order), with the camera applied.</li>
+    <li><strong>Collisions.</strong> New touching pairs call <code>onCollisionEnter</code>. Their effects render on the <em>next</em> tick.</li>
+    <li>The backend draws and presents, then supplies next frame's input.</li>
+  </ol>
+  <h3>Consequences worth knowing</h3>
+  <ul>
+    <li>State set in a handler shows up <strong>next render</strong>, not immediately. Refs are the exception: read and write at once.</li>
+    <li>Things attached during a frame start getting hooks next frame; detached ones are skipped.</li>
+    <li>Many setters in a frame still cause one render. Animations (<code>AnimatedSprite</code>) cost no renders.</li>
+    <li>Unchanged subtrees reuse last frame's draw records, so a standing-still scene is cheap. Compiled components need nothing to benefit.</li>
+    <li>Assets that fail to load never crash: a missing image is drawn as a magenta 16×16 square, and an unreadable colour is magenta, each with one warning.</li>
+    <li>Colours are CSS: <code>#rgb</code>, <code>#rgba</code>, <code>#rrggbb</code>, <code>#rrggbbaa</code>, <code>rgb()</code>, <code>rgba()</code>, named colours, <code>transparent</code>.</li>
+  </ul>
+</section>
+
+<section id="elements" data-group="Reference" data-title="Built-in elements">
+  <h2>Built-in elements</h2>
+  <p>All built-ins are capitalised (there are no lowercase tags). Required props are marked <span class="req">required</span>. Click an element to jump to it.</p>
+  <div id="element-index" class="cards"></div>
+  <div id="element-docs"></div>
+</section>
+
+<section id="diagnostics" data-group="Reference" data-title="Error codes">
+  <h2>Error codes</h2>
+  <p>The compiler reports <code>RGE####</code> codes with source locations. Codes are stable and never renumbered.</p>
+  <div id="diag"></div>
+</section>
+
+<section id="gotchas" data-group="Reference" data-title="Gotchas and tips">
+  <h2>Gotchas and tips</h2>
+  <ul>
+    <li><strong>"Why is my game doing nothing?"</strong> Did you multiply by <code>dt</code>? Is the component actually mounted (inside the root, condition true)?</li>
+    <li><strong>Two <code>setX(x + 1)</code> adds 1.</strong> Use the updater form.</li>
+    <li><strong>Mutating array state does not render.</strong> Always create a new array.</li>
+    <li><strong>Settings on <code>&lt;Game&gt;</code> are literals.</strong> <code>width={640}</code>, never state. <code>&lt;Game&gt;</code> is only ever a component's root.</li>
+    <li><strong>HUD text follows state</strong> through <code>&lt;Text&gt;Score: {score}&lt;/Text&gt;</code>; use <code>text=</code> <em>or</em> children, never both.</li>
+    <li><strong>A collider that never fires?</strong> Check both sides' <code>hits</code> allow the other's <code>layer</code>, and that neither is under a <code>&lt;Hud&gt;</code>.</li>
+    <li><strong>Pixel art blurry?</strong> <code>smooth</code> on <code>&lt;Game&gt;</code> is off by default (sharp). Use <code>Screen fit="integer"</code>.</li>
+    <li><strong>No full-screen key?</strong> <code>F11</code> by default, and <code>Alt + Enter</code> always. <code>fullscreenKey={false}</code> turns the key off.</li>
+    <li><strong>Debug a hitbox:</strong> put a semi-transparent <code>Shape</code> of the same size next to the <code>Collider</code>.</li>
+    <li><strong>Commit the generated output</strong> after changing component source. CI fails on drift.</li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- element reference data ---------- */
+  var T = "transform";
+  var ELEMENTS = [
+    { name: "Entity", kind: "container", sum: "A named container. The usual root of a component.",
+      props: [["name", "string", '""', "Shown as <code>other.owner</code> in collisions."]] },
+    { name: "Game", kind: "container, root only", sum: "The root of a game and its configuration. Optional; each prop overrides the player's default only where written. Its settings are literals.",
+      props: [
+        ["title", "string", '"react-game-engine"', "Window title."],
+        ["width", "number", "640", "Window width in pixels. The game's resolution is a <code>&lt;Screen&gt;</code>, not this."],
+        ["height", "number", "360", "Window height in pixels."],
+        ["background", "CSS colour", '"black"', "Window background."],
+        ["assets", "string", '"assets"', "Folder that image and sound names are relative to."],
+        ["resizable", "boolean", "true", "Allow resizing the window."],
+        ["vsync", "boolean", "true", "Sync to the display."],
+        ["smooth", "boolean", "false", "Bilinear filtering. Off keeps pixel art sharp."],
+        ["fullscreenKey", "string | false", '"F11"', "Key that toggles full screen. <code>false</code> disables the key (Alt + Enter still works)."],
+        ["state", "game state", "–", "<code>state={useGame}</code>. Starts from its initial values with the game."],
+        ["name", "string", '""', "As on <code>Entity</code>."]
+      ] },
+    { name: "Screen", kind: "container, root only", sum: "A fixed game resolution, scaled to the window. Put it inside <code>&lt;Game&gt;</code> as its only child. No <code>transform</code>.",
+      props: [
+        ["width", "number", "–", "Game pixels.", 1],
+        ["height", "number", "–", "Game pixels.", 1],
+        ["fit", '"integer" | "contain" | "stretch" | "expand"', '"integer"', "How it scales into the window. See <a href=\"#ui\">UI</a>."],
+        ["pixelPerfect", "boolean", "true", "Draw at game resolution, then scale the finished frame up."],
+        ["border", "CSS colour", '"black"', "Colour of the bars around the game."]
+      ] },
+    { name: "Sprite", kind: "leaf", sum: "Draws an image from the assets folder. Top-left origin.",
+      props: [["image", "string", "–", "File name relative to <code>assets</code>. Empty draws nothing. A missing file shows a magenta square.", 1]] },
+    { name: "AnimatedSprite", kind: "leaf", sum: "Cycles through <code>frames</code> at <code>fps</code>, looping. Playing costs no renders. A different <code>frames</code> list restarts it; an equal one does not.",
+      props: [
+        ["frames", "string[]", "–", "Images in order.", 1],
+        ["fps", "number", "10", "Frames per second. Non-positive or non-finite freezes it."],
+        ["playing", "boolean", "true", "<code>false</code> freezes on the current frame."]
+      ] },
+    { name: "Text", kind: "leaf (text children)", sum: "One line of text with the default font. Content is the <code>text</code> prop <em>or</em> the element's text, never both. Elements cannot be its children.",
+      props: [
+        ["text", "string", "–", "Or write it between the tags: <code>Score: {score}</code>. Strings and numbers only.", 1],
+        ["size", "number", "16", "Pixels."],
+        ["color", "CSS colour", '"white"', ""],
+        ["width", "number", "text width", "Box width for layout and <code>align</code>. Wider text overflows it."],
+        ["align", '"left" | "center" | "right"', '"left"', "Where the text sits inside <code>width</code>."]
+      ] },
+    { name: "Shape", kind: "leaf", sum: "A filled rectangle or ellipse for debugging colliders and prototyping before art exists. Top-left origin.",
+      props: [
+        ["kind", '"rect" | "circle"', "–", "A circle is an ellipse filling its box.", 1],
+        ["width", "number", "–", "Pixels.", 1],
+        ["height", "number", "–", "Pixels.", 1],
+        ["color", "CSS colour", '"white"', ""]
+      ] },
+    { name: "Collider", kind: "leaf", sum: "An invisible box for collisions. See <a href=\"#collisions\">Collisions</a>.",
+      props: [
+        ["width", "number", "–", "Pixels.", 1],
+        ["height", "number", "–", "Pixels.", 1],
+        ["tag", "string", '""', "A label for handlers: <code>other.tag</code>."],
+        ["layer", "string", '""', "The group it belongs to."],
+        ["hits", "string[]", "all", "Layers it can touch."],
+        ["onCollisionEnter", "(other) =&gt; void", "–", "Starts touching. <code>other</code> has <code>tag</code> and <code>owner</code>."],
+        ["onCollisionExit", "(other) =&gt; void", "–", "Stops touching."]
+      ] },
+    { name: "Pointer", kind: "leaf", sum: "An invisible clickable or tappable area in the world. Top-left origin. Pair with a <code>Sprite</code> or <code>Shape</code> to make a button.",
+      props: [
+        ["width", "number", "–", "Pixels.", 1],
+        ["height", "number", "–", "Pixels.", 1],
+        ["onPress", "() =&gt; void", "–", "Called when a press lands inside, as it is drawn (moved, rotated and scaled included)."]
+      ] },
+    { name: "Camera", kind: "container", sum: "The viewport. Follows its children. See <a href=\"#ui\">UI</a>.",
+      props: [["zoom", "number", "1", "Magnification. Must be positive."]] },
+    { name: "Hud", kind: "container", sum: "A layer that stays on screen while the camera moves, drawn after the world. See <a href=\"#ui\">UI</a>.",
+      props: [] },
+    { name: "Flex", kind: "container", sum: "Places children in a row or column. Also a button when given <code>onPress</code>. See <a href=\"#ui\">UI</a>.",
+      props: [
+        ["direction", '"row" | "column"', '"row"', "The main axis."],
+        ["alignItems", '"start" | "center" | "end" | "stretch"', '"stretch"', "Where children sit across the main axis."],
+        ["justifyContent", '"start" | "center" | "end" | "space-between" | "space-around" | "space-evenly"', '"start"', "How children and free space share the main axis."],
+        ["gap", "number", "0", "Pixels between children."],
+        ["padding", "number", "0", "All four sides."],
+        ["paddingX / paddingY", "number", "–", "Horizontal / vertical. Override <code>padding</code>."],
+        ["paddingTop / Right / Bottom / Left", "number", "–", "One side. Overrides the above."],
+        ["width / height", '"fit" | "grow" | number | "N%"', '"fit"', "Sizing per axis."],
+        ["minWidth / maxWidth / minHeight / maxHeight", "number", "–", "Bounds for a fit or grow size, in pixels."],
+        ["background", "CSS colour", "none", "Filled rectangle behind the children, the size of the box."],
+        ["onPress", "() =&gt; void", "–", "Called when a press lands on the laid-out box."],
+        ["float", "boolean", "false", "Take the box out of its parent's flow."],
+        ["anchor", "9-point anchor", '"top-left"', "Which point of this box is attached. One of <code>top-left top-center top-right center-left center center-right bottom-left bottom-center bottom-right</code>."],
+        ["to", "9-point anchor", '"top-left"', "Which point of the parent it attaches to."],
+        ["offsetX / offsetY", "number", "0", "Pixels right / down from where the points meet."]
+      ] }
+  ];
+
+  var TRANSFORM_NOTE = { Game: 0, Screen: 0 };
+
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  var idx = document.getElementById("element-index");
+  var docs = document.getElementById("element-docs");
+  ELEMENTS.forEach(function (el) {
+    var c = document.createElement("a");
+    c.className = "card"; c.href = "#el-" + el.name; c.style.textDecoration = "none"; c.style.color = "inherit";
+    c.innerHTML = "<b>&lt;" + el.name + "&gt;</b><p>" + el.sum.split(". ")[0].replace(/\.$/, "") + "</p>";
+    idx.appendChild(c);
+
+    var d = document.createElement("div");
+    d.id = "el-" + el.name;
+    d.setAttribute("data-search", el.name + " " + el.sum + " " + el.props.map(function (p) { return p[0] + " " + p[3]; }).join(" "));
+    var rows = el.props.map(function (p) {
+      return "<tr><td><code>" + p[0] + "</code>" + (p[4] ? '<span class="req">required</span>' : "") + '</td><td class="type">' + esc(p[1]).replace(/&amp;lt;/g, "&lt;") + '</td><td class="type">' + esc(p[2]) + "</td><td>" + p[3] + "</td></tr>";
+    }).join("");
+    var tr = (el.name in TRANSFORM_NOTE) ? "No <code>transform</code>." : "Accepts <code>transform</code>.";
+    d.innerHTML = '<h3 data-nav="&lt;' + el.name + "&gt;\">&lt;" + el.name + '&gt; <span class="tag">' + el.kind + "</span></h3><p>" + el.sum + " " + tr + "</p>" +
+      (rows ? '<div class="tablewrap"><table><tr><th>Prop</th><th>Type</th><th>Default</th><th>Notes</th></tr>' + rows + "</table></div>" : "");
+    docs.appendChild(d);
+  });
+
+  /* ---------- keys ---------- */
+  var keys = ["Space", "Enter", "Escape", "Tab", "Backspace", "Shift", "Control", "Alt", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+  var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  var digits = "0123456789".split("");
+  var fkeys = []; for (var i = 1; i <= 12; i++) fkeys.push("F" + i);
+  var mouse = ["MouseLeft", "MouseRight", "MouseMiddle"];
+  function chips(list) { return list.map(function (k) { return "<code>" + k + "</code>"; }).join(" "); }
+  document.getElementById("keys").innerHTML =
+    '<div class="tablewrap"><table><tr><th>Group</th><th>Names (case-sensitive)</th></tr>' +
+    "<tr><td>Control</td><td>" + chips(keys) + "</td></tr>" +
+    "<tr><td>Letters</td><td>" + chips(letters) + " <small>(uppercase: <code>input.down(\"D\")</code>)</small></td></tr>" +
+    "<tr><td>Digits</td><td>" + chips(digits) + "</td></tr>" +
+    "<tr><td>Function</td><td>" + chips(fkeys) + "</td></tr>" +
+    "<tr><td>Mouse</td><td>" + chips(mouse) + " <small>(mouse buttons are keys too)</small></td></tr></table></div>";
+
+  /* ---------- diagnostics ---------- */
+  var DIAG = [
+    ["Project and syntax", [
+      ["RGE1001", "Unsupported syntax, or an import that is not from the authoring module or a <code>.tsx</code> component."],
+      ["RGE1002", "A component body that is not hooks, derived <code>const</code>s, then one <code>return</code>."],
+      ["RGE1003", "The root is not a built-in element or fragment (for example it is another component)."],
+      ["RGE1004", "A name imported from <code>@rge/runtime/jsx</code> that it does not export, or <code>type</code> misused."],
+      ["RGE1005", "A hook, element or runtime function used without importing it."]]],
+    ["Hooks and state", [
+      ["RGE1101", "A hook not at the top level of the component."],
+      ["RGE1102", "An unknown <code>use*</code> call. Old names (<code>onUpdate</code>, <code>onInput</code>, <code>onCollisionEnter</code> as a hook) say where they went."],
+      ["RGE1103", "<code>useState</code> not in the form <code>const [a, setA] = useState(...)</code>."],
+      ["RGE1104", "State type the compiler cannot infer. Give arrays and records a type argument."],
+      ["RGE1106", "<code>useRef</code> misuse. Refs hold numbers, strings and booleans only."],
+      ["RGE1107", "<code>useSound</code> with a non-literal path, or a name already taken."],
+      ["RGE1108", "A <code>useGame</code> selector that is not a valid path, or a bad import from <code>.ts</code>."],
+      ["RGE1109", "A <code>GameState.ts</code> the compiler cannot read."],
+      ["RGE1303", "A non-constant initial state."]]],
+    ["JSX and props", [
+      ["RGE1201", "An unknown component tag."],
+      ["RGE1202", "An unsupported JSX child (text, fragment, arbitrary expression)."],
+      ["RGE1203", "An unsupported attribute, or <code>key</code> outside a list."],
+      ["RGE1205", "A component that contains itself, directly or through other files."],
+      ["RGE1206", "Two files export the same component name."],
+      ["RGE1207", "A malformed <code>transform</code>, or on an element that has none."],
+      ["RGE1208", "A props parameter or props type not in the supported form, or a prop passed the wrong way."],
+      ["RGE1209", "A keyed list not in the supported form."],
+      ["RGE1210", "A literal that is not allowed for a prop (<code>&lt;Shape kind=\"oval\"&gt;</code>). Lists the choices."]]],
+    ["Expressions and handlers", [
+      ["RGE1301", "An unsupported expression."],
+      ["RGE1302", "An unknown identifier."],
+      ["RGE1304", "<code>input</code> or <code>other</code> read outside a handler."],
+      ["RGE1305", "A sound function called outside a handler."],
+      ["RGE1401", "An invalid handler (wrong parameters, redeclaration, rebinding <code>Math</code>)."],
+      ["RGE1402", "An unsupported statement, an assignment to anything but <code>ref.current</code>, or setting state in <code>useUnmount</code>."],
+      ["RGE1403", "A duplicate handler where only one is allowed."],
+      ["RGE1404", "Conflicting writes to one ref."]]],
+    ["Scenes", [
+      ["RGE1501", "A scene that is not valid JSON."],
+      ["RGE1502", "A scene with the wrong shape."],
+      ["RGE1503", "An unknown prefab."],
+      ["RGE1504", "An unknown prop for a prefab."],
+      ["RGE1505", "A required prop is missing."],
+      ["RGE1506", "A prop of the wrong type."],
+      ["RGE1507", "A prop data cannot set (it is code-only)."],
+      ["RGE1508", "A duplicate scene id."],
+      ["RGE1509", "A Tiled import problem."]]],
+    ["Type checks", [
+      ["RGE9001", "A type error in generated code."],
+      ["RGE9002", "A type error in your TSX source."]]]
+  ];
+  var dh = "";
+  DIAG.forEach(function (g) {
+    dh += "<h3>" + g[0] + '</h3><div class="tablewrap"><table><tr><th>Code</th><th>Meaning</th></tr>' +
+      g[1].map(function (r) { return "<tr id=\"" + r[0] + "\"><td><code>" + r[0] + "</code></td><td>" + r[1] + "</td></tr>"; }).join("") + "</table></div>";
+  });
+  document.getElementById("diag").innerHTML = dh;
+
+  /* ---------- code blocks ---------- */
+  var KW = /^(import|from|export|default|function|const|let|return|if|else|interface|type|new|as|true|false|null|undefined|extends|typeof|async|await)$/;
+  var TOKEN = /(\{\s*\/\*[\s\S]*?\*\/\s*\}|\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*(?=\n|$))|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|(<\/?[A-Z][A-Za-z0-9]*|\/>|<>|<\/>)|(\b\d+(?:\.\d+)?\b)|(\b[A-Za-z_$][\w$]*\b)/g;
+  function highlight(src, lang) {
+    if (lang === "sh") {
+      return esc(src).replace(/(#[^\n]*)/g, '<span class="c">$1</span>');
+    }
+    var out = "", last = 0, m;
+    TOKEN.lastIndex = 0;
+    while ((m = TOKEN.exec(src))) {
+      out += esc(src.slice(last, m.index));
+      var t = m[0];
+      if (m[1]) out += '<span class="c">' + esc(t) + "</span>";
+      else if (m[2]) out += '<span class="s">' + esc(t) + "</span>";
+      else if (m[3]) out += '<span class="t">' + esc(t) + "</span>";
+      else if (m[4]) out += '<span class="n">' + t + "</span>";
+      else if (m[5] && KW.test(t)) out += '<span class="k">' + t + "</span>";
+      else out += esc(t);
+      last = m.index + t.length;
+    }
+    return out + esc(src.slice(last));
+  }
+  document.querySelectorAll("pre.code").forEach(function (pre) {
+    var s = pre.querySelector("script");
+    if (!s) return;
+    var lang = pre.getAttribute("data-lang") || "";
+    var src = s.textContent.replace(/^\n+|\s+$/g, "");
+    pre.innerHTML = '<span class="lang">' + lang + '</span><button type="button" class="copy">Copy</button><code>' + highlight(src, lang) + "</code>";
+    pre.querySelector("button").addEventListener("click", function (e) {
+      var b = e.currentTarget;
+      function done(ok) { b.textContent = ok ? "Copied" : "Press Ctrl+C"; setTimeout(function () { b.textContent = "Copy"; }, 1500); }
+      try {
+        navigator.clipboard.writeText(src).then(function () { done(true); }, function () { sel(); });
+      } catch (err) { sel(); }
+      function sel() {
+        var r = document.createRange(); r.selectNodeContents(pre.querySelector("code"));
+        var g = window.getSelection(); g.removeAllRanges(); g.addRange(r); done(false);
+      }
+    });
+  });
+
+  /* ---------- navigation ---------- */
+  var nav = document.getElementById("nav");
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section"));
+  var groups = {}, order = [];
+  sections.forEach(function (sec) {
+    var g = sec.getAttribute("data-group");
+    if (!groups[g]) { groups[g] = []; order.push(g); }
+    groups[g].push(sec);
+  });
+  var links = [];
+  order.forEach(function (g) {
+    var h = document.createElement("h4"); h.textContent = g; nav.appendChild(h);
+    groups[g].forEach(function (sec) {
+      var a = document.createElement("a");
+      a.href = "#" + sec.id; a.textContent = sec.getAttribute("data-title");
+      a.dataset.group = g;
+      nav.appendChild(a);
+      links.push({ a: a, sec: sec, h: h, text: sec.textContent.toLowerCase() });
+    });
+  });
+  var none = document.createElement("div"); none.className = "none"; none.hidden = true; none.textContent = "Nothing matches."; nav.appendChild(none);
+
+  var q = document.getElementById("q");
+  var menu = document.getElementById("menu");
+  menu.addEventListener("click", function () { nav.classList.toggle("open"); });
+  nav.addEventListener("click", function (e) { if (e.target.tagName === "A") nav.classList.remove("open"); });
+
+  q.addEventListener("input", function () {
+    var v = q.value.trim().toLowerCase();
+    var shown = 0, hasGroup = {};
+    links.forEach(function (l) {
+      var ok = !v || l.text.indexOf(v) !== -1 || l.a.textContent.toLowerCase().indexOf(v) !== -1;
+      l.a.hidden = !ok; l.sec.style.display = ok ? "" : "none";
+      if (ok) { shown++; hasGroup[l.a.dataset.group] = true; }
+    });
+    nav.querySelectorAll("h4").forEach(function (h) { h.hidden = !hasGroup[h.textContent]; });
+    none.hidden = shown !== 0;
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "/" && document.activeElement !== q && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); }
+    if (e.key === "Escape" && document.activeElement === q) { q.value = ""; q.dispatchEvent(new Event("input")); q.blur(); }
+  });
+
+  /* highlight current section while scrolling */
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          links.forEach(function (l) { l.a.classList.toggle("on", l.sec === en.target); });
+        }
+      });
+    }, { rootMargin: "-10% 0px -80% 0px" });
+    sections.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
