@@ -9,7 +9,7 @@
  * test checks that this module exports exactly what the compiler accepts.
  */
 import type { InputState } from "./input.ts";
-import type { Scale2, ShakeState } from "./math.ts";
+import type { ShakeState, Vector2 } from "./math.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { GameProps } from "./components/Game.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
@@ -65,12 +65,12 @@ export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>
  * Squash and stretch: a scale set at a moment that springs back to 1 at \`recover\` a second (default 1.75), as state.
  *
  *     const [squash, setSquash] = useSquash();
- *     setSquash({ scaleX: 0.6, scaleY: 1.4 });       // in a handler: thin and tall
- *     <Sprite transform={{ scaleX: squash.scaleX, scaleY: squash.scaleY }} … />   // scales about the sprite's origin
+ *     setSquash({ x: 0.6, y: 1.4 });                 // in a handler: thin and tall
+ *     <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} … />   // scales about the sprite's origin
  *
  * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
  */
-export function useSquash(_recover?: number): [Scale2, Setter<Scale2>] {
+export function useSquash(_recover?: number): [Vector2, Setter<Vector2>] {
   return compileTimeOnly("useSquash");
 }
 

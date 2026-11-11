@@ -332,8 +332,9 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
       if (state.upscaled.id == 0) state.upscaled = LoadRenderTexture(uw, uh);
       if (state.upscaled.id != 0) {
         BeginTextureMode(state.upscaled);
-        /* Stored upside down like the canvas, so it is copied as it is (no flip) and flipped once, when it is drawn to the window. */
-        DrawTexturePro(state.canvas.texture, (Rectangle){ 0.0f, 0.0f, (float)width, (float)height }, (Rectangle){ 0.0f, 0.0f, (float)uw, (float)uh }, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
+        /* Every draw of a render texture flips it (its rows are stored bottom up), into another render texture as onto the window:
+         * so the canvas is flipped here, and the upscaled texture again when it is drawn to the window. */
+        DrawTexturePro(state.canvas.texture, (Rectangle){ 0.0f, 0.0f, (float)width, -(float)height }, (Rectangle){ 0.0f, 0.0f, (float)uw, (float)uh }, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
         EndTextureMode();
         SetTextureFilter(state.upscaled.texture, TEXTURE_FILTER_BILINEAR);
         shown = state.upscaled.texture;

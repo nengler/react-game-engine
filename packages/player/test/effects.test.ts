@@ -97,11 +97,11 @@ describe("createSounds", () => {
 
 describe("springBack (what useSquash does each step)", () => {
   it("moves each axis back toward 1 at its rate, and returns the same object once at rest", () => {
-    let scale = { scaleX: 0.6, scaleY: 1.4 };
+    let scale = { x: 0.6, y: 1.4 };
     scale = springBack(scale, 2, 0.1);
-    assert.ok(Math.abs(scale.scaleX - 0.8) < 1e-9 && Math.abs(scale.scaleY - 1.2) < 1e-9);
+    assert.ok(Math.abs(scale.x - 0.8) < 1e-9 && Math.abs(scale.y - 1.2) < 1e-9);
     for (let i = 0; i < 10; i++) scale = springBack(scale, 2, 0.1);
-    assert.deepEqual(scale, { scaleX: 1, scaleY: 1 });
+    assert.deepEqual(scale, { x: 1, y: 1 });
     assert.equal(springBack(scale, 2, 0.1), scale, "at rest: the same object, so a state holding it does not change");
   });
 });

@@ -66,3 +66,30 @@ describe("renderRun", { skip }, () => {
     assert.ok(white(last.pixels) > white(first.pixels), "the square moved while the key was held");
   });
 });
+
+describe("sharp upscaling, through librge", { skip }, () => {
+  it("keeps the picture the right way up at a scale between whole numbers (full screen), as nearest does", async () => {
+    const { Game, Screen } = await import("@rge/runtime");
+    const topLeftIsRed = (upscale: "nearest" | "sharp"): [boolean, boolean] => {
+      const [shot] = renderRun(
+        {
+          root: () => {
+            // 1000 × 563 shows a 320 × 180 game at 3.125 times: the sharp path's two render textures.
+            const game = new Game({ width: 1000, height: 563, upscale, background: "#000000" });
+            const screen = new Screen({ width: 320, height: 180, fit: "contain" });
+            screen.addChild(new Shape({ kind: "rect", width: 40, height: 20, color: "#ff0000" }));
+            game.addChild(screen);
+            return game;
+          },
+        },
+        [{ dt: 1 / 60, down: [], pressed: [], released: [] }],
+        { at: [0], library },
+      );
+      const p = shot!.pixels;
+      const red = (x: number, y: number): boolean => (p.rgba[(y * p.width + x) * 4] as number) > 200 && (p.rgba[(y * p.width + x) * 4 + 1] as number) < 50;
+      return [red(20, 20), red(20, p.height - 20)];
+    };
+    assert.deepEqual(topLeftIsRed("nearest"), [true, false]);
+    assert.deepEqual(topLeftIsRed("sharp"), [true, false], "not flipped by the second render texture");
+  });
+});

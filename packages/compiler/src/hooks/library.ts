@@ -11,11 +11,11 @@ export const LIBRARY_SOURCE = `import { shakeOn, springBack, useState, useUpdate
 /**
  * Squash and stretch: a scale that is set at a moment and springs back to 1 at \\\`recover\\\` a second.
  *   const [squash, setSquash] = useSquash();
- *   setSquash({ scaleX: 0.6, scaleY: 1.4 });
- *   <Sprite transform={{ scaleX: squash.scaleX, scaleY: squash.scaleY }} />
+ *   setSquash({ x: 0.6, y: 1.4 });
+ *   <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} />
  */
 export function useSquash(recover = 1.75) {
-  const [squash, setSquash] = useState<{ scaleX: number; scaleY: number }>({ scaleX: 1, scaleY: 1 });
+  const [squash, setSquash] = useState<{ x: number; y: number }>({ x: 1, y: 1 });
   useUpdate((dt) => {
     setSquash((s) => springBack(s, recover, dt));
   });

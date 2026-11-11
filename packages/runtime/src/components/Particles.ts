@@ -34,6 +34,14 @@ export interface ParticlesProps {
   space?: "local" | "world";
   /** Seeds the randomness, so a run repeats exactly. Default 1. */
   seed?: number;
+  /**
+   * An area particles start anywhere in, from the emitter's position right and down, in pixels: dust in a room, snow across the
+   * screen. Default 0 by 0, a point.
+   */
+  width?: number;
+  height?: number;
+  /** Start as if it had been emitting for a whole lifetime already, so a room's dust is there when the room is. Default false. */
+  prewarm?: boolean;
 }
 
 export const PARTICLE_SPACES = ["local", "world"] as const;
@@ -77,12 +85,16 @@ export class Particles<P extends object = {}> extends GameObject<P> {
   max: number;
   space: "local" | "world";
   seed: number;
+  width: number;
+  height: number;
+  prewarm: boolean;
 
   // x, y, vx, vy, age, life per particle.
   #data: Float64Array;
   #count = 0;
   #carry = 0;
   #wasEmitting = false;
+  #warmed = false;
   #random: () => number;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
@@ -104,6 +116,9 @@ export class Particles<P extends object = {}> extends GameObject<P> {
     this.max = Math.max(1, Math.floor(hostProps.max ?? DEFAULT_MAX));
     this.space = hostProps.space ?? "local";
     this.seed = hostProps.seed ?? 1;
+    this.width = hostProps.width ?? 0;
+    this.height = hostProps.height ?? 0;
+    this.prewarm = hostProps.prewarm ?? false;
     this.#data = new Float64Array(this.max * 6);
     this.#random = makeRandom(this.seed);
     // Not on yet, so a particle emitter that starts emitting bursts as it joins the world: `{dead && <Particles burst={12} />}` is a death.
@@ -148,8 +163,9 @@ export class Particles<P extends object = {}> extends GameObject<P> {
       const speed = this.speed * (0.6 + this.#random() * 0.4);
       const at = slot * 6;
       const d = this.#data;
-      d[at] = originX;
-      d[at + 1] = originY;
+      // A point uses no randomness for its place, so emitters without an area repeat exactly as they always have.
+      d[at] = this.width > 0 ? originX + this.#random() * this.width : originX;
+      d[at + 1] = this.height > 0 ? originY + this.#random() * this.height : originY;
       d[at + 2] = Math.cos(angle) * speed;
       d[at + 3] = Math.sin(angle) * speed;
       d[at + 4] = 0;
@@ -160,6 +176,8 @@ export class Particles<P extends object = {}> extends GameObject<P> {
 
   override onUpdate(dt: number, _input?: InputState): void {
     if (!(dt > 0)) return;
+    if (this.prewarm && !this.#warmed && this.emitting && this.rate > 0) this.#warm();
+    this.#warmed = true;
     if (this.emitting) {
       if (!this.#wasEmitting && this.burst > 0) this.emit(this.burst);
       if (this.rate > 0) {
@@ -191,6 +209,22 @@ export class Particles<P extends object = {}> extends GameObject<P> {
     }
     this.#count = live;
     this.markChanged();
+  }
+
+  /** Fill in a lifetime's worth of particles, each as far through its life (and its path) as if it had been made then. */
+  #warm(): void {
+    const n = Math.min(this.max, Math.floor(this.rate * this.lifetime));
+    const start = this.#count;
+    this.emit(n);
+    const d = this.#data;
+    for (let i = start; i < this.#count; i++) {
+      const at = i * 6;
+      const age = this.#random() * (d[at + 5] as number);
+      d[at] = (d[at] as number) + (d[at + 2] as number) * age;
+      d[at + 1] = (d[at + 1] as number) + (d[at + 3] as number) * age + 0.5 * this.gravity * age * age;
+      d[at + 3] = (d[at + 3] as number) + this.gravity * age;
+      d[at + 4] = age;
+    }
   }
 }
 

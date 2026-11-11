@@ -121,7 +121,7 @@ export const runtimeManifest: RuntimeManifest = {
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
     Hud: [],
     Tilemap: ["map", "image", "layer", "opacity"],
-    Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "count", "read", "emit", "emitAt"],
+    Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "width", "height", "prewarm", "count", "read", "emit", "emitAt"],
     ParticleLayer: ["particles", "emitBurst"],
     Fade: ["color", "on", "duration", "amount"],
     Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],

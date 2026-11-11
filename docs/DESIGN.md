@@ -1323,8 +1323,8 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
   function of the value (whole pixels from a fixed sequence, so runs repeat). The component that owns the camera owns the
   shake; a child that knows when to shake tells it with a callback prop (Kite: `<Player onDie={() => setShake(…)} />`).
 - **Squash and stretch is state: `const [squash, setSquash] = useSquash(1.75)`** (decided 2026-11-11, replacing a
-  `createSquash()` object with a `start` method, which was the imperative shape). `setSquash({ scaleX: 0.6, scaleY: 1.4 })` in a
-  handler, and `transform={{ scaleX: squash.scaleX, scaleY: squash.scaleY }}` on the sprite, which scales about its origin. It
+  `createSquash()` object with a `start` method, which was the imperative shape). `setSquash({ x: 0.6, y: 1.4 })` (a `Vector2`) in a
+  handler, and `transform={{ scaleX: squash.x, scaleY: squash.y }}` on the sprite, which scales about its origin. It
   springs back to 1 at `recover` a second in the component's own `useUpdate` (`springBack`, a runtime function that returns
   the same object at rest, so the state stops changing). `useSquash` is an **engine-shipped custom hook**: ordinary source
   (`useState` + `useUpdate`, in `compiler/src/hooks/library.ts`, with `useShake`), inlined like any custom hook when a component imports it

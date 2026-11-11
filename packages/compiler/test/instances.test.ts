@@ -55,14 +55,14 @@ export function Enemy({ power }: Props) {
       const blow = strike(power);
       tally.add(blow.power);
       setShake({ strength: blow.crit ? 4 : 1, duration: 0.2 });
-      setSquash({ scaleX: 1 + blow.power * 0.1, scaleY: 1 - blow.power * 0.1 });
+      setSquash({ x: 1 + blow.power * 0.1, y: 1 - blow.power * 0.1 });
       setHp((h) => h - blow.power);
     }
   });
   return (
     <Entity name="Enemy">
       <Camera shake={shake} />
-      {hp > 0 && <AnimatedSprite frames={["a.png"]} transform={{ scaleX: squash.scaleX, scaleY: squash.scaleY }} />}
+      {hp > 0 && <AnimatedSprite frames={["a.png"]} transform={{ scaleX: squash.x, scaleY: squash.y }} />}
     </Entity>
   );
 }
@@ -80,7 +80,7 @@ describe("what a component owns and does itself", () => {
       assert.match(code, /springBack\(/, "useSquash was inlined: its spring back is this component's own update");
       assert.match(code, /shakeOn\(/, "and so was useShake");
       const { Enemy } = (await import(pathToFileURL(join(p.dir, "out", "Enemy.ts")).href)) as {
-        Enemy: new (props: { power: number }) => Entity & { tally: { count: number }; shake: ShakeState; squash: { scaleX: number; scaleY: number }; hp: number };
+        Enemy: new (props: { power: number }) => Entity & { tally: { count: number }; shake: ShakeState; squash: { x: number; y: number }; hp: number };
       };
       const { useGame } = (await import(pathToFileURL(join(p.dir, "src", "GameState.ts")).href)) as { useGame: { getState(): { hits: number } } };
       const world = new World();
@@ -97,9 +97,9 @@ describe("what a component owns and does itself", () => {
       assert.deepEqual([a.hp, b.hp], [2, 1]);
       assert.deepEqual([a.tally.count, b.tally.count], [1, 2]);
       assert.deepEqual([a.shake.strength, b.shake.strength], [1, 4], "each read its own result");
-      assert.ok(a.squash.scaleX < b.squash.scaleX, "each has its own squash state");
+      assert.ok(a.squash.x < b.squash.x, "each has its own squash state");
       for (let i = 0; i < 20; i++) world.tick(0.05);
-      assert.deepEqual([a.squash.scaleX, b.squash.scaleX], [1, 1], "sprung back in each component's own update");
+      assert.deepEqual([a.squash.x, b.squash.x], [1, 1], "sprung back in each component's own update");
       assert.equal(a.shake.elapsed, 0.2, "the shake ran down");
     } finally {
       rmSync(p.dir, { recursive: true, force: true });

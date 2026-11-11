@@ -135,6 +135,31 @@ describe("<Particles>", () => {
     assert.equal(ofOp(backend.frames[39]?.records ?? [], "rect").length, 0, "gone at the end");
   });
 
+  it("starts particles anywhere in its area, and prewarmed starts full, each partway through its life", () => {
+    const e = particles({ rate: 10, lifetime: 2, speed: 0, width: 100, height: 50, prewarm: true, max: 64 });
+    e.transform.x = 20;
+    const world = new World();
+    world.mount(e);
+    world.tick(1 / 60);
+    assert.ok(e.count >= 15, `full at once (less any at the very end of their life): ${e.count}`);
+    const out = { x: 0, y: 0, t: 0 };
+    const xs: number[] = [];
+    const ts: number[] = [];
+    for (let i = 0; i < e.count; i++) {
+      e.read(i, out);
+      assert.ok(out.x >= 0 && out.x <= 100 && out.y >= 0 && out.y <= 50, "inside the area (in the emitter's space)");
+      xs.push(out.x);
+      ts.push(out.t);
+    }
+    assert.ok(Math.max(...xs) - Math.min(...xs) > 50, "spread across it");
+    assert.ok(Math.max(...ts) - Math.min(...ts) > 0.5, "at different ages, so they do not all end together");
+    const point = particles({ rate: 10, lifetime: 2, speed: 0 });
+    const w2 = new World();
+    w2.mount(point);
+    w2.tick(1 / 60);
+    assert.equal(point.count, 0, "not prewarmed: it fills in over time");
+  });
+
   it("keeps world-space particles where they were made when the emitter moves", () => {
     const e = particles({ burst: 1, lifetime: 5, speed: 0, space: "world" });
     e.transform.x = 100;
