@@ -199,6 +199,8 @@ given as the first argument (`rge check packages/kite`).
 
 ### M1. Bramble's greybox (game; \~1 week)
 
+*(Built 2026-11-11 in `games/bramble`: the rules, the screens, 17 tests including a replay through the game and a search that proves it can be finished, and six findings in its `DESIGN.md`. Not yet done from this list: `actor.ts`, `doors.ts`, `talk.ts`, `items.ts` and `shrines.ts` are all in `run.ts` for now; a person has not played it.)*
+
 No engine work is planned here. Bramble is written from the guide, and every snag goes into `games/bramble/DESIGN.md`
 under "Findings while writing", as Kite and Hearth did. The engine is fixed only when a finding is worth it.
 

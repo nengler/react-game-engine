@@ -1,33 +1,28 @@
-import { useInput, useRef, useState, useUpdate, Entity, Game, Screen, Sprite, Text } from "@rge/runtime/jsx";
-import { moveBy } from "./rules/move.ts";
+import { Game, Route, Router, Screen } from "@rge/runtime/jsx";
+import { End } from "./End.tsx";
 import { useGame } from "./GameState.ts";
+import { Play } from "./Play.tsx";
+import { controls } from "./rules/controls.ts";
+import { Title } from "./Title.tsx";
 
-/** The root. Move the hero with the arrow keys; Z counts a step. */
+/** The root: a 320 × 180 screen showing the title, the world or the end. */
 export default function Main() {
-  const [x, setX] = useState(160);
-  const [y, setY] = useState(90);
-  const dirX = useRef(0);
-  const dirY = useRef(0);
-  const steps = useGame((s) => s.steps);
-  const step = useGame((s) => s.step);
-
-  useInput((input) => {
-    dirX.current = (input.down("ArrowRight") ? 1 : 0) - (input.down("ArrowLeft") ? 1 : 0);
-    dirY.current = (input.down("ArrowDown") ? 1 : 0) - (input.down("ArrowUp") ? 1 : 0);
-    if (input.pressed("Z")) step();
-  });
-  useUpdate((dt) => {
-    setX((x) => moveBy(x, dirX.current, dt));
-    setY((y) => moveBy(y, dirY.current, dt));
-  });
+  const screen = useGame((s) => s.screen);
 
   return (
-    <Game name="Main" title="bramble" width={320} height={180} background="#10131c" assets="assets">
-      <Screen width={320} height={180} fit="integer">
-        <Entity name="Hero" transform={{ x, y }}>
-          <Sprite image="hero.png" originX={8} originY={8} />
-        </Entity>
-        <Text transform={{ x: 8, y: 8 }} size={12} color="white" text={`steps: ${steps}`} />
+    <Game name="Main" controls={controls} upscale="sharp" title="Bramble" width={960} height={540} background="#10131c" assets="assets" fixedStep={60}>
+      <Screen width={320} height={180} fit="contain">
+        <Router route={screen}>
+          <Route name="title">
+            <Title />
+          </Route>
+          <Route name="play">
+            <Play />
+          </Route>
+          <Route name="end">
+            <End />
+          </Route>
+        </Router>
       </Screen>
     </Game>
   );

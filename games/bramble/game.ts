@@ -6,10 +6,13 @@ export const gameConfig: PlayerConfig = {
   root: () => new Main(),
 };
 
-/** Names for the input scripts that tests, parity and `rge screenshot` use (`right*30, down*10`); anything else is a key name. */
+/** Names for the input scripts that tests, parity and `rge screenshot` use (`right*30, Z`); anything else is a key name. */
 export const bindings: InputBindings = {
   left: ["ArrowLeft"],
   right: ["ArrowRight"],
   up: ["ArrowUp"],
   down: ["ArrowDown"],
+  action: ["Z"],
+  confirm: ["Enter"],
+  back: ["Escape"],
 };
