@@ -1694,9 +1694,40 @@ run(hostBackend(), { width: 800, height: 600, title: "My game", root: () => new 
 **Startup.** The root is built first, with the window still closed, because a root that is a `<Game>` says what window to
 open (see "Game"). Sounds made while it is built only record their paths; once the window is open they are preloaded
 through the backend, so a sound still never hitches on its first play. Then the window opens, the tree is mounted
-and the first frame is drawn. A root that throws opens no window. Each setting is the `<Game>` prop where it is written,
-else the `PlayerConfig` field, else the default (640 × 360, title `"react-game-engine"`, background black, assets
-`"assets"`); `hidden` is the player's alone.
+and the first frame is drawn. A root that throws opens no window, unless errors are shown in the window (below). Each setting
+is the `<Game>` prop where it is written, else the `PlayerConfig` field, else the default (640 × 360, title
+`"react-game-engine"`, background black, assets `"assets"`); `hidden` is the player's alone.
+
+**Errors in the window** (priority 5, 2026-11-11). With `showErrors`, an error thrown while building the root, mounting it or in
+a step does not close the window: the player stops stepping the world and draws the error instead, on a dark red background in
+window pixels: a heading, `Name: message`, the stack (dimmer, wrapped to the window, cut with a line that says so), and a note
+at the bottom ("Close the window to quit."). `player.failure` holds the error while it is shown. `run` turns this on for a
+visible window and, once the window is closed, throws the error, so both hosts still print it and exit with status 1. A
+`hidden` window, and `createPlayer` unless asked, throw at once as before, which is what tests, tools, the parity runs and CI
+want. Because the error screen is drawn by the TypeScript player through the ordinary draw records, the Rust host needs no
+change. A host can also show its own error (`player.showError(error, note)`): the Node launcher shows a compile error this way.
+
+**Hot reload** (priority 5, 2026-11-11). `player.reload(config)` builds `config.root` again, from a newer build of the game's
+classes, and puts it in place of the current root in the same window and world. What carries over:
+
+- **Each component's own state.** The compiler gives a component with `useState` or `useRef` a `saveHotState()` (its values by
+  their IR ids, `"Coin.taken"`, the pending value a setter wrote included) and a `loadHotState(saved)` that writes them back as a
+  setter would and marks the component dirty. `captureHotState(root)` collects them by **tree path**: each object is named by its
+  class and its index among its siblings of that class (`Main/Level:0/Player:0`), so a component keeps its state when the code
+  around it changes, as long as it is still the n-th of its kind under the same parent. `restoreHotState(world, root, saved)` goes
+  parents first and flushes the world after each level, so a child that exists only because of its parent's state (a condition
+  that was true, a list) is built before it is looked for. A value whose kind changed (a number that became a string), a game
+  object, and a function are not kept (`hotFits`): the new initial value stands.
+- **The game state**, by the host: `GameStore.carryFrom(older)` takes the older store's values where they still fit (a key that
+  is gone is dropped, a new key keeps its initial value, a leaf whose type changed keeps the new one) and the new build's
+  actions, before any component reads it.
+- **Not kept:** a built-in's internal state (an animation's frame, a camera's slide, particles in flight), and module-level
+  variables in plain `.ts` files. The window's settings stay as they were opened; the controls come from the new root.
+
+A reload that fails (the new root throws while it is built or mounted) shows the error and keeps the state of the last good tree
+for the next try, so fixing the bug brings the game back where it was. A crash in a step leaves the world as the error found it,
+and the next reload takes its state from there. How the Node launcher gets a newer build is in NATIVE_PLAN.md
+(`packages/player-node`).
 
 **Reusing draw records** (decided and built 2026-11-10). Most objects stand still in a given frame, and walking them is most
 of a frame's script time. So `FrameBuilder` keeps last frame's world records and, for a subtree that has not changed since,

@@ -14,3 +14,10 @@ export function hostBackend(): Backend {
   }
   return backend as Backend;
 }
+
+/**
+ * The global a host sets when it drives the frame loop itself: `run(backend, config)` then calls it with both and returns,
+ * instead of stepping until the window closes. The Node launcher does this to hot reload, so a newer build of the entry file
+ * hands it a newer config.
+ */
+export const HOST_RUN_KEY = "__rgeRun";

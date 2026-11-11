@@ -271,10 +271,12 @@ When a handler throws, both hosts print the stack and exit with status 1. That i
 
 **Done when**
 
-- [ ] A thrown handler shows its message in the window under both hosts; headless runs still exit 1
+- [x] A thrown handler shows its message in the window under both hosts; headless runs still exit 1 (2026-11-11: drawn by the TypeScript player, so the Rust host needed no change; see DESIGN.md, "Errors in the window")
 - [ ] A game can start from a scene file and a prefab registry
-- [ ] Editing a component while `npm run play:demo` runs updates it in place, keeping its state
+- [x] Editing a component while `npm run play:demo` runs updates it in place, keeping its state (2026-11-11: `play.ts` hot reloads by default, keeping each component's `useState` and refs by tree path and carrying the game state over; compile errors show in the window; see DESIGN.md, "Hot reload", and NATIVE_PLAN.md, `packages/player-node`)
 - [ ] An unknown key name is a compile error with a suggestion
+
+**Started 2026-11-11** with errors in the window and hot reload, the two that matter most for working on a game. Scenes as an entry point may no longer be needed: Kite switches screens with `<Router>`, and nothing has asked to start a game from a scene file. The key-name check now has to know a game's action names too (`createControls`, `input.pressed("confirm")`).
 
 ## Order of work
 

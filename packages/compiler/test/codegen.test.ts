@@ -58,6 +58,17 @@ export class Player extends Entity {
     this.health = this.#healthNext;
   }
 
+  override saveHotState(): Record<string, unknown> {
+    return { "Player.health": this.#healthNext };
+  }
+
+  override loadHotState(saved: Record<string, unknown>): void {
+    let value: unknown;
+    value = saved["Player.health"];
+    if (this.hotFits(value, this.#healthNext)) this.#healthNext = value as number;
+    this.markDirty();
+  }
+
   override render(): void {
     if (this.health < 25) {
       if (this.warningIcon === null) {

@@ -377,6 +377,34 @@ export class GameObject<P extends object = {}> {
   /** Recompute dynamic props and conditional children. Generated code overrides this. */
   render(): void {}
 
+  /**
+   * For hot reload: this object's own state (`useState` values, refs) by stable id, or null when it has none. Generated code
+   * overrides it for a component with state or refs. See `captureHotState`.
+   */
+  saveHotState(): Record<string, unknown> | null {
+    return null;
+  }
+
+  /**
+   * For hot reload: take back what `saveHotState` returned from the object this one replaces (an older build of the same
+   * component). An id it no longer has, or a value of another type, is ignored. It sets state as a setter would, so it shows
+   * on the next render.
+   */
+  loadHotState(_saved: Record<string, unknown>): void {}
+
+  /**
+   * Whether a saved value can stand in for `current` after a hot reload: the same kind of value (a number for a number, an
+   * array for an array, an object or null for an object). A game object or a function is never kept: it belongs to the
+   * build being replaced, and the new tree made its own.
+   */
+  protected hotFits(value: unknown, current: unknown): boolean {
+    if (value === undefined && current !== undefined) return false;
+    if (typeof value !== typeof current || typeof value === "function") return false;
+    if (value instanceof GameObject) return false;
+    if (typeof value === "object" && value !== null && current !== null && Array.isArray(value) !== Array.isArray(current)) return false;
+    return true;
+  }
+
   attachToWorld(world: World): void {
     this.world = world;
     world.registerObject(this);

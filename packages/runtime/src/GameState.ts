@@ -115,6 +115,18 @@ export class GameStore<S = object> {
     this.#notify(changedPaths(before as Tree, this.#state as Tree, "", []));
   }
 
+  /**
+   * For hot reload: take the values of `older`, the same store from the build before this one, keeping this store's actions.
+   * Only what still fits is taken: a key this state no longer has is dropped, a new key keeps its initial value, and a leaf
+   * whose type changed (a number that became a string, an object that became an array) keeps the new one. `older` is
+   * forgotten, so `resetGameState` no longer resets it. Call it before anything reads this store.
+   */
+  carryFrom(older: GameStore<unknown>): void {
+    const merged = carry(this.#state, older.getState());
+    stores.delete(older);
+    this.#state = merged as S;
+  }
+
   /** Mark dirty every reader of a changed leaf, and every reader of an object or array that holds one. */
   #notify(changed: readonly string[]): void {
     if (changed.length === 0 || this.#subscribers.size === 0) return;
@@ -134,6 +146,23 @@ export class GameStore<S = object> {
 }
 
 type Tree = { [key: string]: unknown };
+
+/**
+ * `next` with the values of `old` where they still fit (see `GameStore.carryFrom`). Functions always come from `next`: they
+ * are the new build's actions. Arrays are taken whole, since their length is data.
+ */
+function carry(next: unknown, old: unknown): unknown {
+  if (typeof next === "function") return next;
+  const nextObject = typeof next === "object" && next !== null;
+  const oldObject = typeof old === "object" && old !== null;
+  if (nextObject !== oldObject) return next;
+  if (!nextObject) return typeof next === typeof old ? old : next;
+  if (Array.isArray(next) !== Array.isArray(old)) return next;
+  if (Array.isArray(old)) return old;
+  const out: Tree = {};
+  for (const [key, value] of Object.entries(next as Tree)) out[key] = key in (old as Tree) ? carry(value, (old as Tree)[key]) : value;
+  return out;
+}
 
 /** Every store made in this process, so a new game can reset them all. */
 const stores = new Set<{ reset(): void }>();

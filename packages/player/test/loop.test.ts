@@ -314,7 +314,7 @@ describe("run", () => {
         throw new Error("game over");
       }
     }
-    assert.throws(() => run(backend, { ...WINDOW, root: () => new Crasher() }), /game over/);
+    assert.throws(() => run(backend, { ...WINDOW, hidden: true, root: () => new Crasher() }), /game over/);
     assert.equal(backend.closed, true);
     assert.equal(getSoundSink(), null);
   });
