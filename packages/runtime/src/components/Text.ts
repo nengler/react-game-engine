@@ -15,6 +15,19 @@ export interface TextProps {
    * width, which `align` cannot move within. A text wider than its box overflows it.
    */
   width?: number;
+  /**
+   * Wrap the text to lines no wider than this many pixels: it breaks at spaces, and inside a word only when the word alone is too wide.
+   * A `\n` always breaks. With no `maxWidth` the text is one line (and `\n` still breaks). Each line is drawn on its own; `align` applies
+   * to each, inside `width`, else inside `maxWidth`.
+   */
+  maxWidth?: number;
+  /** Extra pixels between wrapped lines, on top of a line's own height. Default 0. */
+  lineGap?: number;
+  /**
+   * Draw only the first `reveal` characters (a dialogue box typing its page out), but lay out the whole text, so the box does not
+   * grow or rewrap as it appears. The game's rules count it up; the engine has no timer for it. Default: all of it.
+   */
+  reveal?: number;
   /** Where the text sits inside `width`: `"left"` (the default), `"center"` or `"right"`. */
   align?: TextAlign;
   /**
@@ -43,6 +56,9 @@ export class Text<P extends object = {}> extends GameObject<P> {
   width: number | undefined;
   align: TextAlign;
   font: string | undefined;
+  maxWidth: number | undefined;
+  lineGap: number;
+  reveal: number | undefined;
 
   #size = DEFAULT_TEXT_SIZE;
   #sized = false;
@@ -72,5 +88,8 @@ export class Text<P extends object = {}> extends GameObject<P> {
     this.width = hostProps.width;
     this.align = hostProps.align ?? "left";
     this.font = hostProps.font;
+    this.maxWidth = hostProps.maxWidth;
+    this.lineGap = hostProps.lineGap ?? 0;
+    this.reveal = hostProps.reveal;
   }
 }

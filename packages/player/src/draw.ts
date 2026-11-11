@@ -559,6 +559,17 @@ interface FrameArea {
   readonly pixelPerfect: boolean;
 }
 
+/** A text broken into lines: each line's text, and where it starts in the whole text, in characters (so `<Text reveal>` can say how much of it is showing). */
+interface WrappedText {
+  readonly lines: readonly string[];
+  readonly starts: readonly number[];
+}
+
+/** Does this text draw as several lines, or part of one: wrapped, with a line break in it, or revealed a bit at a time? */
+function isMultiline(text: Text): boolean {
+  return text.maxWidth !== undefined || text.reveal !== undefined || text.text.includes("\n");
+}
+
 /** A rectangle of the world, in world pixels. */
 interface WorldRect {
   readonly x0: number;
@@ -639,6 +650,8 @@ export class FrameBuilder {
   #lastRoot: GameObject | null = null;
   #lastWorld: object | null = null;
   /** The camera the last frame was drawn through: the one this frame's `<Tilemap>`s are culled by, since the walk meets them before it finds this frame's camera. */
+  /** Line breaks of wrapped texts, by font, size, width and text: a text is wrapped once, not every frame. */
+  readonly #wraps = new Map<string, WrappedText>();
   #cullCamera: Camera | null = null;
   /** What this frame's tilemaps were culled with, `undefined` when none were; and the world rectangle the view shows, found once per frame. */
   #culledWith: Camera | null | undefined = undefined;
@@ -1275,6 +1288,16 @@ export class FrameBuilder {
         out.height = font === undefined ? object.size : this.#bitmapHeight(object, font);
         return true;
       }
+      if (isMultiline(object)) {
+        // The whole text, wrapped: the widest line by the lines' heights. A reveal does not change it, so the box stays put as text appears.
+        const wrapped = this.#wrap(object, font);
+        let widest = 0;
+        for (const line of wrapped.lines) widest = Math.max(widest, this.#lineSize(object, font, line).width);
+        const lineHeight = this.#lineSize(object, font, "").height;
+        out.width = object.width ?? widest;
+        out.height = wrapped.lines.length * lineHeight + (wrapped.lines.length - 1) * object.lineGap;
+        return true;
+      }
       size = font === undefined ? this.#textSize(object.text, object.size) : this.#bitmapSize(font, object.text, this.#bitmapHeight(object, font));
       if (object.width !== undefined) {
         out.width = object.width;
@@ -1305,6 +1328,97 @@ export class FrameBuilder {
     }
     if (flex.background !== undefined) this.#list.rect(world, flex.box.size[0] as number, flex.box.size[1] as number, this.#color(flex.background));
     return placed;
+  }
+
+  /** The size of one line of `object` in `font` (undefined: the built-in font). An empty line has the height of a line. */
+  #lineSize(object: Text, font: string | undefined, line: string): Size {
+    if (font === undefined) {
+      if (line === "") return { width: 0, height: this.#textSize("M", object.size).height };
+      return this.#textSize(line, object.size);
+    }
+    return this.#bitmapSize(font, line, this.#bitmapHeight(object, font));
+  }
+
+  /**
+   * Break a text into lines: at each `\n`, and, with a `maxWidth`, at the spaces where a line would be too wide; a word wider than
+   * `maxWidth` by itself is broken inside, as late as it fits. The spaces at a break are not drawn. Cached by font, size, width and text.
+   */
+  #wrap(object: Text, font: string | undefined): WrappedText {
+    const maxWidth = object.maxWidth;
+    const key = `${font ?? ""}|${object.size}|${object.sized ? 1 : 0}|${maxWidth ?? ""}|${object.text}`;
+    let wrapped = this.#wraps.get(key);
+    if (wrapped !== undefined) return wrapped;
+    const lines: string[] = [];
+    const starts: number[] = [];
+    let offset = 0; // in characters (code points) of the whole text
+    for (const paragraph of object.text.split("\n")) {
+      const paragraphLength = [...paragraph].length;
+      if (maxWidth === undefined || !(maxWidth > 0)) {
+        lines.push(paragraph);
+        starts.push(offset);
+      } else {
+        // Words with where each starts, in characters of the paragraph; runs of spaces count as one separator.
+        let line = "";
+        let lineStart = 0;
+        let position = 0;
+        const fits = (text: string): boolean => this.#lineSize(object, font, text).width <= maxWidth;
+        for (const word of paragraph.split(" ")) {
+          const wordLength = [...word].length;
+          if (word === "") {
+            position += 1;
+            continue;
+          }
+          const candidate = line === "" ? word : `${line} ${word}`;
+          if (fits(candidate)) {
+            if (line === "") lineStart = position;
+            line = candidate;
+          } else {
+            if (line !== "") {
+              lines.push(line);
+              starts.push(offset + lineStart);
+              line = "";
+            }
+            if (fits(word)) {
+              line = word;
+              lineStart = position;
+            } else {
+              // A word wider than the box alone: break it by characters, each piece as long as fits.
+              let piece = "";
+              let pieceStart = position;
+              let index = position;
+              for (const ch of word) {
+                if (piece !== "" && !fits(piece + ch)) {
+                  lines.push(piece);
+                  starts.push(offset + pieceStart);
+                  piece = "";
+                  pieceStart = index;
+                }
+                piece += ch;
+                index++;
+              }
+              line = piece;
+              lineStart = pieceStart;
+            }
+          }
+          position += wordLength + 1;
+        }
+        lines.push(line);
+        starts.push(offset + lineStart);
+      }
+      offset += paragraphLength + 1; // the "\n"
+    }
+    wrapped = { lines, starts };
+    if (this.#wraps.size >= TEXT_CACHE_LIMIT) this.#wraps.clear();
+    this.#wraps.set(key, wrapped);
+    return wrapped;
+  }
+
+  /** How much of a wrapped line shows: all of it, or the part of it that comes before `reveal` characters of the whole text. */
+  #shown(object: Text, line: string, start: number): string {
+    const reveal = object.reveal;
+    if (reveal === undefined) return line;
+    const count = Math.max(0, Math.min([...line].length, Math.floor(reveal) - start));
+    return count >= [...line].length ? line : [...line].slice(0, count).join("");
   }
 
   #textSize(text: string, size: number): Size {
@@ -1379,7 +1493,7 @@ export class FrameBuilder {
     return { width: characters * (sheet.width / FONT_COLUMNS) * scale, height: size };
   }
 
-  /** Text drawn from a bitmap font: one region of the font sheet for each character, in the text's colour. */
+  /** Text drawn from a bitmap font: one region of the font sheet for each character, in the text's colour. Wrapped and revealed text draws line by line. */
   #bitmapText(text: Text, at: WorldTransform): void {
     const font = (text.font ?? this.font) as string;
     const handle = this.#texture(font);
@@ -1394,25 +1508,61 @@ export class FrameBuilder {
     const color = this.#color(text.color);
     const cos = Math.cos(at.rotation);
     const sin = Math.sin(at.rotation);
-    let x = 0;
-    if (text.width !== undefined && text.align !== "left") {
-      const room = text.width - this.#bitmapSize(font, text.text, this.#bitmapHeight(text, font)).width;
-      x = text.align === "center" ? Math.round(room / 2) : Math.round(room);
-    }
-    for (const ch of text.text) {
-      const code = ch.codePointAt(0) as number;
-      const glyph = code >= 32 && code < 128 ? code - 32 : 63 - 32; // anything else is a "?"
-      if (glyph !== 0) {
-        const lx = x * at.scaleX;
-        this.#list.spriteRegionAt(at.x + cos * lx, at.y + sin * lx, at.rotation, at.scaleX * scale, at.scaleY * scale, handle, (glyph % FONT_COLUMNS) * cellW, Math.floor(glyph / FONT_COLUMNS) * cellH, cellW, cellH, 0, 0, 0, color);
+    const multiline = isMultiline(text);
+    const wrapped = multiline ? this.#wrap(text, font) : null;
+    const lineHeight = this.#bitmapHeight(text, font);
+    const box = text.width ?? text.maxWidth;
+    const lines = wrapped === null ? [text.text] : wrapped.lines;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] as string;
+      const shown = wrapped === null ? line : this.#shown(text, line, wrapped.starts[i] as number);
+      if (shown === "") continue;
+      let x = 0;
+      if (box !== undefined && text.align !== "left") {
+        const room = box - this.#bitmapSize(font, line, lineHeight).width;
+        x = text.align === "center" ? Math.round(room / 2) : Math.round(room);
       }
-      x += cellW * scale;
+      const y = i * (lineHeight + text.lineGap);
+      for (const ch of shown) {
+        const code = ch.codePointAt(0) as number;
+        const glyph = code >= 32 && code < 128 ? code - 32 : 63 - 32; // anything else is a "?"
+        if (glyph !== 0) {
+          const lx = x * at.scaleX;
+          const ly = y * at.scaleY;
+          this.#list.spriteRegionAt(at.x + cos * lx - sin * ly, at.y + sin * lx + cos * ly, at.rotation, at.scaleX * scale, at.scaleY * scale, handle, (glyph % FONT_COLUMNS) * cellW, Math.floor(glyph / FONT_COLUMNS) * cellH, cellW, cellH, 0, 0, 0, color);
+        }
+        x += cellW * scale;
+      }
     }
   }
 
   #text(text: Text, world: WorldTransform): void {
-    if ((text.font ?? this.font) !== undefined) {
+    const font = text.font ?? this.font;
+    if (font !== undefined) {
       this.#bitmapText(text, world);
+      return;
+    }
+    const color = this.#color(text.color);
+    if (isMultiline(text)) {
+      // Wrapped, broken or revealed: a record for each line, one line height (and the gap) below the last, aligned by itself.
+      const wrapped = this.#wrap(text, undefined);
+      const box = text.width ?? text.maxWidth;
+      const lineHeight = this.#lineSize(text, undefined, "").height;
+      const cos = Math.cos(world.rotation);
+      const sin = Math.sin(world.rotation);
+      for (let i = 0; i < wrapped.lines.length; i++) {
+        const line = wrapped.lines[i] as string;
+        const shown = this.#shown(text, line, wrapped.starts[i] as number);
+        if (shown === "") continue;
+        let shift = 0;
+        if (box !== undefined && text.align !== "left") {
+          const room = box - this.#textSize(line, text.size).width;
+          shift = text.align === "center" ? Math.round(room / 2) : Math.round(room);
+        }
+        const lx = shift * world.scaleX;
+        const ly = i * (lineHeight + text.lineGap) * world.scaleY;
+        this.#list.text({ x: world.x + cos * lx - sin * ly, y: world.y + sin * lx + cos * ly, rotation: world.rotation, scaleX: world.scaleX, scaleY: world.scaleY }, shown, text.size, color);
+      }
       return;
     }
     let at = world;
@@ -1425,7 +1575,7 @@ export class FrameBuilder {
         at = { x: world.x + Math.cos(world.rotation) * along, y: world.y + Math.sin(world.rotation) * along, rotation: world.rotation, scaleX: world.scaleX, scaleY: world.scaleY };
       }
     }
-    this.#list.text(at, text.text, text.size, this.#color(text.color));
+    this.#list.text(at, text.text, text.size, color);
   }
 
   /** Window origin at the top-left with no camera; with one, the followed point lands on the centre of a `width` × `height` view (the window, or the game's screen). */

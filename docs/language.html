@@ -581,7 +581,10 @@ function Player() {
         ["size", "number", "16", "Pixels."],
         ["color", "CSS colour", '"white"', ""],
         ["width", "number", "text width", "Box width for layout and <code>align</code>."],
-        ["align", '"left" | "center" | "right"', '"left"', "Where the text sits inside <code>width</code>."],
+        ["align", '"left" | "center" | "right"', '"left"', "Where each line sits inside <code>width</code> (else inside <code>maxWidth</code>)."],
+        ["maxWidth", "number", "none", "Wrap to lines no wider than this: breaks at spaces, inside a word only when the word alone is too wide; <code>\\n</code> always breaks. One text record (or run of glyphs) per line."],
+        ["lineGap", "number", "0", "Extra pixels between wrapped lines."],
+        ["reveal", "number", "all", "Draw only the first <em>n</em> characters but lay out the whole text, so a box does not grow or rewrap as a page types out. The game's rules count it up."],
         ["font", "string", "built-in", "A bitmap font image: ASCII 32–127 in 16 × 6 cells. <code>size</code> is then the cell height."]
       ] },
     { name: "Shape", kind: "leaf", sum: "A filled rectangle or ellipse, for debugging and prototyping.",
