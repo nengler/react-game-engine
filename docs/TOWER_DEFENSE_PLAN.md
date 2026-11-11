@@ -162,18 +162,14 @@ generated code, diagnostics for what is still not allowed), a runtime test, and 
 The order is the order the game is expected to hit them; build each when it is hit.
 
 1. **Spread props** (`<Enemy {...e} />`, and spread together with named props, later ones winning). Today: rejected
-   ("spread attributes … are rejected"). The work is in the analyzer and `transform/elements.ts`: lower a spread into one
-   prop per key the **receiving component declares**, so the generated code stays `new Enemy({ x: e.x, y: e.y, … })`
-   with no runtime spread. Within one file the receiver's `PropDeclIR`s are at hand. Today each file is compiled alone
-   and `project.ts` only checks across files afterwards, so a receiver in another file (the usual case) needs the
-   project to read props first. That pass is part of this work.
-   A spread onto a built-in reads the built-in's props from the manifest. The spread's dependency is the whole object, so
-   the element re-renders when the object changes (an immutable update), which is already how list items work.
-   *Open decision:* how the compiler knows which keys the spread object *has*. Either (a) the receiver's props, read
-   from the object only where its declared type (an interface the compiler can read, as it does for `useState<T[]>`)
-   has them (no checker query, but limited to types written as interfaces), or (b) query the TypeScript 7.1 checker
-   for the object's type (exact, and the first checker query in the compiler; DESIGN.md avoided that until now). Decide
-   in the first commit; (a) is the default.
+   ("Only plain `name={value}` attributes are supported", `RGE1203`). On a **component** element this needs no key list:
+   the generated code can spread for real (`new Enemy({ ...e, speed: 2 })`, `updateProps({ ...e })`). TypeScript checks
+   the object against the props type, the source type-check reports a missing prop at the author's line, and the
+   runtime's `applyProps` already compares key by key, so a render only marks the child dirty when a value changed.
+   The spread's dependency is everything the spread expression reads, so it re-renders when the object is replaced (an
+   immutable update), as list items already do. On a **built-in** a render writes each prop to a field one by one, so
+   a spread needs the keys. That stays a diagnostic until a game spreads onto a built-in (Hearth does not plan to).
+   The cost is one object per render of the element, which the bench in "Performance" measures.
 
 2. **Conditionals inside a list's `.map`.** Today `.map` must return one element; the workaround is
    `filter(…).map(…)`, as in Kite's `Level.tsx`. Two forms:
@@ -197,8 +193,9 @@ The order is the order the game is expected to hit them; build each when it is h
 
 5. **Context** (`createContext`, a provider element, `useContext`). Today: an unknown hook. The proposed shape:
    - `export const TowerContext = createContext<TowerView>(defaultValue)` in a `.ts` file.
-   - `<TowerContext value={…}>…</TowerContext>` as the provider (React 19's form; `.Provider` can be an alias), an
-     implicit `<Entity>` holding its children.
+   - A built-in `<Provider context={TowerContext} value={…}>…</Provider>` as the provider, a container like `<Entity>`.
+     A built-in is cheap for the compiler (it is driven by the manifest). React 19's `<TowerContext value>` can come
+     later as sugar that lowers to it.
    - `const tower = useContext(TowerContext)` at the top level of a component, a compiler intrinsic like the other
      hooks.
    - At runtime a consumer finds the nearest provider when it is attached (walking up), and the provider re-renders its
@@ -206,6 +203,7 @@ The order is the order the game is expected to hit them; build each when it is h
    - The provider's value is a dependency of the consumer's `render()`, like a prop.
    *Open decision:* the provider as an element (above) versus a compile-time-only lowering that threads the value as a
    hidden prop. The element works across files and through passed children, so it is the default.
+   Context in a custom hook (`useTower()` wrapping `useContext`) is left out of the first cut.
 
 Each one that is not hit stays a diagnostic, and its "Not now" row says so.
 
@@ -244,6 +242,119 @@ Each one that is not hit stays a diagnostic, and its "Not now" row says so.
   test so a change to a number shows up as a change in difficulty.
 - **Wave replays:** an input script that clicks build orders and starts waves, played through the game itself. It
   checks that a good build wins with lives left and a bad one loses.
+
+## Implementation map
+
+What each piece touches, file by file, as read from the code on 2026-11-11. Paths are under `packages/` unless they
+start with `docs/` or `tools/`. Every engine item also gets: a section in `docs/DESIGN.md`, compiler tests in
+`compiler/test/` (a new `tier3.test.ts`, or one file per feature in the style of `m14.test.ts`), the diagnostic it
+replaces turned into a test of the new behaviour plus a test of what is still rejected, and a green
+`npm test`, `npm run typecheck` and `check:demo` / `check:kite` (parity stays byte-identical).
+
+### 0. Tooling: clicks in input scripts
+
+| File | Change |
+| --- | --- |
+| `player/src/script.ts` | `parseTerm` accepts `click@x,y` (move the mouse and tap `MouseLeft` for one frame) and `mouse@x,y` (move only). `ScriptFrame` gains `mouse`, carried forward from frame to frame like a held key. Coordinates are in the game's canvas (the `<Screen>` size), not window pixels |
+| `player/src/harness.ts`, `player/src/recording.ts` | Map a canvas point to the window point that `InputFrame.mouse` expects, through the same fit and scale the player uses (`player/src/screen.ts`), so `input.pointerX` and a `<Pointer>` see the point the script named |
+| `player/test/script.test.ts`, `player/test/harness.test.ts` | Parsing (`click@10,20*3` is an error, `click@` combines with `+`), and a demo run that clicks its HUD button and sees the count change |
+| `docs/NEXT_PRIORITIES.md` (priority 7's tooling paragraph) | One line on the new terms |
+
+### 1. Spread props on component elements
+
+| File | Change |
+| --- | --- |
+| `compiler/src/ir/elements.ts` | `PropIR` gains `SpreadPropIR { kind: "SpreadProp"; value: ExprIR; dependencies: DependencyIR[] }`. Order among props is kept, so later props win as in React |
+| `compiler/src/transform/elements.ts` (`lowerProps`) | A `JsxSpreadAttribute` on a component element lowers its expression with `lowerNode` (so it may read state, props, the list item or a `useGame` selection). On a built-in: `RGE1203` "spread onto a built-in is not supported yet". `key` and `ref` checks are unchanged. A spread of a callback-only object is not special: functions in the object pass through as values |
+| `compiler/src/transform/lowering.ts` (`asListItem`) | A spread that reads the item gets the `Item` dependency, like a dynamic prop |
+| `compiler/src/generator/elements.ts` (`propsObject`, `emitPropUpdates`) | Emit `...(<expr>)` in place. `updateProps` gets the spread together with the dynamic props whenever the spread's dependencies changed. A static spread (reads nothing that changes) goes in at construction only |
+| `compiler/src/ir/walk.ts` | Walk `SpreadProp` values (dependencies, `readsParam`, asset collection) |
+| `compiler/src/prefabs/prefabs.ts`, `compiler/src/assets/assets.ts` | Skip spread props when listing settable props and literal asset paths (they are not literal) |
+| Tests | Lowering and generated text, a spread in a keyed list re-rendering only the item whose object changed (runtime counts renders), named prop after a spread winning, source type-check catching a missing prop (`RGE9002`), spread onto `<Sprite>` rejected |
+
+### 2. Conditionals inside a list's `.map`
+
+| File | Change |
+| --- | --- |
+| `compiler/src/transform/elements.ts` (`lowerList`) | Accept a body that is `cond && <El key …/>`: rewrite the source to `source.filter((item) => cond)` (the source may already be filtered; `isListSource` allows it) and lower the element as today. Accept `cond ? <A key …/> : <B key …/>`: lower both branches, check that the two `key` expressions are the same IR (`sameExpr`, new in `ir/walk.ts`), otherwise `RGE1209` "both branches need the same key". A `null` branch is the `&&` form |
+| `compiler/src/ir/elements.ts` | `KeyedListChildIR` gains `alternate: { condition: ExprIR; element: ElementIR } \| null`: `element` when `condition` is true, `alternate.element` otherwise. Each branch has its own `fieldName` |
+| `compiler/src/generator/elements.ts` (`emitList`, `subtreeResets`), `generator.ts` (field declarations) | Per key keep `{ branch: 0 \| 1, instance }`. On render: compute the branch; a new key constructs that branch; a key whose branch flipped queues removal of the old instance and adds the new one at the same `(slot, position)`; otherwise update props. One items map and one order array per list, typed as the union of both classes. The duplicate-key check is unchanged |
+| `compiler/src/generator/elements.ts` (`listItemType`) | Unchanged: the item type comes from the source |
+| Tests | Generated code for both forms, a pad switching from `EmptyPad` to `Tower` keeping its position among siblings, an item whose condition turns false being removed, different keys in the branches rejected, a fragment branch still rejected (a list item is one element) |
+
+### 3. Children on list items
+
+Today `lowerList` rejects them ("A list item cannot have children yet"). The generated code keeps every element in a
+field of the component (`this.<fieldName>`), and a list item has many instances, so its children need somewhere per
+item to live.
+
+| File | Change |
+| --- | --- |
+| `compiler/src/transform/elements.ts` (`lowerList`) | Allow children on the item element: static children, conditional children and a nested `{children}`-free subtree. They may read the item. A nested list inside a list item stays `RGE1209` in the first cut |
+| `compiler/src/generator/elements.ts` | Teach the element emitters (`emitElementFields`, `emitStaticWiring`, `emitChildUpdates`, `emitMountStatics`, `subtreeResets`) to take an **owner** expression instead of assuming `this`: `this` for the component's own elements, `$rec` for a list item's, where `$rec` is the per-key record (the list already keeps `#<field>Records` for callbacks; it becomes the place the item's child instances live too). A component item mounts them with `attachPassedChild`; a built-in item with `addChild` |
+| `compiler/src/generator/generator.ts` | Emit a record type per list with children (`{ current: Item; icon: Icon; label: Label \| null; … }`) |
+| Tests | `TOWER_LIST.map((d) => <MenuButton key={d.kind}><Icon kind={d.kind}/><Label text={d.name}/></MenuButton>)`: built, updated when `d` changes, removed with its item. A conditional child in a list item. A list item that is a `<Flex>` with children |
+
+### 4. Forwarding `{children}`
+
+| File | Change |
+| --- | --- |
+| `compiler/src/transform/lowering.ts` (`lowerChildrenSlot`) | When `context.passed` (the slot is among the children passed to another component) and the slot is the only child of that block, accept it and record the forwarding target (that component element). Otherwise keep today's diagnostic with the reason (beside other passed children: open decision 5) |
+| `compiler/src/ir/elements.ts`, `ir/declarations.ts` | `ChildrenSlotChildIR` gains `forwardedTo: string \| null` (the inner element's field). `ComponentIR` records it for the generator |
+| `compiler/src/generator/generator.ts` (the constructor's slot wiring at `findChildrenSlot`) | For a forwarding component, emit `this.passedChildrenForward = this.<inner>;` instead of host and slot |
+| `runtime/src/GameObject.ts` | `passedChildrenForward: GameObject \| null`. `attachPassedChild`, `queueAttachPassedChild`, `queueDetachPassedChild` and `queueReorderPassedChildren` delegate to it when set, so two levels (Modal → Panel → Flex) resolve in a chain. `acceptsPassedChildren` is true when either is set |
+| Tests | Modal → Panel → Flex with static, conditional and list children; the runtime error for a component that does not render `{children}` still reads well through a forward |
+
+### 5. Context
+
+| File | Change |
+| --- | --- |
+| `runtime/src/context.ts` (new), `runtime/src/index.ts` | `createContext<T>(defaultValue: T): Context<T>`, an object with an id and the default |
+| `runtime/src/components/Provider.ts` (new) | `Provider extends Entity` with `context` and `value`. `value` is an accessor: setting a different value tells every consumer registered with it (`markDirty`). Holds a `Set` of consumers |
+| `runtime/src/GameObject.ts` | `contextReads: readonly Context<unknown>[]` (generated code overrides it, like `gameStateKeys`). On `attachToWorld` walk up the parents for the nearest `Provider` per context, register, and call `receiveContext(context, value)`, then `markDirty` (the store's "refresh once" pattern). Unregister on `detachFromWorld`. With no provider the default stays |
+| `runtime/src/manifest.ts`, `runtime/src/jsx.ts` | `Provider` in `intrinsics`, `containerIntrinsics`, `transformIntrinsics` and `intrinsicMembers`; `useContext` and `createContext` exported for authoring (`useContext` throws if called outside the compiler, as `useGame` does) |
+| `compiler/src/analyzer/matchers.ts`, `analyzer/component.ts` | Recognise `const t = useContext(TowerContext)` at the top level, where `TowerContext` is imported from a `.ts` module (`plainImports`) |
+| `compiler/src/transform/hooks.ts` | Lower it to a `StateIR` with `context: "<import name>"` (like `globalKey` for the store) and a type of `ContextValue<typeof TowerContext>`. Reading it anywhere a state can be read works with no other change |
+| `compiler/src/generator/generator.ts` | Initialise the field to the context's default, emit `contextReads` and a `receiveContext` that assigns the field and marks dirty |
+| `compiler/src/hooks/inline.ts` | Reject `useContext` inside a custom hook for now, with a message |
+| Tests | Two towers in a list, each a provider with its own value, their `Barrel`s seeing their own tower; a value change re-rendering only that tower's consumers; the default with no provider; a consumer under a provider that moves through passed children (`Modal`) still finding it |
+
+### 6. Performance (finding 9)
+
+| File | Change |
+| --- | --- |
+| `player/bench/frame.ts` | New scenes: "200 animated sprites by state" (frame, `flipX`, `tint`, moved by an immutable list update every step) and "80 enemies, 20 towers, 50 shots" (Hearth's wave 10, built from shapes so it does not depend on the game package) |
+| `player/bench/budget.json` | Budgets for both under V8 and QuickJS, at about 2.5–3× the measured time, as the file asks |
+| `player/src/draw.ts` (only if over budget) | Let a styled sprite (frame, flip, tint) take the "moved as a block" path when only its transform changed, by keeping its styled record in the cache |
+| `packages/hearth/tools/frame-time.ts` | Wave 10's frame time, as Kite's `tools/frame-time.ts` does, recorded in `docs/NATIVE_PLAN.md` |
+
+### 7. The game package
+
+| File | What it holds |
+| --- | --- |
+| `package.json` (root) | Scripts `hearth` (compile with `--scenes` and `--assets`), `hearth:assets`, `play:hearth`, `check:hearth`, `package:hearth`, and `hearth` added to `generate` and `typecheck` |
+| `hearth/package.json`, `hearth/tsconfig.json` | As Kite's |
+| `hearth/game.ts` | `gameConfig` (root `Main`) and the script `bindings` (`left`, `right`, `up`, `down`, `confirm`, `back`, `wave`, `fast`, `pause`, `one`, `two`, `three`, `upgrade`, `sell`) |
+| `hearth/main.ts`, `hearth/parity.ts` | Entry, and a parity run: a short build order and the first wave, printing the battle's state each N steps |
+| `hearth/src/rules/*.ts` | The simulation as described under "How it is built". `battle.ts` exports `Battle`, `Command`, `BattleEvent`, `newBattle(map)`, `stepBattle(b, dt, commands)` |
+| `hearth/src/GameState.ts` | `screen`, `battle`, `selected` (pad id or null), `hover`, `speed`, `paused`; actions `begin`, `step(input, dt)`, `select`, `build`, `upgrade`, `sell`, `startWave`, `toggleSpeed`, `pause`, `resume`, `toTitle`. `step` forwards `BattleEvent`s to `effects.ts` |
+| `hearth/src/*.tsx` | The components in the tree above |
+| `hearth/scenes/field.tmj` | Written first by `tools/make-map.ts` from a text drawing, as Kite's rooms were |
+| `hearth/tools/make-assets.ts` | Sheets, font (reuse Kite's font image or its generator), sounds, music |
+| `hearth/tools/balance.ts` | Waves × build orders through `stepBattle` only, printing lives left per wave; `--write` updates the expected table |
+| `hearth/test/rules.test.ts` | Path following, targeting, damage, splash, slow, spawning, economy, leaking, the win and the loss |
+| `hearth/test/balance.test.ts` | The balance table matches `tools/balance.ts`'s output |
+| `hearth/test/replays.test.ts`, `hearth/test/replays.ts` | Click-and-key scripts played through the game with the harness: a good build wins, a thin one loses, the pause menu resumes |
+| `hearth/DESIGN.md` | The design note |
+
+### Docs to update along the way
+
+- `docs/DESIGN.md`: "Keyed lists" (conditionals, children on items), "Passing children" (forwarding), new "Spread props"
+  and "Context" sections.
+- `docs/NEXT_PRIORITIES.md`: the "Not now" rows for context and the Tier 3 syntax, finding 9, and a "Findings from the
+  second game" section.
+- `docs/NATIVE_PLAN.md`: the new bench scenes and wave 10's frame time.
+- `README.md`: the game in the layout list and its scripts.
 
 ## Order of work
 
@@ -289,8 +400,14 @@ movement feel to tune), and the compiler work is most of it.
 ## Open decisions
 
 1. **The name.** "Hearth" is a working title.
-2. **How a spread knows its keys** (receiver's props versus a checker query). See "Spread props". Default: the
-   receiver's props.
-3. **Context's provider form:** an element (`<TowerContext value>`) or a compile-time hidden prop. Default: the element.
+2. **Spread onto built-ins.** Spread onto components needs no key list (see "Spread props"). Spread onto built-ins would,
+   from the manifest's `intrinsicMembers`. Default: not built until a game needs it.
+3. **Context's provider form:** a built-in `<Provider context={TowerContext} value={…}>` (first), with
+   `<TowerContext value>` as sugar later, or a compile-time hidden prop. Default: the built-in, see the implementation
+   map.
 4. **Pads or free placement.** Default: pads. Free placement needs a click-to-tile query and path blocking rules, which
    add nothing to what this game is meant to test.
+5. **Forwarded `{children}` beside other passed children** (`<Panel><Title/>{children}</Panel>` inside `Modal`). Passed
+   children are ordered by one number, so siblings around a forwarded block need a compound order. Default: the first
+   cut requires the forwarded `{children}` to be the only child passed to the inner component, which covers every use
+   Hearth plans; anything else stays a diagnostic.
