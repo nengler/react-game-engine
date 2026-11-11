@@ -16,6 +16,20 @@ export interface WindowConfig {
 }
 
 /**
+ * Saved data (ABI v7): small named entries of UTF-8 text in the user's data folder for the game, each written whole and
+ * atomically. `open(gameId)` goes first (the player calls it with the `<Game id>`); names are 1 to 64 of letters, digits, `_` and `-`.
+ */
+export interface StorageBackend {
+  /** True when the game's folder is there to use. */
+  open(gameId: string): boolean;
+  /** The entry's text, or null when there is none. */
+  read(name: string): string | null;
+  /** True when the entry was written. */
+  write(name: string, text: string): boolean;
+  remove(name: string): void;
+}
+
+/**
  * What a host (Node with koffi, the Rust + QuickJS executable, a test recorder) provides.
  * The player produces the draw records and the host executes them; see `native/include/rge.h`
  * for the record layout and the input and keys buffers.
@@ -60,6 +74,8 @@ export interface Backend {
    * implement it (ABI v4), because an interpreter spends most of a busy frame's collision time there.
    */
   overlaps?(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array): number;
+  /** Saved data, for `createSave` and `createSettings`. Optional: without it nothing is kept between runs. Both native hosts implement it (ABI v7). */
+  readonly storage?: StorageBackend;
   /**
    * Draw and present `records[0, length)` (text records index into `texts`), then poll the
    * devices and write the next frame's input into `input` and `keys`. Blocks until vsync

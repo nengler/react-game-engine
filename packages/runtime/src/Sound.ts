@@ -38,6 +38,20 @@ export function getSoundSink(): SoundSink | null {
   return sink;
 }
 
+/** The two volume groups a player can set (a settings screen's sliders): every sound is multiplied by `effects`, every `<Music>` by `music`. Both start at 1. */
+export type VolumeGroup = "music" | "effects";
+const volumes: Record<VolumeGroup, number> = { music: 1, effects: 1 };
+
+/** Set a group's volume, 0 to 1 (anything else is clamped; not a number is ignored). It is heard at once by what is already playing. */
+export function setVolume(group: VolumeGroup, volume: number): void {
+  if (typeof volume !== "number" || Number.isNaN(volume)) return;
+  volumes[group] = Math.min(1, Math.max(0, volume));
+}
+
+export function getVolume(group: VolumeGroup): number {
+  return volumes[group];
+}
+
 /**
  * A sound a component can play (`const playHit = useSound("hit.wav")`). The runtime has no
  * audio backend: `play(volume?)` counts the call, so a game's logic can be tested, and reports to the
@@ -57,6 +71,6 @@ export class Sound {
   /** Play it, at `volume` (0 to 1, default 1), over any play of it that is still sounding. */
   play(volume = 1): void {
     this.plays++;
-    sink?.play(this.path, volume);
+    sink?.play(this.path, volume * volumes.effects);
   }
 }

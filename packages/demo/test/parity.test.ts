@@ -70,6 +70,18 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
     }
   });
 
+  it("keeps saved data: write, overwrite, read back (UTF-8), remove, and refuse names that could be paths (ABI v7)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "rge-storage-"));
+    try {
+      bundle("packages/demo/test/storage-script.ts", join(dir, "storage.js"));
+      const out = execFileSync(hostBin as string, [join(dir, "storage.js")], { cwd: repo, encoding: "utf8", env: { ...process.env, RGE_DATA_DIR: join(dir, "data") } });
+      assert.deepEqual(JSON.parse(out), [true, null, true, '{"version":1,"data":"héllo ✓"}', true, "two", false, null, null, false]);
+      assert.equal(existsSync(join(dir, "data", "save.dat")), false, "the entry was removed from the folder");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("exits with status 1 and prints the stack when the game throws", () => {
     const dir = mkdtempSync(join(tmpdir(), "rge-crash-"));
     try {

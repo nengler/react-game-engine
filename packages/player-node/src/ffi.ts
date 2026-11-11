@@ -33,6 +33,11 @@ export interface Native {
   frame(clearColor: number, records: Float64Array, recordsLength: number, text: Uint8Array, textOffsets: Int32Array, textCount: number, input: Float64Array, keys: Uint8Array): void;
   /** `rge_overlaps`: the pairs of the `count` boxes that overlap, into `pairs` (`capacity` pairs of room); `order` goes in and comes back sorted. Returns how many pairs there are. */
   overlaps(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array, capacity: number): number;
+  /** Saved data (ABI v7), as the four `rge_storage_*` calls. `read` copies into `out` only when it fits and returns the entry's size, or -1. */
+  storageOpen(gameId: string): number;
+  storageRead(name: string, out: Uint8Array | null, capacity: number): number;
+  storageWrite(name: string, data: Uint8Array): number;
+  storageRemove(name: string): number;
   /** Copies the last captured frame (RGBA8, top row first) into `rgba` if it fits; returns the bytes needed, 0 if there is none. */
   readPixels(rgba: Uint8Array | null, capacity: number): number;
 }
@@ -104,6 +109,10 @@ export function loadNative(path: string): Native {
     "void rge_frame(uint32_t clearColor, const double *records, int32_t recordsLength, const uint8_t *text, const int32_t *textOffsets, int32_t textCount, _Out_ double *input, _Out_ uint8_t *keys)",
   );
   const readPixels = lib.func("int32_t rge_read_pixels(_Out_ uint8_t *rgba, int32_t capacity)");
+  const storageOpen = lib.func("int32_t rge_storage_open(const char *game_id)");
+  const storageRead = lib.func("int32_t rge_storage_read(const char *name, _Out_ uint8_t *out, int32_t capacity)");
+  const storageWrite = lib.func("int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length)");
+  const storageRemove = lib.func("int32_t rge_storage_remove(const char *name)");
   const overlaps = lib.func("int32_t rge_overlaps(const double *boxes, int32_t count, _Inout_ int32_t *order, _Out_ int32_t *pairs, int32_t capacity)");
 
   const native: Native = {
@@ -130,6 +139,10 @@ export function loadNative(path: string): Native {
     },
     frame: (clearColor, records, recordsLength, text, textOffsets, textCount, input, keys) =>
       void frame(clearColor, records, recordsLength, text, textOffsets, textCount, input, keys),
+    storageOpen: (gameId) => storageOpen(gameId) as number,
+    storageRead: (name, out, capacity) => storageRead(name, out, capacity) as number,
+    storageWrite: (name, data) => storageWrite(name, data, data.length) as number,
+    storageRemove: (name) => storageRemove(name) as number,
     overlaps: (boxes, count, order, pairs, capacity) => overlaps(boxes, count, order, pairs, capacity) as number,
     readPixels: (rgba, capacity) => (rgba === null ? (readPixels(null, 0) as number) : (readPixels(rgba, capacity) as number)),
   };

@@ -528,3 +528,49 @@ describe("loading the library", () => {
     assert.doesNotThrow(() => checkAbi({ abiVersion: () => RGE_ABI_VERSION, keyCount: () => KEYS.length }));
   });
 });
+
+describe("saved data (ABI v7)", { skip }, () => {
+  it("writes, reads, overwrites and removes text entries in RGE_DATA_DIR, and refuses names that could be paths", () => {
+    const folder = join(scratch, "saves", "nested");
+    const before = process.env["RGE_DATA_DIR"];
+    process.env["RGE_DATA_DIR"] = folder;
+    try {
+      const backend = createNodeBackend(library);
+      const storage = backend.storage;
+      assert.equal(storage.open("bramble"), true, "makes the folder");
+      assert.equal(storage.read("save"), null);
+      assert.equal(storage.write("save", '{"version":1,"data":"héllo, wörld ✓"}'), true);
+      assert.equal(storage.read("save"), '{"version":1,"data":"héllo, wörld ✓"}', "UTF-8 survives");
+      assert.equal(storage.write("save", "second"), true);
+      assert.equal(storage.read("save"), "second");
+      assert.equal(storage.write("empty", ""), true);
+      assert.equal(storage.read("empty"), "", "an empty entry is not a missing one");
+      for (const bad of ["", "a/b", "../x", "a.b", "a b", "x".repeat(65)]) {
+        assert.equal(storage.write(bad, "x"), false, `write refuses '${bad}'`);
+        assert.equal(storage.read(bad), null, `read refuses '${bad}'`);
+      }
+      storage.remove("save");
+      assert.equal(storage.read("save"), null);
+      storage.remove("save");
+      assert.equal(storage.open("../escape"), false, "a game id cannot be a path either");
+    } finally {
+      if (before === undefined) delete process.env["RGE_DATA_DIR"];
+      else process.env["RGE_DATA_DIR"] = before;
+    }
+  });
+
+  it("is not UTF-8 text: read says null rather than throwing", () => {
+    const folder = join(scratch, "bytes");
+    const before = process.env["RGE_DATA_DIR"];
+    process.env["RGE_DATA_DIR"] = folder;
+    try {
+      const native = loadNative(library as string);
+      assert.equal(native.storageOpen("game"), 0);
+      assert.equal(native.storageWrite("raw", new Uint8Array([0xff, 0xfe, 0x00])), 0);
+      assert.equal(new NodeBackend(native).storage.read("raw"), null);
+    } finally {
+      if (before === undefined) delete process.env["RGE_DATA_DIR"];
+      else process.env["RGE_DATA_DIR"] = before;
+    }
+  });
+});

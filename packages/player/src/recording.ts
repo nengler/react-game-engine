@@ -1,4 +1,4 @@
-import type { Backend, WindowConfig } from "./backend.ts";
+import type { Backend, StorageBackend, WindowConfig } from "./backend.ts";
 import { colorToHex } from "./color.ts";
 import { estimateTextWidth } from "./draw.ts";
 import {
@@ -97,6 +97,8 @@ export interface RecordingOptions {
   readonly missingSounds?: Iterable<string>;
   /** Music paths that fail to load (handle -1). */
   readonly missingMusic?: Iterable<string>;
+  /** Entries the backend's saved data starts with (name to text): a replay can start from a save. */
+  readonly storage?: Readonly<Record<string, string>>;
   /** The size `textureSize` reports for a texture path. Default 16 × 16. */
   readonly textureSizes?: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
   /** Keep only this many of the latest drawn frames (default all): for a long scripted run that only looks at the game's state. */
@@ -128,6 +130,16 @@ export class RecordingBackend implements Backend {
   readonly #missingMusic: Set<string>;
   /** Every `measureText` call, as `size:text`: the player should measure a string once, not every frame. */
   readonly textMeasures: string[] = [];
+  /** The game id the player opened saved data with, or null if it did not. */
+  storageOpenedFor: string | null = null;
+  /** Saved data, in memory: the entries now, which a test reads. Starts from `RecordingOptions.storage`. */
+  readonly stored: Map<string, string>;
+  readonly storage: StorageBackend = {
+    open: (gameId) => ((this.storageOpenedFor = gameId), true),
+    read: (name) => this.stored.get(name) ?? null,
+    write: (name, text) => (this.stored.set(name, text), true),
+    remove: (name) => void this.stored.delete(name),
+  };
   /** Every `textureSize` call, by path. */
   readonly textureSizeQueries: string[] = [];
   readonly #textures: string[] = [];
@@ -144,6 +156,7 @@ export class RecordingBackend implements Backend {
     this.#missingSounds = new Set(options.missingSounds);
     this.#missingMusic = new Set(options.missingMusic);
     this.#textureSizes = options.textureSizes ?? {};
+    this.stored = new Map(Object.entries(options.storage ?? {}));
   }
 
   queueInput(frame: InputFrame): void {

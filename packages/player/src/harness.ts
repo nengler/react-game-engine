@@ -20,6 +20,7 @@ export class ScriptedInputBackend implements Backend {
   readonly setMusicVolume: Backend["setMusicVolume"];
   readonly stopMusic: Backend["stopMusic"];
   readonly setGamepadDeadzone: Backend["setGamepadDeadzone"];
+  readonly storage: Backend["storage"];
 
   constructor(inner: Backend, frames: readonly InputFrame[] = []) {
     this.#inner = inner;
@@ -33,6 +34,7 @@ export class ScriptedInputBackend implements Backend {
     this.setMusicVolume = inner.setMusicVolume?.bind(inner);
     this.stopMusic = inner.stopMusic?.bind(inner);
     this.setGamepadDeadzone = inner.setGamepadDeadzone?.bind(inner);
+    this.storage = inner.storage;
   }
 
   queueInput(frame: InputFrame): void {

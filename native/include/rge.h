@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 6
+#define RGE_ABI_VERSION 7
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -167,6 +167,17 @@ void rge_frame(uint32_t clearColor,
  * on entry. Needs no window. With boxes that are not finite it still returns and writes only valid indices, but
  * which pairs it finds is not defined. */
 int32_t rge_overlaps(const double *boxes, int32_t count, int32_t *order, int32_t *pairs, int32_t capacity);
+
+/* Saved data: small named entries in the platform's user data folder, each written whole and atomically. Needs no window.
+ *
+ * The folder is $RGE_DATA_DIR if that is set (tests and CI), else $XDG_DATA_HOME/<game_id>, else ~/.local/share/<game_id>
+ * (the macOS and Windows folders are written but unverified). `game_id` and every entry name are 1 to 64 of A-Z a-z 0-9 _ -,
+ * so neither can become a path; anything else is refused. An entry is the file <name>.dat. A write goes to <name>.tmp, is
+ * flushed to disk and renamed over the old file, so a crash leaves the old entry or the new one, never half of one. */
+int32_t rge_storage_open(const char *game_id);                               /* 0 ok (makes the folder if it is missing), else nonzero; before any other storage call */
+int32_t rge_storage_read(const char *name, uint8_t *out, int32_t capacity);  /* the bytes the entry holds, or -1 if there is none (or the call is refused); copies only when they fit in `capacity` */
+int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length); /* 0 ok, nonzero if refused or it could not be written */
+int32_t rge_storage_remove(const char *name);                                /* 0 ok, also when the entry did not exist */
 
 /* Tests only: copy the last presented frame as RGBA8, top row first. Returns the bytes needed
  * (0 when there is no frame to read); copies only when capacity is enough. Frames are captured only

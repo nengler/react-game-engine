@@ -2,6 +2,11 @@ import type { Controls } from "../input.ts";
 import { Entity, type EntityProps } from "./Entity.ts";
 
 export interface GameProps extends EntityProps {
+  /**
+   * The game's id, a literal of 1 to 64 letters, digits, `_` and `-` (`id="bramble"`): it names the folder where its save and settings are
+   * kept. Without it nothing is saved.
+   */
+  id?: string;
   /** The window's title. Default: the player's `title`, else `"react-game-engine"`. */
   title?: string;
   /** The window's width in pixels. Not the game's resolution: that is a `<Screen width height>` inside it. Default: the player's, else 640. */
@@ -72,6 +77,7 @@ export interface GameProps extends EntityProps {
 export class Game<P extends object = {}> extends Entity<P> {
   static override readonly intrinsic = true;
 
+  id: string | undefined;
   title: string | undefined;
   width: number | undefined;
   height: number | undefined;
@@ -92,6 +98,7 @@ export class Game<P extends object = {}> extends Entity<P> {
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: GameProps = {}, props?: P, defaults?: Partial<P>) {
     super(hostProps, props, defaults);
+    this.id = hostProps.id;
     this.title = hostProps.title;
     this.width = hostProps.width;
     this.height = hostProps.height;
