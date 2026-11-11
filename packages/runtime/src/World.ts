@@ -71,14 +71,18 @@ export class World {
    * (registered on attach), and the visit lists are snapshotted at the start,
    * so objects attached during a frame start receiving hooks next frame and
    * objects detached mid-frame are skipped. Returns the number of renders run.
+   *
+   * `beforeUpdate`, when given, is called after `onInput` and before `onUpdate`, and only when the update is not frozen: the
+   * player uses it to show `onUpdate` the key edges a freeze kept (see `freeze`), which `onInput` has already seen.
    */
-  tick(dt: number, input: InputState = NO_INPUT): number {
+  tick(dt: number, input: InputState = NO_INPUT, beforeUpdate?: () => void): number {
     const anyInert = this.#hasInert();
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
     const inputs = [...this.#onInput];
     for (const object of inputs) if (object.world === this) object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
     if (this.#frozen > 0) this.#frozen--;
     else {
+      beforeUpdate?.();
       const updates = [...this.#onUpdate];
       for (const object of updates) if (object.world === this) object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
     }

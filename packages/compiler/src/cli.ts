@@ -15,7 +15,8 @@
  * reads the file to check those selectors; generated code imports it from where it is.
  *
  * `--assets <dir>` checks that every image, font and sound a component names with a literal is a file in that folder: a
- * build-time error with the nearest file name, not a magenta square or a silent sound at run time.
+ * build-time error with the nearest file name, not a magenta square or a silent sound at run time. The files of a
+ * `createSounds({ … })` in any `.ts` or `.tsx` file under the source folder are checked too.
  *
  * `--scenes <dir>` validates every scene (.json) in the directory against
  * those prefabs, and imports every Tiled map (.tmj) to
@@ -145,7 +146,11 @@ function main(argv: readonly string[]): number {
       const root = resolve(assetsDir);
       const all = (dir: string, prefix = ""): string[] =>
         readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? all(join(dir, e.name), `${prefix}${e.name}/`) : [`${prefix}${e.name}`]));
-      diagnostics.push(...checkAssets(modules.map((m) => m.ir), { exists: (name) => existsSync(join(root, name)), list: () => all(root), folder: assetsDir }));
+      const options = { exists: (name: string) => existsSync(join(root, name)), list: () => all(root), folder: assetsDir };
+      diagnostics.push(...checkAssets(modules.map((m) => m.ir), options));
+      // Sound stores are made in plain modules (`effects.ts`), anywhere under the source folder: read those too.
+      const sources = sourceFiles(srcDir).map((file) => ({ fileName: relative(process.cwd(), file), text: readFileSync(file, "utf8") }));
+      diagnostics.push(...compiler.checkSoundStores(sources, options));
     }
     // The registry and schema describe the whole project. With a file that failed to compile they would silently leave a
     // component out (and a stale one from an earlier run would be left as it was), so they are only written when all compiled.
@@ -170,6 +175,13 @@ function main(argv: readonly string[]): number {
   }
   for (const d of diagnostics) console.error(formatDiagnostic(d));
   return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
+}
+
+/** Every `.ts` and `.tsx` file under `dir`, folders included, in name order. */
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .sort((a, b) => (a.name < b.name ? -1 : 1))
+    .flatMap((e) => (e.isDirectory() ? (e.name === "node_modules" ? [] : sourceFiles(join(dir, e.name))) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []));
 }
 
 /** Validate the scenes in `dir`; a Tiled map is imported to `<outDir>/scenes/` first and the result validated. */
