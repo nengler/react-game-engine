@@ -2,6 +2,7 @@ export type { Backend, WindowConfig } from "./backend.ts";
 export { boundsOverlap, colliderBounds, CollisionTracker, type Bounds, type Overlaps } from "./collide.ts";
 export { colorToHex, MAGENTA, packColor, parseColor, type PackedColor } from "./color.ts";
 export { DrawList, estimateTextWidth, FrameBuilder, walkTree, type BuiltFrame, type ColliderEntry, type FrameBuilderOptions, type Size } from "./draw.ts";
+export { FixedDriver, type StepRunner } from "./fixed.ts";
 export { HOST_BACKEND_KEY, HOST_RUN_KEY, hostBackend } from "./host.ts";
 export { PlayerInput } from "./input.ts";
 export { createPlayer, DEFAULT_WINDOW, describeError, layoutError, MAX_DT, MAX_STEPS_PER_FRAME, run, type ErrorLine, type Player, type PlayerConfig } from "./loop.ts";

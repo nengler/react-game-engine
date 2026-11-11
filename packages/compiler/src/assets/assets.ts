@@ -4,9 +4,13 @@
  * so a typo is a compile error with the nearest file name, not a magenta square or a silent sound at run time. Paths that are
  * computed (a prop passed in, a string built from state) cannot be checked, and are not.
  */
+import { isAsExpression, isCallExpression, isIdentifier, isNoSubstitutionTemplateLiteral, isObjectLiteralExpression, isParenthesizedExpression, isPropertyAssignment, isSatisfiesExpression, isStringLiteral } from "typescript/ast/is";
+import type { Expression } from "typescript/ast";
+import { visit } from "../analyzer/util.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import type { ChildIR, ElementIR, HostElementIR, IRModule, PropIR } from "../ir/types.ts";
+import type { ChildIR, ElementIR, HostElementIR, IRModule, PropIR, SourceSpan } from "../ir/types.ts";
 import { walkExpr } from "../ir/walk.ts";
+import { spanOf, type TsxParser } from "../parser/parser.ts";
 import { nearest } from "../transform/helpers.ts";
 
 /** Props whose literal strings are asset names, by built-in. */
@@ -27,15 +31,72 @@ export interface AssetCheckOptions {
   readonly folder: string;
 }
 
-export function checkAssets(modules: readonly IRModule[], options: AssetCheckOptions): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+/** A reporter for a file name that is not in the assets folder: one message, with the nearest file name when there is one. */
+function missingAssetReporter(options: AssetCheckOptions, diagnostics: CompilerDiagnostic[]): (what: string, name: string, span: SourceSpan | null) => void {
   let files: readonly string[] | null = null;
-  const report = (what: string, name: string, span: HostElementIR["span"] | null): void => {
+  return (what, name, span) => {
     if (options.exists(name)) return;
     files ??= options.list();
     const near = nearest(name, files);
     diagnostics.push(error(DiagnosticCode.MissingAsset, `The ${what} '${name}' is not in ${options.folder}/${near === null ? "" : ` (did you mean '${near}'?)`}.`, span));
   };
+}
+
+/** One file of the game's source, by the name its diagnostics use. */
+export interface SourceText {
+  readonly fileName: string;
+  readonly text: string;
+}
+
+/**
+ * The sound files of every `createSounds({ … })` in `sources`, checked against the assets folder. A sound store is made in a
+ * plain `.ts` module (`export const sfx = createSounds({ … })`), which the compiler does not otherwise read, so without this a
+ * misspelt file is found only when it is first played, as silence. Each entry is a file name or `{ src: "file name" }`; a
+ * name that is not written as a literal cannot be checked, and is not. Only a call written `createSounds(…)` is seen.
+ */
+export function checkSoundStores(parser: TsxParser, sources: readonly SourceText[], options: AssetCheckOptions): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const report = missingAssetReporter(options, diagnostics);
+  for (const { fileName, text } of sources) {
+    if (!text.includes("createSounds")) continue;
+    const parsed = parser.parse(fileName, text);
+    try {
+      const sourceFile = parsed.sourceFile;
+      const check = (expression: Expression): void => {
+        const value = unwrapValue(expression);
+        if (isStringLiteral(value) || isNoSubstitutionTemplateLiteral(value)) {
+          if (value.text !== "") report("sound", value.text, spanOf(value, sourceFile, fileName));
+        } else if (isObjectLiteralExpression(value)) {
+          for (const member of value.properties) if (isPropertyAssignment(member) && propertyName(member.name) === "src") check(member.initializer);
+        }
+      };
+      visit(sourceFile, (node) => {
+        if (!isCallExpression(node) || !isIdentifier(node.expression) || node.expression.text !== "createSounds") return;
+        const entries = node.arguments[0] === undefined ? undefined : unwrapValue(node.arguments[0]);
+        if (entries === undefined || !isObjectLiteralExpression(entries)) return;
+        for (const entry of entries.properties) if (isPropertyAssignment(entry)) check(entry.initializer);
+      });
+    } finally {
+      parsed.dispose();
+    }
+  }
+  return diagnostics;
+}
+
+function unwrapValue(expression: Expression): Expression {
+  let current = expression;
+  while (isParenthesizedExpression(current) || isAsExpression(current) || isSatisfiesExpression(current)) current = current.expression;
+  return current;
+}
+
+/** The name a property is written with, when that is an identifier or a string. */
+function propertyName(name: object): string | undefined {
+  return "text" in name && typeof name.text === "string" ? name.text : undefined;
+}
+
+export function checkAssets(modules: readonly IRModule[], options: AssetCheckOptions): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const report = missingAssetReporter(options, diagnostics);
   const props = (tag: string, list: readonly PropIR[], span: HostElementIR["span"]): void => {
     const names = ASSET_PROPS[tag];
     if (names === undefined) return;

@@ -1381,7 +1381,7 @@ The author's editor still sees ordinary typed functions: the file type-checks as
 
 `<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [NATIVE_PLAN.md](NATIVE_PLAN.md) ("Priority 7 additions"). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.
 
-**Build-time asset check.** `rge-compile --assets <dir>` (`checkAssets`, `RGE1211`) reports every literal image, font, music file and `useSound` path that is not a file in the folder, with the nearest file name; literals inside conditionals and arrays are found (`frames={on ? [...] : [...]}`), computed paths are not. `npm run check:<game>` passes `--assets` when the package has an `assets/` folder.
+**Build-time asset check.** `rge-compile --assets <dir>` (`checkAssets`, `RGE1211`) reports every literal image, font, music file and `useSound` path that is not a file in the folder, with the nearest file name; literals inside conditionals and arrays are found (`frames={on ? [...] : [...]}`), computed paths are not. The files of a `createSounds({ … })` (a plain `.ts` module, found by scanning the source folder; `checkSoundStores`) are checked the same way, as a name or `{ src }` written as a literal. `npm run check:<game>` passes `--assets` when the package has an `assets/` folder.
 
 ## Props and callbacks
 

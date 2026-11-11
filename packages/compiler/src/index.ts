@@ -1,5 +1,6 @@
 import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
 import { analyzeSourceFile, type SourceAnalysis } from "./analyzer/analyzer.ts";
+import { checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
 import { hasErrors, type CompilerDiagnostic } from "./diagnostics/diagnostics.ts";
 import { generateModule } from "./generator/generator.ts";
 import type { IRModule } from "./ir/types.ts";
@@ -21,7 +22,7 @@ export { parseGameState, type GameStateDefinition, type GameStateEntry, type Gam
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
 export { constantValue, exportedComponents, moduleSchemas, prefabSchema, type JsonValue, type PrefabPropSchema, type PrefabSchema } from "./prefabs/prefabs.ts";
 export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
-export { ASSET_PROPS, checkAssets, type AssetCheckOptions } from "./assets/assets.ts";
+export { ASSET_PROPS, checkAssets, checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
 export { importTiled, type TiledImport } from "./scenes/tiled.ts";
 export { importTilemap, tilemapsSource, type TilemapImport, type TilemapOut } from "./scenes/tilemap.ts";
 export { inlineCustomHooks, type HookResolver, type HookSource } from "./hooks/inline.ts";
@@ -145,6 +146,11 @@ export class Compiler {
    */
   parseGameState(fileName: string, text: string): GameStateSchemaResult {
     return parseGameState(this.#parser, fileName, text);
+  }
+
+  /** Check the sound files that `createSounds({ … })` names in `sources` (plain `.ts` modules too) against the assets folder. */
+  checkSoundStores(sources: readonly SourceText[], options: AssetCheckOptions): CompilerDiagnostic[] {
+    return checkSoundStores(this.#parser, sources, options);
   }
 
   /** Set the project's game state after construction: the CLI reads `GameState.ts` with this compiler's own parser first. */
