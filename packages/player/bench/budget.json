@@ -15,6 +15,7 @@
     "300 colliders in one pile": 32,
     "200 animated sprites by state": 6,
     "80 enemies, 20 towers, 50 shots": 4,
+    "200 x 200 tilemap scrolled": 4,
     "2000 by state with colliders, script sweep": 32,
     "300 in one pile, script sweep": 42,
     "mount 5000 rects": 180,
@@ -35,6 +36,7 @@
     "300 colliders in one pile": 2.5,
     "200 animated sprites by state": 0.7,
     "80 enemies, 20 towers, 50 shots": 0.6,
+    "200 x 200 tilemap scrolled": 0.5,
     "mount 5000 rects": 40,
     "mount 20000 rects": 150
   },

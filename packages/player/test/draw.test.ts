@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AnimatedSprite, Camera, Collider, Entity, GameObject, Pointer, Screen, Shape, Sprite, Text, World } from "@rge/runtime";
+import { AnimatedSprite, Camera, Collider, Entity, GameObject, Pointer, Screen, Shape, Sprite, Text, Tilemap, World, registerTilemaps } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
 import { Level } from "../../example/generated/Level.ts";
 import { estimateTextWidth, FrameBuilder, walkTree } from "../src/draw.ts";
@@ -745,5 +745,83 @@ describe("FrameBuilder: leaves drawn in place", () => {
       const built = builder.build(world.root, 800, 600);
       for (const entry of built.colliders) assert.deepEqual({ ...entry.world }, { ...entry.collider.worldTransform() });
     }
+  });
+});
+
+describe("FrameBuilder: a large <Tilemap>", () => {
+  // 200 × 200 cells of 16 pixels, every cell filled, and a tile sheet of four tiles.
+  const SIZE = 200;
+  registerTilemaps({
+    big: { width: SIZE, height: SIZE, tileWidth: 16, tileHeight: 16, firstGid: 1, solid: [], layers: [{ name: "Ground", visible: true, data: Array.from({ length: SIZE * SIZE }, (_, i) => 1 + (i % 4)) }] },
+  });
+  const sizes = { "assets/tiles.png": { width: 64, height: 16 } };
+
+  /** A world with the map and a camera following a marker; returns what is needed to move the marker and draw. */
+  function scene(options: { camera?: boolean; z?: number } = {}) {
+    const root = new Entity();
+    const map = new Tilemap({ map: "big", image: "tiles.png" });
+    root.addChild(map);
+    const marker = new Entity();
+    if (options.camera !== false) {
+      const camera = new Camera();
+      camera.addChild(marker);
+      root.addChild(camera);
+    }
+    const world = mounted(root);
+    const backend = new RecordingBackend({ textureSizes: sizes });
+    const warnings: string[] = [];
+    // `retain: "check"` builds every frame again without reusing anything and throws if the two differ.
+    const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), textureSize: (h) => backend.textureSize(h), warn: (m) => warnings.push(m), retain: "check" });
+    const frame = (x: number, y: number): Drawn => {
+      marker.transform.x = x;
+      marker.transform.y = y;
+      marker.markChanged();
+      world.tick(1 / 60);
+      return draw(root, { width: 320, height: 180, builder, backend, warnings });
+    };
+    return { frame, warnings, marker };
+  }
+
+  const tilesOf = (records: DecodedRecord[]) => records.filter((r): r is Extract<DecodedRecord, { op: "spriteRegion" }> => r.op === "spriteRegion");
+
+  it("writes only the cells the view shows, and a rectangle's worth wherever the camera is", () => {
+    const { frame, warnings } = scene();
+    const middle = tilesOf(frame(1600, 1600).records);
+    // The view is 320 × 180 = 20 × 11.25 cells; one more cell round it makes at most 23 × 14.
+    assert.ok(middle.length >= 20 * 11 && middle.length <= 23 * 14, `${middle.length} records`);
+    const xs = middle.map((t) => t.x);
+    assert.ok(Math.min(...xs) <= 1600 - 160 && Math.min(...xs) >= 1600 - 160 - 32, "starts about half a view left of the camera");
+    assert.ok(Math.max(...xs) >= 1600 + 160 - 16, "and runs to about half a view right of it");
+    const corner = tilesOf(frame(0, 0).records);
+    assert.ok(corner.length <= 23 * 14 && corner.length > 0, `${corner.length} records at the map's corner`);
+    assert.deepEqual(warnings, []);
+  });
+
+  it("follows the camera: each frame has the cells of where the view is now, not where it was", () => {
+    const { frame } = scene();
+    let last = -Infinity;
+    for (let step = 0; step < 40; step++) {
+      const x = 800 + step * 24;
+      const tiles = tilesOf(frame(x, 900).records);
+      const min = Math.min(...tiles.map((t) => t.x));
+      const max = Math.max(...tiles.map((t) => t.x));
+      assert.ok(min <= x - 160 && max >= x + 150, `step ${step}: cells ${min}..${max} cover the view round ${x}`);
+      assert.ok(min >= last, "and only move on");
+      last = min;
+    }
+  });
+
+  it("draws the same cells a full draw would, for the part in view", () => {
+    const { frame } = scene();
+    const some = tilesOf(frame(500, 300).records);
+    // Every cell here is gid 1 + (index mod 4): column mod 4 (the map is 200 wide, a multiple of 4).
+    for (const t of some) assert.equal(t.srcX, ((t.x / 16) % 4) * 16, `cell at ${t.x},${t.y}`);
+  });
+
+  it("without a camera it draws the window's part of the map, and a camera that appears later is followed from its first frame", () => {
+    const none = scene({ camera: false });
+    const tiles = tilesOf(none.frame(0, 0).records);
+    assert.ok(tiles.length <= 22 * 13 && tiles.length >= 20 * 11, `${tiles.length} records with no camera`);
+    assert.ok(Math.max(...tiles.map((t) => t.x)) <= 320 + 16);
   });
 });

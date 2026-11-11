@@ -467,7 +467,8 @@ function classCode(object: GameObject): number {
       : object instanceof Router ? KIND_ROUTER
       : KIND_NONE;
     code = kind;
-    if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX || kind === KIND_ROUTER) code |= FLAG_VOLATILE;
+    // A tilemap writes only the cells the view shows, so its records change when the camera moves without anything stamping it.
+    if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX || kind === KIND_ROUTER || kind === KIND_TILEMAP) code |= FLAG_VOLATILE;
     if (kind === KIND_FLEX) code |= FLAG_OPAQUE;
     // A class that overrides a per-tick hook may write its own transform or colour from it, which nothing reports, unless it is
     // a built-in or a compiled component (the compiler marks those `managed`; the marker is an own property, so a hand-written subclass of one is not).
@@ -548,6 +549,24 @@ export function estimateTextWidth(text: string, size: number): number {
   return characters * size * 0.6;
 }
 
+/** The sizes this frame is drawn at: the window, the game's area in it, and whether the game is drawn in game pixels. */
+interface FrameArea {
+  readonly gameWidth: number;
+  readonly gameHeight: number;
+  readonly width: number;
+  readonly height: number;
+  readonly placement: ScreenPlacement | null;
+  readonly pixelPerfect: boolean;
+}
+
+/** A rectangle of the world, in world pixels. */
+interface WorldRect {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+}
+
 const NO_SIZE: Size = { width: 0, height: 0 };
 
 /**
@@ -619,6 +638,12 @@ export class FrameBuilder {
   #token: object = {};
   #lastRoot: GameObject | null = null;
   #lastWorld: object | null = null;
+  /** The camera the last frame was drawn through: the one this frame's `<Tilemap>`s are culled by, since the walk meets them before it finds this frame's camera. */
+  #cullCamera: Camera | null = null;
+  /** What this frame's tilemaps were culled with, `undefined` when none were; and the world rectangle the view shows, found once per frame. */
+  #culledWith: Camera | null | undefined = undefined;
+  #cullRect: WorldRect | null | undefined = undefined;
+  #area: FrameArea | null = null;
   #prevTree = new Float64Array(1024);
   #prevTexts: string[] = [];
   #prevColliders: ColliderEntry[] = [];
@@ -662,6 +687,19 @@ export class FrameBuilder {
    * and scaled by the canvas record; any other game is drawn through views that scale to the window themselves.
    */
   build(root: GameObject, width: number, height: number): BuiltFrame {
+    let built = this.#buildOnce(root, width, height);
+    // A tilemap is culled by last frame's camera, because the walk meets it before it finds this frame's. When the camera is not
+    // the same (the first frame, a screen change, a camera mounted or removed), the cells it wrote were chosen for another view.
+    if (this.#culledWith !== undefined && this.#culledWith !== built.camera) {
+      this.#cullCamera = built.camera;
+      built = this.#buildOnce(root, width, height);
+    }
+    this.#cullCamera = built.camera;
+    if (this.#options.retain === "check" && this.#retain && root.world !== null) this.#check(root, width, height, built);
+    return built;
+  }
+
+  #buildOnce(root: GameObject, width: number, height: number): BuiltFrame {
     const list = this.#list;
     list.reset();
     const gameRoot = rootScreen(root);
@@ -672,6 +710,9 @@ export class FrameBuilder {
     const gameWidth = placement === null ? width : placement.width;
     const gameHeight = placement === null ? height : placement.height;
     const pixelPerfect = screen !== null && placement !== null && screen.pixelPerfect !== false;
+    this.#area = { gameWidth, gameHeight, width, height, placement, pixelPerfect };
+    this.#cullRect = undefined;
+    this.#culledWith = undefined;
     const borderColor = screen === null ? 0 : this.#color(screen.border);
     if (screen !== null && placement !== null && pixelPerfect) {
       list.canvas(placement.width, placement.height, { x: placement.left, y: placement.top, width: placement.width * placement.scaleX, height: screen.height * placement.scaleY }, borderColor);
@@ -814,7 +855,7 @@ export class FrameBuilder {
           break;
         case KIND_TILEMAP:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
-          this.#tilemap(node as Tilemap, at);
+          this.#tilemap(node as Tilemap, at, true);
           break;
         case KIND_PARTICLES:
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
@@ -1116,7 +1157,7 @@ export class FrameBuilder {
                   break;
                 case KIND_TILEMAP:
                   if (z !== listZ) list.setZ((listZ = z));
-                  this.#tilemap(object as Tilemap, world);
+                  this.#tilemap(object as Tilemap, world, false); // a HUD is drawn through a view the camera does not touch: every cell
                   break;
                 case KIND_PARTICLES:
                   if (z !== listZ) list.setZ((listZ = z));
@@ -1181,7 +1222,6 @@ export class FrameBuilder {
     // Bars around a game that is not pixel-perfect: window pixels, drawn last. (A pixel-perfect game's canvas record clears them.)
     if (placement !== null && !pixelPerfect) this.#borders(placement, width, height, borderColor);
     const built: BuiltFrame = { list, view, hudView, screen: placement, camera, pointers, hudPointersFrom, colliders };
-    if (this.#options.retain === "check" && reuse) this.#check(root, width, height, built);
     return built;
   }
 
@@ -1460,8 +1500,52 @@ export class FrameBuilder {
     this.#list.spriteRegion(at, handle, srcX, srcY, frameWidth, frameHeight, originX, originY, (flipX ? RGE_SPRITE_FLIP_X : 0) | (flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
   }
 
-  /** A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer, culled to none (a map is a room, not a world). */
-  #tilemap(node: Tilemap, at: WorldTransform): void {
+  /**
+   * The part of the world the view shows, as a rectangle in world pixels: the window (or, for a pixel-perfect game, the game's
+   * area) taken back through the view. Null when the view cannot be inverted. Found once per frame, through last frame's camera.
+   */
+  #visibleRect(): WorldRect | null {
+    if (this.#cullRect !== undefined) return this.#cullRect;
+    const area = this.#area as FrameArea;
+    const camera = this.#cullCamera;
+    let cameraView = IDENTITY_VIEW;
+    if (camera !== null) {
+      camera.viewWidth = area.gameWidth;
+      camera.viewHeight = area.gameHeight;
+      cameraView = this.#view(camera, area.gameWidth, area.gameHeight);
+    }
+    this.#culledWith = camera;
+    const v = area.pixelPerfect || area.placement === null ? cameraView : viewToWindow(cameraView, area.placement);
+    const w = area.pixelPerfect ? area.gameWidth : area.width;
+    const h = area.pixelPerfect ? area.gameHeight : area.height;
+    const det = v.a * v.d - v.b * v.c;
+    let rect: WorldRect | null = null;
+    if (Math.abs(det) > 1e-12 && Number.isFinite(det)) {
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (let k = 0; k < 4; k++) {
+        const px = (k & 1) === 0 ? 0 : w;
+        const py = (k & 2) === 0 ? 0 : h;
+        const wx = (v.d * (px - v.e) - v.c * (py - v.f)) / det;
+        const wy = (v.a * (py - v.f) - v.b * (px - v.e)) / det;
+        if (wx < x0) x0 = wx;
+        if (wx > x1) x1 = wx;
+        if (wy < y0) y0 = wy;
+        if (wy > y1) y1 = wy;
+      }
+      if (Number.isFinite(x0 + x1 + y0 + y1)) rect = { x0, y0, x1, y1 };
+    }
+    this.#cullRect = rect;
+    return rect;
+  }
+
+  /**
+   * A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer. A map that is not turned or scaled, in the
+   * world, writes only the cells the view shows (and one more cell round them), so a map of any size costs what its view does.
+   */
+  #tilemap(node: Tilemap, at: WorldTransform, cull: boolean): void {
     const grid = findTilemap(node.map);
     if (grid === undefined) {
       this.#warner.once(`tilemap:${node.map}`, `<Tilemap map="${node.map}">: no map of that name is registered (registerTilemaps(tilemaps) with the compiler's generated table, before the game starts).`);
@@ -1486,49 +1570,64 @@ export class FrameBuilder {
     if (node.opacity !== 1) tint = ((tint & 0xffffff00) | Math.round(255 * Math.min(1, Math.max(0, node.opacity)))) >>> 0;
     const firstGid = grid.data.firstGid;
     const width = grid.width;
+    const height = grid.height;
+    let col0 = 0;
+    let col1 = width - 1;
+    let row0 = 0;
+    let row1 = height - 1;
+    if (cull && at.rotation === 0 && sx === 1 && sy === 1) {
+      const visible = this.#visibleRect();
+      if (visible !== null) {
+        col0 = Math.max(0, Math.floor((visible.x0 - at.x) / tw) - 1);
+        col1 = Math.min(width - 1, Math.floor((visible.x1 - at.x) / tw) + 1);
+        row0 = Math.max(0, Math.floor((visible.y0 - at.y) / th) - 1);
+        row1 = Math.min(height - 1, Math.floor((visible.y1 - at.y) / th) + 1);
+      }
+    }
     for (const layer of grid.data.layers) {
       if (!layer.visible || (node.layer !== undefined && layer.name !== node.layer)) continue;
       const data = layer.data;
       const flips = layer.flips;
-      for (let i = 0; i < data.length; i++) {
-        const gid = data[i] as number;
-        if (gid === 0) continue;
-        const frame = gid - firstGid;
-        if (frame < 0) continue;
-        const col = i % width;
-        const row = (i - col) / width;
-        const srcX = (frame % columns) * tw;
-        const srcY = Math.floor(frame / columns) * th;
-        const flip = flips === undefined ? 0 : (flips[i] as number);
-        let lx = col * tw;
-        let ly = row * th;
-        let rotation = at.rotation;
-        let flags = 0;
-        let ox = 0;
-        let oy = 0;
-        if (flip !== 0) {
-          // Mirrored tiles turn about their middle. Tiled applies the diagonal flip first, then horizontal, then vertical; each
-          // combination is a quarter turn and at most one mirror, which is what a record can say.
-          lx += tw / 2;
-          ly += th / 2;
-          ox = tw / 2;
-          oy = th / 2;
-          const h = (flip & TILE_FLIP_H) !== 0;
-          const v = (flip & TILE_FLIP_V) !== 0;
-          if ((flip & TILE_FLIP_D) === 0) flags = (h ? RGE_SPRITE_FLIP_X : 0) | (v ? RGE_SPRITE_FLIP_Y : 0);
-          else if (!h && !v) {
-            rotation += Math.PI / 2;
-            flags = RGE_SPRITE_FLIP_Y;
-          } else if (h && !v) rotation += Math.PI / 2;
-          else if (!h && v) rotation += (3 * Math.PI) / 2;
-          else {
-            rotation += (3 * Math.PI) / 2;
-            flags = RGE_SPRITE_FLIP_Y;
+      for (let row = row0; row <= row1; row++) {
+        for (let col = col0; col <= col1; col++) {
+          const i = row * width + col;
+          const gid = data[i] as number;
+          if (gid === 0) continue;
+          const frame = gid - firstGid;
+          if (frame < 0) continue;
+          const srcX = (frame % columns) * tw;
+          const srcY = Math.floor(frame / columns) * th;
+          const flip = flips === undefined ? 0 : (flips[i] as number);
+          let lx = col * tw;
+          let ly = row * th;
+          let rotation = at.rotation;
+          let flags = 0;
+          let ox = 0;
+          let oy = 0;
+          if (flip !== 0) {
+            // Mirrored tiles turn about their middle. Tiled applies the diagonal flip first, then horizontal, then vertical; each
+            // combination is a quarter turn and at most one mirror, which is what a record can say.
+            lx += tw / 2;
+            ly += th / 2;
+            ox = tw / 2;
+            oy = th / 2;
+            const h = (flip & TILE_FLIP_H) !== 0;
+            const v = (flip & TILE_FLIP_V) !== 0;
+            if ((flip & TILE_FLIP_D) === 0) flags = (h ? RGE_SPRITE_FLIP_X : 0) | (v ? RGE_SPRITE_FLIP_Y : 0);
+            else if (!h && !v) {
+              rotation += Math.PI / 2;
+              flags = RGE_SPRITE_FLIP_Y;
+            } else if (h && !v) rotation += Math.PI / 2;
+            else if (!h && v) rotation += (3 * Math.PI) / 2;
+            else {
+              rotation += (3 * Math.PI) / 2;
+              flags = RGE_SPRITE_FLIP_Y;
+            }
           }
+          const px = at.x + cos * lx * sx - sin * ly * sy;
+          const py = at.y + sin * lx * sx + cos * ly * sy;
+          this.#list.spriteRegionAt(px, py, rotation, sx, sy, handle, srcX, srcY, tw, th, ox, oy, flags, tint);
         }
-        const px = at.x + cos * lx * sx - sin * ly * sy;
-        const py = at.y + sin * lx * sx + cos * ly * sy;
-        this.#list.spriteRegionAt(px, py, rotation, sx, sy, handle, srcX, srcY, tw, th, ox, oy, flags, tint);
       }
     }
   }

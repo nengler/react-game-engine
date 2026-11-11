@@ -12,7 +12,7 @@
  *
  * `npm run bench:check` runs it under both and fails when a scene is over its budget in `budget.json` (CI does).
  */
-import { AnimatedSprite, Collider, Entity, Shape, Sprite, World } from "@rge/runtime";
+import { AnimatedSprite, Camera, Collider, Entity, Shape, Sprite, Tilemap, World, registerTilemaps } from "@rge/runtime";
 import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerInput, RGE_IN_DT, RGE_IN_QUIT, Warner, type Backend } from "@rge/player";
 
 /**
@@ -135,6 +135,8 @@ interface Scene {
   readonly pile?: boolean;
   /** How many of the `n` entities move; the rest are still. Default all of them. */
   readonly moving?: number;
+  /** A `side` × `side` tilemap with a camera scrolling across it (`n` is then the side): only the cells in view should cost anything. */
+  readonly map?: boolean;
   /** Sweep in script even under a host with a broad phase of its own. */
   readonly scriptSweep?: boolean;
 }
@@ -169,8 +171,30 @@ function buildTowerScene(enemies: number): Entity {
   return root;
 }
 
-function buildScene({ n, animated = false, tower = false, colliders: withColliders = false, state = false, pile = false, moving = n }: Scene): Entity {
+/** A camera following a marker that moves across the map, 90 pixels a second each way. */
+class Scroller extends Entity {
+  override onUpdate(dt: number): void {
+    this.transform.x += dt * 90;
+    this.transform.y += dt * 90;
+  }
+}
+
+function buildMapScene(side: number): Entity {
+  registerTilemaps({ bench: { width: side, height: side, tileWidth: 16, tileHeight: 16, firstGid: 1, solid: [], layers: [{ name: "Ground", visible: true, data: Array.from({ length: side * side }, (_, i) => 1 + (i % 3)) }] } });
+  const root = new Entity();
+  root.addChild(new Tilemap({ map: "bench", image: "tiles.png" }));
+  const camera = new Camera();
+  const marker = new Scroller();
+  marker.transform.x = 160;
+  marker.transform.y = 90;
+  camera.addChild(marker);
+  root.addChild(camera);
+  return root;
+}
+
+function buildScene({ n, animated = false, tower = false, colliders: withColliders = false, state = false, pile = false, map = false, moving = n }: Scene): Entity {
   if (tower) return buildTowerScene(n);
+  if (map) return buildMapScene(n);
   const root = new Entity();
   const side = Math.ceil(Math.sqrt(n));
   for (let i = 0; i < n; i++) {
@@ -205,7 +229,7 @@ function measure(scene: Scene): number {
 /** Where a frame's time goes, by the three phases `step()` runs: the tick (hooks, state, renders), the tree walk and draw list, and collisions. Milliseconds per frame. */
 function phases(scene: Scene): { tick: number; walk: number; collisions: number } {
   const world = new World();
-  const builder = new FrameBuilder({ loadTexture: () => 0 });
+  const builder = new FrameBuilder({ loadTexture: () => 0, textureSize: () => ({ width: 56, height: 56 }) });
   const tracker = new CollisionTracker(undefined, true, true, scene.scriptSweep ? undefined : hostOverlaps);
   world.mount(buildScene(scene));
   const input = new PlayerInput(new Warner());
@@ -241,6 +265,9 @@ const scenes: [string, Scene][] = [
   // Hearth's finding 9: many styled, animated sprites, each re-rendered by state every step.
   ["200 animated sprites by state", { n: 200, animated: true, state: true }],
   ["80 enemies, 20 towers, 50 shots", { n: 80, tower: true }],
+  // Plan M2.1: only the cells in view are written, so a large map costs what its view does. The 800 × 600 window shows about 50 × 38 cells.
+  ["200 x 200 tilemap scrolled", { n: 200, map: true }],
+  ["20 x 20 tilemap scrolled", { n: 20, map: true }],
 ];
 // Under a host with a broad phase, the same scenes with the script's sweep, to compare.
 if (hostOverlaps !== undefined) {
@@ -263,7 +290,7 @@ for (const n of [5000, 20000]) {
   const runs = [0, 1, 2].map(() => mount({ n })).sort((a, b) => a - b);
   console.log(`${`mount ${n} rects`.padEnd(35)}: ${(runs[1] as number).toFixed(2)} ms once`);
 }
-for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8], ...scenes.slice(12, 14)] as [string, Scene][]) {
+for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8], ...scenes.slice(12, 15)] as [string, Scene][]) {
   const p = phases(scene);
   console.log(`  ${name} by phase: tick ${p.tick.toFixed(2)}, walk ${p.walk.toFixed(2)}, collisions ${p.collisions.toFixed(2)} ms`);
 }

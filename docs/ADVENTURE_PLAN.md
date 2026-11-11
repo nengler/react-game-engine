@@ -230,7 +230,7 @@ findings are written down.
 
 ### M2. The large world (engine; \~1 week)
 
-**2.1 `<Tilemap>` draws only what the view shows.** Today `#tilemap` in `packages/player/src/draw.ts` writes one sprite-region
+**2.1 `<Tilemap>` draws only what the view shows.** *(Done 2026-11-11, simpler than planned: the player writes only the cells of the view's rectangle, in the same order as before, and no chunk cache; a view holds a few hundred cells, so the 200 × 200 bench scene costs 0.12 ms a frame under Node and 1.8 ms under QuickJS. The walk meets a tilemap before it finds the camera, so cells are chosen with the previous frame's camera and the frame is built a second time when the camera turns out to be another one (first frame, screen change). `TileGrid.set` is not built: Bramble keeps cut bushes as the rules' data.)* Today `#tilemap` in `packages/player/src/draw.ts` writes one sprite-region
 record for every filled cell ("culled to none (a map is a room, not a world)").
 
 - **Which cells are drawn:** the player already knows the view transform and the screen size when it walks the tree. From
@@ -245,7 +245,7 @@ record for every filled cell ("culled to none (a map is a room, not a world)").
   records. That is expected; the step re-baselines Kite's parity and says why.
 - **Bench:** a new scene, a 200 × 200 map scrolled across, with a budget in `packages/player/bench/budget.json`.
 
-**2.2 A camera that follows smoothly.** `<Camera>` already follows its children's centre.
+**2.2 A camera that follows smoothly.** *(Done 2026-11-11: `deadzone` and `smoothing`, in `Camera.ts`, with tests.)* `<Camera>` already follows its children's centre.
 
 - **New props:**
   - `deadzone={[w, h]}`: the followed point can move inside a box around the centre without moving the view.

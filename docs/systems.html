@@ -289,6 +289,7 @@ moveActorX(actor, vx * dt, blocked, (dir) => { actor.vx = 0; });      // a pixel
   <ul>
     <li>Reading outside the map gives an empty cell, not an error.</li>
     <li>Kite puts <strong>gameplay data in a hidden layer</strong> (<code>Markers</code>: room start and exit tiles) and finds it with <code>find("Markers", gid)</code>. Only the visible <code>Tiles</code> layer is drawn.</li>
+    <li>A map of any size costs what its view does: in the world, an unrotated, unscaled <code>&lt;Tilemap&gt;</code> writes only the cells the camera shows (and one more cell round them). Inside a <code>&lt;Hud&gt;</code>, or turned or scaled, it writes every cell. Kite still mounts only the current room and its neighbours, which is now an option, not a need.</li>
     <li>Only draw what is needed: Kite maps over its room list and mounts the current room and its neighbours.</li>
     <li><code>moveActorX</code> / <code>moveActorY</code> move <code>{ x, y, rx, ry }</code> a pixel at a time against <code>blocked(x, y)</code>, carrying the sub-pixel remainder. On a block the remainder is dropped and <code>onBlocked(direction)</code> runs; it may move the actor (a corner correction).</li>
     <li>Importer limits: one tileset (the first), embedded tilesets, CSV layers, finite maps. Each is reported when imported.</li>
