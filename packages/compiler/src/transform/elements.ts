@@ -22,8 +22,7 @@ export class ElementLowering extends HookLowering {
   ): CallbackPropIR | null {
     this.functionDepth++;
     const handler = lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
-      // A parameter typed "*" by the manifest takes its type from the element's other props (an event channel's event type).
-      paramTypes: params && !params.some((p) => p.type === "*") ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
+      paramTypes: params ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
       returns: "void",
       what: `${name} callback`,
     });
@@ -436,25 +435,15 @@ export class ElementLowering extends HookLowering {
   }
 
   /**
-   * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`),
-   * `state={useGame}` is the project's game state, the imported store, and `controls={controls}` the game's actions, imported
-   * from a .ts module. Anything else (a state read, an expression)
+   * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`), and
+   * `controls={controls}` the game's actions, imported from a .ts module. Anything else (a state read, an expression)
    * would not exist yet, so it is `RGE1210`.
    */
   protected lowerGameSetting(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
     if (name === "state") {
-      const expression = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
-      if (!expression || !isIdentifier(expression) || !this.storeImports.has(expression.text)) {
-        this.report(
-          DiagnosticCode.InvalidGameState,
-          this.gameState
-            ? `<Game state> is the game state itself: \`state={${this.gameState.name}}\`, imported from GameState.ts.`
-            : "<Game state> needs the project's game state: add GameState.ts next to the components and import its store.",
-          at,
-        );
-        return null;
-      }
-      return { kind: "StoreRef" };
+      // Retired (2026-11-11): every game state starts from its initial values when a game starts, so there is nothing to hand over.
+      this.report(DiagnosticCode.UnsupportedAttribute, `<${GAME_TAG} state> is no longer needed: the game state starts fresh with every game. Remove it.`, at);
+      return null;
     }
     if (name === "controls") {
       // `controls={controls}`: the game's actions, a `createControls(…)` imported from a .ts module. Made when that module

@@ -101,7 +101,7 @@ function storeNames(sourceFile: SourceFile): Set<string> {
  * and leave the text as it was, for the compiler to report on as it would.
  */
 export function inlineCustomHooks(parser: TsxParser, fileName: string, text: string, resolve: HookResolver | null, diagnostics: CompilerDiagnostic[]): string {
-  let current = text;
+  let current = splitStoreSelections(parser, fileName, text, diagnostics);
   let counter = 0;
   // What a hook from another file imports from the authoring module (`useState`, `useUpdate`): its expansion needs those here.
   const needed = new Map<string, Set<string>>();
@@ -143,6 +143,95 @@ export function inlineCustomHooks(parser: TsxParser, fileName: string, text: str
   }
   diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `Custom hooks call each other more than ${MAX_DEPTH} levels deep, or a hook calls itself: hooks are inlined, so they cannot recurse.`, null));
   return text;
+}
+
+/**
+ * Several values from the game state at once, as Zustand allows, each becoming its own selector (so its own subscription, and
+ * a component re-renders only for the values it reads):
+ *
+ *     const { originX, room } = useGame((s) => s.run);              → const originX = useGame((s) => s.run.originX); …
+ *     const { a, b: c } = useGame((s) => ({ a: s.x, b: s.y.z }));   → const a = useGame((s) => s.x); const c = useGame((s) => s.y.z);
+ *     const [a, b] = useGame((s) => [s.x, s.y]);                    → const a = useGame((s) => s.x); const b = …
+ */
+function splitStoreSelections(parser: TsxParser, fileName: string, text: string, diagnostics: CompilerDiagnostic[]): string {
+  const parsed = parser.parse(fileName, text);
+  try {
+    const sf = parsed.sourceFile;
+    const stores = storeNames(sf);
+    const edits: Edit[] = [];
+    const src = (n: Node): string => text.slice(n.getStart(sf), n.getEnd());
+    for (const statement of sf.statements) {
+      for (const body of componentBodies(statement)) {
+        for (const stmt of body.statements) {
+          if (!isVariableStatement(stmt) || stmt.declarationList.declarations.length !== 1) continue;
+          const d = stmt.declarationList.declarations[0]!;
+          const init = d.initializer;
+          if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || !stores.has(init.expression.text) || !HOOK.test(init.expression.text)) continue;
+          if (!isObjectBindingPattern(d.name) && !isArrayBindingPattern(d.name)) continue;
+          const store = init.expression.text;
+          const selector = init.arguments[0];
+          const fn = selector !== undefined ? unwrap(selector) : undefined;
+          if (fn === undefined || fn.kind !== SyntaxKind.ArrowFunction) continue;
+          const arrow = fn as unknown as { parameters: readonly { name: Node }[]; body: Node };
+          const param = arrow.parameters[0];
+          if (arrow.parameters.length !== 1 || param === undefined || !isIdentifier(param.name)) continue;
+          const p = param.name.text;
+          const body = unwrap(arrow.body);
+          const lines: string[] = [];
+          const fail = (message: string): void => {
+            diagnostics.push(error(DiagnosticCode.InvalidGameState, message, spanOf(stmt, sf, fileName)));
+          };
+          if (isObjectBindingPattern(d.name)) {
+            const picked = isObjectLiteralExpression(body) ? new Map<string, string>() : null;
+            if (picked !== null && isObjectLiteralExpression(body)) {
+              for (const property of body.properties) {
+                if (isPropertyAssignment(property) && isIdentifier(property.name)) picked.set(property.name.text, src(property.initializer));
+                else if (isShorthandPropertyAssignment(property)) {
+                  const n = (property.name as unknown as { text: string }).text;
+                  picked.set(n, n);
+                }
+              }
+            }
+            for (const element of d.name.elements) {
+              if (element.name === undefined || !isIdentifier(element.name) || element.dotDotDotToken) {
+                fail(`Each value picked from ${store} is a plain name: \`const { a, b: c } = ${store}(…)\`.`);
+                continue;
+              }
+              const key = element.propertyName !== undefined ? (element.propertyName as unknown as { text: string }).text : element.name.text;
+              const path = picked !== null ? picked.get(key) : `${src(body)}.${key}`;
+              if (path === undefined) {
+                fail(`The selector does not pick '${key}'.`);
+                continue;
+              }
+              lines.push(`const ${element.name.text} = ${store}((${p}) => ${path});`);
+            }
+          } else {
+            const items = body.kind === SyntaxKind.ArrayLiteralExpression ? (body as unknown as { elements: readonly Node[] }).elements : null;
+            if (items === null) {
+              fail(`\`const [a, b] = ${store}(…)\` needs a selector that returns an array of paths: \`(${p}) => [${p}.a, ${p}.b]\`.`);
+              continue;
+            }
+            d.name.elements.forEach((element, i) => {
+              const item = items[i];
+              if (!isBindingElement(element) || element.name === undefined || !isIdentifier(element.name) || item === undefined) return;
+              lines.push(`const ${element.name.text} = ${store}((${p}) => ${src(item)});`);
+            });
+          }
+          edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: lines.join("\n  ") });
+        }
+      }
+    }
+    return edits.length === 0 ? text : applyEdits(text, edits);
+  } finally {
+    parsed.dispose();
+  }
+}
+
+/** Parentheses (and `as`) around an expression do not change it. */
+function unwrap(node: Node): Node {
+  let at = node;
+  while (at.kind === SyntaxKind.ParenthesizedExpression || at.kind === SyntaxKind.AsExpression) at = (at as unknown as { expression: Node }).expression;
+  return at;
 }
 
 function applyEdits(text: string, edits: readonly Edit[]): string {

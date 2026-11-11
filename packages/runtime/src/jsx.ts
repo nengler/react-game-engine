@@ -24,8 +24,6 @@ import type { ScreenProps } from "./components/Screen.ts";
 import type { TilemapProps } from "./components/Tilemap.ts";
 import type { ParticlesProps } from "./components/Particles.ts";
 import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
-import type { EventListenerProps } from "./components/EventListener.ts";
-import type { AfterimageLayerProps } from "./components/AfterimageLayer.ts";
 import type { FadeProps } from "./components/Fade.ts";
 import type { MusicProps } from "./components/Music.ts";
 import type { RouteProps, RouterProps } from "./components/Router.ts";
@@ -34,7 +32,7 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 export type { TransformProps, Child } from "./jsx-runtime.ts";
 
 export { clamp, springBack } from "./math.ts";
-export { createAfterimages, createEvents, createShake } from "./effects.ts";
+export { createShake } from "./effects.ts";
 
 // -- state and refs -----------------------------------------------------------
 
@@ -59,7 +57,7 @@ function compileTimeOnly(name: string): never {
  */
 export function useState<T>(_initial: () => T): [Widen<T>, Setter<Widen<T>>];
 export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>];
-/** `useState(() => createAfterimages())`: React's lazy initial value, made once per instance (an object with methods, such as an effect). */
+/** `useState(() => createShake())`: React's lazy initial value, made once per instance (an object with methods, such as an effect). */
 export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>>] {
   return compileTimeOnly("useState");
 }
@@ -134,7 +132,7 @@ export function Entity(_props: EntityProps & { children?: Child }): JSX.Element 
 
 /**
  * The root of a game and its configuration: the window (`title`, `width`, `height`, `resizable`, `vsync`, `smooth`, `fullscreenKey`, `fixedStep`, `gamepadDeadzone`, `upscale`, `showFps`, `fpsKey`),
- * the `background`, the `assets` folder and the game `state` (`state={useGame}`). A container, like `<Entity>`, and
+ * the `background`, the `assets` folder and the `controls`. A container, like `<Entity>`, and
  * optional: a component whose root is `<Game …>` overrides the defaults, each prop only where it is written. Its
  * `width` and `height` are the window's; put a `<Screen width height>` inside it for the resolution the game is drawn
  * at. Settings are literals, and it is only ever a component's root.
@@ -231,22 +229,6 @@ export function Particles(_props: ParticlesProps): JSX.Element {
  */
 export function ParticleLayer(_props: ParticleLayerProps): JSX.Element {
   return compileTimeOnly("ParticleLayer");
-}
-
-/**
- * Listens to an event channel while it is in the world: `<EventListener events={gameEvents} onEvent={(e) => { if (e.type === "land") … }} />`.
- * The event's type comes from the channel. A leaf that draws nothing.
- */
-export function EventListener<T>(_props: EventListenerProps<T>): JSX.Element {
-  return compileTimeOnly("EventListener");
-}
-
-/**
- * Where a sprite's afterimages are drawn, in the world: `<AfterimageLayer afterimages={trail} emitting={dashing} interval={0.08} />`,
- * with the same `createAfterimages()` given to the sprite (`afterimages={trail}`). A leaf; put it next to a camera, not in it.
- */
-export function AfterimageLayer(_props: AfterimageLayerProps): JSX.Element {
-  return compileTimeOnly("AfterimageLayer");
 }
 
 /**

@@ -82,12 +82,11 @@ export interface RuntimeManifest {
   readonly handleTypes: Readonly<Record<string, HandleTypeManifest>>;
   /**
    * Runtime functions component code may call, imported from the runtime module. Name → argument count: -1 at least one,
-   * -2 any. The `create…` factories make a per-instance object in a lazy `useState(() => createAfterimages())`.
+   * -2 any. A `create…` factory makes a per-instance object in a lazy `useState(() => createShake())`.
    */
   readonly functions: Readonly<Record<string, number>>;
 }
 
-/** A callback parameter: a runtime handle type by name, or "*" for a type the element's other props give (an event channel's). */
 export interface CallbackParamManifest {
   readonly name: string;
   /** A key of `handleTypes`. */
@@ -102,21 +101,21 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "EventListener", "AfterimageLayer", "Fade", "Music", "Router", "Route"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
-    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "state", "controls"],
-    Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity", "afterimages", "snapshot"],
+    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "controls"],
+    Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
     Text: ["text", "size", "color", "width", "align", "font"],
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "shake", "shakeStrength", "shakeDuration", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: [
-      "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity", "afterimages", "snapshot",
+      "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity",
       "animations", "animation", "isSheet", "current", "sheetFrame", "styled", "finished",
     ],
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
@@ -124,8 +123,6 @@ export const runtimeManifest: RuntimeManifest = {
     Tilemap: ["map", "image", "layer", "opacity"],
     Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "count", "read", "emit", "emitAt"],
     ParticleLayer: ["particles", "emitBurst"],
-    EventListener: ["events", "onEvent"],
-    AfterimageLayer: ["afterimages", "emitting", "interval"],
     Fade: ["color", "on", "duration", "amount"],
     Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
@@ -151,21 +148,16 @@ export const runtimeManifest: RuntimeManifest = {
     Tilemap: ["map", "image"],
     Particles: [],
     ParticleLayer: ["particles"],
-    EventListener: ["events", "onEvent"],
-    AfterimageLayer: ["afterimages"],
     Fade: [],
     Music: ["src"],
     Router: ["route"],
     Route: ["name"],
   },
   intrinsicHooks: {
-    Sprite: ["onMount", "onUnmount"],
-    AnimatedSprite: ["onMount", "onUnmount", "onUpdate"],
+    AnimatedSprite: ["onUpdate"],
     Camera: ["onUpdate"],
     Particles: ["onUpdate"],
     ParticleLayer: ["onMount", "onUnmount"],
-    EventListener: ["onMount", "onUnmount"],
-    AfterimageLayer: ["onUpdate"],
     Fade: ["onUpdate"],
     Music: ["onUpdate"],
     Router: ["onUpdate"],
@@ -185,8 +177,6 @@ export const runtimeManifest: RuntimeManifest = {
       onCollisionExit: [{ name: "other", type: "Contact" }],
     },
     Pointer: { onPress: [] },
-    // "*": the parameter's type comes from the element's other props (the channel's event type), not from the manifest.
-    EventListener: { onEvent: [{ name: "event", type: "*" }] },
     Flex: { onPress: [] },
   },
   reservedMembers: [
@@ -210,5 +200,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },
   },
-  functions: { clamp: 3, freeze: 1, springBack: 3, createShake: -2, createEvents: 0, createAfterimages: -2 },
+  functions: { clamp: 3, freeze: 1, springBack: 3, createShake: -2 },
 };

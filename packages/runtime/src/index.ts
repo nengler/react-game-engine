@@ -15,7 +15,7 @@ export {
   type SceneValue,
 } from "./scene.ts";
 export { Entity, type EntityProps } from "./components/Entity.ts";
-export { Game, type GameProps, type GameStateHandle } from "./components/Game.ts";
+export { Game, type GameProps } from "./components/Game.ts";
 export { isStyled, Sprite, type SpriteLook, type SpriteOptions, type SpriteProps } from "./components/Sprite.ts";
 export { Collider, type ColliderProps, type Contact } from "./components/Collider.ts";
 export { Sound, addSoundPreload, getSoundSink, setSoundSink, type SoundSink } from "./Sound.ts";
@@ -30,21 +30,13 @@ export { findTilemap, getTilemap, registerTilemaps, TileGrid, TILE_FLIP_D, TILE_
 export { Music, type MusicProps } from "./components/Music.ts";
 export { Particles, PARTICLE_SPACES, type ParticlesProps } from "./components/Particles.ts";
 export { ParticleLayer, type ParticleLayerProps } from "./components/ParticleLayer.ts";
-export { EventListener, type EventListenerProps } from "./components/EventListener.ts";
-export { AfterimageLayer, type AfterimageLayerProps } from "./components/AfterimageLayer.ts";
 export {
-  createAfterimages,
-  createEvents,
   createParticles,
   createShake,
   createSounds,
-  Afterimages,
-  EventChannel,
   ParticleStore,
   Shake,
   SoundStore,
-  type AfterimageSnapshot,
-  type AfterimageSource,
   type BurstOptions,
   type ParticlePreset,
   type ParticleRenderer,

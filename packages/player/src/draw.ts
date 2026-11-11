@@ -17,7 +17,6 @@ import {
   Text,
   Tilemap,
   Particles,
-  AfterimageLayer,
   Fade,
   Route,
   Router,
@@ -424,7 +423,6 @@ const KIND_PARTICLES = 11;
 const KIND_FADE = 12;
 const KIND_ROUTE = 13;
 const KIND_ROUTER = 14;
-const KIND_AFTERIMAGES = 15;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
@@ -460,7 +458,6 @@ function classCode(object: GameObject): number {
       : object instanceof Fade ? KIND_FADE
       : object instanceof Route ? KIND_ROUTE
       : object instanceof Router ? KIND_ROUTER
-      : object instanceof AfterimageLayer ? KIND_AFTERIMAGES
       : KIND_NONE;
     code = kind;
     if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX || kind === KIND_ROUTER) code |= FLAG_VOLATILE;
@@ -812,10 +809,6 @@ export class FrameBuilder {
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
           this.#particles(node as Particles, at);
           break;
-        case KIND_AFTERIMAGES:
-          if (drawZ !== listZ) list.setZ((listZ = drawZ));
-          this.#afterimages(node as AfterimageLayer);
-          break;
         case KIND_ROUTE:
           // A screen a transition has hidden is not drawn, pressed or collided with: its children are not walked at all.
           if (!(node as Route).visible) return WALK_VOLATILE;
@@ -1118,10 +1111,6 @@ export class FrameBuilder {
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#particles(object as Particles, world);
                   break;
-                case KIND_AFTERIMAGES:
-                  if (z !== listZ) list.setZ((listZ = z));
-                  this.#afterimages(object as AfterimageLayer);
-                  break;
                 case KIND_FADE:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#fade(object as Fade, gameWidth, gameHeight);
@@ -1421,7 +1410,7 @@ export class FrameBuilder {
     this.#region(node.image, sheet, node.frameWidth, node.frameHeight, frame, node.originX, node.originY, node.flipX, node.flipY, tint, at);
   }
 
-  /** One frame of an image (or all of it), as a sprite-region record: a sprite's, or an afterimage's. */
+  /** One frame of an image (or all of it), as a sprite-region record. */
   #region(
     image: string, sheet: boolean, sheetWidth: number | undefined, sheetHeight: number | undefined, frame: number,
     originX: number, originY: number, flipX: boolean, flipY: boolean, tint: number, at: WorldTransform,
@@ -1447,20 +1436,6 @@ export class FrameBuilder {
       return;
     }
     this.#list.spriteRegion(at, handle, srcX, srcY, frameWidth, frameHeight, originX, originY, (flipX ? RGE_SPRITE_FLIP_X : 0) | (flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
-  }
-
-  /** An `<AfterimageLayer>`: each copy where it was taken, in the world, tinted with the colour and fading with age. */
-  #afterimages(node: AfterimageLayer): void {
-    const set = node.afterimages;
-    if (set.images.length === 0) return;
-    const color = this.#color(set.color);
-    const alpha = color & 255;
-    for (const image of set.images) {
-      const left = 1 - image.age / set.lifetime;
-      if (!(left > 0)) continue;
-      const tint = ((color & 0xffffff00) | Math.round(alpha * left)) >>> 0;
-      this.#region(image.image, image.sheet, image.frameWidth, image.frameHeight, image.frame, image.originX, image.originY, image.flipX, image.flipY, tint, image);
-    }
   }
 
   /** A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer, culled to none (a map is a room, not a world). */

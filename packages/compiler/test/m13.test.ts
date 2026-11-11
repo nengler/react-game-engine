@@ -264,13 +264,10 @@ describe("M13: runtime behaviour", () => {
 describe("M13: the manifest says which hooks a built-in implements", () => {
   it("lists onUpdate for the built-ins that advance themselves (AnimatedSprite, Camera, Particles, Fade, Music, Router), and ParticleLayer's mount hooks", () => {
     assert.deepEqual(runtimeManifest.intrinsicHooks, {
-      Sprite: ["onMount", "onUnmount"],
-      AnimatedSprite: ["onMount", "onUnmount", "onUpdate"],
+      AnimatedSprite: ["onUpdate"],
       Camera: ["onUpdate"],
       Particles: ["onUpdate"],
       ParticleLayer: ["onMount", "onUnmount"],
-      EventListener: ["onMount", "onUnmount"],
-      AfterimageLayer: ["onUpdate"],
       Fade: ["onUpdate"],
       Music: ["onUpdate"],
       Router: ["onUpdate"],

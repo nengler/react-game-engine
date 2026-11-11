@@ -878,7 +878,7 @@ is the game's resolution**, the size everything is drawn at before it is scaled 
 // Main.tsx
 export default function Main() {
   return (
-    <Game state={useGame} title="rge demo" width={960} height={540} background="#10131c" assets="assets">
+    <Game title="rge demo" width={960} height={540} background="#10131c" assets="assets">
       <Screen width={320} height={180}>
         <Ground />
         <Camera><Player /></Camera>
@@ -907,11 +907,9 @@ component's root: as a child it is `RGE1003`. It is not placed, so it takes no `
 `RGE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
 built-in's.
 
-**`state`.** `state={useGame}` hands over the project's game state, the store imported from `GameState.ts`: the one
-place a component uses the store as a value (the compiler lowers it to a `StoreRef` expression, and the generated class
-passes the imported name to `super`). Anything else is `RGE1108`. It makes the ownership explicit; the player still starts
-every game state in the process from its initial values (`resetGameState`), and components keep reading it with
-selectors, which work with or without a `<Game>`.
+**No `state` prop** (retired 2026-11-11). It used to hand the game state to the runtime, which never needed it: the player
+starts every game state in the process from its initial values (`resetGameState`), and components read it with selectors,
+with or without a `<Game>`. `<Game state={…}>` is now `RGE1203`, saying to remove it.
 
 A user component cannot be called `Game`: it is an intrinsic like `Entity` (`RGE1206`). The demo's root is `Main`.
 
@@ -1189,6 +1187,12 @@ with the nearest key at the level it went wrong (`'player.hpp' … did you mean 
 `hp` then behaves as `useState` state does: a snapshot of the last render, usable in JSX and handlers, with the leaf's
 type.
 
+**Several values at once** (2026-11-11), as Zustand allows: `const { originX, room } = useGame((s) => s.run)` (a path,
+destructured), `const { a, b: c } = useGame((s) => ({ a: s.x, b: s.y.z }))` (an object literal of paths) and
+`const [a, b] = useGame((s) => [s.x, s.y])` (an array). Before compiling, each picked value becomes its own selector
+(`const originX = useGame((s) => s.run.originX)`), so its own subscription: the component re-renders only for the values it
+reads, which is finer than Zustand's `useShallow`.
+
 **Objects and arrays** (decided 2026-11-11). A path may name an object or an array as well as a leaf:
 `const player = useGame((s) => s.player)` and then `player.hp` in JSX or a handler, or
 `const enemies = useGame((s) => s.enemies)` and `{enemies.map((e) => <Enemy key={e.id} … />)}`. Its type is TypeScript's,
@@ -1269,7 +1273,7 @@ export const controls = createControls({ jump: ["Z", "Space", "PadA"], left: ["A
 ```
 
 ```tsx
-<Game state={useGame} controls={controls}>…</Game>
+<Game controls={controls}>…</Game>
 useInput((input) => { if (input.pressed("confirm")) begin(); });
 ```
 
@@ -1328,24 +1332,21 @@ step: (input, dt) => {
   the same object at rest, so the state stops changing). `useSquash` is an **engine-shipped custom hook**: ordinary source
   (`useState` + `useUpdate`, in `compiler/src/hooks/library.ts`), inlined like any custom hook when a component imports it
   from `@rge/runtime/jsx`, where it is declared for TypeScript.
-- **Per-instance effects.** A store in a module is global; what belongs to one entity is that component's own, made with
-  React's lazy initializer: `const [trail] = useState(() => createAfterimages())`. The arrow's body is the initial value (the
-  generated field is evaluated once per instance anyway), typed `ReturnType<typeof createAfterimages>`, and a handler may call
-  its methods (`trail.capture()`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function from
+- **Per-instance objects.** A store in a module is global; an object that belongs to one entity is that component's own,
+  made with React's lazy initializer: `const [shake] = useState(() => createShake())`. The arrow's body is the initial value
+  (the generated field is evaluated once per instance anyway), typed `ReturnType<typeof createShake>`, and a handler may call
+  its methods (`shake.start(4)`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function from
   the manifest, or a function from a `.ts` file), so arrays and records keep their messages. This is for objects that are
-  not values (a set of afterimages, a camera's shake); a value that changes over time is state (`useSquash`). The manifest's
-  `functions` table includes `createShake`, `createEvents`, `createAfterimages` (`-2`: any number of arguments) and
-  `springBack`.
-- **`createEvents<T>()`** → `EventChannel<T>`: `emit(event)`, `subscribe(listener)`. **`<EventListener events={channel}
-  onEvent={(e) => …} />`** listens while it is in the world, so a component answers events with its own state in an ordinary
-  handler; the parameter's type comes from the channel (the manifest marks the callback parameter `"*"`, lowered as
-  contextual). Kite's game state emits each step's events on `gameEvents`, and the character squashes itself from them.
-- **`createAfterimages({ lifetime, color, max })`** → `Afterimages`: copies of one sprite, left where it was and fading
-  (a dash, a burst of speed, a teleport). Per instance, like a squash: the sprite takes it (`afterimages={trail}`, so it can
-  be copied: its frame, flips, origin and world transform, scale included), and **`<AfterimageLayer afterimages={trail} emitting
-  interval>`** draws the copies in the world, taking one when `emitting` turns on and every `interval` after; `capture()` takes
-  one from a handler. The layer ages them in `onUpdate` and draws each as a sprite-region record tinted with the colour, its
-  alpha falling to 0 over `lifetime`. Put the layer next to a camera, not in it.
+  not values; a value that changes over time is state (`useSquash`). The manifest's `functions` table includes `createShake`
+  (`-2`: any number of arguments) and `springBack`.
+- **Reacting to what happened: call, and use the result.** No event emitter (one was tried, 2026-11-11, and removed as a
+  workaround): the component that runs a step answers it. A handler may use a game-state action's result,
+  `const events = step(input, dt)` (`CalleeIR` `Action`, only as a handler's `const`; in JSX or a derived value it would run
+  on every render), and then call plain functions and setters with it. Kite's character runs the step in its own
+  `useUpdate`, plays the effects (`playEvents`) and sets its squash (`squashFor(events)`).
+- **Effects a game makes from the basics.** Afterimages (copies of a sprite left behind, fading) were an engine feature
+  briefly and are now Kite's own `<DashTrail>`: a list of ghosts in state, drawn as `<Sprite>`s with falling `opacity`. The
+  engine keeps what a game cannot build from the rest.
 - **`moveActorX` / `moveActorY`** (runtime `move.ts`, for a game's rules): move any `{ x, y, rx, ry }` a pixel at a time
   against a `blocked(x, y)` test, carrying the sub-pixel remainder; on a block the remainder is dropped, `onBlocked(direction)`
   is called (it may move the actor, which is how a game adds corner rules) and the move stops. Kite's body uses it, with its

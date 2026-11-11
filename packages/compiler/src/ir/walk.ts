@@ -18,7 +18,6 @@ export function assertNever(value: never, what = "value"): never {
 /** Direct sub-expressions of an expression, in evaluation order. */
 export function childExpressions(e: ExprIR): readonly ExprIR[] {
   switch (e.kind) {
-    case "StoreRef":
     case "PlainRef":
     case "NumberLiteral":
     case "StringLiteral":

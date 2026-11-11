@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { AnimatedSprite, Camera, Fade, Music, Route, Router, Particles, ParticleLayer, createParticles, EventListener, createEvents, AfterimageLayer, createAfterimages, Tilemap, Collider, Entity, Flex, Game, GameObject, Hud, Pointer, SCREEN_FITS, SHAPE_KINDS, Screen, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
+import { AnimatedSprite, Camera, Fade, Music, Route, Router, Particles, ParticleLayer, createParticles, Tilemap, Collider, Entity, Flex, Game, GameObject, Hud, Pointer, SCREEN_FITS, SHAPE_KINDS, Screen, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
 
 /** Every instance field and prototype member a generated subclass of `host` would inherit, excluding Object.prototype. */
 function inheritedMembers(host: object): Set<string> {
@@ -46,8 +46,6 @@ describe("runtime manifest", () => {
       Tilemap: new Tilemap({ map: "m", image: "i" }),
       Particles: new Particles(),
       ParticleLayer: new ParticleLayer({ particles: createParticles({}) }),
-      EventListener: new EventListener({ events: createEvents(), onEvent: () => {} }),
-      AfterimageLayer: new AfterimageLayer({ afterimages: createAfterimages() }),
       Fade: new Fade(),
       Music: new Music({ src: "m.ogg" }),
       Router: new Router({ route: "a" }),
@@ -70,7 +68,7 @@ describe("runtime manifest", () => {
     for (const [tag, callbacks] of Object.entries(runtimeManifest.intrinsicCallbacks)) {
       for (const [name, params] of Object.entries(callbacks)) {
         assert.ok(name in (instances[tag] ?? {}), `${tag}.${name} must be a field`);
-        for (const p of params) assert.ok(p.type === "*" || p.type in runtimeManifest.handleTypes, `${tag}.${name}: ${p.type} is not a handle type`);
+        for (const p of params) assert.ok(p.type in runtimeManifest.handleTypes, `${tag}.${name}: ${p.type} is not a handle type`);
       }
     }
   });
@@ -98,7 +96,7 @@ describe("runtime manifest", () => {
 
   it("lists exactly the hooks each intrinsic implements itself, so a component rooted at it can call super", () => {
     const hooks = ["onInput", "onUpdate", "onMount", "onUnmount"];
-    const classes: Record<string, { prototype: object }> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex, Tilemap, Particles, ParticleLayer, EventListener, AfterimageLayer, Fade, Music, Router, Route };
+    const classes: Record<string, { prototype: object }> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex, Tilemap, Particles, ParticleLayer, Fade, Music, Router, Route };
     for (const tag of runtimeManifest.intrinsics) {
       const overridden = hooks.filter((hook) => Object.hasOwn(classes[tag]!.prototype, hook)).sort();
       assert.deepEqual([...(runtimeManifest.intrinsicHooks[tag] ?? [])].sort(), overridden, `${tag}: intrinsicHooks must list the hooks its class overrides`);
@@ -121,7 +119,7 @@ describe("runtime manifest", () => {
 
   it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
-    const classes: Record<string, unknown> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex, Tilemap, Particles, ParticleLayer, EventListener, AfterimageLayer, Fade, Music, Router, Route };
+    const classes: Record<string, unknown> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex, Tilemap, Particles, ParticleLayer, Fade, Music, Router, Route };
     for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
   });
 });

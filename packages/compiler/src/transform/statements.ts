@@ -152,7 +152,24 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
       ctx.error(DiagnosticCode.UnsupportedStatement, "Only `const name = expression;` declarations are supported in handlers.", statement);
       return null;
     }
-    const value = ctx.lowerExpression(decl.initializer); // lowered before the name exists: no self-reference
+    // `const events = step(input, dt);`: a game-state action whose result the handler uses (only here, in a handler, where it
+    // runs once; in JSX or a derived value it would run on every render).
+    const init = unwrapParens(decl.initializer);
+    const action = isCallExpression(init) && isIdentifier(init.expression) ? ctx.scope.get(init.expression.text) : undefined;
+    let value: ExprIR | null;
+    if (action?.kind === "action" && isCallExpression(init)) {
+      if (!ctx.canPlaySound()) {
+        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${action.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler.`, init);
+        return null;
+      }
+      const args: ExprIR[] = [];
+      for (const argument of init.arguments) {
+        const lowered = ctx.lowerExpression(argument);
+        if (!lowered) return null;
+        args.push(lowered);
+      }
+      value = { kind: "Call", callee: { kind: "Action", name: action.action }, args };
+    } else value = ctx.lowerExpression(decl.initializer); // lowered before the name exists: no self-reference
     const name = decl.name.text;
     if (!value || !checkFreshName(ctx, name, decl.name)) return null;
     const id = localId(ctx.componentName, name, ctx.nextSerial());

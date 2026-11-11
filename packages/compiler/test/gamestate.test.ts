@@ -229,6 +229,29 @@ export function Badge() {
     assert.match(typeErrors(typo).map((d) => d.message).join("\n"), /hpp/, "a member the object does not have is a type error");
   });
 
+  it("picks several values at once, each its own selector: from a path, an object literal or an array literal", async () => {
+    const compiled = build(`
+export function Card() {
+  const { hp, name: who } = useGame((s) => s.player);
+  const { c, quiet: m } = useGame((s) => ({ c: s.coins, quiet: s.muted }));
+  const [total, health] = useGame((s) => [s.coins, s.player.hp]);
+  return <Text size={12}>{who} {hp} {c} {m ? "m" : "-"} {total} {health}</Text>;
+}`);
+    const keys = compiled.ir.components[0]!.state.map((st) => st.globalKey);
+    assert.deepEqual(keys, ["player.hp", "player.name", "coins", "muted", "coins", "player.hp"], "one leaf subscription each");
+    assert.deepEqual(typeErrors(compiled), []);
+    const { Card } = await load<{ Card: new () => Text }>(generated(compiled));
+    const world = new World();
+    const card = new Card();
+    world.mount(card);
+    world.flush();
+    assert.equal(card.text, "Ada 10 0 - 0 10");
+    act("collect", 3);
+    act("hurt");
+    world.flush();
+    assert.equal(card.text, "Ada 9 3 - 3 9");
+  });
+
   it("selects an array and renders it as a keyed list", () => {
     const compiled = build(`
 export function Swarm() {

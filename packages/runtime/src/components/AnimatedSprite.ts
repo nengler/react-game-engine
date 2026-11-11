@@ -1,7 +1,6 @@
 import { GameObject } from "../GameObject.ts";
 import type { InputState } from "../input.ts";
-import type { AfterimageSnapshot, Afterimages } from "../effects.ts";
-import { isStyled, snapshotOf, spriteHooks, type SpriteLook, type SpriteOptions } from "./Sprite.ts";
+import { isStyled, type SpriteLook, type SpriteOptions } from "./Sprite.ts";
 
 export interface AnimatedSpriteProps extends SpriteOptions {
   /** The images to cycle through, in order, one image file per frame. Leave it out to play a sheet (`sheet`). */
@@ -124,7 +123,6 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
   originY: number;
   tint: string | undefined;
   opacity: number;
-  afterimages: Afterimages | undefined;
   #frames: readonly string[];
   #animationsText: string | AnimationTable;
   /** What the animations were last read from, to tell a new table from the same one written again. */
@@ -150,7 +148,6 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
     this.originY = hostProps.originY ?? 0;
     this.tint = hostProps.tint;
     this.opacity = hostProps.opacity ?? 1;
-    this.afterimages = hostProps.afterimages;
     this.#animationsText = "";
     this.#animation = "";
     if (hostProps.animations !== undefined) this.animations = hostProps.animations;
@@ -225,19 +222,6 @@ export class AnimatedSprite<P extends object = {}> extends GameObject<P> impleme
   }
 
   /** Advance by `dt` seconds while playing. The World calls this every tick, since the class overrides it. */
-  /** How it is drawn now, in the world (for an afterimage). */
-  snapshot(): Omit<AfterimageSnapshot, "age"> | null {
-    return snapshotOf(this, this.image, this.isSheet, this.frameWidth, this.frameHeight, this.isSheet ? this.sheetFrame : 0);
-  }
-
-  override onMount(): void {
-    spriteHooks.mount(this);
-  }
-
-  override onUnmount(): void {
-    spriteHooks.unmount(this);
-  }
-
   override onUpdate(dt: number, _input?: InputState): void {
     const current = this.current;
     const count = current === null ? this.#frames.length : current.frames.length;

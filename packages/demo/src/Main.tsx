@@ -1,7 +1,6 @@
 import { useSound, useState, Camera, Flex, Game, Hud, Screen, Text } from "@rge/runtime/jsx";
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
-import { useGame } from "./GameState.ts";
 import { CoinCounter } from "./CoinCounter.tsx";
 import { Ground } from "./Ground.tsx";
 import { Player } from "./Player.tsx";
@@ -19,7 +18,7 @@ export default function Main() {
   const playClick = useSound("click.wav");
 
   return (
-    <Game name="Main" state={useGame} title="rge demo" width={640} height={360} background="#10131c" assets="assets">
+    <Game name="Main" title="rge demo" width={640} height={360} background="#10131c" assets="assets">
       {/* The game is drawn at 640 × 360 and scaled up by whole numbers; a wider window gets a wider view (fit="expand"), not bars. */}
       <Screen width={640} height={360} fit="expand">
         <Ground />

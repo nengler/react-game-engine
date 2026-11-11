@@ -112,7 +112,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
   const visitExpr = (expr: ExprIR): void =>
     walkExpr(expr, (e) => {
       if (e.kind === "Call" && e.callee.kind === "Function" && runtimeFunctions.has(e.callee.name)) values.add(e.callee.name);
-      if (e.kind === "StoreRef") usage.store = true;
+      if (e.kind === "Call" && e.callee.kind === "Action") usage.store = true;
       if (e.kind === "PlainRef") usage.plain.add(e.name);
       if (e.kind === "Call" && e.callee.kind === "Plain") usage.plain.add(e.callee.name.split(".")[0]!);
     });

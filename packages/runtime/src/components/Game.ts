@@ -1,11 +1,6 @@
 import type { Controls } from "../input.ts";
 import { Entity, type EntityProps } from "./Entity.ts";
 
-/** What `state={useGame}` hands over: the game state a `createGameState` made. The player resets its store when the game starts. */
-export interface GameStateHandle {
-  readonly store: { reset(): void };
-}
-
 export interface GameProps extends EntityProps {
   /** The window's title. Default: the player's `title`, else `"react-game-engine"`. */
   title?: string;
@@ -51,8 +46,6 @@ export interface GameProps extends EntityProps {
    * frame's own time. See "Fixed timestep" in DESIGN.md.
    */
   fixedStep?: number;
-  /** The game's state: `state={useGame}`, the store from `GameState.ts`. It starts from its initial values with the game. */
-  state?: GameStateHandle;
   /**
    * The game's actions (`controls={controls}`, a `createControls({ jump: ["Z", "PadA"], … })` kept in a module): every
    * `input.pressed("jump")` then means any of the action's keys.
@@ -62,7 +55,7 @@ export interface GameProps extends EntityProps {
 
 /**
  * The root of a game, and where its configuration lives: the window (title, size, resizing, vsync, filtering), the
- * background colour, the assets folder, and the game state. Its `width` and `height` are the **window's** size; the
+ * background colour, the assets folder and the controls. Its `width` and `height` are the **window's** size; the
  * game's resolution, the size it is drawn at inside the window, is a `<Screen width height>` (put it inside, as its
  * only child). It is an `Entity` with those extra props, so a component whose root
  * is `<Game …>` extends it. It is optional: a game with any other root gets the default settings (and whatever the player was
@@ -88,7 +81,6 @@ export class Game<P extends object = {}> extends Entity<P> {
   upscale: "nearest" | "sharp" | undefined;
   showFps: boolean | undefined;
   fpsKey: string | false | undefined;
-  state: GameStateHandle | undefined;
   controls: Controls | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
@@ -108,7 +100,6 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.upscale = hostProps.upscale;
     this.showFps = hostProps.showFps;
     this.fpsKey = hostProps.fpsKey;
-    this.state = hostProps.state;
     this.controls = hostProps.controls;
   }
 }

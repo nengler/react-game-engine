@@ -79,7 +79,6 @@ export class ExpressionEmitter {
   protected expr(e: ExprIR, top = false): string {
     const wrap = (s: string): string => (top ? s : `(${s})`);
     switch (e.kind) {
-      case "StoreRef": return this.storeName;
       case "PlainRef": return e.name;
       case "NumberLiteral": return String(e.value);
       case "StringLiteral": return JSON.stringify(e.value);
@@ -112,6 +111,7 @@ export class ExpressionEmitter {
           case "Prop": return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
           case "ArrayMethod": return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;
           case "ValueMethod": return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;
+          case "Action": return `${this.storeName}.getState().${e.callee.name}(${args})`;
           default: return assertNever(e.callee, "callee");
         }
       }
