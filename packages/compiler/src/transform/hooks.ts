@@ -4,7 +4,7 @@ import { isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclara
 import { unwrapParens, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type TypeIR, collectDependencies, stateReads, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
-import { type GameStateLeaf, type GameStateNode } from "../gamestate/schema.ts";
+import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { lowerFunction } from "./statements.ts";
 import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
@@ -213,15 +213,17 @@ export class HookLowering extends ExpressionLowering {
       this.componentScope.declare(hook.valueName, { kind: "action", name: hook.valueName, action: first });
       return;
     }
-    // Walk the state tree; a typo is reported with the nearest key at the level it went wrong.
-    let node: GameStateLeaf | GameStateNode = definition.tree;
+    // Walk the state tree; a typo is reported with the nearest key at the level it went wrong. Below a value the compiler
+    // cannot see into (an array, `newRun()`), the path is left to the type-check of the generated code.
+    let node: GameStateEntry = definition.tree;
     const walked: string[] = [];
     for (const key of hook.path) {
+      if (node.kind === "value") break;
       if (node.kind === "leaf") {
         this.report(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is a ${node.type}, so it has no '${key}'.`, at(hook.selector));
         return;
       }
-      const child: GameStateLeaf | GameStateNode | undefined = Object.hasOwn(node.children, key) ? node.children[key] : undefined;
+      const child: GameStateEntry | undefined = Object.hasOwn(node.children, key) ? node.children[key] : undefined;
       if (!child) {
         const options = [...Object.keys(node.children), ...(walked.length === 0 ? definition.actions : [])];
         const near = nearest(key, options);
@@ -235,13 +237,12 @@ export class HookLowering extends ExpressionLowering {
       walked.push(key);
       node = child;
     }
-    if (node.kind === "node") {
-      this.report(DiagnosticCode.InvalidGameState, `'${walked.join(".")}' is an object: select one of its values (${Object.keys(node.children).map((k) => `${walked.join(".")}.${k}`).join(", ")}). A component reads leaves, so it re-renders only when one it uses changes.`, at(hook.selector));
-      return;
-    }
     const id = stateId(this.component.name, hook.valueName);
-    const initialValue: ExprIR = node.type === "number" ? { kind: "NumberLiteral", value: node.initial as number } : node.type === "string" ? { kind: "StringLiteral", value: node.initial as string } : { kind: "BooleanLiteral", value: node.initial as boolean };
-    const type: TypeIR = { kind: "Primitive", name: node.type };
+    // A leaf the schema knows keeps its primitive type; an object, an array or a computed value is typed by TypeScript, from
+    // the store itself: it re-renders when any value under it changes.
+    const leaf = node.kind === "leaf" && walked.length === hook.path.length ? node : null;
+    const initialValue: ExprIR = leaf === null ? { kind: "NullLiteral" } : leaf.type === "number" ? { kind: "NumberLiteral", value: leaf.initial as number } : leaf.type === "string" ? { kind: "StringLiteral", value: leaf.initial as string } : { kind: "BooleanLiteral", value: leaf.initial as boolean };
+    const type: TypeIR = leaf === null ? { kind: "SourceType", text: `ReturnType<typeof ${definition.name}.getState>${hook.path.map((k) => `[${JSON.stringify(k)}]`).join("")}` } : { kind: "Primitive", name: leaf.type };
     state.push({ kind: "State", id, name: hook.valueName, type, initialValue, globalKey: hook.path.join(".") });
     this.stateTypes.set(id, type);
     hooks.push({ kind: "UseState", state: id, setterName: null, span: this.span(hook.declaration) });

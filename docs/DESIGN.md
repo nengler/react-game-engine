@@ -1182,10 +1182,18 @@ const hp = useGame((s) => s.player.hp);          const hurt = useGame((s) => s.h
 **Access.** `const hp = useGame((s) => s.player.hp)` returns the value, exactly as in Zustand. A component imports the
 store (`import { useGame } from "./GameState.ts"`; the only thing it may import from a relative `.ts` module,
 `RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. The selector must be a **plain path**
-from its parameter: that is all the compiler resolves, and it is what makes subscriptions exact. A component reads
-**leaves**: a path that names an object is an error, and a typo is `RGE1108` with the nearest key at the level it
-went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`). `hp` then behaves as `useState` state
-does: a snapshot of the last render, usable in JSX and handlers, with the leaf's type.
+from its parameter: that is all the compiler resolves, and it is what makes subscriptions exact. A typo is `RGE1108`
+with the nearest key at the level it went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`).
+`hp` then behaves as `useState` state does: a snapshot of the last render, usable in JSX and handlers, with the leaf's
+type.
+
+**Objects and arrays** (decided 2026-11-11). A path may name an object or an array as well as a leaf:
+`const player = useGame((s) => s.player)` and then `player.hp` in JSX or a handler, or
+`const enemies = useGame((s) => s.enemies)` and `{enemies.map((e) => <Enemy key={e.id} … />)}`. Its type is TypeScript's,
+written into the generated code as `ReturnType<typeof useGame.getState>["player"]`, so a wrong member is a type error.
+The component re-renders when **any value under the path** changes (the store tells the reader of `player` when
+`player.hp` changes), and not when an equal copy is set: values are still compared leaf by leaf, arrays by index.
+Treat what you select as read-only, and change it with `set`, as with `useState`.
 
 **Update.** The way Zustand updates is `set`, inside the store: `set(partial)` or `set((state) => partial)`, and, as in
 Zustand, the partial is **shallow-merged**, so a nested object is replaced as a whole (spread the rest, as `hurt`
@@ -1202,7 +1210,9 @@ under QuickJS, so TypeScript infers every type from it, and there is no separate
 compiler also *reads* it (it never runs it) to know the state tree and the action names. For that, the creator must be
 an arrow function or function that returns an object literal, whose entries are number, string or boolean literals
 (a negative number is fine; a leaf's type is its literal's, so `0` is a `number`), nested objects of those, and, at the
-top level, functions (the actions). Anything else is `RGE1109`. Arrays are not supported yet. Keys have no dots.
+top level, functions (the actions). Any other value (an array, `newRun()`, a constant) is kept as a *value*: the
+compiler checks paths down to it and leaves the rest to TypeScript. Spreads and computed keys are `RGE1109`. Keys have
+no dots.
 
 **Semantics.** Every `set` compares the old and new state leaf by leaf (a function is not a leaf) and marks dirty every
 mounted component that reads a leaf that changed, and only those: a replaced `player` object does not re-render the

@@ -17,7 +17,7 @@ export * from "./diagnostics/diagnostics.ts";
 export { analyzeSourceFile, AUTHORING_HOOKS, AUTHORING_TYPES, type PropsAnalysis, type TypeDeclarationAnalysis, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
 export { generateModule, type GeneratorOptions } from "./generator/generator.ts";
-export { parseGameState, type GameStateDefinition, type GameStateLeaf, type GameStateNode, type GameStateSchemaResult } from "./gamestate/schema.ts";
+export { parseGameState, type GameStateDefinition, type GameStateEntry, type GameStateLeaf, type GameStateNode, type GameStateValue, type GameStateSchemaResult } from "./gamestate/schema.ts";
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
 export { constantValue, exportedComponents, moduleSchemas, prefabSchema, type JsonValue, type PrefabPropSchema, type PrefabSchema } from "./prefabs/prefabs.ts";
 export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
