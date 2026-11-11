@@ -14,7 +14,7 @@ interface ShotProps {
 /** A shot in the air: a bolt's dot or a mortar shell flying from the tower to where it lands (the shell in an arc), or the ring a frost pulse spreads. */
 export function Shot({ kind, x, y, tx, ty, t, flight, radius }: ShotProps) {
   const k = Math.min(t / flight, 1);
-  const arc = kind === "mortar" ? -Math.sin(k * 3.14159) * 14 : 0;
+  const arc = kind === "mortar" ? -Math.sin(k * Math.PI) * 14 : 0;
   return (
     <Entity name="Shot" transform={{ x: x + (tx - x) * k, y: y + (ty - y) * k + arc }}>
       {kind === "frost" ? (

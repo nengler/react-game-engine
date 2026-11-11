@@ -26,10 +26,7 @@ export interface Ui {
   /** The panel shows that pad's build menu or upgrade panel. */
   readonly open: boolean;
   readonly speed: 1 | 2;
-  readonly paused: boolean;
 }
-
-export const START_UI: Ui = { cursor: 0, open: false, speed: 1, paused: false };
 
 /** The nearest pad from `from` in a direction (the pad must lie in that half-plane; the sideways distance counts double). Null when none. */
 export function padInDirection(pads: readonly PadSpot[], from: number, dx: number, dy: number): number | null {

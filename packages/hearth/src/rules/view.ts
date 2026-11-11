@@ -3,28 +3,12 @@ import { refundOf } from "./economy.ts";
 import type { TowerKind } from "./towers.ts";
 import { statsOf, TOWERS, upgradeCost } from "./towers.ts";
 
-/** The pictures components pick, by name: components cannot hold constants or index a table in an expression, so the tables live here. */
-const TOWER_INDEX: Record<TowerKind, number> = { bolt: 0, mortar: 1, frost: 2 };
-
-/** A tower's frame in `tower_bases.png` and `barrels.png`: three levels to a row, a row per kind. */
-export function towerFrame(kind: TowerKind, level: number): number {
-  return TOWER_INDEX[kind] * 3 + level;
-}
-
-/** A tower's icon in `icons.png`. */
-export function iconOf(kind: TowerKind): number {
-  return TOWER_INDEX[kind];
-}
-
 /** How far a tower of this kind and level reaches. */
 export function rangeOf(kind: TowerKind, level: number): number {
   return statsOf(kind, level).range;
 }
 
-/** The three pips under a tower, one for each level it has. */
-export const PIPS: readonly number[] = [0, 1, 2];
-
-/** What the panel needs to know about the pad the cursor is on, worked out once per step so no component indexes the battle. */
+/** What the panel shows about the pad the cursor is on: `useGame((s) => focusOf(s.battle, s.cursor))`. */
 export interface Focus {
   readonly occupied: boolean;
   readonly title: string;

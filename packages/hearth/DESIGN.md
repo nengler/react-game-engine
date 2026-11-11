@@ -79,10 +79,11 @@ src/rules/     plain TypeScript, no engine: the whole simulation
   path.ts      the polyline and the markers; position-at-distance
   targeting.ts, towers.ts, enemies.ts, waves.ts, economy.ts, rng.ts
   ui.ts        intent (keys) → cursor moves, commands, speed
-  view.ts      what the panel reads: the focus of the cursor, frame numbers
+  view.ts      what the panel reads about the cursor's pad (focusOf), a tower's range
   controls.ts  the action map and readIntent(input)
   map.ts       the one map, read from the generated tilemap
 src/GameState.ts   screen, battle, cursor, panel, speed, pause; `act(intent, dt)` is the one place a step is taken
+src/theme.ts       the colours and icon frames, by name
 src/effects.ts     particle and sound stores; playEvents(events)
 src/*.tsx          Main, Title, Play, End, Field, EmptyPad, Tower, Barrel, RangeRing, LevelPips, MuzzleFlash,
                    Enemy, HealthBar, Shot, SidePanel, StatRow, BuildMenu, BuildOption, UpgradePanel, MenuButton, Modal, Panel, Label, Icon
@@ -104,11 +105,15 @@ the second game".
 
 | Feature | Where | State |
 | --- | --- | --- |
-| Spread props | `<Tower key={p.id} id={p.id} x={p.x} y={p.y} {...p.tower} />`, `<Enemy key={e.id} {...e} />`, `<Shot {...s} />` | built |
+| Spread props | `<Enemy key={e.id} {...e} />`, `<Shot {...s} />` (a `Tower` takes named props: spreading the whole tower passed its `cooldown`, which changes every step while it fires, so every firing tower re-rendered every step) | built |
 | Conditional inside a list's map | `pads.map((p) => p.tower ? <Tower/> : <EmptyPad/>)`, `shots.map((s) => s.live && <Shot/>)` | built |
 | Forwarding `{children}` | `Modal` → `Panel` → its column | built |
 | Children on list items | `TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)` | built (flat children only) |
 | Context | one value per tower for `Barrel`, `RangeRing`, `LevelPips`, `MuzzleFlash` | **not built, not needed**: each takes two or three props from `Tower` |
+| Computed selectors | `useGame((s) => s.cursor === id)` in `Tower`/`EmptyPad`, `useGame((s) => focusOf(s.battle, s.cursor))` in `UpgradePanel` | built after review |
+| Constants and index reads in components | `ROW[kind] * 3 + level` in `Tower`, `ICON[d.kind]` in `BuildMenu`, `WALKS` in `Enemy`, `Math.PI` in `Shot` | built after review |
+| A component as the root | `BuildMenu` and `UpgradePanel` return `<Panel>`; `MuzzleFlash` returns `on ? <Sprite/> : null` | built after review |
+| Functions passed whole | `onPress={resume}`, `onPress={startWave}`; `MenuButton`'s `<Flex onPress={onPress}>` | built after review |
 
 ## Performance
 

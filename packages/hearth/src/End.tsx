@@ -1,8 +1,9 @@
-import { Flex, Hud, useInput } from "@rge/runtime/jsx";
+import { Hud, useInput } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
 import { MenuButton } from "./MenuButton.tsx";
 import { Modal } from "./Modal.tsx";
+import { COLOR } from "./theme.ts";
 
 interface EndProps {
   won: boolean;
@@ -11,8 +12,7 @@ interface EndProps {
 /** The end of a run: a modal over the field saying how it went, and a way back to the title. */
 export function End({ won }: EndProps) {
   const toTitle = useGame((s) => s.toTitle);
-  const lives = useGame((s) => s.battle.lives);
-  const wave = useGame((s) => s.battle.wave);
+  const { lives, wave } = useGame((s) => s.battle);
 
   useInput((input) => {
     if (input.pressed("confirm")) {
@@ -22,14 +22,12 @@ export function End({ won }: EndProps) {
 
   return (
     <Hud>
-      <Flex direction="column" alignItems="center" justifyContent="center" width="grow" height="grow">
-        <Modal title={won ? "THE HEARTH HOLDS" : "THE HEARTH FELL"}>
-          <Label text={won ? `LIVES LEFT ${lives}` : `REACHED WAVE ${wave}`} color={won ? "#7de37a" : "#e04a5a"} />
-          <MenuButton onPress={() => toTitle()}>
-            <Label text="Z TITLE" />
-          </MenuButton>
-        </Modal>
-      </Flex>
+      <Modal title={won ? "THE HEARTH HOLDS" : "THE HEARTH FELL"}>
+        <Label text={won ? `LIVES LEFT ${lives}` : `REACHED WAVE ${wave}`} color={won ? COLOR.good : COLOR.lives} />
+        <MenuButton onPress={toTitle}>
+          <Label text="Z TITLE" />
+        </MenuButton>
+      </Modal>
     </Hud>
   );
 }

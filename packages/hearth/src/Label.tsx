@@ -1,4 +1,5 @@
 import { Text } from "@rge/runtime/jsx";
+import { COLOR } from "./theme.ts";
 
 interface LabelProps {
   text: string;
@@ -7,7 +8,7 @@ interface LabelProps {
 }
 
 /** A line of text in the game's bitmap font: what every screen and the HUD write with. */
-export function Label({ text, color = "#fff1d6", size = 8 }: LabelProps) {
+export function Label({ text, color = COLOR.text, size = 8 }: LabelProps) {
   return (
     <Text font="font.png" size={size} color={color}>
       {text}

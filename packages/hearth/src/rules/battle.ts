@@ -1,4 +1,4 @@
-import { FLASH, HP_PER_WAVE, LANE_SPREAD, START_GOLD, START_LIVES, TRACER, WAVE_BONUS } from "./constants.ts";
+import { FLASH, HP_PER_WAVE, LANE_SPREAD, MUZZLE, START_GOLD, START_LIVES, TRACER, WAVE_BONUS } from "./constants.ts";
 import { buy, sell, upgrade, type Denied } from "./economy.ts";
 import { ENEMIES, type EnemyKind } from "./enemies.ts";
 import { pathAt, type BattleMap } from "./path.ts";
@@ -34,8 +34,8 @@ export interface Tower {
   readonly cooldown: number;
   /** Radians, pointing at its target (it keeps the last one). */
   readonly angle: number;
-  /** Battle time of the last shot, -1 for never. */
-  readonly firedAt: number;
+  /** Seconds its muzzle flash still shows, counting down from `MUZZLE` after a shot (like an enemy's `flash`). */
+  readonly flash: number;
   /** Gold put into it: the price and its upgrades. */
   readonly spent: number;
 }
@@ -231,10 +231,10 @@ export function stepBattle(b: Battle, dt: number, commands: readonly Command[], 
     const target = pickTarget(p.x, p.y, stats.range, enemies);
     let cooldown = Math.max(0, t.cooldown - dt);
     const angle = target === null ? t.angle : Math.atan2(target.y - p.y, target.x - p.x);
-    let firedAt = t.firedAt;
+    let flash = Math.max(0, t.flash - dt);
     if (target !== null && cooldown <= 0) {
       cooldown = def.rate;
-      firedAt = time;
+      flash = MUZZLE;
       events.push({ type: "shot", kind: t.kind, x: p.x, y: p.y });
       if (t.kind === "bolt") {
         hurt(target.id, stats.damage);
@@ -252,7 +252,7 @@ export function stepBattle(b: Battle, dt: number, commands: readonly Command[], 
         shots.push({ id: nextId++, kind: "mortar", x: p.x, y: p.y, tx: target.x + rx.value * 3, ty: target.y + ry.value * 3, t: 0, flight: def.flight, damage: stats.damage, radius: stats.radius, live: true });
       }
     }
-    return cooldown === t.cooldown && angle === t.angle && firedAt === t.firedAt ? p : { ...p, tower: { ...t, cooldown, angle, firedAt } };
+    return cooldown === t.cooldown && angle === t.angle && flash === t.flash ? p : { ...p, tower: { ...t, cooldown, angle, flash } };
   });
 
   // Damage lands; the dead pay out.

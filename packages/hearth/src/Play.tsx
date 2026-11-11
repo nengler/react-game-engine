@@ -14,13 +14,8 @@ import { readIntent } from "./rules/controls.ts";
 
 /** The play screen: the field with its pads, towers, enemies and shots, and over it the side panel and, when paused, a menu. */
 export function Play() {
-  const pads = useGame((s) => s.battle.pads);
-  const enemies = useGame((s) => s.battle.enemies);
-  const shots = useGame((s) => s.battle.shots);
-  const paused = useGame((s) => s.paused);
-  const act = useGame((s) => s.act);
-  const resume = useGame((s) => s.resume);
-  const toTitle = useGame((s) => s.toTitle);
+  const { pads, enemies, shots } = useGame((s) => s.battle);
+  const { paused, act, resume, toTitle } = useGame((s) => s);
 
   // The one place the battle is stepped: what the keys ask for, run through the rules.
   useUpdate((dt, input) => {
@@ -30,7 +25,13 @@ export function Play() {
   return (
     <Entity name="Play">
       <Field />
-      {pads.map((p) => (p.tower ? <Tower key={p.id} id={p.id} x={p.x} y={p.y} {...p.tower} /> : <EmptyPad key={p.id} {...p} />))}
+      {pads.map((p) =>
+        p.tower ? (
+          <Tower key={p.id} id={p.id} x={p.x} y={p.y} kind={p.tower.kind} level={p.tower.level} angle={p.tower.angle} flash={p.tower.flash} />
+        ) : (
+          <EmptyPad key={p.id} id={p.id} x={p.x} y={p.y} />
+        ),
+      )}
       {enemies.map((e) => (
         <Enemy key={e.id} {...e} />
       ))}
@@ -40,10 +41,10 @@ export function Play() {
         <SidePanel />
         {paused && (
           <Modal title="PAUSED">
-            <MenuButton onPress={() => resume()}>
+            <MenuButton onPress={resume}>
               <Label text="RESUME" />
             </MenuButton>
-            <MenuButton onPress={() => toTitle()}>
+            <MenuButton onPress={toTitle}>
               <Label text="QUIT TO TITLE" />
             </MenuButton>
           </Modal>

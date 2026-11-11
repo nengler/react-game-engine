@@ -42,9 +42,21 @@ describe("controls", () => {
     assert.deepEqual([states.at(-1)!.cursor, states.at(-1)!.open], [9, true]);
   });
 
-  it("a click on a build button builds, the gold is taken", () => {
-    // The build menu's first button is under the stat rows; its place comes from the layout, so click where the screenshot shows it.
+  it("the 1 key builds on the selected pad, the gold is taken", () => {
     const { states } = play(`confirm, _*5, ${pad(4)}, _*3, one, _*3`);
+    assert.equal(states.at(-1)!.towers, 1);
+    assert.equal(states.at(-1)!.gold, 70);
+  });
+
+  it("a click on a build button builds: the menu (a component whose root is <Panel>) is laid out in the side panel's column", () => {
+    // The build menu's buttons are the enabled buttons above the side panel's own three at the bottom; find the first by its drawing.
+    const open = play(`confirm, _*5, ${pad(4)}, _*3`).backend.lastFrame.records;
+    const buttons = open.filter((r) => r.op === "rect" && r.color === "#3b4468ff").map((r) => r as { x: number; y: number; width: number; height: number });
+    buttons.sort((a, b) => a.y - b.y);
+    assert.equal(buttons.length, 6, "three to build, three of the side panel");
+    const bolt = buttons[0]!;
+    assert.equal(bolt.width, 80 - 4 * 2 - 4 * 2, "it grows to the panel's column, through BuildMenu");
+    const { states } = play(`confirm, _*5, ${pad(4)}, _*3, click@${Math.round(bolt.x + bolt.width / 2)},${Math.round(bolt.y + bolt.height / 2)}, _*3`);
     assert.equal(states.at(-1)!.towers, 1);
     assert.equal(states.at(-1)!.gold, 70);
   });

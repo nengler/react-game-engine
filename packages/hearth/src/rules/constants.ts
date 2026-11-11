@@ -2,11 +2,6 @@
 export const TILE = 10;
 export const FIELD_COLS = 24;
 export const FIELD_ROWS = 18;
-export const FIELD_W = FIELD_COLS * TILE;
-export const FIELD_H = FIELD_ROWS * TILE;
-export const SCREEN_W = 320;
-export const SCREEN_H = 180;
-export const PANEL_W = SCREEN_W - FIELD_W;
 
 /** The rules run in fixed steps of this many seconds (2× speed is two of them per engine step). */
 export const STEP = 1 / 60;
@@ -23,5 +18,7 @@ export const SELL_SHARE = 0.7;
 export const LANE_SPREAD = 3;
 /** Seconds an enemy shows its hit flash. */
 export const FLASH = 0.12;
+/** Seconds a tower's muzzle flash shows after a shot. */
+export const MUZZLE = 0.08;
 /** How long a shot's picture stays (a bolt's tracer, a frost ring). */
 export const TRACER = 0.12;

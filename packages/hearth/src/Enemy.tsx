@@ -1,6 +1,9 @@
 import { AnimatedSprite, Entity } from "@rge/runtime/jsx";
 import { HealthBar } from "./HealthBar.tsx";
 
+/** Each kind's four-frame walk in `enemies.png`, at its own pace. */
+const WALKS = { runner: { frames: "0-3", fps: 12 }, grunt: { frames: "4-7", fps: 8 }, brute: { frames: "8-11", fps: 5 } };
+
 interface EnemyProps {
   kind: "runner" | "grunt" | "brute";
   x: number;
@@ -20,7 +23,7 @@ export function Enemy({ kind, x, y, left, hp, maxHp, slow, flash }: EnemyProps) 
         sheet="enemies.png"
         frameWidth={14}
         frameHeight={14}
-        animations={{ runner: { frames: "0-3", fps: 12 }, grunt: { frames: "4-7", fps: 8 }, brute: { frames: "8-11", fps: 5 } }}
+        animations={WALKS}
         animation={kind}
         flipX={left}
         originX={7}

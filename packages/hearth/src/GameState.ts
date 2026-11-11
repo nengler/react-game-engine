@@ -4,7 +4,6 @@ import { newBattle, stepBattle, type Battle, type Command } from "./rules/battle
 import { MAP } from "./rules/map.ts";
 import { STEP } from "./rules/constants.ts";
 import { applyIntent, type Intent } from "./rules/ui.ts";
-import { focusOf, NO_FOCUS, type Focus } from "./rules/view.ts";
 import type { TowerKind } from "./rules/towers.ts";
 
 type Screen = "title" | "play" | "won" | "lost";
@@ -13,6 +12,7 @@ type Screen = "title" | "play" | "won" | "lost";
  * The game's shared state: which screen is showing, the whole battle as one object (the rules' state, replaced each step), and
  * the panel's cursor. The rules are in `rules/`; `act` is the one place a step of the battle is taken, and everything else
  * (a click on a pad, a button in the panel) is an action that changes the cursor or queues a command for the next step.
+ * What the panel shows about the cursor's pad is not kept here: components work it out with a selector, `focusOf(s.battle, s.cursor)`.
  */
 interface State {
   screen: Screen;
@@ -22,15 +22,12 @@ interface State {
   open: boolean;
   speed: 1 | 2;
   paused: boolean;
-  /** What the panel shows for the cursor's pad (see rules/view.ts), kept up to date each step. */
-  focus: Focus;
   /** Commands from clicks, waiting for the next step. */
   queue: readonly Command[];
   begin: () => void;
   toTitle: () => void;
   /** The mouse (or a touch) chose a pad. */
   select: (pad: number) => void;
-  close: () => void;
   build: (kind: TowerKind) => void;
   upgrade: () => void;
   sell: () => void;
@@ -42,23 +39,26 @@ interface State {
   act: (intent: Intent, dt: number) => void;
 }
 
+/** A new run on `screen`: a fresh battle, the cursor on the first pad, normal speed, nothing queued. */
+function freshRun(screen: Screen): Pick<State, "screen" | "battle" | "cursor" | "open" | "speed" | "paused" | "queue"> {
+  return { screen, battle: newBattle(MAP), cursor: 0, open: false, speed: 1, paused: false, queue: [] };
+}
 
 export const useGame = createGameState<State>()((set, get) => ({
+  // Written out, not `...freshRun("title")`: the compiler reads the state's shape from this object.
   screen: "title",
   battle: newBattle(MAP),
   cursor: 0,
   open: false,
   speed: 1,
   paused: false,
-  focus: NO_FOCUS,
   queue: [],
   begin: () => {
     sfx.play("click");
-    set({ screen: "play", battle: newBattle(MAP), cursor: 0, open: false, speed: 1, paused: false, focus: NO_FOCUS, queue: [] });
+    set(freshRun("play"));
   },
-  toTitle: () => set({ screen: "title", battle: newBattle(MAP), cursor: 0, open: false, speed: 1, paused: false, focus: NO_FOCUS, queue: [] }),
-  select: (pad) => set((s) => ({ cursor: pad, open: true, focus: focusOf(s.battle, pad) })),
-  close: () => set({ open: false }),
+  toTitle: () => set(freshRun("title")),
+  select: (pad) => set({ cursor: pad, open: true }),
   build: (kind) => set((s) => ({ queue: [...s.queue, { type: "build", pad: s.cursor, kind }] })),
   upgrade: () => set((s) => ({ queue: [...s.queue, { type: "upgrade", pad: s.cursor }] })),
   sell: () => set((s) => ({ queue: [...s.queue, { type: "sell", pad: s.cursor }] })),
@@ -69,12 +69,14 @@ export const useGame = createGameState<State>()((set, get) => ({
   act: (intent, dt) => {
     const s = get();
     if (s.screen !== "play") return;
+    // The pause key and the panel's buttons go through the same two actions.
     if (intent.pause) {
-      set({ paused: !s.paused });
+      if (s.paused) s.resume();
+      else s.pause();
       return;
     }
     if (s.paused) return;
-    const applied = applyIntent({ cursor: s.cursor, open: s.open, speed: s.speed, paused: s.paused }, intent, s.battle);
+    const applied = applyIntent({ cursor: s.cursor, open: s.open, speed: s.speed }, intent, s.battle);
     let battle = s.battle;
     const commands = [...s.queue, ...applied.commands];
     // The first fixed step of the frame takes the commands; at 2x speed a second one follows. With a fixed timestep dt is always STEP, so a
@@ -89,7 +91,6 @@ export const useGame = createGameState<State>()((set, get) => ({
       cursor: applied.ui.cursor,
       open: applied.ui.open,
       speed: applied.ui.speed,
-      focus: focusOf(battle, applied.ui.cursor),
       queue: [],
       screen: battle.status === "won" ? "won" : battle.status === "lost" ? "lost" : "play",
     });

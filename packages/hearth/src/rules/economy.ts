@@ -11,7 +11,7 @@ export function buy(gold: number, pad: Pad, kind: TowerKind): Deal {
   if (pad.tower !== null) return { ok: false, reason: "occupied" };
   const cost = TOWERS[kind].cost;
   if (gold < cost) return { ok: false, reason: "gold" };
-  const tower: Tower = { kind, level: 0, cooldown: 0.2, angle: -Math.PI / 2, firedAt: -1, spent: cost };
+  const tower: Tower = { kind, level: 0, cooldown: 0.2, angle: -Math.PI / 2, flash: 0, spent: cost };
   return { ok: true, gold: gold - cost, pad: { ...pad, tower } };
 }
 
