@@ -1,7 +1,7 @@
 /**
  * Plays the first rooms of the level from their replays against a recording backend and prints everything the player
  * did as one line of JSON (numbers rounded to 1e-9). It runs unchanged under Node and, bundled, under the Rust host
- * (QuickJS-ng): the two outputs must be identical, which `tools/check-game.ts` and `test/parity.test.ts` check.
+ * (QuickJS-ng): the two outputs must be identical, which `rge check` and `test/parity.test.ts` check.
  *
  *   node packages/kite/parity.ts
  */

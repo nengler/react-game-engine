@@ -67,12 +67,44 @@ jobs:
       - name: Package the demo with Node (V8) and run it
         run: |
           npm run package -- --engine node --headless
-          npm run package -- packages/demo/parity.ts parity --engine node --headless
+          npm run package -- --entry parity.ts --name parity --engine node --headless
           node packages/demo/parity.ts > /tmp/parity-node.json
           cd /tmp
-          "$GITHUB_WORKSPACE/dist/parity/parity" > /tmp/parity-packaged.json
+          "$GITHUB_WORKSPACE/packages/demo/dist/parity/parity" > /tmp/parity-packaged.json
           cmp /tmp/parity-node.json /tmp/parity-packaged.json
-          timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
+          timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
+
+  # The engine as an author outside this repository gets it: packed tarballs installed into a copy of games/bramble in a
+  # temporary folder, then `rge check`, `rge package --headless` and a run of the packaged game (tools/check-outside.ts). A
+  # relative import into packages/, a missing export or a file left out of a pack fails here. It needs librge and rge-host to
+  # pack @rge/native.
+  outside:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.18"
+          cache: npm
+      - run: npm ci
+      - run: npm run generate
+      - name: Note the compiler versions (they key the build cache)
+        id: toolchain
+        run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+      - name: Cache librge and the host build (raylib and QuickJS are most of it)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            native/build-headless
+            host/target
+          key: outside-headless-${{ steps.toolchain.outputs.id }}-${{ hashFiles('host/Cargo.lock', 'host/build.rs', 'native/CMakeLists.txt') }}
+          restore-keys: outside-headless-${{ steps.toolchain.outputs.id }}-
+      - run: npm run native:build:headless
+      - run: npm run host:build:headless
+      - run: npm run check:outside
 
   # The same library on the real OpenGL path (GLFW), against Mesa's software GL on a virtual display.
   native-desktop:
@@ -126,12 +158,12 @@ jobs:
           npm run package -- --engine quickjs
           cd /tmp
           # The game runs until its window closes, so stopping it after five seconds (status 124) is the pass.
-          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
+          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
       - name: Package the demo with Node (V8) and run it under a virtual display
         run: |
           npm run package -- --engine node
           cd /tmp
-          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
+          xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
 
   # The shipping host: Rust + QuickJS-ng, linked statically against librge on raylib's software renderer.
   # The parity test plays the demo for 60 scripted frames under Node and under the host and requires
@@ -173,4 +205,4 @@ jobs:
         run: |
           npm run package -- --engine quickjs --headless
           cd /tmp
-          timeout 5 "$GITHUB_WORKSPACE/dist/demo/demo" || test $? -eq 124
+          timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124

@@ -2,8 +2,8 @@
  * Render frames of a scripted run to PNG through the headless (software) build, and a contact sheet of them. For looking at
  * a room, an animation or a camera slide without a window.
  *
- *   npm run native:build:headless
- *   npm run screenshot -- packages/demo --script "right*30" --at 0,15,29 --out /tmp/shots
+ *   npm run native:build:headless   (in this repository; an installed game has librge from @rge/native)
+ *   rge screenshot packages/demo --script "right*30" --at 0,15,29 --out /tmp/shots
  *
  * The game folder holds `game.ts`, which exports `gameConfig` (what `run` takes) and may export `bindings` (the action names a
  * script may use, `jump`, `right`; see `parseInputScript`) and `screen` (how the canvas sits in the window, for `click@x,y`). The script is run with the folder as the working directory, so
@@ -24,7 +24,7 @@ import { pathToFileURL } from "node:url";
 import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@rge/player";
 import { contactSheet, encodePng, renderRun, type Pixels } from "@rge/player-node";
 
-const usage = 'usage: npm run screenshot -- <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N]';
+const usage = 'usage: rge screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N]';
 
 function enlarge(pixels: Pixels, scale: number): Pixels {
   if (scale <= 1) return pixels;
@@ -39,7 +39,7 @@ function enlarge(pixels: Pixels, scale: number): Pixels {
   return { width, height: pixels.height * scale, rgba };
 }
 
-async function main(argv: readonly string[]): Promise<number> {
+export async function screenshotCommand(argv: readonly string[]): Promise<number> {
   const positional: string[] = [];
   const flags = new Map<string, string>();
   for (let i = 0; i < argv.length; i++) {
@@ -91,5 +91,3 @@ async function main(argv: readonly string[]): Promise<number> {
   console.log(`${frames.length} frames run; wrote ${written.join(", ")} to ${out}`);
   return 0;
 }
-
-process.exitCode = await main(process.argv.slice(2));

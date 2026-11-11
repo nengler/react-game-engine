@@ -123,7 +123,7 @@ first, because it is the biggest gap and changes the draw path that M6 builds on
 - `findNativeLibrary` (`packages/player-node/src/ffi.ts`) looks only in `native/build*` beside the repository root, and
   `tools/package.ts` builds librge with CMake and the Rust host with cargo from the repository. An outside game has neither.
 
-**0.1 Packs that build.** *(Started 2026-11-11: `tools/pack.ts` and `npm run pack` pack `runtime`, `compiler`, `player` and `player-node`, and `packages/player-node/test/packs.test.ts` installs them into an empty project and imports every entry point. Still to do: `native` and `cli` packs, and `dev.ts` finding the compiler without a `.ts` path.)* `npm run pack` (`tools/pack.ts`) writes `dist/packs/rge-<name>-<version>.tgz` for `runtime`, `compiler`,
+**0.1 Packs that build.** *(Done 2026-11-11.)* `npm run pack` (`tools/pack.ts`) writes `dist/packs/rge-<name>-<version>.tgz` for `runtime`, `compiler`,
 `player`, `player-node`, `native` and `cli`.
 
 - For each package it makes a staging copy: JavaScript from esbuild (one file per source file, ESM, no bundling, so the
@@ -137,7 +137,7 @@ first, because it is the biggest gap and changes the draw path that M6 builds on
 - **Test:** `packages/cli/test/packs.test.ts` packs into a temporary folder, installs the tarballs into an empty project, and
   imports each entry point (`@rge/runtime/jsx`, `@rge/player`, `@rge/player-node`, `@rge/compiler`) under plain Node.
 
-**0.2 `@rge/native`: librge and the host, prebuilt.** A package with no code of its own beyond one `paths.js`:
+**0.2 `@rge/native`: librge and the host, prebuilt.** *(Done 2026-11-11: `packages/native`; `node tools/pack.ts --build` builds both flavors, desktop only if it can.)* A package with no code of its own beyond one `paths.js`:
 `lib/linux-x64/{desktop,headless}/librge.so` and `bin/linux-x64/{desktop,headless}/rge-host`, built by `npm run pack` from
 the CMake and cargo builds it already knows how to make. Only `linux-x64`: other platforms stay in "Not now".
 
@@ -146,7 +146,7 @@ the CMake and cargo builds it already knows how to make. Only `linux-x64`: other
 - The same applies to `rge-host` (`RGE_HOST_BIN`, then `@rge/native`, then `host/target/release`).
 - The ABI check at load already says clearly when the library and the player disagree.
 
-**0.3 `@rge/cli`: one command line.** A new package with bin `rge` that takes over `tools/check-game.ts`, `tools/package.ts`,
+**0.3 `@rge/cli`: one command line.** *(Done 2026-11-11: `packages/cli`; `tools/check-game.ts`, `package.ts` and `screenshot.ts` are gone, `tools/bundle.ts` is a shim over the CLI, and a packaged game now lands in the game's own `dist/<name>/`.)* A new package with bin `rge` that takes over `tools/check-game.ts`, `tools/package.ts`,
 `tools/bundle.ts`, `tools/screenshot.ts` and `packages/player-node/src/play.ts`. It runs in a game's folder, or the folder
 given as the first argument (`rge check packages/kite`).
 
@@ -173,7 +173,7 @@ given as the first argument (`rge check packages/kite`).
 - **Tests:** each command against a small fixture game in a temporary folder; `npm run check:kite` and `check:hearth` pass
   through it.
 
-**0.4 The template and `rge create`.** `packages/cli/template/`:
+**0.4 The template and `rge create`.** *(Done 2026-11-11.)* `packages/cli/template/`:
 
 - `package.json` (with `"rge"` and the `@rge/*` dependencies), `tsconfig.json`, `main.ts`, `game.ts` (bindings and screen),
   `src/Main.tsx` (a `<Game>`, a `<Screen>`, a `<Router>` with one route), `src/GameState.ts`, `src/rules/move.ts` with one
@@ -182,7 +182,7 @@ given as the first argument (`rge check packages/kite`).
   the tarballs, which is how everything is tested before anything is published.
 - **Test:** create, install and `rge check` in a temporary folder pass; the template's own test passes.
 
-**0.5 `games/bramble`, checked from outside.**
+**0.5 `games/bramble`, checked from outside.** *(Done 2026-11-11: `npm run check:outside` passes locally; the CI job `outside` is new and has not run yet.)*
 
 - `games/bramble` is made with `rge create`. It is **not** one of the workspaces (`packages/*`), and the root's `generate`,
   `test` and `typecheck` do not include it. Its `node_modules` is ignored by git.

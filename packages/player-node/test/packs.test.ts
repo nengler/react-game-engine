@@ -6,6 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { findNativeLibrary } from "../src/index.ts";
 import { packAll, rewriteSpecifiers } from "../../../tools/pack.ts";
 
 test("rewriteSpecifiers turns relative .ts imports into .js and leaves packages alone", () => {
@@ -36,12 +37,21 @@ test("the packs install into an empty project and every entry point imports unde
     execFileSync("mkdir", [project]);
     writeFileSync(join(project, "package.json"), JSON.stringify({ name: "installed", private: true, type: "module" }));
     execFileSync("npm", ["install", "--no-audit", "--no-fund", ...tarballs], { cwd: project, stdio: "pipe" });
-    const entries = ["@rge/runtime", "@rge/runtime/jsx", "@rge/runtime/jsx-runtime", "@rge/player", "@rge/player-node", "@rge/compiler"];
+    const entries = ["@rge/runtime", "@rge/runtime/jsx", "@rge/runtime/jsx-runtime", "@rge/player", "@rge/player-node", "@rge/compiler", "@rge/native"];
     writeFileSync(
       join(project, "check.mjs"),
       `const out = {};\nfor (const s of ${JSON.stringify(entries)}) out[s] = Object.keys(await import(s)).length;\nconsole.log(JSON.stringify(out));\n`,
     );
     const counts = JSON.parse(execFileSync("node", ["check.mjs"], { cwd: project, encoding: "utf8" })) as Record<string, number>;
+    // An installed game has no repository: librge comes from @rge/native, and loads (the ABI check passes).
+    if (findNativeLibrary("headless") !== null) {
+      writeFileSync(
+        join(project, "native.mjs"),
+        `import { findNativeLibrary, loadNative, checkAbi } from "@rge/player-node";\nconst path = findNativeLibrary("headless");\ncheckAbi(loadNative(path));\nconsole.log(path);\n`,
+      );
+      const path = execFileSync("node", ["native.mjs"], { cwd: project, encoding: "utf8", env: { ...process.env, RGE_NATIVE_LIB: "" } }).trim();
+      assert.ok(path.includes(join("node_modules", "@rge", "native", "lib")), `librge came from ${path}`);
+    }
     for (const entry of entries) assert.ok((counts[entry] ?? 0) > 0, `${entry} exports nothing`);
   } finally {
     rmSync(dir, { recursive: true, force: true });

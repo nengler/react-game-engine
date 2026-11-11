@@ -6,9 +6,10 @@
 // import.meta.url stay as they are), .d.ts from tsc, and a package.json whose exports name the built files. The workspace
 // keeps exporting source; nothing here changes how Kite, Hearth or the tests run.
 //
-//   node tools/pack.ts [--out <dir>] [package ...]     (default: dist/packs, every package below)
+//   node tools/pack.ts [--out <dir>] [--build] [package ...]     (default: dist/packs, every package below)
+//   --build builds librge and rge-host first (headless always, desktop if it can); without it, @rge/native ships what is built.
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +18,67 @@ import { transformSync } from "esbuild";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** The packages a game installs. `native` and `cli` join them in M0.2 and M0.3. */
-export const PACKABLE = ["runtime", "compiler", "player", "player-node"] as const;
+export const PACKABLE = ["runtime", "compiler", "player", "native", "player-node", "cli"] as const;
+
+type Flavor = "desktop" | "headless";
+const platform = `${process.platform}-${process.arch}`;
+const libName = process.platform === "win32" ? "rge.dll" : process.platform === "darwin" ? "librge.dylib" : "librge.so";
+const hostName = process.platform === "win32" ? "rge-host.exe" : "rge-host";
+
+/** Where the CMake and cargo builds put librge and rge-host for a flavor. */
+const BUILDS: Record<Flavor, { lib: string[]; host: string }> = {
+  desktop: { lib: ["native/build"], host: "host/target/release" },
+  headless: { lib: ["native/build-headless"], host: "host/target-headless/release" },
+};
+
+function find(candidates: string[], file: string): string | null {
+  for (const dir of candidates) {
+    for (const sub of ["", "Release"]) {
+      const path = join(ROOT, dir, sub, file);
+      if (existsSync(path)) return path;
+    }
+  }
+  return null;
+}
+
+/**
+ * Build librge and rge-host for a flavor from the repository's CMake and cargo setups. The headless flavor (raylib's
+ * software renderer: no window, no GPU, no system libraries) is what CI and `rge package --headless` need; the desktop
+ * one needs the platform's windowing libraries, so a failure there is a warning, not an error.
+ */
+export function buildNative(flavor: Flavor): void {
+  const run = (command: string, args: string[], env: NodeJS.ProcessEnv = process.env): void => {
+    execFileSync(command, args, { cwd: ROOT, stdio: "inherit", env });
+  };
+  const folder = flavor === "headless" ? "native/build-headless" : "native/build";
+  run("cmake", ["-S", "native", "-B", folder, ...(flavor === "headless" ? ["-DRGE_PLATFORM=Memory"] : [])]);
+  run("cmake", ["--build", folder, "-j", "--target", "rge"]);
+  const cargo = ["build", "--release", "--manifest-path", "host/Cargo.toml", ...(flavor === "headless" ? ["--features", "headless"] : [])];
+  run("cargo", cargo, flavor === "headless" ? { ...process.env, CARGO_TARGET_DIR: join(ROOT, "host/target-headless") } : process.env);
+}
+
+/** Copy the built librge and rge-host for each flavor that exists into the staged `@rge/native`. Returns what it shipped. */
+function addBinaries(stage: string): string[] {
+  const shipped: string[] = [];
+  for (const flavor of ["desktop", "headless"] as const) {
+    const lib = find(BUILDS[flavor].lib, libName);
+    // host/target/release is whatever `cargo build` last built there (a headless build, if `host:build:headless` ran last), so
+    // it only counts as the desktop host when a desktop librge exists too.
+    // Conversely a headless host may be there (`host:build:headless`) with no desktop librge, so it is shipped as the headless one.
+    const desktopLib = find(BUILDS.desktop.lib, libName);
+    const candidates = flavor === "headless" ? [BUILDS.headless.host, ...(desktopLib === null ? [BUILDS.desktop.host] : [])] : [BUILDS.desktop.host];
+    const host = flavor === "desktop" && lib === null ? null : find(candidates, hostName);
+    for (const [kind, from, name] of [["lib", lib, libName], ["bin", host, hostName]] as const) {
+      if (from === null) continue;
+      const to = join(stage, kind, platform, flavor, name);
+      mkdirSync(dirname(to), { recursive: true });
+      cpSync(from, to);
+      chmodSync(to, 0o755);
+      shipped.push(`${kind}/${platform}/${flavor}/${name}`);
+    }
+  }
+  return shipped;
+}
 
 type Json = Record<string, unknown>;
 
@@ -97,7 +158,8 @@ export function stagePackage(name: string, staging: string): string {
       Object.entries(pkg.bin as Record<string, string>).map(([bin, file]) => [bin, builtPath(file, ".js")]),
     );
   }
-  built.files = ["dist"];
+  built.files = name === "native" ? ["dist", "lib", "bin"] : name === "cli" ? ["dist", "template"] : ["dist"];
+  if (name === "cli") cpSync(join(source, "template"), join(stage, "template"), { recursive: true });
   writeFileSync(join(stage, "package.json"), `${JSON.stringify(built, null, 2)}\n`);
   return stage;
 }
@@ -145,6 +207,12 @@ export function packAll(outDir: string, names: readonly string[] = PACKABLE): st
   try {
     for (const name of names) {
       const stage = stagePackage(name, staging);
+      if (name === "native") {
+        const shipped = addBinaries(stage);
+        if (!shipped.some((file) => file.startsWith("lib/") && file.includes("/headless/"))) {
+          console.warn("pack: no headless librge found; run with --build (or npm run native:build:headless) first");
+        }
+      }
       const printed = execFileSync("npm", ["pack", "--json", "--pack-destination", outDir, "--silent"], {
         cwd: stage,
         encoding: "utf8",
@@ -163,9 +231,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const args = process.argv.slice(2);
   let out = join(ROOT, "dist", "packs");
   const names: string[] = [];
+  let build = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "--out") out = resolve(args[++i] ?? "");
+    else if (arg === "--build") build = true;
     else names.push(arg);
   }
   const chosen = names.length > 0 ? names : [...PACKABLE];
@@ -173,6 +243,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     if (!existsSync(join(ROOT, "packages", name, "package.json"))) {
       console.error(`pack: no package named ${name}`);
       process.exit(2);
+    }
+  }
+  if (build) {
+    buildNative("headless");
+    try {
+      buildNative("desktop");
+    } catch {
+      console.warn("pack: the desktop build failed (it needs the platform's window libraries); packing the headless one only");
     }
   }
   for (const tarball of packAll(out, chosen)) console.log(relative(ROOT, tarball));

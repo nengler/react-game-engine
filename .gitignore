@@ -2,6 +2,7 @@ node_modules/
 .test-output/
 native/build*/
 host/target/
+host/target-headless/
 host/dist/
 dist/
 # Compiler output: made by `npm run generate` (which npm test and npm run typecheck run first).

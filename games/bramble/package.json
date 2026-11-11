@@ -1,0 +1,25 @@
+{
+  "name": "bramble",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "rge": {
+    "name": "bramble"
+  },
+  "dependencies": {
+    "@rge/native": "0.0.0",
+    "@rge/player": "0.0.0",
+    "@rge/player-node": "0.0.0",
+    "@rge/runtime": "0.0.0"
+  },
+  "devDependencies": {
+    "@rge/cli": "0.0.0",
+    "@types/node": "^22.10.0"
+  },
+  "scripts": {
+    "build": "rge build",
+    "dev": "rge dev",
+    "check": "rge check",
+    "package": "rge package"
+  }
+}

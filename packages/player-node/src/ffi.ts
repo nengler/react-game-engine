@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import koffi from "koffi";
 import { KEYS, RGE_ABI_VERSION } from "@rge/player";
+import { nativeLibrary } from "@rge/native";
 
 /** `librge`, as plain functions. Pointer arguments are typed arrays; koffi copies them in (and, for the two output buffers, back out). */
 export interface Native {
@@ -47,13 +48,18 @@ function libraryNames(): string[] {
 export type BuildFlavor = "desktop" | "headless";
 
 /**
- * Where `librge` is, or null. `RGE_NATIVE_LIB` wins; otherwise the CMake build folders under `native/`:
- * `build` (a real window) and `build-headless` (the software renderer, for tests). `prefer` picks which
- * is tried first.
+ * Where `librge` is, or null. `RGE_NATIVE_LIB` wins; then the prebuilt one in `@rge/native` (an installed game has no
+ * repository); otherwise the CMake build folders under `native/`: `build` (a real window) and `build-headless` (the
+ * software renderer, for tests). `prefer` picks which flavor is tried first.
  */
 export function findNativeLibrary(prefer: BuildFlavor = "desktop", env: NodeJS.ProcessEnv = process.env): string | null {
   const fromEnv = env["RGE_NATIVE_LIB"];
   if (fromEnv) return existsSync(fromEnv) ? resolve(fromEnv) : null;
+  const flavors: BuildFlavor[] = prefer === "desktop" ? ["desktop", "headless"] : ["headless", "desktop"];
+  for (const flavor of flavors) {
+    const shipped = nativeLibrary(flavor);
+    if (shipped !== null) return shipped;
+  }
   const folders = prefer === "desktop" ? ["build", "build-headless"] : ["build-headless", "build"];
   for (const folder of folders) {
     for (const name of libraryNames()) {
