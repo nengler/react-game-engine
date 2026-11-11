@@ -21,8 +21,12 @@ export interface SourceAnalysis {
   readonly storeImports: readonly ImportAnalysis[];
   /** Functions imported from a relative `.ts` file (not named like a hook): components may call them and pass them as values. */
   readonly plainImports: readonly ImportAnalysis[];
+  /** Types imported from a relative `.ts` file (`import type { Tower } from "./rules/battle.ts"`), for props types and state types. */
+  readonly typeImports: readonly ImportAnalysis[];
   /** Top-level `interface` / `type` declarations, which a component's props type names. */
   readonly typeDeclarations: readonly TypeDeclarationAnalysis[];
+  /** Top-level constants and lower-case helper functions, which components read like plain imports. */
+  readonly moduleDeclarations: readonly ModuleDeclarationAnalysis[];
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
@@ -33,15 +37,21 @@ export interface ImportAnalysis {
   readonly isDefault: boolean;
   /** The specifier as written, e.g. `./WarningIcon.tsx`. */
   readonly module: string;
-  /** `import { type Child } from "@rge/runtime/jsx"`: a type, erased from the output (allowed from the authoring module only). */
+  /**
+   * `import { type Child } from "@rge/runtime/jsx"` or `import type { Tower } from "./rules/battle.ts"`: a type. One from the
+   * authoring module is erased; one from a `.ts` file is imported by the generated module as a type.
+   */
   readonly isTypeOnly: boolean;
+  /** `import type { Tower as TowerData }`: the name it has in its module, when it is renamed here. */
+  readonly importedName?: string;
   readonly node: Node;
 }
 
 /** Types the authoring module exports: written `import { type Child }`, never values. */
 export const AUTHORING_TYPES: readonly string[] = ["Child"];
 
-export type JsxRoot = JsxElement | JsxSelfClosingElement | JsxFragment;
+/** What a component returns: an element, a fragment, or (`open ? <Menu /> : null`, `ok && <X />`, `null`) an expression of them. */
+export type JsxRoot = JsxElement | JsxSelfClosingElement | JsxFragment | Expression;
 
 /** `interface EnemyProps { … }` or `type EnemyProps = { … }`. The transform reads its members for the props. */
 export interface TypeDeclarationAnalysis {
@@ -49,6 +59,16 @@ export interface TypeDeclarationAnalysis {
   readonly node: InterfaceDeclaration | TypeAliasDeclaration;
   /** The declaration as written, without `export`. */
   readonly text: string;
+}
+
+/** `const COLORS = { text: "#fff" };` or `function frameOf(kind: Kind): number { … }` at the top of a component file. */
+export interface ModuleDeclarationAnalysis {
+  readonly name: string;
+  readonly node: Node;
+  /** The declaration as written. */
+  readonly text: string;
+  /** Every identifier its text mentions. */
+  readonly reads: readonly string[];
 }
 
 /** A component's destructured props parameter: `function Enemy({ speed = 1, onDefeated }: EnemyProps)`. */
@@ -87,15 +107,20 @@ export interface ComponentAnalysis {
 
 /**
  * `const hp = useGame((s) => s.player.hp)`: a read of one path of the game state, or (`useGame((s) => s.collect)`) a
- * binding of one action. The selector is a plain property path: that is all the compiler resolves.
+ * binding of one action. The selector is a plain property path, or (`body`) any expression of the state, which subscribes to each
+ * path it reads. A destructuring statement makes one of these per name.
  */
 export interface UseStoreCallAnalysis {
   readonly kind: "useStore";
   /** The imported store the call is made on (`useGame`). */
   readonly storeName: string;
   readonly valueName: string;
-  /** The selector's path: `["player", "hp"]`. */
+  /** The selector's path: `["player", "hp"]`. Empty for a computed selector. */
   readonly path: readonly string[];
+  /** A computed selector's expression (`s.cursor === id`), or null for a plain path. */
+  readonly body: Expression | null;
+  /** The selector's parameter (`s`), which `body` reads the state through. */
+  readonly parameter: string;
   /** The selector's parameter, and the path's node, for diagnostics. */
   readonly selector: Node;
   readonly call: CallExpression;

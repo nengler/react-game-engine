@@ -80,6 +80,7 @@ export class ExpressionEmitter {
     const wrap = (s: string): string => (top ? s : `(${s})`);
     switch (e.kind) {
       case "PlainRef": return e.name;
+      case "ActionRef": return `${this.storeName}.getState().${e.name}`;
       case "ElementRead": return `this.${e.field}.${e.member}`;
       case "NumberLiteral": return String(e.value);
       case "StringLiteral": return JSON.stringify(e.value);
@@ -98,6 +99,8 @@ export class ExpressionEmitter {
       }
       case "RefRead": return `this.${this.refField(e.ref)}`;
       case "MemberRead": return `${this.expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
+      case "NonNull": return `${this.expr(e.expression)}!`;
+      case "IndexRead": return `${this.expr(e.object)}${e.optional ? "?." : ""}[${this.expr(e.index, true)}]`;
       case "ArrayLiteral": return `[${e.elements.map((el) => `${el.spread ? "..." : ""}${this.expr(el.value, true)}`).join(", ")}]`;
       case "ObjectLiteral":
         if (e.properties.length === 0) return "{}";

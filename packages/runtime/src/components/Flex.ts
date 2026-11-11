@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { PressableProps } from "./Pointer.ts";
 
 /** The main axis of a `<Flex>`. The manifest's `intrinsicLiterals` reads these lists, so the compiler cannot drift from them. */
 export const FLEX_DIRECTIONS = ["row", "column"] as const;
@@ -22,7 +23,7 @@ export type FlexAnchor = (typeof FLEX_ANCHORS)[number];
  */
 export type FlexSizing = number | "fit" | "grow" | `${number}%`;
 
-export interface FlexProps {
+export interface FlexProps extends Omit<PressableProps, "onPress"> {
   /** The main axis: children go left to right (`"row"`, the default) or top to bottom. */
   direction?: FlexDirection;
   /** Where children sit across the main axis. Default `"stretch"`. */
@@ -66,7 +67,7 @@ export interface FlexProps {
   offsetY?: number;
   /** A CSS colour: draw a filled rectangle behind the children, the size of the box. Default none. */
   background?: string;
-  /** Called when a press lands on the laid-out box (see `World.reportPress`). The box is the size it was laid out at, last frame. */
+  /** Called when a press lands on the laid-out box (see `World.reportPress`), or as `PressableProps` says. The box is the size it was laid out at, last frame. */
   onPress?: () => void;
 }
 
@@ -85,6 +86,12 @@ export class FlexBox {
   childMinimum: Float64Array[] = [new Float64Array(8), new Float64Array(8)];
   /** Where a leaf child's own drawing starts relative to its origin (a sprite drawn centred, say), per axis. */
   childOrigin: Float64Array[] = [new Float64Array(8), new Float64Array(8)];
+  /**
+   * The children layout places, in order: `children` itself, or (when one is `layoutContents`, see `GameObject`) `flat`, the
+   * children with each such child replaced by its own.
+   */
+  kids: readonly GameObject[] = [];
+  readonly flat: GameObject[] = [];
   /** 0 a leaf, 1 a `<Flex>`. */
   childKind = new Uint8Array(8);
   /** Indices of the children still taking part in sharing out space. */
@@ -145,6 +152,13 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   offsetX: number;
   offsetY: number;
   onPress: (() => void) | undefined;
+  onPointerEnter: (() => void) | undefined;
+  onPointerLeave: (() => void) | undefined;
+  pressKey: string | undefined;
+  focusable: boolean;
+  autoFocus: boolean;
+  onFocus: (() => void) | undefined;
+  onBlur: (() => void) | undefined;
   /** Layout's working numbers (see `FlexBox`); `box.size` is the size the box was laid out at, last frame. */
   readonly box = new FlexBox();
 
@@ -175,6 +189,13 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.offsetX = hostProps.offsetX ?? 0;
     this.offsetY = hostProps.offsetY ?? 0;
     this.onPress = hostProps.onPress;
+    this.onPointerEnter = hostProps.onPointerEnter;
+    this.onPointerLeave = hostProps.onPointerLeave;
+    this.pressKey = hostProps.pressKey;
+    this.focusable = hostProps.focusable ?? false;
+    this.autoFocus = hostProps.autoFocus ?? false;
+    this.onFocus = hostProps.onFocus;
+    this.onBlur = hostProps.onBlur;
   }
 
   /**
@@ -193,5 +214,11 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     const localX = (dx * cos + dy * sin) / t.scaleX;
     const localY = (dy * cos - dx * sin) / t.scaleY;
     return localX >= 0 && localX <= width && localY >= 0 && localY <= height;
+  }
+
+  /** The middle of the laid-out box, in its layer's coordinates (scale and rotation ignored). */
+  focusPoint(): { x: number; y: number } {
+    const t = this.worldTransform();
+    return { x: t.x + (this.box.size[0] as number) / 2, y: t.y + (this.box.size[1] as number) / 2 };
   }
 }

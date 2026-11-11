@@ -19,6 +19,7 @@ export function assertNever(value: never, what = "value"): never {
 export function childExpressions(e: ExprIR): readonly ExprIR[] {
   switch (e.kind) {
     case "PlainRef":
+    case "ActionRef":
     case "ElementRead":
     case "NumberLiteral":
     case "StringLiteral":
@@ -33,6 +34,10 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "PropertyRead":
     case "MemberRead":
       return [e.object];
+    case "IndexRead":
+      return [e.object, e.index];
+    case "NonNull":
+      return [e.expression];
     case "ArrayLiteral":
       return e.elements.map((el) => el.value);
     case "ObjectLiteral":

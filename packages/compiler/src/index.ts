@@ -66,6 +66,7 @@ export class Compiler {
   readonly #runtimeModule: string;
   readonly #manifest: RuntimeManifest;
   #gameState: GameStateDefinition | undefined;
+  #tilemapsModule: string | undefined;
   #hookResolver: HookResolver | null = null;
   #sourceFromOutput: string;
 
@@ -116,6 +117,7 @@ export class Compiler {
         requiredHostProps: this.#manifest.intrinsicRequired,
         intrinsicHooks: this.#manifest.intrinsicHooks,
         ...(this.#gameState ? { gameState: { name: this.#gameState.name, importFrom: this.#gameState.importFrom } } : {}),
+        ...(this.#tilemapsModule !== undefined ? { tilemapsModule: this.#tilemapsModule } : {}),
       });
       return { ok: true, fileName, ir: transformed.module, code, diagnostics };
     });
@@ -156,6 +158,14 @@ export class Compiler {
   /** Set the project's game state after construction: the CLI reads `GameState.ts` with this compiler's own parser first. */
   setGameState(definition: GameStateDefinition | undefined): void {
     this.#gameState = definition;
+  }
+
+  /**
+   * The generated `tilemaps.ts` (registering every map as it loads), as generated code imports it (`./tilemaps.ts`): a component
+   * that draws a `<Tilemap>` then imports it, so the maps are registered before the game starts without a `registerTilemaps` call.
+   */
+  setTilemapsModule(importFrom: string | undefined): void {
+    this.#tilemapsModule = importFrom;
   }
 
   close(): void {

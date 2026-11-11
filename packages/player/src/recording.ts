@@ -99,6 +99,8 @@ export interface RecordingOptions {
   readonly missingMusic?: Iterable<string>;
   /** The size `textureSize` reports for a texture path. Default 16 × 16. */
   readonly textureSizes?: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
+  /** Keep only this many of the latest drawn frames (default all): for a long scripted run that only looks at the game's state. */
+  readonly keepFrames?: number;
 }
 
 /**
@@ -131,11 +133,13 @@ export class RecordingBackend implements Backend {
   readonly #textures: string[] = [];
   readonly #sounds: string[] = [];
   readonly #missing: Set<string>;
+  readonly #keepFrames: number | undefined;
   readonly #missingSounds: Set<string>;
   readonly #textureSizes: Readonly<Record<string, { readonly width: number; readonly height: number }>>;
   readonly #queue: InputFrame[] = [];
 
   constructor(options: RecordingOptions = {}) {
+    this.#keepFrames = options.keepFrames;
     this.#missing = new Set(options.missingTextures);
     this.#missingSounds = new Set(options.missingSounds);
     this.#missingMusic = new Set(options.missingMusic);
@@ -233,6 +237,7 @@ export class RecordingBackend implements Backend {
     if (input.length < RGE_IN_LEN) throw new Error(`The input buffer needs ${RGE_IN_LEN} entries, not ${input.length}.`);
     if (keys.length < KEYS.length) throw new Error(`The keys buffer needs ${KEYS.length} entries, not ${keys.length}.`);
     this.frames.push({ clearColor: colorToHex(clearColor), records: this.#decode(records, length, texts) });
+    if (this.#keepFrames !== undefined && this.frames.length > this.#keepFrames) this.frames.splice(0, this.frames.length - this.#keepFrames);
 
     applyInputFrame(this.#queue.shift() ?? {}, input, keys, this.config?.width ?? 0, this.config?.height ?? 0);
   }

@@ -1,5 +1,7 @@
 import type { InputFrame } from "./recording.ts";
 import { KEY_INDEX } from "./protocol.ts";
+import type { ScreenFit } from "@rge/runtime";
+import { fitScreen } from "./screen.ts";
 
 /** A frame of a script: an `InputFrame` with every key list filled in. */
 export interface ScriptFrame extends InputFrame {
@@ -7,6 +9,8 @@ export interface ScriptFrame extends InputFrame {
   readonly down: string[];
   readonly pressed: string[];
   readonly released: string[];
+  /** The mouse in window pixels, once a script has used `click@` or `mouse@`; it stays where it was put, like a held key. */
+  readonly mouse?: { readonly x: number; readonly y: number };
 }
 
 /** What an action name in a script stands for: one key name or several (any of them held counts as the action). */
@@ -17,6 +21,12 @@ export interface ScriptOptions {
   readonly bindings?: InputBindings;
   /** Seconds each frame reports. Default 1/60. */
   readonly dt?: number;
+  /**
+   * How the game's canvas sits in the window, for `click@x,y` and `mouse@x,y`: those points are in the game's own pixels (the
+   * `<Screen>`'s size) and are turned into window points through the same fit the player uses. Without it a game pixel is a
+   * window pixel.
+   */
+  readonly screen?: { readonly width: number; readonly height: number; readonly windowWidth: number; readonly windowHeight: number; readonly fit?: ScreenFit };
 }
 
 /** The empty frame names: no key at all for that long, as in `_*10`. */
@@ -33,6 +43,8 @@ const IDLE_NAMES: ReadonlySet<string> = new Set(["_", "wait", "idle"]);
  *   no count is a tap: down for one frame. An item lasts as long as its longest term (at least one frame).
  * - `_`, `wait` or `idle` is nothing held: `_*10` waits ten frames.
  * - A name is an action from `bindings` (`jump`) or a key name (`ArrowRight`, `Z`, `PadA`).
+ * - `mouse@120,64` moves the mouse to that point of the game's canvas (and leaves it there); `click@120,64` moves it and taps
+ *   `MouseLeft` for one frame. Neither takes a count. See `ScriptOptions.screen` for the canvas-to-window mapping.
  *
  * So `right*20+dash` holds right for 20 frames and taps dash on the first of them.
  *
@@ -44,8 +56,15 @@ export function parseInputScript(script: string, options: ScriptOptions = {}): S
   const dt = options.dt ?? 1 / 60;
   const bindings = options.bindings ?? {};
   const perFrame: Set<string>[] = [];
+  const toWindow = (point: { x: number; y: number }): { x: number; y: number } => {
+    const screen = options.screen;
+    if (screen === undefined) return point;
+    const at = fitScreen(screen.width, screen.height, screen.windowWidth, screen.windowHeight, screen.fit ?? "contain");
+    return { x: at.left + point.x * at.scaleX, y: at.top + point.y * at.scaleY };
+  };
+  const mouseAt = new Map<number, { x: number; y: number }>();
   const items = script
-    .split(/[,\n]/)
+    .split(/\n|,(?![-\d])/) // a comma followed by a digit is inside a point: click@30,40
     .map((item) => item.trim())
     .filter((item) => item !== "");
   for (const item of items) {
@@ -53,18 +72,26 @@ export function parseInputScript(script: string, options: ScriptOptions = {}): S
     const length = Math.max(1, ...terms.map((term) => term.count));
     for (let f = 0; f < length; f++) {
       const held = new Set<string>();
-      for (const term of terms) if (f < term.count) for (const key of keysOf(term.name, bindings, item)) held.add(key);
+      for (const term of terms) {
+        if (f >= term.count) continue;
+        if (term.mouse !== undefined) {
+          if (term.click) held.add("MouseLeft");
+          if (f === 0) mouseAt.set(perFrame.length, toWindow(term.mouse));
+        } else for (const key of keysOf(term.name, bindings, item)) held.add(key);
+      }
       perFrame.push(held);
     }
   }
   const frames: ScriptFrame[] = [];
   let before: ReadonlySet<string> = new Set();
-  for (const down of perFrame) {
+  let mouse: { x: number; y: number } | undefined;
+  perFrame.forEach((down, index) => {
     const pressed = [...down].filter((key) => !before.has(key));
     const released = [...before].filter((key) => !down.has(key));
-    frames.push({ dt, down: [...down], pressed, released });
+    mouse = mouseAt.get(index) ?? mouse;
+    frames.push(mouse === undefined ? { dt, down: [...down], pressed, released } : { dt, down: [...down], pressed, released, mouse });
     before = down;
-  }
+  });
   return frames;
 }
 
@@ -76,9 +103,15 @@ export function scriptLength(script: string, options: ScriptOptions = {}): numbe
 interface Term {
   readonly name: string;
   readonly count: number;
+  /** For `click@x,y` and `mouse@x,y`: the canvas point. */
+  readonly mouse?: { readonly x: number; readonly y: number };
+  readonly click?: boolean;
 }
 
 function parseTerm(text: string, item: string): Term {
+  const point = /^(click|mouse)@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(text);
+  if (point !== null) return { name: point[1] as string, count: 1, mouse: { x: Number(point[2]), y: Number(point[3]) }, click: point[1] === "click" };
+  if (/^(click|mouse)@/.test(text)) throw new Error(`Cannot read '${text}' in the input script item '${item}': ${text.includes("*") ? "click@ and mouse@ take no count; repeat the item instead" : "expected click@x,y or mouse@x,y"}.`);
   const match = /^([A-Za-z_][A-Za-z0-9_]*)(?:\*(\d+))?$/.exec(text);
   if (match === null) throw new Error(`Cannot read '${text}' in the input script item '${item}': expected a name or name*count.`);
   const count = match[2] === undefined ? 1 : Number(match[2]);

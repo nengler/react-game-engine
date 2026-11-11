@@ -540,6 +540,35 @@ a callback reads the item.
 * **Immutable updates** are what make the list re-render: see "Arrays and
   records".
 
+### Conditionals inside the map (2026-11-11)
+
+The callback may return `cond && <El key … />`, `cond ? <El key … /> : null`, or `cond ? <A key={k} … /> : <B key={k} … />`:
+
+```tsx
+{pads.map((p) => (p.tower ? <Tower key={p.id} {...p.tower} id={p.id} /> : <EmptyPad key={p.id} {...p} />))}
+{shots.map((s) => s.live && <Shot key={s.id} {...s} />)}
+```
+
+`KeyedListChildIR` gains `condition` and `alternate`. With no `alternate` the list is the source filtered by the condition
+(`source.filter((s) => s.live)`): an item whose condition is false has no instance. With one, the item's instance is `element` while the
+condition is true and `alternate` while it is false, and **both branches need the same `key` expression** (otherwise `RGE1209`). The
+items map holds the union of the two classes, and a `#<field>Branches` map remembers which each key was built as. On render, a key whose
+branch flipped queues removal of the old instance and adds the new one at the same `(slot, position)`, with the item's current props; the
+reorder that follows uses the new instance. The branches in the generated code test the condition itself, not a stored flag, so that
+TypeScript narrows what it reads (`p.tower ? new Tower({ …p.tower })`). A fragment is still not a branch, and the index parameter cannot
+be used when the items are conditional (it would count the items left out). The `&&` form is a filter, so TypeScript does not narrow
+inside it: spread a non-null source there.
+
+### Children on list items (2026-11-11)
+
+`items.map((d) => <MenuButton key={d.kind}><Icon frame={d.icon} /><Label text={d.name} /></MenuButton>)`. The item's children are plain elements
+(no conditions, lists, `{children}` or children of their own) that may read the item and index like its props do (an `Item` dependency). The
+list's per-key record, which already held the item's current value for callbacks, also holds the children: `{ current: Item; kids: [Icon, Label] }`.
+When a key is new the generator makes the item, then each child (`const $c0 = new Icon(…)`), attaches them (`$item.attachPassedChild($c0, 0)` for a
+component item, `$item.addChild($c0, 0)` for a built-in) and stores them; on later renders it applies each child's props (and transform) from the
+record, so a child updates when the item's object changes. The children belong to the item's subtree, so they go with it when the item is removed.
+Not built: children on an item that switches (`cond ? <A/> : <B/>`), and conditions, lists or nested children inside the children.
+
 **Runtime.** Children are sorted by `(slot, order)`: `addChild(child, slot,
 order = 0)` and `queueAddChild(child, slot, order)` insert after every sibling
 with a lower slot, or the same slot and a lower or equal order.
@@ -602,8 +631,9 @@ relative to the container that holds `{children}`.
   The container is the root, a fragment, or a static `<Entity>` below it:
   not inside a condition, a list, a block passed to another component, or a
   built-in that cannot have children. A declared `children` that is never
-  rendered is an error. Forwarding to another component
-  (`<Box>{children}</Box>`) is not supported yet.
+  rendered is an error. `{children}` may also be the whole of the children
+  passed to another component (`<Box title={title}>{children}</Box>`), which
+  is "Forwarding" below.
 * IR: a `ChildrenSlot` child takes the slot's position among its siblings, so
   the siblings are attached with explicit slots (`addChild(child, 0)`,
   `addChild(footer, 2)`).
@@ -651,6 +681,28 @@ reset, so remounting builds them afresh.
 `queueReorderPassedChildren`, which add to the host at `(slot, order)` (see
 "Keyed lists"). The parent never needs the receiver's slot index, so a
 component from another file works.
+
+### Forwarding `{children}` (2026-11-11)
+
+```tsx
+function Modal({ title, children }: ModalProps) {
+  return <Flex float anchor="center" to="center"><Panel title={title}>{children}</Panel></Flex>;
+}
+```
+
+`Modal` does not hold what it is given: it hands each passed child to `Panel`, which holds it in its own slot (or hands it on again, so
+Modal → Panel → Flex resolves in a chain). The generated constructor says `this.passedChildrenForward = this.panel;` where it would
+say `passedChildrenHost` / `passedChildrenSlot`, and `GameObject`'s four passed-children methods delegate to the forward target when
+it is set (`acceptsPassedChildren` is true for either). The parent's `attachPassedChild`, queued adds, removals and reorders all end up
+in the innermost container, so static, conditional and list children all work through it.
+
+**The forwarded `{children}` must be the only child passed to the inner component** (decided 2026-11-11, option A of the plan's
+"Forwarded `{children}` beside other passed children"). `<Panel title={title}>{children}</Panel>` is allowed;
+`<Panel><Title/>{children}<Footer/></Panel>` is `RGE1202` ("must be the only child passed to it"). Why: all of a receiver's passed
+children share one slot and are sorted by one number (`order`), so a whole forwarded list cannot sit between two siblings. If a game
+needs it: first, allow `{children}` inside a wrapper `<Flex>` that is passed (a compiler-only change, no runtime cost), then order
+ranges (`position × 2²⁰ + i`) in `GameObject`. A forwarding component must itself be always present (not in a condition or a list or
+another component's children): otherwise `RGE1202`, as before.
 
 ## Prefabs and scenes
 
@@ -1181,11 +1233,21 @@ const hp = useGame((s) => s.player.hp);          const hurt = useGame((s) => s.h
 
 **Access.** `const hp = useGame((s) => s.player.hp)` returns the value, exactly as in Zustand. A component imports the
 store (`import { useGame } from "./GameState.ts"`; the only thing it may import from a relative `.ts` module,
-`RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. The selector must be a **plain path**
-from its parameter: that is all the compiler resolves, and it is what makes subscriptions exact. A typo is `RGE1108`
+`RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. A **plain path** from its parameter
+subscribes to exactly that path; any other expression is a computed selector (below). A typo is `RGE1108`
 with the nearest key at the level it went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`).
 `hp` then behaves as `useState` state does: a snapshot of the last render, usable in JSX and handlers, with the leaf's
 type.
+
+**Computed selectors** (2026-11-11, second-game finding 7). The selector may be any expression of the state:
+`const selected = useGame((s) => s.cursor === id)`, `const focus = useGame((s) => focusOf(s.battle, s.cursor))`,
+`useGame((s) => s.battle.pads[s.cursor]?.tower != null)`. Each path it reads (`s.cursor`, `s.battle`) becomes a snapshot of its
+own, `$cursor`, `$battle` (one per path, shared with a plain selector of the same path in the component), and the expression is
+a derived value over them, inlined where it is read like any `const` in the body. So the component re-renders when one of the paths
+it reads changes, and works the value out again then: coarser than Zustand, which compares the selector's result, but the same
+answer. A trailing `.length` (`s.enemies.length`) reads the array's snapshot, since the store reports an array's items, not its
+length; before this, `useGame((s) => s.enemies.length)` subscribed to a path nothing ever reported. An action read inside a
+computed selector is `RGE1301` ("select it by itself"), and `(s) => s` alone is still `RGE1103`.
 
 **Several values at once** (2026-11-11), as Zustand allows: `const { originX, room } = useGame((s) => s.run)` (a path,
 destructured), `const { a, b: c } = useGame((s) => ({ a: s.x, b: s.y.z }))` (an object literal of paths) and
@@ -1321,6 +1383,9 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
 - **`createSounds(entries)`** → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
   Every file is loaded when a sound sink is installed (`addSoundPreload`), so the first play does not hitch. Asset names in
   a `.ts` file are not checked at build time (only literals in components are).
+- **Time since mount is state: `const time = useTime()`** (2026-11-11). An engine-shipped hook like `useSquash`: a `useState(0)` that
+  a `useUpdate` adds `dt` to, so the component renders each update. For a blink or a bob (`time % 1 < 0.66`), where a game wrote
+  the clock out by hand.
 - **A shake is state: `const [shake, setShake] = useShake()`** (2026-11-11, replacing a `createShake()` object). The value is
   `{ strength, duration, elapsed? }`; `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, the hook's own update
   runs it down (`shakeOn`, the same object once over), and `<Camera shake={shake}>` draws it: the camera's offset is a pure
@@ -1484,6 +1549,32 @@ within the slot, as CSS's `transform` does. Both names are reserved members.
 
 `children` is passed between elements, `<Panel>…</Panel>`: see "Children".
 
+### Spread props (2026-11-11)
+
+`<Enemy key={e.id} {...e} />` and `<Box {...o} x={9} />`: on a **component** element an attribute may be a spread of any expression the
+compiler can read (state, a prop, the list item, a game-state selection). `PropIR` gains `SpreadPropIR { value, dependencies }`; the order
+among the props is kept, so a later prop wins, as in React. The generated code spreads for real: `new Enemy({ ...(e) })`, and a render
+sends `updateProps({ ...(e) })`. TypeScript checks the object against the props type, the source type-check reports a missing prop at the
+author's line, and the runtime's `applyProps` compares key by key, so a render marks the child dirty only when a value changed: in a list,
+only the items whose object was replaced (an immutable update) re-render. A spread that reads nothing is applied at construction only. When
+a spread is among the props, `updateProps` carries every value prop, in order, so a named prop after the spread still wins on update
+(callbacks are made once and are not re-sent). A spread in a list item reads the item and gets the `Item` dependency.
+
+Not supported: a spread onto a **built-in** (`<Shape {...p} />`): its render writes each prop to a field one by one, so a spread needs the
+keys, from the manifest's `intrinsicMembers`. It is `RGE1203` with that reason, until a game spreads onto a built-in (Hearth does not).
+`<Box x={5} {...o} />` is TypeScript's own error (`x` is overwritten) when `o` always has `x`.
+
+### Constants, helpers and index reads beside components (2026-11-11)
+
+Second-game finding 7. A component file may hold top-level `const` values and lower-case `function` helpers, as a React file
+does: `const ROW = { bolt: 0, mortar: 1, frost: 2 } as const;`, `function labelOf(kind, n) { … }`. The analyzer keeps each as a
+`ModuleDeclaration` (its text and the names it mentions), the generator copies it into the module before the components (importing
+what it reads from a `.ts` file or the runtime), and components read it like a plain import, in JSX, lists, derived values and
+handlers. One that holds JSX or reads the game state is `RGE1001` (that belongs in a component); `let` is `RGE1001` (a value that
+changes belongs in state). Render expressions may index (`ROW[kind] * 3 + level`, `pads[cursor]`, `found?.[i]`; `IndexRead`) and
+use TypeScript's `!` (`NonNull`, so the generated code type-checks as the source did). `Math.PI`, `Math.E` and `Math.SQRT2` are
+values, and `atan2`, `atan`, `tan`, `pow`, `hypot` and `trunc` join the allowed `Math` calls.
+
 ## Roots and component forms
 
 **Forms.** A component is a `function` declaration or a `const` arrow
@@ -1532,10 +1623,52 @@ like any component. Details:
   built-ins' sections list theirs): the manifest's `intrinsicMembers`, `RGE1103`.
 * Only containers (the manifest's `containerIntrinsics`, today `Entity` and `Camera`) may
   have JSX children; a child under a leaf such as a `Sprite`, `Collider` or `Pointer`, at the root or
-  anywhere, is `RGE1202`. A component as a root (`return <Other />`) is
-  `RGE1003`; a fragment nested as a child is an implicit `<Entity>`.
+  anywhere, is `RGE1202`. A fragment nested as a child is an implicit `<Entity>`. A component, a condition or `null` as the
+  root is "Component, condition and null roots" below.
+
+### Component, condition and null roots (2026-11-11)
+
+`return <Panel title="BUILD">…</Panel>`, `return on ? <Sprite …/> : null`, `return open && <Menu />` and `return null` are
+accepted (they were `RGE1003` / `RGE1002`; found by Hearth, second-game finding 8). The component's class extends the host
+intrinsic (`Entity`), holds that one child (or the condition's children, as `{…}` children are), and sets
+`override readonly layoutContents = true`. `GameObject.layoutContents` is CSS's `display: contents` for `<Flex>` layout: a
+`Flex` lays out such a child's children as its own (`FlexBox.kids`, flattened in `#measureChildren`; when no child is see-through,
+`kids` is `children` itself, so the no-allocation path is unchanged), and a `Flex` under one is not a layout root. So
+`BuildMenu` returning `<Panel>` inside the side panel's column still grows to the column's width. The wrapper sits at its
+parent's origin; a `transform` passed to such a component moves what it holds.
 
 **Element callbacks.** `<Pointer onPress={() => …} />` is the same mechanism with no parameters.
+
+**Keys that press things** (2026-11-11, from the second review of Hearth). `pressKey="wave"` on a `<Pointer>` or a `<Flex>` presses it
+(calls `onPress`) when that key or action is pressed, while it is mounted and not inert: the DOM's `accessKey`, so a button owns its
+shortcut and a key and a click take one path. `World.tick` does it before any `onInput`, over every `Pointer` and `Flex` in the world
+(scratch lists, so nothing is allocated per tick once warm). Every mounted pressable with that key is pressed.
+
+**Focus** (same day). `focusable` makes a pressable take the focus, as a DOM button does; `autoFocus` takes it on mount when nothing has
+it; `onFocus` / `onBlur` say so. Each tick the direction actions `left` `right` `up` `down` (the arrows and the d-pad when the controls
+have no such action: `InputState.isAction` tells) move it to the nearest focusable that way, measured from `focusPoint()` (a Pointer's or
+a laid-out box's middle; along the direction, plus twice the distance across, so a row before the next row), and `confirm` (Enter and PadA
+without one) presses the focused one. A click on a focusable one focuses it before pressing it. `World.focus(p)` / `World.focused` for
+code. One focused or removed, inert or no longer focusable, loses it; the next tick an `autoFocus` one may take it.
+
+**Small things the same review found.** `<Pointer originX originY>` places the area's origin as a Sprite's does (a pad's 10 × 10 area
+centred on it). A bitmap-font `<Text>` without a `size` is drawn at the font's own cell height (`Text.sized`; setting `size` to
+`undefined` goes back to that). `controls.label(action)` names the first key for a label (`"Space"`, `"Esc"`, `"Left"`). The generated
+`tilemaps.ts` registers its maps as it loads, and a component module that draws a `<Tilemap>` imports it, so a game needs no
+`registerTilemaps` call. A component may import types from a `.ts` file (`import type { Tower as TowerData } from "./rules/battle.ts"`,
+`import { type Kind }`); the generated module imports the ones it mentions as types.
+
+**Hover** (2026-11-11, second-game finding 11). `<Pointer>` and `<Flex>` take `onPointerEnter` and `onPointerLeave`, the DOM's
+`pointerenter` / `pointerleave`: each frame the player finds the topmost pressable under the mouse (last frame's draw order,
+the same search a press makes) and `World.reportHover` tells the one before it left and the new one it was entered; an inert one
+counts as none, and a mouse off the screen is over nothing. A `<Flex>` with only hover callbacks is collected for the mouse but
+lets a press through to what is under it. State is the component's: `onPointerEnter={() => setHovered(true)}`.
+
+**Functions passed whole** (2026-11-11, second-game finding 9). `onPress={resume}` where `resume` is a game-state action, and
+`<Flex onPress={onPress}>` where `onPress` is the component's own callback prop (or `props.onPress`): to a built-in, the
+compiler writes the arrow the author would have (`() => useGame.getState().resume()`, `() => this.props.onPress?.()`), with the
+parameters the manifest lists; to a component, an action is the store's own function (`ActionRef`), a static prop, since an action
+never changes. A sound or a setter is still not a value.
 
 **Collider callbacks.** `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`
 is a callback prop on a built-in, which the manifest lists in

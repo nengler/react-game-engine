@@ -22,6 +22,8 @@ export interface GeneratorOptions {
   readonly gameState?: { readonly name: string; readonly importFrom: string };
   /** The path from the generated files to the source folder, so `./transitions.ts` becomes `../src/transitions.ts`. Default `".."` + `/`: see `Compiler`. */
   readonly sourceFromOutput?: string;
+  /** The generated `tilemaps.ts`, imported for its registration by a module that draws a `<Tilemap>` (see `Compiler.setTilemapsModule`). */
+  readonly tilemapsModule?: string;
 }
 
 /**
@@ -39,9 +41,17 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
 
   const usage = { store: false, plain: new Set<string>() };
   const imports = collectImports(module, options.runtimeFunctions, usage, options.intrinsicHooks);
+  // What the file's own constants and helpers read: a function from a `.ts` file, a runtime function.
+  for (const declaration of module.moduleDeclarations) {
+    for (const name of declaration.reads) {
+      if (module.plainImports.some((i) => i.name === name)) usage.plain.add(name);
+      if (options.runtimeFunctions.has(name) && !imports.includes(name)) imports.push(name);
+    }
+  }
   if (imports.length > 0) {
     w.line(`import { ${imports.join(", ")} } from ${JSON.stringify(options.runtimeModule)};`);
   }
+  if (options.tilemapsModule !== undefined && imports.includes("Tilemap")) w.line(`import ${JSON.stringify(options.tilemapsModule)};`);
   if (usage.store) {
     if (!options.gameState) throw new Error("A component uses the game state, but the generator was given none.");
     w.line(`import { ${options.gameState.name} } from ${JSON.stringify(options.gameState.importFrom)};`);
@@ -52,6 +62,8 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
     const from = options.sourceFromOutput ?? "..";
     w.line(`import { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};`);
   }
+  // Types from .ts files (a props type may name one) are imported as types once the rest is written, those it mentions only.
+  const typesAt = w.toString().length;
   for (const [specifier, { defaultName, names }] of collectComponentImports(module)) {
     const clause = [defaultName, names.length > 0 ? `{ ${names.join(", ")} }` : null].filter((part) => part !== null).join(", ");
     w.line(`import ${clause} from ${JSON.stringify(specifier)};`);
@@ -59,6 +71,10 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
   for (const declaration of module.typeDeclarations) {
     w.blank();
     w.line(`export ${declaration.text}`);
+  }
+  for (const declaration of module.moduleDeclarations) {
+    w.blank();
+    for (const line of declaration.text.split("\n")) w.line(line);
   }
   for (const component of module.components) {
     w.blank();
@@ -69,7 +85,16 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
     }
   }
   emitPrefabs(module, w);
-  return w.toString();
+  const text = w.toString();
+  const body = text.slice(typesAt);
+  const typesByModule = new Map<string, string[]>();
+  for (const i of module.typeImports) {
+    if (!new RegExp(`\\b${i.name}\\b`).test(body)) continue;
+    (typesByModule.get(i.module) ?? typesByModule.set(i.module, []).get(i.module)!).push(i.importedName !== undefined ? `${i.importedName} as ${i.name}` : i.name);
+  }
+  const from = options.sourceFromOutput ?? "..";
+  const lines = [...typesByModule].map(([specifier, names]) => `import type { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};\n`).join("");
+  return text.slice(0, typesAt) + lines + body;
 }
 
 /**
@@ -112,7 +137,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
   const visitExpr = (expr: ExprIR): void =>
     walkExpr(expr, (e) => {
       if (e.kind === "Call" && e.callee.kind === "Function" && runtimeFunctions.has(e.callee.name)) values.add(e.callee.name);
-      if (e.kind === "Call" && e.callee.kind === "Action") usage.store = true;
+      if ((e.kind === "Call" && e.callee.kind === "Action") || e.kind === "ActionRef") usage.store = true;
       if (e.kind === "PlainRef") usage.plain.add(e.name);
       if (e.kind === "Call" && e.callee.kind === "Plain") usage.plain.add(e.callee.name.split(".")[0]!);
     });
@@ -129,6 +154,12 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
       if (child.kind === "KeyedListChild") {
         visitExpr(child.source);
         visitExpr(child.key);
+        if (child.condition) visitExpr(child.condition);
+        if (child.alternate) {
+          if (child.alternate.component.kind === "Intrinsic") values.add(child.alternate.component.name);
+          visitProps(child.alternate.props);
+          visitProps(child.alternate.transform);
+        }
       }
       visitProps(child.element.props);
       visitProps(child.element.transform);
@@ -183,12 +214,13 @@ function collectComponentImports(module: IRModule): Map<string, { defaultName: s
   const visit = (children: readonly ChildIR[]): void => {
     for (const child of children) {
       if (child.kind === "ChildrenSlot") continue;
-      const ref = child.element.component;
-      if (ref.kind === "Imported") {
-        const specifier = ref.module.replace(/\.tsx$/, ".ts");
-        if (!named.has(specifier)) named.set(specifier, new Set());
-        if (ref.isDefault) defaults.set(specifier, ref.name);
-        else named.get(specifier)!.add(ref.name);
+      for (const ref of [child.element.component, ...(child.kind === "KeyedListChild" && child.alternate ? [child.alternate.component] : [])]) {
+        if (ref.kind === "Imported") {
+          const specifier = ref.module.replace(/\.tsx$/, ".ts");
+          if (!named.has(specifier)) named.set(specifier, new Set());
+          if (ref.isDefault) defaults.set(specifier, ref.name);
+          else named.get(specifier)!.add(ref.name);
+        }
       }
       visit(child.element.children);
     }
@@ -219,6 +251,8 @@ class ComponentGenerator extends ElementEmitter {
       // Its `render()` writes only what differs and says what it wrote to (`markMoved`, `markChanged`), so the runtime does not
       // take every render for a change: the player keeps what it drew for a render that changed nothing, and for one that only moved it.
       w.line("protected override readonly reportsChanges = true;");
+      // Its root was another component or a condition: layout sees through it to what it holds.
+      if (c.root.layoutContents) w.line("override readonly layoutContents = true;");
       // Persistent state.
       for (const s of c.state) {
         if (s.globalKey !== undefined) {
@@ -257,9 +291,7 @@ class ComponentGenerator extends ElementEmitter {
         // A built-in's constructor may require a prop (a Sprite's `image`) that is dynamic here. `super()` runs before
         // state exists, so it gets a placeholder and its real value in the first `render()`, which the constructor runs.
         const required = this.requiredHostProps[c.root.component.name] ?? [];
-        const placeholders = c.root.props
-          .filter((p) => p.kind === "DynamicProp" && required.includes(p.name))
-          .map((p) => `${propertyKey(p.name)}: undefined as never`);
+        const placeholders = c.root.props.flatMap((p) => (p.kind === "DynamicProp" && required.includes(p.name) ? [`${propertyKey(p.name)}: undefined as never`] : []));
         const hostEntries = [...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`), ...placeholders];
         const host = hostEntries.length > 0 ? `{ ${hostEntries.join(", ")} }` : "{}";
         if (c.propsType) w.line(`super(${host}, props${defaultsObject ? `, ${defaultsObject}` : ""});`);
@@ -273,9 +305,14 @@ class ComponentGenerator extends ElementEmitter {
         this.emitStaticWiring(c.root.children, ROOT);
         const slot = findChildrenSlot(c.root.children, "this");
         if (slot) {
-          // Where a parent's children mount: the container holding `{children}`, and the slot's position among its children.
-          w.line(`this.passedChildrenHost = ${slot.host};`);
-          w.line(`this.passedChildrenSlot = ${slot.index};`);
+          if ("forward" in slot) {
+            // The children this component is given are passed on, whole, to the component that renders them.
+            w.line(`this.passedChildrenForward = ${slot.forward};`);
+          } else {
+            // Where a parent's children mount: the container holding `{children}`, and the slot's position among its children.
+            w.line(`this.passedChildrenHost = ${slot.host};`);
+            w.line(`this.passedChildrenSlot = ${slot.index};`);
+          }
         }
         if (hasRender) {
           w.line("this.render();");

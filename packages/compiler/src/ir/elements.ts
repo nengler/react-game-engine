@@ -43,6 +43,8 @@ export interface HostElementIR {
   /** `transform={{ x, y }}`: the instance's own transform. See `ElementIR.transform`. */
   readonly transform: readonly TransformPropIR[];
   readonly children: readonly ChildIR[];
+  /** The root was another component or a condition: the component is a container `<Flex>` layout sees through. */
+  readonly layoutContents?: boolean;
   readonly span: SourceSpan;
 }
 
@@ -119,7 +121,15 @@ export interface KeyedListChildIR {
    * list's generated fields (`enemyItems`, `#enemyOrder`).
    */
   readonly element: ElementIR;
-  /** What `source` reads: the list re-renders when one changes. */
+  /**
+   * A condition on the item, from `items.map((i) => cond && <El key … />)` or `items.map((i) => cond ? <A key … /> : <B key … />)`.
+   * With no `alternate`, an item for which it is false has no instance (as if filtered out). With one, `element` is the item's
+   * instance while it is true and `alternate` while it is false: the item's slot holds whichever matches, and a switch removes
+   * one and adds the other in the same position. Both branches have the same `key`.
+   */
+  readonly condition: ExprIR | null;
+  readonly alternate: ElementIR | null;
+  /** What `source` and `condition` read: the list re-renders when one changes. */
   readonly dependencies: readonly DependencyIR[];
 }
 
@@ -127,7 +137,7 @@ export interface KeyedListChildIR {
 // Props
 // ---------------------------------------------------------------------------
 
-export type PropIR = ValuePropIR | CallbackPropIR;
+export type PropIR = ValuePropIR | CallbackPropIR | SpreadPropIR;
 
 /** A prop that is a value: static (evaluated once) or dynamic (re-evaluated on render). */
 export type ValuePropIR = StaticPropIR | DynamicPropIR;
@@ -157,6 +167,19 @@ export interface CallbackPropIR {
   readonly name: string;
   /** Parameters are `Contextual`: their types come from the child. */
   readonly handler: FunctionIR;
+}
+
+/**
+ * `<Enemy {...e} />`: an object whose members are props of the component, in place among the named props (a later prop wins,
+ * as in React). Only on a component element: its generated code spreads for real, and the runtime compares the props key by key,
+ * so a render marks the child dirty only when a value changed. It depends on what the expression reads, like a dynamic prop.
+ */
+export interface SpreadPropIR {
+  readonly kind: "SpreadProp";
+  /** A spread has no name: this lets code that looks a prop up by name treat every prop alike. */
+  readonly name?: undefined;
+  readonly value: ExprIR;
+  readonly dependencies: readonly DependencyIR[];
 }
 
 // -- declared props (the receiving side) --------------------------------------

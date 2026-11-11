@@ -54,6 +54,12 @@ export class GameObject<P extends object = {}> {
    */
   readonly gameStateStore: GameStore | null = null;
   readonly gameStateKeys: readonly string[] = NO_KEYS;
+  /**
+   * True for an object that takes no part in `<Flex>` layout itself, like CSS's `display: contents`: a `<Flex>` above it lays out
+   * its children as if they were its own. A compiled component whose root is another component is one (`BuildMenu` rendering
+   * `<Panel>`), so the panel still grows to the column it sits in. Such an object should sit at its parent's origin.
+   */
+  readonly layoutContents: boolean = false;
   readonly children: GameObject[] = [];
   world: World | null = null;
   /**
@@ -122,29 +128,38 @@ export class GameObject<P extends object = {}> {
    */
   protected passedChildrenHost: GameObject | null = null;
   protected passedChildrenSlot = Infinity;
+  /**
+   * A component that writes `<Panel>{children}</Panel>` does not hold its children itself: it hands each one to the component
+   * that does (which may hand it on again), so what the outer parent passes ends up in the innermost container.
+   */
+  protected passedChildrenForward: GameObject | null = null;
 
-  /** Whether this component renders `{children}`: a scene (or a parent) may pass it children. */
+  /** Whether this component renders `{children}`, itself or through the component it forwards them to: a scene (or a parent) may pass it children. */
   get acceptsPassedChildren(): boolean {
-    return this.passedChildrenHost !== null;
+    return this.passedChildrenHost !== null || this.passedChildrenForward !== null;
   }
 
   /** Immediately attach a passed child, at `order` among the passed children (the slot of `{children}` is fixed). */
   attachPassedChild(child: GameObject, order: number): void {
+    if (this.passedChildrenForward !== null) return this.passedChildrenForward.attachPassedChild(child, order);
     this.#passedHost().addChild(child, this.passedChildrenSlot, order);
   }
 
   /** Queue a passed child to be attached when structure is next committed. */
   queueAttachPassedChild(child: GameObject, order: number): void {
+    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueAttachPassedChild(child, order);
     this.#passedHost().queueAddChild(child, this.passedChildrenSlot, order);
   }
 
   /** Queue a passed child to be detached when structure is next committed. */
   queueDetachPassedChild(child: GameObject): void {
+    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueDetachPassedChild(child);
     this.#passedHost().queueRemoveChild(child);
   }
 
   /** Queue a new order for the passed children (a keyed list passed as the whole of the children), see `queueReorder`. */
   queueReorderPassedChildren(children: readonly GameObject[]): void {
+    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueReorderPassedChildren(children);
     this.#passedHost().queueReorder(this.passedChildrenSlot, children);
   }
 

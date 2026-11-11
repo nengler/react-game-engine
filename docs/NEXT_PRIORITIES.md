@@ -30,7 +30,7 @@ Decided 2026-11-10. Once priority 5 lands, every ranked item above is done or de
 | --- | --- | --- | --- |
 | 6 | Play it on a real machine (the rest of priority 1) | Window feel, keys, the HUD, scaling and sound have never been tried by a person; sound has never been heard | \~1 day |
 | 7 | A real game: the first level of a precision platformer, and the engine features it needs | The demo is too small to find what is missing; the "Not now" table is waiting for a game to ask | \~4–6 weeks |
-| 7b | A second, small game in a different genre: a tower defense ([TOWER_DEFENSE_PLAN.md](TOWER_DEFENSE_PLAN.md)) | Kite hit no Tier 3 item and never measured finding 9; a game of lists, menus and many sprites tests both, so priority 8 describes a shape that has worked twice | \~3–4 weeks |
+| 7b | A second, small game in a different genre: a tower defense ([TOWER_DEFENSE_PLAN.md](TOWER_DEFENSE_PLAN.md)) (**built**, `packages/hearth`; four of five Tier 3 items built, see below) | Kite hit no Tier 3 item and never measured finding 9; a game of lists, menus and many sprites tests both, so priority 8 describes a shape that has worked twice | \~3–4 weeks |
 | 8 | Usable outside this repository | A game only builds as a workspace in this monorepo, and the docs are design notes, not a guide; this prepares for open-sourcing | \~1–2 weeks |
 
 **Order.** 6 can start now, alongside priority 5. 7 can start now too: a new game package mostly adds code, so it does not clash with the developer-loop work in the player, host and compiler, and the game is the first real user of hot reload and in-window errors. 8 waits until 5 settles, because it packages that loop, and until 7 and 7b have shown what a game's project layout looks like.
@@ -66,7 +66,7 @@ It lives in its own package beside `packages/demo`, and is written only through 
 
 - **A screenshot script** that renders a frame, or chosen frames of a scripted run, to PNG through the headless build, plus a contact sheet of a run, so an agent can look at a room, an animation or a camera slide.
 - **A headless harness** that takes a game and an input script and returns the game's state for each fixed step (the player's position and velocity, the room, deaths, pickups), so tests assert on behaviour such as jump height or reaching an exit, not on draw records.
-- **An input-script helper**, turning a short script such as `right*30, jump, right*20+dash` into input frames. The same format is the replay format for "every room can be finished" tests.
+- **An input-script helper**, turning a short script such as `right*30, jump, right*20+dash` into input frames. The same format is the replay format for "every room can be finished" tests. (Added in priority 7b: `click@120,64` moves the mouse to a point of the game's canvas and taps `MouseLeft`; `mouse@120,64` only moves it; see `ScriptOptions.screen`.)
 - **One check command per game** (for example `npm run check:<game>`) that compiles it, type-checks, runs its tests and the parity run, and prints a short pass or fail summary.
 
 The harness steps exactly one tick at a time, so once the fixed timestep lands, a run is repeatable and a replay is a trustworthy test. None of this tells an agent how the game *feels*; that is still priority 6.
@@ -156,6 +156,88 @@ waves, written the React way, so its lists, menus and panels hit the Tier 3 item
 `.map`, children on list items, forwarding `{children}`, context) for real reasons, and its last waves measure finding 9
 (many animated sprites). Each Tier 3 item is built when the game hits it, or recorded as not needed. It comes before
 priority 8.
+
+**Built 2026-11-11** in `packages/hearth` ("Hearth"; `npm run check:hearth`, `npm run play:hearth`, `npm run package:hearth`; its design note is
+`packages/hearth/DESIGN.md`). In the order of the plan: input scripts can click (`click@x,y`, `mouse@x,y`); the design note and the rules, with
+headless tests; the game written the React way with marked workarounds; the Tier 3 items the game hit, one commit each (spread props,
+conditionals in a list's `.map`, forwarding `{children}`, children on list items), each removing its workaround; art, sound, the balance tool and the wave
+replays; the two bench scenes and wave 10's frame time. **Not done:** context (below, recorded as not needed), a real-window and Node-engine package (`package:hearth -- --engine quickjs --headless` builds and starts;
+the window builds need GL dev packages this VM lacks), and nobody has played it in a window. `check:hearth` agrees between Node and the Rust host.
+
+### Findings from the second game
+
+What building Hearth found, and which of Kite's findings held a second time.
+
+**Tier 3, as planned:**
+
+1. **Spread props** were hit at once (`<Enemy key={e.id} {...e} />`) and are **built** for component elements: a `SpreadProp` in the IR, a real spread in the
+   generated constructor call and `updateProps`, tests that only the item whose object was replaced re-renders and that a named prop after a spread
+   wins. A spread onto a built-in is still a diagnostic (the game never wanted it). See DESIGN.md, "Spread props".
+2. **Conditionals inside a list's `.map`** were hit twice (a pad that is an `EmptyPad` or a `Tower`, and a shot that is `live`) and are **built**, both the `&&`
+   (an implicit filter) and the `? :` form (an item that switches class keeps its position; both branches need the same key). A limitation the game
+   found: the `&&` form is a filter, so TypeScript cannot narrow inside it (`p.tower && <Tower {...p.tower}/>` would not type-check); the `? :` form
+   narrows because the generated branches test the condition itself.
+3. **Forwarding `{children}`** was hit by the modal (`<Panel title={title}>{children}</Panel>`) and is **built**, with option A decided in the plan (the
+   forwarded `{children}` is the only child passed on). The game never wanted anything beside it. See DESIGN.md, "Forwarding".
+4. **Children on list items** were hit by the build menu (`TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)`, `RGE1209`), worked around for a while with one
+   component per item, and are **built** for the first cut: an item (a component or a built-in) may have plain child elements that read the item. Each item's children are made
+   with it, kept in the list's per-key record (`kids`) and given the item's current value on every render, attached with `attachPassedChild` (or `addChild` on a built-in), and go
+   with the item. Still rejected: a condition, a list, `{children}` or nested children inside an item's children, and children on a `? :` item that switches between two
+   elements. See DESIGN.md, "Children on list items".
+5. **Context was not needed, and is not built.** Each tower's `Barrel`, `RangeRing`, `LevelPips` and `MuzzleFlash` take two or three props from `Tower`, one level
+   of nesting; the only per-tower thing read deeper is the cursor, a store selector. The plan's reason to build it (one value per list item that a single
+   global store cannot hold without ids) did not arise at this size. Its row in "Not now" stays, with a sharper pull: a component tree three or more levels
+   deep passing the same props through.
+6. **Finding 9 (many animated sprites) measured, not a problem:** 200 animated, styled sprites re-rendered every step take 2.2 ms under QuickJS (0.2 ms under V8); wave
+   10 of Hearth (109 enemies) takes a mean of 6.7 ms and a 99th percentile of 15 ms per step under QuickJS. The "moved as a block" fast path for styled sprites was not
+   built. The cost that does show is one `render()` per enemy per step. See NATIVE_PLAN.md.
+
+**Compiler subset, found by writing a game the React way** (each is a clear diagnostic; the workaround and what it should become):
+
+7. **No constants or tables at the top of a component file** (`RGE1001`), **no index reads in render expressions** (`KIND_INDEX[kind]`, `pads[cursor]`) and **selectors must
+   be plain paths** (`s.battle.pads[s.cursor]`, `s.cursor === id` were `RGE1103`). **Built** after review: top-level `const`s and helper functions in a component file,
+   index reads and `!`, `Math.PI`, and computed selectors (each path read is its own subscription; the expression is a derived value). Hearth's `rules/view.ts` lost
+   `towerFrame`, `iconOf` and `PIPS` to the components that use them, and the store lost its `focus` copy: `useGame((s) => focusOf(s.battle, s.cursor))`.
+   See DESIGN.md, "Computed selectors" and "Constants, helpers and index reads beside components". Found on the way: `useGame((s) => s.enemies.length)`
+   subscribed to a path the store never reports (fixed: `.length` reads the array).
+8. **A component cannot be the root of another** (`RGE1003`): `BuildMenu` rendering `<Panel>` directly was rejected, so it wrapped it in a `<Flex>`. **Built**:
+   a component, a condition (`on ? <X/> : null`) or `null` may be the root; the component is a see-through container (`layoutContents`, CSS's
+   `display: contents` for `<Flex>` layout), so the panel still grows to the column. See DESIGN.md, "Component, condition and null roots".
+9. **A game-state action cannot be passed as a value** (`onPress={startWave}`), and **a callback prop could be forwarded whole only to a component**. **Built**:
+   both are accepted (`onPress={resume}`, `<Flex onPress={onPress}>`). Note: destructuring several values from the store
+   (`const { gold, lives } = useGame((s) => s.battle)`) already worked when Hearth was written; `SidePanel` now uses it.
+10. **A compiler bug found and fixed:** a keyed list over an imported constant (`TOWER_LIST.map(…)`) whose item has a callback that reads the item crashed the generator
+    (`Unexpected list source`), because the item's type was only known for state and prop sources. It now reads `(typeof TOWER_LIST)[number]`.
+11. **`<Pointer>` had no hover**, so the plan's "range ring while the mouse is over a tower" was the selected tower's ring instead. **Built** after review:
+    `onPointerEnter` / `onPointerLeave` on `<Pointer>` and `<Flex>`; a tower shows its range while selected or hovered. Two smaller gaps the review named
+    are built with it: `<Game font>` (the bitmap font of every `<Text>` without its own, which `Label` existed mostly to repeat) and `useTime()` (seconds
+    since mount, which `Title` wrote out with `useState` and `useUpdate`).
+12. **`<Flex>` has no `z`**; the pause modal draws above the panel because it comes later in the `<Hud>`. Fine, and what the draw order says.
+
+**Tooling:**
+
+13. **Input scripts can click** (`click@120,64`, `mouse@120,64`: points in the game's canvas, mapped through the screen's fit; an item may combine them with keys). Names
+    in a script must start with a letter, so `1` cannot be written: the game binds `one`, `two`, `three`. The screenshot tool passes the game's `screen` export so
+    its clicks land. A long replay (35,000 frames) kept every drawn frame and ran out of memory: `RecordingBackend` takes `keepFrames`.
+14. **"Press already handled" flag: not needed.** The field and the panel do not overlap, and no `useUpdate` reads `MouseLeft`: every click goes through a
+    `<Pointer>` or a `<Flex onPress>`, which take the topmost one under the mouse. Nothing was built.
+15. **The bitmap font having one case** reads fine for menus in upper case; nobody asked for lower case.
+
+**A second review of Hearth's code** (2026-11-11) found keyboard input taking a path of its own (an `Intent` read from the keys, applied
+by rules apart from the buttons' actions) and asked for what a DOM button has. **Built:** `pressKey` (a button's own shortcut), focus
+(`focusable`, `autoFocus`, `onFocus`/`onBlur`, arrow-key movement, confirm presses the focused), `<Pointer originX originY>`, a bitmap
+`<Text>`'s default size, `controls.label`, self-registering tilemaps and type imports from `.ts` files. Hearth's `rules/ui.ts`,
+`readIntent` and `act(intent)` are gone: every key and click calls an action, and `step(dt)` only steps the battle. See DESIGN.md, "Keys
+that press things" and "Focus".
+
+**Which of Kite's findings held a second time:** *Rules apart from drawing* (finding 1/16): yes, completely. `stepBattle` is plain TypeScript, 27 headless tests, the balance table and
+the parity run all use it with no engine, and the replays then check that the components and the rules agree. *Effect stores* (finding 16): yes: `playEvents` answers the rules'
+events with sounds and bursts and nothing in a component watches state. *The router* (finding 14): yes, for four screens (title, play, won, lost); no transitions were wanted.
+*The game state holding objects and arrays*: yes, and it made the battle one object. *Constants from `.ts` files*: yes, with finding 7's limits. What did not hold: Kite's
+character was one big component that stepped itself; Hearth steps from `Play` through one action (`act`), which is the shape Kite's finding 16 recommended and worked better.
+
+**Balance, a note for whoever tunes it:** with the plan's first numbers eighteen bolt towers lost no lives at all. The table now has HP growing 20 % a wave and half the gold; see
+`packages/hearth/DESIGN.md`. No person has played it, so these are a first pass set by a tool.
 
 ### 8. Usable outside this repository
 
@@ -335,6 +417,7 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 | macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
 | One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
-| Context (`createContext` / `useContext`) | Props cover today's trees; it is Tier 3 in priority 7 | Deep trees passing the same prop down many levels: planned in priority 7b (one value per tower) |
-| Spread props, conditionals inside a list's `.map`, forwarding `{children}`, children on list items | Each is rejected today with a clear diagnostic; Tier 3 in priority 7 | An author hitting one of those diagnostics: the platformer did not (finding 15); priority 7b is expected to |
+| Context (`createContext` / `useContext`) | Props covered Hearth's trees (one level of nesting under each tower), so priority 7b did not need it (second-game finding 5) | A tree three or more levels deep passing the same props through |
+| Children on list items that are conditional, lists, or nested | Built flat only (second-game finding 4): `RGE1209` for the rest | An author needing `{ok && <Icon/>}` inside a list item's children |
+| Forwarding `{children}` beside other passed children, spread onto a built-in | Built: only a forwarded `{children}` that is the whole of what is passed (option A), and spread onto components only | A game writing `<Panel><Title/>{children}<Footer/></Panel>` (then a wrapper `<Flex>` first, order ranges second) or `<Shape {...p}/>` |
 | Tiled importer gaps (whole-number `int` checks, template properties, external and multiple tilesets, base64 layers) | `visible` and tile flip flags are done (priority 7); the rest each say so when met | A map that uses them, or the first map saved by Tiled itself (finding 8) |

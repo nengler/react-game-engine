@@ -85,6 +85,16 @@ export function useShake(): [ShakeState, Setter<ShakeState>] {
 }
 
 /**
+ * Seconds since the component mounted, growing with each update: `const time = useTime();`, then
+ * `color={time % 1 < 0.66 ? "white" : "black"}` to blink. The component renders every update while it is mounted.
+ *
+ * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ */
+export function useTime(): number {
+  return compileTimeOnly("useTime");
+}
+
+/**
  * A sound, played by calling the returned function in a handler:
  * `const playHit = useSound("hit.wav");` then `playHit();`, or `playHit(0.5)` at half volume (0 to 1). A sound played again
  * while it still sounds plays over itself, up to four at once, then the oldest is cut off. The path must be a

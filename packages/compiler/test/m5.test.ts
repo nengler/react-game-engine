@@ -686,10 +686,12 @@ function C() {
   });
 
   it("takes one element with no children from an inline arrow", () => {
-    assert.deepEqual(listCodes(`items.map((e) => e.n > 0 && <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
+    // `cond && <El/>` and `cond ? <A/> : <B/>` are allowed now: see tier3.test.ts.
+    assert.deepEqual(listCodes(`items.map((e) => e.n > 0 || <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map((e) => <><Sprite key={e.id} image={e.id} /></>)`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map((e) => { const x = 1; return <Sprite key={e.id} image={e.id} />; })`), [DiagnosticCode.InvalidList]);
-    assert.deepEqual(listCodes(`items.map((e) => <Entity key={e.id}><Sprite image={e.id} /></Entity>)`), [DiagnosticCode.InvalidList]);
+    // Plain children on an item are allowed now (tier3.test.ts); nested ones are not yet.
+    assert.deepEqual(listCodes(`items.map((e) => <Entity key={e.id}><Entity name="x"><Sprite image={e.id} /></Entity></Entity>)`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map()`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map(({ id }) => <Sprite key={id} image={id} />)`), [DiagnosticCode.InvalidList]);
     assert.doesNotThrow(() => compile(list(`items.map((e) => { return <Sprite key={e.id} image={e.id} />; })`)), "a block with one return is fine");
@@ -1040,10 +1042,13 @@ describe("M8: diagnostics", () => {
     assert.deepEqual(diag(box("children: Child", `<Sprite image="a">{children}</Sprite>`)), [DiagnosticCode.UnsupportedJsxChild]);
   });
 
-  it("does not forward children to another component yet", () => {
+  it("forwards children to another component only as the whole of what it passes (see tier3.test.ts)", () => {
     const source = `${box("children: Child", "{children}")}
-function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
+function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box><Sprite image="a" />{children}</Box></Entity>; }`;
     assert.deepEqual(diag(source), [DiagnosticCode.UnsupportedJsxChild]);
+    const ok = `${box("children: Child", "{children}")}
+function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
+    assert.doesNotThrow(() => compile(ok));
   });
 
   it("does not read children as a value", () => {
@@ -1067,12 +1072,12 @@ function Table() {
     assert.doesNotThrow(() => compile(parent(`{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)));
   });
 
-  it("still rejects children on a list item and children as an attribute", () => {
+  it("still rejects nested children on a list item and children as an attribute", () => {
     const source = `${box("children: Child", "{children}")}
 interface Row { id: string }
 function Table() {
   const [rows, setRows] = useState<Row[]>([]);
-  return <Entity name="Table">{rows.map((r) => <Box key={r.id}><Sprite image="x" /></Box>)}</Entity>;
+  return <Entity name="Table">{rows.map((r) => <Box key={r.id}><Entity name="x"><Sprite image="x" /></Entity></Box>)}</Entity>;
 }`;
     assert.ok(diag(source).includes(DiagnosticCode.InvalidList));
     assert.ok(diag(`${box("children: Child", "{children}")}\nfunction A() { return <Entity name="A"><Box children={1} /></Entity>; }`).includes(DiagnosticCode.UnsupportedAttribute));

@@ -22,6 +22,9 @@ export type ExprIR =
   | PropReadIR
   | RefReadIR
   | MemberReadIR
+  | IndexReadIR
+  | NonNullIR
+  | ActionRefIR
   | ArrayLiteralIR
   | ObjectLiteralIR
   | ArrowIR
@@ -43,6 +46,15 @@ export interface ElementReadIR {
   readonly kind: "ElementRead";
   readonly field: string;
   readonly member: string;
+}
+
+/**
+ * A game-state action passed whole to a component's callback prop (`onPress={resume}`): the store's own function, which
+ * never changes, so it is a static prop.
+ */
+export interface ActionRefIR {
+  readonly kind: "ActionRef";
+  readonly name: string;
 }
 
 export interface PlainRefIR {
@@ -119,6 +131,24 @@ export interface MemberReadIR {
   readonly name: string;
   /** `?.` */
   readonly optional: boolean;
+}
+
+/**
+ * `TABLE[kind]`, `pads[cursor]`, `found?.[i]`: an element of an array or a record, by an index or a key worked out at run
+ * time. Like `MemberRead`, the type-check of the generated code checks it.
+ */
+export interface IndexReadIR {
+  readonly kind: "IndexRead";
+  readonly object: ExprIR;
+  readonly index: ExprIR;
+  /** `?.[` */
+  readonly optional: boolean;
+}
+
+/** `table[key]!`: TypeScript's non-null assertion, kept so the generated code type-checks as the source did. */
+export interface NonNullIR {
+  readonly kind: "NonNull";
+  readonly expression: ExprIR;
 }
 
 /** `[a, ...rest]`. */

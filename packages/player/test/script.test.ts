@@ -49,3 +49,36 @@ describe("parseInputScript", () => {
     assert.equal(scriptLength("right*30, jump", { bindings }), 31);
   });
 });
+
+describe("parseInputScript: the mouse", () => {
+  it("clicks at a point: moves the mouse and taps MouseLeft for one frame", () => {
+    const frames = parseInputScript("_, click@30,40, _*2");
+    assert.equal(frames.length, 4);
+    assert.equal(frames[0]?.mouse, undefined, "no mouse before the script uses it");
+    assert.deepEqual(frames[1]?.mouse, { x: 30, y: 40 });
+    assert.deepEqual(frames[1]?.pressed, ["MouseLeft"]);
+    assert.deepEqual(frames[2]?.released, ["MouseLeft"]);
+    assert.deepEqual(frames[3]?.mouse, { x: 30, y: 40 }, "the mouse stays where it was put");
+  });
+
+  it("moves the mouse without pressing, and combines with other terms", () => {
+    const frames = parseInputScript("mouse@5,6+right*2, click@7.5,8+jump", { bindings });
+    assert.deepEqual(frames[0]?.mouse, { x: 5, y: 6 });
+    assert.deepEqual(frames[0]?.pressed, ["ArrowRight", "D"]);
+    assert.deepEqual(frames[1]?.mouse, { x: 5, y: 6 });
+    assert.deepEqual(frames[2]?.mouse, { x: 7.5, y: 8 });
+    assert.deepEqual(frames[2]?.pressed.sort(), ["MouseLeft", "Z"]);
+  });
+
+  it("maps canvas points through the screen's fit into the window", () => {
+    const screen = { width: 320, height: 180, windowWidth: 960, windowHeight: 540, fit: "contain" } as const;
+    assert.deepEqual(parseInputScript("click@10,20", { screen })[0]?.mouse, { x: 30, y: 60 });
+    const wide = { ...screen, windowWidth: 1280 } as const;
+    assert.deepEqual(parseInputScript("mouse@0,0", { screen: wide })[0]?.mouse, { x: 160, y: 0 }, "bars at the sides move the origin");
+  });
+
+  it("rejects a count and a malformed point", () => {
+    assert.throws(() => parseInputScript("click@10,20*3"), /take no count/);
+    assert.throws(() => parseInputScript("click@10"), /expected click@x,y/);
+  });
+});

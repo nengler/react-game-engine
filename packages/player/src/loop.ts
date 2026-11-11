@@ -1,4 +1,4 @@
-import { Game, World, captureHotState, getSoundSink, restoreHotState, setSoundSink, resetGameState, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type ViewTransform } from "@rge/runtime";
+import { Flex, Game, World, captureHotState, getSoundSink, restoreHotState, setSoundSink, resetGameState, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -161,6 +161,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     measureText: backend.measureText ? (text, size) => backend.measureText!(text, size) : undefined,
     textureSize: backend.textureSize ? (handle) => backend.textureSize!(handle) : undefined,
     assets,
+    font: game?.font,
     warn: config.warn,
     retain: config.retain,
   });
@@ -249,10 +250,28 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     const at = input.worldPoint(input.screenX, input.screenY);
     const hudAt = input.pointThrough(hudView, input.screenX, input.screenY);
     // The last pointer drawn is on top, so it gets the press; one press, one pointer. A HUD is drawn after the world, so its pointers come last.
+    // A <Flex> collected only for its hover callbacks lets the press through to what is under it.
     for (let i = pointers.length - 1; i >= 0; i--) {
+      const pointer = pointers[i] as Pressable;
+      if (pointer.onPress === undefined && pointer instanceof Flex) continue;
       const point = i >= hudPointersFrom ? hudAt : at;
-      if (world.reportPress(pointers[i] as Pressable, point.x, point.y)) return;
+      if (world.reportPress(pointer, point.x, point.y)) return;
     }
+  };
+
+  /** The topmost pressable under the mouse, as last frame drew them, is the hovered one: `onPointerEnter` and `onPointerLeave` when it changes. */
+  const dispatchHover = (): void => {
+    let hovered: Pressable | null = null;
+    if (screen === null || onScreen(screen, input.screenX, input.screenY)) {
+      const at = input.worldPoint(input.screenX, input.screenY);
+      const hudAt = input.pointThrough(hudView, input.screenX, input.screenY);
+      for (let i = pointers.length - 1; i >= 0 && hovered === null; i--) {
+        const pointer = pointers[i] as Pressable;
+        const point = i >= hudPointersFrom ? hudAt : at;
+        if (pointer.world === world && pointer.contains(point.x, point.y)) hovered = pointer;
+      }
+    }
+    world.reportHover(hovered);
   };
 
   return {
@@ -292,6 +311,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       }
       const nextGame = fresh instanceof Game ? fresh : null;
       input.controls = nextGame?.controls ?? next.controls ?? input.controls;
+      builder.font = nextGame?.font;
       failure = null;
       return true;
     },
@@ -319,6 +339,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     const realDt = input.values[RGE_IN_DT] as number;
     if (realDt > 0) smoothDt = smoothDt === 0 ? realDt : smoothDt * 0.9 + realDt * 0.1;
     dispatchPress();
+    dispatchHover();
     const dt = input.values[RGE_IN_DT] as number;
     if (driver === null) world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
     else {

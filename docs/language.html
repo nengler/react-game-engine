@@ -134,12 +134,13 @@ mark { background: var(--accent-soft); color: inherit; }
   <ol>
     <li>Hooks: <code>useState</code>, <code>useRef</code>, <code>useSound</code>, <code>useGame(...)</code>, and the handler hooks.</li>
     <li>Derived values: <code>const hurt = health &lt; 25;</code>, inlined where used.</li>
-    <li>One <code>return</code> of JSX.</li>
+    <li>One <code>return</code> of JSX, a condition of it (<code>on ? &lt;Spark /&gt; : null</code>, <code>open &amp;&amp; &lt;Menu /&gt;</code>) or <code>null</code>.</li>
   </ol>
   <p>An arrow with an expression body is just its return: <code>const Dot = () =&gt; &lt;Sprite image="dot.png" /&gt;</code>.</p>
+  <p>Beside the components, a file may hold <strong>constants and helper functions</strong>, as a React file does: <code>const ROW = { bolt: 0, frost: 2 } as const;</code>, <code>function labelOf(kind: Kind) { … }</code>. Render expressions may index them (<code>ROW[kind] * 3</code>) and use <code>Math.PI</code>. A top-level <code>let</code>, or a constant holding JSX or reading the game state, is <code>RGE1001</code>.</p>
 
-  <h3>The root is a built-in</h3>
-  <p>The root (or a fragment <code>&lt;&gt;…&lt;/&gt;</code>, an implicit <code>Entity</code>) is a built-in, never another component. The class extends it, so the root's props apply to the component itself.</p>
+  <h3>The root</h3>
+  <p>The root (or a fragment <code>&lt;&gt;…&lt;/&gt;</code>, an implicit <code>Entity</code>) is usually a built-in. The class extends it, so the root's props apply to the component itself. The root may also be another component (<code>return &lt;Panel title="BUILD"&gt;…&lt;/Panel&gt;</code>), a condition or <code>null</code>: the component is then a bare container that <code>&lt;Flex&gt;</code> layout sees through, so a panel it returns still grows to the column it sits in.</p>
 <pre class="code" data-lang="tsx"><script type="text/plain">
 // This class extends Sprite: the component *is* a sprite.
 const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : "coin.png"} />;
@@ -191,6 +192,7 @@ const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : 
     <tr><td><code>useSound</code></td><td class="type">const play = useSound("hit.wav")</td><td>You call <code>play()</code> in a handler</td></tr>
     <tr><td><code>useSquash</code></td><td class="type">const [sq, setSq] = useSquash(1.75)</td><td>Shipped hook: a scale that springs back to 1</td></tr>
     <tr><td><code>useShake</code></td><td class="type">const [shake, setShake] = useShake()</td><td>Shipped hook: a camera shake that runs down</td></tr>
+    <tr><td><code>useTime</code></td><td class="type">const time = useTime()</td><td>Shipped hook: seconds since mount, for blinking and bobbing</td></tr>
     <tr><td><code>useGame</code></td><td class="type">useGame((s) =&gt; s.player.hp)</td><td>Re-renders when that leaf changes</td></tr>
   </table></div>
 
@@ -492,7 +494,8 @@ function Player() {
 </script></pre>
   <h3>Rules</h3>
   <ul>
-    <li><strong>Selectors are plain paths</strong> (<code>s.stats.coins</code>) to a leaf, an object or an array; a typo is <code>RGE1108</code>. Call <code>useGame(...)</code> at the top level, bound to a <code>const</code>, or destructured: <code>const { room, deaths } = useGame((s) =&gt; s.run)</code>.</li>
+    <li><strong>A selector is a path</strong> (<code>s.stats.coins</code>) to a leaf, an object or an array, or <strong>any expression of paths</strong> (<code>(s) =&gt; s.cursor === id</code>, <code>(s) =&gt; focusOf(s.battle, s.cursor)</code>): each path it reads is subscribed to, and the value is worked out again when one changes. A typo is <code>RGE1108</code>. Call <code>useGame(...)</code> at the top level, bound to a <code>const</code>, or destructured: <code>const { room, deaths } = useGame((s) =&gt; s.run)</code>.</li>
+    <li>An action may be passed whole: <code>onPress={resume}</code>.</li>
     <li>Call an action as a <strong>statement in a handler</strong>, not in JSX or a derived value.</li>
     <li><code>set</code> <strong>shallow-merges</strong>: a nested object is replaced whole, so spread the rest (<code>{ ...s.stats, coins: … }</code>).</li>
     <li>Only components reading something that <em>changed</em> re-render. Every game starts from the initial state automatically.</li>
@@ -532,6 +535,7 @@ function Player() {
         ["gamepadDeadzone", "number", "0.35", "How far the left stick must go before <code>PadLeft/Right/Up/Down</code> count as held."],
         ["showFps", "boolean", "false", "Show frame rate and script time, top-left."],
         ["fpsKey", "string | false", '"F3"', "Key that toggles the counter."],
+        ["font", "string", "–", "The bitmap font of every <code>&lt;Text&gt;</code> without its own <code>font</code>."],
         ["name", "string", '""', "As on <code>Entity</code>."]
       ] },
     { name: "Screen", kind: "container, root only", sum: "A fixed game resolution, scaled to the window. The only child of <code>&lt;Game&gt;</code>.",
@@ -601,7 +605,15 @@ function Player() {
       props: [
         ["width", "number", "–", "Pixels.", 1],
         ["height", "number", "–", "Pixels.", 1],
-        ["onPress", "() =&gt; void", "–", "Called when a press lands inside it."]
+        ["pressKey", "string", "–", "A key or action that presses it, while it is mounted: the button's own shortcut."],
+        ["focusable", "boolean", "false", "Takes the focus: the arrows (or the <code>left</code>/<code>right</code>/<code>up</code>/<code>down</code> actions) move it, <code>confirm</code> (or Enter) presses it."],
+        ["autoFocus", "boolean", "false", "Take the focus when mounted, if nothing has it."],
+        ["onFocus", "() =&gt; void", "–", "Called when it takes the focus."],
+        ["onBlur", "() =&gt; void", "–", "Called when it loses the focus."],
+        ["onPointerEnter", "() =&gt; void", "–", "Called when the mouse comes over it (the topmost pressable under the mouse)."],
+        ["onPointerLeave", "() =&gt; void", "–", "Called when the mouse leaves it, or something drawn over it takes the mouse."],
+        ["originX / originY", "number", "0", "Where the area's origin is, from its top-left corner: <code>originX={5} originY={5}</code> centres a 10 × 10 area."],
+        ["onPress", "() =&gt; void", "–", "Called when a press lands inside it, its <code>pressKey</code> is pressed, or it has the focus and <code>confirm</code> is pressed."]
       ] },
     { name: "Camera", kind: "container", sum: "The viewport. Follows its children. See <a href=\"systems.html#ui\">UI</a>.",
       props: [
@@ -625,6 +637,13 @@ function Player() {
         ["minWidth / maxWidth / minHeight / maxHeight", "number", "–", "Bounds for a fit or grow size, in pixels."],
         ["background", "CSS colour", "none", "Filled rectangle behind the children, the size of the box."],
         ["onPress", "() =&gt; void", "–", "Called when a press lands on the laid-out box."],
+        ["pressKey", "string", "–", "A key or action that presses it, while it is mounted: the button's own shortcut."],
+        ["focusable", "boolean", "false", "Takes the focus: the arrows (or the <code>left</code>/<code>right</code>/<code>up</code>/<code>down</code> actions) move it, <code>confirm</code> (or Enter) presses it."],
+        ["autoFocus", "boolean", "false", "Take the focus when mounted, if nothing has it."],
+        ["onFocus", "() =&gt; void", "–", "Called when it takes the focus."],
+        ["onBlur", "() =&gt; void", "–", "Called when it loses the focus."],
+        ["onPointerEnter", "() =&gt; void", "–", "Called when the mouse comes over it (the topmost pressable under the mouse)."],
+        ["onPointerLeave", "() =&gt; void", "–", "Called when the mouse leaves it, or something drawn over it takes the mouse."],
         ["float", "boolean", "false", "Take the box out of its parent's flow."],
         ["anchor", "9-point anchor", '"top-left"', "Which point of this box is attached. One of <code>top-left top-center top-right center-left center center-right bottom-left bottom-center bottom-right</code>."],
         ["to", "9-point anchor", '"top-left"', "Which point of the parent it attaches to."],
@@ -725,9 +744,9 @@ function Player() {
   /* ---------- diagnostics ---------- */
   var DIAG = [
     ["Project and syntax", [
-      ["RGE1001", "Unsupported syntax, or an import that is not from the authoring module or a <code>.tsx</code> component."],
+      ["RGE1001", "Unsupported syntax, an import that is not from the authoring module, a <code>.tsx</code> component or a <code>.ts</code> file, or a top-level value that is not a <code>const</code> (or holds JSX or the game state)."],
       ["RGE1002", "A component body that is not hooks, derived <code>const</code>s, then one <code>return</code>."],
-      ["RGE1003", "The root is not a built-in element or fragment (for example it is another component)."],
+      ["RGE1003", "The root is not a built-in element, a component, a fragment, a condition of elements or <code>null</code>."],
       ["RGE1004", "A name imported from <code>@rge/runtime/jsx</code> that it does not export, or <code>type</code> misused."],
       ["RGE1005", "A hook, element or runtime function used without importing it."]]],
     ["Hooks and state", [

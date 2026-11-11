@@ -1,6 +1,6 @@
 # A second game: a small tower defense (plan)
 
-Planned 2026-11-11. Nothing here is built yet. This is priority 7b in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md): a
+Planned 2026-11-11. **Built the same day, in part**: see "Status" at the end. This is priority 7b in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md): a
 second, small game in a different genre, done **before priority 8**, so the guide and template describe a shape that has
 worked twice.
 
@@ -387,18 +387,18 @@ movement feel to tune), and the compiler work is most of it.
 
 ## Done when
 
-- [ ] `packages/hearth/DESIGN.md` covers the mechanics, the numbers and what "finished" means
-- [ ] The game is playable from the title through ten waves to a win or a loss, with mouse, keyboard or gamepad, under
-      Node and as a packaged build (headless verification at least; a person plays it in priority 6's spirit)
-- [ ] Each Tier 3 item is either built (design section, compiler and runtime tests, used by the game) or recorded as a
-      finding saying why the game did not need it; the matching "Not now" rows are removed or updated
-- [ ] Input scripts can click, and a wave replay builds towers by clicking and wins
-- [ ] Headless tests cover targeting, splash, slow, the economy, leaking, and the balance tool's output
-- [ ] The many-sprites bench scenario is in `bench/budget.json`, wave 10's frame time is recorded in `NATIVE_PLAN.md`,
+- [x] `packages/hearth/DESIGN.md` covers the mechanics, the numbers and what "finished" means
+- [~] The game is playable from the title through ten waves to a win or a loss, with mouse, keyboard or gamepad, under
+      Node and as a packaged build (headless verification at least; a person plays it in priority 6's spirit). *Verified headless under Node; not packaged, not played.*
+- [~] Each Tier 3 item is either built (design section, compiler and runtime tests, used by the game) or recorded as a
+      finding saying why the game did not need it; the matching "Not now" rows are removed or updated. *Built: spread props, conditionals in a list's map, forwarding `{children}`, children on list items (flat). Context: recorded as not needed.*
+- [x] Input scripts can click, and a wave replay builds towers by clicking and wins
+- [x] Headless tests cover targeting, splash, slow, the economy, leaking, and the balance tool's output
+- [x] The many-sprites bench scenario is in `bench/budget.json`, wave 10's frame time is recorded in `NATIVE_PLAN.md`,
       and finding 9 is closed or updated with numbers
-- [ ] A "Findings from the second game" section in `NEXT_PRIORITIES.md`, including which of Kite's findings held a second
+- [x] A "Findings from the second game" section in `NEXT_PRIORITIES.md`, including which of Kite's findings held a second
       time (rules apart from drawing, effect stores, the router) and which did not
-- [ ] `npm run check:hearth`, `npm test`, `npm run typecheck` and the parity test pass
+- [x] `npm run check:hearth`, `npm test`, `npm run typecheck` and the parity test pass
 
 ## Open decisions
 
@@ -449,3 +449,12 @@ The diagnostic names the restriction and what to do instead (see the implementat
 **If a game hits it:** B first (local to the compiler, no runtime cost; the diagnostic can then suggest the wrapper),
 then C if the wrapper proves awkward. D and E only if several games ask. The "Not now" row for forwarding in
 `NEXT_PRIORITIES.md` says the same once forwarding lands.
+
+## Status (2026-11-11)
+
+Done: step 0 (clicks in input scripts), 1 (design note, rules, headless tests), 2 (greybox, React way), 3 for spread props, conditionals in
+`.map`, forwarding `{children}` and children on list items (one commit each, workarounds removed), 4 to 7 (input and panel, screens, art and sound, the ten waves, the
+balance tool and the wave replays), 8 (bench scenes; wave 10 measured; no fix needed) and the findings in NEXT_PRIORITIES.md. Not done: Tier 3
+item 5 (context, recorded as not needed), a real-window package, and a person playing it. Where the game differs from this plan: HP grows 20 % a wave and gold rewards are halved (the balance tool), wave 10
+has 136 enemies, the range ring shows for the selected tower (no hover), and a `focus` object in the game state stands in for
+index reads in render expressions.

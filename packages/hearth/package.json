@@ -1,0 +1,11 @@
+{
+  "name": "@rge/hearth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@rge/player": "0.0.0",
+    "@rge/player-node": "0.0.0",
+    "@rge/runtime": "0.0.0"
+  }
+}

@@ -93,7 +93,9 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
     }
   }
 
-  const plainNames = new Set(analysis.plainImports.map((i) => i.name));
+  // A top-level constant or helper function is read like a plain import (it is in the generated module itself).
+  const plainNames = new Set([...analysis.plainImports.map((i) => i.name), ...analysis.moduleDeclarations.map((d) => d.name)]);
+  const moduleDeclarations = analysis.moduleDeclarations.map((d) => ({ kind: "ModuleDeclaration" as const, name: d.name, text: d.text, reads: d.reads }));
   const plainImports = analysis.plainImports.map((i) => ({ name: i.name, module: i.module }));
 
   const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
@@ -107,7 +109,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
 
   checkStaticCycles(components, diagnostics);
 
-  return { module: { kind: "Module", sourceFile: analysis.fileName, typeDeclarations, components, plainImports }, diagnostics };
+  return { module: { kind: "Module", sourceFile: analysis.fileName, typeDeclarations, components, plainImports, moduleDeclarations, typeImports: analysis.typeImports.map((i) => ({ name: i.name, module: i.module, ...(i.importedName !== undefined ? { importedName: i.importedName } : {}) })) }, diagnostics };
 }
 
 /** The component lowering: each layer in its own file (lowering, expressions, hooks, elements), each extending the one before. */

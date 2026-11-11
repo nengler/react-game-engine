@@ -42,6 +42,11 @@ export class World {
   #onInput = new Set<GameObject>();
   #onUpdate = new Set<GameObject>();
   readonly #inert = new Set<GameObject>();
+  /** Every `<Pointer>` and `<Flex>` in this world: what a `pressKey`, the focus and the confirm key look through. */
+  readonly #pressables = new Set<GameObject & Pressable>();
+  #focused: (GameObject & Pressable) | null = null;
+  readonly #live: (GameObject & Pressable)[] = [];
+  readonly #focusables: (GameObject & Pressable)[] = [];
   #frozen = 0;
 
   constructor() {
@@ -71,8 +76,9 @@ export class World {
    * player uses it to show `onUpdate` the key edges a freeze kept (see `freeze`), which `onInput` has already seen.
    */
   tick(dt: number, input: InputState = NO_INPUT, beforeUpdate?: () => void): number {
-    const inputs = [...this.#onInput];
     const anyInert = this.#hasInert();
+    if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
+    const inputs = [...this.#onInput];
     for (const object of inputs) if (object.world === this) object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
     if (this.#frozen > 0) this.#frozen--;
     else {
@@ -121,8 +127,25 @@ export class World {
   reportPress(pointer: Pressable, x: number, y: number): boolean {
     if (pointer.world !== this || !pointer.contains(x, y)) return false;
     if (this.#hasInert() && this.isInert(pointer as unknown as GameObject)) return false;
+    if (pointer.focusable === true) this.focus(pointer);
     pointer.onPress?.();
     return true;
+  }
+
+  #hovered: Pressable | null = null;
+
+  /**
+   * The topmost pressable under the mouse this frame (null for none, or for a mouse off the screen): when it is not the one
+   * before, the one before hears `onPointerLeave` (if it is still in this world) and the new one `onPointerEnter`, as the DOM's
+   * `pointerenter` / `pointerleave`. One in an inert subtree counts as none. Dispatch only: renders happen in the next `tick`.
+   */
+  reportHover(pointer: Pressable | null): void {
+    if (pointer !== null && (pointer.world !== this || (this.#hasInert() && this.isInert(pointer as unknown as GameObject)))) pointer = null;
+    if (pointer === this.#hovered) return;
+    const previous = this.#hovered;
+    this.#hovered = pointer;
+    if (previous !== null && previous.world === this) previous.onPointerLeave?.();
+    pointer?.onPointerEnter?.();
   }
 
   /**
@@ -148,13 +171,70 @@ export class World {
     return this.#inert.size > 0;
   }
 
+  /** What has the focus (see `PressableProps.focusable`), or null. */
+  get focused(): Pressable | null {
+    return this.#focused;
+  }
+
+  /**
+   * Give the focus to a focusable pressable in this world (null takes it away): the one that had it hears `onBlur`, this one
+   * `onFocus`. A click on a focusable one focuses it, as in a browser; the arrow keys move it (`tick`).
+   */
+  focus(target: Pressable | null): void {
+    const next = target !== null && (target as GameObject & Pressable).world === this && target.focusable === true ? (target as GameObject & Pressable) : null;
+    if (next === this.#focused) return;
+    const previous = this.#focused;
+    this.#focused = next;
+    if (previous !== null && previous.world === this) previous.onBlur?.();
+    next?.onFocus?.();
+  }
+
+  /**
+   * Keys that press things, before any `onInput`: each mounted, not inert pressable whose `pressKey` was pressed is pressed; the focus
+   * goes to an `autoFocus` one when nothing has it, moves with the direction actions (`left` `right` `up` `down`, or the arrows and the
+   * d-pad when the controls have no such action) to the nearest focusable that way, and `confirm` (or Enter and PadA) presses it.
+   */
+  #keys(input: InputState, anyInert: boolean): void {
+    // Scratch lists kept between ticks, so a tick allocates nothing here once warm.
+    const live = this.#live;
+    const focusables = this.#focusables;
+    live.length = 0;
+    focusables.length = 0;
+    for (const p of this.#pressables) {
+      if (p.world !== this || (anyInert && this.isInert(p))) continue;
+      live.push(p);
+      if (p.focusable === true) focusables.push(p);
+    }
+    const ask = (action: string, keys: readonly string[]): boolean => (input.isAction?.(action) ? input.pressed(action) : keys.some((k) => input.pressed(k)));
+    if (this.#focused !== null && !focusables.includes(this.#focused)) this.focus(null);
+    if (this.#focused === null) {
+      const auto = focusables.find((p) => p.autoFocus === true);
+      if (auto) this.focus(auto);
+    }
+    if (focusables.length > 0) {
+      const dx = (ask("right", ["ArrowRight", "PadRight"]) ? 1 : 0) - (ask("left", ["ArrowLeft", "PadLeft"]) ? 1 : 0);
+      const dy = dx !== 0 ? 0 : (ask("down", ["ArrowDown", "PadDown"]) ? 1 : 0) - (ask("up", ["ArrowUp", "PadUp"]) ? 1 : 0);
+      if (dx !== 0 || dy !== 0) {
+        if (this.#focused === null) this.focus(focusables[0]!);
+        else {
+          const next = nearestInDirection(this.#focused, focusables, dx, dy);
+          if (next !== null) this.focus(next);
+        }
+      } else if (this.#focused !== null && ask("confirm", ["Enter", "PadA"])) this.#focused.onPress?.();
+    }
+    for (const p of live) if (p.pressKey !== undefined && p.world === this && input.pressed(p.pressKey)) p.onPress?.();
+  }
+
   /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */
   registerObject(object: GameObject): void {
+    if ("pressKey" in object && "focusable" in object) this.#pressables.add(object as GameObject & Pressable);
     if (object.onInput !== GameObject.prototype.onInput) this.#onInput.add(object);
     if (object.onUpdate !== GameObject.prototype.onUpdate) this.#onUpdate.add(object);
   }
 
   unregisterObject(object: GameObject): void {
+    this.#pressables.delete(object as GameObject & Pressable);
+    if (this.#focused === object) this.#focused = null;
     this.#onInput.delete(object);
     this.#onUpdate.delete(object);
   }
@@ -173,4 +253,27 @@ export class World {
     }
     return renders;
   }
+}
+
+/**
+ * The focusable nearest to `from` in a direction: only those on that side of it count, and distance across the direction
+ * counts double, so the focus goes along a row before it jumps to the next one. Null when there is none that way.
+ */
+function nearestInDirection(from: Pressable, candidates: readonly (GameObject & Pressable)[], dx: number, dy: number): (GameObject & Pressable) | null {
+  const here = from.focusPoint?.() ?? { x: 0, y: 0 };
+  let best: (GameObject & Pressable) | null = null;
+  let bestScore = Infinity;
+  for (const c of candidates) {
+    if (c === from) continue;
+    const at = c.focusPoint?.() ?? { x: 0, y: 0 };
+    const along = (at.x - here.x) * dx + (at.y - here.y) * dy;
+    if (along <= 0) continue;
+    const across = Math.abs((at.x - here.x) * dy) + Math.abs((at.y - here.y) * dx);
+    const score = along + across * 2;
+    if (score < bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
 }

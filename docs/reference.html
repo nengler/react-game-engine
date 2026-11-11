@@ -185,6 +185,7 @@ mark { background: var(--accent-soft); color: inherit; }
         ["gamepadDeadzone", "number", "0.35", "How far the left stick must go before <code>PadLeft/Right/Up/Down</code> count as held."],
         ["showFps", "boolean", "false", "Show frame rate and script time, top-left."],
         ["fpsKey", "string | false", '"F3"', "Key that toggles the counter."],
+        ["font", "string", "–", "The bitmap font of every <code>&lt;Text&gt;</code> without its own <code>font</code>."],
         ["name", "string", '""', "As on <code>Entity</code>."]
       ] },
     { name: "Screen", kind: "container, root only", sum: "A fixed game resolution, scaled to the window. The only child of <code>&lt;Game&gt;</code>.",
@@ -254,7 +255,15 @@ mark { background: var(--accent-soft); color: inherit; }
       props: [
         ["width", "number", "–", "Pixels.", 1],
         ["height", "number", "–", "Pixels.", 1],
-        ["onPress", "() =&gt; void", "–", "Called when a press lands inside it."]
+        ["pressKey", "string", "–", "A key or action that presses it, while it is mounted: the button's own shortcut."],
+        ["focusable", "boolean", "false", "Takes the focus: the arrows (or the <code>left</code>/<code>right</code>/<code>up</code>/<code>down</code> actions) move it, <code>confirm</code> (or Enter) presses it."],
+        ["autoFocus", "boolean", "false", "Take the focus when mounted, if nothing has it."],
+        ["onFocus", "() =&gt; void", "–", "Called when it takes the focus."],
+        ["onBlur", "() =&gt; void", "–", "Called when it loses the focus."],
+        ["onPointerEnter", "() =&gt; void", "–", "Called when the mouse comes over it (the topmost pressable under the mouse)."],
+        ["onPointerLeave", "() =&gt; void", "–", "Called when the mouse leaves it, or something drawn over it takes the mouse."],
+        ["originX / originY", "number", "0", "Where the area's origin is, from its top-left corner: <code>originX={5} originY={5}</code> centres a 10 × 10 area."],
+        ["onPress", "() =&gt; void", "–", "Called when a press lands inside it, its <code>pressKey</code> is pressed, or it has the focus and <code>confirm</code> is pressed."]
       ] },
     { name: "Camera", kind: "container", sum: "The viewport. Follows its children. See <a href=\"systems.html#ui\">UI</a>.",
       props: [
@@ -278,6 +287,13 @@ mark { background: var(--accent-soft); color: inherit; }
         ["minWidth / maxWidth / minHeight / maxHeight", "number", "–", "Bounds for a fit or grow size, in pixels."],
         ["background", "CSS colour", "none", "Filled rectangle behind the children, the size of the box."],
         ["onPress", "() =&gt; void", "–", "Called when a press lands on the laid-out box."],
+        ["pressKey", "string", "–", "A key or action that presses it, while it is mounted: the button's own shortcut."],
+        ["focusable", "boolean", "false", "Takes the focus: the arrows (or the <code>left</code>/<code>right</code>/<code>up</code>/<code>down</code> actions) move it, <code>confirm</code> (or Enter) presses it."],
+        ["autoFocus", "boolean", "false", "Take the focus when mounted, if nothing has it."],
+        ["onFocus", "() =&gt; void", "–", "Called when it takes the focus."],
+        ["onBlur", "() =&gt; void", "–", "Called when it loses the focus."],
+        ["onPointerEnter", "() =&gt; void", "–", "Called when the mouse comes over it (the topmost pressable under the mouse)."],
+        ["onPointerLeave", "() =&gt; void", "–", "Called when the mouse leaves it, or something drawn over it takes the mouse."],
         ["float", "boolean", "false", "Take the box out of its parent's flow."],
         ["anchor", "9-point anchor", '"top-left"', "Which point of this box is attached. One of <code>top-left top-center top-right center-left center center-right bottom-left bottom-center bottom-right</code>."],
         ["to", "9-point anchor", '"top-left"', "Which point of the parent it attaches to."],
@@ -378,9 +394,9 @@ mark { background: var(--accent-soft); color: inherit; }
   /* ---------- diagnostics ---------- */
   var DIAG = [
     ["Project and syntax", [
-      ["RGE1001", "Unsupported syntax, or an import that is not from the authoring module or a <code>.tsx</code> component."],
+      ["RGE1001", "Unsupported syntax, an import that is not from the authoring module, a <code>.tsx</code> component or a <code>.ts</code> file, or a top-level value that is not a <code>const</code> (or holds JSX or the game state)."],
       ["RGE1002", "A component body that is not hooks, derived <code>const</code>s, then one <code>return</code>."],
-      ["RGE1003", "The root is not a built-in element or fragment (for example it is another component)."],
+      ["RGE1003", "The root is not a built-in element, a component, a fragment, a condition of elements or <code>null</code>."],
       ["RGE1004", "A name imported from <code>@rge/runtime/jsx</code> that it does not export, or <code>type</code> misused."],
       ["RGE1005", "A hook, element or runtime function used without importing it."]]],
     ["Hooks and state", [

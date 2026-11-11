@@ -1,6 +1,6 @@
 // Analysis of one component and of the props it declares, and of its named imports.
 import { SyntaxKind, type CallExpression, type Block, type Expression, type NodeArray, type ParameterDeclaration, type ImportDeclaration, type JsxSelfClosingElement, type Node, type Statement } from "typescript/ast";
-import { isBlock, isJsxFragment, isCallExpression, isIdentifier, isNamedImports, isObjectBindingPattern, isTypeReferenceNode, isJsxElement, isJsxSelfClosingElement, isReturnStatement } from "typescript/ast/is";
+import { isBinaryExpression, isConditionalExpression, isBlock, isJsxFragment, isCallExpression, isIdentifier, isNamedImports, isObjectBindingPattern, isTypeReferenceNode, isJsxElement, isJsxSelfClosingElement, isReturnStatement } from "typescript/ast/is";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { spanOf } from "../parser/parser.ts";
 import { type ImportAnalysis, type JsxRoot, type PropsAnalysis, type PropBindingAnalysis, type ComponentAnalysis, type HookCallAnalysis, HOOK_NAME, KNOWN_HOOKS } from "./model.ts";
@@ -46,21 +46,26 @@ export function analyzeNamedImport(
     );
     return;
   }
-  // `import type {…}` (and the `defer` / `source` phases) carry a phase modifier on the whole clause.
-  if (clause.phaseModifier !== undefined) {
+  // `import type {…}` (and the `defer` / `source` phases) carry a phase modifier on the whole clause. Where types may be
+  // imported, `import type { Tower }` is every name as a type.
+  const typeClause = clause.phaseModifier === SyntaxKind.TypeKeyword && allowTypeSpecifiers && !clause.name && module.endsWith(".ts");
+  if (clause.phaseModifier !== undefined && !typeClause) {
     diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(statement)));
     return;
   }
   if (clause.name) imports.push({ name: clause.name.text, isDefault: true, isTypeOnly: false, module, node: clause });
   if (bindings && isNamedImports(bindings)) {
     for (const element of bindings.elements) {
-      if ((element.isTypeOnly && !allowTypeSpecifiers) || element.propertyName) {
+      const typeOnly = typeClause || element.isTypeOnly;
+      // A type may be renamed (`type Tower as TowerData`): the generated module imports it the same way.
+      if ((element.isTypeOnly && !allowTypeSpecifiers) || (element.propertyName && !(typeOnly && allowTypeSpecifiers && module.endsWith(".ts")))) {
         diagnostics.push(
           error(DiagnosticCode.UnsupportedSyntax, `${what} must be plain \`{ Name }\`: no \`type\` modifier and no \`as\` aliases.`, span(element)),
         );
         continue;
       }
-      imports.push({ name: element.name.text, isDefault: false, isTypeOnly: element.isTypeOnly, module, node: element });
+      const importedName = element.propertyName && isIdentifier(element.propertyName) ? element.propertyName.text : undefined;
+      imports.push({ name: element.name.text, isDefault: false, isTypeOnly: typeOnly, module, node: element, ...(importedName !== undefined ? { importedName } : {}) });
     }
   }
 }
@@ -108,6 +113,17 @@ function analyzeProps(
   return { typeName: type.typeName.text, typeNode: type, bindings, objectName: null };
 }
 
+/** What a component may return: an element or fragment, `null`, or `cond ? <A /> : <B />` / `cond && <A />` (a branch may be `null`). */
+function isRoot(node: Expression): node is JsxRoot {
+  const jsx = (n: Node): boolean => isJsxElement(n) || isJsxSelfClosingElement(n) || isJsxFragment(n);
+  if (jsx(node) || node.kind === SyntaxKind.NullKeyword) return true;
+  if (isConditionalExpression(node)) {
+    const branches = [unwrapParens(node.whenTrue), unwrapParens(node.whenFalse)];
+    return branches.some(jsx) && branches.every((b) => jsx(b) || b.kind === SyntaxKind.NullKeyword);
+  }
+  return isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken && jsx(unwrapParens(node.right));
+}
+
 export function analyzeComponent(
   fn: ComponentFunction,
   span: (node: Node) => ReturnType<typeof spanOf>,
@@ -122,7 +138,7 @@ export function analyzeComponent(
   const props = analyzeProps(fn, span, diagnostics);
   // An arrow with an expression body (`() => <Entity />`) is just its return; it cannot hold hooks.
   const expressionBody = isBlock(body) ? null : body;
-  const mustReturn = `Component '${name}' must end by returning a built-in element or a fragment: \`return <Entity>…</Entity>;\``;
+  const mustReturn = `Component '${name}' must end by returning an element, a fragment, a condition of them (\`open ? <Menu /> : null\`, \`open && <Menu />\`) or \`null\`: \`return <Entity>…</Entity>;\``;
 
   const hooks: HookCallAnalysis[] = [];
   const acceptedHookCalls = new Set<CallExpression>();
@@ -131,14 +147,14 @@ export function analyzeComponent(
   const statements: readonly Statement[] = isBlock(body) ? body.statements : [];
   if (expressionBody) {
     const returned = unwrapParens(expressionBody);
-    if (isJsxElement(returned) || isJsxSelfClosingElement(returned) || isJsxFragment(returned)) jsx = returned;
+    if (isRoot(returned)) jsx = returned;
     else diagnostics.push(error(DiagnosticCode.InvalidComponentBody, mustReturn, span(expressionBody)));
   }
   statements.forEach((statement, index) => {
     const isLast = index === statements.length - 1;
     if (isLast && isReturnStatement(statement)) {
       const returned = statement.expression ? unwrapParens(statement.expression) : undefined;
-      if (returned && (isJsxElement(returned) || isJsxSelfClosingElement(returned) || isJsxFragment(returned))) {
+      if (returned && isRoot(returned)) {
         jsx = returned;
       } else {
         diagnostics.push(error(DiagnosticCode.InvalidComponentBody, mustReturn, span(statement)));
@@ -148,8 +164,8 @@ export function analyzeComponent(
     const store = matchStoreStatement(statement, storeNames);
     if (store) {
       if (store.kind === "ok") {
-        hooks.push(store.hook);
-        acceptedHookCalls.add(store.hook.call);
+        hooks.push(...store.hooks);
+        for (const hook of store.hooks) acceptedHookCalls.add(hook.call);
       } else {
         diagnostics.push(error(DiagnosticCode.InvalidUseState, store.message, span(statement)));
         acceptedHookCalls.add(store.call);

@@ -11,6 +11,8 @@ export interface InputState {
   released(key: string): boolean;
   readonly pointerX: number;
   readonly pointerY: number;
+  /** Whether `name` is an action of the game's controls (asking about one that is not would be about a key of that name). */
+  isAction?(name: string): boolean;
 }
 
 /**
@@ -54,6 +56,18 @@ export class Controls<Name extends string = string> {
     this.bindings = bindings;
   }
 
+  /**
+   * What to call an action's first key on screen, so a label cannot drift from the binding: `controls.label("wave")` is `"Space"`.
+   * `Escape` is `"Esc"` and the arrows are `"Left"`, `"Right"`, `"Up"` and `"Down"`; other keys are their names. A name that is not
+   * an action is returned as it is.
+   */
+  label(name: string): string {
+    const key = this.keysOf(name)?.[0];
+    if (key === undefined) return name;
+    if (key === "Escape") return "Esc";
+    return key.startsWith("Arrow") ? key.slice(5) : key;
+  }
+
   /** The keys of an action, or undefined when `name` is not one (a key name, say). */
   keysOf(name: string): readonly KeyName[] | undefined {
     return Object.hasOwn(this.bindings, name) ? this.bindings[name as Name] : undefined;
@@ -92,6 +106,7 @@ export function createInputState(snapshot: InputSnapshot = {}, controls?: Contro
     released,
     pointerX: snapshot.pointer?.x ?? 0,
     pointerY: snapshot.pointer?.y ?? 0,
+    isAction: (name) => controls?.keysOf(name) !== undefined,
   };
 }
 

@@ -3,7 +3,7 @@ import { SyntaxKind, type Expression, type PropertyAccessExpression, type Node, 
 import { isPropertyAccessExpression, isIdentifier, isArrayTypeNode, isUnionTypeNode } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type TypeIR, type ParamIR, type ValuePropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType } from "../ir/types.ts";
+import { type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType, type StateIR, type HookIR } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
 import { type GameStateDefinition } from "../gamestate/schema.ts";
 import { type RuntimeManifest } from "@rge/runtime";
@@ -56,6 +56,10 @@ export class LoweringBase {
   protected readonly plainImports: ReadonlySet<string>;
   /** State made once per instance by a factory (`useState(() => createSquash())`), whose methods handlers may call. */
   protected readonly handleStates = new Set<string>();
+  /** Every path of the game state this component reads, to the snapshot that holds it (see `storePathState`). */
+  protected readonly storePaths = new Map<string, StateId>();
+  /** Set while a computed selector is lowered: where the snapshots of the paths it reads go. */
+  protected storeReads: { readonly state: StateIR[]; readonly hooks: HookIR[]; readonly storeName: string } | null = null;
 
   constructor(
     component: ComponentAnalysis,
@@ -181,7 +185,8 @@ export class LoweringBase {
       return { kind: "DynamicProp", name: p.name, value: p.value, dependencies: [...collectDependencies(p.value), { kind: "Item" }] } as unknown as T;
     };
     let ok = true;
-    const props = el.props.map((p) => {
+    const props = el.props.map((p): PropIR => {
+      if (p.kind === "SpreadProp") return readsItem(p.value) ? { ...p, dependencies: [...p.dependencies, { kind: "Item" }] } : p;
       if (p.kind !== "CallbackProp") return dynamic(p);
       if (index !== null && functionReadsParam(p.handler, index.id)) {
         this.diagnostics.push(error(DiagnosticCode.InvalidList, `Callback '${p.name}' cannot read the index '${index.name}': it changes when items move. Read the item (\`${item.name}.id\`) instead.`, el.span));
@@ -250,14 +255,14 @@ export class LoweringBase {
   }
 
   /** Checks that `{children}` is somewhere a slot can be. A slot must be in a container that is always there, once. */
-  protected lowerChildrenSlot(at: Node, context: { readonly slot: boolean; readonly passed: boolean }): boolean {
+  protected lowerChildrenSlot(at: Node, context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean }): boolean {
     const code = DiagnosticCode.UnsupportedJsxChild;
     this.slotRejected = true;
-    if (context.passed) {
-      this.report(code, "Forwarding `children` to another component is not supported yet: render `{children}` inside a built-in container instead.", at);
+    if (context.passed && !context.forward) {
+      this.report(code, "`{children}` can be forwarded to a component only when that component is always present: not inside a condition, a list, or another component's children.", at);
       return false;
     }
-    if (!context.slot) {
+    if (!context.slot && !context.passed) {
       this.report(code, "`{children}` must be a direct child of a container that is always present: not inside a condition, a list, or another component's children.", at);
       return false;
     }

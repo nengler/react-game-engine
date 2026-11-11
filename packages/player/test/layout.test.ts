@@ -548,3 +548,27 @@ describe("layout: floating boxes", () => {
     assert.deepEqual(at(f), [0, 0]);
   });
 });
+
+/** What a compiled component whose root is another component is: a bare container that layout sees through. */
+class Contents extends Entity {
+  override readonly layoutContents = true;
+}
+
+describe("layoutContents", () => {
+  it("lays out a see-through container's children as the Flex's own: they grow, gap and stack as if it were not there", () => {
+    const panel = flex({ width: "grow", height: 10 });
+    const wrapper = new Contents();
+    wrapper.addChild(panel);
+    const nested = new Contents();
+    const inner = new Contents();
+    const second = box(20, 5);
+    inner.addChild(second);
+    nested.addChild(inner);
+    const root = lay(flex({ direction: "column", width: 80, gap: 2, padding: 4 }, wrapper, nested, box(30, 5)));
+    assert.deepEqual(size(panel), [72, 10], "the panel grows to the column, through the wrapper");
+    assert.deepEqual(at(panel), [4, 4]);
+    assert.deepEqual(at(second), [4, 16], "nested wrappers flatten too");
+    assert.deepEqual(at(wrapper), [0, 0], "the wrapper itself is not placed");
+    assert.deepEqual(size(root), [80, 4 + 10 + 2 + 5 + 2 + 5 + 4]);
+  });
+});

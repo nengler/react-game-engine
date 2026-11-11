@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Collider, Entity, Game, GameObject, Pointer, Screen, Shape, Sound, World, createGameState, getSoundSink, type InputState } from "@rge/runtime";
+import { Camera, Collider, Entity, Flex, Game, GameObject, Pointer, Screen, Shape, Sound, Text, World, createGameState, getSoundSink, type InputState } from "@rge/runtime";
 import { Hero } from "../../example/generated/Hero.ts";
 import { createPlayer, DEFAULT_WINDOW, MAX_DT, run, type PlayerConfig } from "../src/loop.ts";
 import { RecordingBackend } from "../src/recording.ts";
@@ -469,5 +469,59 @@ describe("sounds", () => {
     sound.play();
     assert.deepEqual(backend.plays, []);
     assert.equal(sound.plays, 1);
+  });
+});
+
+describe("pointer hover", () => {
+  it("tells the topmost pressable under the mouse it is entered and left, a Flex too, and lets a press through a hover-only Flex", () => {
+    const log: string[] = [];
+    const root = (): GameObject => {
+      const scene = new Entity();
+      const low = new Pointer({ width: 50, height: 50, onPress: () => log.push("press low"), onPointerEnter: () => log.push("enter low"), onPointerLeave: () => log.push("leave low") });
+      const box = new Flex({ width: 20, height: 20, onPointerEnter: () => log.push("enter box"), onPointerLeave: () => log.push("leave box") });
+      box.transform.x = 60;
+      scene.addChild(low);
+      scene.addChild(box);
+      const over = new Flex({ width: 10, height: 10, onPointerEnter: () => log.push("enter over") });
+      over.transform.x = 5;
+      over.transform.y = 5;
+      scene.addChild(over);
+      return scene;
+    };
+    const backend = new RecordingBackend();
+    for (const input of [
+      { mouse: { x: 30, y: 30 } }, // draws the pointers
+      { mouse: { x: 30, y: 30 } }, // over the low pointer
+      { mouse: { x: 31, y: 31 } }, // still over it: nothing new
+      { mouse: { x: 65, y: 5 } }, // over the box
+      { mouse: { x: 8, y: 8 } }, // over the hover-only flex drawn over the low pointer
+      { mouse: { x: 8, y: 8 }, pressed: ["MouseLeft"] },
+      { mouse: { x: 8, y: 8 } }, // the press goes through the hover-only flex to the pointer
+      { mouse: { x: 500, y: 500 } }, // over nothing
+    ]) backend.queueInput(input);
+    const { player: p } = player(root, {}, backend);
+    for (let i = 0; i < 8; i++) p.step();
+    p.close();
+    assert.deepEqual(log, ["enter low", "leave low", "enter box", "leave box", "enter over", "press low"]);
+  });
+});
+
+describe("<Game font>", () => {
+  it("is the font of a <Text> without its own; a <Text font> still wins; without it, text uses the built-in font", () => {
+    const scene = (font: string | undefined) => (): GameObject => {
+      const game = new Game({ font });
+      game.addChild(new Text({ text: "AB", size: 8 }));
+      game.addChild(new Text({ text: "C", size: 8, font: "other.png" }));
+      return game;
+    };
+    const draw = (font: string | undefined) => {
+      const backend = new RecordingBackend({ textureSizes: { "assets/font.png": { width: 80, height: 48 }, "assets/other.png": { width: 160, height: 96 } } });
+      const { player: p } = player(scene(font), {}, backend);
+      p.step();
+      p.close();
+      return backend.lastFrame.records.map((r) => (r.op === "spriteRegion" ? `sprite ${r.texture}` : r.op === "text" ? `text ${r.text}` : r.op)).filter((r) => r.startsWith("sprite") || r.startsWith("text"));
+    };
+    assert.deepEqual(draw("font.png"), ["sprite assets/font.png", "sprite assets/font.png", "sprite assets/other.png"]);
+    assert.deepEqual(draw(undefined), ["text AB", "sprite assets/other.png"]);
   });
 });

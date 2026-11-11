@@ -53,6 +53,17 @@ function finiteOr0(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+/** `object`'s children as a `Flex` lays them out: one that is `layoutContents` stands for its own children. */
+function collectKids(object: GameObject, out: GameObject[], at: number): number {
+  const children = object.children;
+  for (let i = 0; i < children.length; i++) {
+    const kid = children[i] as GameObject;
+    if (kid.layoutContents) at = collectKids(kid, out, at);
+    else out[at++] = kid;
+  }
+  return at;
+}
+
 /** What a child of a `Flex` is, in `FlexBox.childKind`. */
 const LEAF = 0;
 const IN_FLOW = 1;
@@ -155,7 +166,14 @@ export class Layouter {
   /** Fill in each child's kind, and for a leaf its size and where its own drawing starts, on both axes. */
   #measureChildren(f: Flex): void {
     const box = f.box;
-    const kids = f.children;
+    let see = false;
+    for (let i = 0; i < f.children.length; i++) if ((f.children[i] as GameObject).layoutContents) see = true;
+    if (see) {
+      const n = collectKids(f, box.flat, 0);
+      if (box.flat.length !== n) box.flat.length = n;
+      box.kids = box.flat;
+    } else box.kids = f.children;
+    const kids = box.kids;
     box.ensure(kids.length);
     for (let i = 0; i < kids.length; i++) {
       const kid = kids[i] as GameObject;
@@ -235,7 +253,7 @@ export class Layouter {
     const box = f.box;
     if (axis === X) this.#measureChildren(f);
     this.#parse(f, axis);
-    const kids = f.children;
+    const kids = f.box.kids;
     const n = kids.length;
     const along = this.#direction(f) === axis;
     const sizes = box.childSize[axis] as Float64Array;
@@ -294,7 +312,7 @@ export class Layouter {
   /** Step B: given this box's size on the axis, decide each child's size, then do the same inside each child `Flex`. */
   #distribute(f: Flex, axis: number): void {
     const box = f.box;
-    const kids = f.children;
+    const kids = f.box.kids;
     const n = kids.length;
     const sizes = box.childSize[axis] as Float64Array;
     const minimums = box.childMinimum[axis] as Float64Array;
@@ -360,7 +378,7 @@ export class Layouter {
   #grow(f: Flex, axis: number, free: number): void {
     const box = f.box;
     if (!(free > EPSILON)) return;
-    const kids = f.children;
+    const kids = f.box.kids;
     const sizes = box.childSize[axis] as Float64Array;
     const active = box.active;
     let count = 0;
@@ -408,7 +426,7 @@ export class Layouter {
    */
   #shrink(f: Flex, axis: number, overflow: number): void {
     const box = f.box;
-    const kids = f.children;
+    const kids = f.box.kids;
     const sizes = box.childSize[axis] as Float64Array;
     const minimums = box.childMinimum[axis] as Float64Array;
     const active = box.active;
@@ -453,7 +471,7 @@ export class Layouter {
   /** Step 4: where each child goes inside this box, written to its `layoutX` / `layoutY`; then the same inside each child `Flex`. */
   #position(f: Flex): void {
     const box = f.box;
-    const kids = f.children;
+    const kids = f.box.kids;
     const n = kids.length;
     const main = this.#direction(f);
     const cross = main === X ? Y : X;

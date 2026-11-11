@@ -9,11 +9,11 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "generate": "npm run -s demo && npm run -s example && npm run -s kite",
+    "generate": "npm run -s demo && npm run -s example && npm run -s kite && npm run -s hearth",
     "pretest": "npm run -s generate",
     "pretypecheck": "npm run -s generate",
     "test": "node --test \"packages/*/test/**/*.test.ts\"",
-    "typecheck": "tsc -p tsconfig.json && tsc -p packages/example/tsconfig.json && tsc -p packages/demo/tsconfig.json && tsc -p packages/kite/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p packages/example/tsconfig.json && tsc -p packages/demo/tsconfig.json && tsc -p packages/kite/tsconfig.json && tsc -p packages/hearth/tsconfig.json",
     "native:build": "cmake -S native -B native/build && cmake --build native/build -j",
     "native:build:headless": "cmake -S native -B native/build-headless -DRGE_PLATFORM=Memory && cmake --build native/build-headless -j",
     "native:test": "cmake --build native/build-headless -j && ctest --test-dir native/build-headless --output-on-failure",
@@ -34,7 +34,13 @@
     "play:kite": "cd packages/kite && node ../player-node/src/play.ts main.ts",
     "package:kite": "node tools/package.ts packages/kite/main.ts kite packages/kite/assets",
     "check:kite": "node tools/check-game.ts kite",
-    "example": "node packages/compiler/src/cli.ts packages/example/src packages/example/generated --scenes packages/example/scenes"
+    "example": "node packages/compiler/src/cli.ts packages/example/src packages/example/generated --scenes packages/example/scenes",
+    "hearth": "node packages/compiler/src/cli.ts packages/hearth/src packages/hearth/generated --scenes packages/hearth/scenes --assets packages/hearth/assets",
+    "hearth:assets": "node packages/hearth/tools/make-assets.ts",
+    "hearth:map": "node packages/hearth/tools/make-map.ts",
+    "play:hearth": "cd packages/hearth && node ../player-node/src/play.ts main.ts",
+    "package:hearth": "node tools/package.ts packages/hearth/main.ts hearth packages/hearth/assets",
+    "check:hearth": "node tools/check-game.ts hearth"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

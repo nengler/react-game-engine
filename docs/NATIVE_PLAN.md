@@ -792,6 +792,22 @@ A **transition** is a function from progress (0 to 1) and the two route names to
 
 `packages/kite/tools/frame-time.ts` plays the whole game (title, eight rooms, the end) on a recording backend under Node/V8 and times each `player.step()`: script only, no drawing. On the 4-core cloud VM, 1,384 steps: **mean 0.86 ms, 99th percentile 9–11 ms, slowest 25–26 ms**. The slow ones are the steps where a room changes (a `<Tilemap>` is made and the camera's bounds change) and the first frames of a cold JIT; a still room is about 75 draw records and well under a millisecond. The busiest room to draw is the one with the most particles (a death, while the dash trail is still alive), a few hundred rects. `npm run bench:check` is within budget (the player's scenes are unchanged).
 
+**Many animated sprites (finding 9 measured, Hearth, 2026-11-11).** Two scenes in `packages/player/bench/frame.ts`, both with every mover
+re-rendered by state each step and an `<AnimatedSprite>` that gets a `flipX` and a `tint` each render: *200 animated sprites by state* and
+*80 enemies, 20 towers, 50 shots* (Hearth's wave 10 built from engine pieces). Per frame on the cloud VM: **Node 0.2 / 0.2 ms, QuickJS 2.2 /
+1.3 ms** (budgets 0.7 / 0.6 and 6 / 4). A styled animated sprite costs about 11 µs a frame under QuickJS, three times a plain state-moved
+rect (3.9 µs, 2,000 of them take 7.8 ms), and is comfortable at the sizes a game of this kind has. So the planned "extend the moved-as-block
+fast path to styled sprites" was **not done**: nothing is over budget.
+
+**Hearth's wave 10 itself** (`packages/hearth/tools/frame-time.ts`: the good-build replay, every step while wave 10 is on, 1,854 steps; 109
+enemies, 14 towers at the busiest; script only, the rules run twice a step at 2× speed): **Node mean 1.0 ms, p99 2.7, slowest 7; QuickJS mean
+6.7 ms, p99 15, slowest 24**. The rules are 0.1 ms (V8) and 0.5 ms (QuickJS) of that; the rest is the 109 enemy components re-rendering
+every step (each moves, so each is replaced by an immutable update and applies its props), then the tree walk and draw list. Inside a 16.7 ms frame
+at the mean but not by much at the 99th percentile on QuickJS, which has no JIT and runs on a 2.1 GHz VM. If a person sees a hitch in the last
+waves on the Rust host, this is the first place to look: the cost of a keyed list where every item changes every step (one `render()` per enemy)
+is what the plan called out, and the cheap options are moving the enemy's position out of its props (a `<Transform>`-style update with no render) or
+drawing the health bars from one component.
+
 ## Later (not scheduled)
 
 | Idea | Notes |
