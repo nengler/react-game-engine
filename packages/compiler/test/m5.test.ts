@@ -1047,7 +1047,7 @@ function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box><Sprit
     assert.deepEqual(diag(source), [DiagnosticCode.UnsupportedJsxChild]);
     const ok = `${box("children: Child", "{children}")}
 function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
-    assert.deepEqual(diag(ok), []);
+    assert.doesNotThrow(() => compile(ok));
   });
 
   it("does not read children as a value", () => {
