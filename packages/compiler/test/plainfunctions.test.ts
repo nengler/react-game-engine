@@ -111,6 +111,32 @@ export function D() {
     }
   });
 
+  it("give <Game> its controls: an imported createControls, and nothing else", () => {
+    const p = project({
+      "controls.ts": `import { createControls } from "@rge/runtime";\nexport const controls = createControls({ jump: ["Z", "PadA"] });\n`,
+      "Main.tsx": `import { Entity, Game, useInput } from "@rge/runtime/jsx";
+import { controls } from "./controls.ts";
+function Hero() { useInput((input) => { if (input.pressed("jump")) { } }); return <Entity name="Hero" />; }
+export default function Main() { return <Game controls={controls}><Hero /></Game>; }
+`,
+    });
+    try {
+      const r = p.run();
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(p.out("Main.ts"), /new Game\(\{ controls: controls \}\)|controls: controls/);
+    } finally {
+      rmSync(p.dir, { recursive: true, force: true });
+    }
+    const wrong = project({ "Main.tsx": `import { Game } from "@rge/runtime/jsx";\nexport default function Main() { return <Game controls={5}></Game>; }\n` });
+    try {
+      const r = wrong.run();
+      assert.equal(r.status, 1);
+      assert.match(r.stderr, /<Game controls> takes the game's controls, imported from a \.ts module/);
+    } finally {
+      rmSync(wrong.dir, { recursive: true, force: true });
+    }
+  });
+
   it("re-run only when their arguments change: a dynamic prop depends on the state in its arguments", () => {
     const p = project({
       "helpers.ts": HELPERS,

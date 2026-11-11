@@ -1,3 +1,4 @@
+import type { Controls } from "../input.ts";
 import { Entity, type EntityProps } from "./Entity.ts";
 
 /** What `state={useGame}` hands over: the game state a `createGameState` made. The player resets its store when the game starts. */
@@ -52,6 +53,11 @@ export interface GameProps extends EntityProps {
   fixedStep?: number;
   /** The game's state: `state={useGame}`, the store from `GameState.ts`. It starts from its initial values with the game. */
   state?: GameStateHandle;
+  /**
+   * The game's actions (`controls={controls}`, a `createControls({ jump: ["Z", "PadA"], … })` kept in a module): every
+   * `input.pressed("jump")` then means any of the action's keys.
+   */
+  controls?: Controls;
 }
 
 /**
@@ -83,6 +89,7 @@ export class Game<P extends object = {}> extends Entity<P> {
   showFps: boolean | undefined;
   fpsKey: string | false | undefined;
   state: GameStateHandle | undefined;
+  controls: Controls | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: GameProps = {}, props?: P, defaults?: Partial<P>) {
@@ -102,5 +109,6 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.showFps = hostProps.showFps;
     this.fpsKey = hostProps.fpsKey;
     this.state = hostProps.state;
+    this.controls = hostProps.controls;
   }
 }

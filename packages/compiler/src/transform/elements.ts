@@ -436,7 +436,8 @@ export class ElementLowering extends HookLowering {
 
   /**
    * A prop of `<Game>`: the player reads these before the tree is built, so each is a literal (`width={640}`, `smooth`),
-   * and `state={useGame}` is the project's game state, the imported store. Anything else (a state read, an expression)
+   * `state={useGame}` is the project's game state, the imported store, and `controls={controls}` the game's actions, imported
+   * from a .ts module. Anything else (a state read, an expression)
    * would not exist yet, so it is `RGE1210`.
    */
   protected lowerGameSetting(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
@@ -453,6 +454,16 @@ export class ElementLowering extends HookLowering {
         return null;
       }
       return { kind: "StoreRef" };
+    }
+    if (name === "controls") {
+      // `controls={controls}`: the game's actions, a `createControls(…)` imported from a .ts module. Made when that module
+      // loads, so it exists before the tree is built, as a literal does.
+      const expression = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
+      if (!expression || !isIdentifier(expression) || !this.plainImports.has(expression.text) || this.scope.has(expression.text)) {
+        this.report(DiagnosticCode.InvalidPropValue, `<${GAME_TAG} controls> takes the game's controls, imported from a .ts module: \`export const controls = createControls({ jump: ["Z", "PadA"] })\`, then \`controls={controls}\`.`, at);
+        return null;
+      }
+      return { kind: "PlainRef", name: expression.text };
     }
     const allowed = this.manifest.intrinsicMembers[GAME_TAG] ?? [];
     if (!allowed.includes(name) || name === "name") {

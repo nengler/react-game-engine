@@ -1259,6 +1259,28 @@ Rules: the name must not look like a hook (`use…`; those are the game state's 
 
 **`useUpdate` takes the input.** `useUpdate((dt, input) => { step(input, dt); })`: the polled input of that step (under a fixed timestep, the per-step copy with exactly-once key edges), the same object `useInput` gets, and it can be handed to a game-state action or a plain function, which reads the keys with loops and tables (Kite's `rules/controls.ts`). A canonical `onUpdate` override (several handlers, or a root that implements the hook) declares `input` only when it passes it on.
 
+## Named input actions (2026-11-11)
+
+A game names its actions once, in a module, and hands them to `<Game>`:
+
+```ts
+// rules/controls.ts
+export const controls = createControls({ jump: ["Z", "Space", "PadA"], left: ["ArrowLeft", "A", "PadLeft"], confirm: ["Enter", "PadStart"] });
+```
+
+```tsx
+<Game state={useGame} controls={controls}>…</Game>
+useInput((input) => { if (input.pressed("confirm")) begin(); });
+```
+
+Every `InputState` question (`pressed`, `down`, `released`) then takes an action name as well as a key name: `down` is any of
+its keys held, `pressed` is one of them going down this step, `released` is one going up with none still held. Rules in plain
+TypeScript read the same names (`input.down("left")`). `<Game controls>` must be an identifier imported from a `.ts` module
+(`RGE1210` otherwise), since the player reads it before the tree is built; `PlayerConfig.controls` does the same for a game
+without a `<Game>`. `createInputState(snapshot, controls)` gives tests the same answers, and `controls.bindings` is the shape
+an input script's `bindings` takes, so a script's `jump` can hold the game's own keys. An unknown name warns once and lists
+the actions. Not built: rebinding at run time, and axes (a stick's value rather than four directions).
+
 ## Effects that happen at a moment (priority 7, 2026-11-11)
 
 Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each

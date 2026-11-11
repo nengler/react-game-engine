@@ -114,7 +114,7 @@ describe("<Game> as a component's root", () => {
   it("rejects a prop it does not have, and a transform, saying what its settings are", () => {
     const unknown = errors(`function A() { return <Game fps={30} />; }`);
     assert.equal(unknown[0]!.code, DiagnosticCode.UnsupportedAttribute);
-    assert.match(unknown[0]!.message, /<Game> has no prop 'fps'\. Its settings: title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, gamepadDeadzone, upscale, showFps, fpsKey, state\./);
+    assert.match(unknown[0]!.message, /<Game> has no prop 'fps'\. Its settings: title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, gamepadDeadzone, upscale, showFps, fpsKey, state, controls\./);
     assert.deepEqual(errors(`function A() { return <Game transform={{ x: 1 }} />; }`).map((d) => d.code), [DiagnosticCode.InvalidTransformAttribute]);
   });
 

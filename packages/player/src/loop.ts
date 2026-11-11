@@ -1,4 +1,4 @@
-import { Game, World, getSoundSink, setSoundSink, resetGameState, type GameObject, type Pressable, type SoundSink, type ViewTransform } from "@rge/runtime";
+import { Game, World, getSoundSink, setSoundSink, resetGameState, type Controls, type GameObject, type Pressable, type SoundSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -25,6 +25,8 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly fullscreenKey?: string | false;
   /** Steps per second for `useUpdate`, as the `<Game>` prop `fixedStep`; unset runs one update per frame. */
   readonly fixedStep?: number;
+  /** The game's actions, as the `<Game>` prop `controls`. */
+  readonly controls?: Controls;
   /** The gamepad stick's dead zone, as the `<Game>` prop `gamepadDeadzone`. */
   readonly gamepadDeadzone?: number;
   /** How a pixel-perfect screen is scaled up at a scale that is not a whole number, as the `<Game>` prop `upscale`. */
@@ -122,6 +124,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const fixedDt = stepHz === undefined ? 0 : 1 / stepHz;
   if (stepHz !== undefined && !(stepHz > 0 && Number.isFinite(stepHz))) throw new RangeError(`fixedStep must be a positive number of steps per second, not ${stepHz}.`);
   const input = new PlayerInput(warner);
+  input.controls = game?.controls ?? config.controls;
   // With a fixed timestep a handler sees a copy of the key flags per step: edges (pressed, released) gathered since the last step
   // go to the next step only, so a press between steps is never lost and never seen twice.
   const edges = new Uint8Array(KEYS.length);
