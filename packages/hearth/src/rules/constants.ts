@@ -13,8 +13,8 @@ export const STEP = 1 / 60;
 
 export const START_GOLD = 120;
 export const START_LIVES = 20;
-/** HP of every enemy grows by this fraction per wave: wave 1 is 1×, wave 10 is 2.35×. */
-export const HP_PER_WAVE = 0.15;
+/** HP of every enemy grows by this fraction per wave (0.15 in the first plan; the balance table asked for more): wave 1 is 1×, wave 10 is 2.8×. */
+export const HP_PER_WAVE = 0.2;
 /** Gold for clearing a wave. */
 export const WAVE_BONUS = 15;
 /** A tower sells for this share of everything spent on it. */

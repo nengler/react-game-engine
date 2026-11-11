@@ -15,11 +15,11 @@ export const WAVES: readonly (readonly Group[])[] = [
   [{ kind: "runner", count: 10, gap: 0.6, delay: 0 }, { kind: "grunt", count: 8, gap: 1.0, delay: 6 }],
   [{ kind: "grunt", count: 15, gap: 0.7, delay: 0 }, { kind: "brute", count: 1, gap: 1, delay: 12 }],
   [{ kind: "runner", count: 20, gap: 0.4, delay: 0 }, { kind: "grunt", count: 10, gap: 0.8, delay: 10 }],
-  [{ kind: "brute", count: 3, gap: 3, delay: 0 }, { kind: "grunt", count: 20, gap: 0.6, delay: 4 }],
-  [{ kind: "runner", count: 30, gap: 0.35, delay: 0 }, { kind: "brute", count: 4, gap: 2.5, delay: 8 }],
-  [{ kind: "grunt", count: 40, gap: 0.45, delay: 0 }, { kind: "brute", count: 5, gap: 2, delay: 5 }],
-  [{ kind: "runner", count: 30, gap: 0.3, delay: 0 }, { kind: "grunt", count: 30, gap: 0.4, delay: 5 }, { kind: "brute", count: 8, gap: 1.5, delay: 14 }],
-  [{ kind: "grunt", count: 50, gap: 0.3, delay: 0 }, { kind: "runner", count: 30, gap: 0.3, delay: 6 }, { kind: "brute", count: 10, gap: 1.5, delay: 10 }],
+  [{ kind: "brute", count: 4, gap: 3, delay: 0 }, { kind: "grunt", count: 30, gap: 0.5, delay: 4 }],
+  [{ kind: "runner", count: 45, gap: 0.3, delay: 0 }, { kind: "brute", count: 6, gap: 2, delay: 8 }],
+  [{ kind: "grunt", count: 60, gap: 0.35, delay: 0 }, { kind: "brute", count: 8, gap: 2, delay: 5 }],
+  [{ kind: "runner", count: 50, gap: 0.25, delay: 0 }, { kind: "grunt", count: 50, gap: 0.3, delay: 5 }, { kind: "brute", count: 12, gap: 1.2, delay: 12 }],
+  [{ kind: "grunt", count: 70, gap: 0.25, delay: 0 }, { kind: "runner", count: 50, gap: 0.25, delay: 6 }, { kind: "brute", count: 16, gap: 1.1, delay: 8 }],
 ];
 
 export interface Spawn {

@@ -117,10 +117,10 @@ describe("waves", () => {
     ]);
   });
 
-  it("grows each enemy's HP by 15% a wave", () => {
+  it("grows each enemy's HP by 20% of its base a wave", () => {
     assert.equal(hpOf("grunt", 0), 30);
-    assert.equal(hpOf("grunt", 1), 35);
-    assert.equal(hpOf("brute", 9), 282);
+    assert.equal(hpOf("grunt", 1), 36);
+    assert.equal(hpOf("brute", 9), 336);
   });
 });
 

@@ -12,7 +12,7 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: Readonly<Record<EnemyKind, EnemyDef>> = {
-  runner: { kind: "runner", name: "RUNNER", hp: 14, speed: 40, gold: 4, lives: 1 },
-  grunt: { kind: "grunt", name: "GRUNT", hp: 30, speed: 25, gold: 6, lives: 1 },
-  brute: { kind: "brute", name: "BRUTE", hp: 120, speed: 14, gold: 15, lives: 3 },
+  runner: { kind: "runner", name: "RUNNER", hp: 14, speed: 40, gold: 2, lives: 1 },
+  grunt: { kind: "grunt", name: "GRUNT", hp: 30, speed: 25, gold: 3, lives: 1 },
+  brute: { kind: "brute", name: "BRUTE", hp: 120, speed: 14, gold: 8, lives: 3 },
 };
