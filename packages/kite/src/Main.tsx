@@ -1,6 +1,6 @@
-import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Route, Router, Screen } from "@rge/runtime/jsx";
+import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Route, Router, Screen, useShake } from "@rge/runtime/jsx";
 import { DashTrail } from "./DashTrail.tsx";
-import { fx, shake } from "./effects.ts";
+import { fx } from "./effects.ts";
 import { End } from "./End.tsx";
 import { Gem } from "./Gem.tsx";
 import { useGame } from "./GameState.ts";
@@ -16,6 +16,7 @@ import { fadeThrough } from "./transitions.ts";
 function Play() {
   const { originX, originY, room, deaths, dead } = useGame((s) => s.run);
   const gems = useGame((s) => s.gems);
+  const [shake, setShake] = useShake();
 
   return (
     <Entity name="Play">
@@ -23,9 +24,9 @@ function Play() {
       <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />
       {/* Copies of the character a dash leaves, under it, in the world. */}
       <DashTrail />
-      {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it (effects.ts). */}
+      {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it. */}
       <Camera bounds={[originX, originY, 320, 180]} slide={0.4} shake={shake}>
-        <Player />
+        <Player onDie={() => setShake({ strength: 3, duration: 0.25 })} />
       </Camera>
       {/* Where dust and sparks are drawn, in the world, over the character: effects.ts makes them. */}
       <ParticleLayer particles={fx} />

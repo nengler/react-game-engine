@@ -1,10 +1,10 @@
-import { createParticles, createShake, createSounds, freeze, type Scale2 } from "@rge/runtime";
+import { createParticles, createSounds, freeze, type Scale2 } from "@rge/runtime";
 import type { GameEvent } from "./rules/events.ts";
 import { freezeFor } from "./rules/playback.ts";
 
 /**
  * The game's one-off effects, kept like a toast library's store: the looks and sounds are named here once, `Main.tsx` mounts
- * what draws them (`<ParticleLayer particles={fx} />` next to the camera, `<Camera shake={shake}>`), and anything calls them.
+ * what draws them (`<ParticleLayer particles={fx} />` next to the camera), and anything calls them.
  * The character calls `playEvents` with what each step reports; what belongs to it alone (its squash) it sets itself.
  */
 export const fx = createParticles({
@@ -25,10 +25,10 @@ export const sfx = createSounds({
   start: "start.wav",
 });
 
-export const shake = createShake({ strength: 3, duration: 0.25 });
 
 /**
- * Answer what the rules say happened in a step: a sound, a burst at the place it happened, a shake, a freeze. The events are in
+ * Answer what the rules say happened in a step: a sound, a burst at the place it happened, a freeze (the camera's shake is the
+ * `Play` screen's own state). The events are in
  * the room's pixels; the room's top left in the world is (`originX`, `originY`).
  */
 export function playEvents(events: readonly GameEvent[], originX: number, originY: number): void {
@@ -60,7 +60,6 @@ export function playEvents(events: readonly GameEvent[], originX: number, origin
       case "death":
         sfx.play("death");
         fx.burst("death", x, y);
-        shake.start();
         break;
       case "room":
         break;

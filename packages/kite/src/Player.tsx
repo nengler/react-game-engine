@@ -7,7 +7,12 @@ import { animationOf, heightOf } from "./rules/body.ts";
  * The character: it runs the game's step with each fixed step's input, answers what happened (sound, dust, shake and freeze,
  * from `effects.ts`; its own squash and stretch), and draws the rules' body as an animated sprite with the trail a dash leaves.
  */
-export function Player() {
+interface PlayerProps {
+  /** The character died this step: the screen shakes its camera. */
+  onDie: () => void;
+}
+
+export function Player({ onDie }: PlayerProps) {
   const { player: body, originX, originY, dead } = useGame((s) => s.run);
   const step = useGame((s) => s.step);
   const [squash, setSquash] = useSquash(1.75);
@@ -19,6 +24,9 @@ export function Player() {
     const next = squashFor(events);
     if (next !== null) {
       setSquash(next);
+    }
+    if (events.some((e) => e.type === "death")) {
+      onDie();
     }
   });
 
