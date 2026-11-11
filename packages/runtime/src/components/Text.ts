@@ -39,17 +39,34 @@ export class Text<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 
   text: string;
-  size: number;
   color: string;
   width: number | undefined;
   align: TextAlign;
   font: string | undefined;
 
+  #size = DEFAULT_TEXT_SIZE;
+  #sized = false;
+
+  /** The height of a line in pixels. Without one given: 16, or for a bitmap font its cell's height (see `sized`). */
+  get size(): number {
+    return this.#size;
+  }
+
+  set size(value: number) {
+    this.#size = value;
+    this.#sized = true;
+  }
+
+  /** Whether a size was given. Text in a bitmap font without one is drawn at the font's own cell height, one pixel per pixel. */
+  get sized(): boolean {
+    return this.#sized;
+  }
+
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: TextProps, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
     this.text = hostProps.text;
-    this.size = hostProps.size ?? DEFAULT_TEXT_SIZE;
+    if (hostProps.size !== undefined) this.size = hostProps.size;
     this.color = hostProps.color ?? DEFAULT_TEXT_COLOR;
     this.width = hostProps.width;
     this.align = hostProps.align ?? "left";

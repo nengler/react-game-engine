@@ -44,6 +44,10 @@ export class PlayerInput implements InputState {
     return this.#flags(key, RGE_KEY_PRESSED);
   }
 
+  isAction(name: string): boolean {
+    return this.controls?.keysOf(name) !== undefined;
+  }
+
   down(key: string): boolean {
     return this.#flags(key, RGE_KEY_DOWN);
   }

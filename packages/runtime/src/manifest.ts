@@ -110,8 +110,8 @@ export const runtimeManifest: RuntimeManifest = {
     Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "font", "controls"],
     Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
-    Pointer: ["width", "height", "onPress", "onPointerEnter", "onPointerLeave", "contains"],
-    Text: ["text", "size", "color", "width", "align", "font"],
+    Pointer: ["width", "height", "originX", "originY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint"],
+    Text: ["text", "size", "sized", "color", "width", "align", "font"],
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "shake", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: [
@@ -129,7 +129,7 @@ export const runtimeManifest: RuntimeManifest = {
     Route: ["name", "keepAlive", "visible", "active"],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "contains", "box",
+      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint", "box",
     ],
   },
   intrinsicRequired: {
@@ -176,8 +176,8 @@ export const runtimeManifest: RuntimeManifest = {
       onCollisionEnter: [{ name: "other", type: "Contact" }],
       onCollisionExit: [{ name: "other", type: "Contact" }],
     },
-    Pointer: { onPress: [], onPointerEnter: [], onPointerLeave: [] },
-    Flex: { onPress: [], onPointerEnter: [], onPointerLeave: [] },
+    Pointer: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [] },
+    Flex: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [] },
   },
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.

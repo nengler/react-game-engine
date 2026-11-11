@@ -22,6 +22,8 @@ export interface GeneratorOptions {
   readonly gameState?: { readonly name: string; readonly importFrom: string };
   /** The path from the generated files to the source folder, so `./transitions.ts` becomes `../src/transitions.ts`. Default `".."` + `/`: see `Compiler`. */
   readonly sourceFromOutput?: string;
+  /** The generated `tilemaps.ts`, imported for its registration by a module that draws a `<Tilemap>` (see `Compiler.setTilemapsModule`). */
+  readonly tilemapsModule?: string;
 }
 
 /**
@@ -49,6 +51,7 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
   if (imports.length > 0) {
     w.line(`import { ${imports.join(", ")} } from ${JSON.stringify(options.runtimeModule)};`);
   }
+  if (options.tilemapsModule !== undefined && imports.includes("Tilemap")) w.line(`import ${JSON.stringify(options.tilemapsModule)};`);
   if (usage.store) {
     if (!options.gameState) throw new Error("A component uses the game state, but the generator was given none.");
     w.line(`import { ${options.gameState.name} } from ${JSON.stringify(options.gameState.importFrom)};`);

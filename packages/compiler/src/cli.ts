@@ -112,6 +112,7 @@ function main(argv: readonly string[]): number {
       }
       if (maps.size > 0 && !diagnostics.some((d) => d.severity === "error")) {
         writeFileSync(resolve(outDir, "tilemaps.ts"), tilemapsSource(maps, relative(process.cwd(), scenesDir)));
+        compiler.setTilemapsModule("./tilemaps.ts");
         console.log(`wrote tilemaps.ts (${maps.size} map${maps.size === 1 ? "" : "s"})`);
       }
     }

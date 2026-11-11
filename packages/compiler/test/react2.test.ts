@@ -5,7 +5,7 @@
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Flex, Pointer, Shape, Sprite, Text, World } from "@rge/runtime";
+import { createInputState, Entity, Flex, Pointer, Shape, Sprite, Text, World } from "@rge/runtime";
 import { checkAssets, DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, compileProject, load, loadProject, typeCheck, typeCheckProject } from "./helpers.ts";
 
@@ -227,5 +227,37 @@ export function Tip({ onPointerEnter }: TipProps) {
     const found = checkAssets([compiled.ir], { folder: "assets", exists: (name) => name === "fonts.png", list: () => ["fonts.png"] });
     assert.deepEqual(found.map((d) => d.code), [DiagnosticCode.MissingAsset]);
     assert.match(found[0]!.message, /font 'font.png'.*did you mean 'fonts.png'/);
+  });
+});
+
+describe("keys that press things, from TSX", () => {
+  it("pressKey, focusable, autoFocus, onFocus / onBlur and a Pointer's origin compile and run", async () => {
+    const compiled = compile(`
+interface PadsProps { onWave: () => void; }
+export function Pads({ onWave }: PadsProps) {
+  const [focused, setFocused] = useState(-1);
+  return (
+    <Entity>
+      <Flex pressKey="Space" onPress={onWave} />
+      <Pointer width={10} height={10} originX={5} originY={5} focusable autoFocus onFocus={() => setFocused(0)} />
+      <Pointer width={10} height={10} originX={5} originY={5} transform={{ x: 30 }} focusable onFocus={() => setFocused(1)} onBlur={() => setFocused(-1)} />
+      <Text size={8}>{\`\${focused}\`}</Text>
+    </Entity>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    let waves = 0;
+    const { Pads } = await load<{ Pads: new (p: { onWave: () => void }) => Entity }>(compiled);
+    const world = new World();
+    const pads = new Pads({ onWave: () => waves++ });
+    world.mount(pads);
+    world.flush();
+    const text = pads.children[3] as Text;
+    world.tick(1 / 60, createInputState({ pressed: ["Space"] }));
+    assert.equal(text.text, "0");
+    world.tick(1 / 60, createInputState({ pressed: ["ArrowRight"] }));
+    assert.equal(text.text, "1");
+    assert.equal(waves, 1);
+    assert.equal((pads.children[1] as Pointer).contains(-4, -4), true);
   });
 });

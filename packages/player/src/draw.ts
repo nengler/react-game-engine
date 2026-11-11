@@ -1229,13 +1229,13 @@ export class FrameBuilder {
       return true;
     }
     if (object instanceof Text) {
+      const font = object.font ?? this.font;
       if (object.text === "") {
         out.width = object.width ?? 0;
-        out.height = object.size;
+        out.height = font === undefined ? object.size : this.#bitmapHeight(object, font);
         return true;
       }
-      const font = object.font ?? this.font;
-      size = font === undefined ? this.#textSize(object.text, object.size) : this.#bitmapSize(font, object.text, object.size);
+      size = font === undefined ? this.#textSize(object.text, object.size) : this.#bitmapSize(font, object.text, this.#bitmapHeight(object, font));
       if (object.width !== undefined) {
         out.width = object.width;
         out.height = size.height;
@@ -1322,6 +1322,13 @@ export class FrameBuilder {
     else this.#list.rect(world, shape.width, shape.height, color);
   }
 
+  /** A bitmap text's height: its size, or without one given the font's cell height. */
+  #bitmapHeight(text: Text, font: string): number {
+    if (text.sized) return text.size;
+    const sheet = this.#imageSize(font);
+    return sheet.height > 0 ? sheet.height / FONT_ROWS : text.size;
+  }
+
   /** The size of a text drawn with a bitmap font: a cell's width for each character, the size as its height. */
   #bitmapSize(font: string, text: string, size: number): Size {
     const sheet = this.#imageSize(font);
@@ -1343,13 +1350,13 @@ export class FrameBuilder {
     }
     const cellW = sheet.width / FONT_COLUMNS;
     const cellH = sheet.height / FONT_ROWS;
-    const scale = text.size / cellH;
+    const scale = (text.sized ? text.size : cellH) / cellH;
     const color = this.#color(text.color);
     const cos = Math.cos(at.rotation);
     const sin = Math.sin(at.rotation);
     let x = 0;
     if (text.width !== undefined && text.align !== "left") {
-      const room = text.width - this.#bitmapSize(font, text.text, text.size).width;
+      const room = text.width - this.#bitmapSize(font, text.text, this.#bitmapHeight(text, font)).width;
       x = text.align === "center" ? Math.round(room / 2) : Math.round(room);
     }
     for (const ch of text.text) {
