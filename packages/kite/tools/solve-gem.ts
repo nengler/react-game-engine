@@ -1,6 +1,6 @@
 /**
  * Finds a replay that takes the gem: play the level's replays to the start of room 7, then search from there for a way to touch
- * the gem. Writes `test/gem-replay.ts`. The gem's place is in `Main.tsx` (`<Gem transform>`) and here; keep them the same.
+ * the gem. Writes `test/gem-replay.ts`. The gem's place is `GEM` in `rules/rooms.ts`.
  *
  *   node packages/kite/tools/solve-gem.ts
  */
@@ -11,11 +11,9 @@ import { parseInputScript } from "@rge/player";
 import { NO_CONTROLS } from "../src/rules/body.ts";
 import { newRun } from "../src/rules/level.ts";
 import { playFrame, startPlayback } from "../src/rules/playback.ts";
+import { GEM } from "../src/rules/rooms.ts";
 import { REPLAYS } from "../test/replays.ts";
 import { solve } from "./solve.ts";
-
-/** The gem, in room 7's own pixels (it is at 1542, -330 in the world, and room 7 starts at 1280, -360). */
-export const GEM = { x: 262, y: 30, w: 8, h: 8 };
 
 const bindings = { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: "ArrowDown", jump: "Z", dash: "X" };
 const down = (keys: readonly string[], k: string): boolean => keys.includes(k);

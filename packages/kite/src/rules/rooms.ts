@@ -152,3 +152,7 @@ export function tilesOf(room: Room, ch: string): [number, number][] {
   for (let r = 0; r < ROOM_ROWS; r++) for (let c = 0; c < ROOM_COLS; c++) if ((room.rows[r] as string)[c] === ch) found.push([c, r]);
   return found;
 }
+
+/** The gem, off the main path of room 7: its box in the room's own pixels, and where that is in the world. */
+export const GEM = { room: 6, x: 262, y: 30, w: 8, h: 8 };
+export const GEM_AT = { x: (ROOM_LIST[GEM.room]?.ox ?? 0) + GEM.x, y: (ROOM_LIST[GEM.room]?.oy ?? 0) + GEM.y };

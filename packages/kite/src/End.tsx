@@ -1,12 +1,13 @@
-import { useInput, Flex, Hud, Text } from "@rge/runtime/jsx";
+import { useInput, Flex, Hud } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
+import { Label } from "./Label.tsx";
 
 /** The end screen: how the climb went, and a way back to the title, in a centred column on the HUD layer. */
 export function End() {
   const toTitle = useGame((s) => s.toTitle);
-  const deaths = useGame((s) => s.deaths);
+  const deaths = useGame((s) => s.run.deaths);
+  const steps = useGame((s) => s.run.steps);
   const gems = useGame((s) => s.gems);
-  const steps = useGame((s) => s.steps);
   const seconds = Math.floor(steps / 60);
 
   useInput((input) => {
@@ -18,26 +19,14 @@ export function End() {
   return (
     <Hud>
       <Flex direction="column" alignItems="center" justifyContent="center" width="grow" height="grow" gap={10}>
-        <Text font="font.png" size={16} color="#ffb15e">
-          YOU MADE IT
-        </Text>
-        <Text font="font.png" size={8} color="#8e9ac2">
-          THE FOOTHILLS ARE BEHIND YOU
-        </Text>
+        <Label text="YOU MADE IT" size={16} color="#ffb15e" />
+        <Label text="THE FOOTHILLS ARE BEHIND YOU" color="#8e9ac2" />
         <Flex direction="column" alignItems="center" gap={6}>
-          <Text font="font.png" size={8} color="#fff1d6">
-            DEATHS {deaths}
-          </Text>
-          <Text font="font.png" size={8} color="#fff1d6">
-            TIME {Math.floor(seconds / 60)}:{seconds % 60 < 10 ? "0" : ""}{seconds % 60}
-          </Text>
-          <Text font="font.png" size={8} color="#7de3ff">
-            GEM {gems}/1
-          </Text>
+          <Label text={`DEATHS ${deaths}`} />
+          <Label text={`TIME ${Math.floor(seconds / 60)}:${seconds % 60 < 10 ? "0" : ""}${seconds % 60}`} />
+          <Label text={`GEM ${gems}/1`} color="#7de3ff" />
         </Flex>
-        <Text font="font.png" size={8} color="#8e9ac2">
-          PRESS Z FOR THE TITLE
-        </Text>
+        <Label text="PRESS Z FOR THE TITLE" color="#8e9ac2" />
       </Flex>
     </Hud>
   );

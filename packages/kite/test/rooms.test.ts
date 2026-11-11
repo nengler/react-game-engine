@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { parseInputScript, runScript } from "@rge/player";
 import { bindings, gameConfig } from "../game.ts";
+import { fx, sfx } from "../src/effects.ts";
 import { useGame } from "../src/GameState.ts";
 import { NO_CONTROLS } from "../src/rules/body.ts";
 import { ROOM_COLS, ROOM_ROWS } from "../src/rules/constants.ts";
@@ -69,7 +70,7 @@ describe("replays", () => {
     const frames = parseInputScript(`Enter, _*3, ${REPLAYS.join(", ")}`, { bindings });
     const result = runScript(gameConfig, frames, () => {
       const s = useGame.getState();
-      return { room: s.room, deaths: s.deaths, finished: s.finished, screen: s.screen };
+      return { room: s.run.room, deaths: s.run.deaths, finished: s.run.finished, screen: s.screen };
     });
     const last = result.states.at(-1);
     assert.deepEqual(last, { room: 7, deaths: 0, finished: true, screen: "end" });
@@ -78,9 +79,19 @@ describe("replays", () => {
     assert.equal(result.states[0]?.screen, "play", "the first button, on the title screen, starts the run");
   });
 
+  it("answer what happens with the effect stores: sounds, dust and no death on a clean run", () => {
+    const before = { dust: fx.bursts["dust"] ?? 0, kick: fx.bursts["kick"] ?? 0, jump: sfx.plays("jump"), dash: sfx.plays("dash"), start: sfx.plays("start"), death: sfx.plays("death") };
+    runScript(gameConfig, parseInputScript(`Enter, _*3, ${REPLAYS.slice(0, 3).join(", ")}`, { bindings }), () => null);
+    assert.equal(sfx.plays("start") - before.start, 1, "the title's button");
+    assert.ok(sfx.plays("jump") > before.jump, "jumps are heard");
+    assert.ok(sfx.plays("dash") > before.dash, "room 3 needs a dash");
+    assert.ok((fx.bursts["dust"] ?? 0) > before.dust && (fx.bursts["kick"] ?? 0) > before.kick, "landings and jumps raise dust");
+    assert.equal(sfx.plays("death"), before.death);
+  });
+
   it("give the same result at any frame rate, because the game runs on a fixed timestep", () => {
     const script = `Enter, _*3, ${REPLAYS.slice(0, 3).join(", ")}`;
-    const final = (frames: ReturnType<typeof parseInputScript>) => runScript(gameConfig, frames, () => ({ ...useGame.getState().player })).states.at(-1);
+    const final = (frames: ReturnType<typeof parseInputScript>) => runScript(gameConfig, frames, () => ({ ...useGame.getState().run.player })).states.at(-1);
     const at60 = parseInputScript(script, { bindings });
     // The same inputs drawn at 120 and at 30 frames a second: every frame twice with half the time, or two frames' keys in one frame.
     const at120 = at60.flatMap((frame) => [{ ...frame, dt: 1 / 120 }, { ...frame, dt: 1 / 120 }]);
@@ -90,7 +101,7 @@ describe("replays", () => {
 
   it("reach the optional gem in room 7 by a detour, through the game: its collider and the character's collider meet", () => {
     const script = `Enter, _*3, ${REPLAYS.slice(0, 6).join(", ")}, ${GEM_REPLAY}, _*4`;
-    const result = runScript(gameConfig, parseInputScript(script, { bindings }), () => ({ gems: useGame.getState().gems, room: useGame.getState().room }));
+    const result = runScript(gameConfig, parseInputScript(script, { bindings }), () => ({ gems: useGame.getState().gems, room: useGame.getState().run.room }));
     assert.deepEqual(result.states.at(-1), { gems: 1, room: 6 });
     assert.equal(result.states.find((s) => s.room === 6 && s.gems === 0) !== undefined, true, "it was not already picked up on arrival");
   });

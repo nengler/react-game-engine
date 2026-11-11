@@ -1,48 +1,48 @@
-import { Camera, Entity, Fade, Flex, Game, Hud, Music, Route, Router, Screen, Text } from "@rge/runtime/jsx";
+import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Route, Router, Screen, useUpdate } from "@rge/runtime/jsx";
+import { fx, shake } from "./effects.ts";
 import { End } from "./End.tsx";
 import { Gem } from "./Gem.tsx";
 import { useGame } from "./GameState.ts";
+import { Label } from "./Label.tsx";
 import { Level } from "./Level.tsx";
 import { Player } from "./Player.tsx";
+import { GEM_AT } from "./rules/rooms.ts";
 import { Title } from "./Title.tsx";
 import { fadeThrough } from "./transitions.ts";
 
-/** What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, and the HUD. */
+/**
+ * What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, the bursts
+ * the game makes, and the HUD. It runs the game too: each fixed step hands its input to the game state's `step`.
+ */
 function Play() {
-  const originX = useGame((s) => s.originX);
-  const originY = useGame((s) => s.originY);
-  const room = useGame((s) => s.room);
-  const deaths = useGame((s) => s.deaths);
+  const step = useGame((s) => s.step);
+  const originX = useGame((s) => s.run.originX);
+  const originY = useGame((s) => s.run.originY);
+  const room = useGame((s) => s.run.room);
+  const deaths = useGame((s) => s.run.deaths);
+  const dead = useGame((s) => s.run.dead);
   const gems = useGame((s) => s.gems);
-  const deathCount = useGame((s) => s.deathCount);
-  const dead = useGame((s) => s.dead);
+
+  useUpdate((dt, input) => {
+    step(input, dt);
+  });
 
   return (
     <Entity name="Play">
       <Level />
-      <Gem transform={{ x: 1542, y: -330 }} />
-      {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it. */}
-      <Camera
-        bounds={[originX, originY, 320, 180]}
-        slide={0.4}
-        shake={deathCount}
-        shakeStrength={3}
-        shakeDuration={0.25}
-      >
+      <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />
+      {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it (effects.ts). */}
+      <Camera bounds={[originX, originY, 320, 180]} slide={0.4} shake={shake}>
         <Player />
       </Camera>
+      {/* Where dust and sparks are drawn, in the world, over the character: effects.ts makes them. */}
+      <ParticleLayer particles={fx} />
       <Hud>
         {/* A row across the top: the room, the gem once it is picked up, the deaths. */}
         <Flex direction="row" justifyContent="space-between" width="grow" padding={5}>
-          <Text font="font.png" size={8} color="#8e9ac2">
-            {room + 1}/8
-          </Text>
-          <Text font="font.png" size={8} color="#7de3ff">
-            {gems > 0 ? "GEM" : ""}
-          </Text>
-          <Text font="font.png" size={8} color="#ff7a59">
-            X{deaths}
-          </Text>
+          <Label text={`${room + 1}/8`} color="#8e9ac2" />
+          <Label text={gems > 0 ? "GEM" : ""} color="#7de3ff" />
+          <Label text={`X${deaths}`} color="#ff7a59" />
         </Flex>
         {/* Dying fades the screen to the background colour, and the new life fades it back. */}
         <Fade on={dead} duration={0.3} color="#12151f" />

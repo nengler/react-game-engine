@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { newBody, NO_CONTROLS, stepBody, type Body, type Controls, type SolidAt } from "../src/rules/body.ts";
+import type { GameEvent } from "../src/rules/events.ts";
 import { createInputState } from "@rge/runtime";
 import { readControls } from "../src/rules/controls.ts";
 import { BODY_H, COYOTE, DASH_SPEED, JUMP_BUFFER, TILE, WALL_SLIDE_SPEED } from "../src/rules/constants.ts";
@@ -10,16 +11,24 @@ const FLOOR = 100;
 const flat: SolidAt = (_x, y) => y >= FLOOR;
 const STAND_Y = FLOOR - BODY_H;
 
-/** Step a body through `frames` frames of a controls function, returning every body (index i is after frame i). */
-function play(controls: (frame: number, body: Body) => Partial<Controls>, frames: number, start: Partial<Body> = {}, solid: SolidAt = flat): Body[] {
+/** Bodies after each frame (index i is after frame i), and what happened in each frame (`events[i]`). */
+type Played = Body[] & { events: GameEvent[][] };
+
+/** Step a body through `frames` frames of a controls function. */
+function play(controls: (frame: number, body: Body) => Partial<Controls>, frames: number, start: Partial<Body> = {}, solid: SolidAt = flat): Played {
   let body: Body = { ...newBody(100, STAND_Y), ...start };
-  const out: Body[] = [];
+  const out = Object.assign([] as Body[], { events: [] as GameEvent[][] });
   for (let i = 0; i < frames; i++) {
-    body = stepBody(body, { ...NO_CONTROLS, ...controls(i, body) }, solid, DT);
+    const events: GameEvent[] = [];
+    body = stepBody(body, { ...NO_CONTROLS, ...controls(i, body) }, solid, DT, events);
     out.push(body);
+    out.events.push(events);
   }
   return out;
 }
+
+/** How many `type` events happened up to and including frame `last`. */
+const happened = (played: Played, type: GameEvent["type"], last = Infinity): number => played.events.slice(0, last + 1).flat().filter((e) => e.type === type).length;
 
 const rise = (bodies: Body[]): number => STAND_Y - Math.min(...bodies.map((b) => b.y));
 const landing = (bodies: Body[], after: number): number => bodies.findIndex((b, i) => i > after && b.onGround);
@@ -99,13 +108,15 @@ describe("jumping", () => {
         return -1;
       };
       const total = dry();
+      const events: GameEvent[] = [];
+      const jumped = (): boolean => events.some((e) => e.type === "jump");
       for (let i = 0; i < total + 30; i++) {
         const press = i === total - before;
-        body = stepBody(body, { ...NO_CONTROLS, jumpPressed: press, jumpHeld: press || body.vy < 0 }, flat, DT);
+        body = stepBody(body, { ...NO_CONTROLS, jumpPressed: press, jumpHeld: press || body.vy < 0 }, flat, DT, events);
         if (body.onGround && landed < 0) landed = i;
-        if (landed >= 0 && i > landed) return body.jumps > 0;
+        if (landed >= 0 && i > landed) return jumped();
       }
-      return body.jumps > 0;
+      return jumped();
     };
     const window = Math.round(JUMP_BUFFER / DT);
     assert.equal(jumpedOnLanding(window - 2), true);
@@ -139,8 +150,8 @@ describe("the dash", () => {
     const bodies = play((i) => ({ jumpPressed: i === 1, jumpHeld: i >= 1 && i < 30, right: true, dashPressed: i === 10 || i === 30 || i === 60 }), 140);
     assert.equal(bodies[9]?.dashes, 1);
     assert.equal(bodies[10]?.dashes, 0);
-    assert.equal(bodies[10]?.dashCount, 1);
-    assert.equal(bodies[31]?.dashCount, 1, "a second press in the air does nothing");
+    assert.equal(happened(bodies, "dash", 10), 1);
+    assert.equal(happened(bodies, "dash", 31), 1, "a second press in the air does nothing");
     assert.ok(bodies.slice(-20).every((b) => b.onGround && b.dashes === 1), "refilled on landing, and the third press never started before that");
   });
 
@@ -154,7 +165,7 @@ describe("the dash", () => {
 
   it("cannot start again for a moment after it starts", () => {
     const bodies = play((i) => ({ right: true, dashPressed: i === 1 || i === 8 }), 30, { y: 20 }, () => false);
-    assert.equal(bodies.at(-1)?.dashCount, 1);
+    assert.equal(happened(bodies, "dash"), 1);
   });
 });
 
@@ -173,7 +184,7 @@ describe("walls", () => {
 
   it("jumps away from the wall, with the speed away from it, and ignores steering back into it for a moment", () => {
     const bodies = play((i) => ({ right: true, jumpPressed: i === 2, jumpHeld: i >= 2 }), 20, { ...atWall, vy: 20 }, wall);
-    assert.equal(bodies[2]?.wallJumps, 1);
+    assert.equal(happened(bodies, "wallJump", 2), 1);
     assert.ok((bodies[2]?.vx ?? 0) < 0 && (bodies[2]?.vy ?? 0) < 0);
     assert.ok((bodies[6]?.x ?? 999) < atWall.x, "still moving away while the player holds toward the wall");
     assert.equal(bodies[6]?.facing, -1);
@@ -181,9 +192,9 @@ describe("walls", () => {
 
   it("jumps off a wall just after leaving it (within reach), not from far away", () => {
     const far = play((i) => ({ jumpPressed: i === 2 }), 6, { x: WALL_X - 8 - 6, y: 40, vy: 20 }, wall);
-    assert.equal(far.at(-1)?.wallJumps, 0);
+    assert.equal(happened(far, "wallJump"), 0);
     const near = play((i) => ({ jumpPressed: i === 2 }), 6, { x: WALL_X - 8 - 2, y: 40, vy: 20 }, wall);
-    assert.equal(near.at(-1)?.wallJumps, 1);
+    assert.equal(happened(near, "wallJump"), 1);
   });
 });
 

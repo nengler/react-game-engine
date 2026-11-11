@@ -1,5 +1,6 @@
 import { newBody, stepBody, type Body, type Controls } from "./body.ts";
 import { BODY_H, BODY_W, ENTRY_LIFT, RESPAWN_DELAY, ROOM_H, ROOM_W, TILE, TRANSITION_TIME, VOID_MARGIN } from "./constants.ts";
+import type { GameEvent } from "./events.ts";
 import { gridOf, hazardRect, overlapsRect, ROOM_LIST, type Room, type RoomGrid } from "./rooms.ts";
 
 /**
@@ -24,9 +25,6 @@ export interface Run {
   finished: boolean;
   /** Fixed steps played while the world was running: the clock the end screen shows. */
   steps: number;
-  /** Counts of what happened (events for sound and shake: a change is an event). */
-  deathCount: number;
-  roomCount: number;
 }
 
 const grids = new Map<number, RoomGrid>();
@@ -39,7 +37,7 @@ function gridFor(room: Room): RoomGrid {
 /** A run at the start of the first room. */
 export function newRun(): Run {
   const room = ROOM_LIST[0] as Room;
-  return { room: 0, originX: room.ox, originY: room.oy, player: newBody(room.spawnX, room.spawnY), dead: false, deathTimer: 0, deaths: 0, transition: 0, finished: false, steps: 0, deathCount: 0, roomCount: 0 };
+  return { room: 0, originX: room.ox, originY: room.oy, player: newBody(room.spawnX, room.spawnY), dead: false, deathTimer: 0, deaths: 0, transition: 0, finished: false, steps: 0 };
 }
 
 /** Which of a room's tiles the hitbox at (x, y) touches, as the characters found. */
@@ -71,8 +69,8 @@ export function outOfBounds(b: Body): boolean {
   return b.y > ROOM_H + VOID_MARGIN || b.x < -VOID_MARGIN || b.x > ROOM_W + VOID_MARGIN;
 }
 
-/** One fixed step of `dt` seconds. Returns the next state; `run` is not changed. */
-export function stepRun(run: Run, c: Controls, dt: number): Run {
+/** One fixed step of `dt` seconds. Returns the next state; `run` is not changed. What happened is pushed onto `events`. */
+export function stepRun(run: Run, c: Controls, dt: number, events: GameEvent[] = []): Run {
   if (run.finished) return run;
   const room = ROOM_LIST[run.room] as Room;
   const next: Run = { ...run };
@@ -90,13 +88,13 @@ export function stepRun(run: Run, c: Controls, dt: number): Run {
     }
     return next;
   }
-  const body = stepBody(run.player, c, gridFor(room).solidAt, dt);
+  const body = stepBody(run.player, c, gridFor(room).solidAt, dt, events);
   next.player = body;
   if (onSpikes(room, body) || outOfBounds(body)) {
     next.dead = true;
     next.deathTimer = RESPAWN_DELAY;
     next.deaths++;
-    next.deathCount++;
+    events.push({ type: "death", x: body.x + BODY_W / 2, y: body.y + BODY_H / 2 });
     next.player = { ...body, vx: 0, vy: 0, dashing: false, dashTime: 0 };
     return next;
   }
@@ -109,7 +107,7 @@ export function stepRun(run: Run, c: Controls, dt: number): Run {
     next.room = to.index;
     next.originX = to.ox;
     next.originY = to.oy;
-    next.roomCount++;
+    events.push({ type: "room", x: body.x + BODY_W / 2, y: body.y + BODY_H, room: to.index });
     next.transition = TRANSITION_TIME;
     // The body stays where it is in the world: the next room is laid out so its opening is right there.
     // Coming up out of the room below, the body arrives a little above the new room's floor (the slide hides the jump); an exit to the side keeps its height.

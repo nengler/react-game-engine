@@ -1,5 +1,6 @@
 import type { Controls } from "./body.ts";
 import { DASH_FREEZE_STEPS, DEATH_FREEZE_STEPS } from "./constants.ts";
+import type { GameEvent } from "./events.ts";
 import { stepRun, type Run } from "./level.ts";
 
 /**
@@ -22,9 +23,18 @@ export function startPlayback(run: Run): Playback {
 /** One frame of input, which is one fixed step: skipped while frozen (its presses are kept), played otherwise. */
 export function playFrame(p: Playback, c: Controls, dt: number): Playback {
   if (p.frozen > 0) return { run: p.run, frozen: p.frozen - 1, edgeJump: p.edgeJump || c.jumpPressed, edgeDash: p.edgeDash || c.dashPressed };
-  const next = stepRun(p.run, { ...c, jumpPressed: c.jumpPressed || p.edgeJump, dashPressed: c.dashPressed || p.edgeDash }, dt);
-  let frozen = 0;
-  if (next.player.dashCount !== p.run.player.dashCount) frozen = DASH_FREEZE_STEPS;
-  if (next.deathCount !== p.run.deathCount) frozen = Math.max(frozen, DEATH_FREEZE_STEPS);
+  const events: GameEvent[] = [];
+  const next = stepRun(p.run, { ...c, jumpPressed: c.jumpPressed || p.edgeJump, dashPressed: c.dashPressed || p.edgeDash }, dt, events);
+  const frozen = freezeFor(events);
   return { run: next, frozen, edgeJump: false, edgeDash: false };
+}
+
+/** Steps the world stays frozen after these events: a dash and a death each hold it a moment, so a hit reads. */
+export function freezeFor(events: readonly GameEvent[]): number {
+  let frozen = 0;
+  for (const e of events) {
+    if (e.type === "dash") frozen = Math.max(frozen, DASH_FREEZE_STEPS);
+    if (e.type === "death") frozen = Math.max(frozen, DEATH_FREEZE_STEPS);
+  }
+  return frozen;
 }

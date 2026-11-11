@@ -3,11 +3,13 @@ import {
   FAST_FALL, GRAVITY, GROUND_FRICTION, JUMP_BOOST, JUMP_BUFFER, JUMP_HOLD, JUMP_SPEED, MAX_FALL, OVER_SPEED_DECEL, RUN_ACCEL, RUN_SPEED,
   WALL_JUMP_LOCK, WALL_JUMP_SPEED, WALL_REACH, WALL_SLIDE_SPEED,
 } from "./constants.ts";
+import type { GameEvent } from "./events.ts";
 
 /**
  * The character's body: the whole of how it moves, as a plain function of its state, the buttons held, the room's solid
  * cells and the time step. It draws nothing and imports nothing from the engine, so a test steps it directly, and the
- * game state keeps a `Body` as numbers and booleans (every field is one) so a component can show it.
+ * game state keeps a `Body` as numbers and booleans so a component can show it. What happens in a step (a jump, a landing)
+ * is pushed onto the `events` the caller passes, for sound and dust to answer.
  *
  * Position is a whole number of pixels (`x`, `y`: the hitbox's top left, in the room) plus a sub-pixel remainder
  * (`rx`, `ry`), and moves one axis at a time one pixel at a time against the solid cells, so a body never ends a step
@@ -38,11 +40,6 @@ export interface Body {
   dashTime: number;
   dashCooldown: number;
   wallLock: number;
-  // Counters of what happened, only ever going up: what sound, dust and shake read (a change is an event).
-  jumps: number;
-  wallJumps: number;
-  dashCount: number;
-  lands: number;
 }
 
 /** The buttons for one step. `jumpPressed` and `dashPressed` are true only on the step the button went down. */
@@ -65,7 +62,7 @@ export type SolidAt = (x: number, y: number) => boolean;
 export function newBody(x: number, y: number): Body {
   return {
     x, y, rx: 0, ry: 0, vx: 0, vy: 0, facing: 1, onGround: false, wall: 0, sliding: false, dashing: false, dashes: DASH_COUNT, dashX: 0, dashY: 0,
-    coyote: 0, buffer: 0, jumpHold: 0, dashTime: 0, dashCooldown: 0, wallLock: 0, jumps: 0, wallJumps: 0, dashCount: 0, lands: 0,
+    coyote: 0, buffer: 0, jumpHold: 0, dashTime: 0, dashCooldown: 0, wallLock: 0,
   };
 }
 
@@ -150,8 +147,8 @@ function wallSide(b: Body, c: Controls, solid: SolidAt): number {
   return 0;
 }
 
-/** One step of `dt` seconds. Returns the next body; `body` is not changed. */
-export function stepBody(body: Body, c: Controls, solid: SolidAt, dt: number): Body {
+/** One step of `dt` seconds. Returns the next body; `body` is not changed. What happened is pushed onto `events`. */
+export function stepBody(body: Body, c: Controls, solid: SolidAt, dt: number, events: GameEvent[] = []): Body {
   const b = { ...body };
   const wasOnGround = b.onGround;
   const fallingSpeed = b.vy;
@@ -184,7 +181,7 @@ export function stepBody(body: Body, c: Controls, solid: SolidAt, dt: number): B
     b.dashes--;
     b.dashTime = DASH_TIME;
     b.dashCooldown = DASH_COOLDOWN;
-    b.dashCount++;
+    events.push({ type: "dash", x: b.x + BODY_W / 2, y: b.y + BODY_H / 2 });
     b.vx = b.dashX * DASH_SPEED;
     b.vy = b.dashY * DASH_SPEED;
     b.jumpHold = 0;
@@ -202,7 +199,7 @@ export function stepBody(body: Body, c: Controls, solid: SolidAt, dt: number): B
       b.coyote = 0;
       b.buffer = 0;
       b.onGround = false;
-      b.jumps++;
+      events.push({ type: "jump", x: b.x + BODY_W / 2, y: b.y + BODY_H });
     } else if (wall !== 0) {
       if (b.dashTime > 0) endDash(b, false);
       b.vx = -wall * WALL_JUMP_SPEED;
@@ -211,7 +208,7 @@ export function stepBody(body: Body, c: Controls, solid: SolidAt, dt: number): B
       b.jumpHold = JUMP_HOLD;
       b.wallLock = WALL_JUMP_LOCK;
       b.buffer = 0;
-      b.wallJumps++;
+      events.push({ type: "wallJump", x: wall < 0 ? b.x : b.x + BODY_W, y: b.y + BODY_H, wall });
     }
   }
 
@@ -256,7 +253,7 @@ export function stepBody(body: Body, c: Controls, solid: SolidAt, dt: number): B
 
   // Landing, and where the body stands now (what is drawn and what the next step starts from).
   b.onGround = b.vy >= 0 && hits(solid, b.x, b.y + 1);
-  if (b.onGround && !wasOnGround && fallingSpeed > 60) b.lands++;
+  if (b.onGround && !wasOnGround && fallingSpeed > 60) events.push({ type: "land", x: b.x + BODY_W / 2, y: b.y + BODY_H });
   if (b.onGround) b.sliding = false;
   return b;
 }
