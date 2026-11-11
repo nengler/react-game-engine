@@ -11,22 +11,9 @@ import { fileURLToPath } from "node:url";
 import { newBattle, stepBattle, type Battle, type Command } from "../src/rules/battle.ts";
 import { STEP } from "../src/rules/constants.ts";
 import { MAP } from "../src/rules/map.ts";
-import { pathAt } from "../src/rules/path.ts";
+import { BEST } from "../src/rules/coverage.ts";
 import { TOWERS, upgradeCost, type TowerKind } from "../src/rules/towers.ts";
 import { WAVES } from "../src/rules/waves.ts";
-
-/** How many pixels of the path a pad's tower of this kind could reach: where a sensible player builds first. */
-function coverage(pad: number, kind: TowerKind): number {
-  const p = MAP.pads[pad]!;
-  let n = 0;
-  for (let d = 0; d <= MAP.path.length; d += 2) {
-    const at = pathAt(MAP.path, d);
-    if (Math.hypot(at.x - p.x, at.y - p.y) <= TOWERS[kind].range) n += 2;
-  }
-  return n;
-}
-
-export const BEST = [...MAP.pads].map((p) => p.id).sort((a, b) => coverage(b, "bolt") - coverage(a, "bolt") || a - b);
 
 type Step = { readonly build: TowerKind } | "upgrade";
 

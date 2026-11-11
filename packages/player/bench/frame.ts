@@ -12,7 +12,7 @@
  *
  * `npm run bench:check` runs it under both and fails when a scene is over its budget in `budget.json` (CI does).
  */
-import { Collider, Entity, Shape, World } from "@rge/runtime";
+import { AnimatedSprite, Collider, Entity, Shape, Sprite, World } from "@rge/runtime";
 import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerInput, RGE_IN_DT, RGE_IN_QUIT, Warner, type Backend } from "@rge/player";
 
 /**
@@ -29,6 +29,7 @@ const nothing: Backend = {
   open() {},
   close() {},
   loadTexture: () => 0,
+  textureSize: () => ({ width: 56, height: 56 }),
   loadSound: () => 0,
   playSound() {},
   frame(_clear, _records, _length, _texts, input) {
@@ -101,8 +102,34 @@ class StateMover extends Entity {
   }
 }
 
+/**
+ * A compiled component with an animated, styled sprite, like Hearth's enemy: moved by state, and on each render it also writes the
+ * sprite's `flipX` and `tint` (a hit flash), the way `<AnimatedSprite flipX={left} tint={flash > 0 ? … : …} />` does.
+ */
+class AnimatedMover extends StateMover {
+  readonly sprite = new AnimatedSprite({ sheet: "walk.png", frameWidth: 14, frameHeight: 14, animations: "walk:0-3@8", animation: "walk", originX: 7, originY: 7 });
+  constructor() {
+    super();
+    this.addChild(this.sprite);
+  }
+  override render(): void {
+    super.render();
+    const flip = Math.floor(this.x / 4) % 2 === 0;
+    const tint = Math.floor(this.x / 2) % 2 === 0 ? "#ffffff" : "#9ee7ff";
+    if (this.sprite.flipX !== flip || this.sprite.tint !== tint) {
+      this.sprite.flipX = flip;
+      this.sprite.tint = tint;
+      this.sprite.markChanged();
+    }
+  }
+}
+
 interface Scene {
   readonly n: number;
+  /** The movers are animated, styled sprites (`AnimatedMover`) instead of rects. */
+  readonly animated?: boolean;
+  /** Hearth's wave 10 built from shapes: `n` enemies, 20 towers (a base, a barrel and a ring each) and 50 shots, all moving by state. */
+  readonly tower?: boolean;
   readonly colliders?: boolean;
   readonly state?: boolean;
   readonly pile?: boolean;
@@ -112,20 +139,51 @@ interface Scene {
   readonly scriptSweep?: boolean;
 }
 
-function buildScene({ n, colliders: withColliders = false, state = false, pile = false, moving = n }: Scene): Entity {
+/** 80 animated enemies, 20 towers and 50 shots, built from engine pieces so the bench does not depend on the game package. */
+function buildTowerScene(enemies: number): Entity {
+  const root = new Entity();
+  for (let i = 0; i < enemies; i++) {
+    const e = new AnimatedMover();
+    e.setX((i % 40) * 6);
+    e.setY(Math.floor(i / 40) * 30 + 20);
+    root.addChild(e);
+  }
+  for (let i = 0; i < 20; i++) {
+    const t = new Entity();
+    t.transform.x = (i % 10) * 24;
+    t.transform.y = Math.floor(i / 10) * 60 + 5;
+    t.addChild(new Sprite({ image: "base.png", frameWidth: 12, frameHeight: 12, frame: i % 9 }));
+    const barrel = new Sprite({ image: "barrel.png", frameWidth: 12, frameHeight: 12, frame: i % 9, originX: 6, originY: 6 });
+    barrel.transform.rotation = i * 0.3;
+    t.addChild(barrel);
+    t.addChild(new Shape({ kind: "circle", width: 60, height: 60, color: "#ffffff22" }));
+    root.addChild(t);
+  }
+  for (let i = 0; i < 50; i++) {
+    const shot = new StateMover();
+    shot.setX(i * 5);
+    shot.setY(40 + (i % 5) * 20);
+    shot.addChild(new Sprite({ image: "shot.png", frameWidth: 8, frameHeight: 8, frame: 0, originX: 4, originY: 4 }));
+    root.addChild(shot);
+  }
+  return root;
+}
+
+function buildScene({ n, animated = false, tower = false, colliders: withColliders = false, state = false, pile = false, moving = n }: Scene): Entity {
+  if (tower) return buildTowerScene(n);
   const root = new Entity();
   const side = Math.ceil(Math.sqrt(n));
   for (let i = 0; i < n; i++) {
     const x = pile ? 0 : (i % side) * 14;
     const y = pile ? 0 : Math.floor(i / side) * 14;
-    const mover = i >= moving ? new Entity() : state ? new StateMover() : new Mover();
+    const mover = i >= moving ? new Entity() : animated ? new AnimatedMover() : state ? new StateMover() : new Mover();
     mover.transform.x = x;
     mover.transform.y = y;
     if (mover instanceof StateMover) {
       mover.setX(x);
       mover.setY(y);
     }
-    mover.addChild(new Shape({ kind: "rect", width: 10, height: 10 }));
+    if (!animated) mover.addChild(new Shape({ kind: "rect", width: 10, height: 10 }));
     if (withColliders) mover.addChild(new Collider({ width: 10, height: 10 }));
     root.addChild(mover);
   }
@@ -180,6 +238,9 @@ const scenes: [string, Scene][] = [
   ["500 moving rects with colliders", { n: 500, colliders: true }],
   ["2000 moving rects with colliders", { n: 2000, colliders: true }],
   ["300 colliders in one pile", { n: 300, colliders: true, pile: true }],
+  // Hearth's finding 9: many styled, animated sprites, each re-rendered by state every step.
+  ["200 animated sprites by state", { n: 200, animated: true, state: true }],
+  ["80 enemies, 20 towers, 50 shots", { n: 80, tower: true }],
 ];
 // Under a host with a broad phase, the same scenes with the script's sweep, to compare.
 if (hostOverlaps !== undefined) {
@@ -202,7 +263,7 @@ for (const n of [5000, 20000]) {
   const runs = [0, 1, 2].map(() => mount({ n })).sort((a, b) => a - b);
   console.log(`${`mount ${n} rects`.padEnd(35)}: ${(runs[1] as number).toFixed(2)} ms once`);
 }
-for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8], ...scenes.slice(12, 13)] as [string, Scene][]) {
+for (const [name, scene] of [scenes[3], scenes[4], scenes[6], scenes[7], scenes[8], ...scenes.slice(12, 14)] as [string, Scene][]) {
   const p = phases(scene);
   console.log(`  ${name} by phase: tick ${p.tick.toFixed(2)}, walk ${p.walk.toFixed(2)}, collisions ${p.collisions.toFixed(2)} ms`);
 }

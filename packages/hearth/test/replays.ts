@@ -1,5 +1,5 @@
 import { MAP } from "../src/rules/map.ts";
-import { BEST } from "../tools/balance.ts";
+import { BEST } from "../src/rules/coverage.ts";
 
 /**
  * Input scripts that play the whole game: they click pads to build and upgrade, start the waves and wait them out. The pad

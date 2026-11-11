@@ -540,6 +540,25 @@ a callback reads the item.
 * **Immutable updates** are what make the list re-render: see "Arrays and
   records".
 
+### Conditionals inside the map (2026-11-11)
+
+The callback may return `cond && <El key … />`, `cond ? <El key … /> : null`, or `cond ? <A key={k} … /> : <B key={k} … />`:
+
+```tsx
+{pads.map((p) => (p.tower ? <Tower key={p.id} {...p.tower} id={p.id} /> : <EmptyPad key={p.id} {...p} />))}
+{shots.map((s) => s.live && <Shot key={s.id} {...s} />)}
+```
+
+`KeyedListChildIR` gains `condition` and `alternate`. With no `alternate` the list is the source filtered by the condition
+(`source.filter((s) => s.live)`): an item whose condition is false has no instance. With one, the item's instance is `element` while the
+condition is true and `alternate` while it is false, and **both branches need the same `key` expression** (otherwise `RGE1209`). The
+items map holds the union of the two classes, and a `#<field>Branches` map remembers which each key was built as. On render, a key whose
+branch flipped queues removal of the old instance and adds the new one at the same `(slot, position)`, with the item's current props; the
+reorder that follows uses the new instance. The branches in the generated code test the condition itself, not a stored flag, so that
+TypeScript narrows what it reads (`p.tower ? new Tower({ …p.tower })`). A fragment is still not a branch, and the index parameter cannot
+be used when the items are conditional (it would count the items left out). The `&&` form is a filter, so TypeScript does not narrow
+inside it: spread a non-null source there.
+
 **Runtime.** Children are sorted by `(slot, order)`: `addChild(child, slot,
 order = 0)` and `queueAddChild(child, slot, order)` insert after every sibling
 with a lower slot, or the same slot and a lower or equal order.
@@ -602,8 +621,9 @@ relative to the container that holds `{children}`.
   The container is the root, a fragment, or a static `<Entity>` below it:
   not inside a condition, a list, a block passed to another component, or a
   built-in that cannot have children. A declared `children` that is never
-  rendered is an error. Forwarding to another component
-  (`<Box>{children}</Box>`) is not supported yet.
+  rendered is an error. `{children}` may also be the whole of the children
+  passed to another component (`<Box title={title}>{children}</Box>`), which
+  is "Forwarding" below.
 * IR: a `ChildrenSlot` child takes the slot's position among its siblings, so
   the siblings are attached with explicit slots (`addChild(child, 0)`,
   `addChild(footer, 2)`).
@@ -651,6 +671,28 @@ reset, so remounting builds them afresh.
 `queueReorderPassedChildren`, which add to the host at `(slot, order)` (see
 "Keyed lists"). The parent never needs the receiver's slot index, so a
 component from another file works.
+
+### Forwarding `{children}` (2026-11-11)
+
+```tsx
+function Modal({ title, children }: ModalProps) {
+  return <Flex float anchor="center" to="center"><Panel title={title}>{children}</Panel></Flex>;
+}
+```
+
+`Modal` does not hold what it is given: it hands each passed child to `Panel`, which holds it in its own slot (or hands it on again, so
+Modal → Panel → Flex resolves in a chain). The generated constructor says `this.passedChildrenForward = this.panel;` where it would
+say `passedChildrenHost` / `passedChildrenSlot`, and `GameObject`'s four passed-children methods delegate to the forward target when
+it is set (`acceptsPassedChildren` is true for either). The parent's `attachPassedChild`, queued adds, removals and reorders all end up
+in the innermost container, so static, conditional and list children all work through it.
+
+**The forwarded `{children}` must be the only child passed to the inner component** (decided 2026-11-11, option A of the plan's
+"Forwarded `{children}` beside other passed children"). `<Panel title={title}>{children}</Panel>` is allowed;
+`<Panel><Title/>{children}<Footer/></Panel>` is `RGE1202` ("must be the only child passed to it"). Why: all of a receiver's passed
+children share one slot and are sorted by one number (`order`), so a whole forwarded list cannot sit between two siblings. If a game
+needs it: first, allow `{children}` inside a wrapper `<Flex>` that is passed (a compiler-only change, no runtime cost), then order
+ranges (`position × 2²⁰ + i`) in `GameObject`. A forwarding component must itself be always present (not in a condition or a list or
+another component's children): otherwise `RGE1202`, as before.
 
 ## Prefabs and scenes
 
@@ -1483,6 +1525,21 @@ conflict: layout decides the slot, and the object's own `transform` nudges it
 within the slot, as CSS's `transform` does. Both names are reserved members.
 
 `children` is passed between elements, `<Panel>…</Panel>`: see "Children".
+
+### Spread props (2026-11-11)
+
+`<Enemy key={e.id} {...e} />` and `<Box {...o} x={9} />`: on a **component** element an attribute may be a spread of any expression the
+compiler can read (state, a prop, the list item, a game-state selection). `PropIR` gains `SpreadPropIR { value, dependencies }`; the order
+among the props is kept, so a later prop wins, as in React. The generated code spreads for real: `new Enemy({ ...(e) })`, and a render
+sends `updateProps({ ...(e) })`. TypeScript checks the object against the props type, the source type-check reports a missing prop at the
+author's line, and the runtime's `applyProps` compares key by key, so a render marks the child dirty only when a value changed: in a list,
+only the items whose object was replaced (an immutable update) re-render. A spread that reads nothing is applied at construction only. When
+a spread is among the props, `updateProps` carries every value prop, in order, so a named prop after the spread still wins on update
+(callbacks are made once and are not re-sent). A spread in a list item reads the item and gets the `Item` dependency.
+
+Not supported: a spread onto a **built-in** (`<Shape {...p} />`): its render writes each prop to a field one by one, so a spread needs the
+keys, from the manifest's `intrinsicMembers`. It is `RGE1203` with that reason, until a game spreads onto a built-in (Hearth does not).
+`<Box x={5} {...o} />` is TypeScript's own error (`x` is overwritten) when `o` always has `x`.
 
 ## Roots and component forms
 
