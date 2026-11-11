@@ -329,11 +329,18 @@ export class ElementLowering extends HookLowering {
     const textProp = isComponent ? undefined : this.manifest.textContent[tag.text];
     let children: ChildIR[] = [];
     if (textProp !== undefined) props.push(...this.lowerTextContent(isJsxElement(jsx) ? jsx.children : [], textProp, props, tag.text, jsx));
-    else if (isJsxElement(jsx)) children = this.lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent });
+    else if (isJsxElement(jsx)) children = this.lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent, forward: slotOk && isComponent });
     if (isComponent && children.some((c) => c.kind === "KeyedListChild") && children.length > 1) {
       this.report(
         DiagnosticCode.InvalidList,
         `A list passed to <${tag.text}> must be its only child: the list's items and the other children would share positions. Wrap the list in an <${this.hostIntrinsic}> or make the others part of the list.`,
+        jsx,
+      );
+    }
+    if (isComponent && children.length > 1 && children.some((c) => c.kind === "ChildrenSlot")) {
+      this.report(
+        DiagnosticCode.UnsupportedJsxChild,
+        `\`{children}\` forwarded to <${tag.text}> must be the only child passed to it: put the other children inside <${tag.text}> itself, or pass them through \`{children}\` from the parent.`,
         jsx,
       );
     }
@@ -539,7 +546,7 @@ export class ElementLowering extends HookLowering {
    * `slot`: a `{children}` may appear here (a container reachable through static elements). `passed`: these are
    * children passed to a component, which mount at its slot.
    */
-  protected lowerChildren(children: readonly JsxChild[], parentPath: readonly number[], context: { readonly slot: boolean; readonly passed: boolean }): ChildIR[] {
+  protected lowerChildren(children: readonly JsxChild[], parentPath: readonly number[], context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean }): ChildIR[] {
     const out: ChildIR[] = [];
     let index = 0;
     for (const child of children) {

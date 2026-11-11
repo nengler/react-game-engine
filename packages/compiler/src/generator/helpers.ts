@@ -32,12 +32,15 @@ export function queueRemoveChild(mount: Mount, child: string): string {
 }
 
 /** The container holding `{children}` and the slot's index among its children, found through static elements (`{children}` is only allowed there). */
-export function findChildrenSlot(children: readonly ChildIR[], host: string): { host: string; index: number } | null {
+export function findChildrenSlot(children: readonly ChildIR[], host: string): { host: string; index: number } | { forward: string } | null {
   for (const [index, child] of children.entries()) {
     if (child.kind === "ChildrenSlot") return { host, index };
   }
   for (const child of children) {
     if (child.kind !== "StaticChild") continue;
+    // `<Panel title={title}>{children}</Panel>`: the slot is the whole of a component's passed children, so what this component is
+    // given goes on to that component (which may forward it again).
+    if (child.element.component.kind !== "Intrinsic" && child.element.children.some((c) => c.kind === "ChildrenSlot")) return { forward: `this.${child.element.fieldName}` };
     const found = findChildrenSlot(child.element.children, `this.${child.element.fieldName}`);
     if (found) return found;
   }

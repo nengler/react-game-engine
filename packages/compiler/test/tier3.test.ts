@@ -308,3 +308,140 @@ describe("conditionals in a list's map: generated code and diagnostics", () => {
     assert.match(index[0]!.message, /cannot take the index/);
   });
 });
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Forwarding {children}
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const FORWARD = `
+interface BoxProps {
+  title: string;
+  children: Child;
+}
+
+function Box({ title, children }: BoxProps) {
+  return (
+    <Entity name={title}>
+      <Entity name="body">{children}</Entity>
+    </Entity>
+  );
+}
+
+function Frame({ title, children }: BoxProps) {
+  return (
+    <Entity name="frame">
+      <Box title={title}>{children}</Box>
+    </Entity>
+  );
+}
+
+function Outer({ title, children }: BoxProps) {
+  return (
+    <Entity name="outer">
+      <Frame title={title}>{children}</Frame>
+    </Entity>
+  );
+}
+
+function Use() {
+  const [on, setOn] = useState(true);
+  const [ids, setIds] = useState<number[]>([1, 2]);
+  return (
+    <Entity name="use">
+      <Outer title="t">
+        <Entity name="static" />
+        {on && <Entity name="maybe" />}
+        <Entity name="last" />
+      </Outer>
+    </Entity>
+  );
+}
+
+function UseList() {
+  const [ids, setIds] = useState<number[]>([1, 2]);
+  return <Entity name="use"><Outer title="t">{ids.map((i) => <Entity key={i} name={"n" + i} />)}</Outer></Entity>;
+}
+`;
+
+interface UseInstance extends Entity {
+  setOn(on: boolean): void;
+}
+interface UseListInstance extends Entity {
+  setIds(ids: number[]): void;
+}
+
+describe("forwarding {children}", () => {
+  let Use: new () => UseInstance;
+  let UseList: new () => UseListInstance;
+  before(async () => {
+    ({ Use, UseList } = await load<{ Use: typeof Use; UseList: typeof UseList }>(compile(FORWARD, "Forward.tsx")));
+  });
+
+  /** The names under the `body` entity of the innermost Box. */
+  const bodyNames = (root: Entity): string[] => {
+    let node: Entity = root;
+    while (node.name !== "body") {
+      const next = node.children.find((c) => (c as Entity).name !== undefined && (c as Entity).name !== "" ) as Entity | undefined;
+      if (next === undefined) throw new Error("no body");
+      node = next;
+    }
+    return node.children.map((c) => (c as Entity).name);
+  };
+
+  it("hands static, conditional and list children through two forwards into the innermost container", () => {
+    const world = new World();
+    const u = new Use();
+    world.mount(u);
+    world.flush();
+    assert.deepEqual(bodyNames(u), ["static", "maybe", "last"]);
+    u.setOn(false);
+    world.flush();
+    assert.deepEqual(bodyNames(u), ["static", "last"]);
+    u.setOn(true);
+    world.flush();
+    assert.deepEqual(bodyNames(u), ["static", "maybe", "last"], "a child that comes back lands between its siblings");
+  });
+
+  it("forwards a list passed as the whole of the children, with its adds, removals and reorders", () => {
+    const world = new World();
+    const l = new UseList();
+    world.mount(l);
+    world.flush();
+    assert.deepEqual(bodyNames(l), ["n1", "n2"]);
+    l.setIds([3, 2, 1]);
+    world.flush();
+    assert.deepEqual(bodyNames(l), ["n3", "n2", "n1"]);
+    l.setIds([2]);
+    world.flush();
+    assert.deepEqual(bodyNames(l), ["n2"]);
+  });
+
+  it("marks a forwarding component as one that accepts passed children", () => {
+    const u = new UseList();
+    assert.ok(u.children.length > 0);
+    const outer = u.children[0]!;
+    assert.equal(outer.acceptsPassedChildren, true);
+  });
+
+  const compiled = compile(FORWARD, "Forward.tsx");
+
+  it("generates one line in the constructor: the forwarding target", () => {
+    assert.match(compiled.code, /this\.passedChildrenForward = this\.box;/);
+    assert.match(compiled.code, /this\.passedChildrenForward = this\.frame;/);
+    assert.match(compiled.code, /this\.passedChildrenHost = this\.entity2;|this\.passedChildrenHost = this\.\w+;/);
+  });
+
+  it("type-checks the generated module", () => {
+    assert.deepEqual(typeCheck(compiled), []);
+  });
+
+  it("rejects a forwarded {children} beside other children, and one inside a condition", () => {
+    const head = `interface P { children: Child }\nfunction Box({ children }: P) { return <Entity name="b">{children}</Entity>; }\n`;
+    const beside = compileErrors(`${head}function Mod({ children }: P) { return <Entity name="m"><Box><Entity name="x" />{children}</Box></Entity>; }`);
+    assert.equal(beside[0]?.code, DiagnosticCode.UnsupportedJsxChild);
+    assert.match(beside[0]!.message, /must be the only child passed to it/);
+    const conditional = compileErrors(`${head}function Mod({ children }: P) { const [on] = useState(true); return <Entity name="m">{on && <Box>{children}</Box>}</Entity>; }`);
+    assert.equal(conditional[0]?.code, DiagnosticCode.UnsupportedJsxChild);
+    assert.match(conditional[0]!.message, /always present/);
+  });
+});

@@ -251,14 +251,14 @@ export class LoweringBase {
   }
 
   /** Checks that `{children}` is somewhere a slot can be. A slot must be in a container that is always there, once. */
-  protected lowerChildrenSlot(at: Node, context: { readonly slot: boolean; readonly passed: boolean }): boolean {
+  protected lowerChildrenSlot(at: Node, context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean }): boolean {
     const code = DiagnosticCode.UnsupportedJsxChild;
     this.slotRejected = true;
-    if (context.passed) {
-      this.report(code, "Forwarding `children` to another component is not supported yet: render `{children}` inside a built-in container instead.", at);
+    if (context.passed && !context.forward) {
+      this.report(code, "`{children}` can be forwarded to a component only when that component is always present: not inside a condition, a list, or another component's children.", at);
       return false;
     }
-    if (!context.slot) {
+    if (!context.slot && !context.passed) {
       this.report(code, "`{children}` must be a direct child of a container that is always present: not inside a condition, a list, or another component's children.", at);
       return false;
     }

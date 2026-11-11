@@ -58,6 +58,15 @@ describe("controls", () => {
     assert.equal(closed.open, false);
   });
 
+  it("the pause menu draws its panel and the two buttons it was given, through the modal's forwarded children", () => {
+    const rects = (script: string, color: string): number => play(script).backend.lastFrame.records.filter((r) => r.op === "rect" && r.color === color).length;
+    // The bitmap font draws as sprite regions, so look at the backgrounds: the modal's dim box, the panel's, and a button's each.
+    assert.equal(rects("confirm, _*5, pause, _*3", "#000000aa"), 1);
+    assert.equal(rects("confirm, _*5, _*3", "#000000aa"), 0);
+    const buttons = (script: string) => rects(script, "#3b4468ff");
+    assert.equal(buttons("confirm, _*5, pause, _*3") - buttons("confirm, _*5, _*3"), 2, "RESUME and QUIT TO TITLE");
+  });
+
   it("f toggles double speed and escape pauses the battle; the menu's resume button goes back", () => {
     const { states } = play(`confirm, _*5, fast, _*2, wave, _*30, pause, _*30, pause, _*5`);
     assert.equal(states[9]!.speed, 2);
