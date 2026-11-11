@@ -1,5 +1,5 @@
 /**
- * Finds a replay that finishes a room: a search over the rules' own `stepRun`, in short bursts of held buttons, from the
+ * Finds a replay that finishes a room: a search over the rules' own `stepSim`, in short bursts of held buttons, from the
  * room's start to its exit. The replays in `test/replays.ts` came from this and are checked by the tests; run it again
  * after changing a room or the movement constants.
  *
@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseInputScript } from "@rge/player";
 import { NO_CONTROLS, type Controls } from "../src/rules/body.ts";
-import { newRun } from "../src/rules/level.ts";
+import { newSim } from "../src/rules/level.ts";
 import { playFrame, startPlayback, type Playback } from "../src/rules/playback.ts";
 import { TRANSITION_TIME } from "../src/rules/constants.ts";
 import { overlapsRect, ROOM_LIST } from "../src/rules/rooms.ts";
@@ -58,14 +58,13 @@ function controlsFor(burst: Burst, frame: number, jumpWasHeld: boolean): Control
 }
 
 function key(play: Playback): string {
-  const run = play.run;
-  const b = run.player;
+  const b = play.player.body;
   return [Math.round(b.x / 2), Math.round(b.y / 2), Math.round(b.vx / 30), Math.round(b.vy / 30), b.onGround ? 1 : 0, b.dashes, b.varJump > 0 ? 1 : 0, b.state, b.forceMoveTime > 0 ? 1 : 0, b.coyote > 0 ? 1 : 0, b.ducking ? 1 : 0, b.autoJump ? 1 : 0, Math.round(b.wallSlideTimer * 2), b.dashCooldown > 0 ? 1 : 0, play.frozen].join(",");
 }
 
 /** Distance to the nearest exit tile: how promising a state looks. */
 function heuristic(play: Playback, targets: [number, number][]): number {
-  const b = play.run.player;
+  const b = play.player.body;
   let best = Infinity;
   for (const [c, r] of targets) best = Math.min(best, Math.abs(b.x - c * 10) + Math.abs(b.y - r * 10));
   return best;
@@ -124,7 +123,7 @@ export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit 
   const targets: [number, number][] = [];
   if (goal !== null) targets.push([(goal.x + goal.w / 2) / 10, (goal.y + goal.h / 2) / 10]);
   else room.rows.forEach((row, r) => [...row].forEach((ch, c) => ch === "E" && targets.push([c, r])));
-  const start: Playback = from ?? startPlayback({ ...newRun(), room: roomIndex, originX: room.ox, originY: room.oy, player: { ...newRun().player, x: room.spawnX, y: room.spawnY } });
+  const start: Playback = from ?? startPlayback(newSim(roomIndex));
   const open: Node[] = [{ run: start, held: { jump: false }, parent: null, burst: null, g: 0 }];
   const seen = new Set<string>([key(start)]);
   const scoreOf = (n: Node): number => n.g * 1.0 + heuristic(n.run, targets) * 2;
@@ -140,7 +139,7 @@ export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit 
       for (let f = 0; f < BURST; f++) {
         run = playFrame(run, controlsFor(burst, f, node.held.jump), DT);
         if (run.run.dead) { ok = false; break; }
-        if (goal !== null && overlapsRect(run.run.player.x, run.run.player.y, goal)) return finish({ run, held: { jump: burst.jump }, parent: node, burst, g: node.g + BURST }, start);
+        if (goal !== null && overlapsRect(run.player.body.x, run.player.body.y, goal)) return finish({ run, held: { jump: burst.jump }, parent: node, burst, g: node.g + BURST }, start);
         if (goal === null && (run.run.room !== roomIndex || run.run.finished)) break;
       }
       if (!ok) continue;

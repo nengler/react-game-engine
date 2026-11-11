@@ -1,5 +1,4 @@
-import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Particles, Route, Router, Screen, useShake } from "@rge/runtime/jsx";
-import { DashTrail } from "./DashTrail.tsx";
+import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Particles, Route, Router, Screen, useShake, useUpdate } from "@rge/runtime/jsx";
 import { fx } from "./effects.ts";
 import { End } from "./End.tsx";
 import { Gem } from "./Gem.tsx";
@@ -8,15 +7,20 @@ import { Label } from "./Label.tsx";
 import { Level } from "./Level.tsx";
 import { Player } from "./Player.tsx";
 import { controls } from "./rules/controls.ts";
-import { GEM_AT } from "./rules/rooms.ts";
+import { GEM_AT, ROOM_LIST } from "./rules/rooms.ts";
 import { Title } from "./Title.tsx";
 import { fadeThrough } from "./transitions.ts";
 
-/** What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, the bursts the game makes, and the HUD. */
+/** What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, the bursts the game makes, and the HUD. It keeps the run's clock. */
 function Play() {
   const { originX, originY, room, deaths, dead } = useGame((s) => s.run);
   const gems = useGame((s) => s.gems);
+  const tick = useGame((s) => s.tick);
   const [shake, setShake] = useShake();
+
+  useUpdate((dt) => {
+    tick(dt);
+  });
 
   return (
     <Entity name="Play">
@@ -41,8 +45,6 @@ function Play() {
       />
       <Level />
       <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />
-      {/* Copies of the character a dash leaves, under it, in the world. */}
-      <DashTrail />
       {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it. */}
       <Camera bounds={[originX, originY, 320, 180]} slide={0.4} shake={shake}>
         <Player onDie={() => setShake({ strength: 3, duration: 0.25 })} />
@@ -52,7 +54,7 @@ function Play() {
       <Hud>
         {/* A row across the top: the room, the gem once it is picked up, the deaths. */}
         <Flex direction="row" justifyContent="space-between" width="grow" padding={5}>
-          <Label text={`${room + 1}/8`} color="#8e9ac2" />
+          <Label text={`${room + 1}/${ROOM_LIST.length}`} color="#8e9ac2" />
           <Label text={gems > 0 ? "GEM" : ""} color="#7de3ff" />
           <Label text={`X${deaths}`} color="#ff7a59" />
         </Flex>
@@ -71,7 +73,6 @@ export default function Main() {
     <Game
       vsync={false}
       name="Main"
-     
       controls={controls}
       upscale="sharp"
       title="Kite"

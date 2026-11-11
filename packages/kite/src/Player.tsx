@@ -1,37 +1,61 @@
-import { AnimatedSprite, Collider, Entity, Particles, useSquash, useUpdate } from "@rge/runtime/jsx";
+import { AnimatedSprite, Collider, Entity, Particles, useSquash, useState, useUpdate } from "@rge/runtime/jsx";
+import { DashTrail } from "./DashTrail.tsx";
 import { playEvents, squashFor } from "./effects.ts";
 import { useGame } from "./GameState.ts";
 import { animationOf, heightOf } from "./rules/body.ts";
+import { readControls } from "./rules/controls.ts";
+import { spawnIn, stepPlayer } from "./rules/player.ts";
 
-/**
- * The character: it runs the game's step with each fixed step's input, answers what happened (sound, dust, shake and freeze,
- * from `effects.ts`; its own squash and stretch), and draws the rules' body as an animated sprite with the trail a dash leaves.
- */
 interface PlayerProps {
   /** The character died this step: the screen shakes its camera. */
   onDie: () => void;
 }
 
+/**
+ * The character. It keeps its own body and moves it each fixed step (`rules/player.ts`), answers what happened (sound, dust and
+ * freeze from `effects.ts`; its own squash and stretch), and tells the run what it needs to know: a death, a respawn, the next
+ * room, the end. It reads only which room it is in from the game state.
+ */
 export function Player({ onDie }: PlayerProps) {
-  const { player: body, originX, originY, dead } = useGame((s) => s.run);
-  const step = useGame((s) => s.step);
+  const { room, originX, originY, finished } = useGame((s) => s.run);
+  const died = useGame((s) => s.died);
+  const respawned = useGame((s) => s.respawned);
+  const enteredRoom = useGame((s) => s.enteredRoom);
+  const reachedEnd = useGame((s) => s.finished);
+  // A new run mounts a new play screen, so the character always starts at the first room's start.
+  const [me, setMe] = useState(() => spawnIn(0));
   const [squash, setSquash] = useSquash(1.75);
+  const body = me.body;
+  const dead = me.deadFor > 0;
   const height = heightOf(body);
 
   useUpdate((dt, input) => {
-    const events = step(input, dt);
-    playEvents(events, originX, originY);
-    const next = squashFor(events);
-    if (next !== null) {
-      setSquash(next);
+    if (finished) return;
+    const step = stepPlayer(me, room, readControls(input), dt);
+    setMe(step.next);
+
+    playEvents(step.events, originX, originY);
+    const nextSquash = squashFor(step.events);
+    if (nextSquash !== null) {
+      setSquash(nextSquash);
     }
-    if (events.some((e) => e.type === "death")) {
+
+    if (step.outcome === "died") {
+      died();
       onDie();
+    } else if (step.outcome === "respawned") {
+      respawned();
+    } else if (step.outcome === "entered") {
+      enteredRoom();
+    } else if (step.outcome === "finished") {
+      reachedEnd();
     }
   });
 
   return (
     <Entity name="Player" transform={{ x: originX + body.x, y: originY + body.y }}>
+      {/* Copies of the character a dash leaves, drawn first so they are under it. */}
+      <DashTrail dashing={body.state === "dash"} x={originX + body.x} y={originY + body.y} height={height} flipX={body.facing < 0} />
       {/* The hitbox is 8 × 11 (8 × 6 ducking); the picture is 12 × 12 with its origin at the feet, so it sits centred on the hitbox's bottom. */}
       <AnimatedSprite
         sheet="hero.png"
@@ -54,7 +78,7 @@ export function Player({ onDie }: PlayerProps) {
         transform={{ x: 4, y: height, scaleX: squash.x, scaleY: squash.y }}
       />
       <Collider width={8} height={height} tag="player" layer="player" />
-      {/* A trail while dashing: state, not a moment, so it is an emitter that is on while the body dashes. */}
+      {/* Sparks while dashing: state, not a moment, so it is an emitter that is on while the body dashes. */}
       <Particles rate={120} lifetime={0.25} speed={6} spread={180} size={3} shrink fade color="#ff9a7a" space="world" emitting={body.state === "dash"} transform={{ x: 4, y: 6 }} max={24} />
     </Entity>
   );

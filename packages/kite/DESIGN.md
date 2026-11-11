@@ -19,20 +19,28 @@ the room's start 0.45 s later. Leaving a room by its exit moves to the next, wit
 
 ## How it is built
 
+- **Each piece handles itself.** `Player.tsx` keeps the character's state (`useState`) and moves it in its own `useUpdate`
+  by calling `stepPlayer` (`rules/player.ts`): the body moves, spikes or a fall kill it and it comes back, an exit takes it
+  into the next room. It answers what it did (sound, dust and freeze from `effects.ts`, its squash, the camera's shake
+  through `onDie`) and reports what the run needs to know through the game state's actions (`died`, `respawned`,
+  `enteredRoom`, `finished`). The game state (`GameState.ts`) steps nothing: it keeps the screen, the gem and the run's
+  facts that other components read (the room, the deaths, whether the character is dead, the time). The play screen keeps the
+  clock; `DashTrail` is the character's child and is given what it draws.
 - **Rules are plain functions** (`src/rules/`), which know nothing of the engine's drawing: `body.ts` (one step of the body,
   read top to bottom: timers, what carries over, the state's rules, moving), with the parts in `body/`: `types.ts` (the body,
   whose `state` is `"normal"`, `"dash"` or `"climb"`), `normal.ts` (run, fall, duck, grab, jump), `dash.ts`, `climb.ts`,
   `jumps.ts` (every kind of jump), `collide.ts` (moving, and what happens when blocked) and `step.ts` (what a step shares);
-  `level.ts` (a run: deaths, respawn, room changes), `rooms.ts` (rooms read from the Tiled maps), `playback.ts` (what
-  the engine does around the rules, for a driver without an engine), `constants.ts` (every number). `GameState.ts` keeps the run
-  where components can read it; `Player.tsx` and the other components only draw it.
+  `player.ts` (the character's step, above), `level.ts` (the run's facts and how each outcome changes them, and `stepSim`,
+  the character and the run stepped together for the solver and the rule-level tests), `rooms.ts` (rooms read from the
+  Tiled maps, and what a body touches in one), `playback.ts` (what the engine does around the rules, for a driver without
+  an engine), `constants.ts` (every number).
 - **Rooms are Tiled maps** (`scenes/room1.tmj` …: a tile layer `Tiles`, a hidden layer `Markers`), 32 × 18 tiles of 10 px; the
   compiler writes `generated/tilemaps.ts` from them. Movement reads the same data the `<Tilemap>` draws. Room 1's start is the
   tile 8 on `Markers`, an exit is tile 7 (tile 9 for the last one). `tools/rooms.ts` holds the first drafts as text and
   `tools/make-rooms.ts` writes the maps from them; after that the maps are the source.
 - **Engine features used**: fixed 60 Hz timestep, `<Tilemap>`, camera bounds/slide/shake, `<AnimatedSprite>` sheets, `<Particles>`,
-  `<Fade>`, bitmap font, `freeze()`, `<Music>`, sound volume, gamepad keys, a custom hook (`usePlatformerBody`, `useSoundOnCount`,
-  `useBurst` in `Player.tsx`), and `<Collider>` for the gem. Hazards, exits and the start are tiles read by the rules in the same step
+  `<Fade>`, bitmap font, `freeze()`, `<Music>`, sound volume, gamepad keys, the engine's hooks `useSquash` and `useShake`, a
+  `<Router>` for the screens, and `<Collider>` for the gem. Hazards, exits and the start are tiles read by the rules in the same step
   (a collision callback arrives after the frame, which would make a death a step late and untestable without the player).
 
 ## The rooms

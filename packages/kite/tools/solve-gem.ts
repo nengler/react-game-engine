@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseInputScript } from "@rge/player";
 import { NO_CONTROLS } from "../src/rules/body.ts";
-import { newRun } from "../src/rules/level.ts";
+import { newSim } from "../src/rules/level.ts";
 import { playFrame, startPlayback } from "../src/rules/playback.ts";
 import { GEM } from "../src/rules/rooms.ts";
 import { REPLAYS } from "../test/replays.ts";
@@ -19,7 +19,7 @@ const bindings = { left: "ArrowLeft", right: "ArrowRight", up: "ArrowUp", down: 
 const down = (keys: readonly string[], k: string): boolean => keys.includes(k);
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  let play = startPlayback(newRun());
+  let play = startPlayback(newSim());
   let prev: readonly string[] = [];
   for (const script of REPLAYS.slice(0, 6)) {
     for (const f of parseInputScript(script, { bindings })) {
