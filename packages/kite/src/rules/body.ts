@@ -294,8 +294,14 @@ class Stepper {
 
     // Ducking.
     if (b.ducking) {
-      if (b.onGround && moveY !== 1 && this.canUnDuck) this.unDuck();
-    } else if (b.onGround && moveY === 1 && b.vy >= 0) this.duck();
+      if (b.onGround && moveY !== 1 && this.canUnDuck) {
+        this.unDuck();
+        this.events.push({ type: "stand", x: b.x + BODY_W / 2, y: b.y + BODY_H });
+      }
+    } else if (b.onGround && moveY === 1 && b.vy >= 0) {
+      this.duck();
+      this.events.push({ type: "duck", x: b.x + BODY_W / 2, y: b.y + DUCK_H });
+    }
 
     // Running, and slowing toward the run speed when faster (a super jump, a dash) in the direction held.
     if (b.ducking && b.onGround) b.vx = approach(b.vx, 0, K.DUCK_FRICTION * dt);
@@ -669,7 +675,7 @@ class Stepper {
     }
     // Where the body stands now, and a landing.
     b.onGround = b.vy >= 0 && this.hitsAt(0, 1);
-    if (b.onGround && !wasOnGround && fall > 60 && !b.climbing) this.events.push({ type: "land", x: b.x + BODY_W / 2, y: b.y + heightOf(b) });
+    if (b.onGround && !wasOnGround && fall > 0 && !b.climbing) this.events.push({ type: "land", x: b.x + BODY_W / 2, y: b.y + heightOf(b), speed: fall });
     if (b.onGround) b.sliding = false;
   }
 

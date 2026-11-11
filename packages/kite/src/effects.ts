@@ -1,4 +1,4 @@
-import { createParticles, createShake, createSounds, freeze } from "@rge/runtime";
+import { createParticles, createShake, createSounds, createSquash, freeze } from "@rge/runtime";
 import type { GameEvent } from "./rules/events.ts";
 import { freezeFor } from "./rules/playback.ts";
 
@@ -26,6 +26,9 @@ export const sfx = createSounds({
 
 export const shake = createShake({ strength: 3, duration: 0.25 });
 
+/** The character's squash and stretch, Celeste's: thin and tall leaving the ground, wide and flat landing hard. */
+export const squash = createSquash({ recover: 1.75 });
+
 /**
  * Answer what the rules say happened in a step: a sound, a burst at the place it happened, a shake, a freeze. The events are
  * in the room's pixels; the room's top left in the world is (`originX`, `originY`).
@@ -38,18 +41,32 @@ export function playEvents(events: readonly GameEvent[], originX: number, origin
       case "jump":
         sfx.play("jump");
         fx.burst("kick", x, y);
+        squash.start(0.6, 1.4);
         break;
       case "wallJump":
         sfx.play("wallJump");
+        squash.start(0.6, 1.4);
         // Off the wall, away from it.
         fx.burst("kick", x, y - 4, { angle: e.wall < 0 ? 0 : 180 });
         break;
       case "dash":
         sfx.play("dash");
         break;
-      case "land":
-        sfx.play("land");
-        fx.burst("dust", x, y);
+      case "land": {
+        // The harder the landing, the flatter: all the way at 240 pixels a second.
+        const k = Math.min(e.speed / 240, 1);
+        squash.start(1 + 0.6 * k, 1 - 0.6 * k);
+        if (e.speed > 60) {
+          sfx.play("land");
+          fx.burst("dust", x, y);
+        }
+        break;
+      }
+      case "duck":
+        squash.start(1.4, 0.6);
+        break;
+      case "stand":
+        squash.start(0.8, 1.2);
         break;
       case "death":
         sfx.play("death");

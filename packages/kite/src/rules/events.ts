@@ -9,6 +9,9 @@ export type GameEvent =
   /** `wall` is the side the wall was on: -1 left, 1 right. */
   | { readonly type: "wallJump"; readonly x: number; readonly y: number; readonly wall: number }
   | { readonly type: "dash"; readonly x: number; readonly y: number }
-  | { readonly type: "land"; readonly x: number; readonly y: number }
+  /** `speed`: how fast it was falling, in pixels a second. */
+  | { readonly type: "land"; readonly x: number; readonly y: number; readonly speed: number }
+  | { readonly type: "duck"; readonly x: number; readonly y: number }
+  | { readonly type: "stand"; readonly x: number; readonly y: number }
   | { readonly type: "death"; readonly x: number; readonly y: number }
   | { readonly type: "room"; readonly x: number; readonly y: number; readonly room: number };

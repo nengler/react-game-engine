@@ -1,4 +1,5 @@
 import { AnimatedSprite, Collider, Entity, Particles } from "@rge/runtime/jsx";
+import { squash } from "./effects.ts";
 import { useGame } from "./GameState.ts";
 
 /**
@@ -48,6 +49,7 @@ export function Player() {
         originY={12}
         tint={body.dashes > 0 || dead ? "#ffffff" : "#9db4ff"}
         transform={{ x: 4, y: height }}
+        squash={squash}
       />
       <Collider width={8} height={height} tag="player" layer="player" />
       {/* A trail while dashing: state, not a moment, so it is an emitter that is on while `dashing` is. */}
