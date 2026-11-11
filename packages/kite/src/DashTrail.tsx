@@ -1,4 +1,4 @@
-import { Entity, Sprite, useRef, useState, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Sprite, useMount, useRef, useState, useUpdate } from "@rge/runtime/jsx";
 
 /** One copy of the character: where its feet were in the world, which way it faced, and how old it is. */
 interface Ghost {
@@ -29,6 +29,11 @@ export function DashTrail({ dashing, x, y, height, flipX }: DashTrailProps) {
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const wait = useRef(0);
   const made = useRef(0);
+
+  // No copies left over from the last run when the play screen comes back.
+  useMount(() => {
+    setGhosts([]);
+  });
 
   useUpdate((dt) => {
     wait.current -= dt;

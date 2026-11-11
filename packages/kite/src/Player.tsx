@@ -1,4 +1,4 @@
-import { AnimatedSprite, Collider, Entity, Particles, useSquash, useState, useUpdate } from "@rge/runtime/jsx";
+import { AnimatedSprite, Collider, Entity, Particles, useMount, useSquash, useState, useUpdate } from "@rge/runtime/jsx";
 import { DashTrail } from "./DashTrail.tsx";
 import { playEvents, squashFor } from "./effects.ts";
 import { useGame } from "./GameState.ts";
@@ -22,12 +22,17 @@ export function Player({ onDie }: PlayerProps) {
   const respawned = useGame((s) => s.respawned);
   const enteredRoom = useGame((s) => s.enteredRoom);
   const reachedEnd = useGame((s) => s.finished);
-  // A new run mounts a new play screen, so the character always starts at the first room's start.
   const [me, setMe] = useState(() => spawnIn(0));
   const [squash, setSquash] = useSquash(1.75);
   const body = me.body;
   const dead = me.deadFor > 0;
   const height = heightOf(body);
+
+  // Every run starts at the first room's start. The router keeps the play screen (and this state) while another screen shows,
+  // so a second run finds the character where the first one ended: it comes back here when the screen does.
+  useMount(() => {
+    setMe(spawnIn(0));
+  });
 
   useUpdate((dt, input) => {
     if (finished) return;

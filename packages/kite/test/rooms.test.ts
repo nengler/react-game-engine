@@ -106,6 +106,18 @@ describe("replays", () => {
     assert.equal(sfx.plays("death"), before.death);
   });
 
+  it("play again from the start: a second run, after the end screen and the title, begins at the first room's start and finishes too", () => {
+    const level = REPLAYS.join(", ");
+    const script = `Enter, _*3, ${level}, _*60, Enter, _*60, Enter, _*3, ${level}, _*10`;
+    const states = runScript(gameConfig, parseInputScript(script, { bindings }), () => {
+      const s = useGame.getState();
+      return { screen: s.screen, room: s.run.room, finished: s.run.finished, deaths: s.run.deaths };
+    }).states;
+    const ends = states.filter((s, i) => s.screen === "end" && states[i - 1]?.screen !== "end").length;
+    assert.equal(ends, 2, "the end screen came twice: the second run finished the level as the first did");
+    assert.deepEqual(states.at(-1), { screen: "end", room: 7, finished: true, deaths: 0 });
+  });
+
   it("give the same result at any frame rate, because the game runs on a fixed timestep", () => {
     const script = `Enter, _*3, ${REPLAYS.slice(0, 3).join(", ")}`;
     const final = (frames: ReturnType<typeof parseInputScript>) =>
