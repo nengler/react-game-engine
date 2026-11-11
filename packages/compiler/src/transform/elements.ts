@@ -440,11 +440,6 @@ export class ElementLowering extends HookLowering {
    * would not exist yet, so it is `RGE1210`.
    */
   protected lowerGameSetting(name: string, init: JsxAttribute["initializer"], at: Node): ExprIR | null {
-    if (name === "state") {
-      // Retired (2026-11-11): every game state starts from its initial values when a game starts, so there is nothing to hand over.
-      this.report(DiagnosticCode.UnsupportedAttribute, `<${GAME_TAG} state> is no longer needed: the game state starts fresh with every game. Remove it.`, at);
-      return null;
-    }
     if (name === "controls") {
       // `controls={controls}`: the game's actions, a `createControls(…)` imported from a .ts module. Made when that module
       // loads, so it exists before the tree is built, as a literal does.

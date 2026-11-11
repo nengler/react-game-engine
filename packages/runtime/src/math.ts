@@ -19,3 +19,23 @@ export function springBack<S extends Scale2>(scale: S, rate: number, dt: number)
   const toward = (v: number): number => (v < 1 ? Math.min(1, v + step) : Math.max(1, v - step));
   return { ...scale, scaleX: toward(scale.scaleX), scaleY: toward(scale.scaleY) };
 }
+
+/**
+ * A shake of the view, as state (`useShake`): `strength` pixels at first, dying away over `duration` seconds, `elapsed` of
+ * them gone (absent: just started). `<Camera shake={shake}>` draws it.
+ */
+export interface ShakeState {
+  readonly strength: number;
+  readonly duration: number;
+  readonly elapsed?: number;
+}
+
+/** No shake. */
+export const NO_SHAKE: ShakeState = Object.freeze({ strength: 0, duration: 0 });
+
+/** A shake `dt` seconds on. Returns the same object once it is over, so a state that holds it stops changing. */
+export function shakeOn(shake: ShakeState, dt: number): ShakeState {
+  const elapsed = shake.elapsed ?? 0;
+  if (!(shake.duration > 0) || elapsed >= shake.duration) return shake;
+  return { ...shake, elapsed: Math.min(shake.duration, elapsed + dt) };
+}

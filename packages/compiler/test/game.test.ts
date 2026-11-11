@@ -78,10 +78,10 @@ describe("<Game> as a component's root", () => {
     assert.match(errors(`function A() { const [n] = useState(60); return <Game fixedStep={n} />; }`)[0]!.message, /<Game fixedStep> must be a literal/);
   });
 
-  it("no longer takes the game state: it starts fresh with every game, so state={useGame} is an error saying to remove it", () => {
+  it("has no state prop (every game state starts fresh with the game): it is not one of its settings", () => {
     const found = errors(`function Main() { return <Game state={useGame} />; }`);
     assert.equal(found[0]!.code, DiagnosticCode.UnsupportedAttribute);
-    assert.match(found[0]!.message, /<Game state> is no longer needed/);
+    assert.match(found[0]!.message, /<Game> has no prop 'state'/);
     const bare = build(`function Main() { return <Game />; }`);
     assert.deepEqual(bare.ir.components[0]!.root.props, []);
     assert.doesNotMatch(bare.code, /GameState/);

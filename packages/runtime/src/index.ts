@@ -32,10 +32,8 @@ export { Particles, PARTICLE_SPACES, type ParticlesProps } from "./components/Pa
 export { ParticleLayer, type ParticleLayerProps } from "./components/ParticleLayer.ts";
 export {
   createParticles,
-  createShake,
   createSounds,
   ParticleStore,
-  Shake,
   SoundStore,
   type BurstOptions,
   type ParticlePreset,
@@ -47,6 +45,6 @@ export { Route, Router, type RouteProps, type RouterProps, type Transition, type
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { actionAware, Controls, createControls, createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
-export { clamp, springBack, type Scale2 } from "./math.ts";
+export { clamp, NO_SHAKE, shakeOn, springBack, type Scale2, type ShakeState } from "./math.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";

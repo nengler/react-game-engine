@@ -9,7 +9,7 @@
  * test checks that this module exports exactly what the compiler accepts.
  */
 import type { InputState } from "./input.ts";
-import type { Scale2 } from "./math.ts";
+import type { Scale2, ShakeState } from "./math.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { GameProps } from "./components/Game.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
@@ -31,8 +31,7 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
 
-export { clamp, springBack } from "./math.ts";
-export { createShake } from "./effects.ts";
+export { clamp, shakeOn, springBack } from "./math.ts";
 
 // -- state and refs -----------------------------------------------------------
 
@@ -57,7 +56,7 @@ function compileTimeOnly(name: string): never {
  */
 export function useState<T>(_initial: () => T): [Widen<T>, Setter<Widen<T>>];
 export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>];
-/** `useState(() => createShake())`: React's lazy initial value, made once per instance (an object with methods, such as an effect). */
+/** `useState(() => makeThing())`: React's lazy initial value, made once per instance (an object with methods, such as an effect). */
 export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>>] {
   return compileTimeOnly("useState");
 }
@@ -73,6 +72,16 @@ export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>
  */
 export function useSquash(_recover?: number): [Scale2, Setter<Scale2>] {
   return compileTimeOnly("useSquash");
+}
+
+/**
+ * A shake of the view, as state: `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, and it runs down by
+ * itself in this component's update. Give it to the camera: `<Camera shake={shake}>`.
+ *
+ * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ */
+export function useShake(): [ShakeState, Setter<ShakeState>] {
+  return compileTimeOnly("useShake");
 }
 
 /**

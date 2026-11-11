@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
+import { LIBRARY_HOOKS } from "../src/hooks/library.ts";
 import { AUTHORING_HOOKS, Compiler, formatDiagnostic, type ChildIR, type CompilerDiagnostic, type ElementIR, type IRModule } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -42,7 +43,7 @@ export interface CompiledModule {
  */
 export function withAuthoringImports(source: string, manifest: RuntimeManifest = runtimeManifest): string {
   if (source.includes(`from "${manifest.authoringModule}"`)) return source;
-  const exported = [...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions)];
+  const exported = [...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions), ...LIBRARY_HOOKS];
   const used = exported.filter((name) => new RegExp(`\\b${name}\\b`).test(source));
   if (used.length === 0) return source;
   return `import { ${used.join(", ")} } from "${manifest.authoringModule}"; ${source}`;

@@ -96,36 +96,3 @@ export function createSounds<const Entries extends Record<string, SoundEntry>>(e
   return new SoundStore<keyof Entries & string>(entries);
 }
 
-/**
- * A shake of the view, started from anywhere with `shake.start()` and drawn by the `<Camera shake={shake}>` that has it. Each
- * start throws the view by `strength` pixels and dies away over `duration` seconds; a start while one runs starts it again.
- */
-export class Shake {
-  strength: number;
-  duration: number;
-  /** Starts so far. The camera starts its shake when this changes. */
-  starts = 0;
-
-  constructor(strength: number, duration: number) {
-    this.strength = strength;
-    this.duration = duration;
-  }
-
-  /** Shake now, by `strength` pixels for `duration` seconds (default: the ones it was created with). */
-  start(strength?: number, duration?: number): void {
-    this.starts++;
-    this.#next = { strength: strength ?? this.strength, duration: duration ?? this.duration };
-  }
-
-  #next = { strength: 0, duration: 0 };
-
-  /** The strength and duration of the latest start. */
-  get current(): { readonly strength: number; readonly duration: number } {
-    return this.#next;
-  }
-}
-
-/** Make a shake for a camera. Keep the result in a module (`export const shake = createShake({ strength: 3, duration: 0.25 })`). */
-export function createShake(options: { strength?: number; duration?: number } = {}): Shake {
-  return new Shake(options.strength ?? 2, options.duration ?? 0.2);
-}

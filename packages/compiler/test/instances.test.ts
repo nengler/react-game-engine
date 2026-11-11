@@ -1,6 +1,6 @@
 /**
- * What a component owns and does itself: a per-instance object (`useState(() => createShake())`) whose methods a handler calls,
- * the engine's `useSquash` hook, and a game-state action whose result the handler uses (`const blow = strike(power)`).
+ * What a component owns and does itself: a per-instance object (`useState(() => makeTally())`) whose methods a handler calls, the
+ * engine's `useSquash` and `useShake` hooks, and a game-state action whose result the handler uses (`const blow = strike(power)`).
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createInputState, Entity, World, type Shake } from "@rge/runtime";
+import { createInputState, Entity, World, type ShakeState } from "@rge/runtime";
 
 const repo = resolve(import.meta.dirname, "../../..");
 
@@ -33,20 +33,28 @@ export const useGame = createGameState<State>()((set) => ({
 }));
 `;
 
-const ENEMY = `import { AnimatedSprite, Camera, Entity, createShake, useInput, useSquash, useState } from "@rge/runtime/jsx";
+const TALLY = `export function makeTally() {
+  return { count: 0, add(n: number): void { this.count += n; } };
+}
+`;
+
+const ENEMY = `import { AnimatedSprite, Camera, Entity, useInput, useShake, useSquash, useState } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
+import { makeTally } from "./tally.ts";
 
 interface Props { power: number }
 
 export function Enemy({ power }: Props) {
   const strike = useGame((s) => s.strike);
-  const [shake] = useState(() => createShake({ strength: 2 }));
+  const [tally] = useState(() => makeTally());
+  const [shake, setShake] = useShake();
   const [squash, setSquash] = useSquash(2);
   const [hp, setHp] = useState(3);
   useInput((input) => {
     if (input.pressed("Z")) {
       const blow = strike(power);
-      shake.start(blow.crit ? 4 : 1);
+      tally.add(blow.power);
+      setShake({ strength: blow.crit ? 4 : 1, duration: 0.2 });
       setSquash({ scaleX: 1 + blow.power * 0.1, scaleY: 1 - blow.power * 0.1 });
       setHp((h) => h - blow.power);
     }
@@ -62,15 +70,17 @@ export function Enemy({ power }: Props) {
 
 describe("what a component owns and does itself", () => {
   it("gives each instance its own object and squash, and lets a handler use what an action returns", async () => {
-    const p = project({ "GameState.ts": STATE, "Enemy.tsx": ENEMY });
+    const p = project({ "GameState.ts": STATE, "tally.ts": TALLY, "Enemy.tsx": ENEMY });
     try {
       assert.equal(p.status, 0, p.stderr);
       const code = p.out("Enemy.ts");
-      assert.match(code, /shake: ReturnType<typeof createShake> = createShake\(\{ strength: 2 \}\);/);
+      assert.match(code, /tally: ReturnType<typeof makeTally> = makeTally\(\);/);
+      assert.match(code, /this\.tally\.add\(/);
       assert.match(code, /const blow = useGame\.getState\(\)\.strike\(this\.props\.power\);/);
       assert.match(code, /springBack\(/, "useSquash was inlined: its spring back is this component's own update");
+      assert.match(code, /shakeOn\(/, "and so was useShake");
       const { Enemy } = (await import(pathToFileURL(join(p.dir, "out", "Enemy.ts")).href)) as {
-        Enemy: new (props: { power: number }) => Entity & { shake: Shake; squash: { scaleX: number; scaleY: number }; hp: number };
+        Enemy: new (props: { power: number }) => Entity & { tally: { count: number }; shake: ShakeState; squash: { scaleX: number; scaleY: number }; hp: number };
       };
       const { useGame } = (await import(pathToFileURL(join(p.dir, "src", "GameState.ts")).href)) as { useGame: { getState(): { hits: number } } };
       const world = new World();
@@ -81,14 +91,16 @@ describe("what a component owns and does itself", () => {
       root.addChild(b);
       world.mount(root);
       world.flush();
-      assert.notEqual(a.shake, b.shake, "one object per instance");
+      assert.notEqual(a.tally, b.tally, "one object per instance");
       world.tick(0.05, createInputState({ pressed: ["Z"], down: ["Z"] }));
       assert.equal(useGame.getState().hits, 2, "the action ran once for each");
       assert.deepEqual([a.hp, b.hp], [2, 1]);
-      assert.deepEqual([a.shake.current.strength, b.shake.current.strength], [1, 4], "each read its own result");
+      assert.deepEqual([a.tally.count, b.tally.count], [1, 2]);
+      assert.deepEqual([a.shake.strength, b.shake.strength], [1, 4], "each read its own result");
       assert.ok(a.squash.scaleX < b.squash.scaleX, "each has its own squash state");
       for (let i = 0; i < 20; i++) world.tick(0.05);
       assert.deepEqual([a.squash.scaleX, b.squash.scaleX], [1, 1], "sprung back in each component's own update");
+      assert.equal(a.shake.elapsed, 0.2, "the shake ran down");
     } finally {
       rmSync(p.dir, { recursive: true, force: true });
     }
@@ -106,7 +118,7 @@ export function A() { const [items, setItems] = useState<number[]>([]); useUpdat
     } finally {
       rmSync(p.dir, { recursive: true, force: true });
     }
-    const q = project({ "B.tsx": `import { Entity, createShake, useState } from "@rge/runtime/jsx";\nexport function B() { const [s] = useState((x: number) => createShake()); return <Entity name="B" />; }\n` });
+    const q = project({ "tally.ts": TALLY, "B.tsx": `import { Entity, useState } from "@rge/runtime/jsx";\nimport { makeTally } from "./tally.ts";\nexport function B() { const [s] = useState((x: number) => makeTally()); return <Entity name="B" />; }\n` });
     try {
       assert.equal(q.status, 1);
       assert.match(q.stderr, /A lazy initial value is an arrow with no parameters/);

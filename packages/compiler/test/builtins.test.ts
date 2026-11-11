@@ -26,7 +26,8 @@ describe("authored source of the new built-ins type-checks, and wrong props do n
     assert.deepEqual(check("Screen", `<Tilemap map="room1" image="tiles.png" layer="Tiles" opacity={0.5} transform={{ x: 10 }} />`), []);
     assert.deepEqual(check("Screen", `<Particles rate={20} burst={n} lifetime={0.4} speed={30} angle={270} spread={40} gravity={90} color="#fff" endColor="#f00" size={2} shrink fade emitting={on} max={32} space="world" seed={3} transform={{ x: n }} />`), []);
     assert.deepEqual(check("Screen", `<Hud><Fade color="#000" on={on} duration={0.3} /></Hud>`), []);
-    assert.deepEqual(check("Screen", `<Camera bounds={[0, 0, 320, 180]} slide={0.4} shake={n} shakeStrength={3} shakeDuration={0.2} />`), []);
+    assert.deepEqual(check("Screen", `<Camera bounds={[0, 0, 320, 180]} slide={0.4} shake={{ strength: n, duration: 0.2 }} />`), []);
+    assert.ok(check("Screen", `<Camera shake={n} />`).length > 0, "a shake is a value, not a counter");
     assert.deepEqual(check("Screen", `<Text font="font.png" size={16} align="center" width={100}>Hi</Text>`), []);
   });
 
@@ -54,22 +55,27 @@ describe("authored source of the new built-ins type-checks, and wrong props do n
 });
 
 describe("the built-ins in compiled components", () => {
-  it("builds a Particles that bursts when a condition turns it on, and a Camera that shakes when a counter changes", async () => {
+  it("builds a Particles that bursts when a condition turns it on, and a Camera that shakes with useShake", async () => {
     registerTilemaps({});
     const compiled = compile(
       `function Hero() {
-        const [hits, setHits] = useState(0);
+        const [shake, setShake] = useShake();
         const [dead, setDead] = useState(false);
+        useInput((input) => {
+          if (input.pressed("Z")) {
+            setShake({ strength: 2, duration: 0.2 });
+          }
+        });
         return (
           <Entity name="Hero">
             {dead && <Particles burst={6} lifetime={0.3} speed={50} spread={180} />}
-            <Camera shake={hits} shakeStrength={2} bounds={[0, 0, 320, 180]} slide={0.3} />
+            <Camera shake={shake} bounds={[0, 0, 320, 180]} slide={0.3} />
           </Entity>
         );
       }`,
       "Hero.tsx",
     );
-    const { Hero } = await load<{ Hero: new () => Entity & { setHits(v: number): void; setDead(v: boolean): void } }>(compiled);
+    const { Hero } = await load<{ Hero: new () => Entity & { setDead(v: boolean): void } }>(compiled);
     const world = new World();
     const hero = new Hero();
     world.mount(hero);
@@ -83,12 +89,14 @@ describe("the built-ins in compiled components", () => {
     const camera = hero.children.find((c): c is Camera => c instanceof Camera)!;
     assert.deepEqual(camera.bounds, [0, 0, 320, 180]);
     assert.equal(camera.slide, 0.3);
-    hero.setHits(1);
-    world.tick(1 / 60);
+    world.tick(1 / 60, createInputState({ pressed: ["Z"], down: ["Z"] }));
     world.tick(1 / 60);
     camera.viewWidth = 320;
     camera.viewHeight = 180;
-    assert.notEqual(camera.shakeOffset.x + camera.shakeOffset.y, 0, "a changed counter shakes");
+    assert.equal(camera.shake?.strength, 2, "the camera has the component's shake");
+    assert.notEqual(camera.shakeOffset.x + camera.shakeOffset.y, 0, "and is thrown by it");
+    for (let i = 0; i < 20; i++) world.tick(1 / 60);
+    assert.deepEqual(camera.shakeOffset, { x: 0, y: 0 }, "over after its duration");
   });
 
   it("builds a Tilemap and a Fade, and lowers a literal array and a bitmap font to their fields", () => {

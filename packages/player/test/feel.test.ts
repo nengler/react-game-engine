@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Entity, Fade, Hud, Particles, Screen, Text, Tilemap, World, freeze, registerTilemaps, type TilemapData } from "@rge/runtime";
+import { Camera, Entity, Fade, Hud, NO_SHAKE, Particles, Screen, Text, Tilemap, World, freeze, registerTilemaps, shakeOn, type TilemapData } from "@rge/runtime";
 import { createPlayer, RecordingBackend, type DecodedRecord, type PlayerConfig } from "../src/index.ts";
 
 const SIZES = { "assets/tiles.png": { width: 30, height: 20 }, "assets/font.png": { width: 80, height: 48 } };
@@ -231,12 +231,13 @@ describe("<Camera> bounds, slide and shake", () => {
     assert.equal(-none.viewTransform().e, 480, "no slide time: it jumps");
   });
 
-  it("shakes when its shake value changes, by whole pixels, dying away over its duration, the same every run", () => {
+  it("shakes by the shake it is given, in whole pixels, dying away over its duration, the same every run", () => {
     const run1 = (): number[] => {
-      const c = camera({ shake: 0, shakeStrength: 4, shakeDuration: 0.2 });
+      const c = camera({});
       const out: number[] = [];
       for (let i = 0; i < 20; i++) {
-        if (i === 2) c.shake = 1;
+        if (i === 2) c.shake = { strength: 4, duration: 0.2 };
+        else if (c.shake !== undefined) c.shake = shakeOn(c.shake, 1 / 60);
         c.onUpdate(1 / 60);
         out.push(c.viewTransform().e);
       }
@@ -244,14 +245,12 @@ describe("<Camera> bounds, slide and shake", () => {
     };
     const a = run1();
     assert.deepEqual(a, run1());
-    assert.ok(a.slice(0, 2).every((e) => e === 0), "still before it is asked");
+    assert.ok(a.slice(0, 2).every((e) => e === 0), "still before it is set");
     assert.ok(a.slice(2, 6).some((e) => e !== 0));
     assert.ok(a.every((e) => Number.isInteger(e) || e === 0));
     assert.ok(Math.max(...a.slice(2, 5).map(Math.abs)) <= 4);
     assert.ok(a.slice(-4).every((e) => e === 0), "over by the end");
-    const same = camera({ shake: 3 });
-    same.onUpdate(0.1);
-    assert.equal(same.viewTransform().e, 0, "the value it was made with is not a shake");
+    assert.equal(shakeOn(NO_SHAKE, 0.1), NO_SHAKE, "no shake: the same object, so a state holding it does not change");
   });
 });
 

@@ -909,7 +909,7 @@ built-in's.
 
 **No `state` prop** (retired 2026-11-11). It used to hand the game state to the runtime, which never needed it: the player
 starts every game state in the process from its initial values (`resetGameState`), and components read it with selectors,
-with or without a `<Game>`. `<Game state={…}>` is now `RGE1203`, saying to remove it.
+with or without a `<Game>`, so `state` is simply not one of its props.
 
 A user component cannot be called `Game`: it is an intrinsic like `Entity` (`RGE1206`). The demo's root is `Main`.
 
@@ -1298,21 +1298,15 @@ plain function, or a component's handler.
 // effects.ts
 export const fx = createParticles({ dust: { burst: 9, lifetime: 0.4, speed: 55, angle: 270, spread: 75, gravity: 160, fade: true } });
 export const sfx = createSounds({ land: { src: "land.wav", volume: 0.5 }, start: "start.wav" });
-export const shake = createShake({ strength: 3, duration: 0.25 });
 ```
 
 ```tsx
-<Camera bounds={…} shake={shake}><Player /></Camera>
 <ParticleLayer particles={fx} />     {/* like <Toaster />: where bursts are drawn, in the world */}
 ```
 
 ```ts
-// GameState.ts: the rules push events onto an array; the action answers them
-step: (input, dt) => {
-  const events: GameEvent[] = [];
-  set({ run: stepRun(get().run, readControls(input), dt, events) });
-  for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dust", e.x, e.y); }
-},
+// called with what a step reports, by the component that runs it
+for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dust", e.x, e.y); }
 ```
 
 - **`createParticles(presets)`** → `ParticleStore`: `burst(name, x, y, { angle?, count? })`, and `bursts` (counts by name,
@@ -1323,22 +1317,25 @@ step: (input, dt) => {
 - **`createSounds(entries)`** → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
   Every file is loaded when a sound sink is installed (`addSoundPreload`), so the first play does not hitch. Asset names in
   a `.ts` file are not checked at build time (only literals in components are).
-- **`createShake({ strength, duration })`** → `Shake`: `start(strength?, duration?)`. `<Camera shake={shake}>` starts a shake
-  each time it is started (a number still works as before: the view shakes when it changes).
+- **A shake is state: `const [shake, setShake] = useShake()`** (2026-11-11, replacing a `createShake()` object). The value is
+  `{ strength, duration, elapsed? }`; `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, the hook's own update
+  runs it down (`shakeOn`, the same object once over), and `<Camera shake={shake}>` draws it: the camera's offset is a pure
+  function of the value (whole pixels from a fixed sequence, so runs repeat). The component that owns the camera owns the
+  shake; a child that knows when to shake tells it with a callback prop (Kite: `<Player onDie={() => setShake(…)} />`).
 - **Squash and stretch is state: `const [squash, setSquash] = useSquash(1.75)`** (decided 2026-11-11, replacing a
   `createSquash()` object with a `start` method, which was the imperative shape). `setSquash({ scaleX: 0.6, scaleY: 1.4 })` in a
   handler, and `transform={{ scaleX: squash.scaleX, scaleY: squash.scaleY }}` on the sprite, which scales about its origin. It
   springs back to 1 at `recover` a second in the component's own `useUpdate` (`springBack`, a runtime function that returns
   the same object at rest, so the state stops changing). `useSquash` is an **engine-shipped custom hook**: ordinary source
-  (`useState` + `useUpdate`, in `compiler/src/hooks/library.ts`), inlined like any custom hook when a component imports it
+  (`useState` + `useUpdate`, in `compiler/src/hooks/library.ts`, with `useShake`), inlined like any custom hook when a component imports it
   from `@rge/runtime/jsx`, where it is declared for TypeScript.
 - **Per-instance objects.** A store in a module is global; an object that belongs to one entity is that component's own,
-  made with React's lazy initializer: `const [shake] = useState(() => createShake())`. The arrow's body is the initial value
-  (the generated field is evaluated once per instance anyway), typed `ReturnType<typeof createShake>`, and a handler may call
-  its methods (`shake.start(4)`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function from
+  made with React's lazy initializer: `const [tally] = useState(() => makeTally())`. The arrow's body is the initial value
+  (the generated field is evaluated once per instance anyway), typed `ReturnType<typeof makeTally>`, and a handler may call
+  its methods (`tally.add(1)`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function from
   the manifest, or a function from a `.ts` file), so arrays and records keep their messages. This is for objects that are
-  not values; a value that changes over time is state (`useSquash`). The manifest's `functions` table includes `createShake`
-  (`-2`: any number of arguments) and `springBack`.
+  not values; a value that changes over time is state (`useSquash`, `useShake`). The manifest's `functions` table includes
+  `springBack` and `shakeOn`, which the shipped hooks call.
 - **Reacting to what happened: call, and use the result.** No event emitter (one was tried, 2026-11-11, and removed as a
   workaround): the component that runs a step answers it. A handler may use a game-state action's result,
   `const events = step(input, dt)` (`CalleeIR` `Action`, only as a handler's `const`; in JSX or a derived value it would run

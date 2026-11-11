@@ -1,7 +1,7 @@
-/** Effect stores: particle bursts drawn by a <ParticleLayer>, sounds played by name, and a camera shake started from anywhere. */
+/** Effect stores (particle bursts drawn by a <ParticleLayer>, sounds played by name) and what useSquash does each step. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Entity, ParticleLayer, World, createParticles, createShake, createSounds, freeze, springBack, getSoundSink, setSoundSink, type SoundSink } from "@rge/runtime";
+import { Entity, ParticleLayer, World, createParticles, createSounds, freeze, springBack, getSoundSink, setSoundSink, type SoundSink } from "@rge/runtime";
 import { createPlayer, RecordingBackend, type DecodedRecord } from "../src/index.ts";
 
 const ofOp = <T extends DecodedRecord["op"]>(frame: readonly DecodedRecord[], op: T): Extract<DecodedRecord, { op: T }>[] => frame.filter((r): r is Extract<DecodedRecord, { op: T }> => r.op === op);
@@ -92,31 +92,6 @@ describe("createSounds", () => {
     } finally {
       setSoundSink(before);
     }
-  });
-});
-
-describe("createShake and <Camera shake>", () => {
-  it("shakes the camera that has it when started, with the strength and time of that start", () => {
-    const shake = createShake({ strength: 4, duration: 0.2 });
-    const run = (start: (i: number) => void): number[] => {
-      const c = new Camera({ shake });
-      c.viewWidth = 320;
-      c.viewHeight = 180;
-      const out: number[] = [];
-      for (let i = 0; i < 30; i++) {
-        start(i);
-        c.onUpdate(1 / 60);
-        out.push(c.viewTransform().e);
-      }
-      return out;
-    };
-    const a = run((i) => i === 2 && shake.start());
-    assert.ok(a.slice(0, 2).every((e) => e === 0), "still before it is started");
-    assert.ok(a.slice(2, 6).some((e) => e !== 0));
-    assert.ok(Math.max(...a.map(Math.abs)) <= 4);
-    assert.ok(a.slice(-10).every((e) => e === 0), "over after 0.2 seconds");
-    const long = run((i) => i === 2 && shake.start(4, 0.4));
-    assert.ok(long.slice(16, 20).some((e) => e !== 0), "a longer start lasts longer");
   });
 });
 

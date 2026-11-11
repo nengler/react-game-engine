@@ -82,7 +82,7 @@ export interface RuntimeManifest {
   readonly handleTypes: Readonly<Record<string, HandleTypeManifest>>;
   /**
    * Runtime functions component code may call, imported from the runtime module. Name → argument count: -1 at least one,
-   * -2 any. A `create…` factory makes a per-instance object in a lazy `useState(() => createShake())`.
+   * -2 any.
    */
   readonly functions: Readonly<Record<string, number>>;
 }
@@ -113,7 +113,7 @@ export const runtimeManifest: RuntimeManifest = {
     Pointer: ["width", "height", "onPress", "contains"],
     Text: ["text", "size", "color", "width", "align", "font"],
     Shape: ["kind", "width", "height", "color"],
-    Camera: ["zoom", "shake", "shakeStrength", "shakeDuration", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
+    Camera: ["zoom", "shake", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: [
       "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity",
       "animations", "animation", "isSheet", "current", "sheetFrame", "styled", "finished",
@@ -200,5 +200,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },
   },
-  functions: { clamp: 3, freeze: 1, springBack: 3, createShake: -2 },
+  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2 },
 };

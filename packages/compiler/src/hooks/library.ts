@@ -6,7 +6,7 @@
  */
 export const LIBRARY_FILE = "rge:hooks.tsx";
 
-export const LIBRARY_SOURCE = `import { springBack, useState, useUpdate } from "@rge/runtime/jsx";
+export const LIBRARY_SOURCE = `import { shakeOn, springBack, useState, useUpdate } from "@rge/runtime/jsx";
 
 /**
  * Squash and stretch: a scale that is set at a moment and springs back to 1 at \\\`recover\\\` a second.
@@ -21,7 +21,21 @@ export function useSquash(recover = 1.75) {
   });
   return [squash, setSquash];
 }
+
+/**
+ * A shake of the view, as state: set at a moment, it runs down by itself.
+ *   const [shake, setShake] = useShake();
+ *   setShake({ strength: 3, duration: 0.25 });
+ *   <Camera shake={shake}>
+ */
+export function useShake() {
+  const [shake, setShake] = useState<{ strength: number; duration: number; elapsed?: number }>({ strength: 0, duration: 0 });
+  useUpdate((dt) => {
+    setShake((s) => shakeOn(s, dt));
+  });
+  return [shake, setShake];
+}
 `;
 
 /** The names of the library's hooks. */
-export const LIBRARY_HOOKS: readonly string[] = ["useSquash"];
+export const LIBRARY_HOOKS: readonly string[] = ["useSquash", "useShake"];

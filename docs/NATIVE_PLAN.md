@@ -764,7 +764,7 @@ Limits, each said by the importer: one tileset (the first is used; a second is a
 
 ### Effect stores: bursts, sounds and shakes from anywhere (2026-11-11)
 
-`createParticles`, `createSounds` and `createShake` (runtime `effects.ts`) are stores made once in a module and called from anywhere, as a toast library's are; `<ParticleLayer particles={fx}>` draws a particle store (an `Entity`-like leaf holding one `<Particles>` per preset, emitting with `emitAt(n, x, y, angle)`) and `<Camera shake={shake}>` reads a `Shake`'s starts. Squash and stretch is state (`useSquash`) written to the sprite's transform scale, which the native side already applies about the origin. Nothing new reaches the frame builder or the ABI: the layer's emitters draw as every `<Particles>` does. See DESIGN.md, "Effects that happen at a moment".
+`createParticles` and `createSounds` (runtime `effects.ts`) are stores made once in a module and called from anywhere, as a toast library's are; `<ParticleLayer particles={fx}>` draws a particle store (an `Entity`-like leaf holding one `<Particles>` per preset, emitting with `emitAt(n, x, y, angle)`). A camera shake is state (`useShake`) the camera reads as a value. Squash and stretch is state (`useSquash`) written to the sprite's transform scale, which the native side already applies about the origin. Nothing new reaches the frame builder or the ABI: the layer's emitters draw as every `<Particles>` does. See DESIGN.md, "Effects that happen at a moment".
 
 ### Sound with a volume, and music
 
