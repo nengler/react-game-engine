@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, type InputState } from "@rge/runtime";
-import { createPlayer, MAX_STEPS_PER_FRAME, RecordingBackend, type InputFrame, type PlayerConfig } from "../src/index.ts";
+import { Entity, freeze, type InputState } from "@rge/runtime";
+import { createPlayer, FixedDriver, MAX_STEPS_PER_FRAME, RecordingBackend, RGE_KEY_DOWN, RGE_KEY_PRESSED, RGE_KEY_RELEASED, type InputFrame, type PlayerConfig } from "../src/index.ts";
 
 /** Records what each tick of it saw. */
 class Probe extends Entity {
@@ -74,5 +74,82 @@ describe("fixed timestep", () => {
 
   it("rejects a rate that is not positive", () => {
     assert.throws(() => run([], { fixedStep: 0 }), /fixedStep/);
+  });
+});
+
+describe("FixedDriver, without a player", () => {
+  const PRESSED = RGE_KEY_DOWN | RGE_KEY_PRESSED;
+  /** Runs frames of `dt` through a one-key driver; `frozen` says which steps (counting from 0) are frozen. Returns what each step's input and update saw. */
+  function drive(frames: readonly { dt: number; keys: number }[], frozen: (step: number) => boolean = () => false) {
+    const driver = new FixedDriver(60, 1);
+    const log: { input: number; update: number; frozen: boolean }[] = [];
+    for (const f of frames) {
+      driver.advance(f.dt, Uint8Array.of(f.keys), (input, update) => {
+        const isFrozen = frozen(log.length);
+        log.push({ input: input[0] as number, update: update[0] as number, frozen: isFrozen });
+        return isFrozen;
+      });
+    }
+    return log;
+  }
+
+  it("runs the steps a frame holds, as the player does", () => {
+    assert.equal(drive(Array.from({ length: 600 }, () => ({ dt: 1 / 60, keys: 0 }))).length, 600);
+    assert.equal(drive(Array.from({ length: 10 }, () => ({ dt: 1 / 30, keys: 0 }))).length, 20);
+    assert.equal(drive([{ dt: 5, keys: 0 }]).length, MAX_STEPS_PER_FRAME);
+  });
+
+  it("rejects a rate that is not positive", () => {
+    assert.throws(() => new FixedDriver(0, 1), /fixedStep/);
+    assert.throws(() => new FixedDriver(Number.NaN, 1), /fixedStep/);
+  });
+
+  it("keeps the edges of frozen steps for the first step after, and shows them to input only once", () => {
+    // Steps 0 and 1 are frozen; the press is made in step 1.
+    const log = drive([{ dt: 1 / 60, keys: 0 }, { dt: 1 / 60, keys: PRESSED }, { dt: 1 / 60, keys: RGE_KEY_DOWN }, { dt: 1 / 60, keys: 0 }], (n) => n < 2);
+    assert.deepEqual(log.map((l) => (l.input & RGE_KEY_PRESSED) !== 0), [false, true, false, false], "input sees it in the step it was made");
+    assert.deepEqual(log.map((l) => (l.update & RGE_KEY_PRESSED) !== 0), [false, true, true, false], "update sees it in the first step after the freeze, and not again");
+  });
+
+  it("keeps a release made in a freeze too, and drops what is kept once a step has run", () => {
+    const log = drive([{ dt: 1 / 60, keys: RGE_KEY_RELEASED }, { dt: 1 / 60, keys: 0 }, { dt: 1 / 60, keys: 0 }], (n) => n === 0);
+    assert.deepEqual(log.map((l) => (l.update & RGE_KEY_RELEASED) !== 0), [true, true, false]);
+  });
+
+  it("clones its state, so a replay can branch", () => {
+    const a = new FixedDriver(60, 1);
+    a.advance(1 / 120, Uint8Array.of(PRESSED), () => false); // no step yet: the edge and half a step wait
+    const b = a.clone();
+    let seen = 0;
+    a.advance(1 / 120, Uint8Array.of(0), (input) => ((seen = input[0] as number), false));
+    assert.ok((seen & RGE_KEY_PRESSED) !== 0);
+    seen = 0;
+    b.advance(1 / 120, Uint8Array.of(0), (input) => ((seen = input[0] as number), false));
+    assert.ok((seen & RGE_KEY_PRESSED) !== 0, "the copy had its own");
+  });
+});
+
+describe("a freeze in the player", () => {
+  it("shows onUpdate a press made during the freeze in the first step after it, and onInput only once", () => {
+    const saw: string[] = [];
+    class Pressed extends Entity {
+      override onInput(input: InputState): void {
+        saw.push(`in:${input.pressed("Space") ? "p" : "-"}`);
+      }
+      override onUpdate(_dt: number, input?: InputState): void {
+        saw.push(`up:${input?.pressed("Space") ? "p" : "-"}`);
+      }
+    }
+    const backend = new RecordingBackend();
+    backend.queueInput({ dt: 1 / 60 }); // runs, and starts the freeze
+    backend.queueInput({ dt: 1 / 60, pressed: ["Space"] }); // frozen
+    backend.queueInput({ dt: 1 / 60 }); // frozen
+    backend.queueInput({ dt: 1 / 60 }); // the first step after
+    const player = createPlayer(backend, { fixedStep: 60, root: () => new Pressed() });
+    player.step(); // the first step has no input yet
+    freeze(2);
+    for (let i = 0; i < 4; i++) player.step();
+    player.close();
+    assert.deepEqual(saw, ["in:-", "up:-", "in:p", "in:-", "in:-", "up:p"]);
   });
 });

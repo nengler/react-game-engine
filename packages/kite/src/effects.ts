@@ -1,6 +1,6 @@
 import { createParticles, createSounds, freeze, type Vector2 } from "@rge/runtime";
 import type { GameEvent } from "./rules/events.ts";
-import { freezeFor } from "./rules/playback.ts";
+import { freezeFor } from "./rules/freeze.ts";
 
 /**
  * The game's one-off effects, kept like a toast library's store: the looks and sounds are named here once, `Main.tsx` mounts
