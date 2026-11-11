@@ -1,6 +1,6 @@
 // Layer 3 of ComponentLowering: the JSX tree (elements, props, transforms, children, keyed lists) into ElementIR.
 import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type JsxFragment, type Node } from "typescript/ast";
-import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isConditionalExpression, isIdentifier, isJsxAttribute, isJsxElement, isJsxExpression, isJsxSelfClosingElement, isJsxText, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isJsxFragment, isStringLiteral, isBlock, isReturnStatement } from "typescript/ast/is";
+import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isConditionalExpression, isIdentifier, isJsxAttribute, isJsxSpreadAttribute, isJsxElement, isJsxExpression, isJsxSelfClosingElement, isJsxText, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isJsxFragment, isStringLiteral, isBlock, isReturnStatement } from "typescript/ast/is";
 import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
 import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR } from "../ir/types.ts";
@@ -181,9 +181,23 @@ export class ElementLowering extends HookLowering {
     let returned: Expression | null = null;
     if (!isBlock(fn.body)) returned = fn.body;
     else if (fn.body.statements.length === 1 && isReturnStatement(fn.body.statements[0]!) && fn.body.statements[0].expression) returned = fn.body.statements[0].expression;
-    const jsx = returned ? unwrapParens(returned) : null;
-    if (!jsx || !(isJsxElement(jsx) || isJsxSelfClosingElement(jsx))) {
-      this.report(code, `${shape}: the callback returns exactly one element (no conditionals, fragments or other statements).`, fn.body);
+    // The callback returns one element, or a condition choosing: `cond && <El />`, `cond ? <A /> : <B />`, `cond ? <A /> : null`.
+    const body = returned ? unwrapParens(returned) : null;
+    let conditionNode: Expression | null = null;
+    let jsx: Expression | null = body;
+    let otherJsx: Expression | null = null;
+    if (body && isBinaryExpression(body) && body.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken) {
+      conditionNode = body.left;
+      jsx = unwrapParens(body.right);
+    } else if (body && isConditionalExpression(body)) {
+      conditionNode = body.condition;
+      jsx = unwrapParens(body.whenTrue);
+      const other = unwrapParens(body.whenFalse);
+      if (other.kind !== SyntaxKind.NullKeyword) otherJsx = other;
+    }
+    const isJsx = (e: Expression | null): e is JsxElementNode => e !== null && (isJsxElement(e) || isJsxSelfClosingElement(e));
+    if (!isJsx(jsx) || (otherJsx !== null && !isJsx(otherJsx))) {
+      this.report(code, `${shape}: the callback returns one element, or \`cond && <El …/>\`, or \`cond ? <A …/> : <B …/>\` (no fragments or other statements).`, fn.body);
       return null;
     }
     if (fn.parameters.length < 1 || fn.parameters.length > 2) {
@@ -229,6 +243,32 @@ export class ElementLowering extends HookLowering {
       const key = this.lowerNode(keyNode);
       const lowered = this.lowerElement(jsx, path, true);
       if (!key || !lowered) return null;
+      let condition: ExprIR | null = null;
+      let alternate: ElementIR | null = null;
+      if (conditionNode !== null) {
+        if (index !== null) {
+          this.report(code, "A list whose items are conditional cannot take the index (`(item, index) => cond && …`): the index would count the items that are left out. Use the item's own id.", fn.parameters[1]!);
+          return null;
+        }
+        condition = this.lowerNode(conditionNode);
+        if (!condition) return null;
+      }
+      if (otherJsx !== null) {
+        const otherOpening = isJsxElement(otherJsx) ? otherJsx.openingElement : otherJsx;
+        const otherKey = findAttribute(otherOpening.attributes, "key")?.initializer;
+        const otherKeyNode = otherKey && isJsxExpression(otherKey) && otherKey.expression && !otherKey.dotDotDotToken ? otherKey.expression : null;
+        const otherKeyIr = otherKeyNode ? this.lowerNode(otherKeyNode) : null;
+        if (!otherKeyIr) {
+          if (!otherKeyNode) this.report(code, "Both branches of a conditional item need a `key`, and the same one.", otherOpening);
+          return null;
+        }
+        if (JSON.stringify(otherKeyIr) !== JSON.stringify(key)) {
+          this.report(code, "Both branches of a conditional item need the same `key` expression: an item keeps its place when it switches from one to the other.", otherKeyNode!);
+          return null;
+        }
+        alternate = this.lowerElement(otherJsx, [...path, 1], true);
+        if (!alternate) return null;
+      }
       const readsItem = readsParam(key, item.id);
       const readsIndex = index !== null && readsParam(key, index.id);
       if (!readsItem && !readsIndex) {
@@ -240,12 +280,15 @@ export class ElementLowering extends HookLowering {
           warning(code, `\`key\` reads only the index, so an item keeps its instance by position, not by identity: removing or reordering items moves state between them. Prefer an id from the item.`, this.span(keyNode)),
         );
       }
-      if (lowered.children.length > 0) {
+      if (lowered.children.length > 0 || (alternate !== null && alternate.children.length > 0)) {
         this.report(code, "A list item cannot have children yet: make the item a component that renders them.", jsx);
         return null;
       }
       const element = this.asListItem(lowered, item, index);
-      return element && { kind: "KeyedListChild", source, item, index, key, element, dependencies: collectDependencies(source) };
+      const alternateElement = alternate && this.asListItem(alternate, item, index);
+      if (!element || (alternate && !alternateElement)) return null;
+      const dependencies = [...collectDependencies(source), ...(condition ? collectDependencies(condition) : [])];
+      return { kind: "KeyedListChild", source, item, index, key, element, condition, alternate: alternateElement, dependencies };
     } finally {
       this.scope = outer;
     }
@@ -378,6 +421,15 @@ export class ElementLowering extends HookLowering {
     const props: PropIR[] = [];
     const seen = new Set<string>();
     for (const attribute of attributes.properties) {
+      if (isJsxSpreadAttribute(attribute)) {
+        if (!toComponent) {
+          this.report(DiagnosticCode.UnsupportedAttribute, `Spreading props onto a built-in (<${tag} {...props} />) is not supported yet: a built-in's props are written to its fields one by one, so name them. Spreading onto a component works.`, attribute);
+          continue;
+        }
+        const value = this.lowerNode(attribute.expression);
+        if (value) props.push({ kind: "SpreadProp", value, dependencies: collectDependencies(value) });
+        continue;
+      }
       if (!isJsxAttribute(attribute) || !isIdentifier(attribute.name)) {
         this.report(DiagnosticCode.UnsupportedAttribute, "Only plain `name={value}` attributes are supported.", attribute);
         continue;

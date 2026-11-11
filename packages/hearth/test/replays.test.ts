@@ -10,7 +10,7 @@ function play(script: string) {
   const frames = parseInputScript(script, { bindings, screen });
   return runScript(gameConfig, frames, () => {
     const s = useGame.getState();
-    return { screen: s.screen, lives: s.battle.lives, wave: s.battle.wave, gold: s.battle.gold, towers: s.towers.length, cursor: s.cursor, open: s.open, paused: s.paused, speed: s.speed, enemies: s.battle.enemies.length };
+    return { screen: s.screen, lives: s.battle.lives, wave: s.battle.wave, gold: s.battle.gold, towers: s.battle.pads.filter((p) => p.tower !== null).length, cursor: s.cursor, open: s.open, paused: s.paused, speed: s.speed, enemies: s.battle.enemies.length };
   }, { keepFrames: 2 });
 }
 

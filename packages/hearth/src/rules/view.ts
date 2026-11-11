@@ -1,4 +1,4 @@
-import type { Battle, Pad, Tower } from "./battle.ts";
+import type { Battle } from "./battle.ts";
 import { refundOf } from "./economy.ts";
 import type { TowerKind } from "./towers.ts";
 import { statsOf, TOWERS, upgradeCost } from "./towers.ts";
@@ -49,22 +49,4 @@ export function focusOf(battle: Battle, cursor: number): Focus {
     upgrade: upgradeCost(tower.kind, tower.level) ?? -1,
     refund: refundOf(tower),
   };
-}
-
-/** A tower on its pad, flat, as a component takes it. */
-export interface TowerView extends Tower {
-  readonly id: number;
-  readonly x: number;
-  readonly y: number;
-}
-
-/** The pads split by whether they hold a tower. WORKAROUND(tier3-cond-map): the play screen draws a pad as an empty pad or a tower with `pads.map(p => p.tower ? … : …)` once conditionals are allowed in a list's map. */
-export function splitPads(pads: readonly Pad[]): { towers: TowerView[]; empty: Pad[] } {
-  const towers: TowerView[] = [];
-  const empty: Pad[] = [];
-  for (const p of pads) {
-    if (p.tower === null) empty.push(p);
-    else towers.push({ ...p.tower, id: p.id, x: p.x, y: p.y });
-  }
-  return { towers, empty };
 }

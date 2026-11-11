@@ -14,8 +14,7 @@ import { readIntent } from "./rules/controls.ts";
 
 /** The play screen: the field with its pads, towers, enemies and shots, and over it the side panel and, when paused, a menu. */
 export function Play() {
-  const towers = useGame((s) => s.towers);
-  const empty = useGame((s) => s.empty);
+  const pads = useGame((s) => s.battle.pads);
   const enemies = useGame((s) => s.battle.enemies);
   const shots = useGame((s) => s.battle.shots);
   const paused = useGame((s) => s.paused);
@@ -31,23 +30,11 @@ export function Play() {
   return (
     <Entity name="Play">
       <Field />
-      {/* WORKAROUND(tier3-spread): the props are named one by one; `<Tower key={t.id} {...t} />` once spread props work on components. */}
-      {/* WORKAROUND(tier3-cond-map): one list of empty pads and one of towers; it is one list, `pads.map((p) => (p.tower ? <Tower …/> : <EmptyPad …/>))`, once a list's map may choose. */}
-      {empty.map((p) => (
-        <EmptyPad key={p.id} id={p.id} x={p.x} y={p.y} />
-      ))}
-      {towers.map((t) => (
-        <Tower key={t.id} id={t.id} x={t.x} y={t.y} kind={t.kind} level={t.level} angle={t.angle} firedAt={t.firedAt} />
-      ))}
+      {pads.map((p) => (p.tower ? <Tower key={p.id} id={p.id} x={p.x} y={p.y} {...p.tower} /> : <EmptyPad key={p.id} {...p} />))}
       {enemies.map((e) => (
-        <Enemy key={e.id} kind={e.kind} x={e.x} y={e.y} left={e.left} hp={e.hp} maxHp={e.maxHp} slow={e.slow} flash={e.flash} />
+        <Enemy key={e.id} {...e} />
       ))}
-      {/* WORKAROUND(tier3-cond-map): `shots.map((s) => s.live && <Shot …/>)` */}
-      {shots
-        .filter((s) => s.live)
-        .map((s) => (
-          <Shot key={s.id} kind={s.kind} x={s.x} y={s.y} tx={s.tx} ty={s.ty} t={s.t} flight={s.flight} radius={s.radius} />
-        ))}
+      {shots.map((s) => s.live && <Shot key={s.id} {...s} />)}
       <ParticleLayer particles={fx} />
       <Hud>
         <SidePanel />

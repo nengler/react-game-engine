@@ -3,7 +3,7 @@ import { SyntaxKind, type Expression, type PropertyAccessExpression, type Node, 
 import { isPropertyAccessExpression, isIdentifier, isArrayTypeNode, isUnionTypeNode } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type TypeIR, type ParamIR, type ValuePropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType } from "../ir/types.ts";
+import { type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
 import { type GameStateDefinition } from "../gamestate/schema.ts";
 import { type RuntimeManifest } from "@rge/runtime";
@@ -181,7 +181,8 @@ export class LoweringBase {
       return { kind: "DynamicProp", name: p.name, value: p.value, dependencies: [...collectDependencies(p.value), { kind: "Item" }] } as unknown as T;
     };
     let ok = true;
-    const props = el.props.map((p) => {
+    const props = el.props.map((p): PropIR => {
+      if (p.kind === "SpreadProp") return readsItem(p.value) ? { ...p, dependencies: [...p.dependencies, { kind: "Item" }] } : p;
       if (p.kind !== "CallbackProp") return dynamic(p);
       if (index !== null && functionReadsParam(p.handler, index.id)) {
         this.diagnostics.push(error(DiagnosticCode.InvalidList, `Callback '${p.name}' cannot read the index '${index.name}': it changes when items move. Read the item (\`${item.name}.id\`) instead.`, el.span));

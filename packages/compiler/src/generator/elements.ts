@@ -13,7 +13,9 @@ export class ElementEmitter extends HandlerEmitter {
       const type = typeName(el.component);
       if (child.kind === "KeyedListChild") {
         // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
-        this.w.line(`readonly ${el.fieldName}Items: Map<string | number, ${type}> = new Map();`);
+        const itemType = child.alternate ? `${type} | ${typeName(child.alternate.component)}` : type;
+        this.w.line(`readonly ${el.fieldName}Items: Map<string | number, ${itemType}> = new Map();`);
+        if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
         this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
         if (this.listNeedsRecords(child)) this.w.line(`#${el.fieldName}Records: Map<string | number, { current: ${this.listItemType(child)} }> = new Map();`);
         continue;
@@ -116,9 +118,11 @@ export class ElementEmitter extends HandlerEmitter {
     const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
     if (el.component.kind === "Intrinsic") {
       this.emitReportedWrites(dynamic.map((prop) => ({ target: access(ref, prop.name), value: prop.value })), `${ref}.markChanged()`);
-    } else if (dynamic.length > 0) {
-      // A component takes all its changed props in one call, which marks it dirty once.
-      this.w.line(`${ref}.updateProps(${this.propsObject(dynamic)});`);
+    } else if (hasDynamicProps(el.props)) {
+      // A component takes all its changed props in one call, which marks it dirty once. With a spread among them the call
+      // carries every value prop, in order, so that a named prop after the spread still wins over it.
+      const sent = el.props.some((p) => p.kind === "SpreadProp") ? el.props.filter((p) => p.kind !== "CallbackProp") : dynamic;
+      this.w.line(`${ref}.updateProps(${this.propsObject(sent)});`);
     }
   }
 
@@ -133,17 +137,28 @@ export class ElementEmitter extends HandlerEmitter {
   protected emitList(list: KeyedListChildIR, mount: Mount, slot: number): void {
     const w = this.w;
     const el = list.element;
+    const alt = list.alternate;
     const items = `this.${el.fieldName}Items`;
     const order = `this.#${el.fieldName}Order`;
+    const branches = `this.#${el.fieldName}Branches`;
     const records = this.listNeedsRecords(list) ? `this.#${el.fieldName}Records` : null;
     const item = list.item.name;
     const position = list.index?.name ?? "$n";
     const params = list.index ? `${item}, ${list.index.name}` : item;
-    const target = transformTarget(el);
     const where = `in the <${el.component.name}> list of ${this.c.name}`;
+    // An item may switch between two elements (`cond ? <A/> : <B/>`): its instance is cast to the one that is current.
+    const view = (e: ElementIR): string => (alt ? `($item as ${typeName(e.component)})` : "$item");
+    // The branches test the condition itself (not `$branch`), so that TypeScript narrows what it reads (`p.tower ? … {...p.tower}`).
+    const test = list.condition ? this.arrowBody(list.condition) : "true";
+    const construct = (e: ElementIR): void => {
+      w.line(`$item = ${this.construct(e)};`);
+      this.emitStaticTransform(e.transform, "$item", transformTarget(e));
+    };
     w.open("{");
     w.line(`const $parent = ${mount.ref};`);
-    w.line(`const $list = ${this.expr(list.source, true)};`);
+    // `cond && <El/>`: an item whose condition is false has no instance, as if it were filtered out.
+    const filter = list.condition !== null && alt === null ? `.filter((${item}) => ${this.arrowBody(list.condition)})` : "";
+    w.line(`const $list = ${this.expr(list.source, true)}${filter};`);
     w.line(`const $keys = $list.map((${params}) => ${this.arrowBody(list.key)});`);
     w.line("const $seen = new Set<string | number>();");
     w.block("for (const $key of $keys)", () => {
@@ -153,34 +168,53 @@ export class ElementEmitter extends HandlerEmitter {
     w.block(`for (const [${position}, ${item}] of $list.entries())`, () => {
       w.line(`const $key = $keys[${position}]!;`);
       w.line(`let $item = ${items}.get($key);`);
+      if (alt && list.condition) {
+        // The branch this item is in now; if it is not the one it was built in, the old instance goes and the new one takes its place.
+        w.line(`const $branch = ${test} ? 0 : 1;`);
+        w.block(`if ($item !== undefined && ${branches}.get($key) !== $branch)`, () => {
+          w.line(`${queueRemoveChild({ ref: "$parent", passed: mount.passed }, "$item")};`);
+          w.line(`${items}.delete($key);`);
+          w.line("$item = undefined;");
+        });
+        w.line(`${branches}.set($key, $branch);`);
+      }
       w.open("if ($item === undefined) {");
       // A callback is created once, with the item's first value. It reads the item's current value through this
       // holder, which every render refreshes, and which it keeps after the item is removed (an unmount hook may call it).
       if (records) w.line(`const $rec = { current: ${item} };`);
       this.itemLookup = records ? { id: list.item.id, text: "$rec.current" } : null;
       try {
-        w.line(`$item = ${this.construct(el)};`);
+        if (alt) {
+          w.block(`if (${test})`, () => construct(el));
+          w.block("else", () => construct(alt));
+        } else construct(el);
       } finally {
         this.itemLookup = null;
       }
-      this.emitStaticTransform(el.transform, "$item", target);
       w.line(`${items}.set($key, $item);`);
       if (records) w.line(`${records}.set($key, $rec);`);
       w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, ${position})` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
-      if (records || el.props.some((p) => p.kind === "DynamicProp")) {
+      if (records || hasDynamicProps(el.props) || (alt !== null && hasDynamicProps(alt.props))) {
         w.close();
         w.open("} else {");
         if (records) w.line(`${records}.get($key)!.current = ${item};`);
-        this.emitPropUpdates(el, "$item");
+        if (alt) {
+          w.block(`if (${test})`, () => this.emitPropUpdates(el, view(el)));
+          w.block("else", () => this.emitPropUpdates(alt, view(alt)));
+        } else this.emitPropUpdates(el, "$item");
       }
       w.close("}");
-      this.emitDynamicTransform(el.transform, "$item", target);
+      if (alt) {
+        w.block(`if (${test})`, () => this.emitDynamicTransform(el.transform, view(el), transformTarget(el)));
+        w.block("else", () => this.emitDynamicTransform(alt.transform, view(alt), transformTarget(alt)));
+      } else this.emitDynamicTransform(el.transform, "$item", transformTarget(el));
     });
     w.block(`for (const [$key, $item] of ${items})`, () => {
       w.block("if (!$seen.has($key))", () => {
         w.line(`${queueRemoveChild({ ref: "$parent", passed: mount.passed }, "$item")};`);
         w.line(`${items}.delete($key);`);
         if (records) w.line(`${records}.delete($key);`);
+        if (alt) w.line(`${branches}.delete($key);`);
       });
     });
     w.block(`if ($keys.length !== ${order}.length || $keys.some(($k, $i) => $k !== ${order}[$i]))`, () => {
@@ -193,7 +227,7 @@ export class ElementEmitter extends HandlerEmitter {
 
   /** Whether a list's item callbacks read the item, so each key's current item must be kept. */
   protected listNeedsRecords(list: KeyedListChildIR): boolean {
-    return list.element.props.some((p) => p.kind === "CallbackProp" && functionReadsParam(p.handler, list.item.id));
+    return [list.element, ...(list.alternate ? [list.alternate] : [])].some((e) => e.props.some((p) => p.kind === "CallbackProp" && functionReadsParam(p.handler, list.item.id)));
   }
 
   /** The element type of a list's source array, named through the state field or the props type. */
@@ -214,7 +248,7 @@ export class ElementEmitter extends HandlerEmitter {
         if (c.kind === "ChildrenSlot") return [];
         if (c.kind !== "KeyedListChild") return this.subtreeResets(c.element);
         const f = c.element.fieldName;
-        return [`this.${f}Items.clear();`, `this.#${f}Order = [];`, ...(this.listNeedsRecords(c) ? [`this.#${f}Records.clear();`] : [])];
+        return [`this.${f}Items.clear();`, `this.#${f}Order = [];`, ...(this.listNeedsRecords(c) ? [`this.#${f}Records.clear();`] : []), ...(c.alternate ? [`this.#${f}Branches.clear();`] : [])];
       }),
     ];
   }
@@ -249,7 +283,7 @@ export class ElementEmitter extends HandlerEmitter {
   }
 
   protected elementNeedsRender(el: ElementIR): boolean {
-    return [...el.props, ...el.transform].some((p) => p.kind === "DynamicProp") || this.childrenNeedRender(el.children);
+    return hasDynamicProps(el.props) || el.transform.some((p) => p.kind === "DynamicProp") || this.childrenNeedRender(el.children);
   }
 
   protected childrenNeedRender(children: readonly ChildIR[]): boolean {
@@ -273,6 +307,11 @@ export class ElementEmitter extends HandlerEmitter {
   }
 
   protected propsObject(props: readonly PropIR[]): string {
-    return `{ ${props.map((p) => `${propertyKey(p.name)}: ${p.kind === "CallbackProp" ? this.callback(p.handler) : this.expr(p.value, true)}`).join(", ")} }`;
+    return `{ ${props.map((p) => (p.kind === "SpreadProp" ? `...(${this.expr(p.value, true)})` : `${propertyKey(p.name)}: ${p.kind === "CallbackProp" ? this.callback(p.handler) : this.expr(p.value, true)}`)).join(", ")} }`;
   }
+}
+
+/** Whether a render has props to send: a dynamic prop, or a spread that reads something that changes. */
+function hasDynamicProps(props: readonly PropIR[]): boolean {
+  return props.some((p) => p.kind === "DynamicProp" || (p.kind === "SpreadProp" && p.dependencies.length > 0));
 }

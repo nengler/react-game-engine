@@ -48,6 +48,7 @@ export function checkAssets(modules: readonly IRModule[], options: AssetCheckOpt
   };
   const child = (c: ChildIR): void => {
     if (c.kind === "StaticChild" || c.kind === "ConditionalChild" || c.kind === "KeyedListChild") element(c.element);
+    if (c.kind === "KeyedListChild" && c.alternate) element(c.alternate);
   };
   const element = (e: ElementIR): void => {
     if (e.component.kind === "Intrinsic") props(e.component.name, e.props, e.span);

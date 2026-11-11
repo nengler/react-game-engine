@@ -1,10 +1,10 @@
 import { createGameState } from "@rge/runtime";
 import { playEvents, sfx } from "./effects.ts";
-import { newBattle, stepBattle, type Battle, type Command, type Pad } from "./rules/battle.ts";
+import { newBattle, stepBattle, type Battle, type Command } from "./rules/battle.ts";
 import { MAP } from "./rules/map.ts";
 import { STEP } from "./rules/constants.ts";
 import { applyIntent, type Intent } from "./rules/ui.ts";
-import { focusOf, NO_FOCUS, splitPads, type Focus, type TowerView } from "./rules/view.ts";
+import { focusOf, NO_FOCUS, type Focus } from "./rules/view.ts";
 import type { TowerKind } from "./rules/towers.ts";
 
 type Screen = "title" | "play" | "won" | "lost";
@@ -22,10 +22,8 @@ interface State {
   open: boolean;
   speed: 1 | 2;
   paused: boolean;
-  /** What the panel shows for the cursor's pad, and the pads split into towers and empty ones (see rules/view.ts), kept up to date each step. */
+  /** What the panel shows for the cursor's pad (see rules/view.ts), kept up to date each step. */
   focus: Focus;
-  towers: readonly TowerView[];
-  empty: readonly Pad[];
   /** Commands from clicks, waiting for the next step. */
   queue: readonly Command[];
   begin: () => void;
@@ -44,7 +42,6 @@ interface State {
   act: (intent: Intent, dt: number) => void;
 }
 
-const split = splitPads(newBattle(MAP).pads);
 
 export const useGame = createGameState<State>()((set, get) => ({
   screen: "title",
@@ -54,14 +51,12 @@ export const useGame = createGameState<State>()((set, get) => ({
   speed: 1,
   paused: false,
   focus: NO_FOCUS,
-  towers: split.towers,
-  empty: split.empty,
   queue: [],
   begin: () => {
     sfx.play("click");
-    set({ screen: "play", battle: newBattle(MAP), cursor: 0, open: false, speed: 1, paused: false, focus: NO_FOCUS, towers: split.towers, empty: split.empty, queue: [] });
+    set({ screen: "play", battle: newBattle(MAP), cursor: 0, open: false, speed: 1, paused: false, focus: NO_FOCUS, queue: [] });
   },
-  toTitle: () => set({ screen: "title", battle: newBattle(MAP), cursor: 0, open: false, speed: 1, paused: false, focus: NO_FOCUS, towers: split.towers, empty: split.empty, queue: [] }),
+  toTitle: () => set({ screen: "title", battle: newBattle(MAP), cursor: 0, open: false, speed: 1, paused: false, focus: NO_FOCUS, queue: [] }),
   select: (pad) => set((s) => ({ cursor: pad, open: true, focus: focusOf(s.battle, pad) })),
   close: () => set({ open: false }),
   build: (kind) => set((s) => ({ queue: [...s.queue, { type: "build", pad: s.cursor, kind }] })),
@@ -89,15 +84,12 @@ export const useGame = createGameState<State>()((set, get) => ({
       battle = result.battle;
       playEvents(result.events);
     }
-    const pads = splitPads(battle.pads);
     set({
       battle,
       cursor: applied.ui.cursor,
       open: applied.ui.open,
       speed: applied.ui.speed,
       focus: focusOf(battle, applied.ui.cursor),
-      towers: pads.towers,
-      empty: pads.empty,
       queue: [],
       screen: battle.status === "won" ? "won" : battle.status === "lost" ? "lost" : "play",
     });

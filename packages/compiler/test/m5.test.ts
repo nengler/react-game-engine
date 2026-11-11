@@ -686,7 +686,8 @@ function C() {
   });
 
   it("takes one element with no children from an inline arrow", () => {
-    assert.deepEqual(listCodes(`items.map((e) => e.n > 0 && <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
+    // `cond && <El/>` and `cond ? <A/> : <B/>` are allowed now: see tier3.test.ts.
+    assert.deepEqual(listCodes(`items.map((e) => e.n > 0 || <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map((e) => <><Sprite key={e.id} image={e.id} /></>)`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map((e) => { const x = 1; return <Sprite key={e.id} image={e.id} />; })`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map((e) => <Entity key={e.id}><Sprite image={e.id} /></Entity>)`), [DiagnosticCode.InvalidList]);

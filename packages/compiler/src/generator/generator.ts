@@ -129,6 +129,12 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
       if (child.kind === "KeyedListChild") {
         visitExpr(child.source);
         visitExpr(child.key);
+        if (child.condition) visitExpr(child.condition);
+        if (child.alternate) {
+          if (child.alternate.component.kind === "Intrinsic") values.add(child.alternate.component.name);
+          visitProps(child.alternate.props);
+          visitProps(child.alternate.transform);
+        }
       }
       visitProps(child.element.props);
       visitProps(child.element.transform);
@@ -183,12 +189,13 @@ function collectComponentImports(module: IRModule): Map<string, { defaultName: s
   const visit = (children: readonly ChildIR[]): void => {
     for (const child of children) {
       if (child.kind === "ChildrenSlot") continue;
-      const ref = child.element.component;
-      if (ref.kind === "Imported") {
-        const specifier = ref.module.replace(/\.tsx$/, ".ts");
-        if (!named.has(specifier)) named.set(specifier, new Set());
-        if (ref.isDefault) defaults.set(specifier, ref.name);
-        else named.get(specifier)!.add(ref.name);
+      for (const ref of [child.element.component, ...(child.kind === "KeyedListChild" && child.alternate ? [child.alternate.component] : [])]) {
+        if (ref.kind === "Imported") {
+          const specifier = ref.module.replace(/\.tsx$/, ".ts");
+          if (!named.has(specifier)) named.set(specifier, new Set());
+          if (ref.isDefault) defaults.set(specifier, ref.name);
+          else named.get(specifier)!.add(ref.name);
+        }
       }
       visit(child.element.children);
     }
@@ -257,9 +264,7 @@ class ComponentGenerator extends ElementEmitter {
         // A built-in's constructor may require a prop (a Sprite's `image`) that is dynamic here. `super()` runs before
         // state exists, so it gets a placeholder and its real value in the first `render()`, which the constructor runs.
         const required = this.requiredHostProps[c.root.component.name] ?? [];
-        const placeholders = c.root.props
-          .filter((p) => p.kind === "DynamicProp" && required.includes(p.name))
-          .map((p) => `${propertyKey(p.name)}: undefined as never`);
+        const placeholders = c.root.props.flatMap((p) => (p.kind === "DynamicProp" && required.includes(p.name) ? [`${propertyKey(p.name)}: undefined as never`] : []));
         const hostEntries = [...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`), ...placeholders];
         const host = hostEntries.length > 0 ? `{ ${hostEntries.join(", ")} }` : "{}";
         if (c.propsType) w.line(`super(${host}, props${defaultsObject ? `, ${defaultsObject}` : ""});`);
