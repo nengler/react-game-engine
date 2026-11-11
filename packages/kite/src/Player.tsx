@@ -1,4 +1,4 @@
-import { AfterimageLayer, AnimatedSprite, Collider, Entity, EventListener, Particles, createAfterimages, createSquash, useState } from "@rge/runtime/jsx";
+import { AfterimageLayer, AnimatedSprite, Collider, Entity, EventListener, Particles, createAfterimages, useSquash, useState } from "@rge/runtime/jsx";
 import { gameEvents } from "./effects.ts";
 import { useGame } from "./GameState.ts";
 import { animationOf, heightOf } from "./rules/body.ts";
@@ -14,7 +14,7 @@ export function Player() {
   const originY = useGame((s) => s.run.originY);
   const dead = useGame((s) => s.run.dead);
 
-  const [squash] = useState(() => createSquash({ recover: 1.75 }));
+  const [squash, setSquash] = useSquash(1.75);
   const [trail] = useState(() => createAfterimages({ lifetime: 0.3, color: "#ff9a7aa0" }));
   const height = heightOf(body);
 
@@ -41,8 +41,7 @@ export function Player() {
         originX={6}
         originY={12}
         tint={body.dashes > 0 || dead ? "#ffffff" : "#9db4ff"}
-        transform={{ x: 4, y: height }}
-        squash={squash}
+        transform={{ x: 4, y: height, scaleX: squash.scaleX, scaleY: squash.scaleY }}
         afterimages={trail}
       />
       <Collider width={8} height={height} tag="player" layer="player" />
@@ -50,14 +49,14 @@ export function Player() {
         events={gameEvents}
         onEvent={(e) => {
           if (e.type === "jump" || e.type === "wallJump") {
-            squash.start(0.6, 1.4);
+            setSquash({ scaleX: 0.6, scaleY: 1.4 });
           } else if (e.type === "land") {
             // The harder the landing, the flatter: all the way at 240 pixels a second.
-            squash.start(1 + 0.6 * Math.min(e.speed / 240, 1), 1 - 0.6 * Math.min(e.speed / 240, 1));
+            setSquash({ scaleX: 1 + 0.6 * Math.min(e.speed / 240, 1), scaleY: 1 - 0.6 * Math.min(e.speed / 240, 1) });
           } else if (e.type === "duck") {
-            squash.start(1.4, 0.6);
+            setSquash({ scaleX: 1.4, scaleY: 0.6 });
           } else if (e.type === "stand") {
-            squash.start(0.8, 1.2);
+            setSquash({ scaleX: 0.8, scaleY: 1.2 });
           }
         }}
       />
