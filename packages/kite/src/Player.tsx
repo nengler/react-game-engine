@@ -20,7 +20,15 @@ export function Player() {
         sheet="hero.png"
         frameWidth={12}
         frameHeight={12}
-        animations="idle:0-1@3, run:2-7@14, jump:8@1, fall:9@1, wall:10@1, dash:11@1, die:12-15@16~"
+        animations={{
+          idle: { frames: "0-1", fps: 3 },
+          run: { frames: "2-7", fps: 14 },
+          jump: { frames: 8 },
+          fall: { frames: 9 },
+          wall: { frames: 10 },
+          dash: { frames: 11 },
+          die: { frames: "12-15", fps: 16, once: true },
+        }}
         animation={animation}
         flipX={body.facing < 0}
         originX={6}
