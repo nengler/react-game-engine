@@ -7,5 +7,8 @@
     "@rge/player": "0.0.0",
     "@rge/player-node": "0.0.0",
     "@rge/runtime": "0.0.0"
+  },
+  "rge": {
+    "checkAssets": false
   }
 }

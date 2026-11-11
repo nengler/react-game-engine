@@ -43,15 +43,15 @@ describe("createGameState", () => {
     assert.equal((plain.getState() as { n: number }).n, 1);
   });
 
-  it("reads a leaf by its dotted path", () => {
+  it("reads a leaf, an object or an array by its dotted path", () => {
     const { store } = counter();
     assert.equal(store.get("coins"), 0);
     assert.equal(store.get("player.hp"), 10);
     assert.equal(store.get("player.name"), "Ada");
-    assert.throws(() => store.get("player"), /no value at 'player'/);
-    assert.throws(() => store.get("collect"), /no value at 'collect'/);
+    assert.deepEqual(store.get("player"), { hp: 10, name: "Ada" });
+    assert.throws(() => store.get("collect"), /'collect' is an action/);
     assert.throws(() => store.get("coins.x"), /nothing at 'coins\.x'/);
-    assert.throws(() => store.get("nope"), /no value at 'nope'/);
+    assert.throws(() => store.get("nope"), /nothing at 'nope'/);
   });
 
   it("is a compile-time declaration when called", () => {

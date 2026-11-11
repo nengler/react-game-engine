@@ -2,9 +2,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createPlayer, RecordingBackend, type DecodedRecord, type InputFrame, type Player } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend, runScript, type DecodedRecord, type InputFrame, type Player } from "@rge/player";
 import { createNodeBackend, findNativeLibrary, type Pixels } from "@rge/player-node";
-import { gameConfig } from "../game.ts";
+import { bindings, gameConfig } from "../game.ts";
+import { useGame } from "../src/GameState.ts";
 import { Main } from "../generated/Main.ts";
 
 const ASSETS = resolve(dirname(fileURLToPath(import.meta.url)), "../assets");
@@ -315,5 +316,16 @@ describe("demo: a fixed resolution that expands", () => {
     p.step();
     p.close();
     assert.deepEqual(backend.fullscreenCalls, [true]);
+  });
+});
+
+describe("demo: the headless harness", () => {
+  it("runs an input script and reports the game's state after each step, so a test can assert on what happened", () => {
+    // The coin is 60 pixels right of the start: 20 frames at 140 px/s is 46 pixels, 40 is well past it.
+    const result = runScript(gameConfig, parseInputScript("right*40, down*10", { bindings, dt: 0.05 }), () => ({ ...useGame.getState().stats }));
+    assert.equal(result.states.length, 50);
+    assert.equal(result.states[3]?.coins, 0, "not yet at the coin");
+    assert.equal(result.states.at(-1)?.coins, 1, "picked it up on the way");
+    assert.deepEqual(result.warnings, []);
   });
 });

@@ -707,6 +707,90 @@ The frame bench packaged this way, against the Rust host, same VM:
 - **How it was checked.** The demo's parity script, packaged this way, prints byte for byte what it prints under Node and under the Rust host; CI's `native` job does the same and then runs the packaged demo from another folder, and the `native-desktop` job packages it with a window and runs it under a virtual display. The windowed package was not built in the container this was written in (it lacks the X11 development packages), only in CI.
 - **Found on the way:** the bench took the host backend's `overlaps` without binding it, which worked for the Rust host's plain function and threw for the Node backend's method. It is bound now.
 
+## Priority 7 additions (2026-11)
+
+Engine features the first level of the platformer needed (see [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md), priority 7). Each section says what was built, what was decided and why. Native changes are batched, so the ABI moves once.
+
+### Headless tooling
+
+Built first, because the level is written without a window. `npm run check:<game>` (`tools/check-game.ts`) compiles a game package, type-checks it, runs its tests and runs its parity script under Node (and under the Rust host when it is built), printing one line per step.
+
+- **`parseInputScript(script, { bindings, dt })`** turns `right*30, jump, right*20+dash` into input frames. Items run one after another, `+` joins terms that start together, `name*N` holds N frames, a bare name is a one-frame tap, `_` waits. Presses and releases are derived from what is held, so a key held across two items is one hold. The same format is the replay format of the level.
+- **`runScript(config, frames, observe)`** (`@rge/player`) builds a game on a `RecordingBackend`, does one warm-up step, then steps once per frame and returns what `observe` gives after each: the game state, not draw records. `ScriptedInputBackend` wraps any backend and takes input from a script, which is how a scripted run is drawn natively.
+- **`renderRun` and `npm run screenshot`** (`@rge/player-node`, `tools/screenshot.ts`) render chosen steps of a scripted run through the software-rendered hidden window to PNG, and a contact sheet of them with step numbers (`--sheet`). Needs `npm run native:build:headless`.
+
+### Fixed timestep
+
+`<Game fixedStep={60}>` (or `PlayerConfig.fixedStep`) runs `world.tick` at a fixed rate from an accumulator. Per frame: add the frame's `dt` (clamped to `MAX_DT`), run as many whole steps as it holds, each a full tick (`useInput`, `useUpdate`, renders) with `dt = 1 / rate`, then build and draw once. Decisions:
+
+- A frame can run no step (a fast monitor), one, or several. At most `MAX_STEPS_PER_FRAME` (8) run; after that the leftover time is dropped, so a stall is not followed by a catch-up burst. The accumulator compares with a 1e-9 epsilon: sixty sums of 1/60 s must give sixty steps.
+- **No input is lost.** Key edges (pressed, released) accumulate from every frame's poll and go to the next step only; a step after the first in a frame sees the key held but no edge. A tap that began and ended between two steps is shown to the next step as down, pressed and released at once. Handlers read a per-step copy of the key flags (`PlayerInput.handlerKeys`); the player's own reads (mouse press, full screen) use the raw flags once per frame.
+- Collisions are still reported once per frame after the steps, and nothing is interpolated: the frame draws the latest step. A frame that ran no step settles pending renders (`world.flush()`) so state set by the last step still shows.
+- Off by default, so existing games and the parity test are untouched.
+
+### ABI v5: one batch (priority 7)
+
+`RGE_ABI_VERSION` moved from 4 to 5 once, for everything the platformer needed from librge:
+
+- **`RGE_OP_SPRITE_REGION`** (op 9, 15 doubles): a source rectangle of a texture, an origin, mirror flags and a packed tint (its alpha is opacity). `DrawTexturePro` under the record's transform; a mirror swings the picture about the origin, so a character flipped to face left stays on its feet. The old `RGE_OP_SPRITE` is unchanged, so a game that uses no sprite option writes the same bytes as before (the parity test stays byte-identical).
+- **`rge_play_sound_ex(handle, volume)`**: volume 0 to 1 (clamped, NaN is 0), and a sound that is still playing is played again on an alias (`LoadSoundAlias`), up to `RGE_SOUND_VOICES` (4) at once; with all busy the oldest is cut off.
+- **`rge_load_music` / `rge_music_play(handle, volume, loop)` / `rge_music_set_volume` / `rge_music_stop`**: streams (`LoadMusicStream`) that `rge_frame` feeds each frame. Fading is the player's job (`<Music>` moves the volume each step), which keeps librge free of time.
+- **Gamepad keys**: `PadA PadB PadX PadY PadLB PadRB PadBack PadStart` and `PadLeft PadRight PadUp PadDown` are appended to `RGE_KEYS` (kinds `G` and `S`), read from the first gamepad; a direction is down for the d-pad or the left stick beyond the dead zone, which `rge_set_gamepad_deadzone` sets (default 0.35). Edges are worked out in librge from last frame's state. No pad connected reads as nothing held, so the hidden-window smoke test checks that every key is idle.
+
+Both hosts, the recording backend (`playVolumes`, `musicEvents`, `spriteRegion` records) and `smoke.c` follow.
+
+### Sprite sheets and sprite options
+
+`<Sprite image frameWidth frameHeight frame flipX flipY originX originY tint opacity>` draws one frame of a sheet (read left to right, then down; the columns come from the texture's width). `<AnimatedSprite sheet frameWidth frameHeight animations animation loop …>` plays named animations: `animations` is text, `"idle:0-1@4, run:2-7@12, die:8-12@10~"` (name, frames as `3`, `2-7` or `1+2+3+2`, `@fps`, a trailing `~` to play once and hold the last frame), and `loop={false}` plays all once. Setting a different `animation` restarts it, setting the same one does not; `finished` is true on the last frame of a played-once animation. The list of image files (`frames`) still works and is no longer required. A malformed list throws when the sprite is made, naming the entry. Since 2026-11-11 `animations` also takes a table, which reads and type-checks better: `animations={{ idle: { frames: "0-1", fps: 3 }, die: { frames: "12-15", fps: 16, once: true } }}` (frames as a number, a list, or the same text; `fps` defaults to 10). Setting an equal table again (a render writing the same literal) changes nothing; a different one restarts.
+
+A sprite that uses none of this draws as it always did, through the fast in-place path in the frame builder; a styled one is written by the general walk, which also keeps it out of the "moved as a block" copy (that copy only knows plain sprites and shapes).
+
+### Tilemap
+
+`<Tilemap map="room1" image="tiles.png" layer="Tiles" />` draws a registered map: one region record for each filled cell of each visible layer, no game object per tile. The data is `TilemapData` (`runtime/src/tilemap.ts`): cells as global tile ids with the flip bits split off, a `flips` array only when a cell has one, per-layer `visible`, the first tileset's `firstGid`, and the global ids that are `solid`. `registerTilemaps(tilemaps)` makes them known by name, and **the same data is the solid grid movement code reads**: `getTilemap("room1")` is a `TileGrid` (`tileAt`, `solidAt(col, row)`, `solidAtPixel`, `find(layer, gid)`), so what is drawn and what blocks cannot disagree. Horizontal and vertical flips are mirrors about the tile's middle; the diagonal flip, which Tiled applies first, is a quarter turn plus at most one mirror (the table is in `#tilemap` and tested through the software renderer). A tilemap is reused like any other leaf: a still one is copied from the last frame.
+
+Limits, each said by the importer: one tileset (the first is used; a second is a warning), embedded tilesets only (an external one draws but nothing is solid), CSV layers (base64 and compressed ones are an error that says what to change), finite maps.
+
+### Camera: bounds, slide, shake
+
+`<Camera bounds={[x, y, w, h]} slide={0.4} shake={n} shakeStrength shakeDuration>`. The view never shows outside `bounds` (an area smaller than the view is centred on); the player tells the camera the size of the screen before it asks for the view. When `bounds` change and `slide` is above 0, the view starts where it was last shown and eases to where the new bounds put it (an exponential ease with a time constant of `slide / 7` steps, snapping the last half pixel), in `onUpdate`, so it follows the fixed timestep. `shake` is a counter: when its value changes (not when the camera is made) the view is thrown by `shakeStrength` pixels, dying over `shakeDuration`, in whole pixels from a fixed sine-hash sequence, so a replay shakes the same every time.
+
+### Particles, fades, fonts, freeze frames
+
+- **`<Particles>`** keeps its particles in one flat `Float64Array` (six numbers each) and simulates in `onUpdate`: `rate`, `burst` (when it starts emitting, which includes being mounted), `lifetime`, `speed`, `angle` ± `spread`, `gravity`, `color` to `endColor`, `shrink`, `fade`, `max`, `space="world"` for a trail, and a seeded generator (mulberry32) so a run repeats exactly. It draws a rect record per live particle, in whole pixels. It stamps itself changed only on ticks where it has particles, so an idle emitter costs a copied record.
+- **`<Particles width height prewarm>`** (2026-11-11): particles start anywhere in a `width` × `height` area from the emitter (a room's dust, snow across the screen), and `prewarm` starts it as if it had been emitting for a lifetime, each particle partway through its life and its path. An emitter with no area uses no randomness for its place, so existing ones repeat exactly. Kite's rooms have drifting dust behind the rock, which stops with the world in a freeze.
+- **`<Fade color on duration from>`** in a `<Hud>`: a full-screen rect whose alpha is how far along the fade is; `from={1}` fades in as a screen begins. A fade in the world warns once and draws nothing.
+- **`<Text font="font.png" size>`**: a bitmap font is a sheet of the characters 32 to 127 in 16 × 6 cells; the player writes a region record per character (spaces advance without drawing, anything outside is a `?`), tinted with the text's colour, and layout measures by the cell. `size` is the cell's height, so a whole multiple keeps pixels square.
+- **`freeze(steps)`** (also callable as a statement in a handler): the next `steps` ticks skip every `onUpdate`; `onInput` and renders still run. The request is taken when the tick ends, so the tick that asked still updates. During a freeze the player keeps the key edges for the first step after it, so a press in the middle of a dash's freeze is not lost. Anything animated by `onUpdate` pauses with the world, which is the point.
+
+### Effect stores: bursts, sounds and shakes from anywhere (2026-11-11)
+
+`createParticles` and `createSounds` (runtime `effects.ts`) are stores made once in a module and called from anywhere, as a toast library's are; `<ParticleLayer particles={fx}>` draws a particle store (an `Entity`-like leaf holding one `<Particles>` per preset, emitting with `emitAt(n, x, y, angle)`). A camera shake is state (`useShake`) the camera reads as a value. Squash and stretch is state (`useSquash`) written to the sprite's transform scale, which the native side already applies about the origin. Nothing new reaches the frame builder or the ABI: the layer's emitters draw as every `<Particles>` does. See DESIGN.md, "Effects that happen at a moment".
+
+### Sound with a volume, and music
+
+`useSound`'s function takes a volume (`play(0.5)`); `SoundSink.play(path, volume)`. `<Music src playing volume loop fade>` opens its stream when it is made, starts silent and fades up over `fade`, fades out and stops when `playing` turns off, and restarts from the beginning when it turns on; it belongs to whatever holds it, so a `<Music>` in the root keeps playing across rooms and screens. A backend without music (`loadMusic` absent) warns once and stays silent.
+
+### ABI v6: sharp scaling
+
+`RGE_OPEN_SHARP` (open option 16; `<Game upscale="sharp">`). A pixel-perfect `<Screen>` shown at a scale that is not a whole number (`fit="contain"`, or any window size) used to be copied to the window with nearest filtering, so at 2.3x some game pixels were two window pixels wide and some three, which shimmers as things move slowly. With the option, a canvas shown between two whole scales is first copied into a second render texture at the next whole number above (3x for 2.3x) with nearest filtering, and that is taken down to the exact size with bilinear filtering: edges stay crisp and every game pixel looks the same size. Whole-number scales and scales below 1 are untouched, and the default stays nearest, so no parity output changes. The second texture is made when needed and resized with the window. **Fixed 2026-11-11:** the copy into the second texture did not flip the canvas, so at a fractional scale (full screen, say) the picture was upside down; every draw of a render texture flips it, so both draws do. The first check only ran at whole scales, which skip this path; `player-node/test/screenshot.test.ts` now renders a 320 × 180 game at 3.125 times through librge and checks the top left is the top left.
+
+### Router and Route
+
+`<Router route={screen} transition={fadeThrough} duration={0.5} coverColor="#12151f"><Route name="title">…</Route>…</Router>`. A `Route` is a container that is **in the world only while the router shows it**: the router keeps the routes by name, attaches the one `route` names, and swaps them with `queueAddChild` / `queueRemoveChild`, so only the shown screen updates, draws, collides and is pressed, and `useMount` / `useUnmount` inside a screen mean "the screen came" and "the screen went". **A route's components are made when it comes and dropped once it has gone** (decided 2026-11-11, as React Router does): the compiler shows a `<Route>`'s children only while the route is `active` (a conditional child on `this.<route>.active`, `ExprIR` `ElementRead`), and the router sets `active` when a route is entered and clears it when the leave transition ends, marking the compiled components above it dirty so they render and make or drop the children. So each visit starts fresh: initial state, `useState(() => …)`, `useMount`. **`<Route keepAlive>`** keeps a screen's components and their state between visits (Vue's `<KeepAlive>`), as all routes did before. Kite found why fresh is the default: its character's body is the `Player`'s own state, and a second run started where the first had ended. A route that does not exist is an error naming the ones that do.
+
+While a transition runs, the screen being left is **inert** (`World.setInert`, as the HTML attribute): it still updates, draws and collides, but its `useInput` and `useUpdate` get no keys and its pointers cannot be pressed, so a button pressed during a fade acts only on the screen being entered. (Kite found this: a jump during the title's fade restarted the run.)
+
+A **transition** is a function from progress (0 to 1) and the two route names to a `TransitionFrame`: where each screen is (`fromX`, `toX`, …, in game pixels), whether each is visible, and how far a cover colour is over the whole screen (`cover`). It is written as a plain function in a `.ts` file and passed as a value (`transition={fadeThrough}`), which is why the compiler grew plain functions (see DESIGN.md). While it runs both screens are in the world; the router counts `duration` in `onUpdate`, so it follows the fixed timestep; a change that arrives mid-transition finishes the running one first. Hidden screens are skipped by the frame builder (their children are not walked, so no records, pointers or colliders), and `cover` is drawn after the HUD layers in screen pixels. With no `transition`, screens switch at once. Not built: true cross-fading of a subtree (the engine has no group opacity, so a fade goes through a cover colour) and nested routers' paths (a route is a flat name).
+
+### Frame-rate counter
+
+`<Game showFps>` (or `PlayerConfig.showFps`) draws `60 fps  0.9 ms` in the top left over everything: the frame rate from the time the backend measures between frames, and the script time of the step (tick, tree walk, collisions; not the backend's draw and wait), both smoothed. `F3` toggles it while playing (`fpsKey` changes or removes the key). A frame that is slow with a small script time is the backend's (vsync, drawing); one with a large script time is the game's.
+
+### What a frame of the level costs
+
+`packages/kite/tools/frame-time.ts` plays the whole game (title, eight rooms, the end) on a recording backend under Node/V8 and times each `player.step()`: script only, no drawing. On the 4-core cloud VM, 1,384 steps: **mean 0.86 ms, 99th percentile 9–11 ms, slowest 25–26 ms**. The slow ones are the steps where a room changes (a `<Tilemap>` is made and the camera's bounds change) and the first frames of a cold JIT; a still room is about 75 draw records and well under a millisecond. The busiest room to draw is the one with the most particles (a death, while the dash trail is still alive), a few hundred rects. `npm run bench:check` is within budget (the player's scenes are unchanged).
+
 ## Later (not scheduled)
 
 | Idea | Notes |

@@ -52,6 +52,10 @@ export class LoweringBase {
   protected readonly sounds: SoundIR[] = [];
   protected readonly gameState: GameStateDefinition | undefined;
   protected readonly storeImports: ReadonlySet<string>;
+  /** Names of functions imported from relative `.ts` files, which a component may call and pass. */
+  protected readonly plainImports: ReadonlySet<string>;
+  /** State made once per instance by a factory (`useState(() => createSquash())`), whose methods handlers may call. */
+  protected readonly handleStates = new Set<string>();
 
   constructor(
     component: ComponentAnalysis,
@@ -65,9 +69,11 @@ export class LoweringBase {
     diagnostics: CompilerDiagnostic[],
     gameState: GameStateDefinition | undefined,
     storeImports: ReadonlySet<string>,
+    plainImports: ReadonlySet<string> = new Set(),
   ) {
     this.gameState = gameState;
     this.storeImports = storeImports;
+    this.plainImports = plainImports;
     this.typeDecls = typeDecls;
     this.authoring = authoring;
     this.component = component;

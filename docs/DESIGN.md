@@ -131,8 +131,10 @@ ignored):
   `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two
   conditional children, on `condition` and `!condition`), or a keyed list
   `{items.map((item) => <Element key={item.id} … />)}` (see "Keyed lists").
-  Text children, fragments, spread attributes and other expression children
-  are rejected.
+  A fragment `<>…</>` may stand for an element anywhere here, as a child or as
+  a branch (`{alive && <>…</>}`): it is an implicit `<Entity>` holding its
+  children, so they come and go together (decided 2026-11-11). Text children,
+  spread attributes and other expression children are rejected.
 * Imports: components from `./Name.tsx`, and hooks, built-in elements and
   `clamp` and the `Child` type from `@rge/runtime/jsx` (the manifest's
   `authoringModule`; the type is written `import { type Child }`, the one
@@ -727,9 +729,15 @@ degrees to radians. A tile object (one with a `gid`) is anchored at its bottom
 left in Tiled, an entity at its top left, so the importer moves the anchor
 along the object's own rotated up axis. An object with no class is skipped
 with a warning. A layer's `offsetx` / `offsety`, and those of every group it is in,
-shift its objects, because Tiled shows them there. Not handled: Tiled's `visible` flag (a hidden object is still an
-entity), tile flip flags in a `gid`, whether an `int` property is whole, and
-properties inherited from object templates.
+shift its objects, because Tiled shows them there. A layer or group hidden in Tiled, and an object with `visible: false`,
+are not placed (priority 7). Flip bits in an object's `gid` do not move its anchor, so they need no handling. Not handled:
+whether an `int` property is whole, and properties inherited from object templates.
+
+**Tile layers** (priority 7) are a second import, `importTilemap`, of the same `.tmj` into `generated/tilemaps.ts`, a table of
+`TilemapData` by file name (see `NATIVE_PLAN.md`, "Tilemap"): the layers' ids with flip bits split off, each layer's `visible`
+(a hidden group hides its layers), the first embedded tileset's `firstgid` and its tiles with the property `solid`. It is written
+**before** the sources are type-checked, because a game's own code (its rules) imports it. A map with no tile data (an objects-only
+map) writes nothing.
 
 **Runtime.** `loadScene(world, scene, prefabs)` builds each entity with
 `create(props)`, copies `transform` onto its **`placement`** (so the component's
@@ -870,7 +878,7 @@ is the game's resolution**, the size everything is drawn at before it is scaled 
 // Main.tsx
 export default function Main() {
   return (
-    <Game state={useGame} title="rge demo" width={960} height={540} background="#10131c" assets="assets">
+    <Game title="rge demo" width={960} height={540} background="#10131c" assets="assets">
       <Screen width={320} height={180}>
         <Ground />
         <Camera><Player /></Camera>
@@ -899,11 +907,9 @@ component's root: as a child it is `RGE1003`. It is not placed, so it takes no `
 `RGE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
 built-in's.
 
-**`state`.** `state={useGame}` hands over the project's game state, the store imported from `GameState.ts`: the one
-place a component uses the store as a value (the compiler lowers it to a `StoreRef` expression, and the generated class
-passes the imported name to `super`). Anything else is `RGE1108`. It makes the ownership explicit; the player still starts
-every game state in the process from its initial values (`resetGameState`), and components keep reading it with
-selectors, which work with or without a `<Game>`.
+**No `state` prop** (retired 2026-11-11). It used to hand the game state to the runtime, which never needed it: the player
+starts every game state in the process from its initial values (`resetGameState`), and components read it with selectors,
+with or without a `<Game>`, so `state` is simply not one of its props.
 
 A user component cannot be called `Game`: it is an intrinsic like `Entity` (`RGE1206`). The demo's root is `Main`.
 
@@ -1176,10 +1182,24 @@ const hp = useGame((s) => s.player.hp);          const hurt = useGame((s) => s.h
 **Access.** `const hp = useGame((s) => s.player.hp)` returns the value, exactly as in Zustand. A component imports the
 store (`import { useGame } from "./GameState.ts"`; the only thing it may import from a relative `.ts` module,
 `RGE1108` otherwise) and calls it at the top level, bound with `const` to one name. The selector must be a **plain path**
-from its parameter: that is all the compiler resolves, and it is what makes subscriptions exact. A component reads
-**leaves**: a path that names an object is an error, and a typo is `RGE1108` with the nearest key at the level it
-went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`). `hp` then behaves as `useState` state
-does: a snapshot of the last render, usable in JSX and handlers, with the leaf's type.
+from its parameter: that is all the compiler resolves, and it is what makes subscriptions exact. A typo is `RGE1108`
+with the nearest key at the level it went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`).
+`hp` then behaves as `useState` state does: a snapshot of the last render, usable in JSX and handlers, with the leaf's
+type.
+
+**Several values at once** (2026-11-11), as Zustand allows: `const { originX, room } = useGame((s) => s.run)` (a path,
+destructured), `const { a, b: c } = useGame((s) => ({ a: s.x, b: s.y.z }))` (an object literal of paths) and
+`const [a, b] = useGame((s) => [s.x, s.y])` (an array). Before compiling, each picked value becomes its own selector
+(`const originX = useGame((s) => s.run.originX)`), so its own subscription: the component re-renders only for the values it
+reads, which is finer than Zustand's `useShallow`.
+
+**Objects and arrays** (decided 2026-11-11). A path may name an object or an array as well as a leaf:
+`const player = useGame((s) => s.player)` and then `player.hp` in JSX or a handler, or
+`const enemies = useGame((s) => s.enemies)` and `{enemies.map((e) => <Enemy key={e.id} … />)}`. Its type is TypeScript's,
+written into the generated code as `ReturnType<typeof useGame.getState>["player"]`, so a wrong member is a type error.
+The component re-renders when **any value under the path** changes (the store tells the reader of `player` when
+`player.hp` changes), and not when an equal copy is set: values are still compared leaf by leaf, arrays by index.
+Treat what you select as read-only, and change it with `set`, as with `useState`.
 
 **Update.** The way Zustand updates is `set`, inside the store: `set(partial)` or `set((state) => partial)`, and, as in
 Zustand, the partial is **shallow-merged**, so a nested object is replaced as a whole (spread the rest, as `hurt`
@@ -1196,7 +1216,9 @@ under QuickJS, so TypeScript infers every type from it, and there is no separate
 compiler also *reads* it (it never runs it) to know the state tree and the action names. For that, the creator must be
 an arrow function or function that returns an object literal, whose entries are number, string or boolean literals
 (a negative number is fine; a leaf's type is its literal's, so `0` is a `number`), nested objects of those, and, at the
-top level, functions (the actions). Anything else is `RGE1109`. Arrays are not supported yet. Keys have no dots.
+top level, functions (the actions). Any other value (an array, `newRun()`, a constant) is kept as a *value*: the
+compiler checks paths down to it and leaves the rest to TypeScript. Spreads and computed keys are `RGE1109`. Keys have
+no dots.
 
 **Semantics.** Every `set` compares the old and new state leaf by leaf (a function is not a leaf) and marks dirty every
 mounted component that reads a leaf that changed, and only those: a replaced `player` object does not re-render the
@@ -1230,6 +1252,132 @@ The IR marks such a state `globalKey` (the dotted path) and has a `CallAction` s
 **Not yet.** Zustand's `subscribe`, middleware and `replace`; `setState` inside a compiled handler (writes go through
 actions, which keeps what the compiler must understand small); save and restore of the store; arrays in the state;
 and more than one store per project (one store per process, one `createGameState` call per project).
+
+## Plain functions in components (priority 7)
+
+A component may import functions from a relative `.ts` file (`import { fadeThrough } from "./transitions.ts"`) and **call them in any expression** (a prop, a derived value, a handler) or **pass them as values** (`transition={fadeThrough}`). The compiler does not look inside them: TypeScript checks the call, the function is assumed pure, and a dynamic prop that calls one depends on the state in its arguments, so it is re-evaluated when those change. The function body is plain TypeScript with loops, arrays and anything else. This is the escape hatch from the restricted handler language: the logic goes in a `.ts` file, the component only wires it up.
+
+**Constants too** (decided 2026-11-11). Anything else a `.ts` file exports is used the same way: `import { ROOM_LIST } from "./rules/rooms.ts"` and `{ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} … />)}` (an imported array is a list's items, as a state or prop array is; the filter's callback reads state, so the list follows it), `transform={{ x: GEM_AT.x }}`, and a **method of an imported object** called in a handler or an expression (`fx.burst("dust", x, y)`, `sfx.play("start")`): opaque like a plain function (`CalleeIR` `Plain` with a dotted name), its arguments are all it depends on. An array method on an imported array (`ROOM_LIST.filter`) stays an array method, so its callback is lowered. An imported constant is a constant: nothing re-renders when code changes it, which is right for data and for the effect stores below, and wrong for game state (that is `useGame`).
+
+Rules: the name must not look like a hook (`use…`; those are the game state's store, which is the only hook-named import from a `.ts` file); a function that is a prop of a component (a callback) is still lowered as a handler as before. The generator imports the function from where it is (`../src/transitions.ts` from the generated file, through `rge-compile`'s knowledge of where it reads and writes), only if the component uses it. In the IR: `CalleeIR` kind `Plain`, `ExprIR` kind `PlainRef`, and `IRModule.plainImports`.
+
+**`useUpdate` takes the input.** `useUpdate((dt, input) => { step(input, dt); })`: the polled input of that step (under a fixed timestep, the per-step copy with exactly-once key edges), the same object `useInput` gets, and it can be handed to a game-state action or a plain function, which reads the keys with loops and tables (Kite's `rules/controls.ts`). A canonical `onUpdate` override (several handlers, or a root that implements the hook) declares `input` only when it passes it on.
+
+## Named input actions (2026-11-11)
+
+A game names its actions once, in a module, and hands them to `<Game>`:
+
+```ts
+// rules/controls.ts
+export const controls = createControls({ jump: ["Z", "Space", "PadA"], left: ["ArrowLeft", "A", "PadLeft"], confirm: ["Enter", "PadStart"] });
+```
+
+```tsx
+<Game controls={controls}>…</Game>
+useInput((input) => { if (input.pressed("confirm")) begin(); });
+```
+
+Every `InputState` question (`pressed`, `down`, `released`) then takes an action name as well as a key name: `down` is any of
+its keys held, `pressed` is one of them going down this step, `released` is one going up with none still held. Rules in plain
+TypeScript read the same names (`input.down("left")`). `<Game controls>` must be an identifier imported from a `.ts` module
+(`RGE1210` otherwise), since the player reads it before the tree is built; `PlayerConfig.controls` does the same for a game
+without a `<Game>`. `createInputState(snapshot, controls)` gives tests the same answers, and `controls.bindings` is the shape
+an input script's `bindings` takes, so a script's `jump` can hold the game's own keys. An unknown name warns once and lists
+the actions. Not built: rebinding at run time, and axes (a stick's value rather than four directions).
+
+## Effects that happen at a moment (priority 7, 2026-11-11)
+
+Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each
+happens at a moment and then plays out on its own, after whatever caused it has moved on. React has no `useEffect`
+here (and this compiler will not grow one: an effect that watches state to fire an event is the pattern React's own docs
+warn against); the answer is the one toast libraries use. **An effect store** is made once in a `.ts` module, **its
+renderer is mounted once**, and **anything calls it**: a game-state action (plain TypeScript, where events are known), a
+plain function, or a component's handler.
+
+```ts
+// effects.ts
+export const fx = createParticles({ dust: { burst: 9, lifetime: 0.4, speed: 55, angle: 270, spread: 75, gravity: 160, fade: true } });
+export const sfx = createSounds({ land: { src: "land.wav", volume: 0.5 }, start: "start.wav" });
+```
+
+```tsx
+<ParticleLayer particles={fx} />     {/* like <Toaster />: where bursts are drawn, in the world */}
+```
+
+```ts
+// called with what a step reports, by the component that runs it
+for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dust", e.x, e.y); }
+```
+
+- **`createParticles(presets)`** → `ParticleStore`: `burst(name, x, y, { angle?, count? })`, and `bursts` (counts by name,
+  for tests). A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. **`<ParticleLayer particles={fx}>`** holds
+  one emitter per preset and attaches itself to the store while mounted (the last mounted wins); a burst's point is in the
+  layer's space. It follows the world: frozen with it, gone with it. With no layer mounted a burst is counted, not drawn.
+  Put the layer **next to** a `<Camera>`, not inside it, since a camera follows its children.
+- **`createSounds(entries)`** → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
+  Every file is loaded when a sound sink is installed (`addSoundPreload`), so the first play does not hitch. Asset names in
+  a `.ts` file are not checked at build time (only literals in components are).
+- **A shake is state: `const [shake, setShake] = useShake()`** (2026-11-11, replacing a `createShake()` object). The value is
+  `{ strength, duration, elapsed? }`; `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, the hook's own update
+  runs it down (`shakeOn`, the same object once over), and `<Camera shake={shake}>` draws it: the camera's offset is a pure
+  function of the value (whole pixels from a fixed sequence, so runs repeat). The component that owns the camera owns the
+  shake; a child that knows when to shake tells it with a callback prop (Kite: `<Player onDie={() => setShake(…)} />`).
+- **Squash and stretch is state: `const [squash, setSquash] = useSquash(1.75)`** (decided 2026-11-11, replacing a
+  `createSquash()` object with a `start` method, which was the imperative shape). `setSquash({ x: 0.6, y: 1.4 })` (a `Vector2`) in a
+  handler, and `transform={{ scaleX: squash.x, scaleY: squash.y }}` on the sprite, which scales about its origin. It
+  springs back to 1 at `recover` a second in the component's own `useUpdate` (`springBack`, a runtime function that returns
+  the same object at rest, so the state stops changing). `useSquash` is an **engine-shipped custom hook**: ordinary source
+  (`useState` + `useUpdate`, in `compiler/src/hooks/library.ts`, with `useShake`), inlined like any custom hook when a component imports it
+  from `@rge/runtime/jsx`, where it is declared for TypeScript.
+- **Per-instance objects.** A store in a module is global; an object that belongs to one entity is that component's own,
+  made with React's lazy initializer: `const [tally] = useState(() => makeTally())`. The arrow's body is the initial value
+  (the generated field is evaluated once per instance anyway), typed `ReturnType<typeof makeTally>`, and a handler may call
+  its methods (`tally.add(1)`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function from
+  the manifest, or a function from a `.ts` file), so arrays and records keep their messages. This is for objects that are
+  not values; a value that changes over time is state (`useSquash`, `useShake`). The manifest's `functions` table includes
+  `springBack` and `shakeOn`, which the shipped hooks call.
+- **Reacting to what happened: call, and use the result.** No event emitter (one was tried, 2026-11-11, and removed as a
+  workaround): the component that runs a step answers it. A handler may use a game-state action's result,
+  `const events = step(input, dt)` (`CalleeIR` `Action`, only as a handler's `const`; in JSX or a derived value it would run
+  on every render), and then call plain functions and setters with it. Kite's character runs the step in its own
+  `useUpdate`, plays the effects (`playEvents`) and sets its squash (`squashFor(events)`).
+- **Effects a game makes from the basics.** Afterimages (copies of a sprite left behind, fading) were an engine feature
+  briefly and are now Kite's own `<DashTrail>`: a list of ghosts in state, drawn as `<Sprite>`s with falling `opacity`. The
+  engine keeps what a game cannot build from the rest.
+- **`moveActorX` / `moveActorY`** (runtime `move.ts`, for a game's rules): move any `{ x, y, rx, ry }` a pixel at a time
+  against a `blocked(x, y)` test, carrying the sub-pixel remainder; on a block the remainder is dropped, `onBlocked(direction)`
+  is called (it may move the actor, which is how a game adds corner rules) and the move stops. Kite's body uses it, with its
+  corner corrections as the callbacks.
+- **Continuous effects stay JSX.** A trail "while dashing" is state, so it is `<Particles emitting={dashing}>` in the component.
+  The stores are for moments.
+- **Rules stay pure.** Kite's `stepRun` reports events and never calls a store, so the solver and the tests step it with no
+  side effects; the game state turns events into effects (`effects.ts`, `playEvents`).
+
+## Custom hooks (priority 7)
+
+"Hooks are compiler intrinsics" extends to the ones an author writes. A function named `use…` (not a built-in hook, not the
+game state's store) whose body is what a component body may hold is a **custom hook**, and a call to it that is a statement of a
+component body is replaced, before the file is compiled, by the hook's own statements (`hooks/inline.ts`; text to text, so the
+rest of the compiler is unchanged and every rule and diagnostic applies to the expanded component):
+
+```tsx
+function usePlatformerBody() { const step = useGame((s) => s.step); const buttons = useRef(0); useInput(…); useUpdate((dt) => { step(buttons.current, dt); }); }
+export function Player() { usePlatformerBody(); … }
+```
+
+- **Names.** What the hook declares at its top level (its `const`s, its `[x, setX]` state, its parameters) is given a prefix unique to the call, `_useName3_x`, so two calls make two separate states and nothing clashes with the component's own names. Properties, keys and JSX attribute names are left alone; `{ x }` becomes `{ x: _useName3_x }`.
+- **Parameters.** A literal argument (a string, number or boolean) is written into the hook where the parameter is used, so a parameter can be a `useSound` path; any other argument is bound with `const _useName3_p = (argument);`. A missing argument takes the parameter's default. A destructured parameter is a diagnostic.
+- **Results.** `const v = useX()`, `const { a, b } = useX()` (the hook returns an object literal) and `const [a, b] = useX()` (an array literal) become `const` declarations of the returned expressions. A name the hook declares and returns as it is (`return [count, setCount]`, `return { on, toggle: setOn }`) is not copied: the hook's own declaration takes the caller's name, so a hook can return a setter, as in React (decided 2026-11-11). Anything else returned is a value (a state-derived expression); refs cannot be returned (they are not readable outside handlers).
+- **Where.** In the component's file, or imported from a relative `.tsx` (`import { useClock } from "./hooks.tsx"`, read by the CLI; the hook's imports from the authoring module are added to the file that uses it). Hooks may call hooks, to a depth of six, which also stops recursion. A call anywhere but as a statement of the component body (in a condition, a callback, an expression) is `RGE1101` with the hook's name.
+- **What is left.** After expansion the hook's declaration and its import are removed, so a hooks-only file compiles to an empty module. Positions in later diagnostics are those of the expanded text. An unknown `use…` name is left alone, so the retired hooks keep their messages.
+
+The author's editor still sees ordinary typed functions: the file type-checks as written (the hook calls `useState` and friends, which throw only if actually run).
+
+## Tilemap, assets and the other built-ins (priority 7)
+
+`<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [NATIVE_PLAN.md](NATIVE_PLAN.md) ("Priority 7 additions"). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.
+
+**Build-time asset check.** `rge-compile --assets <dir>` (`checkAssets`, `RGE1211`) reports every literal image, font, music file and `useSound` path that is not a file in the folder, with the nearest file name; literals inside conditionals and arrays are found (`frames={on ? [...] : [...]}`), computed paths are not. `npm run check:<game>` passes `--assets` when the package has an `assets/` folder.
 
 ## Props and callbacks
 
@@ -1381,7 +1529,7 @@ like any component. Details:
 * Only containers (the manifest's `containerIntrinsics`, today `Entity` and `Camera`) may
   have JSX children; a child under a leaf such as a `Sprite`, `Collider` or `Pointer`, at the root or
   anywhere, is `RGE1202`. A component as a root (`return <Other />`) is
-  `RGE1003`; a fragment nested as a child is `RGE1202`.
+  `RGE1003`; a fragment nested as a child is an implicit `<Entity>`.
 
 **Element callbacks.** `<Pointer onPress={() => …} />` is the same mechanism with no parameters.
 

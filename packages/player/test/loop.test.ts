@@ -44,7 +44,19 @@ describe("createPlayer", () => {
   it("opens the window with the config it was given, and nothing else", () => {
     const { backend, player: p } = player(() => new Entity(), { resizable: false, smooth: true, background: "navy", assets: "art" });
     p.close();
-    assert.deepEqual(backend.config, { width: 800, height: 600, title: "test", resizable: false, vsync: undefined, hidden: undefined, smooth: true });
+    assert.deepEqual(backend.config, { width: 800, height: 600, title: "test", resizable: false, vsync: undefined, hidden: undefined, smooth: true, sharp: undefined });
+  });
+
+  it("asks for sharp scaling when the <Game> or the config says upscale is sharp, and for nothing otherwise", () => {
+    const a = player(() => new Game({ upscale: "sharp" }));
+    a.player.close();
+    assert.equal(a.backend.config?.sharp, true);
+    const b = player(() => new Entity(), { upscale: "sharp" });
+    b.player.close();
+    assert.equal(b.backend.config?.sharp, true);
+    const c = player(() => new Game({ upscale: "nearest" }));
+    c.player.close();
+    assert.equal(c.backend.config?.sharp, undefined);
   });
 
   it("clears the screen with the background colour", () => {
@@ -195,7 +207,7 @@ describe("createPlayer", () => {
   describe("a <Game> root", () => {
     it("opens the window it asks for, over the player's config, over the defaults, each setting on its own", () => {
       const game = player(() => new Game({ title: "from game", width: 200, smooth: true }), { width: 999, height: 111, title: "from config", resizable: false, vsync: false, smooth: false });
-      assert.deepEqual(game.backend.config, { width: 200, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true }, "width, title and smooth from <Game>; the rest from the player");
+      assert.deepEqual(game.backend.config, { width: 200, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true, sharp: undefined }, "width, title and smooth from <Game>; the rest from the player");
       game.player.close();
       const backend = new RecordingBackend();
       const plain = createPlayer(backend, { root: () => new Entity(), warn: () => {} });

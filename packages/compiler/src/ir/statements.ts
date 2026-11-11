@@ -25,6 +25,8 @@ export interface CallActionStmtIR {
 export interface PlaySoundStmtIR {
   readonly kind: "PlaySound";
   readonly sound: SoundId;
+  /** `playHit(0.5)`: the volume, 0 to 1; null plays at full volume. */
+  readonly volume: ExprIR | null;
 }
 
 export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=";

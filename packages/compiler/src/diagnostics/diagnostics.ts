@@ -37,6 +37,8 @@ export const DiagnosticCode = {
   InvalidList: "RGE1209",
   /** A literal for a built-in's prop that is not one of the values it allows (`<Shape kind="oval">`). */
   InvalidPropValue: "RGE1210",
+  /** An image, sound or font a component names with a literal that is not in the assets folder (`rge-compile --assets`). */
+  MissingAsset: "RGE1211",
   UnsupportedExpression: "RGE1301",
   UnknownIdentifier: "RGE1302",
   NonConstantInitialState: "RGE1303",

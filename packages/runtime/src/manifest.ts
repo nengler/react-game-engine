@@ -1,5 +1,6 @@
 import { FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT } from "./components/Flex.ts";
 import { TEXT_ALIGNS } from "./components/Text.ts";
+import { PARTICLE_SPACES } from "./components/Particles.ts";
 import { SCREEN_FITS } from "./components/Screen.ts";
 import { SHAPE_KINDS } from "./components/Shape.ts";
 
@@ -79,7 +80,10 @@ export interface RuntimeManifest {
   readonly transformIntrinsics: readonly string[];
   /** Runtime types handler parameters may have, with the members handler code may use. */
   readonly handleTypes: Readonly<Record<string, HandleTypeManifest>>;
-  /** Runtime functions handler code may call, imported from the runtime module. Name → argument count. */
+  /**
+   * Runtime functions component code may call, imported from the runtime module. Name → argument count: -1 at least one,
+   * -2 any.
+   */
   readonly functions: Readonly<Record<string, number>>;
 }
 
@@ -97,22 +101,32 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
-    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "state"],
-    Sprite: ["image"],
+    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "controls"],
+    Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "onPress", "contains"],
-    Text: ["text", "size", "color", "width", "align"],
+    Text: ["text", "size", "color", "width", "align", "font"],
     Shape: ["kind", "width", "height", "color"],
-    Camera: ["zoom", "viewTransform", "worldToView", "viewToWorld"],
-    AnimatedSprite: ["fps", "playing", "frame", "elapsed", "frames", "image"],
+    Camera: ["zoom", "shake", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
+    AnimatedSprite: [
+      "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity",
+      "animations", "animation", "isSheet", "current", "sheetFrame", "styled", "finished",
+    ],
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
     Hud: [],
+    Tilemap: ["map", "image", "layer", "opacity"],
+    Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "width", "height", "prewarm", "count", "read", "emit", "emitAt"],
+    ParticleLayer: ["particles", "emitBurst"],
+    Fade: ["color", "on", "duration", "amount"],
+    Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
+    Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
+    Route: ["name", "keepAlive", "visible", "active"],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
       "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "contains", "box",
@@ -127,18 +141,33 @@ export const runtimeManifest: RuntimeManifest = {
     Text: ["text"],
     Shape: ["kind", "width", "height"],
     Camera: [],
-    AnimatedSprite: ["frames"],
+    AnimatedSprite: [],
     Screen: ["width", "height"],
     Hud: [],
     Flex: [],
+    Tilemap: ["map", "image"],
+    Particles: [],
+    ParticleLayer: ["particles"],
+    Fade: [],
+    Music: ["src"],
+    Router: ["route"],
+    Route: ["name"],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
+    Camera: ["onUpdate"],
+    Particles: ["onUpdate"],
+    ParticleLayer: ["onMount", "onUnmount"],
+    Fade: ["onUpdate"],
+    Music: ["onUpdate"],
+    Router: ["onUpdate"],
   },
   intrinsicLiterals: {
     Shape: { kind: SHAPE_KINDS },
     Screen: { fit: SCREEN_FITS },
     Text: { align: TEXT_ALIGNS },
+    Game: { upscale: ["nearest", "sharp"] },
+    Particles: { space: PARTICLE_SPACES },
     Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS },
   },
   intrinsicSizing: { Flex: ["width", "height"] },
@@ -163,7 +192,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },
@@ -171,5 +200,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },
   },
-  functions: { clamp: 3 },
+  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2 },
 };

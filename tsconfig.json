@@ -13,7 +13,9 @@
     "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "packages/compiler/src",
@@ -32,6 +34,13 @@
     "packages/demo/main.ts",
     "packages/demo/tools",
     "packages/demo/test",
-    "packages/example/generated"
+    "packages/example/generated",
+    "packages/kite/generated",
+    "packages/kite/game.ts",
+    "packages/kite/main.ts","packages/kite/parity.ts",
+    "packages/kite/src/rules",
+    "packages/kite/src/GameState.ts",
+    "packages/kite/tools",
+    "packages/kite/test"
   ]
 }

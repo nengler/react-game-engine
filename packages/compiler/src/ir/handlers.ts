@@ -11,7 +11,7 @@ interface HandlerSignature {
 
 /** Shared by the transform (parameter types) and the generator (override signatures). */
 export const HANDLER_SIGNATURES: Readonly<Record<HandlerHookIR["kind"], HandlerSignature>> = {
-  OnUpdate: { method: "onUpdate", params: [{ name: "dt", type: number }] },
+  OnUpdate: { method: "onUpdate", params: [{ name: "dt", type: number }, { name: "input", type: { kind: "Named", name: "InputState" } }] },
   OnInput: { method: "onInput", params: [{ name: "input", type: { kind: "Named", name: "InputState" } }] },
   OnMount: { method: "onMount", params: [] },
   OnUnmount: { method: "onUnmount", params: [] },

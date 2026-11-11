@@ -4,3 +4,5 @@ native/build*/
 host/target/
 host/dist/
 dist/
+# Compiler output: made by `npm run generate` (which npm test and npm run typecheck run first).
+packages/*/generated/

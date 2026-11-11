@@ -84,7 +84,7 @@ packages/
   player-node/ (Phase 3) the Node host: koffi binding to `librge`, and `play.ts`
   host/       (Phase 3) the shipping host: Rust + QuickJS-ng, linked statically against librge; `npm run package`
   demo/       (Phase 3) a small playable game in TSX with its generated output and assets; `npm run play:demo`
-  example/    example components and their committed generated output
+  example/    example components (their generated output is not committed: `npm run generate`)
 ```
 
 ## Usage
@@ -123,5 +123,5 @@ try {
 }
 ```
 
-CI (`.github/workflows/ci.yml`) runs the tests and the typecheck, then regenerates the
-example and fails if `packages/example/generated` changed: commit regenerated output with any codegen change.
+Compiler output (`packages/*/generated`) is not committed: `npm run generate` makes it, and `npm test` and
+`npm run typecheck` run it first. CI does the same.

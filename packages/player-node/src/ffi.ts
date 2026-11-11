@@ -19,7 +19,12 @@ export interface Native {
   setFullscreen(on: boolean): boolean;
   loadTexture(path: string): number;
   loadSound(path: string): number;
-  playSound(handle: number): void;
+  playSound(handle: number, volume: number): void;
+  loadMusic(path: string): number;
+  playMusic(handle: number, volume: number, loop: boolean): void;
+  setMusicVolume(handle: number, volume: number): void;
+  stopMusic(handle: number): void;
+  setGamepadDeadzone(deadzone: number): void;
   /** Width and line height of `text` at `size`, or null when librge cannot say (no window open). */
   measureText(text: string, size: number): { width: number; height: number } | null;
   /** Width and height of a loaded texture, or null for an invalid handle. */
@@ -81,7 +86,12 @@ export function loadNative(path: string): Native {
   const setFullscreen = lib.func("int32_t rge_set_fullscreen(int32_t on)");
   const loadTexture = lib.func("int32_t rge_load_texture(const char *path)");
   const loadSound = lib.func("int32_t rge_load_sound(const char *path)");
-  const playSound = lib.func("void rge_play_sound(int32_t handle)");
+  const playSound = lib.func("void rge_play_sound_ex(int32_t handle, double volume)");
+  const loadMusic = lib.func("int32_t rge_load_music(const char *path)");
+  const playMusic = lib.func("void rge_music_play(int32_t handle, double volume, int32_t loop)");
+  const setMusicVolume = lib.func("void rge_music_set_volume(int32_t handle, double volume)");
+  const stopMusic = lib.func("void rge_music_stop(int32_t handle)");
+  const setGamepadDeadzone = lib.func("void rge_set_gamepad_deadzone(double deadzone)");
   const measureText = lib.func("int32_t rge_measure_text(const char *text, double size, _Out_ double *out)");
   const textureSize = lib.func("int32_t rge_texture_size(int32_t handle, _Out_ double *out)");
   const frame = lib.func(
@@ -98,7 +108,12 @@ export function loadNative(path: string): Native {
     setFullscreen: (on) => (setFullscreen(on ? 1 : 0) as number) === 0,
     loadTexture: (path) => loadTexture(path) as number,
     loadSound: (path) => loadSound(path) as number,
-    playSound: (handle) => void playSound(handle),
+    playSound: (handle, volume) => void playSound(handle, volume),
+    loadMusic: (path) => loadMusic(path) as number,
+    playMusic: (handle, volume, loop) => void playMusic(handle, volume, loop ? 1 : 0),
+    setMusicVolume: (handle, volume) => void setMusicVolume(handle, volume),
+    stopMusic: (handle) => void stopMusic(handle),
+    setGamepadDeadzone: (deadzone) => void setGamepadDeadzone(deadzone),
     measureText: (text, size) => {
       const out = new Float64Array(2);
       return (measureText(text, size, out) as number) === 0 ? { width: out[0] as number, height: out[1] as number } : null;

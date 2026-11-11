@@ -263,7 +263,8 @@ function C() {
 
   it("rejects bad handler shapes", () => {
     assert.deepEqual(codes("useUpdate(5);"), [DiagnosticCode.InvalidHandler]);
-    assert.deepEqual(codes("useUpdate((a, b) => setN(1));"), [DiagnosticCode.InvalidHandler]);
+    assert.deepEqual(codes("useUpdate((a, b, c) => setN(1));"), [DiagnosticCode.InvalidHandler]);
+    assert.ok(compile(`function C() { const [n, setN] = useState(0); useUpdate((dt, input) => { if (input.down("Space")) setN(1); }); return <Entity name="C" />; }`), "an update handler may take the input too");
     assert.deepEqual(codes("useUpdate(({ a }) => setN(1));"), [DiagnosticCode.InvalidHandler]);
   });
 

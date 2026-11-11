@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
+ * Usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>] [--assets <dir>] [--assets <dir>]
  * Type-checks every .tsx file in srcDir (imports from the authoring module,
  * prop types, hook arguments), compiles each to a .ts file in outDir, writes
  * the IR next to it as .ir.json, then type-checks the output. `--no-check`
@@ -14,18 +14,25 @@
  * global state: components import it and read it with selectors, `useGame((s) => s.player.hp)`. The compiler
  * reads the file to check those selectors; generated code imports it from where it is.
  *
+ * `--assets <dir>` checks that every image, font and sound a component names with a literal is a file in that folder: a
+ * build-time error with the nearest file name, not a magenta square or a silent sound at run time.
+ *
  * `--scenes <dir>` validates every scene (.json) in the directory against
  * those prefabs, and imports every Tiled map (.tmj) to
  * `<outDir>/scenes/<name>.scene.json` and validates that.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import {
   Compiler,
   checkProject,
   formatDiagnostic,
   generatedFileName,
+  checkAssets,
   importTiled,
+  importTilemap,
+  tilemapsSource,
+  type TilemapOut,
   prefabsIndexSource,
   prefabsJson,
   projectSchemas,
@@ -39,10 +46,11 @@ function main(argv: readonly string[]): number {
   let runtimeModule: string | undefined;
   let check = true;
   let scenesDir: string | undefined;
-  const usage = "usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]";
+  let assetsDir: string | undefined;
+  const usage = "usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>] [--assets <dir>]";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
-    if (arg === "--runtime" || arg === "--scenes") {
+    if (arg === "--runtime" || arg === "--scenes" || arg === "--assets") {
       // A flag with no value would otherwise be accepted and silently do nothing: CI would pass without checking scenes.
       const value = argv[i + 1];
       if (value === undefined || value.startsWith("--")) {
@@ -51,6 +59,7 @@ function main(argv: readonly string[]): number {
       }
       i++;
       if (arg === "--runtime") runtimeModule = value;
+      else if (arg === "--assets") assetsDir = value;
       else scenesDir = value;
     } else if (arg === "--no-check") check = false;
     else if (arg.startsWith("--")) {
@@ -63,7 +72,7 @@ function main(argv: readonly string[]): number {
     console.error(usage);
     return 2;
   }
-  for (const [what, dir] of [["source", srcDir], ...(scenesDir === undefined ? [] : [["scenes", scenesDir]])] as const) {
+  for (const [what, dir] of [["source", srcDir], ...(scenesDir === undefined ? [] : [["scenes", scenesDir]]), ...(assetsDir === undefined ? [] : [["assets", assetsDir]])] as const) {
     if (!existsSync(dir) || !statSync(dir).isDirectory()) {
       console.error(`The ${what} directory '${dir}' does not exist or is not a directory.`);
       return 2;
@@ -71,6 +80,12 @@ function main(argv: readonly string[]): number {
   }
 
   const compiler = new Compiler(runtimeModule ? { runtimeModule } : {});
+  compiler.setSourceFromOutput(relative(resolve(outDir), resolve(srcDir)).split(sep).join("/") || ".");
+  // Custom hooks imported from a relative .tsx file are read from beside the file that imports them.
+  compiler.setHookResolver((specifier, fromFile) => {
+    const path = resolve(dirname(resolve(fromFile)), specifier);
+    return existsSync(path) ? { fileName: relative(process.cwd(), path), text: readFileSync(path, "utf8") } : null;
+  });
   const diagnostics: CompilerDiagnostic[] = [];
   const outputs: VirtualFile[] = [];
   const modules: ProjectModule[] = [];
@@ -87,6 +102,20 @@ function main(argv: readonly string[]): number {
         console.log(`read GameState.ts (${schema.actions.length} action${schema.actions.length === 1 ? "" : "s"})`);
       }
     }
+    // Tilemaps come first: the game's own code (its rules, its game state) imports `tilemaps.ts`, so it must exist when the sources are type-checked.
+    if (scenesDir !== undefined && !diagnostics.some((d) => d.severity === "error")) {
+      const maps = new Map<string, TilemapOut>();
+      for (const name of readdirSync(scenesDir).filter((f) => f.endsWith(".tmj")).sort()) {
+        const imported = importTilemap(relative(process.cwd(), resolve(scenesDir, name)), readFileSync(resolve(scenesDir, name), "utf8"));
+        diagnostics.push(...imported.diagnostics);
+        if (imported.tilemap !== null) maps.set(name.replace(/\.tmj$/, ""), imported.tilemap);
+      }
+      if (maps.size > 0 && !diagnostics.some((d) => d.severity === "error")) {
+        writeFileSync(resolve(outDir, "tilemaps.ts"), tilemapsSource(maps, relative(process.cwd(), scenesDir)));
+        console.log(`wrote tilemaps.ts (${maps.size} map${maps.size === 1 ? "" : "s"})`);
+      }
+    }
+
     const sourceNames = readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort();
     if (check && sourceNames.length > 0) {
       diagnostics.push(
@@ -111,6 +140,12 @@ function main(argv: readonly string[]): number {
       console.log(`compiled ${name} -> ${outPath}`);
     }
     diagnostics.push(...checkProject(modules));
+    if (assetsDir !== undefined) {
+      const root = resolve(assetsDir);
+      const all = (dir: string, prefix = ""): string[] =>
+        readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? all(join(dir, e.name), `${prefix}${e.name}/`) : [`${prefix}${e.name}`]));
+      diagnostics.push(...checkAssets(modules.map((m) => m.ir), { exists: (name) => existsSync(join(root, name)), list: () => all(root), folder: assetsDir }));
+    }
     // The registry and schema describe the whole project. With a file that failed to compile they would silently leave a
     // component out (and a stale one from an earlier run would be left as it was), so they are only written when all compiled.
     const complete = modules.length === sourceNames.length;

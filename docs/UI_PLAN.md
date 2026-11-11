@@ -598,3 +598,8 @@ Decided on 2026-11-09:
 | Several canvases (split screen, a minimap) | Needs render targets as a general feature, not one canvas | A local multiplayer or minimap game |
 | Post-processing (CRT filter, palette shaders) | Needs shaders in the ABI | An art direction that asks for it |
 | Sub-pixel camera smoothing in `pixelPerfect` mode (drawing one pixel larger and offsetting the blit) | A refinement; slow pans may look a little steppy without it | A slow-scrolling game where the camera's steps show |
+
+
+## Fades and pixel fonts (priority 7)
+
+Two small additions to the HUD layer, written for the platformer's title and end screens. `<Fade color on duration from>` is a full-screen cover drawn on the `<Hud>` layer in game pixels (so under `fit="expand"` it covers the widened screen), whose alpha follows `on` by `dt / duration` each update; the screens use `from={1} on={false}` to fade in as they appear and a death uses `on={dead}`. `<Text font="font.png" size>` draws a bitmap font (a 16 × 6 grid of the characters 32 to 127) through sprite-region records; `<Flex>` measures it by the glyph cell like any text, so a column of pixel-font labels lays out the same way. Details in [NATIVE_PLAN.md](NATIVE_PLAN.md), "Particles, fades, fonts, freeze frames".

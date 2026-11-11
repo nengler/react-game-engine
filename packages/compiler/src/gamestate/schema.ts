@@ -13,6 +13,7 @@ import {
   isPrefixUnaryExpression,
   isPropertyAssignment,
   isReturnStatement,
+  isShorthandPropertyAssignment,
   isSatisfiesExpression,
   isStringLiteral,
   isVariableStatement,
@@ -29,11 +30,21 @@ export interface GameStateLeaf {
   readonly initial: number | string | boolean;
 }
 
-/** An object in the game state: its keys, each a leaf or another object. */
+/** An object in the game state: its keys, each a leaf, another object or a value. */
 export interface GameStateNode {
   readonly kind: "node";
-  readonly children: Readonly<Record<string, GameStateLeaf | GameStateNode>>;
+  readonly children: Readonly<Record<string, GameStateEntry>>;
 }
+
+/**
+ * Anything else in the game state: an array (`enemies: []`), or a value made by code (`run: newRun()`). The compiler does
+ * not know its shape; TypeScript does, so a selector below it (`s.run.player.x`) is checked by the type-check, not here.
+ */
+export interface GameStateValue {
+  readonly kind: "value";
+}
+
+export type GameStateEntry = GameStateLeaf | GameStateNode | GameStateValue;
 
 /**
  * The project's game state, as the compiler needs it: what `GameState.ts`'s `createGameState({ state, actions })`
@@ -62,8 +73,8 @@ const SHAPE = "GameState.ts must contain `export const useGame = createGameState
  * Reads `GameState.ts`: `createGameState(creator)` or `createGameState<State>()(creator)`, exported under a name
  * components import. The creator is an arrow or function whose result is an object literal: the state. Its leaves are
  * number, string or boolean literals (a negative number is fine; a leaf's type is its literal's: `0` is a `number`),
- * objects of those nested as deep as you like, and, at the top level, functions: the actions. Anything else is
- * `RGE1109`, saying what to write instead. Arrays are not supported yet.
+ * objects of those nested as deep as you like, and, at the top level, functions: the actions. Any other value (an array,
+ * a call such as `newRun()`) is a `GameStateValue`: its type comes from TypeScript. Spreads and computed keys are `RGE1109`.
  */
 export function parseGameState(parser: TsxParser, fileName: string, text: string): GameStateSchemaResult {
   const parsed = parser.parse(fileName, text);
@@ -137,11 +148,11 @@ function stateObject(creator: Expression): ObjectLiteralExpression | null {
 }
 
 function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[] | null): GameStateNode {
-  const children: Record<string, GameStateLeaf | GameStateNode> = {};
+  const children: Record<string, GameStateEntry> = {};
   for (const p of object.properties) {
-    const named = (isPropertyAssignment(p) || isMethodDeclaration(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
+    const named = (isPropertyAssignment(p) || isMethodDeclaration(p) || isShorthandPropertyAssignment(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
     if (named === null) {
-      fail("Each state entry is `key: value` or an action `name() {}`: no spreads, shorthand or computed keys.", p);
+      fail("Each state entry is `key: value` or an action `name() {}`: no spreads or computed keys.", p);
       continue;
     }
     const key = named;
@@ -151,6 +162,10 @@ function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[]
     }
     if (Object.hasOwn(children, key) || actions?.includes(key)) {
       fail(`'${key}' is declared twice.`, p);
+      continue;
+    }
+    if (isShorthandPropertyAssignment(p)) {
+      children[key] = { kind: "value" };
       continue;
     }
     const value = isPropertyAssignment(p) ? unwrap(p.initializer) : null;
@@ -163,12 +178,7 @@ function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[]
       children[key] = readNode(value, fail, null);
       continue;
     }
-    const leaf = literalLeaf(value);
-    if (!leaf) {
-      fail(`'${key}' must start as a number, string or boolean literal, an object of them, or be an action function (arrays are not supported yet).`, (isPropertyAssignment(p) ? p.initializer : p) as never);
-      continue;
-    }
-    children[key] = leaf;
+    children[key] = literalLeaf(value) ?? { kind: "value" };
   }
   return { kind: "node", children };
 }

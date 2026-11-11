@@ -26,6 +26,11 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     backend.set("loadTexture", Function::new(ctx.clone(), load_texture)?.with_name("loadTexture")?)?;
     backend.set("loadSound", Function::new(ctx.clone(), load_sound)?.with_name("loadSound")?)?;
     backend.set("playSound", Function::new(ctx.clone(), play_sound)?.with_name("playSound")?)?;
+    backend.set("loadMusic", Function::new(ctx.clone(), load_music)?.with_name("loadMusic")?)?;
+    backend.set("playMusic", Function::new(ctx.clone(), play_music)?.with_name("playMusic")?)?;
+    backend.set("setMusicVolume", Function::new(ctx.clone(), set_music_volume)?.with_name("setMusicVolume")?)?;
+    backend.set("stopMusic", Function::new(ctx.clone(), stop_music)?.with_name("stopMusic")?)?;
+    backend.set("setGamepadDeadzone", Function::new(ctx.clone(), set_gamepad_deadzone)?.with_name("setGamepadDeadzone")?)?;
     backend.set("measureText", Function::new(ctx.clone(), measure_text)?.with_name("measureText")?)?;
     backend.set("textureSize", Function::new(ctx.clone(), texture_size)?.with_name("textureSize")?)?;
     backend.set("overlaps", Function::new(ctx.clone(), overlaps)?.with_name("overlaps")?)?;
@@ -48,6 +53,7 @@ fn open<'js>(ctx: Ctx<'js>, config: Object<'js>) -> JsResult<()> {
     if flag("vsync", true)? { options |= ffi::RGE_OPEN_VSYNC; }
     if flag("hidden", false)? { options |= ffi::RGE_OPEN_HIDDEN; }
     if flag("smooth", false)? { options |= ffi::RGE_OPEN_SMOOTH; }
+    if flag("sharp", false)? { options |= ffi::RGE_OPEN_SHARP; }
     let title = c_string(&title);
     let code = unsafe { ffi::rge_open(width, height, title.as_ptr(), options) };
     if code != 0 {
@@ -75,8 +81,30 @@ fn load_sound(path: String) -> i32 {
     unsafe { ffi::rge_load_sound(path.as_ptr()) }
 }
 
-fn play_sound(handle: i32) {
-    unsafe { ffi::rge_play_sound(handle) }
+/// Play a sound at `volume` (0 to 1) over any plays of it still going.
+fn play_sound(handle: i32, volume: Option<f64>) {
+    unsafe { ffi::rge_play_sound_ex(handle, volume.unwrap_or(1.0)) }
+}
+
+fn load_music(path: String) -> i32 {
+    let path = c_string(&path);
+    unsafe { ffi::rge_load_music(path.as_ptr()) }
+}
+
+fn play_music(handle: i32, volume: f64, looping: bool) {
+    unsafe { ffi::rge_music_play(handle, volume, looping as i32) }
+}
+
+fn set_music_volume(handle: i32, volume: f64) {
+    unsafe { ffi::rge_music_set_volume(handle, volume) }
+}
+
+fn stop_music(handle: i32) {
+    unsafe { ffi::rge_music_stop(handle) }
+}
+
+fn set_gamepad_deadzone(deadzone: f64) {
+    unsafe { ffi::rge_set_gamepad_deadzone(deadzone) }
 }
 
 /// The width and line height of `text` at `size`, as an object.
