@@ -72,7 +72,7 @@ export interface StepResult {
 
 export const NO_INPUT: Input = { dx: 0, dy: 0, action: false };
 
-const START: Run["shrine"] = { map: "overworld", col: 6, row: 24 };
+const START: Run["shrine"] = { map: "overworld", col: 6, row: 42 };
 
 /** Where a body stands when placed on a tile. */
 export const bodyAt = (col: number, row: number): { x: number; y: number } => ({ x: col * TILE + BODY_OFFSET, y: row * TILE + BODY_OFFSET });

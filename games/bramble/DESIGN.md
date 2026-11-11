@@ -44,10 +44,17 @@ three bells ──▶ gate
 
 ## Not in the greybox yet
 
-Enemies and the swing's damage (M5), the large scrolling overworld (this one is 48 × 30 tiles, a camera that stops at the
-edge, no follow smoothing; M2), saving to disk and settings (M3), the dialogue box with wrapped, revealed text and the
+Enemies and the swing's damage (M5), saving to disk and settings (M3), the dialogue box with wrapped, revealed text and the
 inventory grid (M4), maps drawn in Tiled by a person (M6; these are written by `tools/make-maps.ts` from the text), pushable
 blocks in the maze, art, sound and music (M7).
+
+## The world (M2)
+
+The overworld is 80 × 48 tiles (1280 × 768 px: four screens across, almost five down). The camera follows with a dead zone of 24 × 16
+and a smoothing of 0.12 s *(guess)*, and stops at the map's edge. The player writes only the tilemap cells the view shows. A door
+step (the map changes, the new map's cells are written for the first time) costs **1.2 to 1.5 ms** of script under Node
+(`node tools/frame-time.ts`), so no hitch needs fixing; the mean step is 0.6 ms, the 99th percentile 5 ms, and one step in 1,433
+took 18 ms (a garbage collection or a JIT step, nowhere near a door).
 
 ## Findings while writing
 

@@ -57,39 +57,41 @@ function fill(g: string[][], ch: string, c0: number, r0: number, c1: number, r1:
 const text = (g: string[][]): string[] => g.map((row) => row.join(""));
 
 function overworld(): MapDef {
-  const g = grid(48, 30);
-  fill(g, "~", 10, 6, 16, 10); // a pond
-  fill(g, "#", 1, 14, 19, 14); // a ridge across the valley, with a pass between col 20 and 22
-  fill(g, "#", 23, 14, 46, 14);
-  fill(g, "#", 30, 15, 30, 21); // a second ridge in the south, open below row 22
-  fill(g, "#", 30, 24, 30, 28);
-  fill(g, "#", 22, 1, 26, 2); // the gate's wall
-  fill(g, "#", 4, 3, 8, 5); // the house
-  fill(g, "#", 40, 24, 44, 26); // the cave
-  fill(g, "#", 40, 3, 44, 5); // the maze's front
-  fill(g, "~", 34, 8, 36, 11); // a second pond
+  const g = grid(80, 48);
+  fill(g, "#", 1, 32, 19, 32); // a ridge across the valley, with a pass at cols 20 to 22
+  fill(g, "#", 23, 32, 78, 32);
+  fill(g, "#", 40, 33, 40, 39); // a second ridge, with a gap at rows 40 and 41 into the south-east
+  fill(g, "#", 40, 42, 40, 46);
+  fill(g, "~", 10, 24, 16, 28); // two ponds
+  fill(g, "~", 60, 24, 66, 29);
+  fill(g, "#", 36, 1, 44, 2); // the gate's wall
+  fill(g, "#", 4, 21, 8, 23); // the house, in the west
+  fill(g, "#", 70, 3, 74, 5); // the maze's front, in the north-east
+  fill(g, "#", 66, 42, 70, 44); // the cave, in the south-east
+  fill(g, "#", 28, 8, 28, 20); // a hedge-row of rock in the north, to walk round
+  fill(g, "#", 50, 10, 58, 10);
   return {
     id: "overworld",
     name: "The valley",
     rows: text(g),
     doors: [
-      { id: "cave", col: 42, row: 26, to: { map: "cave", door: "cave-exit" }, out: [0, 1], needs: "lantern" },
-      { id: "house", col: 6, row: 5, to: { map: "house", door: "house-exit" }, out: [0, 1], needs: "key" },
-      { id: "maze", col: 42, row: 5, to: { map: "maze", door: "maze-exit" }, out: [0, 1] },
+      { id: "cave", col: 68, row: 44, to: { map: "cave", door: "cave-exit" }, out: [0, 1], needs: "lantern" },
+      { id: "house", col: 6, row: 23, to: { map: "house", door: "house-exit" }, out: [0, 1], needs: "key" },
+      { id: "maze", col: 72, row: 5, to: { map: "maze", door: "maze-exit" }, out: [0, 1] },
     ],
-    pickups: [{ id: "lantern", item: "lantern", col: 9, row: 25 }],
+    pickups: [{ id: "lantern", item: "lantern", col: 9, row: 43 }],
     npcs: [
-      { id: "guide", col: 12, row: 23 },
-      { id: "gardener", col: 9, row: 7 },
-      { id: "hermit", col: 38, row: 6 },
-      { id: "keeper", col: 21, row: 4 },
+      { id: "guide", col: 12, row: 41 },
+      { id: "gardener", col: 9, row: 25 },
+      { id: "hermit", col: 68, row: 6 },
+      { id: "keeper", col: 37, row: 4 },
     ],
     shrines: [
-      { id: "shrine-south", col: 6, row: 24 },
-      { id: "shrine-middle", col: 21, row: 11 },
-      { id: "shrine-north", col: 42, row: 9 },
+      { id: "shrine-south", col: 6, row: 42 },
+      { id: "shrine-middle", col: 21, row: 29 },
+      { id: "shrine-north", col: 72, row: 9 },
     ],
-    gate: { col: 24, row: 2 },
+    gate: { col: 40, row: 2 },
   };
 }
 

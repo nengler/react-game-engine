@@ -49,32 +49,32 @@ test("doors come in pairs: each leads to a door that leads back, and the arrival
 });
 
 test("walking: eight ways at one speed, stopped by walls and water, with no sub-pixel drift between runs", () => {
-  const start = at("overworld", 20, 18);
+  const start = at("overworld", 20, 40);
   const east = walk(start, 1, 0, 1);
   const diag = walk(start, 1, 1, 1);
   assert.ok(Math.abs(east.run.x - start.x - 56) <= 1);
   const dist = Math.hypot(diag.run.x - start.x, diag.run.y - start.y);
   assert.ok(Math.abs(dist - 56) <= 1.5, `diagonal distance ${dist}`);
   // into the ridge across the valley (row 14) from below: stopped with the box against it
-  const north = walk(at("overworld", 10, 16), 0, -1, 3);
-  assert.equal(north.run.y, 15 * TILE);
+  const north = walk(at("overworld", 10, 34), 0, -1, 3);
+  assert.equal(north.run.y, 33 * TILE);
   // into the pond
-  const pond = walk(at("overworld", 13, 12), 0, -1, 3);
-  assert.equal(pond.run.y, 11 * TILE);
+  const pond = walk(at("overworld", 13, 30), 0, -1, 3);
+  assert.equal(pond.run.y, 29 * TILE);
   assert.equal(walk(start, 1, 0, 1).run.x, east.run.x, "same input, same place");
 });
 
 test("people are solid and the character faces where they last moved", () => {
-  const start = at("overworld", 12, 25);
+  const start = at("overworld", 12, 43);
   const r = walk(start, 0, -1, 2);
-  assert.equal(r.run.y, 24 * TILE, "stopped against the guide at (12, 23)");
+  assert.equal(r.run.y, 42 * TILE, "stopped against the guide at (12, 41)");
   assert.deepEqual([r.run.fx, r.run.fy], [0, -1]);
   const turned = walk(r.run, 1, 0, 0.1).run;
   assert.deepEqual([turned.fx, turned.fy], [1, 0]);
 });
 
 test("talking: the action starts a conversation, pages advance, and the world waits meanwhile", () => {
-  let run = walk(at("overworld", 12, 25), 0, -1, 1).run;
+  let run = walk(at("overworld", 12, 43), 0, -1, 1).run;
   assert.equal(facingNpc(run), "guide");
   let r = press(run);
   assert.deepEqual(r.events, [{ type: "talk", npc: "guide", page: 0 }]);
@@ -99,7 +99,7 @@ test("what people say changes once, when the bell nearest them is found", () => 
 });
 
 test("items: walking onto one picks it up once and shows a notice", () => {
-  const run = at("overworld", 8, 25, [1, 0]);
+  const run = at("overworld", 8, 43, [1, 0]);
   const r = walk(run, 1, 0, 0.5);
   assert.deepEqual(r.events, [{ type: "pickup", item: "lantern", id: "lantern" }]);
   assert.ok(carries(r.run, "lantern"));
@@ -191,7 +191,7 @@ test("the game can be finished: a search through the world, with locks and bushe
   let changed = true;
   while (changed) {
     changed = false;
-    const queue: [MapId, number, number][] = [["overworld", 6, 25]];
+    const queue: [MapId, number, number][] = [["overworld", 6, 43]];
     const visited = new Set<string>();
     while (queue.length > 0) {
       const [map, col, row] = queue.pop()!;

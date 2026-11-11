@@ -41,12 +41,12 @@ const tile = (col: number, row: number) => bodyAt(col, row);
  * door. (The raw legs are plain input script: a press needs a frame of its own between presses.)
  */
 export const TO_THE_CAVE: readonly Leg[] = [
-  { x: tile(9, 25).x },
-  { y: tile(9, 22).y },
-  { x: tile(12, 22).x },
+  { x: tile(9, 43).x },
+  { y: tile(9, 40).y },
+  { x: tile(12, 40).x },
   { raw: "down*6, Z, _, Z, _, Z, _" },
-  { x: tile(46, 22).x },
-  { y: tile(46, 27).y },
-  { x: tile(42, 27).x },
+  { x: tile(73, 40).x },
+  { y: tile(73, 45).y },
+  { x: tile(68, 45).x },
   { raw: "up*40, _*5" },
 ];

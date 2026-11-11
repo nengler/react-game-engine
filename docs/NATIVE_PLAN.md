@@ -903,3 +903,13 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 - [x] The demo plays identically under the Rust host (decoded draw-list parity over 60 scripted frames)
 - [x] Performance baseline recorded in this document
 - [x] `npm run package` produces a runnable folder
+
+## Large maps and the follow camera (2026-11-11)
+
+- `<Tilemap>` in the world writes only the cells the view shows (plus one round them), found from the previous frame's camera; a
+  frame is built twice when that camera turns out to be another (the first frame, a screen change). A map in a `<Hud>`, or turned or
+  scaled, writes every cell. Bench: a 200 × 200 map scrolled across costs 0.12 ms a frame under Node and 1.8 ms under QuickJS
+  (budgets 0.5 and 4).
+- `<Camera deadzone smoothing>` follows a character across such a map; both are stepped in `onUpdate` so a replay repeats, and a
+  change of `bounds` snaps the view.
+- Measured in Bramble (`games/bramble/tools/frame-time.ts`): the step that changes map costs 1.2 to 1.5 ms of script under Node.

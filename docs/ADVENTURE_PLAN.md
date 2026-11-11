@@ -255,7 +255,7 @@ record for every filled cell ("culled to none (a map is a room, not a world)").
 - **On a door:** a `bounds` change with no `slide` snaps the view at once, so going through a door needs no new prop.
 - **Tests:** runtime tests of the dead zone, smoothing and snapping; a recording test of a scroll.
 
-**2.3 A door without a hitch.**
+**2.3 A door without a hitch.** *(Measured 2026-11-11: a door step costs 1.2 to 1.5 ms under Node on the cloud VM, so nothing to fix; see `games/bramble/DESIGN.md`.)*
 
 - **Measure first.** Bramble's `tools/frame-time.ts` (copied from Kite's) times the step that changes map.
 - **Then fix the cause:**
@@ -264,7 +264,7 @@ record for every filled cell ("culled to none (a map is a room, not a world)").
   - If it is building the subtree, mount the next map one step early, as Kite finding 10 suggested.
 - **Target:** no step over 16.7 ms under Node on the cloud VM, recorded in `NATIVE_PLAN.md`.
 
-**2.4 Entities off screen, measured.** One overworld map holds about 40 enemies and NPCs. Measure the busiest view first. If
+**2.4 Entities off screen, measured.** *(Not yet: there are no enemies until M5; the ones in the world now are 4 people.)* One overworld map holds about 40 enemies and NPCs. Measure the busiest view first. If
 rendering the ones off screen costs too much:
 
 - **First**, the game filters its lists by distance to the view, with a computed selector (no engine change).

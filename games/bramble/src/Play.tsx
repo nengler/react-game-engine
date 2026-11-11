@@ -32,7 +32,7 @@ export function Play() {
   return (
     <Entity name="Play">
       <World />
-      <Camera bounds={[0, 0, size.width, size.height]}>
+      <Camera bounds={[0, 0, size.width, size.height]} deadzone={[24, 16]} smoothing={0.12}>
         <Entity name="Hero" transform={{ x: run.x, y: run.y }}>
           <Shape kind="rect" width={BODY} height={BODY} color="#f28b3c" />
         </Entity>
