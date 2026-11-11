@@ -1,4 +1,4 @@
-import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Particles, Route, Router, Screen, useShake, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Particles, Route, Router, Screen, useShake } from "@rge/runtime/jsx";
 import { fx } from "./effects.ts";
 import { End } from "./End.tsx";
 import { Gem } from "./Gem.tsx";
@@ -11,16 +11,11 @@ import { GEM_AT, ROOM_LIST } from "./rules/rooms.ts";
 import { Title } from "./Title.tsx";
 import { fadeThrough } from "./transitions.ts";
 
-/** What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, the bursts the game makes, and the HUD. It keeps the run's clock. */
+/** What shows while playing: the rooms, the character in a camera that stays inside the room it is in, the gem, the bursts the game makes, and the HUD. */
 function Play() {
   const { originX, originY, room, deaths, dead } = useGame((s) => s.run);
   const gems = useGame((s) => s.gems);
-  const tick = useGame((s) => s.tick);
   const [shake, setShake] = useShake();
-
-  useUpdate((dt) => {
-    tick(dt);
-  });
 
   return (
     <Entity name="Play">

@@ -5,7 +5,7 @@ import { afterOutcome, newRun, type Run } from "./rules/level.ts";
 /**
  * The game's shared state: which screen is showing, the facts of the run that more than one component reads (the room, the
  * deaths, whether the character is dead, the time), and the gem. It does not step anything: the character moves itself
- * (`Player.tsx`) and reports what happened through these actions, and the play screen keeps the clock.
+ * (`Player.tsx`) and reports what happened through these actions, the clock included.
  */
 interface State {
   screen: "title" | "play" | "end";
@@ -24,7 +24,7 @@ interface State {
   enteredRoom: () => void;
   /** The character went through the last exit: the end screen. */
   finished: () => void;
-  /** Time played, while the play screen is up. */
+  /** Time played: the character adds each step it plays (not the camera's slides between rooms). */
   tick: (dt: number) => void;
 }
 

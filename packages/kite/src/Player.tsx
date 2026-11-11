@@ -1,4 +1,4 @@
-import { AnimatedSprite, Collider, Entity, Particles, useMount, useSquash, useState, useUpdate } from "@rge/runtime/jsx";
+import { AnimatedSprite, Collider, Entity, Particles, useSquash, useState, useUpdate } from "@rge/runtime/jsx";
 import { DashTrail } from "./DashTrail.tsx";
 import { playEvents, squashFor } from "./effects.ts";
 import { useGame } from "./GameState.ts";
@@ -22,22 +22,22 @@ export function Player({ onDie }: PlayerProps) {
   const respawned = useGame((s) => s.respawned);
   const enteredRoom = useGame((s) => s.enteredRoom);
   const reachedEnd = useGame((s) => s.finished);
+  const tick = useGame((s) => s.tick);
+  // Every run starts at the first room's start: the play screen is made fresh for each run, and this with it.
   const [me, setMe] = useState(() => spawnIn(0));
   const [squash, setSquash] = useSquash(1.75);
   const body = me.body;
   const dead = me.deadFor > 0;
   const height = heightOf(body);
 
-  // Every run starts at the first room's start. The router keeps the play screen (and this state) while another screen shows,
-  // so a second run finds the character where the first one ended: it comes back here when the screen does.
-  useMount(() => {
-    setMe(spawnIn(0));
-  });
-
   useUpdate((dt, input) => {
     if (finished) return;
     const step = stepPlayer(me, room, readControls(input), dt);
     setMe(step.next);
+    // The run's clock: every step the character plays, not the camera's slides between rooms.
+    if (step.played) {
+      tick(dt);
+    }
 
     playEvents(step.events, originX, originY);
     const nextSquash = squashFor(step.events);

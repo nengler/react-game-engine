@@ -20,7 +20,7 @@ export interface Run {
   dead: boolean;
   /** The last room's exit was reached. */
   finished: boolean;
-  /** Seconds played, for the end screen. */
+  /** Seconds played, for the end screen: every step but the camera's slides between rooms (and freezes, when nothing runs). */
   time: number;
 }
 
@@ -65,7 +65,7 @@ export function newSim(room = 0): Sim {
 /** One fixed step of `dt` seconds. What happened is pushed onto `events`. */
 export function stepSim(sim: Sim, c: Controls, dt: number, events: GameEvent[] = []): Sim {
   if (sim.run.finished) return sim;
-  const { next, outcome, events: happened } = stepPlayer(sim.player, sim.run.room, c, dt);
+  const { next, outcome, events: happened, played } = stepPlayer(sim.player, sim.run.room, c, dt);
   events.push(...happened);
-  return { run: afterOutcome({ ...sim.run, time: sim.run.time + dt }, outcome), player: next };
+  return { run: afterOutcome(played ? { ...sim.run, time: sim.run.time + dt } : sim.run, outcome), player: next };
 }

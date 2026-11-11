@@ -32,25 +32,27 @@ export interface PlayerStep {
   readonly next: PlayerState;
   readonly outcome: Outcome;
   readonly events: GameEvent[];
+  /** The step was played: false while the camera slides to a new room, when the character waits. What the clock counts. */
+  readonly played: boolean;
 }
 
 /** One fixed step of the character in room `room`; `p` is not changed. */
 export function stepPlayer(p: PlayerState, room: number, c: Controls, dt: number): PlayerStep {
   const events: GameEvent[] = [];
-  if (p.entering > 0) return { next: { ...p, entering: Math.max(0, p.entering - dt) }, outcome: "none", events };
+  if (p.entering > 0) return { next: { ...p, entering: Math.max(0, p.entering - dt) }, outcome: "none", events, played: false };
   if (p.deadFor > 0) {
     const deadFor = p.deadFor - dt;
-    return deadFor > 0 ? { next: { ...p, deadFor }, outcome: "none", events } : { next: spawnIn(room), outcome: "respawned", events };
+    return deadFor > 0 ? { next: { ...p, deadFor }, outcome: "none", events, played: true } : { next: spawnIn(room), outcome: "respawned", events, played: true };
   }
 
   const here = ROOM_LIST[room] as Room;
   const body = stepBody(p.body, c, here.solidAt, dt, events);
   if (onSpikes(here, body) || outOfBounds(body)) {
     events.push({ type: "death", x: body.x + BODY_W / 2, y: body.y + BODY_H / 2 });
-    return { next: { body: { ...body, vx: 0, vy: 0, state: "normal", dashTime: 0 }, deadFor: RESPAWN_DELAY, entering: 0 }, outcome: "died", events };
+    return { next: { body: { ...body, vx: 0, vy: 0, state: "normal", dashTime: 0 }, deadFor: RESPAWN_DELAY, entering: 0 }, outcome: "died", events, played: true };
   }
-  if (!inExit(here, body)) return { next: { ...p, body }, outcome: "none", events };
-  if (here.exit === "end" || room + 1 >= ROOM_LIST.length) return { next: { ...p, body }, outcome: "finished", events };
+  if (!inExit(here, body)) return { next: { ...p, body }, outcome: "none", events, played: true };
+  if (here.exit === "end" || room + 1 >= ROOM_LIST.length) return { next: { ...p, body }, outcome: "finished", events, played: true };
 
   const to = ROOM_LIST[room + 1] as Room;
   events.push({ type: "room", x: body.x + BODY_W / 2, y: body.y + BODY_H, room: to.index });
@@ -58,5 +60,5 @@ export function stepPlayer(p: PlayerState, room: number, c: Controls, dt: number
   // room below, it arrives a little above the new room's floor (the slide hides the jump); an exit to the side keeps its height.
   const x = Math.max(0, body.x - (to.ox - here.ox));
   const y = Math.min(ROOM_H - BODY_H - ENTRY_LIFT, body.y - (to.oy - here.oy));
-  return { next: { body: { ...body, x, y }, deadFor: 0, entering: TRANSITION_TIME }, outcome: "entered", events };
+  return { next: { body: { ...body, x, y }, deadFor: 0, entering: TRANSITION_TIME }, outcome: "entered", events, played: true };
 }

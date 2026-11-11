@@ -24,8 +24,8 @@ the room's start 0.45 s later. Leaving a room by its exit moves to the next, wit
   into the next room. It answers what it did (sound, dust and freeze from `effects.ts`, its squash, the camera's shake
   through `onDie`) and reports what the run needs to know through the game state's actions (`died`, `respawned`,
   `enteredRoom`, `finished`). The game state (`GameState.ts`) steps nothing: it keeps the screen, the gem and the run's
-  facts that other components read (the room, the deaths, whether the character is dead, the time). The play screen keeps the
-  clock; `DashTrail` is the character's child and is given what it draws.
+  facts that other components read (the room, the deaths, whether the character is dead, the time). The character keeps the
+  clock (every step it plays; the camera's slides between rooms are not counted); `DashTrail` is the character's child and is given what it draws.
 - **Rules are plain functions** (`src/rules/`), which know nothing of the engine's drawing: `body.ts` (one step of the body,
   read top to bottom: timers, what carries over, the state's rules, moving), with the parts in `body/`: `types.ts` (the body,
   whose `state` is `"normal"`, `"dash"` or `"climb"`), `normal.ts` (run, fall, duck, grab, jump), `dash.ts`, `climb.ts`,
