@@ -1,4 +1,4 @@
-import { Flex, Hud, useInput, useState, useUpdate } from "@rge/runtime/jsx";
+import { Flex, Hud, useInput, useTime } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
 import { COLOR } from "./theme.ts";
@@ -6,11 +6,7 @@ import { COLOR } from "./theme.ts";
 /** The title screen: the name, how to play, and a prompt that waits for a button or a click. */
 export function Title() {
   const begin = useGame((s) => s.begin);
-  const [clock, setClock] = useState(0);
-
-  useUpdate((dt) => {
-    setClock((t) => t + dt);
-  });
+  const time = useTime();
 
   useInput((input) => {
     if (input.pressed("confirm") || input.pressed("wave")) {
@@ -25,7 +21,7 @@ export function Title() {
         <Label text="HOLD THE ROAD TEN WAVES" color={COLOR.dim} />
         <Label text="CLICK A PAD TO BUILD  SPACE STARTS A WAVE" />
         <Label text="ARROWS MOVE  Z BUYS  1 2 3 TOWERS" />
-        <Label text="PRESS Z OR CLICK TO START" color={clock % 1 < 0.66 ? COLOR.prompt : COLOR.background} />
+        <Label text="PRESS Z OR CLICK TO START" color={time % 1 < 0.66 ? COLOR.prompt : COLOR.background} />
       </Flex>
     </Hud>
   );

@@ -7,10 +7,10 @@ interface LabelProps {
   size?: number;
 }
 
-/** A line of text in the game's bitmap font: what every screen and the HUD write with. */
+/** A line of text at the game's size and colour (the font is `<Game font>`'s): what every screen and the HUD write with. */
 export function Label({ text, color = COLOR.text, size = 8 }: LabelProps) {
   return (
-    <Text font="font.png" size={size} color={color}>
+    <Text size={size} color={color}>
       {text}
     </Text>
   );

@@ -192,6 +192,7 @@ const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : 
     <tr><td><code>useSound</code></td><td class="type">const play = useSound("hit.wav")</td><td>You call <code>play()</code> in a handler</td></tr>
     <tr><td><code>useSquash</code></td><td class="type">const [sq, setSq] = useSquash(1.75)</td><td>Shipped hook: a scale that springs back to 1</td></tr>
     <tr><td><code>useShake</code></td><td class="type">const [shake, setShake] = useShake()</td><td>Shipped hook: a camera shake that runs down</td></tr>
+    <tr><td><code>useTime</code></td><td class="type">const time = useTime()</td><td>Shipped hook: seconds since mount, for blinking and bobbing</td></tr>
     <tr><td><code>useGame</code></td><td class="type">useGame((s) =&gt; s.player.hp)</td><td>Re-renders when that leaf changes</td></tr>
   </table></div>
 
@@ -534,6 +535,7 @@ function Player() {
         ["gamepadDeadzone", "number", "0.35", "How far the left stick must go before <code>PadLeft/Right/Up/Down</code> count as held."],
         ["showFps", "boolean", "false", "Show frame rate and script time, top-left."],
         ["fpsKey", "string | false", '"F3"', "Key that toggles the counter."],
+        ["font", "string", "–", "The bitmap font of every <code>&lt;Text&gt;</code> without its own <code>font</code>."],
         ["name", "string", '""', "As on <code>Entity</code>."]
       ] },
     { name: "Screen", kind: "container, root only", sum: "A fixed game resolution, scaled to the window. The only child of <code>&lt;Game&gt;</code>.",
@@ -603,6 +605,8 @@ function Player() {
       props: [
         ["width", "number", "–", "Pixels.", 1],
         ["height", "number", "–", "Pixels.", 1],
+        ["onPointerEnter", "() =&gt; void", "–", "Called when the mouse comes over it (the topmost pressable under the mouse)."],
+        ["onPointerLeave", "() =&gt; void", "–", "Called when the mouse leaves it, or something drawn over it takes the mouse."],
         ["onPress", "() =&gt; void", "–", "Called when a press lands inside it."]
       ] },
     { name: "Camera", kind: "container", sum: "The viewport. Follows its children. See <a href=\"systems.html#ui\">UI</a>.",
@@ -627,6 +631,8 @@ function Player() {
         ["minWidth / maxWidth / minHeight / maxHeight", "number", "–", "Bounds for a fit or grow size, in pixels."],
         ["background", "CSS colour", "none", "Filled rectangle behind the children, the size of the box."],
         ["onPress", "() =&gt; void", "–", "Called when a press lands on the laid-out box."],
+        ["onPointerEnter", "() =&gt; void", "–", "Called when the mouse comes over it (the topmost pressable under the mouse)."],
+        ["onPointerLeave", "() =&gt; void", "–", "Called when the mouse leaves it, or something drawn over it takes the mouse."],
         ["float", "boolean", "false", "Take the box out of its parent's flow."],
         ["anchor", "9-point anchor", '"top-left"', "Which point of this box is attached. One of <code>top-left top-center top-right center-left center center-right bottom-left bottom-center bottom-right</code>."],
         ["to", "9-point anchor", '"top-left"', "Which point of the parent it attaches to."],

@@ -303,6 +303,7 @@ rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
         ["gamepadDeadzone", "number", "0.35", "How far the left stick must go before <code>PadLeft/Right/Up/Down</code> count as held."],
         ["showFps", "boolean", "false", "Show frame rate and script time, top-left."],
         ["fpsKey", "string | false", '"F3"', "Key that toggles the counter."],
+        ["font", "string", "–", "The bitmap font of every <code>&lt;Text&gt;</code> without its own <code>font</code>."],
         ["name", "string", '""', "As on <code>Entity</code>."]
       ] },
     { name: "Screen", kind: "container, root only", sum: "A fixed game resolution, scaled to the window. The only child of <code>&lt;Game&gt;</code>.",
@@ -372,6 +373,8 @@ rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
       props: [
         ["width", "number", "–", "Pixels.", 1],
         ["height", "number", "–", "Pixels.", 1],
+        ["onPointerEnter", "() =&gt; void", "–", "Called when the mouse comes over it (the topmost pressable under the mouse)."],
+        ["onPointerLeave", "() =&gt; void", "–", "Called when the mouse leaves it, or something drawn over it takes the mouse."],
         ["onPress", "() =&gt; void", "–", "Called when a press lands inside it."]
       ] },
     { name: "Camera", kind: "container", sum: "The viewport. Follows its children. See <a href=\"systems.html#ui\">UI</a>.",
@@ -396,6 +399,8 @@ rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
         ["minWidth / maxWidth / minHeight / maxHeight", "number", "–", "Bounds for a fit or grow size, in pixels."],
         ["background", "CSS colour", "none", "Filled rectangle behind the children, the size of the box."],
         ["onPress", "() =&gt; void", "–", "Called when a press lands on the laid-out box."],
+        ["onPointerEnter", "() =&gt; void", "–", "Called when the mouse comes over it (the topmost pressable under the mouse)."],
+        ["onPointerLeave", "() =&gt; void", "–", "Called when the mouse leaves it, or something drawn over it takes the mouse."],
         ["float", "boolean", "false", "Take the box out of its parent's flow."],
         ["anchor", "9-point anchor", '"top-left"', "Which point of this box is attached. One of <code>top-left top-center top-right center-left center center-right bottom-left bottom-center bottom-right</code>."],
         ["to", "9-point anchor", '"top-left"', "Which point of the parent it attaches to."],

@@ -1383,6 +1383,9 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
 - **`createSounds(entries)`** → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
   Every file is loaded when a sound sink is installed (`addSoundPreload`), so the first play does not hitch. Asset names in
   a `.ts` file are not checked at build time (only literals in components are).
+- **Time since mount is state: `const time = useTime()`** (2026-11-11). An engine-shipped hook like `useSquash`: a `useState(0)` that
+  a `useUpdate` adds `dt` to, so the component renders each update. For a blink or a bob (`time % 1 < 0.66`), where a game wrote
+  the clock out by hand.
 - **A shake is state: `const [shake, setShake] = useShake()`** (2026-11-11, replacing a `createShake()` object). The value is
   `{ strength, duration, elapsed? }`; `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, the hook's own update
   runs it down (`shakeOn`, the same object once over), and `<Camera shake={shake}>` draws it: the camera's offset is a pure
@@ -1635,6 +1638,12 @@ intrinsic (`Entity`), holds that one child (or the condition's children, as `{�
 parent's origin; a `transform` passed to such a component moves what it holds.
 
 **Element callbacks.** `<Pointer onPress={() => …} />` is the same mechanism with no parameters.
+
+**Hover** (2026-11-11, second-game finding 11). `<Pointer>` and `<Flex>` take `onPointerEnter` and `onPointerLeave`, the DOM's
+`pointerenter` / `pointerleave`: each frame the player finds the topmost pressable under the mouse (last frame's draw order,
+the same search a press makes) and `World.reportHover` tells the one before it left and the new one it was entered; an inert one
+counts as none, and a mouse off the screen is over nothing. A `<Flex>` with only hover callbacks is collected for the mouse but
+lets a press through to what is under it. State is the component's: `onPointerEnter={() => setHovered(true)}`.
 
 **Functions passed whole** (2026-11-11, second-game finding 9). `onPress={resume}` where `resume` is a game-state action, and
 `<Flex onPress={onPress}>` where `onPress` is the component's own callback prop (or `props.onPress`): to a built-in, the

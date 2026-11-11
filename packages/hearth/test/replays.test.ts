@@ -61,6 +61,15 @@ describe("controls", () => {
     assert.equal(states.at(-1)!.gold, 70);
   });
 
+  it("a tower shows its range while the mouse is over it, and not once the mouse leaves", () => {
+    const rings = (script: string): number => play(script).backend.lastFrame.records.filter((r) => r.op === "ellipse" && r.color === "#ffffff22").length;
+    const built = `confirm, _*5, ${pad(4)}, _*3, one, _*3, ${pad(9)}, _*3`;
+    assert.equal(rings(built), 0, "the cursor is on another pad");
+    const over = `mouse@${MAP.pads[4]!.x},${MAP.pads[4]!.y}`;
+    assert.equal(rings(`${built}, ${over}, _*3`), 1);
+    assert.equal(rings(`${built}, ${over}, _*3, mouse@300,170, _*3`), 0);
+  });
+
   it("the arrow keys move the cursor to the nearest pad in that direction; back closes the panel", () => {
     const { states } = play("confirm, _*5, confirm, _, right, _*2, down, _*2, back, _*2");
     const [open, afterRight, afterDown, closed] = [states[6]!, states[9]!, states[12]!, states.at(-1)!];

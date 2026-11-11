@@ -1,4 +1,4 @@
-import { Entity, Pointer, Sprite } from "@rge/runtime/jsx";
+import { Entity, Pointer, Sprite, useState } from "@rge/runtime/jsx";
 import { Barrel } from "./Barrel.tsx";
 import { useGame } from "./GameState.ts";
 import { LevelPips } from "./LevelPips.tsx";
@@ -20,20 +20,21 @@ interface TowerProps {
   flash: number;
 }
 
-/** A tower on its pad: the base, the barrel turning toward its target, the pips, the flash of a shot, and its range while the cursor is on it. */
+/** A tower on its pad: the base, the barrel turning toward its target, the pips, the flash of a shot, and its range while the cursor or the mouse is on it. */
 export function Tower({ id, x, y, kind, level, angle, flash }: TowerProps) {
   const selected = useGame((s) => s.cursor === id);
   const select = useGame((s) => s.select);
+  const [hovered, setHovered] = useState(false);
   const frame = ROW[kind] * 3 + level;
 
   return (
     <Entity name="Tower" transform={{ x, y }}>
-      {selected && <RangeRing range={rangeOf(kind, level)} />}
+      {(selected || hovered) && <RangeRing range={rangeOf(kind, level)} />}
       <Sprite image="tower_bases.png" frameWidth={12} frameHeight={12} frame={frame} originX={6} originY={6} />
       <Barrel frame={frame} angle={angle} />
       <LevelPips level={level} />
       <MuzzleFlash on={flash > 0} angle={angle} />
-      <Pointer width={10} height={10} transform={{ x: -5, y: -5 }} onPress={() => select(id)} />
+      <Pointer width={10} height={10} transform={{ x: -5, y: -5 }} onPress={() => select(id)} onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} />
       {selected && <Sprite image="cursor.png" originX={7} originY={7} />}
     </Entity>
   );

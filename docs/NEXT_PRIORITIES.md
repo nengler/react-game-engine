@@ -208,8 +208,10 @@ What building Hearth found, and which of Kite's findings held a second time.
    (`const { gold, lives } = useGame((s) => s.battle)`) already worked when Hearth was written; `SidePanel` now uses it.
 10. **A compiler bug found and fixed:** a keyed list over an imported constant (`TOWER_LIST.map(…)`) whose item has a callback that reads the item crashed the generator
     (`Unexpected list source`), because the item's type was only known for state and prop sources. It now reads `(typeof TOWER_LIST)[number]`.
-11. **`<Pointer>` has no hover**, so the plan's "range ring while the mouse is over a tower" is the selected tower's ring instead. A `useHover`-style event would be
-    needed, and is not wanted by anything else yet.
+11. **`<Pointer>` had no hover**, so the plan's "range ring while the mouse is over a tower" was the selected tower's ring instead. **Built** after review:
+    `onPointerEnter` / `onPointerLeave` on `<Pointer>` and `<Flex>`; a tower shows its range while selected or hovered. Two smaller gaps the review named
+    are built with it: `<Game font>` (the bitmap font of every `<Text>` without its own, which `Label` existed mostly to repeat) and `useTime()` (seconds
+    since mount, which `Title` wrote out with `useState` and `useUpdate`).
 12. **`<Flex>` has no `z`**; the pause modal draws above the panel because it comes later in the `<Hud>`. Fine, and what the draw order says.
 
 **Tooling:**

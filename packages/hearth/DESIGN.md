@@ -64,7 +64,7 @@ same money in bolts alone runs out in wave 10; three towers lose in wave 5.
 All through `createControls` and `<Game controls>` (`rules/controls.ts`).
 
 - **Mouse:** click a pad (empty or built) to select it; the panel shows the build menu or the upgrade panel; the buttons in the panel are
-  clicks too. The range ring shows for the selected tower. (There is no hover ring: `<Pointer>` has no hover.)
+  clicks too. The range ring shows for the selected tower and for the tower the mouse is over (`onPointerEnter` / `onPointerLeave`).
 - **Keyboard and gamepad:** the arrows or d-pad move the cursor to the nearest pad in that direction; `Z` / `A` select (and open the panel),
   `X` / `B` close it; `1` `2` `3` buy a bolt, mortar or frost tower on the selected pad; `U` upgrades, `S` sells; `Space` / `Y` starts the
   next wave; `F` toggles 2× speed; `Esc` / Start pauses.
