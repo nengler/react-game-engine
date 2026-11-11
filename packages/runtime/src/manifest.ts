@@ -126,7 +126,7 @@ export const runtimeManifest: RuntimeManifest = {
     Fade: ["color", "on", "duration", "amount"],
     Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
-    Route: ["name", "visible"],
+    Route: ["name", "keepAlive", "visible", "active"],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
       "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "contains", "box",

@@ -296,10 +296,17 @@ export class ElementLowering extends HookLowering {
     }
     if (!isComponent) this.checkContainer(tag.text, children.length, jsx);
 
+    const fieldName = this.allocateFieldName(tag.text, listItem ? "Items" : null);
+    // A <Route>'s children exist only while the route is active (shown, or being left or entered): made fresh each time it
+    // comes, and gone once it has left, as React Router's are. `keepAlive` keeps them (and their state) between visits.
+    if (component.kind === "Intrinsic" && tag.text === ROUTE_TAG && !hasTrueAttribute(opening.attributes, "keepAlive")) {
+      children = children.map((child) => whileActive(child, fieldName));
+    }
+
     return {
       kind: "Element",
       id: elementId(this.component.name, path),
-      fieldName: this.allocateFieldName(tag.text, listItem ? "Items" : null),
+      fieldName,
       component,
       props,
       transform,
@@ -551,4 +558,25 @@ export class ElementLowering extends HookLowering {
     }
     return out;
   }
+}
+
+const ROUTE_TAG = "Route";
+
+/** Is the attribute written as `name` or `name={true}`? */
+function hasTrueAttribute(attributes: JsxAttributes, name: string): boolean {
+  const attribute = findAttribute(attributes, name);
+  if (!attribute) return false;
+  const init = attribute.initializer;
+  if (!init) return true;
+  return isJsxExpression(init) && init.expression !== undefined && init.expression.kind === SyntaxKind.TrueKeyword;
+}
+
+/** A route's child, made to exist only while the route (the element in field `route`) is active. */
+function whileActive(child: ChildIR, route: string): ChildIR {
+  const active: ExprIR = { kind: "ElementRead", field: route, member: "active" };
+  if (child.kind === "StaticChild") return { kind: "ConditionalChild", condition: active, dependencies: [], element: child.element };
+  if (child.kind === "ConditionalChild") {
+    return { ...child, condition: { kind: "Binary", operator: "&&", left: active, right: child.condition } };
+  }
+  return child; // a list or a slot keeps its own rules
 }

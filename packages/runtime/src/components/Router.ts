@@ -36,24 +36,35 @@ export interface RouterProps {
 export interface RouteProps {
   /** What the router's `route` calls this screen. */
   name: string;
+  /**
+   * Keep this screen's components (and their state) while another screen shows, instead of making them fresh each time it
+   * comes back: a level select that remembers where it was scrolled. Default false, as React Router's routes.
+   */
+  keepAlive?: boolean;
 }
 
 /**
  * One screen of a `<Router>`: a container that is in the world only while the router shows it (and while it is being left or
- * entered). Its children keep their state when it is not shown, and join and leave the world with it, so `useMount` and
- * `useUnmount` mean "the screen came" and "the screen went".
+ * entered). Its components are made when it comes and dropped once it has gone (the compiler shows a route's children only
+ * while it is `active`), so each visit starts fresh, as with React Router; `keepAlive` keeps them, and their state, between
+ * visits. Either way they join and leave the world with it, so `useMount` and `useUnmount` mean "the screen came" and
+ * "the screen went".
  */
 export class Route<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 
   name: string;
+  keepAlive: boolean;
   /** False while a transition hides this screen: it is not drawn and nothing in it can be pressed or collide. */
   visible = true;
+  /** Shown, or being left or entered: what the compiler shows the route's children on (unless `keepAlive`). Set by the router. */
+  active = false;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: RouteProps, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
     this.name = hostProps.name;
+    this.keepAlive = hostProps.keepAlive ?? false;
   }
 }
 
@@ -125,6 +136,7 @@ export class Router<P extends object = {}> extends GameObject<P> {
     this.#routes.set(child.name, child);
     if (child.name === this.#route) {
       this.#current = child;
+      this.#activate(child, true);
       super.addChild(child, slot, order);
     }
   }
@@ -140,6 +152,7 @@ export class Router<P extends object = {}> extends GameObject<P> {
     const entering = this.#find(to);
     const leaving = this.#current;
     this.#current = entering;
+    this.#activate(entering, true);
     if (leaving === null) {
       this.queueAddChild(entering);
       return;
@@ -147,6 +160,7 @@ export class Router<P extends object = {}> extends GameObject<P> {
     this.queueAddChild(entering);
     if (this.transition === undefined || !(this.duration > 0)) {
       this.queueRemoveChild(leaving);
+      this.#activate(leaving, false);
       return;
     }
     this.#leaving = leaving;
@@ -163,10 +177,24 @@ export class Router<P extends object = {}> extends GameObject<P> {
     this.#leaving = null;
     this.world?.setInert(leaving, false);
     this.queueRemoveChild(leaving);
+    this.#activate(leaving, false);
     this.#settle(leaving);
     if (this.#current !== null) this.#settle(this.#current);
     this.cover = 0;
     this.markChanged();
+  }
+
+  /**
+   * A route comes or goes: its children are made or dropped by the component that wrote them, which renders again to see it.
+   * That is a compiled component above this router (marking all of them is harmless: a render with nothing changed does
+   * nothing).
+   */
+  #activate(route: Route, active: boolean): void {
+    if (route.active === active) return;
+    route.active = active;
+    for (let at: GameObject | null = this.parent; at !== null; at = at.parent) {
+      if ((at.constructor as { readonly managed?: boolean }).managed === true) at.markDirty();
+    }
   }
 
   #settle(route: Route): void {

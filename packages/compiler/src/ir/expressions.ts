@@ -10,6 +10,7 @@ import { type ParamIR } from "./values.ts";
 
 export type ExprIR =
   | PlainRefIR
+  | ElementReadIR
   | NumberLiteralIR
   | StringLiteralIR
   | BooleanLiteralIR
@@ -34,6 +35,16 @@ export type ExprIR =
  * A function imported from a relative `.ts` file, used as a value (`<Router transition={crossfade} />`): the generated code writes
  * the imported name. The compiler does not look inside it.
  */
+/**
+ * A field of one of this component's own elements, by its field name: `this.route2.active`. Only the compiler writes it (a
+ * `<Route>`'s children are shown while the route is active); it is read fresh on every render, so it has no dependencies.
+ */
+export interface ElementReadIR {
+  readonly kind: "ElementRead";
+  readonly field: string;
+  readonly member: string;
+}
+
 export interface PlainRefIR {
   readonly kind: "PlainRef";
   readonly name: string;
