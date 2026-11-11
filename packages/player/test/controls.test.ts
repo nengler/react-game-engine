@@ -18,6 +18,12 @@ describe("createControls", () => {
     assert.throws(() => createControls({ jump: [] }), /'jump' has no keys/);
   });
 
+  it("takes only key names the player knows: a misspelt one is a type error (checked by npm run typecheck)", () => {
+    // @ts-expect-error "Spcae" is not a KeyName (tsc says: Did you mean '"Space"'?)
+    const typo = createControls({ jump: ["Z", "Spcae"] });
+    assert.deepEqual(typo.keysOf("jump"), ["Z", "Spcae"], "at run time it is still a binding, which warns when it is read");
+  });
+
   it("is the game's when <Game controls> has it: a handler asks for an action, and a script can use the same names", () => {
     const seen: string[] = [];
     class Probe extends Entity {

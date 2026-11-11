@@ -12,7 +12,7 @@ Phase 3 is done: a compiled game runs in a native window under Node and as a Qui
 | 2 | Collisions gameplay can use: readable `other`, layers, exit events (**done**, #34) | A handler could not tell a coin from an enemy, which blocked almost any game | Done |
 | 3 | ABI v2 with a HUD layer, plus `z` draw order (`z` **done**, #36) | A score drawn in the world moves with the camera; layout and `pixelPerfect` need the same ABI change | \~1–1.5 weeks, `z` done |
 | 4 | Performance pass two: dependency-scoped `render()`, cached transforms, a collision grid | 2,000 state-driven objects with colliders still take 18 ms of a 16.7 ms frame under QuickJS | \~1.5–2 weeks |
-| 5 | Developer loop: errors in the window and hot reload (**done**), key names checked by type (scenes as an entry point dropped) | A crash today closes the window and prints to a terminal the player may not see | \~1.5 weeks |
+| 5 | Developer loop: errors in the window, hot reload, key names checked by type (**done**; scenes as an entry point dropped) | A crash today closes the window and prints to a terminal the player may not see | \~1.5 weeks |
 
 Sizes are rough, for one engineer, in the style of the Phase 3 plan. Each priority below ends with a checklist that says when it is done.
 
@@ -266,13 +266,15 @@ When a handler throws, both hosts print the stack and exit with status 1. That i
 
 - **Errors in the window.** Catch an exception from a step, keep the window open, and draw the message and stack in screen space (on priority 3's layer) until it is closed. Keep exit status 1 for headless runs and CI.
 - **Hot reload in the Node host.** Recompile a changed `.tsx`, swap its class, and keep state by element id. The IR's stable element ids and scene ids were designed for this.
-- **Key names checked by type.** Since `createControls`, a game writes its key names in one place, the bindings table, and everything else asks about actions (`input.pressed("confirm")`). A typo there (`jump: ["Spcae"]`) is only a warning at run time, on the first press. Type each binding as a union of the key names the player knows (`KeyName`, kept equal to `protocol.ts`'s `KEYS` by a test), so the editor and `tsc` report it. A key name written straight into `input.pressed("…")` can take the same type where the argument is not an action.
+- **Key names checked by type.** Since `createControls`, a game writes its key names in one place, the bindings table, and everything else asks about actions (`input.pressed("confirm")`). A typo there (`jump: ["Spcae"]`) is only a warning at run time, on the first press. Type each binding as a union of the key names the player knows (`KeyName`, kept equal to `protocol.ts`'s `KEYS` by a test), so the editor and `tsc` report it.
 
 **Done when**
 
 - [x] A thrown handler shows its message in the window under both hosts; headless runs still exit 1 (2026-11-11: drawn by the TypeScript player, so the Rust host needed no change; see DESIGN.md, "Errors in the window")
 - [x] Editing a component while `npm run play:demo` runs updates it in place, keeping its state (2026-11-11: `play.ts` hot reloads by default, keeping each component's `useState` and refs by tree path and carrying the game state over; compile errors show in the window; see DESIGN.md, "Hot reload", and NATIVE_PLAN.md, `packages/player-node`)
-- [ ] A misspelt key name in `createControls` is a type error
+- [x] A misspelt key name in `createControls` is a type error (2026-11-11: `KeyName` from the runtime's `KEY_NAMES`, which the player's `KEYS` now is; tsc suggests the nearest name)
+
+**Done 2026-11-11.**
 
 **Started 2026-11-11** with errors in the window and hot reload, the two that matter most for working on a game.
 

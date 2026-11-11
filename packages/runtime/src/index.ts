@@ -45,7 +45,7 @@ export { Fade, type FadeProps } from "./components/Fade.ts";
 export { Route, Router, type RouteProps, type RouterProps, type Transition, type TransitionFrame } from "./components/Router.ts";
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
-export { actionAware, Controls, createControls, createInputState, NO_INPUT, type InputState, type InputSnapshot } from "./input.ts";
+export { actionAware, Controls, createControls, createInputState, KEY_NAMES, NO_INPUT, type InputState, type InputSnapshot, type KeyName } from "./input.ts";
 export { clamp, NO_SHAKE, shakeOn, springBack, type ShakeState, type Vector2 } from "./math.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";

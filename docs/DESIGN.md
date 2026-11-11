@@ -1277,6 +1277,10 @@ export const controls = createControls({ jump: ["Z", "Space", "PadA"], left: ["A
 useInput((input) => { if (input.pressed("confirm")) begin(); });
 ```
 
+Each binding is a `KeyName`, the union of the names in `KEY_NAMES` (the player's `KEYS` is that list), so a misspelt key is a
+type error where the controls are written: `Type '"Spcae"' is not assignable to type … Did you mean '"Space"'?` (priority 5,
+2026-11-11). Action names in `input.pressed("…")` are not checked by type; an unknown name is a warning at run time.
+
 Every `InputState` question (`pressed`, `down`, `released`) then takes an action name as well as a key name: `down` is any of
 its keys held, `pressed` is one of them going down this step, `released` is one going up with none still held. Rules in plain
 TypeScript read the same names (`input.down("left")`). `<Game controls>` must be an identifier imported from a `.ts` module
