@@ -1,9 +1,9 @@
 import { ModifierFlags, NodeFlags, type Node, type SourceFile } from "typescript/ast";
-import { isArrowFunction, isExportAssignment, isFunctionDeclaration, isIdentifier, isImportDeclaration, isInterfaceDeclaration, isNamedImports, isTypeAliasDeclaration, isStringLiteral, isVariableStatement } from "typescript/ast/is";
+import { isArrowFunction, isExportAssignment, isFunctionDeclaration, isIdentifier, isImportDeclaration, isInterfaceDeclaration, isJsxElement, isJsxFragment, isJsxSelfClosingElement, isNamedImports, isTypeAliasDeclaration, isStringLiteral, isVariableStatement } from "typescript/ast/is";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { spanOf } from "../parser/parser.ts";
-import { type SourceAnalysis, type ImportAnalysis, type TypeDeclarationAnalysis, type ComponentAnalysis } from "./model.ts";
-import { unwrapParens } from "./util.ts";
+import { type SourceAnalysis, type ImportAnalysis, type TypeDeclarationAnalysis, type ComponentAnalysis, type ModuleDeclarationAnalysis } from "./model.ts";
+import { unwrapParens, visit } from "./util.ts";
 import { analyzeNamedImport, analyzeComponent } from "./component.ts";
 import { HOOK_NAME } from "./model.ts";
 
@@ -27,6 +27,28 @@ export function analyzeSourceFile(
   const authoringImports: ImportAnalysis[] = [];
   const relativeImports: ImportAnalysis[] = [];
   const typeDeclarations: TypeDeclarationAnalysis[] = [];
+  const moduleDeclarations: ModuleDeclarationAnalysis[] = [];
+  /**
+   * A constant or helper function at the top of the file: plain TypeScript, copied into the generated module. It may read
+   * imports from `.ts` files and other constants, but not JSX or the game state (that belongs in a component).
+   */
+  const moduleDeclaration = (name: string, node: Node): void => {
+    const reads = new Set<string>();
+    let ok = true;
+    visit(node, (n) => {
+      if (isJsxElement(n) || isJsxSelfClosingElement(n) || isJsxFragment(n)) {
+        if (ok) diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `'${name}' holds JSX: JSX belongs in a component (\`function ${name.charAt(0).toUpperCase() + name.slice(1)}() { return <…/>; }\`).`, span(n)));
+        ok = false;
+      } else if (isIdentifier(n)) {
+        if (storeNames.has(n.text)) {
+          if (ok) diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `'${name}' reads the game state ('${n.text}'): read it in a component with a selector.`, span(n)));
+          ok = false;
+        }
+        reads.add(n.text);
+      }
+    });
+    if (ok) moduleDeclarations.push({ name, node, text: node.getText(sourceFile), reads: [...reads] });
+  };
   const defaultExports: { name: string; node: Node }[] = [];
   const span = (node: Node) => spanOf(node, sourceFile, fileName);
 
@@ -78,6 +100,10 @@ export function analyzeSourceFile(
       if (component) components.push(component);
       continue;
     }
+    if (isFunctionDeclaration(statement) && statement.name && (statement.modifierFlags & ModifierFlags.Default) === 0 && statement.body) {
+      moduleDeclaration(statement.name.text, statement);
+      continue;
+    }
     if (isFunctionDeclaration(statement) && (statement.modifierFlags & ModifierFlags.Default) !== 0) {
       diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, "A default-exported component needs a capitalised name: `export default function Enemy() {}`.", span(statement)));
       continue;
@@ -101,6 +127,19 @@ export function analyzeSourceFile(
         continue;
       }
     }
+    // `const COLORS = { … };`: a constant the components read, as a React file would hold one beside its components.
+    if (isVariableStatement(statement) && statement.declarationList.declarations.length === 1 && isIdentifier(statement.declarationList.declarations[0]!.name)) {
+      const declaration = statement.declarationList.declarations[0]!;
+      const name = (declaration.name as { text: string }).text;
+      if ((statement.declarationList.flags & NodeFlags.Const) === 0) {
+        diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `'${name}': a top-level value must be a \`const\` (state that changes belongs in \`useState\` or the game state).`, span(statement)));
+        continue;
+      }
+      if (declaration.initializer) {
+        moduleDeclaration(name, statement);
+        continue;
+      }
+    }
     // `export default Enemy;` makes an already-declared component the module's default export.
     if (isExportAssignment(statement) && !statement.isExportEquals) {
       const target = unwrapParens(statement.expression);
@@ -112,7 +151,7 @@ export function analyzeSourceFile(
     diagnostics.push(
       error(
         DiagnosticCode.UnsupportedSyntax,
-        "Only imports, `interface` / `type` declarations, components (`function Name() {}` or `const Name = () => {}`, capitalised) and `export default Name;` are supported at the top level.",
+        "Only imports, `interface` / `type` declarations, components (`function Name() {}` or `const Name = () => {}`, capitalised), constants (`const SPEED = 4;`), helper functions and `export default Name;` are supported at the top level.",
         span(statement),
       ),
     );
@@ -134,7 +173,7 @@ export function analyzeSourceFile(
   // From a relative .ts file come the game state (a name that looks like a hook, `useGame`) and plain functions, which components may call.
   const storeImports = relativeImports.filter((i) => HOOK_NAME.test(i.name));
   const plainImports = relativeImports.filter((i) => !HOOK_NAME.test(i.name));
-  return { fileName, sourceFile, components: resolved, imports, authoringImports, storeImports, plainImports, typeDeclarations, diagnostics };
+  return { fileName, sourceFile, components: resolved, imports, authoringImports, storeImports, plainImports, typeDeclarations, moduleDeclarations, diagnostics };
 }
 
 

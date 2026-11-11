@@ -33,6 +33,10 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "PropertyRead":
     case "MemberRead":
       return [e.object];
+    case "IndexRead":
+      return [e.object, e.index];
+    case "NonNull":
+      return [e.expression];
     case "ArrayLiteral":
       return e.elements.map((el) => el.value);
     case "ObjectLiteral":

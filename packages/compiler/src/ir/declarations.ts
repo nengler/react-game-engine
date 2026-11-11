@@ -21,6 +21,21 @@ export interface IRModule {
   readonly components: readonly ComponentIR[];
   /** Functions imported from relative `.ts` files that components call or pass: the generator imports them from where they are. */
   readonly plainImports: readonly PlainImportIR[];
+  /**
+   * Top-level constants and helper functions of the component file (`const COLORS = { … }`, `function frameOf(kind) { … }`),
+   * copied into the generated module as written, before the components, which read them as they read a plain import.
+   */
+  readonly moduleDeclarations: readonly ModuleDeclarationIR[];
+}
+
+/** `const ICON = { gold: 3 } as const;` or `function towerFrame(kind: TowerKind, level: number) { … }` at the top of a component file. */
+export interface ModuleDeclarationIR {
+  readonly kind: "ModuleDeclaration";
+  readonly name: string;
+  /** The declaration's source text, as written. */
+  readonly text: string;
+  /** Every name its text mentions, so the generator imports what it reads (a function from a `.ts` file, a runtime function). */
+  readonly reads: readonly string[];
 }
 
 /** `import { crossfade } from "./transitions.ts"`. */

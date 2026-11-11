@@ -1,10 +1,10 @@
 // Layer 1 of ComponentLowering: lowers TypeScript expressions into ExprIR (reads, calls, array methods, handles).
 import { SyntaxKind, type Node, type ObjectLiteralExpression, type CallExpression, type Expression, type PropertyAccessExpression } from "typescript/ast";
-import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock } from "typescript/ast/is";
+import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock, isElementAccessExpression, isNonNullExpression } from "typescript/ast/is";
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import { assertNever, ARRAY_METHODS, MUTATING_ARRAY_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
-import { MATH_FUNCTIONS } from "./handles.ts";
+import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
 import { lowerFunction } from "./statements.ts";
 import { BINARY_OPERATORS, UNARY_OPERATORS } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
@@ -100,6 +100,16 @@ export class ExpressionLowering extends LoweringBase {
       return { kind: "TemplateLiteral", quasis, expressions };
     }
     if (isPropertyAccessExpression(node)) return this.lowerPropertyRead(node);
+    if (isNonNullExpression(node)) {
+      const expression = this.lowerNode(node.expression);
+      return expression && { kind: "NonNull", expression };
+    }
+    if (isElementAccessExpression(node)) {
+      // `TABLE[kind]`, `pads[cursor]`: any index; the type-check of the generated code checks the element's type.
+      const object = this.lowerNode(node.expression);
+      const index = this.lowerNode(node.argumentExpression);
+      return object && index && { kind: "IndexRead", object, index, optional: node.questionDotToken !== undefined };
+    }
     if (isCallExpression(node)) return this.lowerCall(node);
     if (isArrayLiteralExpression(node)) {
       const elements: ArrayElementIR[] = [];
@@ -181,6 +191,10 @@ export class ExpressionLowering extends LoweringBase {
       root = unwrapParens(root.expression);
     }
     if (isIdentifier(root) && this.scope.get(root.text)?.kind === "storeRoot") return this.lowerStoreRead(storePath, node);
+    // `Math.PI`: a constant, written as it is.
+    if (isIdentifier(node.expression) && node.expression.text === "Math" && !this.scope.has("Math") && MATH_CONSTANTS.has(`Math.${node.name.text}`)) {
+      return { kind: "PlainRef", name: `Math.${node.name.text}` };
+    }
     const propsObject = this.propsObjectMember(node);
     if (propsObject !== undefined) {
       if (propsObject === null) return null;

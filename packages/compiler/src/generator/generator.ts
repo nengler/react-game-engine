@@ -39,6 +39,13 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
 
   const usage = { store: false, plain: new Set<string>() };
   const imports = collectImports(module, options.runtimeFunctions, usage, options.intrinsicHooks);
+  // What the file's own constants and helpers read: a function from a `.ts` file, a runtime function.
+  for (const declaration of module.moduleDeclarations) {
+    for (const name of declaration.reads) {
+      if (module.plainImports.some((i) => i.name === name)) usage.plain.add(name);
+      if (options.runtimeFunctions.has(name) && !imports.includes(name)) imports.push(name);
+    }
+  }
   if (imports.length > 0) {
     w.line(`import { ${imports.join(", ")} } from ${JSON.stringify(options.runtimeModule)};`);
   }
@@ -59,6 +66,10 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
   for (const declaration of module.typeDeclarations) {
     w.blank();
     w.line(`export ${declaration.text}`);
+  }
+  for (const declaration of module.moduleDeclarations) {
+    w.blank();
+    for (const line of declaration.text.split("\n")) w.line(line);
   }
   for (const component of module.components) {
     w.blank();

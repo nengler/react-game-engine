@@ -543,7 +543,8 @@ export function Level() {
     assert.deepEqual(codes(`const Dot = () => 5;`), [DiagnosticCode.InvalidComponentBody]);
     assert.deepEqual(codes(`export default Missing;`), [DiagnosticCode.UnsupportedSyntax]);
     assert.deepEqual(codes(`function A() { return <Entity />; } function B() { return <Entity />; } export default A; export default B;`), [DiagnosticCode.UnsupportedSyntax]);
-    assert.deepEqual(codes(`const x = 5;`), [DiagnosticCode.UnsupportedSyntax]);
+    assert.deepEqual(codes(`let x = 5;`), [DiagnosticCode.UnsupportedSyntax]);
+    assert.deepEqual(codes(`const x = <Entity />;`), [DiagnosticCode.UnsupportedSyntax]);
   });
 
   function codes(source: string): string[] {

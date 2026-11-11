@@ -23,6 +23,8 @@ export interface SourceAnalysis {
   readonly plainImports: readonly ImportAnalysis[];
   /** Top-level `interface` / `type` declarations, which a component's props type names. */
   readonly typeDeclarations: readonly TypeDeclarationAnalysis[];
+  /** Top-level constants and lower-case helper functions, which components read like plain imports. */
+  readonly moduleDeclarations: readonly ModuleDeclarationAnalysis[];
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
@@ -49,6 +51,16 @@ export interface TypeDeclarationAnalysis {
   readonly node: InterfaceDeclaration | TypeAliasDeclaration;
   /** The declaration as written, without `export`. */
   readonly text: string;
+}
+
+/** `const COLORS = { text: "#fff" };` or `function frameOf(kind: Kind): number { … }` at the top of a component file. */
+export interface ModuleDeclarationAnalysis {
+  readonly name: string;
+  readonly node: Node;
+  /** The declaration as written. */
+  readonly text: string;
+  /** Every identifier its text mentions. */
+  readonly reads: readonly string[];
 }
 
 /** A component's destructured props parameter: `function Enemy({ speed = 1, onDefeated }: EnemyProps)`. */

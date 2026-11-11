@@ -115,6 +115,7 @@ describe("IR construction", () => {
       sourceFile: "Player.tsx",
       typeDeclarations: [],
       plainImports: [],
+      moduleDeclarations: [],
       components: [
         {
           kind: "Component",
@@ -308,7 +309,7 @@ describe("diagnostics", () => {
     ["static self-reference", DiagnosticCode.ComponentCycle, `function A() { return <Entity><A /></Entity>; }`],
     ["non-literal state type", DiagnosticCode.UnsupportedStateType, `function A() { const [a, setA] = useState(null); return <Entity />; }`],
     ["state shadows runtime member", DiagnosticCode.InvalidUseState, `function A() { const [name, setName] = useState("x"); return <Entity />; }`],
-    ["non-component top level code", DiagnosticCode.UnsupportedSyntax, `const speed = 4; function A() { return <Entity />; }`],
+    ["non-component top level code", DiagnosticCode.UnsupportedSyntax, `let speed = 4; function A() { return <Entity />; }`],
   ];
   for (const [name, code, source] of cases) {
     it(`reports: ${name}`, () => {
