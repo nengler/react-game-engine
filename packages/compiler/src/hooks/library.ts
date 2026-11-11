@@ -35,7 +35,21 @@ export function useShake() {
   });
   return [shake, setShake];
 }
+
+/**
+ * Seconds since the component mounted, growing with each update (each fixed step, under a fixed timestep): for something
+ * that moves or blinks with time.
+ *   const time = useTime();
+ *   <Label color={time % 1 < 0.66 ? "white" : "black"} />
+ */
+export function useTime() {
+  const [time, setTime] = useState(0);
+  useUpdate((dt) => {
+    setTime((t) => t + dt);
+  });
+  return time;
+}
 `;
 
 /** The names of the library's hooks. */
-export const LIBRARY_HOOKS: readonly string[] = ["useSquash", "useShake"];
+export const LIBRARY_HOOKS: readonly string[] = ["useSquash", "useShake", "useTime"];

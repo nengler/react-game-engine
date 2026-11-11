@@ -121,6 +121,22 @@ export class World {
     return true;
   }
 
+  #hovered: Pressable | null = null;
+
+  /**
+   * The topmost pressable under the mouse this frame (null for none, or for a mouse off the screen): when it is not the one
+   * before, the one before hears `onPointerLeave` (if it is still in this world) and the new one `onPointerEnter`, as the DOM's
+   * `pointerenter` / `pointerleave`. One in an inert subtree counts as none. Dispatch only: renders happen in the next `tick`.
+   */
+  reportHover(pointer: Pressable | null): void {
+    if (pointer !== null && (pointer.world !== this || (this.#hasInert() && this.isInert(pointer as unknown as GameObject)))) pointer = null;
+    if (pointer === this.#hovered) return;
+    const previous = this.#hovered;
+    this.#hovered = pointer;
+    if (previous !== null && previous.world === this) previous.onPointerLeave?.();
+    pointer?.onPointerEnter?.();
+  }
+
   /**
    * Make a subtree inert, or not, as the HTML attribute does: it still updates, draws and collides, but hears no input (its
    * `useInput` and `useUpdate` get no keys pressed) and none of its pointers can be pressed. A router makes the screen it is

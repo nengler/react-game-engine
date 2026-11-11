@@ -8,6 +8,10 @@ import type { World } from "../World.ts";
 export interface Pressable {
   readonly world: World | null;
   onPress: (() => void) | undefined;
+  /** The mouse came over it: it is now the topmost pressable under the mouse (see `World.reportHover`). */
+  onPointerEnter?: (() => void) | undefined;
+  /** The mouse left it, or something else came over it. */
+  onPointerLeave?: (() => void) | undefined;
   /** Whether the world-space point (the HUD's, for one inside a `<Hud>`) is on it as it is drawn. */
   contains(x: number, y: number): boolean;
 }
@@ -17,6 +21,10 @@ export interface PointerProps {
   height: number;
   /** Called when a press lands inside the area (see `World.reportPress`). */
   onPress?: () => void;
+  /** Called when the mouse comes over the area (it is the topmost pressable under the mouse), as the DOM's `pointerenter`. */
+  onPointerEnter?: () => void;
+  /** Called when the mouse leaves the area, or something drawn over it takes the mouse. */
+  onPointerLeave?: () => void;
 }
 
 /**
@@ -30,6 +38,8 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
   width: number;
   height: number;
   onPress: (() => void) | undefined;
+  onPointerEnter: (() => void) | undefined;
+  onPointerLeave: (() => void) | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: PointerProps, props?: P, defaults?: Partial<P>) {
@@ -37,6 +47,8 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
     this.width = hostProps.width;
     this.height = hostProps.height;
     this.onPress = hostProps.onPress;
+    this.onPointerEnter = hostProps.onPointerEnter;
+    this.onPointerLeave = hostProps.onPointerLeave;
   }
 
   /**

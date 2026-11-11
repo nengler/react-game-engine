@@ -357,6 +357,11 @@ export class DrawList {
   }
 }
 
+/** A `<Flex>` takes the mouse when it has a press or a hover callback. */
+function hoverable(flex: Flex): boolean {
+  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined;
+}
+
 export interface FrameBuilderOptions {
   /** Load a texture through the backend: a handle, or -1 if it could not be loaded. */
   loadTexture(path: string): number;
@@ -366,6 +371,8 @@ export interface FrameBuilderOptions {
   textureSize?: (handle: number) => Size;
   /** Folder that image names are relative to. Default `"assets"`. */
   assets?: string;
+  /** The bitmap font of a `<Text>` without its own (`<Game font>`). Default none: the built-in font. */
+  font?: string;
   /** Where warnings go. Default `console.warn`. */
   warn?: (message: string) => void;
   /**
@@ -628,6 +635,9 @@ export class FrameBuilder {
     return this.#moved;
   }
 
+  /** The bitmap font of a `<Text>` without its own: the root `<Game>`'s `font`, set again on a reload. */
+  font: string | undefined;
+
   constructor(options: FrameBuilderOptions) {
     this.#options = options;
     this.#retain = options.retain !== false;
@@ -635,6 +645,7 @@ export class FrameBuilder {
     this.#measureText = options.measureText;
     this.#textureSize = options.textureSize;
     this.#assets = options.assets ?? "assets";
+    this.font = options.font;
     this.#warner = new Warner(options.warn);
     this.#layouter = new Layouter({
       measure: (object, out) => this.#measureInto(object, out),
@@ -839,7 +850,7 @@ export class FrameBuilder {
         case KIND_FLEX: {
           if (drawZ !== listZ && (node as Flex).background !== undefined) list.setZ((listZ = drawZ));
           const placed = this.#flex(node as Flex, at, gameWidth, gameHeight);
-          if ((node as Flex).onPress !== undefined) {
+          if (hoverable(node as Flex)) {
             pointers.push(node as Flex);
             pointerZs.push(drawZ);
           }
@@ -1124,7 +1135,7 @@ export class FrameBuilder {
                 case KIND_FLEX: {
                   if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
                   const placed = this.#flex(object as Flex, world, gameWidth, gameHeight);
-                  if ((object as Flex).onPress !== undefined) {
+                  if (hoverable(object as Flex)) {
                     hudPointers.push(object as Flex);
                     hudPointerZs.push(z);
                   }
@@ -1223,7 +1234,8 @@ export class FrameBuilder {
         out.height = object.size;
         return true;
       }
-      size = object.font === undefined ? this.#textSize(object.text, object.size) : this.#bitmapSize(object.font, object.text, object.size);
+      const font = object.font ?? this.font;
+      size = font === undefined ? this.#textSize(object.text, object.size) : this.#bitmapSize(font, object.text, object.size);
       if (object.width !== undefined) {
         out.width = object.width;
         out.height = size.height;
@@ -1322,7 +1334,7 @@ export class FrameBuilder {
 
   /** Text drawn from a bitmap font: one region of the font sheet for each character, in the text's colour. */
   #bitmapText(text: Text, at: WorldTransform): void {
-    const font = text.font as string;
+    const font = (text.font ?? this.font) as string;
     const handle = this.#texture(font);
     const sheet = this.#imageSize(font);
     if (handle < 0 || sheet.width === 0 || sheet.height === 0) {
@@ -1352,7 +1364,7 @@ export class FrameBuilder {
   }
 
   #text(text: Text, world: WorldTransform): void {
-    if (text.font !== undefined) {
+    if ((text.font ?? this.font) !== undefined) {
       this.#bitmapText(text, world);
       return;
     }

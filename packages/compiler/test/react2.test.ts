@@ -5,8 +5,8 @@
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Flex, Shape, Sprite, Text, World } from "@rge/runtime";
-import { DiagnosticCode } from "../src/index.ts";
+import { Entity, Flex, Pointer, Shape, Sprite, Text, World } from "@rge/runtime";
+import { checkAssets, DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, compileProject, load, loadProject, typeCheck, typeCheckProject } from "./helpers.ts";
 
 after(() => {
@@ -166,5 +166,66 @@ export function Plain(props: ButtonProps) {
     button.onPress!();
     plain.onPress!();
     assert.equal(presses, 11);
+  });
+});
+
+describe("the three smaller gaps: useTime, hover and <Game font>", () => {
+  it("useTime gives the seconds since mount, growing each update", async () => {
+    const compiled = compile(`
+export function Blink() {
+  const time = useTime();
+  return <Text size={8} color={time % 1 < 0.5 ? "white" : "black"}>{\`\${Math.floor(time)}\`}</Text>;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Blink } = await load<{ Blink: new () => Text }>(compiled);
+    const world = new World();
+    const blink = new Blink();
+    world.mount(blink);
+    world.flush();
+    assert.equal(blink.color, "white");
+    for (let i = 0; i < 4; i++) world.tick(0.2);
+    world.flush();
+    assert.equal(blink.color, "black");
+    for (let i = 0; i < 2; i++) world.tick(0.2);
+    world.flush();
+    assert.equal(blink.text, "1");
+  });
+
+  it("hover callbacks are built-in callback props of <Pointer> and <Flex>, and may be passed whole", async () => {
+    const compiled = compile(`
+interface TipProps { onPointerEnter: () => void; }
+export function Tip({ onPointerEnter }: TipProps) {
+  const [over, setOver] = useState(false);
+  return (
+    <Entity>
+      <Pointer width={4} height={4} onPointerEnter={() => setOver(true)} onPointerLeave={() => setOver(false)} />
+      <Flex onPointerEnter={onPointerEnter} />
+      {over && <Text size={8}>tip</Text>}
+    </Entity>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    let entered = 0;
+    const { Tip } = await load<{ Tip: new (p: { onPointerEnter: () => void }) => Entity }>(compiled);
+    const world = new World();
+    const tip = new Tip({ onPointerEnter: () => entered++ });
+    world.mount(tip);
+    world.flush();
+    const [pointer, flex] = tip.children as [Pointer, Flex];
+    world.reportHover(pointer);
+    world.flush();
+    assert.equal(tip.children.length, 3, "the tip shows while the mouse is over the pointer");
+    world.reportHover(flex);
+    world.flush();
+    assert.equal(tip.children.length, 2);
+    assert.equal(entered, 1);
+  });
+
+  it("<Game font> is a literal setting, checked against the assets folder", () => {
+    const compiled = compile(`export function Main() { return <Game font="font.png"><Text size={8}>hi</Text></Game>; }`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const found = checkAssets([compiled.ir], { folder: "assets", exists: (name) => name === "fonts.png", list: () => ["fonts.png"] });
+    assert.deepEqual(found.map((d) => d.code), [DiagnosticCode.MissingAsset]);
+    assert.match(found[0]!.message, /font 'font.png'.*did you mean 'fonts.png'/);
   });
 });

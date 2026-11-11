@@ -68,6 +68,10 @@ export interface FlexProps {
   background?: string;
   /** Called when a press lands on the laid-out box (see `World.reportPress`). The box is the size it was laid out at, last frame. */
   onPress?: () => void;
+  /** Called when the mouse comes over the box (it is the topmost pressable under the mouse). */
+  onPointerEnter?: () => void;
+  /** Called when the mouse leaves the box, or something drawn over it takes the mouse. */
+  onPointerLeave?: () => void;
 }
 
 /**
@@ -151,6 +155,8 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   offsetX: number;
   offsetY: number;
   onPress: (() => void) | undefined;
+  onPointerEnter: (() => void) | undefined;
+  onPointerLeave: (() => void) | undefined;
   /** Layout's working numbers (see `FlexBox`); `box.size` is the size the box was laid out at, last frame. */
   readonly box = new FlexBox();
 
@@ -181,6 +187,8 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.offsetX = hostProps.offsetX ?? 0;
     this.offsetY = hostProps.offsetY ?? 0;
     this.onPress = hostProps.onPress;
+    this.onPointerEnter = hostProps.onPointerEnter;
+    this.onPointerLeave = hostProps.onPointerLeave;
   }
 
   /**
