@@ -30,9 +30,10 @@ Decided 2026-11-10. Once priority 5 lands, every ranked item above is done or de
 | --- | --- | --- | --- |
 | 6 | Play it on a real machine (the rest of priority 1) | Window feel, keys, the HUD, scaling and sound have never been tried by a person; sound has never been heard | \~1 day |
 | 7 | A real game: the first level of a precision platformer, and the engine features it needs | The demo is too small to find what is missing; the "Not now" table is waiting for a game to ask | \~4–6 weeks |
+| 7b | A second, small game in a different genre: a tower defense ([TOWER_DEFENSE_PLAN.md](TOWER_DEFENSE_PLAN.md)) | Kite hit no Tier 3 item and never measured finding 9; a game of lists, menus and many sprites tests both, so priority 8 describes a shape that has worked twice | \~3–4 weeks |
 | 8 | Usable outside this repository | A game only builds as a workspace in this monorepo, and the docs are design notes, not a guide; this prepares for open-sourcing | \~1–2 weeks |
 
-**Order.** 6 can start now, alongside priority 5. 7 can start now too: a new game package mostly adds code, so it does not clash with the developer-loop work in the player, host and compiler, and the game is the first real user of hot reload and in-window errors. 8 waits until 5 settles, because it packages that loop, and until 7 has shown what a game's project layout looks like.
+**Order.** 6 can start now, alongside priority 5. 7 can start now too: a new game package mostly adds code, so it does not clash with the developer-loop work in the player, host and compiler, and the game is the first real user of hot reload and in-window errors. 8 waits until 5 settles, because it packages that loop, and until 7 and 7b have shown what a game's project layout looks like.
 
 ### 6. Play it on a real machine
 
@@ -147,6 +148,14 @@ What writing a real game found, beyond the planned additions. Each says what the
     - *Key lists in three places.* `createControls` and `<Game controls>`: `input.pressed("confirm")` anywhere.
     - *Smaller.* A fragment may be a condition's branch (`{!taken && <>…</>}`); the gem owns its collision; screens write with a `<Label>`; animations are a table; the title blinks from time in `useUpdate`; the game loop (`step`) is called by the `Play` screen, not a hook in the character.
     *Still open:* asset names in a `.ts` file (`createSounds`) are not checked at build time; a selected object is trusted not to be changed in place.
+
+### 7b. A second game: a small tower defense
+
+Planned 2026-11-11; the plan is [TOWER_DEFENSE_PLAN.md](TOWER_DEFENSE_PLAN.md). One map, three towers, three enemies and ten
+waves, written the React way, so its lists, menus and panels hit the Tier 3 items (spread props, conditionals inside
+`.map`, children on list items, forwarding `{children}`, context) for real reasons, and its last waves measure finding 9
+(many animated sprites). Each Tier 3 item is built when the game hits it, or recorded as not needed. It comes before
+priority 8.
 
 ### 8. Usable outside this repository
 
@@ -320,6 +329,6 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 | macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
 | One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
-| Context (`createContext` / `useContext`) | Props cover today's trees; it is Tier 3 in priority 7 | Deep trees passing the same prop down many levels, in the platformer or later |
-| Spread props, conditionals inside a list's `.map`, forwarding `{children}`, children on list items | Each is rejected today with a clear diagnostic; Tier 3 in priority 7 | An author hitting one of those diagnostics while writing the platformer |
+| Context (`createContext` / `useContext`) | Props cover today's trees; it is Tier 3 in priority 7 | Deep trees passing the same prop down many levels: planned in priority 7b (one value per tower) |
+| Spread props, conditionals inside a list's `.map`, forwarding `{children}`, children on list items | Each is rejected today with a clear diagnostic; Tier 3 in priority 7 | An author hitting one of those diagnostics: the platformer did not (finding 15); priority 7b is expected to |
 | Tiled importer gaps (whole-number `int` checks, template properties, external and multiple tilesets, base64 layers) | `visible` and tile flip flags are done (priority 7); the rest each say so when met | A map that uses them, or the first map saved by Tiled itself (finding 8) |
