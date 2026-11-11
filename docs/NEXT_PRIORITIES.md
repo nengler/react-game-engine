@@ -415,7 +415,7 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| Web backend (canvas) | Phase 4 is local first (decided 2026-11-10); records map directly onto canvas calls, so it stays cheap to add later | Wanting a shareable browser build, after priority 8 |
+| Web backend (canvas) | Phase 4 is local first (decided 2026-11-10); records map directly onto canvas calls, so it stays cheap to add later. Storage (priority 8) is in librge only; a web build would add a `localStorage` one behind the player's `Storage` interface | Wanting a shareable browser build, after priority 8 |
 | High DPI | Slots into the ABI without rework; gamepads and a fixed timestep were built in priority 7 | A blurry Retina window |
 | macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
 | One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |

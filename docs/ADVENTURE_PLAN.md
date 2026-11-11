@@ -130,9 +130,11 @@ The shape both games settled on stays the same:
 
 ### Engine: saving
 
-- **Storage in both hosts**, not in librge: Node writes with `fs`, the Rust host exposes the same few calls to the script. A
-  small JavaScript interface, the same under both: read, write and remove a named entry, written whole, atomically (a temporary
-  file, then rename). The folder is the platform's user data folder (`$XDG_DATA_HOME/<game>` on Linux), named by `<Game id>`.
+- **Storage in librge, written once** (decided 2026-11-11): `rge_storage_read`, `rge_storage_write` and `rge_storage_remove`
+  for a named entry, written whole and atomically (a temporary file, then rename), in the platform's user data folder
+  (`$XDG_DATA_HOME/<game>` on Linux), named by `<Game id>`. Both hosts already reach librge (koffi under Node, linked into the
+  Rust host), so neither host writes its own. The player wraps it in a small `Storage` interface (read, write, remove, exists),
+  which is the seam a web backend would fill with `localStorage` if a web build is ever decided on.
 - **`createSave({ version, pick, apply, migrate })`**, an effect-store-style module like `createSounds`: `save.write(slot)`,
   `save.read(slot)`, `save.exists(slot)`. What is saved is JSON; a save from an older version is passed through `migrate`.
 - **A memory store** for tests and the recording backend, so the harness can save, load and compare without a disk, and a
@@ -180,7 +182,7 @@ on the busiest part of the overworld.
    on a map written as text in a tool, the character as a `<Shape>`. A person plays it here if they can.
 2. **The large world:** the camera's follow, the tilemap's chunks and culling, map changes without a hitch; the overworld at full
    size.
-3. **Saving and settings:** storage in both hosts, `createSave`, the memory store, rebinding, volume groups, the settings screen.
+3. **Saving and settings:** storage in librge (ABI bump), `createSave`, the memory store, rebinding, volume groups, the settings screen.
 4. **Dialogue and inventory:** wrapped and revealed text, the dialogue box, the inventory grid; Tier 3 items as they are hit.
 5. **Enemies:** `findPath`, the two enemies, damage and knockback.
 6. **Tiled:** a person draws or re-saves the overworld in Tiled; the importer is fixed for it; object layers replace the tool's
@@ -188,8 +190,8 @@ on the busiest part of the overworld.
 7. **Art, sound and music**; replays from title to end and through a save; frame time on the busiest view.
 8. **The guide**: the getting-started page checked by following it in an empty folder; reference entries.
 
-Engine and game changes go in separate commits, as before. Native changes, if any are needed (none are planned: storage is in
-the hosts), are batched so `RGE_ABI_VERSION` moves once.
+Engine and game changes go in separate commits, as before. Native changes are batched so `RGE_ABI_VERSION` moves once: storage
+is the one planned (step 3), and anything else native that the game asks for goes in the same batch if it can.
 
 ## Done when
 
@@ -212,10 +214,10 @@ the hosts), are batched so `RGE_ABI_VERSION` moves once.
 
 ## Open decisions
 
-1. **Where storage lives.** Proposed: in the hosts (Node `fs`, Rust `std::fs`), not librge, because librge has no files beyond
-   loading assets and the web backend later would use `localStorage` instead. The cost is writing it twice.
-2. **Whether the game is in this repository.** Proposed: yes, in `games/bramble` outside the workspaces, checked from a copy in a
-   temporary folder. The alternative, a separate repository, tests "outside" more honestly but splits CI and review.
+1. ~~**Where storage lives.**~~ Decided 2026-11-11: **one implementation, in librge**, shared by both hosts, until a web build is
+   decided on. The player's `Storage` interface is where a second one (`localStorage`) would go then.
+2. ~~**Whether the game is in this repository.**~~ Decided 2026-11-11: **yes**, in `games/bramble` outside the workspaces, checked
+   from a copy in a temporary folder.
 3. **Combat at all.** Proposed: the one swing and two enemies above, because enemies are what tests pathfinding and actors
    blocking each other. Dropping it keeps the game smaller and leaves `findPath` unasked for.
 4. **Package names and a scope** for the packed packages (`@rge/…` today). Only matters once anything is published; decide with
