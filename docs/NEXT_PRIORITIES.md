@@ -16,7 +16,7 @@ Phase 3 is done: a compiled game runs in a native window under Node and as a Qui
 
 Sizes are rough, for one engineer, in the style of the Phase 3 plan. Each priority below ends with a checklist that says when it is done.
 
-**What comes after these** is Phase 4, decided 2026-11-10: play the engine on a real machine, build a real small game and let it drive the backlog, then make it usable outside this repository. See "Phase 4: driven by a real game" below.
+**What comes after these** is Phase 4, decided 2026-11-10: play the engine on a real machine, build a real small game and let it drive the backlog, then make it usable outside this repository by making a third game outside it (decided 2026-11-11; [ADVENTURE_PLAN.md](ADVENTURE_PLAN.md)). See "Phase 4: driven by a real game" below.
 
 ## Phase 4: driven by a real game
 
@@ -31,9 +31,9 @@ Decided 2026-11-10. Once priority 5 lands, every ranked item above is done or de
 | 6 | Play it on a real machine (the rest of priority 1) | Window feel, keys, the HUD, scaling and sound have never been tried by a person; sound has never been heard | \~1 day |
 | 7 | A real game: the first level of a precision platformer, and the engine features it needs | The demo is too small to find what is missing; the "Not now" table is waiting for a game to ask | \~4–6 weeks |
 | 7b | A second, small game in a different genre: a tower defense ([TOWER_DEFENSE_PLAN.md](TOWER_DEFENSE_PLAN.md)) (**built**, `packages/hearth`; four of five Tier 3 items built, see below) | Kite hit no Tier 3 item and never measured finding 9; a game of lists, menus and many sprites tests both, so priority 8 describes a shape that has worked twice | \~3–4 weeks |
-| 8 | Usable outside this repository | A game only builds as a workspace in this monorepo, and the docs are design notes, not a guide; this prepares for open-sourcing | \~1–2 weeks |
+| 8 | Usable outside this repository, tested by a third game made outside it: a small top-down adventure ([ADVENTURE_PLAN.md](ADVENTURE_PLAN.md)) | A game only builds as a workspace in this monorepo, and the docs are design notes, not a guide; and both games so far are one screen, a few minutes long and keep nothing, so a large world, saves, maps saved by Tiled, deeper UI, enemies that path, and rebinding are all untested | \~4–6 weeks |
 
-**Order.** 6 can start now, alongside priority 5. 7 can start now too: a new game package mostly adds code, so it does not clash with the developer-loop work in the player, host and compiler, and the game is the first real user of hot reload and in-window errors. 8 waits until 5 settles, because it packages that loop, and until 7 and 7b have shown what a game's project layout looks like.
+**Order.** 6 can start now, alongside priority 5, and is still the cheapest way to learn something before priority 8: Hearth has never been played in a window. 7 can start now too: a new game package mostly adds code, so it does not clash with the developer-loop work in the player, host and compiler, and the game is the first real user of hot reload and in-window errors. 8 waits until 5 settles, because it packages that loop, and until 7 and 7b have shown what a game's project layout looks like.
 
 ### 6. Play it on a real machine
 
@@ -239,11 +239,13 @@ character was one big component that stepped itself; Hearth steps from `Play` th
 **Balance, a note for whoever tunes it:** with the plan's first numbers eighteen bolt towers lost no lives at all. The table now has HP growing 20 % a wave and half the gold; see
 `packages/hearth/DESIGN.md`. No person has played it, so these are a first pass set by a tool.
 
-### 8. Usable outside this repository
+### 8. Usable outside this repository, and a third game made outside it
 
 Today a game is a workspace in this monorepo, compiled by a path into `packages/compiler/src/cli.ts`, and the docs explain the design rather than how to use it. This is the groundwork for open-sourcing, kept local: nothing is published to a registry yet.
 
-**Work**
+**Decided 2026-11-11: done together with a third game.** Kite and Hearth have shown what a game's project layout looks like, which is what this priority was waiting for. The work is tested by making a game from the template, outside the workspaces, through the guide, and the game is chosen for what neither earlier game touched: a world larger than the screen, saving and loading, maps saved by Tiled itself, dialogue and an inventory, enemies that path to the player, and settings with rebinding. The plan is [ADVENTURE_PLAN.md](ADVENTURE_PLAN.md) (working title Bramble). Performance work waits for a measured problem: under the default V8 build both games use about 1 ms a step; only Hearth's wave 10 under QuickJS (p99 15 ms) is near the line, and QuickJS is the fallback.
+
+**Work** (the game's own engine work is in the plan)
 
 - One command line for a game wherever it lives: compile, play (with hot reload), and package.
 - A game template (or a `create` command) that makes a new game folder outside the repo and works with packed local packages (`npm pack` or a path dependency).
@@ -256,6 +258,7 @@ Today a game is a workspace in this monorepo, compiled by a path into `packages/
 - [ ] The guide takes a new reader from nothing to a packaged game, checked by following it from scratch
 - [ ] Every built-in and hook has a reference entry with an example
 - [ ] A license is chosen
+- [ ] Everything in [ADVENTURE_PLAN.md](ADVENTURE_PLAN.md)'s "Done when"
 
 ## 1. Verify on real hardware, and cache CI builds
 
@@ -417,7 +420,7 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 | macOS and Windows builds and CI | Linux is the only supported platform; extra CI jobs are a lot of upkeep for no player yet | Someone wanting to play on either, at which point the unverified link lists in `host/build.rs` get tried and fixed |
 | One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
-| Context (`createContext` / `useContext`) | Props covered Hearth's trees (one level of nesting under each tower), so priority 7b did not need it (second-game finding 5) | A tree three or more levels deep passing the same props through |
-| Children on list items that are conditional, lists, or nested | Built flat only (second-game finding 4): `RGE1209` for the rest | An author needing `{ok && <Icon/>}` inside a list item's children |
+| Context (`createContext` / `useContext`) | Props covered Hearth's trees (one level of nesting under each tower), so priority 7b did not need it (second-game finding 5) | A tree three or more levels deep passing the same props through; the third game's settings screen may be it (priority 8) |
+| Children on list items that are conditional, lists, or nested | Built flat only (second-game finding 4): `RGE1209` for the rest | An author needing `{ok && <Icon/>}` inside a list item's children; the third game's inventory slots are expected to (priority 8) |
 | Forwarding `{children}` beside other passed children, spread onto a built-in | Built: only a forwarded `{children}` that is the whole of what is passed (option A), and spread onto components only | A game writing `<Panel><Title/>{children}<Footer/></Panel>` (then a wrapper `<Flex>` first, order ranges second) or `<Shape {...p}/>` |
-| Tiled importer gaps (whole-number `int` checks, template properties, external and multiple tilesets, base64 layers) | `visible` and tile flip flags are done (priority 7); the rest each say so when met | A map that uses them, or the first map saved by Tiled itself (finding 8) |
+| Tiled importer gaps (whole-number `int` checks, template properties, external and multiple tilesets, base64 layers) | `visible` and tile flip flags are done (priority 7); the rest each say so when met | A map that uses them, or the first map saved by Tiled itself (finding 8); the third game's overworld is planned to be that map (priority 8) |

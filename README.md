@@ -10,7 +10,7 @@ This repository contains the **compiler** (Phase 2, M0–M15), the runtime, and 
 keyboard and mouse through raylib, under Node during development and as a small Rust +
 QuickJS-ng executable that ships without Node. **Start with the [authoring guide](docs/index.html)** (open it in a browser; five pages: start, language, systems, effects and input, reference). See [docs/DESIGN.md](docs/DESIGN.md) for the
 architecture, the IR, the ground rules and the design decisions, and
-[docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md) for the player's design, its ABI and its performance baseline. What comes next, including Phase 4 (a real game drives the backlog), is ranked in [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md).
+[docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md) for the player's design, its ABI and its performance baseline. What comes next, including Phase 4 (a real game drives the backlog), is ranked in [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md); the next piece of work, priority 8 with a third game, is planned in [docs/ADVENTURE_PLAN.md](docs/ADVENTURE_PLAN.md).
 
 ```tsx
 import { useState, Entity, Sprite, Collider } from "@rge/runtime/jsx";
