@@ -170,6 +170,7 @@ mark { background: var(--accent-soft); color: inherit; }
       props: [["name", "string", '""', "Shown as <code>other.owner</code> in collisions."]] },
     { name: "Game", kind: "container, root only", sum: "The game's root and configuration. Optional; each prop overrides a default only where written. Settings are literals.",
       props: [
+        ["id", "string", "none", "The game's id (letters, digits, <code>_</code>, <code>-</code>): the folder its save and settings are kept in. Without it nothing is kept. See <a href=\"effects.html#saved\">Saved data</a>."],
         ["title", "string", '"react-game-engine"', "Window title."],
         ["width", "number", "640", "Window width in pixels (resolution is <code>&lt;Screen&gt;</code>)."],
         ["height", "number", "360", "Window height in pixels."],
