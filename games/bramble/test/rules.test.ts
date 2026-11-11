@@ -230,3 +230,15 @@ test("input is plain data", () => {
   const input: Input = { dx: 0, dy: 0, action: false };
   assert.deepEqual(step(newRun(), input, DT).events, []);
 });
+
+test("a shrine saves when stepped onto, not every step the character stands on it", () => {
+  const shrine = MAPS.overworld.shrines[0]!;
+  const below = at("overworld", shrine.col, shrine.row + 1, [0, -1]);
+  const onto = walk(below, 0, -1, 0.3);
+  assert.equal(onto.events.filter((e) => e.type === "shrine").length, 1, "stepping onto the first shrine saves, even though it is already the last one touched");
+  const shuffle = walk(onto.run, 0, -1, 0.2);
+  assert.deepEqual(shuffle.events.filter((e) => e.type === "shrine"), [], "moving about on it does not save again");
+  const away = walk(shuffle.run, 0, 1, 0.6);
+  const back = walk(away.run, 0, -1, 0.6);
+  assert.equal(back.events.filter((e) => e.type === "shrine").length, 1, "stepping off and on does");
+});

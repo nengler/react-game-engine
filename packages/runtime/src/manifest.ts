@@ -195,7 +195,7 @@ export const runtimeManifest: RuntimeManifest = {
   transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer"],
   handleTypes: {
     InputState: {
-      methods: { pressed: 1, down: 1, released: 1 },
+      methods: { pressed: 1, down: 1, released: 1, lastPressed: 0 },
       properties: ["pointerX", "pointerY"],
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },

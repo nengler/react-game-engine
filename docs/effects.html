@@ -224,9 +224,10 @@ export const save = createSave({
 });
 save.write();  save.exists();  save.load();  save.remove();   // synchronous; call them from game-state actions
 
-export const settings = createSettings({
+interface Settings { music: number; effects: number; fullscreen: boolean; bindings: Record<string, string[]> | null }
+export const settings = createSettings<Settings>({     // name the type: from the defaults alone, `fullscreen: false` would be the type `false`
   name: "settings", controls,
-  defaults: { music: 0.6, effects: 0.8, fullscreen: false, bindings: null as Record<string, string[]> | null },
+  defaults: { music: 0.6, effects: 0.8, fullscreen: false, bindings: null },
 });
 settings.get();  settings.set({ music: 0.4 });  settings.reset();
 </script></pre>

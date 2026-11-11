@@ -275,6 +275,8 @@ recorded.
 
 ### M3. Saving and settings (engine; one native batch, ABI v7; \~1 week)
 
+*(Built 2026-11-11: 3.1 to 3.4 as written, with `createSettings` also applying `fullscreen` through a `StorageSink`; the one deviation is that `pick` takes no argument, because the runtime does not know the game's store. Bramble has Continue, a save at each shrine, and a settings screen with rebinding. Not done: a person has not tried a save across a real quit under both hosts; the Node and Rust hosts are tested against the real library separately.)*
+
 **3.1 Storage in librge.** New in `native/include/rge.h`:
 
 ```c

@@ -15,7 +15,7 @@ export interface InputState {
    * The first key or button that went down this step, by name (for "press a key for Jump"), or undefined when none did. The mouse
    * buttons and the gamepad's are keys too.
    */
-  lastPressed?(): KeyName | undefined;
+  lastPressed(): KeyName | undefined;
   /** Whether `name` is an action of the game's controls (asking about one that is not would be about a key of that name). */
   isAction?(name: string): boolean;
 }
@@ -70,7 +70,7 @@ export class Controls<Name extends string = string> {
   }
 
   /** Give an action these keys (at least one; each a `KeyName`). Returns false, changing nothing, for an unknown action or a bad key. */
-  bind(action: Name, keys: readonly string[]): boolean {
+  bind(action: string, keys: readonly string[]): boolean {
     if (!Object.hasOwn(this.bindings, action) || keys.length === 0 || !keys.every(isKeyName)) return false;
     this.bindings = { ...this.bindings, [action]: [...keys] as KeyName[] };
     return true;
@@ -95,7 +95,7 @@ export class Controls<Name extends string = string> {
     if (typeof data !== "object" || data === null) return 0;
     let count = 0;
     for (const [action, keys] of Object.entries(data as Record<string, unknown>)) {
-      if (Array.isArray(keys) && keys.every((k) => typeof k === "string") && this.bind(action as Name, keys as string[])) count++;
+      if (Array.isArray(keys) && keys.every((k) => typeof k === "string") && this.bind(action, keys as string[])) count++;
     }
     return count;
   }

@@ -34,6 +34,8 @@ export interface Run {
   /** The last shrine touched: where the character returns when the hearts run out. */
   readonly shrine: { readonly map: MapId; readonly col: number; readonly row: number };
   readonly talk: Talk | null;
+  /** The shrine the character is standing on, so that stepping onto one saves once and standing there does not save every step. */
+  readonly onShrine: string | null;
   /** A line shown for a moment (an item card, a locked door), and how long it has left. */
   readonly notice: string | null;
   readonly noticeLeft: number;
@@ -93,6 +95,7 @@ export function newRun(): Run {
     cut: [],
     shrine: START,
     talk: null,
+    onShrine: null,
     notice: null,
     noticeLeft: 0,
     time: 0,
@@ -211,9 +214,10 @@ function touch(run: Run, events: GameEvent[]): Run {
 
   let next = run;
   const shrine = def.shrines.find((s) => s.col === col && s.row === row);
-  if (shrine !== undefined && (run.shrine.map !== run.map || run.shrine.col !== col || run.shrine.row !== row || run.hearts < MAX_HEARTS)) {
+  if (shrine === undefined) next = { ...next, onShrine: null };
+  else if (run.onShrine !== shrine.id) {
     events.push({ type: "shrine", id: shrine.id });
-    next = withNotice({ ...next, shrine: { map: run.map, col, row }, hearts: MAX_HEARTS }, "The shrine hums. Your progress is kept.");
+    next = withNotice({ ...next, shrine: { map: run.map, col, row }, hearts: MAX_HEARTS, onShrine: shrine.id }, "The shrine hums. Your progress is kept.");
   }
 
   const pickup = def.pickups.find((p) => p.col === col && p.row === row && !run.taken.includes(p.id));
@@ -232,7 +236,7 @@ export function hurt(run: Run, amount: number): StepResult {
   const hearts = run.hearts - amount;
   if (hearts > 0) return { run: { ...run, hearts }, events: [{ type: "hurt", hearts }] };
   const at = bodyAt(run.shrine.col, run.shrine.row + 1);
-  return { run: { ...run, map: run.shrine.map, x: at.x, y: at.y, rx: 0, ry: 0, hearts: MAX_HEARTS, talk: null }, events: [{ type: "died" }] };
+  return { run: { ...run, map: run.shrine.map, x: at.x, y: at.y, rx: 0, ry: 0, hearts: MAX_HEARTS, talk: null, onShrine: null }, events: [{ type: "died" }] };
 }
 
 /** The action button: advance a conversation, start one, cut a bush, or swing. */
