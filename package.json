@@ -21,6 +21,7 @@
     "check:demo": "node tools/check-game.ts demo",
     "bundle": "node tools/bundle.ts",
     "bench:check": "node tools/bench-check.ts",
+    "pack": "node tools/pack.ts",
     "package": "node tools/package.ts",
     "host:build": "cargo build --release --manifest-path host/Cargo.toml",
     "host:build:headless": "cargo build --release --features headless --manifest-path host/Cargo.toml",

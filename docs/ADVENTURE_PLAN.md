@@ -123,7 +123,7 @@ first, because it is the biggest gap and changes the draw path that M6 builds on
 - `findNativeLibrary` (`packages/player-node/src/ffi.ts`) looks only in `native/build*` beside the repository root, and
   `tools/package.ts` builds librge with CMake and the Rust host with cargo from the repository. An outside game has neither.
 
-**0.1 Packs that build.** `npm run pack` (`tools/pack.ts`) writes `dist/packs/rge-<name>-<version>.tgz` for `runtime`, `compiler`,
+**0.1 Packs that build.** *(Started 2026-11-11: `tools/pack.ts` and `npm run pack` pack `runtime`, `compiler`, `player` and `player-node`, and `packages/player-node/test/packs.test.ts` installs them into an empty project and imports every entry point. Still to do: `native` and `cli` packs, and `dev.ts` finding the compiler without a `.ts` path.)* `npm run pack` (`tools/pack.ts`) writes `dist/packs/rge-<name>-<version>.tgz` for `runtime`, `compiler`,
 `player`, `player-node`, `native` and `cli`.
 
 - For each package it makes a staging copy: JavaScript from esbuild (one file per source file, ESM, no bundling, so the
