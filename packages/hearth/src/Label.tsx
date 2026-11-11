@@ -4,13 +4,12 @@ import { COLOR } from "./theme.ts";
 interface LabelProps {
   text: string;
   color?: string;
-  size?: number;
 }
 
-/** A line of text at the game's size and colour (the font is `<Game font>`'s): what every screen and the HUD write with. */
-export function Label({ text, color = COLOR.text, size = 8 }: LabelProps) {
+/** A line of text in the game's colour, at its font's own size (`<Game font>`): what every screen and the HUD write with. */
+export function Label({ text, color = COLOR.text }: LabelProps) {
   return (
-    <Text size={size} color={color}>
+    <Text color={color}>
       {text}
     </Text>
   );

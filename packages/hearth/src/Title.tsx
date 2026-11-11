@@ -1,27 +1,22 @@
-import { Flex, Hud, useInput, useTime } from "@rge/runtime/jsx";
+import { Flex, Hud, Text, useTime } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
+import { keyLabel } from "./rules/controls.ts";
 import { COLOR } from "./theme.ts";
 
-/** The title screen: the name, how to play, and a prompt that waits for a button or a click. */
+/** The title screen: the name, how to play, and a prompt that waits for the confirm key or a click (both press the screen). */
 export function Title() {
   const begin = useGame((s) => s.begin);
   const time = useTime();
 
-  useInput((input) => {
-    if (input.pressed("confirm") || input.pressed("wave")) {
-      begin();
-    }
-  });
-
   return (
     <Hud>
-      <Flex direction="column" alignItems="center" justifyContent="center" width="grow" height="grow" gap={10} onPress={begin}>
-        <Label text="HEARTH" size={40} color={COLOR.title} />
+      <Flex direction="column" alignItems="center" justifyContent="center" width="grow" height="grow" gap={10} pressKey="confirm" onPress={begin}>
+        <Text size={40} color={COLOR.title}>HEARTH</Text>
         <Label text="HOLD THE ROAD TEN WAVES" color={COLOR.dim} />
-        <Label text="CLICK A PAD TO BUILD  SPACE STARTS A WAVE" />
-        <Label text="ARROWS MOVE  Z BUYS  1 2 3 TOWERS" />
-        <Label text="PRESS Z OR CLICK TO START" color={time % 1 < 0.66 ? COLOR.prompt : COLOR.background} />
+        <Label text={`CLICK A PAD TO BUILD  ${keyLabel("wave")} STARTS A WAVE`} />
+        <Label text={`ARROWS MOVE  ${keyLabel("one")} ${keyLabel("two")} ${keyLabel("three")} TOWERS`} />
+        <Label text={`PRESS ${keyLabel("confirm")} OR CLICK TO START`} color={time % 1 < 0.66 ? COLOR.prompt : COLOR.background} />
       </Flex>
     </Hud>
   );

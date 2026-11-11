@@ -1,9 +1,9 @@
-import { createControls, type InputState } from "@rge/runtime";
-import { NO_INTENT, type Intent } from "./ui.ts";
+import { createControls } from "@rge/runtime";
 
 /**
  * The game's actions and the keys and gamepad buttons that do each: the one place to rebind. `Main.tsx` hands it to
- * `<Game controls={controls}>`, so anywhere in the game `input.pressed("confirm")` means any of the confirm keys.
+ * `<Game controls={controls}>`, so anywhere in the game `input.pressed("confirm")` means any of the confirm keys. Buttons take their
+ * action as `pressKey`; `left` `right` `up` `down` move the focus between the pads and `confirm` presses the focused one (the engine's).
  */
 export const controls = createControls({
   left: ["ArrowLeft", "PadLeft"],
@@ -22,19 +22,7 @@ export const controls = createControls({
   pause: ["Escape", "PadStart"],
 });
 
-/** What this step's input asks for. A direction is a press, not a hold: the cursor moves one pad each time. */
-export function readIntent(input: InputState): Intent {
-  return {
-    ...NO_INTENT,
-    dx: (input.pressed("right") ? 1 : 0) - (input.pressed("left") ? 1 : 0),
-    dy: (input.pressed("down") ? 1 : 0) - (input.pressed("up") ? 1 : 0),
-    confirm: input.pressed("confirm"),
-    back: input.pressed("back"),
-    buy: input.pressed("one") ? "bolt" : input.pressed("two") ? "mortar" : input.pressed("three") ? "frost" : null,
-    upgrade: input.pressed("upgrade"),
-    sell: input.pressed("sell"),
-    wave: input.pressed("wave"),
-    fast: input.pressed("fast"),
-    pause: input.pressed("pause"),
-  };
+/** What the screen calls an action's key, in the font's one case: `keyLabel("wave")` is `"SPACE"`. */
+export function keyLabel(action: string): string {
+  return controls.label(action).toUpperCase();
 }

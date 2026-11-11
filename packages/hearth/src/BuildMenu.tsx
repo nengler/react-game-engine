@@ -3,6 +3,7 @@ import { Icon } from "./Icon.tsx";
 import { Label } from "./Label.tsx";
 import { MenuButton } from "./MenuButton.tsx";
 import { Panel } from "./Panel.tsx";
+import { keyLabel } from "./rules/controls.ts";
 import { TOWER_LIST } from "./rules/towers.ts";
 import { COLOR, ICON } from "./theme.ts";
 
@@ -14,9 +15,9 @@ export function BuildMenu() {
   return (
     <Panel title="BUILD">
       {TOWER_LIST.map((d) => (
-        <MenuButton key={d.kind} enabled={gold >= d.cost} onPress={() => build(d.kind)}>
+        <MenuButton key={d.kind} enabled={gold >= d.cost} pressKey={d.action} onPress={() => build(d.kind)}>
           <Icon frame={ICON[d.kind]} />
-          <Label text={`${d.key} ${d.name} ${d.cost}`} color={gold >= d.cost ? COLOR.text : COLOR.dim} />
+          <Label text={`${keyLabel(d.action)} ${d.name} ${d.cost}`} color={gold >= d.cost ? COLOR.text : COLOR.dim} />
         </MenuButton>
       ))}
     </Panel>

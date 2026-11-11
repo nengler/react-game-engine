@@ -61,13 +61,15 @@ same money in bolts alone runs out in wave 10; three towers lose in wave 5.
 
 ## Controls
 
-All through `createControls` and `<Game controls>` (`rules/controls.ts`).
+All through `createControls` and `<Game controls>` (`rules/controls.ts`), and one path: every key and click calls a game-state action.
 
 - **Mouse:** click a pad (empty or built) to select it; the panel shows the build menu or the upgrade panel; the buttons in the panel are
   clicks too. The range ring shows for the selected tower and for the tower the mouse is over (`onPointerEnter` / `onPointerLeave`).
-- **Keyboard and gamepad:** the arrows or d-pad move the cursor to the nearest pad in that direction; `Z` / `A` select (and open the panel),
-  `X` / `B` close it; `1` `2` `3` buy a bolt, mortar or frost tower on the selected pad; `U` upgrades, `S` sells; `Space` / `Y` starts the
-  next wave; `F` toggles 2× speed; `Esc` / Start pauses.
+- **Keyboard and gamepad:** the pads are focusable, so the arrows or d-pad move the focus (the cursor) to the nearest pad in that direction
+  and `Z` / `A` presses the focused one (it opens the panel), as a click does; `X` / `B` closes it (`Play`'s one `useInput`). Every button
+  owns its key (`pressKey`): `1` `2` `3` buy a bolt, mortar or frost tower while the build menu shows, `U` upgrades and `S` sells while
+  the upgrade panel shows, `Space` / `Y` starts the next wave, `F` toggles 2× speed, `Esc` / Start pauses and resumes. A button's label
+  names its key from the bindings (`keyLabel("wave")`).
 
 ## How it is built
 
@@ -78,24 +80,24 @@ src/rules/     plain TypeScript, no engine: the whole simulation
   battle.ts    stepBattle(battle, dt, commands, map) → { battle, events }: the one entry point
   path.ts      the polyline and the markers; position-at-distance
   targeting.ts, towers.ts, enemies.ts, waves.ts, economy.ts, rng.ts
-  ui.ts        intent (keys) → cursor moves, commands, speed
   view.ts      what the panel reads about the cursor's pad (focusOf), a tower's range
-  controls.ts  the action map and readIntent(input)
+  controls.ts  the action map, and keyLabel(action) for the buttons' labels
   map.ts       the one map, read from the generated tilemap
-src/GameState.ts   screen, battle, cursor, panel, speed, pause; `act(intent, dt)` is the one place a step is taken
+src/GameState.ts   screen, battle, cursor, panel, speed, pause; the actions the buttons and pads call; `step(dt)` is the one place a step is taken
 src/theme.ts       the colours and icon frames, by name
 src/effects.ts     particle and sound stores; playEvents(events)
-src/*.tsx          Main, Title, Play, End, Field, EmptyPad, Tower, Barrel, RangeRing, LevelPips, MuzzleFlash,
+src/*.tsx          Main, Title, Play, End, Field, Pad, Tower, Barrel, RangeRing, LevelPips, MuzzleFlash,
                    Enemy, HealthBar, Shot, SidePanel, StatRow, BuildMenu, BuildOption, UpgradePanel, MenuButton, Modal, Panel, Label, Icon
 ```
 
 `stepBattle` takes the battle (enemies, pads with their towers, shots, gold, lives, the wave, the spawner's clock, the seed) and the
 commands of this step (build, upgrade, sell, start a wave), and returns the next battle and the step's events (`shot`, `hit`, `killed`,
-`leaked`, `built`, `waveCleared`, `denied`, …), which the game state hands to `effects.ts` for sounds and particles. At 2× speed `act` runs
+`leaked`, `built`, `waveCleared`, `denied`, …), which the game state hands to `effects.ts` for sounds and particles. At 2× speed `step` runs
 the rules twice per engine step. The game state holds the battle as one object, replaced every step; components select what they draw.
 
 The component tree: `Main` (`<Game>`, `<Screen>`, `<Router>` on a `screen` leaf, `<Music>`) → `Title`, `Play`, `End` (won or lost, a `Modal`).
-`Play` draws the field, then `pads.map((p) => p.tower ? <Tower …/> : <EmptyPad …/>)`, `enemies.map(…)`, `shots.map(…)`, the particle layer,
+`Play` draws the field, then `pads.map((p) => <Pad key={p.id} {...p} />)` (a `Pad` takes the focus and the press, shows the cursor, and its
+`Tower` when it has one, which only draws), `enemies.map(…)`, `shots.map(…)`, the particle layer,
 and a `<Hud>` holding the `SidePanel` and, while paused, a `Modal` whose children are two buttons.
 
 ## Which engine features it uses

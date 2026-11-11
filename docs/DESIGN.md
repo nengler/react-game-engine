@@ -1639,6 +1639,25 @@ parent's origin; a `transform` passed to such a component moves what it holds.
 
 **Element callbacks.** `<Pointer onPress={() => …} />` is the same mechanism with no parameters.
 
+**Keys that press things** (2026-11-11, from the second review of Hearth). `pressKey="wave"` on a `<Pointer>` or a `<Flex>` presses it
+(calls `onPress`) when that key or action is pressed, while it is mounted and not inert: the DOM's `accessKey`, so a button owns its
+shortcut and a key and a click take one path. `World.tick` does it before any `onInput`, over every `Pointer` and `Flex` in the world
+(scratch lists, so nothing is allocated per tick once warm). Every mounted pressable with that key is pressed.
+
+**Focus** (same day). `focusable` makes a pressable take the focus, as a DOM button does; `autoFocus` takes it on mount when nothing has
+it; `onFocus` / `onBlur` say so. Each tick the direction actions `left` `right` `up` `down` (the arrows and the d-pad when the controls
+have no such action: `InputState.isAction` tells) move it to the nearest focusable that way, measured from `focusPoint()` (a Pointer's or
+a laid-out box's middle; along the direction, plus twice the distance across, so a row before the next row), and `confirm` (Enter and PadA
+without one) presses the focused one. A click on a focusable one focuses it before pressing it. `World.focus(p)` / `World.focused` for
+code. One focused or removed, inert or no longer focusable, loses it; the next tick an `autoFocus` one may take it.
+
+**Small things the same review found.** `<Pointer originX originY>` places the area's origin as a Sprite's does (a pad's 10 × 10 area
+centred on it). A bitmap-font `<Text>` without a `size` is drawn at the font's own cell height (`Text.sized`; setting `size` to
+`undefined` goes back to that). `controls.label(action)` names the first key for a label (`"Space"`, `"Esc"`, `"Left"`). The generated
+`tilemaps.ts` registers its maps as it loads, and a component module that draws a `<Tilemap>` imports it, so a game needs no
+`registerTilemaps` call. A component may import types from a `.ts` file (`import type { Tower as TowerData } from "./rules/battle.ts"`,
+`import { type Kind }`); the generated module imports the ones it mentions as types.
+
 **Hover** (2026-11-11, second-game finding 11). `<Pointer>` and `<Flex>` take `onPointerEnter` and `onPointerLeave`, the DOM's
 `pointerenter` / `pointerleave`: each frame the player finds the topmost pressable under the mouse (last frame's draw order,
 the same search a press makes) and `World.reportHover` tells the one before it left and the new one it was entered; an inert one

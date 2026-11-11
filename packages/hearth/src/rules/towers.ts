@@ -16,14 +16,14 @@ export interface TowerDef {
   /** Frost: the share of speed taken away, and for how long. */
   readonly slow: number;
   readonly slowFor: number;
-  /** The key that buys it from the keyboard. */
-  readonly key: string;
+  /** The action of the game's controls that buys it from the keyboard (see `controls.ts`). */
+  readonly action: "one" | "two" | "three";
 }
 
 export const TOWERS: Readonly<Record<TowerKind, TowerDef>> = {
-  bolt: { kind: "bolt", name: "BOLT", cost: 50, range: 40, rate: 0.4, damage: 6, radius: 0, flight: 0, slow: 0, slowFor: 0, key: "1" },
-  mortar: { kind: "mortar", name: "MORTAR", cost: 80, range: 55, rate: 1.6, damage: 18, radius: 14, flight: 0.5, slow: 0, slowFor: 0, key: "2" },
-  frost: { kind: "frost", name: "FROST", cost: 60, range: 35, rate: 1.0, damage: 2, radius: 35, flight: 0, slow: 0.4, slowFor: 1.5, key: "3" },
+  bolt: { kind: "bolt", name: "BOLT", cost: 50, range: 40, rate: 0.4, damage: 6, radius: 0, flight: 0, slow: 0, slowFor: 0, action: "one" },
+  mortar: { kind: "mortar", name: "MORTAR", cost: 80, range: 55, rate: 1.6, damage: 18, radius: 14, flight: 0.5, slow: 0, slowFor: 0, action: "two" },
+  frost: { kind: "frost", name: "FROST", cost: 60, range: 35, rate: 1.0, damage: 2, radius: 35, flight: 0, slow: 0.4, slowFor: 1.5, action: "three" },
 };
 
 /** The towers in the build menu's order. */

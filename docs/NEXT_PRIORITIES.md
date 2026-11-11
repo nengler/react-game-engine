@@ -223,6 +223,13 @@ What building Hearth found, and which of Kite's findings held a second time.
     `<Pointer>` or a `<Flex onPress>`, which take the topmost one under the mouse. Nothing was built.
 15. **The bitmap font having one case** reads fine for menus in upper case; nobody asked for lower case.
 
+**A second review of Hearth's code** (2026-11-11) found keyboard input taking a path of its own (an `Intent` read from the keys, applied
+by rules apart from the buttons' actions) and asked for what a DOM button has. **Built:** `pressKey` (a button's own shortcut), focus
+(`focusable`, `autoFocus`, `onFocus`/`onBlur`, arrow-key movement, confirm presses the focused), `<Pointer originX originY>`, a bitmap
+`<Text>`'s default size, `controls.label`, self-registering tilemaps and type imports from `.ts` files. Hearth's `rules/ui.ts`,
+`readIntent` and `act(intent)` are gone: every key and click calls an action, and `step(dt)` only steps the battle. See DESIGN.md, "Keys
+that press things" and "Focus".
+
 **Which of Kite's findings held a second time:** *Rules apart from drawing* (finding 1/16): yes, completely. `stepBattle` is plain TypeScript, 27 headless tests, the balance table and
 the parity run all use it with no engine, and the replays then check that the components and the rules agree. *Effect stores* (finding 16): yes: `playEvents` answers the rules'
 events with sounds and bursts and nothing in a component watches state. *The router* (finding 14): yes, for four screens (title, play, won, lost); no transitions were wanted.
