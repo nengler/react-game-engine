@@ -113,7 +113,7 @@ export const runtimeManifest: RuntimeManifest = {
     Pointer: ["width", "height", "originX", "originY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint"],
     Text: ["text", "size", "sized", "color", "width", "align", "font"],
     Shape: ["kind", "width", "height", "color"],
-    Camera: ["zoom", "shake", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
+    Camera: ["zoom", "shake", "bounds", "slide", "deadzone", "smoothing", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: [
       "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity",
       "animations", "animation", "isSheet", "current", "sheetFrame", "styled", "finished",

@@ -620,6 +620,8 @@ function Player() {
         ["zoom", "number", "1", "Magnification. Must be positive."],
         ["bounds", "[x, y, w, h]", "–", "The view never shows outside this world area (a smaller area is centred)."],
         ["slide", "number", "0", "Seconds to ease to new <code>bounds</code> (a room change)."],
+        ["deadzone", "[width, height]", "none", "A box around the view's centre the followed point can move in without moving the view; past its edge it drags the view."],
+        ["smoothing", "number", "0", "Seconds the view takes to catch up with what it follows (eases, stepped, so replays repeat). A change of <code>bounds</code> snaps the view at once."],
         ["shake", "ShakeState", "–", "From <code>useShake()</code>: <code>&lt;Camera shake={shake}&gt;</code>."]
       ] },
     { name: "Hud", kind: "container", sum: "A layer that stays on screen while the camera moves, drawn after the world. See <a href=\"systems.html#ui\">UI</a>.",
