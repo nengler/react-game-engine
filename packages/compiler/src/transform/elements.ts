@@ -1,5 +1,5 @@
 // Layer 3 of ComponentLowering: the JSX tree (elements, props, transforms, children, keyed lists) into ElementIR.
-import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type Node } from "typescript/ast";
+import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type JsxFragment, type Node } from "typescript/ast";
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isConditionalExpression, isIdentifier, isJsxAttribute, isJsxElement, isJsxExpression, isJsxSelfClosingElement, isJsxText, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isJsxFragment, isStringLiteral, isBlock, isReturnStatement } from "typescript/ast/is";
 import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
@@ -34,6 +34,23 @@ export class ElementLowering extends HookLowering {
    * The root is a built-in element (the component's class extends it) or a
    * fragment, which is an implicit container: a bare `<Entity>` with no props.
    */
+  /**
+   * A fragment `<>…</>` as a child, or as a branch of a condition: an implicit container, a bare `<Entity>` with no props,
+   * so `{alive && <>…</>}` adds and removes its children together.
+   */
+  protected lowerFragment(jsx: JsxFragment, path: readonly number[]): ElementIR {
+    return {
+      kind: "Element",
+      id: elementId(this.component.name, path),
+      fieldName: this.allocateFieldName(this.hostIntrinsic, null),
+      component: { kind: "Intrinsic", name: this.hostIntrinsic },
+      props: [],
+      transform: [],
+      children: this.lowerChildren(jsx.children, path, { slot: false, passed: false }),
+      span: this.span(jsx),
+    };
+  }
+
   protected lowerRoot(jsx: JsxRoot): HostElementIR | null {
     if (isJsxFragment(jsx)) {
       return {
@@ -485,6 +502,10 @@ export class ElementLowering extends HookLowering {
         if (element) out.push({ kind: "StaticChild", element });
         continue;
       }
+      if (isJsxFragment(child)) {
+        out.push({ kind: "StaticChild", element: this.lowerFragment(child, path) });
+        continue;
+      }
       if (isJsxExpression(child) && child.expression) {
         const expression = unwrapParens(child.expression);
         if (this.isChildrenReference(expression)) {
@@ -498,9 +519,9 @@ export class ElementLowering extends HookLowering {
         }
         if (isBinaryExpression(expression) && expression.operatorToken.kind === SyntaxKind.AmpersandAmpersandToken) {
           const right = unwrapParens(expression.right);
-          if (isJsxElement(right) || isJsxSelfClosingElement(right)) {
+          if (isJsxElement(right) || isJsxSelfClosingElement(right) || isJsxFragment(right)) {
             const condition = this.lowerNode(expression.left);
-            const element = this.lowerElement(right, path);
+            const element = isJsxFragment(right) ? this.lowerFragment(right, path) : this.lowerElement(right, path);
             if (condition && element) {
               out.push({ kind: "ConditionalChild", condition, dependencies: collectDependencies(condition), element });
             }
@@ -512,21 +533,22 @@ export class ElementLowering extends HookLowering {
           // second on `!c`. Each branch keeps its own identity, so switching recreates, as React does
           // for different element types.
           const branches = [unwrapParens(expression.whenTrue), unwrapParens(expression.whenFalse)];
-          const usable = branches.every((b) => isJsxElement(b) || isJsxSelfClosingElement(b) || b.kind === SyntaxKind.NullKeyword);
+          const usable = branches.every((b) => isJsxElement(b) || isJsxSelfClosingElement(b) || isJsxFragment(b) || b.kind === SyntaxKind.NullKeyword);
           if (usable) {
             const condition = this.lowerNode(expression.condition);
             if (!condition) continue;
             const conditions: ExprIR[] = [condition, { kind: "Unary", operator: "!", operand: condition }];
             branches.forEach((branch, i) => {
-              if (!(isJsxElement(branch) || isJsxSelfClosingElement(branch))) return;
-              const element = this.lowerElement(branch, i === 0 ? path : [...parentPath, index++]);
+              if (!(isJsxElement(branch) || isJsxSelfClosingElement(branch) || isJsxFragment(branch))) return;
+              const at = i === 0 ? path : [...parentPath, index++];
+              const element = isJsxFragment(branch) ? this.lowerFragment(branch, at) : this.lowerElement(branch, at);
               const when = conditions[i]!;
               if (element) out.push({ kind: "ConditionalChild", condition: when, dependencies: collectDependencies(when), element });
             });
             continue;
           }
         }
-        this.report(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`) or `{items.map((item) => <Element key={item.id} />)}`.", child);
+        this.report(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`, and an element may be a fragment `<>…</>`) or `{items.map((item) => <Element key={item.id} />)}`.", child);
         continue;
       }
       this.report(DiagnosticCode.UnsupportedJsxChild, `Unsupported JSX child (${SyntaxKind[child.kind]}).`, child);

@@ -192,7 +192,10 @@ export interface CallIR {
 
 export type CalleeIR =
   | { readonly kind: "Function"; readonly name: string }
-  /** A call of a function imported from a relative `.ts` file: opaque and assumed pure, so its arguments are all it depends on. */
+  /**
+   * A call of a function imported from a relative `.ts` file, or of a method of a value imported from one (`fx.burst`, the
+   * name then has a dot): opaque, so its arguments are all it depends on.
+   */
   | { readonly kind: "Plain"; readonly name: string }
   | { readonly kind: "Method"; readonly receiver: ParamReadIR; readonly name: string }
   /** `enemies.filter((e) => …)`: an allowlisted, non-mutating array method (`ARRAY_METHODS`) on any value. */

@@ -18,7 +18,7 @@ export { Entity, type EntityProps } from "./components/Entity.ts";
 export { Game, type GameProps, type GameStateHandle } from "./components/Game.ts";
 export { isStyled, Sprite, type SpriteLook, type SpriteOptions, type SpriteProps } from "./components/Sprite.ts";
 export { Collider, type ColliderProps, type Contact } from "./components/Collider.ts";
-export { Sound, getSoundSink, setSoundSink, type SoundSink } from "./Sound.ts";
+export { Sound, addSoundPreload, getSoundSink, setSoundSink, type SoundSink } from "./Sound.ts";
 export { Pointer, type PointerProps, type Pressable } from "./components/Pointer.ts";
 export { Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
@@ -29,6 +29,19 @@ export { Tilemap, type TilemapProps } from "./components/Tilemap.ts";
 export { findTilemap, getTilemap, registerTilemaps, TileGrid, TILE_FLIP_D, TILE_FLIP_H, TILE_FLIP_V, type TilemapData, type TilemapLayerData } from "./tilemap.ts";
 export { Music, type MusicProps } from "./components/Music.ts";
 export { Particles, PARTICLE_SPACES, type ParticlesProps } from "./components/Particles.ts";
+export { ParticleLayer, type ParticleLayerProps } from "./components/ParticleLayer.ts";
+export {
+  createParticles,
+  createShake,
+  createSounds,
+  ParticleStore,
+  Shake,
+  SoundStore,
+  type BurstOptions,
+  type ParticlePreset,
+  type ParticleRenderer,
+  type SoundEntry,
+} from "./effects.ts";
 export { Fade, type FadeProps } from "./components/Fade.ts";
 export { Route, Router, type RouteProps, type RouterProps, type Transition, type TransitionFrame } from "./components/Router.ts";
 export { Hud } from "./components/Hud.ts";

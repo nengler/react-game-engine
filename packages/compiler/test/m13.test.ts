@@ -262,8 +262,16 @@ describe("M13: runtime behaviour", () => {
 });
 
 describe("M13: the manifest says which hooks a built-in implements", () => {
-  it("lists onUpdate for the built-ins that advance themselves: AnimatedSprite, Camera (shake and slide), Particles, Fade, Music and Router", () => {
-    assert.deepEqual(runtimeManifest.intrinsicHooks, { AnimatedSprite: ["onUpdate"], Camera: ["onUpdate"], Particles: ["onUpdate"], Fade: ["onUpdate"], Music: ["onUpdate"], Router: ["onUpdate"] });
+  it("lists onUpdate for the built-ins that advance themselves (AnimatedSprite, Camera, Particles, Fade, Music, Router), and ParticleLayer's mount hooks", () => {
+    assert.deepEqual(runtimeManifest.intrinsicHooks, {
+      AnimatedSprite: ["onUpdate"],
+      Camera: ["onUpdate"],
+      Particles: ["onUpdate"],
+      ParticleLayer: ["onMount", "onUnmount"],
+      Fade: ["onUpdate"],
+      Music: ["onUpdate"],
+      Router: ["onUpdate"],
+    });
   });
 
   it("is driven by the manifest, not by AnimatedSprite: any intrinsic can be marked", () => {

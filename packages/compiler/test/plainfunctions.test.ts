@@ -77,6 +77,40 @@ export function A() {
     }
   });
 
+  it("bring constants too: an imported array is a list's items (filtered by state), and an imported object's methods are called in handlers", () => {
+    const p = project({
+      "data.ts": `export interface RoomData { name: string; index: number; x: number }
+export const ROOMS: readonly RoomData[] = [{ name: "a", index: 0, x: 0 }, { name: "b", index: 1, x: 320 }, { name: "c", index: 2, x: 640 }];
+export const fx = { bursts: 0, burst(name: string, x: number): void { void name; this.bursts += x; } };
+`,
+      "D.tsx": `import { Entity, Shape, useState, useUpdate } from "@rge/runtime/jsx";
+import { ROOMS, fx } from "./data.ts";
+export function D() {
+  const [room, setRoom] = useState(0);
+  useUpdate(() => {
+    fx.burst("dust", room);
+    setRoom((r) => r + 1);
+  });
+  return (
+    <Entity name="D">
+      {ROOMS.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Shape key={r.name} kind="rect" width={4} height={4} color="#fff" transform={{ x: r.x }} />)}
+    </Entity>
+  );
+}
+`,
+    });
+    try {
+      const r = p.run();
+      assert.equal(r.status, 0, r.stderr);
+      const code = p.out("D.ts");
+      assert.match(code, /import \{ ROOMS, fx \} from "\.\.\/src\/data\.ts";/);
+      assert.match(code, /fx\.burst\("dust", this\.room\);/);
+      assert.match(code, /const \$list = ROOMS\.filter\(\(r\) => \(?Math\.abs\(r\.index - this\.room\)/);
+    } finally {
+      rmSync(p.dir, { recursive: true, force: true });
+    }
+  });
+
   it("re-run only when their arguments change: a dynamic prop depends on the state in its arguments", () => {
     const p = project({
       "helpers.ts": HELPERS,

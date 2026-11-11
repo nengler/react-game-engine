@@ -131,8 +131,10 @@ ignored):
   `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two
   conditional children, on `condition` and `!condition`), or a keyed list
   `{items.map((item) => <Element key={item.id} … />)}` (see "Keyed lists").
-  Text children, fragments, spread attributes and other expression children
-  are rejected.
+  A fragment `<>…</>` may stand for an element anywhere here, as a child or as
+  a branch (`{alive && <>…</>}`): it is an implicit `<Entity>` holding its
+  children, so they come and go together (decided 2026-11-11). Text children,
+  spread attributes and other expression children are rejected.
 * Imports: components from `./Name.tsx`, and hooks, built-in elements and
   `clamp` and the `Child` type from `@rge/runtime/jsx` (the manifest's
   `authoringModule`; the type is written `import { type Child }`, the one
@@ -1251,9 +1253,56 @@ and more than one store per project (one store per process, one `createGameState
 
 A component may import functions from a relative `.ts` file (`import { fadeThrough } from "./transitions.ts"`) and **call them in any expression** (a prop, a derived value, a handler) or **pass them as values** (`transition={fadeThrough}`). The compiler does not look inside them: TypeScript checks the call, the function is assumed pure, and a dynamic prop that calls one depends on the state in its arguments, so it is re-evaluated when those change. The function body is plain TypeScript with loops, arrays and anything else. This is the escape hatch from the restricted handler language: the logic goes in a `.ts` file, the component only wires it up.
 
+**Constants too** (decided 2026-11-11). Anything else a `.ts` file exports is used the same way: `import { ROOM_LIST } from "./rules/rooms.ts"` and `{ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Tilemap key={r.map} … />)}` (an imported array is a list's items, as a state or prop array is; the filter's callback reads state, so the list follows it), `transform={{ x: GEM_AT.x }}`, and a **method of an imported object** called in a handler or an expression (`fx.burst("dust", x, y)`, `sfx.play("start")`): opaque like a plain function (`CalleeIR` `Plain` with a dotted name), its arguments are all it depends on. An array method on an imported array (`ROOM_LIST.filter`) stays an array method, so its callback is lowered. An imported constant is a constant: nothing re-renders when code changes it, which is right for data and for the effect stores below, and wrong for game state (that is `useGame`).
+
 Rules: the name must not look like a hook (`use…`; those are the game state's store, which is the only hook-named import from a `.ts` file); a function that is a prop of a component (a callback) is still lowered as a handler as before. The generator imports the function from where it is (`../src/transitions.ts` from the generated file, through `rge-compile`'s knowledge of where it reads and writes), only if the component uses it. In the IR: `CalleeIR` kind `Plain`, `ExprIR` kind `PlainRef`, and `IRModule.plainImports`.
 
 **`useUpdate` takes the input.** `useUpdate((dt, input) => { step(input, dt); })`: the polled input of that step (under a fixed timestep, the per-step copy with exactly-once key edges), the same object `useInput` gets, and it can be handed to a game-state action or a plain function, which reads the keys with loops and tables (Kite's `rules/controls.ts`). A canonical `onUpdate` override (several handlers, or a root that implements the hook) declares `input` only when it passes it on.
+
+## Effects that happen at a moment (priority 7, 2026-11-11)
+
+Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each
+happens at a moment and then plays out on its own, after whatever caused it has moved on. React has no `useEffect`
+here (and this compiler will not grow one: an effect that watches state to fire an event is the pattern React's own docs
+warn against); the answer is the one toast libraries use. **An effect store** is made once in a `.ts` module, **its
+renderer is mounted once**, and **anything calls it**: a game-state action (plain TypeScript, where events are known), a
+plain function, or a component's handler.
+
+```ts
+// effects.ts
+export const fx = createParticles({ dust: { burst: 9, lifetime: 0.4, speed: 55, angle: 270, spread: 75, gravity: 160, fade: true } });
+export const sfx = createSounds({ land: { src: "land.wav", volume: 0.5 }, start: "start.wav" });
+export const shake = createShake({ strength: 3, duration: 0.25 });
+```
+
+```tsx
+<Camera bounds={…} shake={shake}><Player /></Camera>
+<ParticleLayer particles={fx} />     {/* like <Toaster />: where bursts are drawn, in the world */}
+```
+
+```ts
+// GameState.ts: the rules push events onto an array; the action answers them
+step: (input, dt) => {
+  const events: GameEvent[] = [];
+  set({ run: stepRun(get().run, readControls(input), dt, events) });
+  for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dust", e.x, e.y); }
+},
+```
+
+- **`createParticles(presets)`** → `ParticleStore`: `burst(name, x, y, { angle?, count? })`, and `bursts` (counts by name,
+  for tests). A preset is `<Particles>`'s props less `rate`, `emitting` and `space`. **`<ParticleLayer particles={fx}>`** holds
+  one emitter per preset and attaches itself to the store while mounted (the last mounted wins); a burst's point is in the
+  layer's space. It follows the world: frozen with it, gone with it. With no layer mounted a burst is counted, not drawn.
+  Put the layer **next to** a `<Camera>`, not inside it, since a camera follows its children.
+- **`createSounds(entries)`** → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
+  Every file is loaded when a sound sink is installed (`addSoundPreload`), so the first play does not hitch. Asset names in
+  a `.ts` file are not checked at build time (only literals in components are).
+- **`createShake({ strength, duration })`** → `Shake`: `start(strength?, duration?)`. `<Camera shake={shake}>` starts a shake
+  each time it is started (a number still works as before: the view shakes when it changes).
+- **Continuous effects stay JSX.** A trail "while dashing" is state, so it is `<Particles emitting={dashing}>` in the component.
+  The stores are for moments.
+- **Rules stay pure.** Kite's `stepRun` reports events and never calls a store, so the solver and the tests step it with no
+  side effects; the game state turns events into effects (`effects.ts`, `playEvents`).
 
 ## Custom hooks (priority 7)
 
@@ -1431,7 +1480,7 @@ like any component. Details:
 * Only containers (the manifest's `containerIntrinsics`, today `Entity` and `Camera`) may
   have JSX children; a child under a leaf such as a `Sprite`, `Collider` or `Pointer`, at the root or
   anywhere, is `RGE1202`. A component as a root (`return <Other />`) is
-  `RGE1003`; a fragment nested as a child is `RGE1202`.
+  `RGE1003`; a fragment nested as a child is an implicit `<Entity>`.
 
 **Element callbacks.** `<Pointer onPress={() => …} />` is the same mechanism with no parameters.
 

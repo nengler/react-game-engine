@@ -22,6 +22,7 @@ import type { FlexProps } from "./components/Flex.ts";
 import type { ScreenProps } from "./components/Screen.ts";
 import type { TilemapProps } from "./components/Tilemap.ts";
 import type { ParticlesProps } from "./components/Particles.ts";
+import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
 import type { FadeProps } from "./components/Fade.ts";
 import type { MusicProps } from "./components/Music.ts";
 import type { RouteProps, RouterProps } from "./components/Router.ts";
@@ -201,6 +202,15 @@ export function Tilemap(_props: TilemapProps): JSX.Element {
  */
 export function Particles(_props: ParticlesProps): JSX.Element {
   return compileTimeOnly("Particles");
+}
+
+/**
+ * Where a particle store's bursts are drawn, as a `<Toaster />` is for toasts: `const fx = createParticles({ dust: { … } })` in a
+ * `.ts` module, `<ParticleLayer particles={fx} />` once (inside the `<Camera>`, for bursts at world positions), then
+ * `fx.burst("dust", x, y)` from an action, a plain function or a handler. A leaf.
+ */
+export function ParticleLayer(_props: ParticleLayerProps): JSX.Element {
+  return compileTimeOnly("ParticleLayer");
 }
 
 /**

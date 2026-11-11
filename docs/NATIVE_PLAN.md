@@ -762,6 +762,10 @@ Limits, each said by the importer: one tileset (the first is used; a second is a
 - **`<Text font="font.png" size>`**: a bitmap font is a sheet of the characters 32 to 127 in 16 × 6 cells; the player writes a region record per character (spaces advance without drawing, anything outside is a `?`), tinted with the text's colour, and layout measures by the cell. `size` is the cell's height, so a whole multiple keeps pixels square.
 - **`freeze(steps)`** (also callable as a statement in a handler): the next `steps` ticks skip every `onUpdate`; `onInput` and renders still run. The request is taken when the tick ends, so the tick that asked still updates. During a freeze the player keeps the key edges for the first step after it, so a press in the middle of a dash's freeze is not lost. Anything animated by `onUpdate` pauses with the world, which is the point.
 
+### Effect stores: bursts, sounds and shakes from anywhere (2026-11-11)
+
+`createParticles`, `createSounds` and `createShake` (runtime `effects.ts`) are stores made once in a module and called from anywhere, as a toast library's are; `<ParticleLayer particles={fx}>` draws a particle store (an `Entity`-like leaf holding one `<Particles>` per preset, emitting with `emitAt(n, x, y, angle)`), and `<Camera shake={shake}>` reads a `Shake`'s starts. Nothing new reaches the frame builder or the ABI: the layer's emitters draw as every `<Particles>` does. See DESIGN.md, "Effects that happen at a moment".
+
 ### Sound with a volume, and music
 
 `useSound`'s function takes a volume (`play(0.5)`); `SoundSink.play(path, volume)`. `<Music src playing volume loop fade>` opens its stream when it is made, starts silent and fades up over `fade`, fades out and stops when `playing` turns off, and restarts from the beginning when it turns on; it belongs to whatever holds it, so a `<Music>` in the root keeps playing across rooms and screens. A backend without music (`loadMusic` absent) warns once and stays silent.

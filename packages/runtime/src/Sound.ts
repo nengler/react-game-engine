@@ -17,10 +17,20 @@ export interface SoundSink {
 }
 
 let sink: SoundSink | null = null;
+/** Files a sound store will play (`createSounds`): loaded by every sink when it is installed, as a `Sound` is when it is made. */
+const preloads = new Set<string>();
 
 /** Install the sink sounds report to, or `null` to remove it. One sink at a time: the last one installed wins. */
 export function setSoundSink(next: SoundSink | null): void {
   sink = next;
+  if (next !== null) for (const path of preloads) next.load(path);
+}
+
+/** Load `path` with the sink now, and with any sink installed later. What `createSounds` does for each of its files. */
+export function addSoundPreload(path: string): void {
+  if (preloads.has(path)) return;
+  preloads.add(path);
+  sink?.load(path);
 }
 
 /** The installed sink, so a player can tell whether it is still the one in place when it closes. */

@@ -269,6 +269,23 @@ export class ExpressionLowering extends LoweringBase {
       }
       return { kind: "Call", callee: { kind: "Plain", name: callee.text }, args };
     }
+    // A method of a value imported from a relative .ts file (`fx.burst("dust", x, y)`): opaque too. An array method on an
+    // imported array (`ROOMS.filter(…)`) stays an array method, so its callback is lowered.
+    if (
+      isPropertyAccessExpression(callee) &&
+      isIdentifier(callee.expression) &&
+      this.plainImports.has(callee.expression.text) &&
+      !this.scope.has(callee.expression.text) &&
+      !Object.hasOwn(ARRAY_METHODS, callee.name.text)
+    ) {
+      const args: ExprIR[] = [];
+      for (const argument of node.arguments) {
+        const lowered = this.lowerNode(argument);
+        if (!lowered) return null;
+        args.push(lowered);
+      }
+      return { kind: "Call", callee: { kind: "Plain", name: `${callee.expression.text}.${callee.name.text}` }, args };
+    }
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
     if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
       const name = `Math.${callee.name.text}`;

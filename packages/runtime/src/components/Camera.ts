@@ -1,16 +1,18 @@
 import { GameObject } from "../GameObject.ts";
 import type { InputState } from "../input.ts";
 import { IDENTITY_TRANSFORM, type WorldTransform } from "../Transform.ts";
+import type { Shake } from "../effects.ts";
 
 export interface CameraProps {
   /** Magnification of the view: 2 draws everything twice as large. Must be positive. Default 1. */
   zoom?: number;
   /**
-   * Shake the view when this value changes (not when the camera is made): a counter a game bumps on each hit, 1, 2, 3. The
-   * shake is `shakeStrength` pixels at first and dies away over `shakeDuration` seconds, in whole pixels, from a fixed random
-   * sequence so a run repeats exactly. It is time in `onUpdate`, so it follows the fixed timestep.
+   * What shakes the view: a `createShake()` kept in a module, started from anywhere with `shake.start()`, which sets its own
+   * strength and duration. (A number also works: the view shakes when it changes, by `shakeStrength` for `shakeDuration`.)
+   * The shake dies away in whole pixels, from a fixed random sequence so a run repeats exactly. It is time in `onUpdate`, so it
+   * follows the fixed timestep.
    */
-  shake?: number;
+  shake?: Shake | number;
   /** Pixels the view is thrown by at the start of a shake. Default 2. */
   shakeStrength?: number;
   /** Seconds a shake lasts. Default 0.2. */
@@ -69,7 +71,7 @@ export class Camera<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 
   zoom: number;
-  shake: number | undefined;
+  shake: Shake | number | undefined;
   shakeStrength: number;
   shakeDuration: number;
   bounds: readonly number[] | undefined;
@@ -79,6 +81,8 @@ export class Camera<P extends object = {}> extends GameObject<P> {
   slideY = 0;
   #shakeTime = 0;
   #shakeSeen: number | undefined;
+  #shakeStrengthNow = 0;
+  #shakeDurationNow = 0;
   #shakeFrame = 0;
   #lastBounds: readonly number[] | undefined;
   #lastCentre: Point | null = null;
@@ -91,29 +95,41 @@ export class Camera<P extends object = {}> extends GameObject<P> {
     super(props, defaults);
     this.zoom = hostProps.zoom ?? DEFAULT_ZOOM;
     this.shake = hostProps.shake;
-    this.#shakeSeen = hostProps.shake;
+    this.#shakeSeen = this.#shakeCount();
     this.shakeStrength = hostProps.shakeStrength ?? 2;
     this.shakeDuration = hostProps.shakeDuration ?? 0.2;
     this.bounds = hostProps.bounds;
     this.slide = hostProps.slide ?? 0;
   }
 
+  /** What tells a new shake: the shake's starts, or the number itself. */
+  #shakeCount(): number | undefined {
+    return typeof this.shake === "object" ? this.shake.starts : this.shake;
+  }
+
   /** The shake's offset now, in whole pixels: strong at first, dying to 0, from a fixed sequence. */
   get shakeOffset(): Point {
-    if (this.#shakeTime <= 0 || !(this.shakeDuration > 0)) return { x: 0, y: 0 };
-    const k = this.#shakeTime / this.shakeDuration;
+    if (this.#shakeTime <= 0 || !(this.#shakeDurationNow > 0)) return { x: 0, y: 0 };
+    const k = this.#shakeTime / this.#shakeDurationNow;
+    const strength = this.#shakeStrengthNow;
     const f = this.#shakeFrame;
     // A fixed pseudo-random walk over frames: no Math.random, so every run and every engine shakes the same.
     const rx = Math.sin(f * 12.9898 + 78.233) * 43758.5453;
     const ry = Math.sin(f * 39.3468 + 11.135) * 24634.6345;
-    return { x: Math.round((rx - Math.floor(rx) - 0.5) * 2 * this.shakeStrength * k), y: Math.round((ry - Math.floor(ry) - 0.5) * 2 * this.shakeStrength * k) };
+    return { x: Math.round((rx - Math.floor(rx) - 0.5) * 2 * strength * k), y: Math.round((ry - Math.floor(ry) - 0.5) * 2 * strength * k) };
   }
 
   /** Advance the shake and the slide. */
   override onUpdate(dt: number, _input?: InputState): void {
-    if (this.shake !== this.#shakeSeen) {
-      this.#shakeSeen = this.shake;
-      if (this.shake !== undefined) this.#shakeTime = this.shakeDuration;
+    const count = this.#shakeCount();
+    if (count !== this.#shakeSeen) {
+      this.#shakeSeen = count;
+      if (count !== undefined) {
+        const shake = this.shake;
+        this.#shakeStrengthNow = typeof shake === "object" ? shake.current.strength : this.shakeStrength;
+        this.#shakeDurationNow = typeof shake === "object" ? shake.current.duration : this.shakeDuration;
+        this.#shakeTime = this.#shakeDurationNow;
+      }
     }
     let changed = false;
     if (this.#shakeTime > 0) {

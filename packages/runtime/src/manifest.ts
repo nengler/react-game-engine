@@ -98,7 +98,7 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "Fade", "Music", "Router", "Route"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route"],
   textContent: { Text: "text" },
@@ -118,7 +118,8 @@ export const runtimeManifest: RuntimeManifest = {
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
     Hud: [],
     Tilemap: ["map", "image", "layer", "opacity"],
-    Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "count", "read", "emit"],
+    Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "count", "read", "emit", "emitAt"],
+    ParticleLayer: ["particles", "emitBurst"],
     Fade: ["color", "on", "duration", "amount"],
     Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
@@ -143,6 +144,7 @@ export const runtimeManifest: RuntimeManifest = {
     Flex: [],
     Tilemap: ["map", "image"],
     Particles: [],
+    ParticleLayer: ["particles"],
     Fade: [],
     Music: ["src"],
     Router: ["route"],
@@ -152,6 +154,7 @@ export const runtimeManifest: RuntimeManifest = {
     AnimatedSprite: ["onUpdate"],
     Camera: ["onUpdate"],
     Particles: ["onUpdate"],
+    ParticleLayer: ["onMount", "onUnmount"],
     Fade: ["onUpdate"],
     Music: ["onUpdate"],
     Router: ["onUpdate"],
@@ -186,7 +189,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Tilemap", "Particles"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1 },

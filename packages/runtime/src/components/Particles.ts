@@ -124,7 +124,7 @@ export class Particles<P extends object = {}> extends GameObject<P> {
     out.t = (d[at + 4] as number) / (d[at + 5] as number);
   }
 
-  /** Make `n` particles now. */
+  /** Make `n` particles now, at the emitter. */
   emit(n: number): void {
     let originX = 0;
     let originY = 0;
@@ -133,10 +133,18 @@ export class Particles<P extends object = {}> extends GameObject<P> {
       originX = at.x;
       originY = at.y;
     }
+    this.emitAt(n, originX, originY);
+  }
+
+  /**
+   * Make `n` particles now at (`x`, `y`) in the space they live in (the emitter's own, or the world's for `space="world"`),
+   * going `angle` degrees (default: the emitter's). How a `<ParticleLayer>` makes a burst wherever it is asked to.
+   */
+  emitAt(n: number, originX: number, originY: number, direction: number = this.angle): void {
     if (this.max * 6 > this.#data.length) this.#data = grow(this.#data, this.max * 6);
     for (let k = 0; k < n; k++) {
       const slot = this.#count < this.max ? this.#count++ : 0; // full: the first one is replaced
-      const angle = ((this.angle + (this.#random() * 2 - 1) * this.spread) * Math.PI) / 180;
+      const angle = ((direction + (this.#random() * 2 - 1) * this.spread) * Math.PI) / 180;
       const speed = this.speed * (0.6 + this.#random() * 0.4);
       const at = slot * 6;
       const d = this.#data;
