@@ -67,6 +67,23 @@ export interface FlexProps extends Omit<PressableProps, "onPress"> {
   offsetY?: number;
   /** A CSS colour: draw a filled rectangle behind the children, the size of the box. Default none. */
   background?: string;
+  /**
+   * Pixels of border, drawn inside the edge of the box in `borderColor`. The border takes room: it counts as padding on every
+   * side, so the children never sit on it. Default 0: none.
+   */
+  borderWidth?: number;
+  /** A CSS colour for the border. Default none: a box with no border colour (plain, hovered or focused) has no border, whatever `borderWidth` says. */
+  borderColor?: string;
+  /** Pixels of rounding on all four corners of the background and the border, at most half the shorter side. Default 0: square. */
+  borderRadius?: number;
+  /** `background` while the mouse is over the box (see `World.hovered`). Only what a prop says changes; the rest stays. A box with a hover prop takes the mouse, and lets a press through unless it has an `onPress`. */
+  hoverBackground?: string;
+  /** `borderColor` while the mouse is over the box. */
+  hoverBorderColor?: string;
+  /** `background` while the box has the focus (`focusable`). Under a hover prop: when both apply, the hover colour wins. */
+  focusBackground?: string;
+  /** `borderColor` while the box has the focus. */
+  focusBorderColor?: string;
   /** Called when a press lands on the laid-out box (see `World.reportPress`), or as `PressableProps` says. The box is the size it was laid out at, last frame. */
   onPress?: () => void;
 }
@@ -146,6 +163,13 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   minHeight: number | undefined;
   maxHeight: number | undefined;
   background: string | undefined;
+  borderWidth: number;
+  borderColor: string | undefined;
+  borderRadius: number;
+  hoverBackground: string | undefined;
+  hoverBorderColor: string | undefined;
+  focusBackground: string | undefined;
+  focusBorderColor: string | undefined;
   float: boolean;
   anchor: FlexAnchor;
   to: FlexAnchor;
@@ -183,6 +207,13 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.minHeight = hostProps.minHeight;
     this.maxHeight = hostProps.maxHeight;
     this.background = hostProps.background;
+    this.borderWidth = hostProps.borderWidth ?? 0;
+    this.borderColor = hostProps.borderColor;
+    this.borderRadius = hostProps.borderRadius ?? 0;
+    this.hoverBackground = hostProps.hoverBackground;
+    this.hoverBorderColor = hostProps.hoverBorderColor;
+    this.focusBackground = hostProps.focusBackground;
+    this.focusBorderColor = hostProps.focusBorderColor;
     this.float = hostProps.float ?? false;
     this.anchor = hostProps.anchor ?? "top-left";
     this.to = hostProps.to ?? "top-left";

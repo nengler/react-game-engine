@@ -1,7 +1,7 @@
 //! `native/include/rge.h`, as Rust declarations. The header is the source of truth.
 use std::os::raw::c_char;
 
-pub const RGE_ABI_VERSION: i32 = 7;
+pub const RGE_ABI_VERSION: i32 = 8;
 
 pub const RGE_IN_LEN: usize = 7;
 
