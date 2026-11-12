@@ -87,7 +87,9 @@ no React equivalent.
   says why the root is made with `new`; and "Coming from React" has a "When something goes wrong" table. Not yet: a packaged game and
   the Rust host report the bundled `game.js`.
 - **Setup is heavy.** cmake, a C compiler and cargo are needed to make the tarballs before `rge create` works, since nothing is
-  published.
+  published. *Since:* only Node is needed to write, test and check a game: `npm run dist` builds what the machine can, keeps going
+  when cmake or cargo is missing, and ends with what the author has and what to install for the rest (the guide's step 0 is a table of
+  the same). Nothing is published, so a checkout and `npm run dist` is still the way in.
 - **Input scripts hold a key until it changes**: `right, right` is one press, `right, _, right` is two (Bramble finding 11).
 - **The guide is dense and terse** and mixes design reasons with usage; priority 8's "checked by following it from scratch" is not
   ticked yet.

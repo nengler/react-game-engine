@@ -130,7 +130,15 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 <p>From an empty folder to a packaged game, in eight steps. Every command below was run, in this order, in a folder outside the engine's repository. Nothing is published to a registry yet, so the engine is installed from tarballs made by the repository.</p>
 
 <h2>0. What you need</h2>
-<ul><li>Node 22.18 or newer (the compiler and the tools run TypeScript directly).</li><li>A checkout of the engine's repository, once, to make the tarballs: <code>npm install &amp;&amp; npm run native:build:headless &amp;&amp; npm run host:build:headless &amp;&amp; npm run pack</code> (needs cmake, a C compiler and cargo). This writes <code>dist/packs/rge-*.tgz</code>, including a prebuilt librge and <code>rge-host</code> in <code>@rge/native</code>.</li></ul>
+<ul><li>Node 22.18 or newer (the compiler and the tools run TypeScript directly). <strong>That alone is enough to write, test and check a game.</strong></li><li>A checkout of the engine's repository, once, to make the tarballs: <code>npm install &amp;&amp; npm run dist</code>. This writes <code>dist/packs/rge-*.tgz</code>. It builds what your machine can, keeps going when a piece is missing, and ends by saying what you have and what to install for the rest.</li></ul>
+<div class="tablewrap"><table>
+<tr><th>You have</th><th>You get</th></tr>
+<tr><td>Node</td><td><code>rge create</code> and <code>rge check</code>: compile, type-check, tests, and a scripted run under Node</td></tr>
+<tr><td>+ cmake and a C compiler (<code>sudo apt install build-essential cmake</code>; on macOS <code>xcode-select --install</code> and <code>brew install cmake</code>)</td><td>Screenshots, and <code>rge package --headless</code> (the software renderer, no window)</td></tr>
+<tr><td>+ the windowing libraries (<code>libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev</code> on Debian or Ubuntu)</td><td>A window: <code>rge dev</code> with hot reload, and a packaged game that opens one</td></tr>
+<tr><td>+ Rust (<a href="https://rustup.rs">rustup.rs</a>)</td><td><code>rge package --engine quickjs</code> (a few MB, no JIT), and <code>rge check</code> also plays the game under the Rust host and requires the same output</td></tr>
+</table></div>
+<p>Run <code>npm run dist</code> again after installing something; the builds are incremental.</p>
 
 <h2>1. Make a game</h2>
 <pre class="code" data-lang="sh"><code>cd /path/to/engine &amp;&amp; node packages/cli/src/cli.ts create ~/my-game --packs dist/packs
