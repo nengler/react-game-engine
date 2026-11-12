@@ -2,11 +2,9 @@ import { Camera, Entity, Hud, ParticleLayer, Shape, Sprite, Text, useInput, useR
 import { fx } from "./effects.ts";
 import { Dialogue } from "./Dialogue.tsx";
 import { useGame } from "./GameState.ts";
-import { Inventory } from "./Inventory.tsx";
-import { Menu } from "./Menu.tsx";
+import { Pause } from "./Pause.tsx";
 import { BELLS_NEEDED, MAX_HEARTS } from "./rules/constants.ts";
 import { mapPixels } from "./rules/maps.ts";
-import { pauseRows } from "./rules/menu.ts";
 import { readInput } from "./rules/controls.ts";
 import { heroOf } from "./rules/view.ts";
 import { World } from "./World.tsx";
@@ -15,7 +13,7 @@ import { World } from "./World.tsx";
 export function Play() {
   const run = useGame((s) => s.run);
   const paused = useGame((s) => s.paused);
-  const { advance, togglePause, choosePaused } = useGame((s) => s);
+  const { advance, togglePause } = useGame((s) => s);
   // What the keys said this step: refs hold values that must not cause a render. A press is kept until the update takes it.
   const dx = useRef(0);
   const dy = useRef(0);
@@ -23,12 +21,12 @@ export function Play() {
   const { x, y, frame } = heroOf(run);
   const { width, height } = mapPixels(run.map);
 
+  // While the pause screen is shown it is modal: this hears no keys (the held ones read as released), and it closes itself.
   useInput((input) => {
     if (input.pressed("back")) {
       togglePause();
       return;
     }
-    if (paused) return; // the pause screen's menu takes the keys
     const held = readInput(input);
     dx.current = held.dx;
     dy.current = held.dy;
@@ -56,14 +54,7 @@ export function Play() {
           </Entity>
         )}
         {run.talk !== null && !paused && <Dialogue />}
-        {paused && (
-          <Entity name="Pause">
-            <Shape kind="rect" width={320} height={180} color="#10131cd9" />
-            <Text transform={{ x: 12, y: 8 }} size={10} color="#e8d9a8" text="PAUSED" />
-            <Inventory />
-            <Menu top={120} rows={pauseRows()} onChoose={choosePaused} />
-          </Entity>
-        )}
+        {paused && <Pause />}
       </Hud>
     </Entity>
   );
