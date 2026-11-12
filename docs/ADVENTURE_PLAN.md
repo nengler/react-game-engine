@@ -468,6 +468,8 @@ updated.
 
 ### M8. The guide, the reference and the license (\~4 days)
 
+*(Done 2026-11-12 except the license: `docs/start.html` was written by running every step in a folder outside the repository (`rge create`, install, a second screen, a sound, a test, `rge check`, `rge package --headless`), and is linked from the overview; tests fail when a built-in element or an authoring hook is missing from the docs. **The license is not chosen**: it is the owner's decision (open decision 4 with the package names). A pass for secrets and large files found none (the largest tracked files are the games' 0.6 to 0.7 MB themes). The guide has not yet been followed by someone who did not write it.)*
+
 - **A getting-started page** (`docs/start.html`, linked first from `docs/index.html`), written by doing it: an empty folder,
   `rge create`, a moving square, a sprite, a sound, a second screen, a test, `rge check`, `rge package`. Then it is followed
   again from scratch by someone (or an agent) who did not write it.
