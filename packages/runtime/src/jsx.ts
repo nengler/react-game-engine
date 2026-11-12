@@ -225,8 +225,8 @@ export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
 
 /**
  * A grid of tiles from a sheet, with no object per tile: `<Tilemap map="room1" image="tiles.png" />` draws the registered Tiled map
- * `room1` with the tiles of `tiles.png`. The same map, as `getTilemap("room1")`, is the solid grid that movement code reads.
- * Placed by `transform` at the map's top left; `layer` draws one layer only. A leaf.
+ * `room1` with the tiles of `tiles.png`; without `image`, each tile comes from its own tileset's sheet, as saved in Tiled. The same
+ * map, as `getTilemap("room1")`, is the solid grid that movement code reads. Placed by `transform` at the map's top left; `layer` draws one layer only. A leaf.
  */
 export function Tilemap(_props: TilemapProps): JSX.Element {
   return compileTimeOnly("Tilemap");

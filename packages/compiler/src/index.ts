@@ -24,7 +24,8 @@ export { constantValue, exportedComponents, moduleSchemas, prefabSchema, type Js
 export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
 export { ASSET_PROPS, checkAssets, checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
 export { importTiled, type TiledImport } from "./scenes/tiled.ts";
-export { importTilemap, tilemapsSource, type TilemapImport, type TilemapImportOptions, type TilemapObjectOut, type TilemapOut } from "./scenes/tilemap.ts";
+export { importTilemap, tilemapsSource, type TilemapImport, type TilemapImportOptions, type TilemapObjectOut, type TilemapOut, type TilesetOut } from "./scenes/tilemap.ts";
+export { readTsx, type TilesetJson } from "./scenes/tsx.ts";
 export { inlineCustomHooks, expandCustomHooks, type ExpandedSource, type HookResolver, type HookSource } from "./hooks/inline.ts";
 export { EditMap } from "./hooks/edits.ts";
 export { checkProject, prefabsIndexSource, prefabsJson, projectSchemas, type ProjectModule } from "./project.ts";

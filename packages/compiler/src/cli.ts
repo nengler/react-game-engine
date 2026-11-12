@@ -26,7 +26,7 @@
  * `<outDir>/scenes/<name>.scene.json` and validates that.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   Compiler,
   checkProject,
@@ -119,6 +119,12 @@ function main(argv: readonly string[]): number {
             } catch {
               return null;
             }
+          },
+          // A tileset's sheet is loaded by its name in the assets folder; one that is not there cannot be drawn from the map.
+          resolveImage: (path) => {
+            if (assetsDir === undefined) return path;
+            const name = relative(resolve(assetsDir), resolve(scenesDir, path)).split(sep).join("/");
+            return name.startsWith("../") || name === ".." || isAbsolute(name) || !existsSync(resolve(assetsDir, name)) ? null : name;
           },
         });
         diagnostics.push(...imported.diagnostics);

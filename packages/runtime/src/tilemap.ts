@@ -33,18 +33,40 @@ export interface TilemapObject {
   readonly properties: Readonly<Record<string, string | number | boolean>>;
 }
 
+/**
+ * One tileset of a map: its sheet and how the sheet is cut. A cell's tile belongs to the tileset with the largest `firstGid` not
+ * above the cell's global id, as in Tiled.
+ */
+export interface TilesetData {
+  /** The global id of the sheet's first tile. */
+  readonly firstGid: number;
+  /** The sheet, as a name in the assets folder (what `<Sprite image>` takes). Empty when it is not there, or the tileset is a collection of images. */
+  readonly image: string;
+  /** Tiles across the sheet. */
+  readonly columns: number;
+  readonly tileWidth: number;
+  readonly tileHeight: number;
+  /** Pixels round the edge of the sheet, and between tiles. */
+  readonly margin: number;
+  readonly spacing: number;
+}
+
 export interface TilemapData {
   readonly width: number;
   readonly height: number;
   readonly tileWidth: number;
   readonly tileHeight: number;
-  /** The global id of the tile sheet's first tile. */
+  /** The global id of the first tileset's first tile: where a sheet given as `<Tilemap image>` starts. */
   readonly firstGid: number;
   /** The global ids of the tiles that are solid (the tile property `solid` in Tiled). */
   readonly solid: readonly number[];
   readonly layers: readonly TilemapLayerData[];
   /** The objects of the map's visible object layers, in file order. Absent when there are none. */
   readonly objects?: readonly TilemapObject[];
+  /** The map's tilesets, in order of `firstGid`: what a `<Tilemap>` with no `image` draws from. Absent in maps written by hand. */
+  readonly tilesets?: readonly TilesetData[];
+  /** The map's own custom properties (Map → Map Properties in Tiled). Absent when there are none. */
+  readonly properties?: Readonly<Record<string, string | number | boolean>>;
 }
 
 /** A map's cells, asked about by column and row or by pixel. Reading outside the map gives an empty cell, not an error. */
@@ -68,6 +90,11 @@ export class TileGrid {
   }
   get tileHeight(): number {
     return this.data.tileHeight;
+  }
+
+  /** One of the map's custom properties, or undefined. */
+  property(name: string): string | number | boolean | undefined {
+    return this.data.properties?.[name];
   }
 
   /** The map's objects, all of them or only those of one `type` (Tiled's Class). */

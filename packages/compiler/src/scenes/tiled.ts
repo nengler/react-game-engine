@@ -3,6 +3,10 @@
  * entity whose prefab is the object's `type` (Tiled 1.9+ saves it as `class`)
  * and whose props are its custom properties. Tile layers are a renderer
  * concern. The result goes through the same validation as a hand-written scene.
+ *
+ * An object layer (or group) with the custom property `data` set to true holds
+ * data for the game's rules (doors, spawns, markers: `TilemapData.objects`), not
+ * prefabs, so it is skipped here.
  */
 import { DiagnosticCode, error, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { SCENE_VERSION } from "./validate.ts";
@@ -36,6 +40,12 @@ interface TiledLayer {
   readonly visible?: unknown;
   readonly objects?: unknown;
   readonly layers?: unknown;
+  readonly properties?: unknown;
+}
+
+/** Whether a layer is marked as data for the rules (the bool property `data`), not prefabs. */
+export function isDataLayer(layer: { readonly properties?: unknown }): boolean {
+  return Array.isArray(layer.properties) && (layer.properties as TiledProperty[]).some((p) => p.name === "data" && (p as { value?: unknown }).value === true);
 }
 
 interface SceneEntityData {
@@ -73,7 +83,7 @@ export function importTiled(fileName: string, text: string): TiledImport {
   const visit = (layers: readonly TiledLayer[], dx: number, dy: number): void => {
     for (const layer of layers) {
       // A layer hidden in Tiled hides what is in it (a group's whole subtree too): its objects are not entities.
-      if (layer.visible === false) continue;
+      if (layer.visible === false || isDataLayer(layer)) continue;
       const x = dx + (typeof layer.offsetx === "number" ? layer.offsetx : 0);
       const y = dy + (typeof layer.offsety === "number" ? layer.offsety : 0);
       if (layer.type === "group" && Array.isArray(layer.layers)) visit(layer.layers as TiledLayer[], x, y); // groups flatten

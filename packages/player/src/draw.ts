@@ -21,6 +21,7 @@ import {
   Route,
   Router,
   findTilemap,
+  type TilemapData,
   TILE_FLIP_D,
   TILE_FLIP_H,
   TILE_FLIP_V,
@@ -55,6 +56,17 @@ import {
 } from "./protocol.ts";
 import { borderRects, fitScreen, viewToWindow, type ScreenPlacement, type WindowRect } from "./screen.ts";
 import { Warner } from "./warn.ts";
+
+/** A sheet a `<Tilemap>` cuts tiles from: the tiles from `firstGid` on, `columns` across, each `tw` × `th`. A handle of -1 draws nothing. */
+interface TileSheet {
+  readonly firstGid: number;
+  readonly handle: number;
+  readonly columns: number;
+  readonly tw: number;
+  readonly th: number;
+  readonly margin: number;
+  readonly spacing: number;
+}
 
 /**
  * Visit every object under `root` in draw order (a parent before its children, children in their
@@ -1694,6 +1706,7 @@ export class FrameBuilder {
   /**
    * A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer. A map that is not turned or scaled, in the
    * world, writes only the cells the view shows (and one more cell round them), so a map of any size costs what its view does.
+   * With `image`, every tile is cut from that one sheet; without it, each tile from its own tileset's sheet, as the map names them.
    */
   #tilemap(node: Tilemap, at: WorldTransform, cull: boolean): void {
     const grid = findTilemap(node.map);
@@ -1701,24 +1714,17 @@ export class FrameBuilder {
       this.#warner.once(`tilemap:${node.map}`, `<Tilemap map="${node.map}">: no map of that name is registered (registerTilemaps(tilemaps) with the compiler's generated table, before the game starts).`);
       return;
     }
-    if (node.image === "") return;
-    const handle = this.#texture(node.image);
-    if (handle < 0) return;
-    const sheet = this.#imageSize(node.image);
     const tw = grid.tileWidth;
     const th = grid.tileHeight;
-    if (!(sheet.width >= tw && tw > 0 && th > 0)) {
-      this.#warner.once(`tilemap-sheet:${node.image}`, `The tile sheet '${node.image}' (${sheet.width} × ${sheet.height}) is smaller than one ${tw} × ${th} tile (or this backend cannot report texture sizes): the map is not drawn.`);
-      return;
-    }
-    const columns = Math.floor(sheet.width / tw);
+    if (!(tw > 0 && th > 0)) return;
+    const sheets = this.#tileSheets(node, grid.data);
+    if (sheets.length === 0) return;
     const cos = Math.cos(at.rotation);
     const sin = Math.sin(at.rotation);
     const sx = at.scaleX;
     const sy = at.scaleY;
     let tint = 0xffffffff;
     if (node.opacity !== 1) tint = ((tint & 0xffffff00) | Math.round(255 * Math.min(1, Math.max(0, node.opacity)))) >>> 0;
-    const firstGid = grid.data.firstGid;
     const width = grid.width;
     const height = grid.height;
     let col0 = 0;
@@ -1728,12 +1734,21 @@ export class FrameBuilder {
     if (cull && at.rotation === 0 && sx === 1 && sy === 1) {
       const visible = this.#visibleRect();
       if (visible !== null) {
-        col0 = Math.max(0, Math.floor((visible.x0 - at.x) / tw) - 1);
+        // A tile taller or wider than a cell is drawn up and to the right of its cell (Tiled's bottom-left anchor), so cells that
+        // far below or to the left of the view can still show.
+        let extraCols = 0;
+        let extraRows = 0;
+        for (const sheet of sheets) {
+          extraCols = Math.max(extraCols, Math.ceil(sheet.tw / tw) - 1);
+          extraRows = Math.max(extraRows, Math.ceil(sheet.th / th) - 1);
+        }
+        col0 = Math.max(0, Math.floor((visible.x0 - at.x) / tw) - 1 - extraCols);
         col1 = Math.min(width - 1, Math.floor((visible.x1 - at.x) / tw) + 1);
         row0 = Math.max(0, Math.floor((visible.y0 - at.y) / th) - 1);
-        row1 = Math.min(height - 1, Math.floor((visible.y1 - at.y) / th) + 1);
+        row1 = Math.min(height - 1, Math.floor((visible.y1 - at.y) / th) + 1 + extraRows);
       }
     }
+    const single = sheets.length === 1 ? sheets[0]! : null;
     for (const layer of grid.data.layers) {
       if (!layer.visible || (node.layer !== undefined && layer.name !== node.layer)) continue;
       const data = layer.data;
@@ -1743,13 +1758,26 @@ export class FrameBuilder {
           const i = row * width + col;
           const gid = data[i] as number;
           if (gid === 0) continue;
-          const frame = gid - firstGid;
-          if (frame < 0) continue;
-          const srcX = (frame % columns) * tw;
-          const srcY = Math.floor(frame / columns) * th;
+          let sheet = single;
+          if (sheet === null) {
+            // The tileset with the largest first id not above this one; a map has a handful, so a walk from the end is enough.
+            for (let k = sheets.length - 1; k >= 0; k--) {
+              if ((sheets[k] as TileSheet).firstGid <= gid) {
+                sheet = sheets[k] as TileSheet;
+                break;
+              }
+            }
+            if (sheet === null) continue;
+          }
+          const frame = gid - sheet.firstGid;
+          if (frame < 0 || sheet.handle < 0) continue;
+          const stw = sheet.tw;
+          const sth = sheet.th;
+          const srcX = sheet.margin + (frame % sheet.columns) * (stw + sheet.spacing);
+          const srcY = sheet.margin + Math.floor(frame / sheet.columns) * (sth + sheet.spacing);
           const flip = flips === undefined ? 0 : (flips[i] as number);
           let lx = col * tw;
-          let ly = row * th;
+          let ly = row * th + th - sth; // a tile sits on the bottom of its cell, as Tiled draws one of another size
           let rotation = at.rotation;
           let flags = 0;
           let ox = 0;
@@ -1757,10 +1785,10 @@ export class FrameBuilder {
           if (flip !== 0) {
             // Mirrored tiles turn about their middle. Tiled applies the diagonal flip first, then horizontal, then vertical; each
             // combination is a quarter turn and at most one mirror, which is what a record can say.
-            lx += tw / 2;
-            ly += th / 2;
-            ox = tw / 2;
-            oy = th / 2;
+            lx += stw / 2;
+            ly += sth / 2;
+            ox = stw / 2;
+            oy = sth / 2;
             const h = (flip & TILE_FLIP_H) !== 0;
             const v = (flip & TILE_FLIP_V) !== 0;
             if ((flip & TILE_FLIP_D) === 0) flags = (h ? RGE_SPRITE_FLIP_X : 0) | (v ? RGE_SPRITE_FLIP_Y : 0);
@@ -1776,10 +1804,39 @@ export class FrameBuilder {
           }
           const px = at.x + cos * lx * sx - sin * ly * sy;
           const py = at.y + sin * lx * sx + cos * ly * sy;
-          this.#list.spriteRegionAt(px, py, rotation, sx, sy, handle, srcX, srcY, tw, th, ox, oy, flags, tint);
+          this.#list.spriteRegionAt(px, py, rotation, sx, sy, sheet.handle, srcX, srcY, stw, sth, ox, oy, flags, tint);
         }
       }
     }
+  }
+
+  /**
+   * The sheets a `<Tilemap>` draws from, by first global id: its `image` for the whole map, or each of the map's tilesets. Empty,
+   * with a warning, when there is nothing to draw from. A tileset that cannot be drawn (no sheet) is kept with a handle of -1, so
+   * its tiles are skipped rather than cut from the wrong sheet.
+   */
+  #tileSheets(node: Tilemap, map: TilemapData): TileSheet[] {
+    const tw = map.tileWidth;
+    const th = map.tileHeight;
+    if (node.image !== "") {
+      const handle = this.#texture(node.image);
+      if (handle < 0) return [];
+      const size = this.#imageSize(node.image);
+      if (!(size.width >= tw)) {
+        this.#warner.once(`tilemap-sheet:${node.image}`, `The tile sheet '${node.image}' (${size.width} × ${size.height}) is smaller than one ${tw} × ${th} tile (or this backend cannot report texture sizes): the map is not drawn.`);
+        return [];
+      }
+      return [{ firstGid: map.firstGid, handle, columns: Math.floor(size.width / tw), tw, th, margin: 0, spacing: 0 }];
+    }
+    const sets = map.tilesets ?? [];
+    if (!sets.some((set) => set.image !== "")) {
+      this.#warner.once(`tilemap-no-sheet:${node.map}`, `<Tilemap map="${node.map}"> has no \`image\`, and the map names no tile sheet in the assets folder: the map is not drawn. Give it an \`image\`, or keep the tilesets' images in the assets folder.`);
+      return [];
+    }
+    return sets.map((set) => {
+      const handle = set.image === "" || !(set.columns > 0) ? -1 : this.#texture(set.image);
+      return { firstGid: set.firstGid, handle, columns: Math.max(1, set.columns), tw: set.tileWidth, th: set.tileHeight, margin: set.margin, spacing: set.spacing };
+    });
   }
 
   /** A `<Particles>`: a small filled square for each live particle, aged toward its end colour, smaller or fainter. */

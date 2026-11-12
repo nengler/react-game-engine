@@ -39,7 +39,7 @@ export const GID = { grass: 1, tuft: 2, path: 3, pad: 4 } as const;
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "../scenes");
 
-const tileset = { firstgid: 1, name: "tiles", image: "tiles.png", imagewidth: 80, imageheight: 40, tilewidth: TILE, tileheight: TILE, columns: 8, tilecount: 32, margin: 0, spacing: 0 };
+const tileset = { firstgid: 1, name: "tiles", image: "../assets/tiles.png", imagewidth: 80, imageheight: 40, tilewidth: TILE, tileheight: TILE, columns: 8, tilecount: 32, margin: 0, spacing: 0 };
 
 export function buildMap(): unknown {
   if (DRAWING.length !== FIELD_ROWS || DRAWING.some((r) => r.length !== FIELD_COLS)) throw new Error(`The drawing must be ${FIELD_COLS} × ${FIELD_ROWS}.`);

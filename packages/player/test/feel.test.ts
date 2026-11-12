@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Camera, Entity, Fade, Hud, NO_SHAKE, Particles, Screen, Text, Tilemap, World, freeze, registerTilemaps, shakeOn, type TilemapData } from "@rge/runtime";
 import { createPlayer, RecordingBackend, type DecodedRecord, type PlayerConfig } from "../src/index.ts";
 
-const SIZES = { "assets/tiles.png": { width: 30, height: 20 }, "assets/font.png": { width: 80, height: 48 } };
+const SIZES = { "assets/tiles.png": { width: 30, height: 20 }, "assets/font.png": { width: 80, height: 48 }, "assets/props.png": { width: 64, height: 40 } };
 
 function run(root: PlayerConfig["root"], steps: number, config: Partial<PlayerConfig> = {}, dts: number[] = []): { backend: RecordingBackend; warnings: string[] } {
   const backend = new RecordingBackend({ textureSizes: SIZES });
@@ -66,6 +66,48 @@ describe("<Tilemap>", () => {
     assert.match(missing.warnings[0] as string, /no map of that name is registered/);
   });
 
+  it("without `image`, cuts each tile from its own tileset's sheet: margins, spacing, and a taller tile on the bottom of its cell", () => {
+    // Two tilesets: the ground (ids 1 to 6, the 3 × 2 sheet of 10 px tiles) and props (ids 20 on: 10 × 20 tiles with a margin of
+    // 2 and spacing of 1, 3 across, in `props.png`). A third tileset has no sheet (a collection of images): its tiles are skipped.
+    registerTilemaps({
+      sets: {
+        width: 3,
+        height: 2,
+        tileWidth: 10,
+        tileHeight: 10,
+        firstGid: 1,
+        solid: [],
+        layers: [{ name: "Ground", visible: true, data: [1, 6, 0, 0, 24, 40] }],
+        tilesets: [
+          { firstGid: 1, image: "tiles.png", columns: 3, tileWidth: 10, tileHeight: 10, margin: 0, spacing: 0 },
+          { firstGid: 20, image: "props.png", columns: 3, tileWidth: 10, tileHeight: 20, margin: 2, spacing: 1 },
+          { firstGid: 40, image: "", columns: 0, tileWidth: 10, tileHeight: 10, margin: 0, spacing: 0 },
+        ],
+      },
+    });
+    const { backend, warnings } = run(() => new Tilemap({ map: "sets" }), 1);
+    assert.deepEqual(warnings, []);
+    const tiles = ofOp(backend.lastFrame.records, "spriteRegion");
+    assert.equal(tiles.length, 3, "tile 40 has no sheet, so it is not drawn from the wrong one");
+    const [a, b, c] = tiles;
+    assert.deepEqual([a?.x, a?.y, a?.srcX, a?.srcY, a?.srcW, a?.srcH], [0, 0, 0, 0, 10, 10]);
+    assert.deepEqual([b?.x, b?.y, b?.srcX, b?.srcY], [10, 0, 20, 10], "tile 6: the last of the ground sheet");
+    assert.notEqual(a?.texture, c?.texture, "the prop comes from its own sheet");
+    // Tile 24 is the fifth of the props (frame 4: column 1, row 1): 2 + 1 × 11 across, 2 + 1 × 21 down; 10 × 20, drawn with its bottom
+    // on the bottom of cell (1, 1), which ends at y 20, so its top is at 20 - 20.
+    assert.deepEqual([c?.x, c?.y, c?.srcX, c?.srcY, c?.srcW, c?.srcH], [10, 0, 13, 23, 10, 20]);
+    // With `image`, the map's tilesets are ignored and every tile is cut from that one sheet, as before.
+    const one = run(() => new Tilemap({ map: "sets", image: "tiles.png" }), 1);
+    assert.equal(ofOp(one.backend.lastFrame.records, "spriteRegion").every((r) => r.srcH === 10), true);
+  });
+
+  it("without `image` and with no sheet in the map, draws nothing and warns once", () => {
+    const { backend, warnings } = run(() => new Tilemap({ map: "room" }), 3);
+    assert.equal(ofOp(backend.lastFrame.records, "spriteRegion").length, 0);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] as string, /has no `image`, and the map names no tile sheet/);
+  });
+
   it("is the same grid movement code asks: solid cells by cell and by pixel, markers by tile", async () => {
     const { getTilemap } = await import("@rge/runtime");
     const grid = getTilemap("room");
@@ -75,6 +117,7 @@ describe("<Tilemap>", () => {
     assert.equal(grid.solidAtPixel(15, 12), true);
     assert.deepEqual(grid.find("Back", 3), [[3, 0, 3]]);
     assert.throws(() => getTilemap("nope"), /No tilemap named 'nope' is registered \(registered: room/);
+    assert.equal(grid.property("name"), undefined, "a map with no properties");
   });
 });
 
