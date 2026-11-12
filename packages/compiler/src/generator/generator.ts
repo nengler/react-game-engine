@@ -104,13 +104,23 @@ function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
     w.blank();
     for (const line of declaration.text.split("\n")) w.line(line);
   }
+  let usesAssume = false;
   for (const component of module.components) {
     w.blank();
-    w.at(component.span, () => new ComponentGenerator(component, w, options.requiredHostProps, options.intrinsicHooks, options.gameState?.name ?? "").emit());
+    w.at(component.span, () => {
+      const generator = new ComponentGenerator(component, w, options.requiredHostProps, options.intrinsicHooks, options.gameState?.name ?? "");
+      generator.emit();
+      usesAssume ||= generator.usesAssume;
+    });
     if (component.isDefaultExport) {
       w.blank();
       w.line(`export default ${component.name};`);
     }
+  }
+  if (usesAssume) {
+    w.blank();
+    w.line("/** Narrows for TypeScript what a callback made under a condition reads (the condition held when it was made). It checks nothing. */");
+    w.line("function $assume(_condition: unknown): asserts _condition {}");
   }
   emitPrefabs(module, w);
   return w;

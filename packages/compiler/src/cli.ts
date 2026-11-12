@@ -142,13 +142,14 @@ function main(argv: readonly string[]): number {
     }
 
     const sourceNames = readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort();
+    let sourceTypesOk = true;
     if (check && sourceNames.length > 0) {
-      diagnostics.push(
-        ...compiler.typeCheckSources(sourceNames.map((name) => {
-          const sourcePath = resolve(srcDir, name);
-          return { fileName: sourcePath, text: readFileSync(sourcePath, "utf8") };
-        })),
-      );
+      const found = compiler.typeCheckSources(sourceNames.map((name) => {
+        const sourcePath = resolve(srcDir, name);
+        return { fileName: sourcePath, text: readFileSync(sourcePath, "utf8") };
+      }));
+      sourceTypesOk = !found.some((d) => d.severity === "error");
+      diagnostics.push(...found);
     }
     for (const name of sourceNames) {
       const sourcePath = resolve(srcDir, name);
@@ -192,10 +193,12 @@ function main(argv: readonly string[]): number {
       const count = projectSchemas(modules).size;
       console.log(`wrote prefabs.ts and prefabs.json (${count} prefab${count === 1 ? "" : "s"})`);
     }
-    // A file that failed to compile has no generated module (or an old one): checking the others against it would report the
-    // import as missing, in a generated file, when the cause is the source above. So the check waits until every file compiles.
+    // The generated code is checked for what the source check cannot see. It waits for every file to compile (a file that failed has
+    // no generated module, or an old one, so the others would report it missing) and for the source check to pass (each of its errors
+    // would come back from the generated code too, at the same line).
     if (check && outputs.length > 0) {
       if (!complete) console.error("skipped type-checking the generated code: fix the errors above first (a file that did not compile has no generated module)");
+      else if (!sourceTypesOk) console.error("skipped type-checking the generated code: fix the type errors above first");
       else diagnostics.push(...mapToSource(compiler.typeCheck(outputs), generated));
     }
     if (scenesDir !== undefined) {

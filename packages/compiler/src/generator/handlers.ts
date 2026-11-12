@@ -1,6 +1,7 @@
 // Layer 1 of ComponentGenerator: the handler methods, state setters and updaters, and the statements and callbacks inside them.
 import { assertNever, type FunctionIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
+import { walkExpr } from "../ir/walk.ts";
 import { param, annotated, pendingRef, propertyKey } from "./helpers.ts";
 import { ExpressionEmitter } from "./expressions.ts";
 
@@ -211,6 +212,31 @@ export class HandlerEmitter extends ExpressionEmitter {
    */
   protected override callback(fn: FunctionIR): string {
     const params = fn.params.map(param).join(", ");
-    return this.arrow(params, this.within({ inCallback: true }, () => this.capture(() => this.stmts(fn.body))), fn);
+    return this.arrow(params, this.within({ inCallback: true }, () => this.capture(() => {
+      // A callback made under a condition reads state through `this`, which TypeScript does not narrow inside a function, as it
+      // narrows the `const` the source's arrow closed over. `$assume` narrows it again; it checks nothing at run time, so a callback
+      // still runs as written when the condition no longer holds (a `useUnmount` telling the parent it went).
+      const conditions = this.mode.conditions;
+      if (conditions.length === 0) {
+        this.stmts(fn.body);
+        return;
+      }
+      // A memo the condition reads (`const waiting = pick(id)`) is a call, which TypeScript cannot narrow: read each once into a local,
+      // and read the local everywhere in the callback. Within one call it is the same value (state is a snapshot, props do not change).
+      const memoLocals = new Map(this.mode.memoLocals);
+      for (const condition of conditions) {
+        walkExpr(condition, (e) => {
+          if (e.kind !== "Memo" || memoLocals.has(e.key)) return;
+          const local = `$m${memoLocals.size}`;
+          this.w.line(`const ${local} = ${this.within({ memoLocals }, () => this.expr(e, true))};`);
+          memoLocals.set(e.key, local);
+        });
+      }
+      this.within({ memoLocals }, () => {
+        this.usesAssume = true;
+        this.w.line(`$assume(${conditions.map((c) => this.expr(c)).join(" && ")});`);
+        this.stmts(fn.body);
+      });
+    })), fn);
   }
 }

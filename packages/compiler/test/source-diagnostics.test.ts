@@ -1,6 +1,7 @@
 /**
  * Errors are reported in the component source, not in the generated code: a type error found in a generated file is moved to the
- * line of the `.tsx` it was written for, and a file that failed to compile is not reported again as a missing import elsewhere.
+ * line of the `.tsx` it was written for, an error the source check found is not reported again from the generated code, and a
+ * file that failed to compile is not reported again as a missing import elsewhere.
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -23,35 +24,20 @@ function compileProject(files: Record<string, string>): { status: number | null;
 }
 
 describe("diagnostics in the source", () => {
-  it("moves a type error found in the generated code to the line of the element it was written for", () => {
-    // TypeScript narrows `waiting` inside the arrow in the source, but the generated callback reads the state, which is not narrowed.
+  it("reports a type error in the source once, and does not check the generated code until the source passes", () => {
     const r = compileProject({
-      "keys.ts": `export function bind(action: string, key: string): void { void action; void key; }\n`,
-      "Prompt.tsx": `import { Entity } from "@rge/runtime/jsx";
-interface PromptProps { onKey: (key: string) => void }
-export function Prompt({ onKey }: PromptProps) {
-  return <Entity name="Prompt" />;
-}
-`,
-      "Settings.tsx": `import { Entity, useState } from "@rge/runtime/jsx";
-import { Prompt } from "./Prompt.tsx";
-import { bind } from "./keys.ts";
-
-export function Settings() {
-  const [waiting, setWaiting] = useState<string | null>(null);
-  return (
-    <Entity name="Settings">
-      {waiting !== null && <Prompt onKey={(key) => bind(waiting, key)} />}
-    </Entity>
-  );
+      "A.tsx": `import { Entity, Sprite, useState } from "@rge/runtime/jsx";
+export function A() {
+  const [n, setN] = useState(0);
+  return <Entity name="A"><Sprite image={n} /></Entity>;
 }
 `,
     });
     assert.equal(r.status, 1);
-    const line = r.stderr.split("\n").find((l) => l.includes("RGE9001"));
-    assert.ok(line, r.stderr);
-    assert.match(line!, /src\/Settings\.tsx:9:\d+ - error RGE9001: TS2345: /, "the element's line in the source");
-    assert.match(line!, /\(in the generated .*out\/Settings\.ts:\d+:\d+\)$/, "and where it was found");
+    const errors = r.stderr.split("\n").filter((l) => / - error /.test(l));
+    assert.equal(errors.length, 1, r.stderr);
+    assert.match(errors[0]!, /src\/A\.tsx:4:\d+ - error RGE9002: TS2322: /);
+    assert.match(r.stderr, /skipped type-checking the generated code: fix the type errors above first/);
   });
 
   it("does not report a file that failed to compile again, as a missing module of the files that import it", () => {

@@ -1,5 +1,5 @@
 // Layer 2 of ComponentGenerator: the element tree, keyed lists, mounts and transforms, and the code that builds and updates each element.
-import { assertNever, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam } from "../ir/types.ts";
+import { assertNever, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam, readsParam } from "../ir/types.ts";
 import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, transformTarget, propertyKey, access } from "./helpers.ts";
 import { HandlerEmitter } from "./handlers.ts";
 
@@ -79,13 +79,15 @@ export class ElementEmitter extends HandlerEmitter {
         const el = child.element;
         const ref = this.fieldRef(el);
         w.open(`if (${this.expr(child.condition, true)}) {`);
-        w.block(`if (${ref} === null)`, () => {
-          w.line(`${ref} = ${this.construct(el)};`);
-          this.emitStaticTransform(el.transform, ref, transformTarget(el));
-          this.emitMountStatics(el.children, mountOf(el, ref));
-          w.line(`${queueAddChild(mount, ref, children, index)};`);
+        this.within({ conditions: [...this.mode.conditions, child.condition] }, () => {
+          w.block(`if (${ref} === null)`, () => {
+            w.line(`${ref} = ${this.construct(el)};`);
+            this.emitStaticTransform(el.transform, ref, transformTarget(el));
+            this.emitMountStatics(el.children, mountOf(el, ref));
+            w.line(`${queueAddChild(mount, ref, children, index)};`);
+          });
+          this.emitElementUpdates(el, ref, "conditional");
         });
-        this.emitElementUpdates(el, ref, "conditional");
         w.close();
         w.open(`} else if (${ref} !== null) {`);
         w.line(`${queueRemoveChild(mount, ref)};`);
@@ -93,9 +95,13 @@ export class ElementEmitter extends HandlerEmitter {
         w.close("}");
         break;
       }
-      case "KeyedListChild":
-        this.emitList(child, mount, index);
+      case "KeyedListChild": {
+        // A condition that does not read the item (a keyed element's, `{open && <Menu key={screen} …/>}`) holds for every item's callbacks.
+        const condition = child.condition;
+        const itemFree = condition !== null && !readsParam(condition, child.item.id) && (child.index === null || !readsParam(condition, child.index.id));
+        this.within({ conditions: itemFree ? [...this.mode.conditions, condition] : this.mode.conditions }, () => this.emitList(child, mount, index));
         break;
+      }
       case "ChildrenSlot":
         break; // nothing renders here: the parent mounts its elements
       default:
@@ -185,6 +191,12 @@ export class ElementEmitter extends HandlerEmitter {
     });
     w.block(`for (const [${position}, ${item}] of $list.entries())`, () => {
       w.line(`const $key = $keys[${position}]!;`);
+      if (list.condition !== null && alt === null) {
+        // `p.tower && <Tower {...p.tower} />`: the filter above kept only items whose condition holds, but TypeScript does not narrow
+        // through `filter`. `$assume` narrows the item here, as the source's `&&` did; it is true by construction.
+        this.usesAssume = true;
+        w.line(`$assume(${this.arrowBody(list.condition)});`);
+      }
       w.line(`let $item = ${items}.get($key);`);
       if (alt && list.condition) {
         // The branch this item is in now; if it is not the one it was built in, the old instance goes and the new one takes its place.

@@ -673,8 +673,33 @@ items map holds the union of the two classes, and a `#<field>Branches` map remem
 branch flipped queues removal of the old instance and adds the new one at the same `(slot, position)`, with the item's current props; the
 reorder that follows uses the new instance. The branches in the generated code test the condition itself, not a stored flag, so that
 TypeScript narrows what it reads (`p.tower ? new Tower({ …p.tower })`). A fragment is still not a branch, and the index parameter cannot
-be used when the items are conditional (it would count the items left out). The `&&` form is a filter, so TypeScript does not narrow
-inside it: spread a non-null source there.
+be used when the items are conditional (it would count the items left out). The `&&` form is a filter, which TypeScript does not narrow
+through; the generated loop narrows the item with `$assume` (see "Narrowing in the generated code"), so `p.tower && <Tower {...p.tower} />`
+type-checks.
+
+### Narrowing in the generated code (2026-11-12)
+
+What TypeScript narrows in the source, the generated code must narrow too, or the check of the generated code fails where the
+source passed (Bramble finding 17). Three places lost it:
+
+- **A callback made under a condition** (`{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`). In the
+  source the arrow closes over a narrowed `const`; in the generated code it reads `this.capturing`, which TypeScript does not narrow
+  inside a function even when the function is made inside `if (this.capturing !== null)`.
+- **A memo in such a condition** (`const waiting = pick(id)`): it is generated as a call, `this.$memo(…)`, which is never narrowed.
+- **A list's `&&` form**: the generated code filters the items, and TypeScript does not narrow through `filter`.
+
+The generator writes `$assume(condition)`, a function the module declares when it uses it,
+`function $assume(_condition: unknown): asserts _condition {}`. An assertion signature narrows what follows; the body checks nothing.
+`EmitMode.conditions` holds the conditions an element being made sits under (a `ConditionalChild`'s, and a keyed list's when it does
+not read the item, as a keyed element's does), and `callback` starts each callback with `$assume(c1 && c2)`. A memo a condition reads
+is first read into a local (`const $m0 = this.$memo(…)`, `EmitMode.memoLocals`) that the callback then reads everywhere, since a local
+can be narrowed: within one call it is the same value, because state is a snapshot and props do not change. In a list's loop the
+item is narrowed by the list's own condition, after the filter that makes it true.
+
+**It changes no behaviour.** A callback that runs after its condition stopped holding still runs, reading state as it is now: a
+`useUnmount` that tells the parent `onGone()` after `label` became `null` sees `null`, as before. (React's closure would see the value
+of the render that made it; this engine's callbacks read current state, see "Props and callbacks".) Not narrowed still: a condition
+on something that is not a path or a memo, which TypeScript cannot narrow in the source either.
 
 ### Children on list items (2026-11-11)
 
