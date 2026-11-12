@@ -284,6 +284,13 @@ export class CollisionTracker {
   #fresh = new Float64Array(64);
   #incrementalFrames = 0;
 
+  #reported = 0;
+
+  /** How many contacts the last `update` reported, started and ended: when it is 0, no callback ran. */
+  get reported(): number {
+    return this.#reported;
+  }
+
   /** How many frames were handled by looking only at what moved (for tests and benchmarks). */
   get incrementalFrames(): number {
     return this.#incrementalFrames;
@@ -312,6 +319,7 @@ export class CollisionTracker {
 
   /** Compare this frame's colliders with last frame's contacts and report new contacts and ended ones. Returns how many contacts started (exits are not counted). */
   update(world: World, colliders: readonly ColliderEntry[]): number {
+    this.#reported = 0;
     // Keep ids small, so pair keys stay int32. Only when it pays: not every frame when there are simply that many colliders.
     const renumber = this.#nextId + colliders.length > this.#compactAt && this.#nextId > 2 * colliders.length;
     if (!renumber && this.#incremental) {
@@ -733,6 +741,7 @@ export class CollisionTracker {
    * order, the best a collider that is gone still has), enters in draw order (the list's order, which is the box index).
    */
   #report(world: World, ended: Pair[] | undefined, started: [number, number][]): number {
+    this.#reported = (ended?.length ?? 0) + started.length;
     if (ended) {
       const idOf = (c: Collider): number => this.#ids.get(c) ?? 0;
       const ordered = ended

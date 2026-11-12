@@ -100,8 +100,9 @@ export class World {
   /**
    * Report that two colliders began touching (the mock has no physics; a
    * collision system calls this). Each collider's own `onCollisionEnter`
-   * callback is called with the other collider. Dispatch only: renders happen
-   * in the next `tick`.
+   * callback is called with the other collider. Dispatch only: the player
+   * calls `flush` after the step's contacts, so what they change renders
+   * before the next step.
    */
   reportCollision(a: Collider, b: Collider): void {
     if (a.world === this) a.onCollisionEnter?.(b);

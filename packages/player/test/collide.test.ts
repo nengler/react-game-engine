@@ -420,7 +420,7 @@ describe("CollisionTracker against every-pair testing", () => {
 describe("collisions in the frame loop", () => {
   const WINDOW = { width: 200, height: 100, title: "test" };
 
-  it("reports two Heroes walking into each other once, again after they part and meet again, and renders the effect next tick", () => {
+  it("reports two Heroes walking into each other once, again after they part and meet again, and renders the effect in the same step", () => {
     const backend = new RecordingBackend();
     const left = new Hero();
     const right = new Hero();
@@ -440,12 +440,13 @@ describe("collisions in the frame loop", () => {
     right.placement.x = 10; // each Hero's collider is 16 × 24 from its position
     player.step();
     assert.deepEqual(backend.plays, ["assets/hurt.wav", "assets/hurt.wav"], "each Hero heard it once");
-    assert.equal(left.health, 100, "setHealth was queued: it renders in the next tick");
+    // The hit takes 10, rendered right after the step that made the contact (so the frame that shows them touching shows it).
+    assert.equal(left.health, 90, "left's health in the step of the hit");
+    assert.equal(right.health, 90, "right's health in the step of the hit");
     player.step();
-    // The hit takes 10. Hero also regenerates `dt` in that same tick, since it is not poisoned yet in the snapshot it reads.
-    close(left.health, 90, "left's health after the hit", 0.1);
-    close(right.health, 90, "right's health after the hit", 0.1);
-    assert.ok(left.health < 100 && right.health < 100);
+    // Poisoned by the hit, a Hero no longer regenerates: the next step's update already reads the new state.
+    assert.ok(left.health < 90 && right.health < 90, "poison, not regeneration, in the very next step");
+    close(left.health, 90, "left's health a step after the hit", 0.1);
     player.step();
     player.step();
     assert.equal(backend.plays.length, 2, "still overlapping: no new reports");
