@@ -20,7 +20,7 @@ export { Game, type GameProps } from "./components/Game.ts";
 export { isStyled, Sprite, type SpriteLook, type SpriteOptions, type SpriteProps } from "./components/Sprite.ts";
 export { Collider, type ColliderProps, type Contact } from "./components/Collider.ts";
 export { Sound, addSoundPreload, getSoundSink, getVolume, setSoundSink, setVolume, type SoundSink, type VolumeGroup } from "./Sound.ts";
-export { createMemoryStorage, createSave, createSettings, getStorage, Save, setStorage, Settings, type EngineSettings, type SaveOptions, type SettingsOptions, type StorageSink } from "./storage.ts";
+export { createMemoryStorage, createSave, createSettings, getStorage, Save, setStorage, Settings, type EngineSettings, type SaveOptions, type SettingsOf, type SettingsOptions, type StorageSink } from "./storage.ts";
 export { Pointer, type PointerProps, type Pressable } from "./components/Pointer.ts";
 export { Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";

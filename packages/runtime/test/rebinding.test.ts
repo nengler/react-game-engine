@@ -34,6 +34,20 @@ describe("Controls rebinding", () => {
     assert.equal(controls.load(null), 0);
   });
 
+  it("tells a subscriber each change of keys, and nothing for a reset that changes nothing", () => {
+    const controls = createControls({ jump: ["Z"], dash: ["X"] });
+    const seen: string[] = [];
+    const stop = controls.subscribe((bindings) => seen.push(bindings.jump.join("+")));
+    controls.reset();
+    controls.bind("jump", ["Space"]);
+    controls.bind("jump", ["Nope"]);
+    controls.load({ jump: ["Enter", "PadA"] });
+    controls.reset();
+    stop();
+    controls.bind("jump", ["Q"]);
+    assert.deepEqual(seen, ["Space", "Enter+PadA", "Z"]);
+  });
+
   it("lastPressed names the first key pressed, for 'press a key for Jump'", () => {
     assert.equal(createInputState({}).lastPressed?.(), undefined);
     assert.equal(createInputState({ pressed: ["Q", "W"] }).lastPressed?.(), "Q");
