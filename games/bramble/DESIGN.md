@@ -146,5 +146,14 @@ answered, the components read like React:
 Every frame of three replays (the title and settings, the cave with the pause screen, and the whole game) draws exactly what it drew
 before the change.
 
+A second review found what still read unlike React, and the engine took three more: methods of strings and numbers
+(`String(seconds).padStart(2, "0")` on the end screen, `id.startsWith("bind:")` in the settings, where a `bindingOf` helper had stood in),
+destructured derived values worked out once (`const { x, y, frame } = heroOf(run)`, `const { name, page, shown, more } = dialogueOf(run)`),
+and `useState` starting from the game state. With them, `<Menu>` owns its cursor and keys and says what was chosen through
+`onChoose` and `onAdjust` (the title, the settings and the pause screen pass actions or an arrow), the screens take several actions in
+one `useGame((s) => s)`, and the inventory's slot holds one condition over a fragment. The three replays still draw every frame as
+before.
+
 Still as it was: sounds and particles answer the step's events in the `advance` action (`answer(events)`), since the engine has no
-`useEffect` on purpose; and a list inside a list item is not built yet.
+`useEffect` on purpose; a list inside a list item is not built yet; and the play screen keeps three refs for the keys, since a ref
+holds a number, string or boolean only.

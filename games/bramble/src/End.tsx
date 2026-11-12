@@ -8,11 +8,11 @@ export function End() {
     if (input.pressed("confirm")) toTitle();
   });
   const minutes = Math.floor(time / 60);
-  const seconds = Math.floor(time % 60);
+  const seconds = String(Math.floor(time % 60)).padStart(2, "0");
   return (
     <Entity name="End">
       <Text transform={{ x: 0, y: 55 }} width={320} align="center" size={20} color="#e8d9a8" text="The gate opens." />
-      <Text transform={{ x: 0, y: 85 }} width={320} align="center" size={10} color="#a7b0c8" text={`Time ${minutes}:${seconds < 10 ? "0" : ""}${seconds}`} />
+      <Text transform={{ x: 0, y: 85 }} width={320} align="center" size={10} color="#a7b0c8" text={`Time ${minutes}:${seconds}`} />
       <Text transform={{ x: 0, y: 120 }} width={320} align="center" size={10} color="#a7b0c8" text="Press Enter" />
     </Entity>
   );

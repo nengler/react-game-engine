@@ -71,8 +71,3 @@ export function pauseRows(): Row[] {
 export function wrap(cursor: number, count: number): number {
   return (cursor + count) % count;
 }
-
-/** The action a settings row rebinds (`bind:up` is "up"), or null for any other row. */
-export function bindingOf(id: string): string | null {
-  return id.startsWith("bind:") ? id.slice(5) : null;
-}
