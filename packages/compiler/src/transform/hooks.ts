@@ -249,11 +249,18 @@ export class HookLowering extends ExpressionLowering {
       this.componentScope.declare(hook.valueName, { kind: "action", name: hook.valueName, action: first });
       return;
     }
-    if (this.usedNames.has(hook.valueName)) {
-      this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared or is reserved by the runtime.`, hook.declaration);
-      return;
+    // A value read from the game state is kept in a field of the component. When its name is a member the runtime already has
+    // (`const name = useGame((s) => s.speaker)` in an `<Entity>` root, whose `name` is the entity's), the field is `$name`: the
+    // author's name stays as written, and `$` names are the compiler's alone.
+    let field = hook.valueName;
+    if (this.usedNames.has(field)) {
+      if (!this.isRuntimeMember(field)) {
+        this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared or is reserved by the runtime.`, hook.declaration);
+        return;
+      }
+      field = `$${field}`;
     }
-    const id = this.storePathState(hook.path, hook.valueName, hook.selector, state, hooks);
+    const id = this.storePathState(hook.path, field, hook.selector, state, hooks);
     if (id) this.componentScope.declare(hook.valueName, { kind: "state", id });
   }
 

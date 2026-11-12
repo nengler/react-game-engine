@@ -190,6 +190,29 @@ export function Settings() {
     assert.deepEqual(typeErrors(compiled), []);
   });
 
+  it("reads a value named like a member of the root (`name` in an <Entity>) into a field of its own", async () => {
+    const compiled = build(`
+export function Badge() {
+  const name = useGame((s) => s.player.name);
+  const rename = useGame((s) => s.rename);
+  useUpdate(() => { if (name === "Ada") rename("Bo"); });
+  return <Entity name="Badge"><Text text={name} /></Entity>;
+}`);
+    assert.match(compiled.code, /\$name: string = useGame\.store\.get<string>\("player\.name"\);/);
+    assert.deepEqual(typeErrors(compiled), []);
+    const g = generated(compiled);
+    const { Badge } = await load<{ Badge: new () => Entity }>(g);
+    const world = new World();
+    const badge = new Badge();
+    world.mount(badge);
+    world.flush();
+    assert.equal(badge.name, "Badge", "the entity keeps its own name");
+    assert.equal((badge.children[0] as Text).text, "Ada");
+    world.tick(1 / 60);
+    world.flush();
+    assert.equal((badge.children[0] as Text).text, "Bo");
+  });
+
   it("binds an action: called as a statement in a handler, with arguments, reading nothing", () => {
     const compiled = build(SCORER);
     const [component] = compiled.ir.components;

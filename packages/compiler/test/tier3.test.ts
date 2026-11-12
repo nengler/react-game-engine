@@ -4,7 +4,7 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Pointer, Shape, World } from "@rge/runtime";
+import { Entity, Pointer, Shape, Text, World } from "@rge/runtime";
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, load, typeCheck } from "./helpers.ts";
 
@@ -573,12 +573,118 @@ describe("children on list items", () => {
   const compiled = compile(ITEM_CHILDREN, "Items.tsx");
   it("type-checks the generated module and keeps the children in the item's record", () => {
     assert.deepEqual(typeCheck(compiled), []);
-    assert.match(compiled.code, /kids: \[Tag, Tag\]/);
-    assert.match(compiled.code, /\$item\.attachPassedChild\(\$c0, 0\)/);
+    assert.match(compiled.code, /kids: \{ tag: Tag \| null; tag2: Tag \| null \}/);
+    assert.match(compiled.code, /\$item\.attachPassedChild\(\$rec\.kids\.tag, 0\)/);
   });
 
-  it("still rejects a condition or a list inside an item's children", () => {
-    const errors = compileErrors(`${ITEM_CHILDREN}\nfunction Bad() { const [opts] = useState<Opt[]>([]); return <Entity name="B">{opts.map((o) => <Btn key={o.id} on onPress={() => {}}>{o.ok && <Tag text="x" />}</Btn>)}</Entity>; }`);
+  it("still rejects a list inside an item's children", () => {
+    const errors = compileErrors(`${ITEM_CHILDREN}\nfunction Bad() { const [opts] = useState<Opt[]>([]); return <Entity name="B">{opts.map((o) => <Btn key={o.id} on onPress={() => {}}>{opts.map((p) => <Tag key={p.id} text="x" />)}</Btn>)}</Entity>; }`);
     assert.equal(errors[0]?.code, DiagnosticCode.InvalidList);
+  });
+});
+
+const ITEM_CONDITIONS = `
+interface Slot {
+  id: number;
+  label: string;
+  count: number;
+  locked: boolean;
+}
+
+interface Grid {
+  slots: Slot[];
+}
+
+function Inventory() {
+  const [grid, setGrid] = useState<Grid>({ slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "", count: 0, locked: true }] });
+  const [picked, setPicked] = useState("");
+  return (
+    <Entity name="Inventory">
+      {grid.slots.map((s) => (
+        <Entity key={s.id} name={"slot" + s.id}>
+          <Shape kind="rect" width={10} height={10} />
+          {s.count > 0 && (
+            <Entity name="filled">
+              <Text text={s.label} />
+              {s.count > 1 && <Text text={"x" + s.count} />}
+              <Pointer width={4} height={4} onPress={() => setPicked(s.label)} />
+            </Entity>
+          )}
+          {s.locked ? <Entity name="lock" /> : null}
+        </Entity>
+      ))}
+    </Entity>
+  );
+}
+`;
+
+interface InventoryInstance extends Entity {
+  setGrid(grid: { slots: { id: number; label: string; count: number; locked: boolean }[] }): void;
+  readonly picked: string;
+}
+
+describe("conditions and nested children inside list items", () => {
+  let Inventory: new () => InventoryInstance;
+  before(async () => {
+    ({ Inventory } = await load<{ Inventory: typeof Inventory }>(compile(ITEM_CONDITIONS, "Inventory.tsx")));
+  });
+
+  /** For each slot: the names of its children, and the texts inside its `filled` entity. */
+  const summary = (inv: Entity): [string, string[], string[]][] =>
+    inv.children.map((slot) => {
+      const filled = slot.children.find((c) => (c as Entity).name === "filled");
+      const texts = filled ? filled.children.filter((c): c is Text => c instanceof Text).map((t) => t.text) : [];
+      return [(slot as Entity).name, slot.children.map((c) => (c instanceof Entity ? c.name : c.constructor.name)), texts];
+    });
+
+  it("builds only the children whose conditions hold, in their written places", () => {
+    const world = new World();
+    const inv = new Inventory();
+    world.mount(inv);
+    world.flush();
+    assert.deepEqual(summary(inv), [
+      ["slot1", ["Shape", "filled"], ["key"]],
+      ["slot2", ["Shape", "lock"], []],
+    ]);
+  });
+
+  it("adds and removes them as the item changes, keeping the item's instance", () => {
+    const world = new World();
+    const inv = new Inventory();
+    world.mount(inv);
+    world.flush();
+    const first = inv.children[0];
+    inv.setGrid({ slots: [{ id: 1, label: "key", count: 3, locked: false }, { id: 2, label: "bell", count: 1, locked: false }] });
+    world.flush();
+    assert.equal(inv.children[0], first);
+    assert.deepEqual(summary(inv), [
+      ["slot1", ["Shape", "filled"], ["key", "x3"]],
+      ["slot2", ["Shape", "filled"], ["bell"]],
+    ]);
+    inv.setGrid({ slots: [{ id: 1, label: "key", count: 0, locked: true }, { id: 2, label: "bell", count: 1, locked: false }] });
+    world.flush();
+    assert.deepEqual(summary(inv), [
+      ["slot1", ["Shape", "lock"], []],
+      ["slot2", ["Shape", "filled"], ["bell"]],
+    ]);
+  });
+
+  it("gives a child made later a callback that reads the item's current value", () => {
+    const world = new World();
+    const inv = new Inventory();
+    world.mount(inv);
+    world.flush();
+    inv.setGrid({ slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "bell", count: 1, locked: false }] });
+    world.flush();
+    inv.setGrid({ slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "shears", count: 1, locked: false }] });
+    world.flush();
+    const filled = inv.children[1]!.children.find((c) => (c as Entity).name === "filled")!;
+    world.reportPress(filled.children.find((c) => c instanceof Pointer) as Pointer, 1, 1);
+    world.flush();
+    assert.equal(inv.picked, "shears");
+  });
+
+  it("type-checks the generated module", () => {
+    assert.deepEqual(typeCheck(compile(ITEM_CONDITIONS, "Inventory.tsx")), []);
   });
 });

@@ -342,6 +342,11 @@ export class LoweringBase {
     return true;
   }
 
+  /** A member of the runtime's object (`name` of an `<Entity>` root, `render`), as opposed to a name this component declared. */
+  protected isRuntimeMember(name: string): boolean {
+    return this.manifest.reservedMembers.includes(name) || (this.manifest.intrinsicMembers[rootTag(this.component.jsx, this.manifest.hostIntrinsic)] ?? []).includes(name);
+  }
+
   /** A free field name for an element; with a suffix (a list's `enemyItems`), the suffixed name is claimed too. */
   protected allocateFieldName(tag: string, suffix: string | null = null): string {
     const base = tag.charAt(0).toLowerCase() + tag.slice(1);

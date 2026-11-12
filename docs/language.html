@@ -159,17 +159,18 @@ const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : 
   <h3>Allowed in a component body</h3>
   <div class="pair">
     <div class="yes"><h5>Allowed</h5><ul>
-      <li>Number, string, boolean, <code>null</code> literals</li>
+      <li>Number, string, boolean, <code>null</code> and <code>undefined</code> (<code>gate !== undefined</code>)</li>
       <li>State and prop reads</li>
       <li>Unary <code>! - +</code>, binary arithmetic, comparison, logical</li>
       <li><code>a ? b : c</code>, parentheses, template literals</li>
       <li>Array and object literals, with spreads</li>
       <li>Member reads (<code>e.id</code>, <code>items.length</code>, <code>found?.hp</code>)</li>
       <li>Non-mutating array methods (<code>map</code>, <code>filter</code>, <code>some</code>…)</li>
+      <li>Calling a function from a relative <code>.ts</code> file or the same file (<code>spotsOf(run)</code>): assumed pure</li>
     </ul></div>
     <div class="no"><h5>Not allowed</h5><ul>
       <li>Loops, <code>try</code>, <code>let</code>, <code>await</code>, <code>this</code></li>
-      <li>Calling arbitrary functions</li>
+      <li>Calling methods of values (<code>name.toUpperCase()</code>): put them in a plain function</li>
       <li>Text children and spread attributes in JSX</li>
       <li><code>useEffect</code>, <code>ref={…}</code>, <code>useContext</code></li>
       <li>Hooks inside conditions, loops or handlers</li>
@@ -443,6 +444,7 @@ export function Panel({ title, children }: PanelProps) {
 {health < 25 && <WarningIcon />}
 {taken ? null : <Coin />}
 {open ? <Menu /> : <Button />}          // either branch may be null
+{gate !== undefined && <Sprite image="gate.png" frame={gate.frame} />}
 </script></pre>
   <p>A condition turning off <strong>unmounts</strong> the child; turning on mounts it. To switch several siblings on one condition, wrap them in a fragment: <code>{gems === 0 &amp;&amp; (&lt;&gt;&lt;Shape … /&gt;&lt;Collider … /&gt;&lt;/&gt;)}</code>.</p>
 
@@ -451,16 +453,27 @@ export function Panel({ title, children }: PanelProps) {
 {enemies.map((e) => (
   <Enemy key={e.id} speed={e.speed} onDefeated={() => remove(e.id)} />
 ))}
+
+// The items can be computed where they are drawn, as in React: a member, a mapped array, a helper's result.
+{spotsOf(run).map((s) => <Sprite key={s.id} image="things.png" frame={s.frame} transform={{ x: s.x, y: s.y }} />)}
+
+// An item may hold children, nested and conditional, that read it.
+{slots.map((slot) => (
+  <Entity key={slot.id} transform={{ x: slot.x, y: slot.y }}>
+    <Shape kind="rect" width={42} height={36} color="#1b2036" />
+    {slot.filled && <Text text={slot.name} />}
+  </Entity>
+))}
 </script></pre>
   <div class="tablewrap"><table>
     <tr><th>Rule (otherwise <code>RGE1209</code>)</th></tr>
-    <tr><td>The source is a state or prop array, optionally followed by <code>.filter((e) =&gt; …)</code>.</td></tr>
-    <tr><td><code>map</code> takes one inline arrow (item, optionally index) returning exactly <strong>one element</strong>: an expression body, or a block with only <code>return &lt;X … /&gt;</code>.</td></tr>
-    <tr><td>No conditionals, fragments or children inside the arrow. A richer item is a component.</td></tr>
+    <tr><td>The items are any array the component can compute: state or a prop, a member of one (<code>world.enemies</code>), an array method's result (<code>.filter</code>, <code>.map</code>, <code>.slice</code>), an imported constant, or what a plain function returns (<code>spotsOf(run)</code>). The list follows the state and props the expression reads. Not through <code>?.</code>.</td></tr>
+    <tr><td><code>map</code> takes one inline arrow (item, optionally index) returning <strong>one element</strong>, <code>cond &amp;&amp; &lt;El key … /&gt;</code> or <code>cond ? &lt;A key … /&gt; : &lt;B key … /&gt;</code>: an expression body, or a block with only <code>return</code>. No fragments.</td></tr>
+    <tr><td>The element may have children, nested and conditional (<code>{slot.filled &amp;&amp; &lt;Text … /&gt;}</code>), that read the item. Not yet among them: a list, <code>{children}</code> or a <code>&lt;Route&gt;</code>; for those, make the item a component.</td></tr>
     <tr><td>The element has a <code>key</code> that reads the item (<code>key={e.id}</code>). A key reading only the index compiles with a warning; one reading neither is an error. <code>key</code> anywhere else is <code>RGE1203</code>.</td></tr>
     <tr><td>A callback on the item may read the item but not the index.</td></tr>
   </table></div>
-  <p>Instances follow keys, so each keeps its own state as items move.</p>
+  <p>Instances follow keys, so each keeps its own state as items move. A computed list is worked out once per render of the component, which happens when what it reads changes.</p>
 </section>
 <section id="gamestate" data-group="Language" data-title="Game state (useGame)">
   <h2>Game state: <code>createGameState</code></h2>

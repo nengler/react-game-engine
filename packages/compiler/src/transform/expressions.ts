@@ -23,6 +23,8 @@ export class ExpressionLowering extends LoweringBase {
       const binding = this.scope.get(node.text);
       // A function imported from a relative .ts file, used as a value (a prop that takes a function).
       if (!binding && this.plainImports.has(node.text)) return { kind: "PlainRef", name: node.text };
+      // `x !== undefined`, `cond ? undefined : x`: the global, which no import or declaration can shadow here.
+      if (!binding && node.text === "undefined") return { kind: "PlainRef", name: "undefined" };
       if (!binding) {
         this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component.`, node);
         return null;
