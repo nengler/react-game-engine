@@ -21,6 +21,7 @@
     "check:demo": "rge check packages/demo && tsc -p tsconfig.json",
     "bundle": "node tools/bundle.ts",
     "bench:check": "node tools/bench-check.ts",
+    "docs:index": "node tools/docs-index.ts",
     "pack": "node tools/pack.ts",
     "package": "rge package packages/demo",
     "host:build": "cargo build --release --manifest-path host/Cargo.toml",

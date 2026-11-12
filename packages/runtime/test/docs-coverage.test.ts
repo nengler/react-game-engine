@@ -12,3 +12,11 @@ describe("docs/reference.html", () => {
     assert.deepEqual(missing, [], "built-ins missing from the reference (add them to docs/reference.html)");
   });
 });
+
+// The guide's search box matches an index written into every page; it cannot fall behind the sections it indexes.
+describe("the guide's search index", () => {
+  it("matches every section's text, on every page (run node tools/docs-index.ts after changing a section)", async () => {
+    const { updateIndex } = await import("../../../tools/docs-index.ts");
+    assert.deepEqual(updateIndex(false), [], "pages whose index is stale");
+  });
+});
