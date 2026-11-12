@@ -176,7 +176,8 @@ What building Hearth found, and which of Kite's findings held a second time.
 2. **Conditionals inside a list's `.map`** were hit twice (a pad that is an `EmptyPad` or a `Tower`, and a shot that is `live`) and are **built**, both the `&&`
    (an implicit filter) and the `? :` form (an item that switches class keeps its position; both branches need the same key). A limitation the game
    found: the `&&` form is a filter, so TypeScript cannot narrow inside it (`p.tower && <Tower {...p.tower}/>` would not type-check); the `? :` form
-   narrows because the generated branches test the condition itself.
+   narrows because the generated branches test the condition itself. *Since (2026-11-12):* the `&&` form narrows too (`$assume`; DESIGN.md,
+   "Narrowing in the generated code").
 3. **Forwarding `{children}`** was hit by the modal (`<Panel title={title}>{children}</Panel>`) and is **built**, with option A decided in the plan (the
    forwarded `{children}` is the only child passed on). The game never wanted anything beside it. See DESIGN.md, "Forwarding".
 4. **Children on list items** were hit by the build menu (`TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)`, `RGE1209`), worked around for a while with one

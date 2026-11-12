@@ -7,8 +7,6 @@ interface MenuProps {
   rows: readonly Row[];
   /** The row the cursor starts on. */
   start?: number;
-  /** Ignore the keys (a row of the screen is waiting for a key of its own). */
-  disabled?: boolean;
   /** Confirm on a row. */
   onChoose: (id: string) => void;
   /** Left or right on a row: -1 or 1. */
@@ -16,10 +14,9 @@ interface MenuProps {
 }
 
 /** Rows of a menu, with a bar behind the one the cursor is on. Up and down move the cursor; the screen acts on what is chosen. */
-export function Menu({ top, rows, start = 0, disabled = false, onChoose, onAdjust }: MenuProps) {
+export function Menu({ top, rows, start = 0, onChoose, onAdjust }: MenuProps) {
   const [cursor, setCursor] = useState(start);
   useInput((input) => {
-    if (disabled) return;
     const id = rows[cursor]?.id ?? "";
     if (input.pressed("up")) setCursor((c) => wrap(c - 1, rows.length));
     if (input.pressed("down")) setCursor((c) => wrap(c + 1, rows.length));

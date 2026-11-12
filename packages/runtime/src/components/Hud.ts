@@ -1,4 +1,6 @@
-import { GameObject } from "../GameObject.ts";
+import { GameObject, type InputScopeProps } from "../GameObject.ts";
+
+export type HudProps = InputScopeProps;
 
 /**
  * A layer drawn after the world through a view that ignores the camera, so what is in it stays where it is put while
@@ -12,7 +14,9 @@ export class Hud<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 
   /** `props` and `defaults` are the component's own (see `GameObject`). */
-  constructor(_hostProps: object = {}, props?: P, defaults?: Partial<P>) {
+  constructor(hostProps: HudProps = {}, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
+    this.inert = hostProps.inert ?? false;
+    this.modal = hostProps.modal ?? false;
   }
 }

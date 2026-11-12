@@ -17,6 +17,13 @@ export interface EmitMode {
   readonly inlineMemos: boolean;
   /** Where element fields live: on the component (`this.sprite`), or, while a list item's children are written, in its record. */
   readonly fieldBase: string;
+  /**
+   * The conditions an element being made sits under (`{capturing !== null && <Prompt … />}`). Its callbacks start with
+   * `$assume(condition)`, so TypeScript narrows in them what the source narrowed (see `callback`).
+   */
+  readonly conditions: readonly ExprIR[];
+  /** Memos a callback read once into a local (`const $m0 = this.$memo(…)`), by key: read as that local, which TypeScript can narrow. */
+  readonly memoLocals: ReadonlyMap<string, string>;
 }
 
 export class ExpressionEmitter {
@@ -26,7 +33,9 @@ export class ExpressionEmitter {
   protected w: CodeWriter;
   protected readonly stateById: ReadonlyMap<StateId, StateIR>;
   /** Where the emitter is now, and so how some IR is written. Changed only through `within`. */
-  protected mode: EmitMode = { itemLookup: null, inCallback: false, inlineMemos: false, fieldBase: "this" };
+  protected mode: EmitMode = { itemLookup: null, inCallback: false, inlineMemos: false, fieldBase: "this", conditions: [], memoLocals: new Map() };
+  /** Whether a callback was written with `$assume`, so the module declares it. */
+  usesAssume = false;
   /** How many temporaries the `render()` being written has used (see `emitReportedWrites`). */
   protected renderTemps = 0;
   /** The imported game state (`useGame`), when the module uses one. */
@@ -167,6 +176,8 @@ export class ExpressionEmitter {
       case "Conditional": return wrap(`${this.expr(e.test)} ? ${this.expr(e.whenTrue)} : ${this.expr(e.whenFalse)}`);
       case "Memo": {
         if (this.mode.inlineMemos) return this.expr(e.value, top);
+        const local = this.mode.memoLocals.get(e.key);
+        if (local !== undefined) return local;
         // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
         const deps = collectDependencies(e.value).map((d) => (d.kind === "State" ? `this.${this.state(d.state).name}` : d.kind === "Prop" ? `this.props.${d.name}` : null));
         if (deps.includes(null)) throw new Error(`A memo of ${this.c.name} reads a list item`);

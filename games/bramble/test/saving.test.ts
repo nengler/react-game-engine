@@ -98,6 +98,39 @@ test("rebinding: choose a key's row, press a key, and the action means that key 
   setVolume("effects", 1);
 });
 
+test("rebinding: Escape while a row waits for a key gives no key, and the menu under the prompt heard nothing", () => {
+  // Settings; down to "Up"; confirm; Escape. The prompt is modal, so the menu does not take the Escape or the confirm.
+  const r = run("_, down, Enter, _*2, down, _, down, _, down, _, Enter, _, Escape, _*2");
+  const states = r.states;
+  assert.ok(states.some((s) => s.rows.includes("Up:press a key...")), "the row waited for a key");
+  assert.ok(!states.at(-1)!.rows.some((row) => row.endsWith("press a key...")), "it stopped waiting");
+  assert.deepEqual(controls.keysOf("up"), ["ArrowUp", "W", "PadUp"], "no key was given: the defaults stand");
+  assert.equal(states.at(-1)!.screen, "settings", "still on the settings screen");
+  settings.reset();
+  setStorage(null);
+  setVolume("music", 1);
+  setVolume("effects", 1);
+});
+
+test("the pause screen is modal: Escape opens it, the world hears no keys while it is shown, and Escape closes it", () => {
+  // New game; walk right; Escape; hold right (the world must not move); Escape; walk right again.
+  const frames = parseInputScript("_, Enter, _*2, right*20, back, _, right*20, back, _, right*20", { bindings });
+  const r = runScript(gameConfig, frames, (player) => {
+    const s = useGame.getState();
+    return { paused: s.paused, x: s.run.x, rows: menuRows(player) };
+  });
+  const states = r.states;
+  const opened = states.findIndex((s) => s.paused);
+  const closed = states.findIndex((s, i) => i > opened && !s.paused);
+  assert.ok(opened > 0 && closed > opened, "it opened and closed");
+  // The step Escape is pressed in still steps the world (the pause is state, seen from the next step on).
+  const before = states[opened]!.x;
+  assert.ok(before > states[0]!.x, "the character walked before the pause");
+  assert.equal(states[closed - 1]!.x, before, "holding right while paused moved nothing");
+  assert.ok(states.slice(opened, closed).some((s) => s.rows.includes("Resume:")), "the pause menu was shown");
+  assert.ok(states.at(-1)!.x > before, "the character walks again after Escape closes it");
+});
+
 test("settings rows show volumes as percentages and the keys by name", () => {
   const rows = settingsRows({ music: 0.6, effects: 0.8, fullscreen: true }, { up: ["ArrowUp", "W"], action: ["Z"], confirm: ["Enter"], back: ["Escape"] }, "left");
   assert.deepEqual(rows.slice(0, 3).map((r) => r.value), ["60%", "80%", "On"]);

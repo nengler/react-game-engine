@@ -8,6 +8,14 @@ type StructureOp =
   | { readonly kind: "remove"; readonly child: GameObject }
   | { readonly kind: "reorder"; readonly slot: number; readonly children: readonly GameObject[] };
 
+/** What decides whether a subtree hears input, on the containers (`<Entity>`, `<Flex>`, `<Hud>`): see `GameObject.inert` and `modal`. */
+export interface InputScopeProps {
+  /** The subtree hears no input, as the HTML attribute `inert`. */
+  inert?: boolean;
+  /** While mounted, everything outside this subtree hears no input, as a `<dialog>` opened with `showModal()`. */
+  modal?: boolean;
+}
+
 /**
  * Base class for every persistent game object. Compiled components extend a
  * built-in that extends this. It owns the object tree, the dirty flag, the
@@ -118,6 +126,8 @@ export class GameObject<P extends object = {}> {
   #order = 0;
   /** `onMount` has run and `onUnmount` has not: each runs once per stay in a World. */
   #mounted = false;
+  #inert = false;
+  #modal = false;
   /** What `useMount` handlers returned this stay in a World (`keepCleanup`), run after `onUnmount` when it leaves. */
   #cleanups: (() => void)[] = [];
 
@@ -447,9 +457,40 @@ export class GameObject<P extends object = {}> {
     return true;
   }
 
+  /**
+   * `inert`, as the HTML attribute: this subtree still updates, draws and collides, but hears no input. Its `useInput` and
+   * `useUpdate` get no keys, and none of its pointers or buttons can be pressed, hovered, focused or reached by a `pressKey`.
+   * `<Menu inert={capturing} />` stops a menu while something else takes the keys.
+   */
+  get inert(): boolean {
+    return this.#inert;
+  }
+
+  set inert(value: boolean) {
+    this.#inert = value === true;
+    this.world?.setInert(this, this.#inert);
+  }
+
+  /**
+   * `modal`, as a `<dialog>` opened with `showModal()`: while this object is in a world, everything outside its subtree is
+   * inert. The pause screen or a "press a key" prompt takes the keys, and the focus stays inside it. When several are mounted,
+   * the one mounted last takes the keys (an inner modal over an outer one).
+   */
+  get modal(): boolean {
+    return this.#modal;
+  }
+
+  set modal(value: boolean) {
+    this.#modal = value === true;
+    this.world?.setModal(this, this.#modal);
+  }
+
   attachToWorld(world: World): void {
     this.world = world;
     world.registerObject(this);
+    // Before the children attach, so an outer modal is below an inner one.
+    if (this.#inert) world.setInert(this, true);
+    if (this.#modal) world.setModal(this, true);
     if (this.gameStateStore && this.gameStateKeys.length > 0) {
       this.gameStateStore.subscribe(this, this.gameStateKeys);
       // It may have been built before a change it missed (it was not subscribed): refresh it once.
@@ -465,6 +506,8 @@ export class GameObject<P extends object = {}> {
   }
 
   detachFromWorld(): void {
+    if (this.#modal) this.world?.setModal(this, false);
+    if (this.#inert) this.world?.setInert(this, false);
     this.gameStateStore?.unsubscribe(this, this.gameStateKeys);
     if (this.#mounted) {
       this.#mounted = false;

@@ -1,6 +1,6 @@
 import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type TypeIR, walkExpr, walkFunction } from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
-import { CodeWriter, sourceMap } from "./writer.ts";
+import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
 import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
 import { ElementEmitter } from "./elements.ts";
 
@@ -53,9 +53,15 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
  * `generateModule`, with a source map (version 3) from each generated line to the component, hook or element it was written
  * for. The code ends with a `//# sourceMappingURL=` comment naming `<file>.map`, where the caller writes `map`.
  */
-export function generateModuleWithMap(module: IRModule, options: GeneratorOptions, map: SourceMapOptions): { readonly code: string; readonly map: string } {
+export function generateModuleWithMap(module: IRModule, options: GeneratorOptions, map: SourceMapOptions): { readonly code: string; readonly map: string; readonly origins: readonly LineOrigin[] } {
   const w = writeModule(module, options);
-  return { code: `${w.toString()}//# sourceMappingURL=${map.file}.map\n`, map: sourceMap(w.origins, map.file, map.source, map.sourceContent) };
+  return { code: `${w.toString()}//# sourceMappingURL=${map.file}.map\n`, map: sourceMap(w.origins, map.file, map.source, map.sourceContent), origins: w.origins };
+}
+
+/** The generated code, and for each generated line written for a construct of the source, where that construct is. */
+export function generateModuleWithOrigins(module: IRModule, options: GeneratorOptions): { readonly code: string; readonly origins: readonly LineOrigin[] } {
+  const w = writeModule(module, options);
+  return { code: w.toString(), origins: w.origins };
 }
 
 function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
@@ -98,13 +104,23 @@ function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
     w.blank();
     for (const line of declaration.text.split("\n")) w.line(line);
   }
+  let usesAssume = false;
   for (const component of module.components) {
     w.blank();
-    w.at(component.span, () => new ComponentGenerator(component, w, options.requiredHostProps, options.intrinsicHooks, options.gameState?.name ?? "").emit());
+    w.at(component.span, () => {
+      const generator = new ComponentGenerator(component, w, options.requiredHostProps, options.intrinsicHooks, options.gameState?.name ?? "");
+      generator.emit();
+      usesAssume ||= generator.usesAssume;
+    });
     if (component.isDefaultExport) {
       w.blank();
       w.line(`export default ${component.name};`);
     }
+  }
+  if (usesAssume) {
+    w.blank();
+    w.line("/** Narrows for TypeScript what a callback made under a condition reads (the condition held when it was made). It checks nothing. */");
+    w.line("function $assume(_condition: unknown): asserts _condition {}");
   }
   emitPrefabs(module, w);
   return w;
