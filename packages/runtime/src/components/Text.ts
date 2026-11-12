@@ -45,8 +45,8 @@ const DEFAULT_TEXT_COLOR = "white";
 /**
  * A line of text for HUDs, labels and menus. The mock draws nothing: a
  * renderer reads `text`, `size`, `color` and `worldTransform()`. In JSX the
- * content is the element's text (`<Text>Score: {score}</Text>`) or its `text`
- * prop; either way it is this `text` field, updated in place.
+ * content is the element's children (`<Text>Score: {score}</Text>`), which
+ * the compiler sets as this `text` field, updated in place.
  */
 export class Text<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;

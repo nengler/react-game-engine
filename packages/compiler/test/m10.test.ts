@@ -26,7 +26,7 @@ function Scoreboard({ label }: HudProps) {
       <Text size={12}>
         Score: {score}
       </Text>
-      <Text text={label + ":"} color={score > 5 ? "gold" : "white"} transform={{ x: 4 }} />
+      <Text color={score > 5 ? "gold" : "white"} transform={{ x: 4 }}>{label + ":"}</Text>
       <Text>{\`Total \${score * 2}\`}</Text>
       <Text>Fixed</Text>
     </Entity>
@@ -142,7 +142,7 @@ describe("M10: generated code", () => {
   it("builds the element with its text and updates the field in place", () => {
     assert.match(code, /readonly text: Text = new Text\(\{ size: 12, text: `Score: \$\{this\.score\}` \}\);/);
     assert.match(code, /const (\$\d+) = `Score: \$\{this\.score\}`;[^]*?this\.text\.text = \1;/);
-    assert.match(code, /const (\$\d+) = this\.props\.label \+ ":";[^]*?this\.text2\.text = \1;/, "the attribute form is an ordinary dynamic prop");
+    assert.match(code, /const (\$\d+) = `\$\{this\.props\.label \+ ":"\}`;[^]*?this\.text2\.text = \1;/, "an expression child is a dynamic text, as a template literal (always a string)");
     assert.match(code, /const (\$\d+) = \(this\.score > 5\) \? "gold" : "white";[^]*?this\.text2\.color = \1;/);
     assert.match(code, /readonly text4: Text = new Text\(\{ text: "Fixed" \}\);/);
   });
@@ -171,7 +171,6 @@ describe("M10: authored source type-checks", () => {
     assert.deepEqual(check(`<Text>Score</Text>`), []);
     assert.deepEqual(check(`<Text>Score: {n}</Text>`), []);
     assert.deepEqual(check(`<Text size={12} color="red" transform={{ x: 1 }}>{\`n = \${n}\`}</Text>`), []);
-    assert.deepEqual(check(`<Text text="Score" />`), []);
   });
 
   it("rejects what a Text cannot hold", () => {
@@ -180,7 +179,7 @@ describe("M10: authored source type-checks", () => {
     assert.ok(check(`<Text><Sprite image="x" /></Text>`).length > 0, "an element");
     assert.ok(check(`<Text size="big">x</Text>`).length > 0, "a wrong prop type");
     assert.ok(check(`<Text>{true}</Text>`).length > 0, "a boolean");
-    assert.ok(check(`<Text text={n} />`).length > 0, "text must be a string");
+    assert.ok(check(`<Text>{n}</Text>`).length === 0, "a number is text too");
   });
 });
 
@@ -226,7 +225,8 @@ describe("M10: diagnostics", () => {
     assert.deepEqual(diag(`<Text>a<Text>b</Text></Text>`), [DiagnosticCode.UnsupportedJsxChild]);
   });
 
-  it("rejects both forms, and no content", () => {
+  it("rejects a text attribute (the words are children), both forms, and no content", () => {
+    assert.ok(diag(`<Text text="a" />`).includes(DiagnosticCode.UnsupportedAttribute), "the words are children, not an attribute");
     assert.deepEqual(diag(`<Text text="a">b</Text>`), [DiagnosticCode.UnsupportedAttribute]);
     assert.deepEqual(diag(`<Text />`), [DiagnosticCode.UnsupportedJsxChild]);
     assert.deepEqual(diag(`<Text>{/* nothing */}</Text>`), [DiagnosticCode.UnsupportedJsxChild]);
