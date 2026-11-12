@@ -1,4 +1,4 @@
-export type { Backend, WindowConfig } from "./backend.ts";
+export type { Backend, StorageBackend, WindowConfig } from "./backend.ts";
 export { boundsOverlap, colliderBounds, CollisionTracker, type Bounds, type Overlaps } from "./collide.ts";
 export { colorToHex, MAGENTA, packColor, parseColor, type PackedColor } from "./color.ts";
 export { DrawList, estimateTextWidth, FrameBuilder, walkTree, type BuiltFrame, type ColliderEntry, type FrameBuilderOptions, type Size } from "./draw.ts";

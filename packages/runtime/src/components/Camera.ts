@@ -22,6 +22,17 @@ export interface CameraProps {
    * the new bounds put it, instead of jumping. Default 0: no slide.
    */
   slide?: number;
+  /**
+   * A box `[width, height]`, in world pixels, around the view's centre: the followed point can move inside it without moving the
+   * view, and pushes the view along when it reaches the box's edge. Default none: the view follows exactly.
+   */
+  deadzone?: readonly number[];
+  /**
+   * Seconds the view takes to catch up with the point it follows: it eases towards it, a fraction of the distance each step
+   * (exponentially, like `slide`). Default 0: the view is on the point. Both `deadzone` and `smoothing` are stepped in `onUpdate`,
+   * so a replay repeats; a change of `bounds` (a door to another map) snaps the view at once.
+   */
+  smoothing?: number;
 }
 
 const DEFAULT_ZOOM = 1;
@@ -69,10 +80,14 @@ export class Camera<P extends object = {}> extends GameObject<P> {
   shake: ShakeState | undefined;
   bounds: readonly number[] | undefined;
   slide: number;
+  deadzone: readonly number[] | undefined;
+  smoothing: number;
   /** Where the view is now, as a movement away from where the bounds put it: it eases to 0 during a slide. Pixels. */
   slideX = 0;
   slideY = 0;
   #lastBounds: readonly number[] | undefined;
+  /** Where the view's centre is, as an offset from the camera's anchor (see `#targetOffset`), when a `deadzone` or `smoothing` holds it back from the children's centre. */
+  #followed: Point | null = null;
   #lastCentre: Point | null = null;
   /** The size of the view in world pixels at zoom 1, set by the player before it asks for the view (the screen's size). */
   viewWidth = 0;
@@ -85,6 +100,8 @@ export class Camera<P extends object = {}> extends GameObject<P> {
     this.shake = hostProps.shake;
     this.bounds = hostProps.bounds;
     this.slide = hostProps.slide ?? 0;
+    this.deadzone = hostProps.deadzone;
+    this.smoothing = hostProps.smoothing ?? 0;
   }
 
   /** The shake's offset now, in whole pixels: strong at first, dying to 0, from a fixed sequence. */
@@ -112,7 +129,61 @@ export class Camera<P extends object = {}> extends GameObject<P> {
       this.slideY = Math.abs(this.slideY) < 0.5 ? 0 : this.slideY * (1 - k);
       changed = true;
     }
+    if (this.#follows()) {
+      const target = this.#targetOffset();
+      const before = this.#followed;
+      if (target === null) this.#followed = null;
+      else if (before === null) this.#followed = target;
+      else {
+        let fx = before.x;
+        let fy = before.y;
+        const dz = this.deadzone;
+        if (dz !== undefined && dz.length === 2) {
+          // The point may wander inside the box; past its edge it drags the view.
+          const halfW = (dz[0] as number) / 2;
+          const halfH = (dz[1] as number) / 2;
+          if (target.x - fx > halfW) fx = target.x - halfW;
+          else if (fx - target.x > halfW) fx = target.x + halfW;
+          if (target.y - fy > halfH) fy = target.y - halfH;
+          else if (fy - target.y > halfH) fy = target.y + halfH;
+        } else {
+          fx = target.x;
+          fy = target.y;
+        }
+        if (this.smoothing > 0 && dt > 0) {
+          // Ease in: a fraction of the distance each step; the view comes to rest within a pixel and stays there.
+          const k = 1 - Math.exp(-dt / this.smoothing);
+          const nx = before.x + (fx - before.x) * k;
+          const ny = before.y + (fy - before.y) * k;
+          fx = Math.abs(fx - nx) < 0.01 ? fx : nx;
+          fy = Math.abs(fy - ny) < 0.01 ? fy : ny;
+        }
+        if (fx !== before.x || fy !== before.y) {
+          this.#followed = { x: fx, y: fy };
+          changed = true;
+        }
+      }
+    }
     if (changed) this.markChanged();
+  }
+
+  #boundsChanged(): boolean {
+    const area = this.bounds;
+    const last = this.#lastBounds;
+    return area !== undefined && area.length === 4 && last !== undefined && (last[0] !== area[0] || last[1] !== area[1] || last[2] !== area[2] || last[3] !== area[3]);
+  }
+
+  /** Does the view hold back from the children's centre: is there a deadzone or smoothing to apply? */
+  #follows(): boolean {
+    return (this.deadzone !== undefined && this.deadzone.length === 2) || this.smoothing > 0;
+  }
+
+  /** How far the children's centre is from the camera's anchor: what the view moves by to follow them. Null with no children. */
+  #targetOffset(): Point | null {
+    const target = this.#childrenCentre();
+    if (target === null) return null;
+    const anchor = this.transform.global || this.parent === null ? { x: 0, y: 0 } : this.parent.childSpace();
+    return { x: target.x - anchor.x, y: target.y - anchor.y };
   }
 
   /**
@@ -149,14 +220,21 @@ export class Camera<P extends object = {}> extends GameObject<P> {
     if (world.scaleX === 0 || world.scaleY === 0) throw new RangeError("A camera cannot have a scale of 0: it would see nothing.");
     let x = world.x;
     let y = world.y;
-    const target = this.#childrenCentre();
+    // Move the camera's anchor (its parent's position, or the origin when it has none or is `global`) to the children's centre.
+    // The camera keeps its own offset from the anchor, transformed as usual by its parent, so the offset means the same thing
+    // with or without children. With a deadzone or smoothing the view is at `#followed`, which `onUpdate` moves towards it.
+    const target = this.#targetOffset();
     if (target !== null) {
-      // Move the camera's anchor (its parent's position, or the origin when it has none or is `global`) to the
-      // children's centre. The camera keeps its own offset from the anchor, transformed as usual by its parent,
-      // so the offset means the same thing with or without children.
-      const anchor = this.transform.global || this.parent === null ? { x: 0, y: 0 } : this.parent.childSpace();
-      x += target.x - anchor.x;
-      y += target.y - anchor.y;
+      if (this.#follows()) {
+        // A change of bounds (a door) puts the view on the point at once; `slide` then eases it from where it was.
+        if (this.#boundsChanged()) this.#followed = target;
+        this.#followed ??= target;
+        x += this.#followed.x;
+        y += this.#followed.y;
+      } else {
+        x += target.x;
+        y += target.y;
+      }
     }
     // Bounds: the view stays inside the area (centred on it when the area is smaller than the view). A change of bounds starts a slide.
     const area = this.bounds;

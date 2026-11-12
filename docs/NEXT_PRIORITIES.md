@@ -260,6 +260,18 @@ Today a game is a workspace in this monorepo, compiled by a path into `packages/
 - [ ] A license is chosen
 - [ ] Everything in [ADVENTURE_PLAN.md](ADVENTURE_PLAN.md)'s "Done when"
 
+### Findings from the third game
+
+Bramble (`games/bramble`, made from the template, checked from a copy outside the repository by `npm run check:outside`) was written 2026-11-11 and 2026-11-12 by an agent that did not know the compiler's subset in advance, which is the point. The full list, with the steps that raised each, is in its [DESIGN.md](../games/bramble/DESIGN.md#findings-while-writing); the ones that matter beyond it:
+
+1. **The subset is still the main cost, a third time.** A component cannot compute a list, so the rules make every list the screen draws (`rules/view.ts`) and the game state holds them (Kite finding 1, Hearth's lists). Conditions cannot compare with `undefined` (so a maybe-gate is a list of zero or one), a list item's children cannot hold a condition (make the item a component), and a prop needs a declared type. Each message says what to do; none was an engine change. **Held a third time.**
+2. **Side-effect imports are refused in `.tsx`** and the message does not say where they can go (a plain `.ts` the game state imports).
+3. **A new engine API is invisible to components until `runtime/src/manifest.ts` lists it** (`InputState.lastPressed`). A test that every public `InputState` method is in the manifest is worth adding.
+4. **Rules as plain TypeScript held up** (Kite and Hearth finding): 40 headless tests, a search that proves the game can be finished, and a whole-game replay planned with `findPath` and played through the real components, with no window.
+5. **The first-layout hazard in Kite (finding 7, 10) did not recur:** a door step costs 1.2 to 1.5 ms; a large map costs what its view costs (`<Tilemap>` writes only the cells in view).
+6. **Not found yet, because nobody has played it:** feel (speed, reach, enemy numbers, typing speed are all marked as guesses in the design note), whether a pause of one second of safety reads well, and Tiled finding 8 (no map was saved by Tiled).
+7. **Outside the repository:** packing, installing and checking from a temporary folder found nothing that a relative import into `packages/` would have hidden, but only because the template and `games/bramble` were written to it from the start; the CI job `outside` has not yet run.
+
 ## 1. Verify on real hardware, and cache CI builds
 
 Every Phase 3 milestone was built and tested only in a Linux cloud container, against a virtual display. Two things have never happened: a person playing in a real window, and a sound actually playing (hidden test windows have no audio device).

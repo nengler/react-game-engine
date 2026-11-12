@@ -5,7 +5,7 @@
  */
 import { KEY_NAMES, type KeyName } from "@rge/runtime";
 
-export const RGE_ABI_VERSION = 6;
+export const RGE_ABI_VERSION = 7;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const RGE_OP_VIEW = 1;

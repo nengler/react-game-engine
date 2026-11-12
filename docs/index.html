@@ -128,6 +128,7 @@ mark { background: var(--accent-soft); color: inherit; }
   <nav id="nav"></nav>
 </aside>
 <main>
+<p style="margin:0 0 16px"><strong>New here?</strong> <a href="start.html">Getting started</a> takes you from an empty folder to a packaged game.</p>
 <section id="overview" data-group="Start here" data-title="Overview">
   <h1>Write games as components.</h1>
   <p class="intro">A native-first 2D engine with React-like TSX authoring. There is no React and no virtual DOM: a compiler turns each component into a TypeScript class whose children are persistent instances, updated in place when state changes.</p>
@@ -349,7 +350,10 @@ rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
         ["size", "number", "16", "Pixels."],
         ["color", "CSS colour", '"white"', ""],
         ["width", "number", "text width", "Box width for layout and <code>align</code>."],
-        ["align", '"left" | "center" | "right"', '"left"', "Where the text sits inside <code>width</code>."],
+        ["align", '"left" | "center" | "right"', '"left"', "Where each line sits inside <code>width</code> (else inside <code>maxWidth</code>)."],
+        ["maxWidth", "number", "none", "Wrap to lines no wider than this: breaks at spaces, inside a word only when the word alone is too wide; <code>\\n</code> always breaks. One text record (or run of glyphs) per line."],
+        ["lineGap", "number", "0", "Extra pixels between wrapped lines."],
+        ["reveal", "number", "all", "Draw only the first <em>n</em> characters but lay out the whole text, so a box does not grow or rewrap as a page types out. The game's rules count it up."],
         ["font", "string", "built-in", "A bitmap font image: ASCII 32–127 in 16 × 6 cells. <code>size</code> is then the cell height."]
       ] },
     { name: "Shape", kind: "leaf", sum: "A filled rectangle or ellipse, for debugging and prototyping.",
@@ -388,6 +392,8 @@ rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>]
         ["zoom", "number", "1", "Magnification. Must be positive."],
         ["bounds", "[x, y, w, h]", "–", "The view never shows outside this world area (a smaller area is centred)."],
         ["slide", "number", "0", "Seconds to ease to new <code>bounds</code> (a room change)."],
+        ["deadzone", "[width, height]", "none", "A box around the view's centre the followed point can move in without moving the view; past its edge it drags the view."],
+        ["smoothing", "number", "0", "Seconds the view takes to catch up with what it follows (eases, stepped, so replays repeat). A change of <code>bounds</code> snaps the view at once."],
         ["shake", "ShakeState", "–", "From <code>useShake()</code>: <code>&lt;Camera shake={shake}&gt;</code>."]
       ] },
     { name: "Hud", kind: "container", sum: "A layer that stays on screen while the camera moves, drawn after the world. See <a href=\"systems.html#ui\">UI</a>.",

@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import koffi from "koffi";
 import { KEYS, RGE_ABI_VERSION } from "@rge/player";
+import { nativeLibrary } from "@rge/native";
 
 /** `librge`, as plain functions. Pointer arguments are typed arrays; koffi copies them in (and, for the two output buffers, back out). */
 export interface Native {
@@ -32,6 +33,11 @@ export interface Native {
   frame(clearColor: number, records: Float64Array, recordsLength: number, text: Uint8Array, textOffsets: Int32Array, textCount: number, input: Float64Array, keys: Uint8Array): void;
   /** `rge_overlaps`: the pairs of the `count` boxes that overlap, into `pairs` (`capacity` pairs of room); `order` goes in and comes back sorted. Returns how many pairs there are. */
   overlaps(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array, capacity: number): number;
+  /** Saved data (ABI v7), as the four `rge_storage_*` calls. `read` copies into `out` only when it fits and returns the entry's size, or -1. */
+  storageOpen(gameId: string): number;
+  storageRead(name: string, out: Uint8Array | null, capacity: number): number;
+  storageWrite(name: string, data: Uint8Array): number;
+  storageRemove(name: string): number;
   /** Copies the last captured frame (RGBA8, top row first) into `rgba` if it fits; returns the bytes needed, 0 if there is none. */
   readPixels(rgba: Uint8Array | null, capacity: number): number;
 }
@@ -47,13 +53,18 @@ function libraryNames(): string[] {
 export type BuildFlavor = "desktop" | "headless";
 
 /**
- * Where `librge` is, or null. `RGE_NATIVE_LIB` wins; otherwise the CMake build folders under `native/`:
- * `build` (a real window) and `build-headless` (the software renderer, for tests). `prefer` picks which
- * is tried first.
+ * Where `librge` is, or null. `RGE_NATIVE_LIB` wins; then the prebuilt one in `@rge/native` (an installed game has no
+ * repository); otherwise the CMake build folders under `native/`: `build` (a real window) and `build-headless` (the
+ * software renderer, for tests). `prefer` picks which flavor is tried first.
  */
 export function findNativeLibrary(prefer: BuildFlavor = "desktop", env: NodeJS.ProcessEnv = process.env): string | null {
   const fromEnv = env["RGE_NATIVE_LIB"];
   if (fromEnv) return existsSync(fromEnv) ? resolve(fromEnv) : null;
+  const flavors: BuildFlavor[] = prefer === "desktop" ? ["desktop", "headless"] : ["headless", "desktop"];
+  for (const flavor of flavors) {
+    const shipped = nativeLibrary(flavor);
+    if (shipped !== null) return shipped;
+  }
   const folders = prefer === "desktop" ? ["build", "build-headless"] : ["build-headless", "build"];
   for (const folder of folders) {
     for (const name of libraryNames()) {
@@ -98,6 +109,10 @@ export function loadNative(path: string): Native {
     "void rge_frame(uint32_t clearColor, const double *records, int32_t recordsLength, const uint8_t *text, const int32_t *textOffsets, int32_t textCount, _Out_ double *input, _Out_ uint8_t *keys)",
   );
   const readPixels = lib.func("int32_t rge_read_pixels(_Out_ uint8_t *rgba, int32_t capacity)");
+  const storageOpen = lib.func("int32_t rge_storage_open(const char *game_id)");
+  const storageRead = lib.func("int32_t rge_storage_read(const char *name, _Out_ uint8_t *out, int32_t capacity)");
+  const storageWrite = lib.func("int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length)");
+  const storageRemove = lib.func("int32_t rge_storage_remove(const char *name)");
   const overlaps = lib.func("int32_t rge_overlaps(const double *boxes, int32_t count, _Inout_ int32_t *order, _Out_ int32_t *pairs, int32_t capacity)");
 
   const native: Native = {
@@ -124,6 +139,10 @@ export function loadNative(path: string): Native {
     },
     frame: (clearColor, records, recordsLength, text, textOffsets, textCount, input, keys) =>
       void frame(clearColor, records, recordsLength, text, textOffsets, textCount, input, keys),
+    storageOpen: (gameId) => storageOpen(gameId) as number,
+    storageRead: (name, out, capacity) => storageRead(name, out, capacity) as number,
+    storageWrite: (name, data) => storageWrite(name, data, data.length) as number,
+    storageRemove: (name) => storageRemove(name) as number,
     overlaps: (boxes, count, order, pairs, capacity) => overlaps(boxes, count, order, pairs, capacity) as number,
     readPixels: (rgba, capacity) => (rgba === null ? (readPixels(null, 0) as number) : (readPixels(rgba, capacity) as number)),
   };

@@ -466,10 +466,13 @@ return (
 
 * The source is a state or prop array, optionally followed by
   `.filter((e) => …)` (a derived `const` that inlines to one counts).
+  (Since 2026-11-12, any array: see "Computed lists, and conditions inside
+  list items".)
 * `map` takes one inline arrow with the item and optionally the index as
   plain names, returning exactly one element: an expression body, or a block
   holding only `return <Element … />`. No conditionals, fragments or children
-  inside it; a richer item is a component.
+  inside it; a richer item is a component. (Conditions and children came
+  later: see the sections below.)
 * The element has a `key` that reads the item. A key that reads only the
   index compiles with a warning (instances then follow positions, not
   identities); a key that reads neither is an error, since every item would
@@ -568,6 +571,45 @@ When a key is new the generator makes the item, then each child (`const $c0 = ne
 component item, `$item.addChild($c0, 0)` for a built-in) and stores them; on later renders it applies each child's props (and transform) from the
 record, so a child updates when the item's object changes. The children belong to the item's subtree, so they go with it when the item is removed.
 Not built: children on an item that switches (`cond ? <A/> : <B/>`), and conditions, lists or nested children inside the children.
+
+### Computed lists, and conditions inside list items (2026-11-12)
+
+Found by Bramble, whose rules had to build every list the screen drew (`viewOf`) and keep it in the game state, because a list's items
+could only be a state or prop array (optionally filtered), and whose inventory slot had to be a component only to hold `{filled && …}`.
+
+**Any array is a list's items.** `{spotsOf(run).map(…)}`, `{world.enemies.map(…)}`, `{items.map((e) => ({ … })).map(…)}`, `[a, b].map(…)`:
+the source is any expression the component may compute (not through `?.`), and the type-check of the generated code checks it is an
+array. A source that is not a named array (state, a prop, an imported constant, each optionally `.filter`ed) is computed by a method
+of the class, `$<field>List() { return <source>; }`: `render()` calls it once per render, and the list's record type names its items as
+`ReturnType<C["$<field>List"]>[number]`. Its dependencies are what the expression reads, so it follows the state it was computed from,
+as a React component's render does. A plain function is assumed pure, as everywhere else.
+
+**An item's children may be nested and conditional.** The item's record keeps one field per element below the item (through static
+and conditional children), each `T | null`: `{ current: Item; kids: { shape: Shape | null; text: Text | null } }`. The generator writes
+the item's children with the same code as a component's conditional subtree, with the record (`$rec.kids`) where a component has
+`this` (`fieldBase`): when the item is made, its static descendants are built and attached at once and its conditions are evaluated;
+on each later render, its conditions mount and unmount their elements (queued on the item) and its dynamic props are applied. A
+callback on a child made later reads the item through the record, as one made with the item does. Still not built inside an item: a
+list, `{children}`, a `<Route>`, and children on an item that switches between two elements.
+
+**`undefined` is a value** (`PlainRef "undefined"`), in render and in handlers: `{gate !== undefined && <Sprite … />}`,
+`if (key !== undefined) bindKey(action, key)`.
+
+**Methods of strings and numbers, destructured and memoized derived values, and `useState` from the game state** (also 2026-11-12,
+from the second Bramble review). `VALUE_METHODS` lists the string and number methods that change nothing (`padStart`, `startsWith`,
+`toUpperCase`, `toFixed`, …), called as written (`CalleeIR` `ValueMethod`); `String`, `Number` and `Boolean` are allowed as
+functions; `flatMap`, `join`, `at`, `lastIndexOf` and `flat` joined the array methods (ES2023's `toSorted` and the like wait for the
+target to move past ES2022). A derived `const` may destructure (`const { x, y: top } = heroOf(run)`, `const [a, , c] = trio`): each
+name is a member or index read of the one value. A derived value that calls a function or a method is an `ExprIR` `Memo`: the
+generated code is `this.$memo(key, [deps], () => value)` (`GameObject.$memo`), the deps being the state and props it reads, so it
+is worked out once per change of them wherever it is used (render, handlers, field initialisers), as React's `useMemo`; in `super(…)`'s
+arguments, where `this` is not there yet, it is written in place. A call inside a nested memo does not make a memo of its own.
+`useState`'s initial value may read the game state (the component's snapshot of it, already a field above), not the component's
+own state.
+
+**A game-state value named like a member of the root** (`const name = useGame((s) => s.speaker)` in an `<Entity>` root) is kept in the
+field `$name`; the author's name is unchanged. A `useState` with such a name is still `RGE1103`, since its field and setter are the
+component's public API.
 
 **Runtime.** Children are sorted by `(slot, order)`: `addChild(child, slot,
 order = 0)` and `queueAddChild(child, slot, order)` insert after every sibling

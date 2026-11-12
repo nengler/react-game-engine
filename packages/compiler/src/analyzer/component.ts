@@ -41,8 +41,12 @@ export function analyzeNamedImport(
   const bindings = clause?.namedBindings;
   const wellFormed = clause && (clause.name ? allowDefault : true) && (bindings ? isNamedImports(bindings) : clause.name !== undefined);
   if (!clause || !wellFormed) {
+    // A component file only declares; code that runs when a module loads (`registerTilemaps(…)`) belongs to a plain .ts file.
+    const sideEffect = !clause
+      ? ` To run a module for what it does when loaded (registering maps, say), import it from a plain .ts file the components use, such as the game state (\`import "./tilemaps.ts";\` in GameState.ts), or from the game's entry (game.ts).`
+      : "";
     diagnostics.push(
-      error(DiagnosticCode.UnsupportedSyntax, `${what} must name what they import: \`${example}\` (no side-effect${allowDefault ? "" : ", default"} or namespace imports).`, span(statement)),
+      error(DiagnosticCode.UnsupportedSyntax, `${what} must name what they import: \`${example}\` (no side-effect${allowDefault ? "" : ", default"} or namespace imports).${sideEffect}`, span(statement)),
     );
     return;
   }

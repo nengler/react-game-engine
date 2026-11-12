@@ -107,13 +107,13 @@ export const runtimeManifest: RuntimeManifest = {
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
-    Game: ["name", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "font", "controls"],
+    Game: ["name", "id", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "font", "controls"],
     Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "originX", "originY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint"],
-    Text: ["text", "size", "sized", "color", "width", "align", "font"],
+    Text: ["text", "size", "sized", "color", "width", "align", "font", "maxWidth", "lineGap", "reveal"],
     Shape: ["kind", "width", "height", "color"],
-    Camera: ["zoom", "shake", "bounds", "slide", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
+    Camera: ["zoom", "shake", "bounds", "slide", "deadzone", "smoothing", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: [
       "fps", "playing", "frame", "elapsed", "frames", "image", "sheet", "frameWidth", "frameHeight", "loop", "flipX", "flipY", "originX", "originY", "tint", "opacity",
       "animations", "animation", "isSheet", "current", "sheetFrame", "styled", "finished",
@@ -188,14 +188,14 @@ export const runtimeManifest: RuntimeManifest = {
     "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "markChanged", "markMoved", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
     "onInput", "onUpdate", "onMount", "onUnmount",
-    "attachToWorld", "detachFromWorld",
+    "attachToWorld", "detachFromWorld", "$memo",
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
   transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer"],
   handleTypes: {
     InputState: {
-      methods: { pressed: 1, down: 1, released: 1 },
+      methods: { pressed: 1, down: 1, released: 1, lastPressed: 0 },
       properties: ["pointerX", "pointerY"],
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },

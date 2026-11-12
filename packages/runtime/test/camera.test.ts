@@ -302,3 +302,86 @@ describe("Camera errors", () => {
     assert.throws(() => camera.viewTransform(), /scale of 0/);
   });
 });
+
+describe("Camera deadzone and smoothing", () => {
+  /** A camera following a target at (x, y) in a parent at the origin. */
+  function following(props: ConstructorParameters<typeof Camera>[0]): { camera: Camera; target: Entity } {
+    const camera = new Camera(props);
+    const target = new Entity();
+    camera.addChild(target);
+    return { camera, target };
+  }
+  const viewCentreX = (camera: Camera): number => 0 - camera.viewTransform().e;
+
+  it("a deadzone lets the target wander in a box without moving the view, and drags it past the edge", () => {
+    const { camera, target } = following({ deadzone: [40, 20] });
+    camera.onUpdate(1 / 60);
+    assert.equal(viewCentreX(camera), 0);
+    target.transform.x = 15; // inside the half-width of 20
+    camera.onUpdate(1 / 60);
+    assert.equal(viewCentreX(camera), 0);
+    target.transform.x = 50; // 30 past the edge: the view follows, keeping the target at the box's edge
+    camera.onUpdate(1 / 60);
+    assert.equal(viewCentreX(camera), 30);
+    target.transform.x = 20; // back inside the box: the view stays where it is
+    camera.onUpdate(1 / 60);
+    assert.equal(viewCentreX(camera), 30);
+    target.transform.x = 5; // past the other edge
+    camera.onUpdate(1 / 60);
+    assert.equal(viewCentreX(camera), 25);
+  });
+
+  it("smoothing eases the view towards the target, never overshooting, and settles on it", () => {
+    const { camera, target } = following({ smoothing: 0.2 });
+    camera.onUpdate(1 / 60);
+    target.transform.x = 100;
+    let last = 0;
+    for (let i = 0; i < 12; i++) {
+      camera.onUpdate(1 / 60);
+      const now = viewCentreX(camera);
+      assert.ok(now > last && now < 100, `step ${i}: ${now} is between ${last} and 100`);
+      last = now;
+    }
+    for (let i = 0; i < 600; i++) camera.onUpdate(1 / 60);
+    close(viewCentreX(camera), 100);
+  });
+
+  it("the same steps give the same views (a replay repeats)", () => {
+    const run = (): number[] => {
+      const { camera, target } = following({ smoothing: 0.3, deadzone: [10, 10] });
+      const out: number[] = [];
+      for (let i = 0; i < 90; i++) {
+        target.transform.x = i * 1.7;
+        camera.onUpdate(1 / 60);
+        out.push(viewCentreX(camera));
+      }
+      return out;
+    };
+    assert.deepEqual(run(), run());
+  });
+
+  it("a change of bounds snaps the view onto the target even while it is easing", () => {
+    const { camera, target } = following({ smoothing: 0.5, bounds: [0, 0, 1000, 1000] });
+    camera.viewWidth = 100;
+    camera.viewHeight = 100;
+    target.transform.x = 500;
+    target.transform.y = 500;
+    camera.onUpdate(1 / 60);
+    camera.viewTransform();
+    camera.onUpdate(1 / 60);
+    target.transform.x = 100; // a door: the character is somewhere else, in another map
+    target.transform.y = 100;
+    camera.bounds = [2000, 0, 1000, 1000];
+    target.transform.x = 2200;
+    target.transform.y = 100;
+    camera.onUpdate(1 / 60);
+    const t = camera.viewTransform();
+    close(0 - t.e, 2200, "the view is on the character at once");
+  });
+
+  it("without either, the view is on the target at every call, as before", () => {
+    const { camera, target } = following({});
+    target.transform.x = 33;
+    assert.equal(viewCentreX(camera), 33);
+  });
+});

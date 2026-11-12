@@ -1,4 +1,4 @@
-import type { Backend, WindowConfig } from "@rge/player";
+import type { Backend, StorageBackend, WindowConfig } from "@rge/player";
 import { RGE_IN_HEIGHT, RGE_IN_WIDTH, RGE_OPEN_HIDDEN, RGE_OPEN_RESIZABLE, RGE_OPEN_SHARP, RGE_OPEN_SMOOTH, RGE_OPEN_VSYNC } from "@rge/player";
 import { findNativeLibrary, loadNative, type Native } from "./ffi.ts";
 
@@ -21,6 +21,24 @@ export class NodeBackend implements Backend {
   constructor(native: Native) {
     this.#native = native;
   }
+
+  /** Saved data in librge's folder for the game (see `rge.h`): UTF-8 text, written whole and atomically. */
+  readonly storage: StorageBackend = {
+    open: (gameId) => this.#native.storageOpen(gameId) === 0,
+    read: (name) => {
+      const size = this.#native.storageRead(name, null, 0);
+      if (size < 0) return null;
+      const bytes = new Uint8Array(size);
+      if (this.#native.storageRead(name, bytes, size) !== size) return null;
+      try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      } catch {
+        return null; // not UTF-8: not one of ours
+      }
+    },
+    write: (name, text) => this.#native.storageWrite(name, this.#encoder.encode(text)) === 0,
+    remove: (name) => void this.#native.storageRemove(name),
+  };
 
   open(config: WindowConfig): void {
     let options = 0;

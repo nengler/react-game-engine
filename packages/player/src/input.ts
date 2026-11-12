@@ -44,6 +44,11 @@ export class PlayerInput implements InputState {
     return this.#flags(key, RGE_KEY_PRESSED);
   }
 
+  lastPressed(): (typeof KEYS)[number] | undefined {
+    for (let i = 0; i < KEYS.length; i++) if (((this.handlerKeys[i] as number) & RGE_KEY_PRESSED) !== 0) return KEYS[i];
+    return undefined;
+  }
+
   isAction(name: string): boolean {
     return this.controls?.keysOf(name) !== undefined;
   }

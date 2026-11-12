@@ -11,8 +11,18 @@ export interface InputState {
   released(key: string): boolean;
   readonly pointerX: number;
   readonly pointerY: number;
+  /**
+   * The first key or button that went down this step, by name (for "press a key for Jump"), or undefined when none did. The mouse
+   * buttons and the gamepad's are keys too.
+   */
+  lastPressed(): KeyName | undefined;
   /** Whether `name` is an action of the game's controls (asking about one that is not would be about a key of that name). */
   isAction?(name: string): boolean;
+}
+
+/** Is `name` one of the keys the player knows (`KEY_NAMES`). */
+function isKeyName(name: string): name is KeyName {
+  return (KEY_NAMES as readonly string[]).includes(name);
 }
 
 /**
@@ -47,13 +57,64 @@ export interface InputSnapshot {
  * table (`controls.bindings`).
  */
 export class Controls<Name extends string = string> {
-  readonly bindings: Readonly<Record<Name, readonly KeyName[]>>;
+  /** The keys of each action now. Read every time an action is asked about, so `bind` and `load` apply at once; do not keep a copy. */
+  bindings: Readonly<Record<Name, readonly KeyName[]>>;
+  readonly #defaults: Readonly<Record<Name, readonly KeyName[]>>;
+  readonly #listeners = new Set<(bindings: Readonly<Record<Name, readonly KeyName[]>>) => void>();
 
   constructor(bindings: Readonly<Record<Name, readonly KeyName[]>>) {
     for (const [name, keys] of Object.entries<readonly string[]>(bindings)) {
       if (keys.length === 0) throw new Error(`The action '${name}' has no keys.`);
     }
     this.bindings = bindings;
+    this.#defaults = bindings;
+  }
+
+  /** Give an action these keys (at least one; each a `KeyName`). Returns false, changing nothing, for an unknown action or a bad key. */
+  bind(action: string, keys: readonly string[]): boolean {
+    if (!Object.hasOwn(this.bindings, action) || keys.length === 0 || !keys.every(isKeyName)) return false;
+    this.bindings = { ...this.bindings, [action]: [...keys] as KeyName[] };
+    this.#changed();
+    return true;
+  }
+
+  /** Back to the keys the game was written with. */
+  reset(): void {
+    if (this.bindings === this.#defaults) return;
+    this.bindings = this.#defaults;
+    this.#changed();
+  }
+
+  /**
+   * Be told each time the keys change (`bind`, `reset`, `load`), with the new bindings: a settings screen copies them into the game
+   * state so the rows that show them re-render. Returns the function that stops it.
+   */
+  subscribe(listener: (bindings: Readonly<Record<Name, readonly KeyName[]>>) => void): () => void {
+    this.#listeners.add(listener);
+    return () => void this.#listeners.delete(listener);
+  }
+
+  #changed(): void {
+    for (const listener of [...this.#listeners]) listener(this.bindings);
+  }
+
+  /** The bindings as plain data, for a settings file. */
+  toJSON(): Record<string, string[]> {
+    return Object.fromEntries(Object.entries<readonly string[]>(this.bindings).map(([action, keys]) => [action, [...keys]]));
+  }
+
+  /**
+   * Take bindings from plain data (a settings file): each known action with a list of real key names is rebound; anything else (an
+   * action the game no longer has, a key that is not a `KeyName`, a list that is empty) is ignored, so an old file cannot break the
+   * controls. Returns how many actions were rebound.
+   */
+  load(data: unknown): number {
+    if (typeof data !== "object" || data === null) return 0;
+    let count = 0;
+    for (const [action, keys] of Object.entries(data as Record<string, unknown>)) {
+      if (Array.isArray(keys) && keys.every((k) => typeof k === "string") && this.bind(action, keys as string[])) count++;
+    }
+    return count;
   }
 
   /**
@@ -107,6 +168,7 @@ export function createInputState(snapshot: InputSnapshot = {}, controls?: Contro
     pointerX: snapshot.pointer?.x ?? 0,
     pointerY: snapshot.pointer?.y ?? 0,
     isAction: (name) => controls?.keysOf(name) !== undefined,
+    lastPressed: () => [...(snapshot.pressed ?? [])].find(isKeyName),
   };
 }
 

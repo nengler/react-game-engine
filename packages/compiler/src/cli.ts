@@ -107,7 +107,15 @@ function main(argv: readonly string[]): number {
     if (scenesDir !== undefined && !diagnostics.some((d) => d.severity === "error")) {
       const maps = new Map<string, TilemapOut>();
       for (const name of readdirSync(scenesDir).filter((f) => f.endsWith(".tmj")).sort()) {
-        const imported = importTilemap(relative(process.cwd(), resolve(scenesDir, name)), readFileSync(resolve(scenesDir, name), "utf8"));
+        const imported = importTilemap(relative(process.cwd(), resolve(scenesDir, name)), readFileSync(resolve(scenesDir, name), "utf8"), {
+          readFile: (path) => {
+            try {
+              return readFileSync(resolve(scenesDir, path), "utf8");
+            } catch {
+              return null;
+            }
+          },
+        });
         diagnostics.push(...imported.diagnostics);
         if (imported.tilemap !== null) maps.set(name.replace(/\.tmj$/, ""), imported.tilemap);
       }

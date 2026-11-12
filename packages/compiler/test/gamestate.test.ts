@@ -190,6 +190,51 @@ export function Settings() {
     assert.deepEqual(typeErrors(compiled), []);
   });
 
+  it("reads a value named like a member of the root (`name` in an <Entity>) into a field of its own", async () => {
+    const compiled = build(`
+export function Badge() {
+  const name = useGame((s) => s.player.name);
+  const rename = useGame((s) => s.rename);
+  useUpdate(() => { if (name === "Ada") rename("Bo"); });
+  return <Entity name="Badge"><Text text={name} /></Entity>;
+}`);
+    assert.match(compiled.code, /\$name: string = useGame\.store\.get<string>\("player\.name"\);/);
+    assert.deepEqual(typeErrors(compiled), []);
+    const g = generated(compiled);
+    const { Badge } = await load<{ Badge: new () => Entity }>(g);
+    const world = new World();
+    const badge = new Badge();
+    world.mount(badge);
+    world.flush();
+    assert.equal(badge.name, "Badge", "the entity keeps its own name");
+    assert.equal((badge.children[0] as Text).text, "Ada");
+    world.tick(1 / 60);
+    world.flush();
+    assert.equal((badge.children[0] as Text).text, "Bo");
+  });
+
+  it("starts a useState from the game state as it is when the component is made", async () => {
+    const compiled = build(`
+export function Counter() {
+  const coins = useGame((s) => s.coins);
+  const [start, setStart] = useState(coins * 10);
+  return <Text size={12} text={\`\${start}\`} />;
+}`);
+    assert.deepEqual(typeErrors(compiled), []);
+    const { Counter } = await load<{ Counter: new () => Text }>(generated(compiled));
+    act("collect", 3);
+    const world = new World();
+    const counter = new Counter();
+    world.mount(counter);
+    world.flush();
+    assert.equal(counter.text, "30");
+    act("collect", 1);
+    world.flush();
+    assert.equal(counter.text, "30", "only the first value: it is the component's own state from then on");
+    const own = errors(`export function A() { const [a, setA] = useState(1); const [b, setB] = useState(a); return <Entity name="A" />; }`);
+    assert.equal(own[0]?.code, DiagnosticCode.NonConstantInitialState);
+  });
+
   it("binds an action: called as a statement in a handler, with arguments, reading nothing", () => {
     const compiled = build(SCORER);
     const [component] = compiled.ir.components;

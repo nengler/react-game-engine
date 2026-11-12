@@ -102,8 +102,8 @@ npm run example     # recompile packages/example/src → packages/example/genera
 # The native player (needs cmake and a C compiler; on Linux, the X11/GL dev packages for a real window)
 npm run native:build    # librge with a real window → native/build
 npm run play:demo       # play the demo under Node, with hot reload: save a file under src/ and the window updates
-npm run package         # dist/demo/: the game on Node's V8 as one executable (~125 MB; 10-30x faster script)
-npm run package -- --engine quickjs   # dist/demo/: the Rust host (needs cargo), game.js and assets/; a few MB, no JIT
+npm run package         # packages/demo/dist/demo/: the game on Node's V8 as one executable (~125 MB; 10-30x faster script)
+npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host (needs cargo), game.js and assets/; a few MB, no JIT
 ```
 
 Programmatic use:

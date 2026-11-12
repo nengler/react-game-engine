@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Getting started</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: sticky searchable sidebar + one reading column; reference tables scroll inside their own wrappers. */
+:root {
+  --bg: #f6f6f2;
+  --panel: #ffffff;
+  --fg: #1c2430;
+  --muted: #5b6676;
+  --line: #dcdcd2;
+  --accent: #b4540a;
+  --accent-soft: #f7e6d6;
+  --code-bg: #eef0ee;
+  --code-fg: #1c2430;
+  --tok-kw: #7a3ea8;
+  --tok-str: #1f7a4d;
+  --tok-com: #7b8794;
+  --tok-num: #b4540a;
+  --tok-tag: #1b5fa8;
+  --good: #1f7a4d;
+  --bad: #b3261e;
+  --font-head: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --panel: #181e27; --fg: #e3e7ee; --muted: #94a0b2; --line: #2a3340;
+    --accent: #f0a050; --accent-soft: #3a2a18; --code-bg: #1d2530; --code-fg: #e3e7ee;
+    --tok-kw: #c79bf0; --tok-str: #7fd3a3; --tok-com: #7b8794; --tok-num: #f0a050; --tok-tag: #7fb4f0;
+    --good: #7fd3a3; --bad: #f08a82; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #181e27; --fg: #e3e7ee; --muted: #94a0b2; --line: #2a3340;
+  --accent: #f0a050; --accent-soft: #3a2a18; --code-bg: #1d2530; --code-fg: #e3e7ee;
+  --tok-kw: #c79bf0; --tok-str: #7fd3a3; --tok-com: #7b8794; --tok-num: #f0a050; --tok-tag: #7fb4f0;
+  --good: #7fd3a3; --bad: #f08a82; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--font-body); margin: 0; }
+.shell { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1220px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); gap: 40px; }
+aside { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 24px 4px 24px 0; }
+.brand { font: 700 20px/1 var(--font-head); letter-spacing: -0.01em; }
+.brand small { display: block; margin-top: 6px; font: 400 12px/1.4 var(--font-body); color: var(--muted); }
+#q { width: 100%; margin: 16px 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; }
+#q:focus-visible, a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav h4 { margin: 18px 0 4px; font: 600 11px/1 var(--font-body); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+nav a { display: block; padding: 3px 8px; margin-left: -8px; border-radius: 5px; color: var(--fg); text-decoration: none; font-size: 14px; }
+nav a:hover { background: var(--accent-soft); }
+nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+nav .none { color: var(--muted); font-size: 13px; padding: 8px 0; }
+main { min-width: 0; padding: 32px 0 96px; }
+.intro { font-size: 17px; max-width: 64ch; }
+section { padding-top: 40px; border-top: 1px solid var(--line); margin-top: 40px; }
+section:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+h1 { font: 700 40px/1.1 var(--font-head); letter-spacing: -0.02em; margin: 0 0 12px; text-wrap: balance; }
+h2 { font: 700 27px/1.2 var(--font-head); letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance; }
+h3 { font: 700 18px/1.3 var(--font-head); margin: 28px 0 8px; }
+h3 code, h2 code { font-size: .9em; }
+p, li { max-width: 74ch; }
+p { margin: 10px 0; }
+ul, ol { padding-left: 22px; margin: 10px 0; }
+li { margin: 4px 0; }
+a { color: var(--accent); }
+code { font: 13px/1.5 var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.codebox { margin: 14px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--code-bg); overflow: hidden; }
+.codebar { display: flex; justify-content: space-between; align-items: center; padding: 3px 6px 3px 16px; border-bottom: 1px solid var(--line); }
+.codebar .lang { font: 500 10px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.codebar button.copy { font: 500 11px/1 var(--font-body); padding: 5px 8px; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--muted); cursor: pointer; }
+.codebar button.copy:hover { background: var(--panel); border-color: var(--line); color: var(--fg); }
+pre.code { margin: 0; padding: 14px 16px; overflow-x: auto; color: var(--code-fg); font: 13px/1.6 var(--font-mono); }
+pre.code code { background: none; padding: 0; font: inherit; overflow-wrap: normal; }
+.k { color: var(--tok-kw); } .s { color: var(--tok-str); } .c { color: var(--tok-com); font-style: italic; } .n { color: var(--tok-num); } .t { color: var(--tok-tag); }
+.tablewrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 11px/1.2 var(--font-body); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; }
+td.type { font: 12.5px/1.5 var(--font-mono); color: var(--tok-tag); }
+.req { color: var(--bad); font-weight: 600; font-size: 11px; margin-left: 4px; }
+.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; max-width: 78ch; }
+.callout p { margin: 4px 0; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.pair > div { min-width: 0; }
+.pair h5 { margin: 6px 0 0; font: 600 12px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; }
+.pair .yes h5 { color: var(--good); } .pair .no h5 { color: var(--bad); }
+.tag { display: inline-block; font: 600 10.5px/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); vertical-align: middle; margin-left: 6px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card b { font-family: var(--font-head); }
+.card p { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 16px 0; }
+.pipeline div { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; flex: 1 1 140px; min-width: 0; }
+.pipeline b { display: block; font: 700 14px var(--font-head); margin-bottom: 2px; }
+.pipeline .arr { flex: 0 0 auto; min-width: 0; padding: 0; border: 0; background: none; align-self: center; color: var(--muted); font-size: 18px; }
+.menu-btn { display: none; }
+mark { background: var(--accent-soft); color: inherit; }
+@media (max-width: 860px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  aside { position: static; height: auto; padding: 16px 0 0; }
+  nav { display: none; }
+  nav.open, #q:not(:placeholder-shown) ~ nav { display: block; }
+  .menu-btn { display: inline-block; margin: 0 0 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; cursor: pointer; }
+  .pair { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 32px; }
+  .pipeline .arr { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+.pager{display:flex;justify-content:space-between;gap:12px;margin-top:56px;padding-top:20px;border-top:1px solid var(--line)}.pager a{font:600 15px var(--font-head)}
+</style>
+<style>
+body{margin:0} main.start{max-width:760px;margin:0 auto;padding:24px 16px 80px}
+main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.topbar a{margin-right:14px;color:var(--accent);text-decoration:none} pre.code{overflow:auto;padding:12px;background:var(--code-bg);border-radius:6px}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="index.html">Overview</a><a href="start.html"><strong>Getting started</strong></a><a href="language.html">Language</a><a href="systems.html">Systems</a><a href="effects.html">Effects and input</a><a href="reference.html">Reference</a></div>
+<main class="start">
+<h1>Getting started</h1>
+<p>From an empty folder to a packaged game, in eight steps. Every command below was run, in this order, in a folder outside the engine's repository. Nothing is published to a registry yet, so the engine is installed from tarballs made by the repository.</p>
+
+<h2>0. What you need</h2>
+<ul><li>Node 22.18 or newer (the compiler and the tools run TypeScript directly).</li><li>A checkout of the engine's repository, once, to make the tarballs: <code>npm install &amp;&amp; npm run native:build:headless &amp;&amp; npm run host:build:headless &amp;&amp; npm run pack</code> (needs cmake, a C compiler and cargo). This writes <code>dist/packs/rge-*.tgz</code>, including a prebuilt librge and <code>rge-host</code> in <code>@rge/native</code>.</li></ul>
+
+<h2>1. Make a game</h2>
+<pre class="code" data-lang="sh"><code>cd /path/to/engine &amp;&amp; node packages/cli/src/cli.ts create ~/my-game --packs dist/packs
+cd ~/my-game &amp;&amp; npm install
+npm run check</code></pre>
+<p><code>rge create</code> copies the template. <code>rge check</code> compiles, type-checks, runs the tests, and plays a short scripted run under Node and under the Rust host, which must print the same. The template passes it before you change anything.</p>
+<p>What is in the folder: <code>package.json</code> (its <code>"rge"</code> field names the entry and folders), <code>main.ts</code> (starts the player), <code>game.ts</code> (the root and the names a script may use), <code>src/Main.tsx</code> (the game), <code>src/GameState.ts</code>, <code>src/rules/</code> (plain TypeScript), <code>test/</code>, <code>assets/</code>, <code>parity.ts</code>.</p>
+
+<h2>2. A moving square</h2>
+<p><code>npm run dev</code> opens a window and hot reloads: save a file under <code>src/</code> and the window changes, keeping the state. The template's <code>src/Main.tsx</code> already moves a sprite with the arrow keys:</p>
+<pre class="code" data-lang="tsx"><code>useInput((input) =&gt; {
+  dirX.current = (input.down(&quot;ArrowRight&quot;) ? 1 : 0) - (input.down(&quot;ArrowLeft&quot;) ? 1 : 0);
+});
+useUpdate((dt) =&gt; {
+  setX((x) =&gt; moveBy(x, dirX.current, dt));   // rules/move.ts: plain TypeScript, tested without a window
+});</code></pre>
+<p>Replace the <code>&lt;Sprite&gt;</code> with <code>&lt;Shape kind="rect" width={16} height={16} color="gold" /&gt;</code> to see a square, and back to see the sprite from <code>assets/hero.png</code>.</p>
+
+<h2>3. A sprite</h2>
+<p>Put a PNG in <code>assets/</code> and name it: <code>&lt;Sprite image="hero.png" originX={8} originY={8} /&gt;</code>. A missing image is a compile error (<code>rge build</code> checks the assets folder), not a magenta square at run time. A sheet of equal frames takes <code>frameWidth</code>, <code>frameHeight</code> and <code>frame</code>.</p>
+
+<h2>4. A sound</h2>
+<pre class="code" data-lang="ts"><code>// src/effects.ts
+import { createSounds } from &quot;@rge/runtime&quot;;
+export const sfx = createSounds({ beep: &quot;beep.wav&quot; });
+
+// src/GameState.ts: call it from a game-state action
+step: () =&gt; {
+  sfx.play(&quot;beep&quot;);
+  set((s) =&gt; ({ steps: s.steps + 1 }));
+},</code></pre>
+<p>Put <code>beep.wav</code> in <code>assets/</code>. A sound is an effect, not state: playing it renders nothing and is counted, so a test can check it.</p>
+
+<h2>5. A second screen</h2>
+<pre class="code" data-lang="tsx"><code>// src/Main.tsx
+&lt;Router route={screen}&gt;
+  &lt;Route name=&quot;title&quot;&gt;&lt;Title /&gt;&lt;/Route&gt;
+  &lt;Route name=&quot;play&quot;&gt;
+    &lt;Entity name=&quot;Hero&quot; transform={{ x, y }}&gt;&lt;Sprite image=&quot;hero.png&quot; originX={8} originY={8} /&gt;&lt;/Entity&gt;
+  &lt;/Route&gt;
+&lt;/Router&gt;
+
+// src/GameState.ts: screen: &quot;title&quot; | &quot;play&quot;, start: () =&gt; set({ screen: &quot;play&quot; })</code></pre>
+<p><code>Title</code> is a component in <code>src/Title.tsx</code> that calls <code>start()</code> when Enter is pressed (<code>useInput</code>). Only the screen the router shows is in the world.</p>
+
+<h2>6. A test</h2>
+<pre class="code" data-lang="ts"><code>// test/state.test.ts
+import assert from &quot;node:assert/strict&quot;;
+import { test } from &quot;node:test&quot;;
+import { useGame } from &quot;../src/GameState.ts&quot;;
+
+test(&quot;stepping counts&quot;, () =&gt; {
+  useGame.getState().step();
+  useGame.getState().step();
+  assert.equal(useGame.getState().steps, 2);
+});</code></pre>
+<p>Rules in <code>src/rules/</code> are plain functions, so most tests need no window. To play the components themselves, <code>runScript(gameConfig, parseInputScript("Enter, _*3, right*30", { bindings }), observe)</code> from <code>@rge/player</code> runs an input script on a recording backend.</p>
+
+<h2>7. Check it</h2>
+<pre class="code" data-lang="sh"><code>npm run check</code></pre>
+<p>Compile, type-check, test, parity. A failing step prints its output and stops there.</p>
+
+<h2>8. Package it</h2>
+<pre class="code" data-lang="sh"><code>npm run package                 # dist/my-game/: the game as one executable on Node&#x27;s V8 (about 100 MB)
+npx rge package --engine quickjs   # a few MB, on the Rust host, no JIT
+npx rge package --headless         # the software renderer, no window: for CI</code></pre>
+<p>The folder holds the executable, <code>lib/</code> (librge) and <code>assets/</code>; copy it anywhere and run it. Saves and settings (<code>&lt;Game id="..."&gt;</code>, <a href="effects.html#saved">Saved data</a>) go to the user's data folder.</p>
+
+<h2>Where next</h2>
+<ul><li><a href="language.html">The language</a>: what a component may contain, and what the compiler says when it may not.</li><li><a href="systems.html">Systems</a>: tilemaps, collisions, layout, the camera.</li><li><a href="reference.html">Reference</a>: every built-in, hook and error code.</li><li><code>games/bramble</code> in the repository is a whole small game made this way, with its <code>DESIGN.md</code> of what writing it found.</li></ul>
+</main>
+</body>
+</html>

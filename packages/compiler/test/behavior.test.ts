@@ -273,8 +273,8 @@ function Idle() {
     const world = new World();
     const counter = new Counter({ step: 0 });
     world.mount(counter);
-    world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, pointerX: 0, pointerY: 0 });
-    world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, pointerX: 0, pointerY: 0 });
+    world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, lastPressed: () => undefined, pointerX: 0, pointerY: 0 });
+    world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, lastPressed: () => undefined, pointerX: 0, pointerY: 0 });
     assert.deepEqual(counter.items, [0, 1]);
   });
 });
@@ -372,7 +372,7 @@ function Tag() {
     world.mount(tag);
     const press = (key: string, serial: number): void => {
       world.serial = serial;
-      world.tick(0.1, { pressed: (k: string) => k === key, down: () => false, released: () => false, pointerX: 0, pointerY: 0 });
+      world.tick(0.1, { pressed: (k: string) => k === key, down: () => false, released: () => false, lastPressed: () => undefined, pointerX: 0, pointerY: 0 });
     };
     press("Y", 1); // only the second of the two transform values changes
     assert.deepEqual([tag.transform.x, tag.transform.y], [0, 5]);

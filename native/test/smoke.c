@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "raylib.h"
 #include "rge.h"
 #include "internal.h"
@@ -173,6 +174,60 @@ static void test_overlaps(void) {
     for (int i = 0; i < N; i++) { if (order[i] < 0 || order[i] >= N || seen[order[i]]) valid = 0; else seen[order[i]] = 1; }
     CHECK(valid, "round %d: bad boxes and a bad order still give valid indices and a permutation", round);
   }
+}
+
+
+/* ---- storage: named entries, written atomically (needs no window) ---- */
+static void test_storage(void) {
+  char folder[] = "rge-storage-test-XXXXXX";
+  CHECK(mkdtemp(folder) != NULL, "a temporary folder");
+  char data_dir[512];
+  snprintf(data_dir, sizeof(data_dir), "%s/nested/saves", folder); /* not there yet: open makes it, with its parents */
+  setenv("RGE_DATA_DIR", data_dir, 1);
+  uint8_t out[64];
+  CHECK(rge_storage_read("save", out, sizeof(out)) == -1, "reading before open is refused");
+  CHECK(rge_storage_write("save", (const uint8_t *)"x", 1) != 0, "writing before open is refused");
+  CHECK(rge_storage_open("bad id") != 0 && rge_storage_open("") != 0 && rge_storage_open("../x") != 0 && rge_storage_open(NULL) != 0, "a bad game id is refused");
+  CHECK(rge_storage_open("game") == 0, "open makes the folder");
+  CHECK(rge_storage_read("save", out, sizeof(out)) == -1, "a missing entry is -1");
+  const char *hello = "{\"version\":1}";
+  CHECK(rge_storage_write("save", (const uint8_t *)hello, (int32_t)strlen(hello)) == 0, "write");
+  CHECK(rge_storage_read("save", NULL, 0) == (int32_t)strlen(hello), "asking for the size copies nothing");
+  memset(out, 0, sizeof(out));
+  CHECK(rge_storage_read("save", out, 4) == (int32_t)strlen(hello) && out[0] == 0, "too small a buffer: the size comes back, nothing is copied");
+  CHECK(rge_storage_read("save", out, sizeof(out)) == (int32_t)strlen(hello) && memcmp(out, hello, strlen(hello)) == 0, "read back what was written");
+  CHECK(rge_storage_write("save", (const uint8_t *)"two", 3) == 0 && rge_storage_read("save", out, sizeof(out)) == 3 && memcmp(out, "two", 3) == 0, "overwrite");
+  CHECK(rge_storage_write("empty", NULL, 0) == 0 && rge_storage_read("empty", out, sizeof(out)) == 0, "an empty entry is 0 bytes, not missing");
+  char path[4400];
+  snprintf(path, sizeof(path), "%s/save.tmp", data_dir);
+  CHECK(access(path, F_OK) != 0, "no temporary file is left behind");
+  snprintf(path, sizeof(path), "%s/save.dat", data_dir);
+  CHECK(access(path, F_OK) == 0, "the entry is <name>.dat in the folder");
+  const char *bad[] = { "", "a b", "../x", "a/b", "a.b", "x\\y", NULL };
+  for (int i = 0; bad[i] != NULL; i++) {
+    CHECK(rge_storage_write(bad[i], (const uint8_t *)"x", 1) != 0, "write refuses the name '%s'", bad[i]);
+    CHECK(rge_storage_read(bad[i], out, sizeof(out)) == -1, "read refuses the name '%s'", bad[i]);
+    CHECK(rge_storage_remove(bad[i]) != 0, "remove refuses the name '%s'", bad[i]);
+  }
+  char longname[80];
+  memset(longname, 'a', 65); longname[65] = 0;
+  CHECK(rge_storage_write(longname, (const uint8_t *)"x", 1) != 0, "a name over 64 characters is refused");
+  CHECK(rge_storage_remove("save") == 0 && rge_storage_read("save", out, sizeof(out)) == -1, "remove");
+  CHECK(rge_storage_remove("save") == 0, "removing what is not there is fine");
+  /* No RGE_DATA_DIR: the folder is under XDG_DATA_HOME, named by the game id. */
+  unsetenv("RGE_DATA_DIR");
+  char absolute[4096];
+  CHECK(realpath(folder, absolute) != NULL, "the folder's absolute path (XDG_DATA_HOME must be absolute)");
+  char xdg[4200];
+  snprintf(xdg, sizeof(xdg), "%s/xdg", absolute);
+  setenv("XDG_DATA_HOME", xdg, 1);
+  CHECK(rge_storage_open("mygame") == 0 && rge_storage_write("a", (const uint8_t *)"1", 1) == 0, "XDG_DATA_HOME/<game_id>");
+  snprintf(path, sizeof(path), "%s/mygame/a.dat", xdg);
+  CHECK(access(path, F_OK) == 0, "the entry is in XDG_DATA_HOME/mygame");
+  /* Clean up what the test made. */
+  char cmd[900];
+  snprintf(cmd, sizeof(cmd), "rm -rf %s", folder);
+  CHECK(system(cmd) == 0, "clean up");
 }
 
 int main(void) {
@@ -442,5 +497,6 @@ int main(void) {
   remove("rge_smoke_red.png");
 
   printf("%d checks, %d failures\n", checks, failures);
+  test_storage();
   return failures == 0 ? 0 : 1;
 }

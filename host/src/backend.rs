@@ -35,6 +35,13 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     backend.set("textureSize", Function::new(ctx.clone(), texture_size)?.with_name("textureSize")?)?;
     backend.set("overlaps", Function::new(ctx.clone(), overlaps)?.with_name("overlaps")?)?;
     backend.set("frame", Function::new(ctx.clone(), frame)?.with_name("frame")?)?;
+    // Saved data (ABI v7): `storage.open(gameId)`, then `read(name)` (text or null), `write(name, text)` and `remove(name)`.
+    let storage = Object::new(ctx.clone())?;
+    storage.set("open", Function::new(ctx.clone(), storage_open)?.with_name("open")?)?;
+    storage.set("read", Function::new(ctx.clone(), storage_read)?.with_name("read")?)?;
+    storage.set("write", Function::new(ctx.clone(), storage_write)?.with_name("write")?)?;
+    storage.set("remove", Function::new(ctx.clone(), storage_remove)?.with_name("remove")?)?;
+    backend.set("storage", storage)?;
     ctx.globals().set(HOST_BACKEND_KEY, backend)
 }
 
@@ -105,6 +112,38 @@ fn stop_music(handle: i32) {
 
 fn set_gamepad_deadzone(deadzone: f64) {
     unsafe { ffi::rge_set_gamepad_deadzone(deadzone) }
+}
+
+/// Open the game's saved-data folder (`rge_storage_open`): true when it is there to use.
+fn storage_open(game_id: String) -> bool {
+    let id = c_string(&game_id);
+    unsafe { ffi::rge_storage_open(id.as_ptr()) == 0 }
+}
+
+/// An entry's text, or null (`None`) when there is none or it is not UTF-8.
+fn storage_read(name: String) -> Option<String> {
+    let name = c_string(&name);
+    let size = unsafe { ffi::rge_storage_read(name.as_ptr(), std::ptr::null_mut(), 0) };
+    if size < 0 {
+        return None;
+    }
+    let mut bytes = vec![0u8; size as usize];
+    let got = unsafe { ffi::rge_storage_read(name.as_ptr(), bytes.as_mut_ptr(), size) };
+    if got != size {
+        return None; // it changed between the two calls
+    }
+    String::from_utf8(bytes).ok()
+}
+
+fn storage_write(name: String, text: String) -> bool {
+    let name = c_string(&name);
+    let bytes = text.as_bytes();
+    unsafe { ffi::rge_storage_write(name.as_ptr(), bytes.as_ptr(), bytes.len() as i32) == 0 }
+}
+
+fn storage_remove(name: String) {
+    let name = c_string(&name);
+    unsafe { ffi::rge_storage_remove(name.as_ptr()) };
 }
 
 /// The width and line height of `text` at `size`, as an object.

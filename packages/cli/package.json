@@ -1,0 +1,22 @@
+{
+  "name": "@rge/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "rge": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@rge/compiler": "0.0.0",
+    "@rge/native": "0.0.0",
+    "@rge/player": "0.0.0",
+    "@rge/player-node": "0.0.0",
+    "@rge/runtime": "0.0.0",
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6",
+    "typescript": "7.1.0-beta"
+  }
+}

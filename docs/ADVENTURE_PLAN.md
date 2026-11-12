@@ -123,7 +123,7 @@ first, because it is the biggest gap and changes the draw path that M6 builds on
 - `findNativeLibrary` (`packages/player-node/src/ffi.ts`) looks only in `native/build*` beside the repository root, and
   `tools/package.ts` builds librge with CMake and the Rust host with cargo from the repository. An outside game has neither.
 
-**0.1 Packs that build.** `npm run pack` (`tools/pack.ts`) writes `dist/packs/rge-<name>-<version>.tgz` for `runtime`, `compiler`,
+**0.1 Packs that build.** *(Done 2026-11-11.)* `npm run pack` (`tools/pack.ts`) writes `dist/packs/rge-<name>-<version>.tgz` for `runtime`, `compiler`,
 `player`, `player-node`, `native` and `cli`.
 
 - For each package it makes a staging copy: JavaScript from esbuild (one file per source file, ESM, no bundling, so the
@@ -137,7 +137,7 @@ first, because it is the biggest gap and changes the draw path that M6 builds on
 - **Test:** `packages/cli/test/packs.test.ts` packs into a temporary folder, installs the tarballs into an empty project, and
   imports each entry point (`@rge/runtime/jsx`, `@rge/player`, `@rge/player-node`, `@rge/compiler`) under plain Node.
 
-**0.2 `@rge/native`: librge and the host, prebuilt.** A package with no code of its own beyond one `paths.js`:
+**0.2 `@rge/native`: librge and the host, prebuilt.** *(Done 2026-11-11: `packages/native`; `node tools/pack.ts --build` builds both flavors, desktop only if it can.)* A package with no code of its own beyond one `paths.js`:
 `lib/linux-x64/{desktop,headless}/librge.so` and `bin/linux-x64/{desktop,headless}/rge-host`, built by `npm run pack` from
 the CMake and cargo builds it already knows how to make. Only `linux-x64`: other platforms stay in "Not now".
 
@@ -146,7 +146,7 @@ the CMake and cargo builds it already knows how to make. Only `linux-x64`: other
 - The same applies to `rge-host` (`RGE_HOST_BIN`, then `@rge/native`, then `host/target/release`).
 - The ABI check at load already says clearly when the library and the player disagree.
 
-**0.3 `@rge/cli`: one command line.** A new package with bin `rge` that takes over `tools/check-game.ts`, `tools/package.ts`,
+**0.3 `@rge/cli`: one command line.** *(Done 2026-11-11: `packages/cli`; `tools/check-game.ts`, `package.ts` and `screenshot.ts` are gone, `tools/bundle.ts` is a shim over the CLI, and a packaged game now lands in the game's own `dist/<name>/`.)* A new package with bin `rge` that takes over `tools/check-game.ts`, `tools/package.ts`,
 `tools/bundle.ts`, `tools/screenshot.ts` and `packages/player-node/src/play.ts`. It runs in a game's folder, or the folder
 given as the first argument (`rge check packages/kite`).
 
@@ -173,7 +173,7 @@ given as the first argument (`rge check packages/kite`).
 - **Tests:** each command against a small fixture game in a temporary folder; `npm run check:kite` and `check:hearth` pass
   through it.
 
-**0.4 The template and `rge create`.** `packages/cli/template/`:
+**0.4 The template and `rge create`.** *(Done 2026-11-11.)* `packages/cli/template/`:
 
 - `package.json` (with `"rge"` and the `@rge/*` dependencies), `tsconfig.json`, `main.ts`, `game.ts` (bindings and screen),
   `src/Main.tsx` (a `<Game>`, a `<Screen>`, a `<Router>` with one route), `src/GameState.ts`, `src/rules/move.ts` with one
@@ -182,7 +182,7 @@ given as the first argument (`rge check packages/kite`).
   the tarballs, which is how everything is tested before anything is published.
 - **Test:** create, install and `rge check` in a temporary folder pass; the template's own test passes.
 
-**0.5 `games/bramble`, checked from outside.**
+**0.5 `games/bramble`, checked from outside.** *(Done 2026-11-11: `npm run check:outside` passes locally; the CI job `outside` is new and has not run yet.)*
 
 - `games/bramble` is made with `rge create`. It is **not** one of the workspaces (`packages/*`), and the root's `generate`,
   `test` and `typecheck` do not include it. Its `node_modules` is ignored by git.
@@ -198,6 +198,8 @@ given as the first argument (`rge check packages/kite`).
 `check:outside` passes locally and in CI on the empty Bramble.
 
 ### M1. Bramble's greybox (game; \~1 week)
+
+*(Built 2026-11-11 in `games/bramble`: the rules, the screens, 17 tests including a replay through the game and a search that proves it can be finished, and six findings in its `DESIGN.md`. Not yet done from this list: `actor.ts`, `doors.ts`, `talk.ts`, `items.ts` and `shrines.ts` are all in `run.ts` for now; a person has not played it.)*
 
 No engine work is planned here. Bramble is written from the guide, and every snag goes into `games/bramble/DESIGN.md`
 under "Findings while writing", as Kite and Hearth did. The engine is fixed only when a finding is worth it.
@@ -228,7 +230,7 @@ findings are written down.
 
 ### M2. The large world (engine; \~1 week)
 
-**2.1 `<Tilemap>` draws only what the view shows.** Today `#tilemap` in `packages/player/src/draw.ts` writes one sprite-region
+**2.1 `<Tilemap>` draws only what the view shows.** *(Done 2026-11-11, simpler than planned: the player writes only the cells of the view's rectangle, in the same order as before, and no chunk cache; a view holds a few hundred cells, so the 200 × 200 bench scene costs 0.12 ms a frame under Node and 1.8 ms under QuickJS. The walk meets a tilemap before it finds the camera, so cells are chosen with the previous frame's camera and the frame is built a second time when the camera turns out to be another one (first frame, screen change). `TileGrid.set` is not built: Bramble keeps cut bushes as the rules' data.)* Today `#tilemap` in `packages/player/src/draw.ts` writes one sprite-region
 record for every filled cell ("culled to none (a map is a room, not a world)").
 
 - **Which cells are drawn:** the player already knows the view transform and the screen size when it walks the tree. From
@@ -243,7 +245,7 @@ record for every filled cell ("culled to none (a map is a room, not a world)").
   records. That is expected; the step re-baselines Kite's parity and says why.
 - **Bench:** a new scene, a 200 × 200 map scrolled across, with a budget in `packages/player/bench/budget.json`.
 
-**2.2 A camera that follows smoothly.** `<Camera>` already follows its children's centre.
+**2.2 A camera that follows smoothly.** *(Done 2026-11-11: `deadzone` and `smoothing`, in `Camera.ts`, with tests.)* `<Camera>` already follows its children's centre.
 
 - **New props:**
   - `deadzone={[w, h]}`: the followed point can move inside a box around the centre without moving the view.
@@ -253,7 +255,7 @@ record for every filled cell ("culled to none (a map is a room, not a world)").
 - **On a door:** a `bounds` change with no `slide` snaps the view at once, so going through a door needs no new prop.
 - **Tests:** runtime tests of the dead zone, smoothing and snapping; a recording test of a scroll.
 
-**2.3 A door without a hitch.**
+**2.3 A door without a hitch.** *(Measured 2026-11-11: a door step costs 1.2 to 1.5 ms under Node on the cloud VM, so nothing to fix; see `games/bramble/DESIGN.md`.)*
 
 - **Measure first.** Bramble's `tools/frame-time.ts` (copied from Kite's) times the step that changes map.
 - **Then fix the cause:**
@@ -262,7 +264,7 @@ record for every filled cell ("culled to none (a map is a room, not a world)").
   - If it is building the subtree, mount the next map one step early, as Kite finding 10 suggested.
 - **Target:** no step over 16.7 ms under Node on the cloud VM, recorded in `NATIVE_PLAN.md`.
 
-**2.4 Entities off screen, measured.** One overworld map holds about 40 enemies and NPCs. Measure the busiest view first. If
+**2.4 Entities off screen, measured.** *(Measured after M5, 2026-11-12: 11 enemies and 4 people, mean step 0.75 ms; no filtering needed.)* One overworld map holds about 40 enemies and NPCs. Measure the busiest view first. If
 rendering the ones off screen costs too much:
 
 - **First**, the game filters its lists by distance to the view, with a computed selector (no engine change).
@@ -272,6 +274,8 @@ rendering the ones off screen costs too much:
 recorded.
 
 ### M3. Saving and settings (engine; one native batch, ABI v7; \~1 week)
+
+*(Built 2026-11-11: 3.1 to 3.4 as written, with `createSettings` also applying `fullscreen` through a `StorageSink`; the one deviation is that `pick` takes no argument, because the runtime does not know the game's store. Bramble has Continue, a save at each shrine, and a settings screen with rebinding. Not done: a person has not tried a save across a real quit under both hosts; the Node and Rust hosts are tested against the real library separately.)*
 
 **3.1 Storage in librge.** New in `native/include/rge.h`:
 
@@ -384,6 +388,8 @@ and mouse.
 
 ### M5. Enemies (engine and game; \~4 days)
 
+*(Built 2026-11-12: `findPath` / `lineOfSight` with tests and a bench scene; Bramble's beetle and wisp, combat and invulnerability, with 10 tests including a wisp that follows a path round a wall. The `blocked` function stayed in the game: it was not written twice.)*
+
 **5.1 `findPath` and `lineOfSight`** in `packages/runtime/src/path.ts`, exported from `@rge/runtime`:
 
 ```ts
@@ -409,6 +415,8 @@ lineOfSight(grid: TileGrid, from: Point, to: Point): boolean
 **Done when:** both enemies work on the overworld, a replay shows a wisp chasing around a wall, and the bench is in budget.
 
 ### M6. Maps saved by Tiled (engine and a person; \~4 days plus the person's time)
+
+*(Partly built 2026-11-12. Done: base64 layers (uncompressed, zlib, gzip; zstd is a diagnostic), external `.tsj` tilesets read through the CLI, the `solid` tiles of every tileset, and each map's objects as data (`TilemapData.objects`, `TileGrid.objects(type?)`), all with fixtures. Not done: the `.tsx` reader and drawing from more than one sheet (`TilemapData.tilesets`, per-cell sheets, optional `<Tilemap image>`), reading Bramble's doors, people and items from objects (its text maps and `make-maps.ts` stay), and 6.3, which needs a person to save a map in Tiled. The fixtures are written by hand to Tiled's documented format, so they are not the evidence 6.3 asks for.)*
 
 **6.1 The importer** (`packages/compiler/src/scenes/tilemap.ts`):
 
@@ -443,6 +451,8 @@ updated.
 
 ### M7. Content, replays and frame time (game; \~1 week)
 
+*(Built 2026-11-12: original sprites, sound effects and a looping theme written by `tools/make-assets.ts`; particles and sounds answer the rules' events (`src/effects.ts`); replays: to the cave through the game, the whole game from the title to the end screen (planned with `findPath`, in `test/fullrun.ts`), save and continue (`test/saving.test.ts`), and losing the last heart; frame time under Node in `NATIVE_PLAN.md`; the findings are in `NEXT_PRIORITIES.md`. Not done: a pixel font (the built-in one is used at sizes 10 and 20), shake and fades, a cave theme, and the QuickJS frame time.)*
+
 - **Art, sound and music** from `tools/make-assets.ts`: tiles, the character's eight-way walk and swing, the NPCs, both
   enemies, the bells, the UI frame, a pixel font with lower case if the dialogue needs it, overworld and cave music, and
   sound effects.
@@ -457,6 +467,8 @@ updated.
   findings held a third time.
 
 ### M8. The guide, the reference and the license (\~4 days)
+
+*(Done 2026-11-12 except the license: `docs/start.html` was written by running every step in a folder outside the repository (`rge create`, install, a second screen, a sound, a test, `rge check`, `rge package --headless`), and is linked from the overview; tests fail when a built-in element or an authoring hook is missing from the docs. **The license is not chosen**: it is the owner's decision (open decision 4 with the package names). A pass for secrets and large files found none (the largest tracked files are the games' 0.6 to 0.7 MB themes). The guide has not yet been followed by someone who did not write it.)*
 
 - **A getting-started page** (`docs/start.html`, linked first from `docs/index.html`), written by doing it: an empty folder,
   `rge create`, a moving square, a sprite, a sound, a second screen, a test, `rge check`, `rge package`. Then it is followed

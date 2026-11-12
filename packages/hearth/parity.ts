@@ -2,7 +2,7 @@
  * Plays a short game (a build order of clicks and keys, then the first wave) against a recording backend and prints the battle's
  * state every 30 steps, with the sounds played and the number of draw records of the last frame, as one line of JSON (numbers
  * rounded to 1e-9). It runs unchanged under Node and, bundled, under the Rust host (QuickJS-ng): the two outputs must be identical,
- * which `tools/check-game.ts` checks.
+ * which `rge check` checks.
  *
  *   node packages/hearth/parity.ts
  */

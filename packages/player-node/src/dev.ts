@@ -41,18 +41,39 @@ export interface DevOptions {
 
 const NOTE = "Save a file to reload. Close the window to quit.";
 
-/** The command line that compiles the game in `gameDir`, as `npm run check:<game>` does. */
-export function compileArgs(gameDir: string): string[] {
-  const cli = join(dirname(fileURLToPath(import.meta.resolve("@rge/compiler"))), "cli.ts");
-  const args = [cli, "src", "generated"];
-  if (existsSync(join(gameDir, "scenes"))) args.push("--scenes", "scenes");
-  let checkAssets = true;
+/** The `rge` field of a game's package.json: where its folders are, and whether a missing asset is an error. */
+export interface GameSettings {
+  readonly name?: string;
+  readonly entry?: string;
+  readonly src?: string;
+  readonly generated?: string;
+  readonly scenes?: string;
+  readonly assets?: string;
+  readonly checkAssets?: boolean;
+}
+
+export function readGameSettings(gameDir: string): GameSettings {
   try {
-    checkAssets = (JSON.parse(readFileSync(join(gameDir, "package.json"), "utf8")) as { rge?: { checkAssets?: boolean } }).rge?.checkAssets !== false;
+    return (JSON.parse(readFileSync(join(gameDir, "package.json"), "utf8")) as { rge?: GameSettings }).rge ?? {};
   } catch {
-    // No package.json: check the assets.
+    return {}; // No package.json: the defaults.
   }
-  if (existsSync(join(gameDir, "assets")) && checkAssets) args.push("--assets", "assets");
+}
+
+/** The compiler's command-line script: `cli.ts` in the workspace, `cli.js` in an installed pack. */
+export function compilerCli(): string {
+  const dir = dirname(fileURLToPath(import.meta.resolve("@rge/compiler")));
+  return [join(dir, "cli.ts"), join(dir, "cli.js")].find((path) => existsSync(path)) ?? join(dir, "cli.js");
+}
+
+/** The command line that compiles the game in `gameDir`, as `rge check` does. */
+export function compileArgs(gameDir: string): string[] {
+  const settings = readGameSettings(gameDir);
+  const args = [compilerCli(), settings.src ?? "src", settings.generated ?? "generated"];
+  const scenes = settings.scenes ?? "scenes";
+  if (existsSync(join(gameDir, scenes))) args.push("--scenes", scenes);
+  const assets = settings.assets ?? "assets";
+  if (existsSync(join(gameDir, assets)) && settings.checkAssets !== false) args.push("--assets", assets);
   return args;
 }
 

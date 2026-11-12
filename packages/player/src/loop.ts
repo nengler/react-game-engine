@@ -1,4 +1,4 @@
-import { Flex, Game, World, captureHotState, getSoundSink, restoreHotState, setSoundSink, resetGameState, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type ViewTransform } from "@rge/runtime";
+import { Flex, Game, World, captureHotState, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -29,6 +29,8 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly fixedStep?: number;
   /** The game's actions, as the `<Game>` prop `controls`. */
   readonly controls?: Controls;
+  /** The game's id, as the `<Game>` prop `id`: the folder its save and settings are kept in. */
+  readonly id?: string;
   /** The gamepad stick's dead zone, as the `<Game>` prop `gamepadDeadzone`. */
   readonly gamepadDeadzone?: number;
   /** How a pixel-perfect screen is scaled up at a scale that is not a whole number, as the `<Game>` prop `upscale`. */
@@ -146,6 +148,26 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     sharp: (game?.upscale ?? config.upscale) === "sharp" ? true : undefined,
   });
 
+  // Saved data: open the game's folder and let saves and settings write through it, before the tree is mounted, so settings are
+  // applied before the first frame.
+  const gameId = game?.id ?? config.id;
+  let storageSink: StorageSink | null = null;
+  if (gameId !== undefined && backend.storage !== undefined) {
+    const storage = backend.storage;
+    if (storage.open(gameId)) {
+      storageSink = {
+        read: (name) => storage.read(name),
+        write: (name, text) => storage.write(name, text),
+        remove: (name) => storage.remove(name),
+        setFullscreen: (on) => {
+          if (!backend.setFullscreen) return false;
+          if (on === fullscreen) return true;
+          if (backend.setFullscreen(on)) fullscreen = on;
+          return fullscreen === on;
+        },
+      };
+    } else warner.once("storage", `Saved data is not available: the folder for the game id '${gameId}' could not be opened (the id is 1 to 64 letters, digits, _ and -).`);
+  } else if (gameId !== undefined) warner.once("storage", "This host has no saved data (its backend has no storage): nothing will be kept between runs.");
   const deadzone = game?.gamepadDeadzone ?? config.gamepadDeadzone;
   if (deadzone !== undefined) backend.setGamepadDeadzone?.(deadzone);
   const stepHz = game?.fixedStep ?? config.fixedStep;
@@ -202,10 +224,12 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     if (closed) return;
     closed = true;
     if (getSoundSink() === sink) setSoundSink(null);
+    if (storageSink !== null && getStorage() === storageSink) setStorage(null);
     backend.close();
   };
 
   setSoundSink(sink);
+  if (storageSink !== null) setStorage(storageSink);
   for (const name of preload) sink.load(name);
   for (const name of preloadMusic) sink.loadMusic?.(name);
   /** The root in the world, or null when building or mounting the last one failed. */

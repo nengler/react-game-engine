@@ -1,6 +1,6 @@
 import { GameObject } from "../GameObject.ts";
 import type { InputState } from "../input.ts";
-import { getSoundSink } from "../Sound.ts";
+import { getSoundSink, getVolume } from "../Sound.ts";
 
 export interface MusicProps {
   /** The music file, a path relative to the assets folder. It streams from the file, so it can be long (an `.ogg`, `.mp3` or `.wav`). */
@@ -49,6 +49,9 @@ export class Music<P extends object = {}> extends GameObject<P> {
     return this.#started;
   }
 
+  /** The music group's volume last sent to the stream, so a change of it is heard at once even while the level holds still. */
+  #group = 1;
+
   override onUpdate(dt: number, _input?: InputState): void {
     const sink = getSoundSink();
     if (this.src === undefined || this.src === "") return;
@@ -56,13 +59,19 @@ export class Music<P extends object = {}> extends GameObject<P> {
     if (goal > 0 && !this.#started) {
       this.#started = true;
       this.level = this.fade > 0 ? 0 : goal;
-      sink?.playMusic?.(this.src, this.level, this.loop);
+      this.#group = getVolume("music");
+      sink?.playMusic?.(this.src, this.level * this.#group, this.loop);
     }
     if (!this.#started) return;
+    const group = getVolume("music");
     if (this.level !== goal) {
       const step = this.fade > 0 ? Math.max(0, dt) / this.fade : 1;
       this.level = this.level < goal ? Math.min(goal, this.level + step) : Math.max(goal, this.level - step);
-      sink?.setMusicVolume?.(this.src, this.level);
+      this.#group = group;
+      sink?.setMusicVolume?.(this.src, this.level * group);
+    } else if (group !== this.#group) {
+      this.#group = group;
+      sink?.setMusicVolume?.(this.src, this.level * group);
     }
     if (this.level === 0 && goal === 0) {
       this.#started = false;
