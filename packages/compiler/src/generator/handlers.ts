@@ -1,7 +1,6 @@
 // Layer 1 of ComponentGenerator: the handler methods, state setters and updaters, and the statements and callbacks inside them.
 import { assertNever, type FunctionIR, type HandlerHookIR, type IfStmtIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
-import { CodeWriter } from "./writer.ts";
 import { param, annotated, pendingRef } from "./helpers.ts";
 import { ExpressionEmitter } from "./expressions.ts";
 
@@ -66,12 +65,7 @@ export class HandlerEmitter extends ExpressionEmitter {
     const params = fn.params.map(param).join(", ");
     const only = fn.body.length === 1 ? fn.body[0]! : null;
     if (only?.kind === "Return" && only.value) return `(${params}) => ${this.arrowBody(only.value)}`;
-    const inner = new CodeWriter();
-    const outer = this.w;
-    this.w = inner;
-    this.stmts(fn.body);
-    this.w = outer;
-    return this.arrow(params, inner.toString().trimEnd().split("\n"), fn);
+    return this.arrow(params, this.capture(() => this.stmts(fn.body)), fn);
   }
 
   /**
@@ -92,7 +86,7 @@ export class HandlerEmitter extends ExpressionEmitter {
     const only = fn.body.length === 1 ? fn.body[0]! : null;
     const previous = fn.params.length === 1 ? fn.params[0]! : null;
     // Not in a callback handed to an element: those run on an event, not every frame, and read better as the call.
-    if (this.callbackDepth > 0 || previous === null || only?.kind !== "Return" || !only.value || !this.hasSetter(state)) return false;
+    if (this.mode.inCallback || previous === null || only?.kind !== "Return" || !only.value || !this.hasSetter(state)) return false;
     const w = this.w;
     const slot = pendingRef(this.state(state));
     w.open("{");
@@ -175,16 +169,6 @@ export class HandlerEmitter extends ExpressionEmitter {
   /** A callback passed to a child: an arrow with unannotated parameters, typed by the child's props type. */
   protected callback(fn: FunctionIR): string {
     const params = fn.params.map(param).join(", ");
-    const inner = new CodeWriter();
-    const outer = this.w;
-    this.w = inner;
-    this.callbackDepth++;
-    try {
-      this.stmts(fn.body);
-    } finally {
-      this.callbackDepth--;
-      this.w = outer;
-    }
-    return this.arrow(params, inner.toString().trimEnd().split("\n"), fn);
+    return this.arrow(params, this.within({ inCallback: true }, () => this.capture(() => this.stmts(fn.body))), fn);
   }
 }

@@ -189,21 +189,18 @@ export class ElementEmitter extends HandlerEmitter {
       // A callback is created once, with the item's first value. It reads the item's current value through this
       // holder, which every render refreshes, and which it keeps after the item is removed (an unmount hook may call it).
       if (records) w.line(kids.length > 0 ? `const $rec: ${this.recordType(list)} = { current: ${item}, kids: ${this.emptyKids(list)} };` : `const $rec = { current: ${item} };`);
-      this.itemLookup = records ? { id: list.item.id, text: "$rec.current" } : null;
-      try {
+      this.within({ itemLookup: records ? { id: list.item.id, text: "$rec.current" } : null }, () => {
         if (alt) {
           w.block(`if (${test})`, () => construct(el));
           w.block("else", () => construct(alt));
         } else construct(el);
         if (kids.length > 0) {
-          this.withFieldBase("$rec.kids", () => {
+          this.within({ fieldBase: "$rec.kids" }, () => {
             this.emitMountStatics(kids, mountOf(el, "$item"));
             this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional");
           });
         }
-      } finally {
-        this.itemLookup = null;
-      }
+      });
       w.line(`${items}.set($key, $item);`);
       if (records) w.line(`${records}.set($key, $rec);`);
       w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, ${position})` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
@@ -214,12 +211,7 @@ export class ElementEmitter extends HandlerEmitter {
         if (records && kids.length > 0) {
           w.line(`$rec.current = ${item};`);
           // A child made now (its condition just turned on) may hold a callback: it reads the item through the record too.
-          this.itemLookup = { id: list.item.id, text: "$rec.current" };
-          try {
-            this.withFieldBase("$rec.kids", () => this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional"));
-          } finally {
-            this.itemLookup = null;
-          }
+          this.within({ itemLookup: { id: list.item.id, text: "$rec.current" }, fieldBase: "$rec.kids" }, () => this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional"));
         }
         if (alt) {
           w.block(`if (${test})`, () => this.emitPropUpdates(el, view(el)));
@@ -278,21 +270,8 @@ export class ElementEmitter extends HandlerEmitter {
     throw new Error(`Unexpected list source in component ${this.c.name}`);
   }
 
-  /** Where element fields live: on the component (`this.sprite`), or, while a list item's children are written, in its record. */
-  protected fieldBase = "this";
-
   protected fieldRef(el: ElementIR): string {
-    return `${this.fieldBase}.${el.fieldName}`;
-  }
-
-  protected withFieldBase(base: string, emit: () => void): void {
-    const outer = this.fieldBase;
-    this.fieldBase = base;
-    try {
-      emit();
-    } finally {
-      this.fieldBase = outer;
-    }
+    return `${this.mode.fieldBase}.${el.fieldName}`;
   }
 
   /** What unmounting a conditional subtree resets: its element fields to null, its lists to empty. */

@@ -9,7 +9,6 @@ import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { lowerFunction } from "./statements.ts";
 import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
 import { ExpressionLowering } from "./expressions.ts";
-import { Scope } from "./scope.ts";
 
 export class HookLowering extends ExpressionLowering {
   /**
@@ -131,16 +130,10 @@ export class HookLowering extends ExpressionLowering {
         case "useUnmount": {
           const kind = HANDLER_KIND[hook.kind];
           const signature = HANDLER_SIGNATURES[kind];
-          this.functionDepth++;
-          // The component is going away: it can no longer render, so there is nothing for a setter to do.
-          if (hook.kind === "useUnmount") this.settersForbidden++;
-          const handler = lowerFunction(this, hook.handler, {
-            paramTypes: signature.params.map((p) => p.type),
-            returns: "void",
-            what: `${hook.kind} handler`,
-          });
-          if (hook.kind === "useUnmount") this.settersForbidden--;
-          this.functionDepth--;
+          // In `useUnmount` the component is going away: it can no longer render, so there is nothing for a setter to do.
+          const handler = this.within({ inHandler: true, inUnmount: hook.kind === "useUnmount" }, () =>
+            lowerFunction(this, hook.handler, { paramTypes: signature.params.map((p) => p.type), returns: "void", what: `${hook.kind} handler` }),
+          );
           if (handler) hooks.push({ kind, handler, span: this.span(hook.statement) });
           break;
         }
@@ -243,18 +236,11 @@ export class HookLowering extends ExpressionLowering {
         this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component (or reserved).`, hook.declaration);
         return;
       }
-      const outer = this.scope;
-      this.scope = new Scope(outer);
-      this.scope.declare(hook.parameter, { kind: "storeRoot", name: hook.parameter });
-      const previous = this.storeReads;
-      this.storeReads = { state, hooks, storeName: hook.storeName };
-      let value: ExprIR | null;
-      try {
-        value = this.lowerNode(hook.body);
-      } finally {
-        this.scope = outer;
-        this.storeReads = previous;
-      }
+      const body = hook.body;
+      const value = this.inScope((scope) => {
+        scope.declare(hook.parameter, { kind: "storeRoot", name: hook.parameter });
+        return this.within({ storeReads: { state, hooks, storeName: hook.storeName } }, () => this.lowerNode(body));
+      });
       if (value) this.componentScope.declare(hook.valueName, { kind: "derived", name: hook.valueName, value: memoized(hook.valueName, value) });
       return;
     }
@@ -333,7 +319,7 @@ export class HookLowering extends ExpressionLowering {
    * A trailing `.length` reads the array's snapshot, since the store tells readers about an array's items, not its length.
    */
   protected override lowerStoreRead(path: readonly string[], at: Node): ExprIR | null {
-    const reads = this.storeReads;
+    const reads = this.mode.storeReads;
     if (!reads || path.length === 0) {
       this.report(DiagnosticCode.UnsupportedExpression, "Read a path of the game state (`s.player.hp`), not the whole state.", at);
       return null;

@@ -30,7 +30,7 @@ import {
   type StatementIR,
   type TypeIR,
 } from "../ir/types.ts";
-import { Scope } from "./scope.ts";
+import { type Scope } from "./scope.ts";
 
 /** What function lowering needs from the component lowering that owns it. */
 export interface LoweringContext {
@@ -49,6 +49,8 @@ export interface LoweringContext {
   canPlaySound(): boolean;
   /** Lowers a state updater: sounds cannot be played in it. */
   inUpdater<T>(lower: () => T): T;
+  /** Lowers something in a new scope beneath the current one, restored afterwards. */
+  inScope<T>(lower: (scope: Scope) => T): T;
   nextSerial(): number;
   /** A type annotation (`let best: Enemy | null`): primitives and arrays understood, anything else kept as source text. */
   typeFromNode(node: Node): TypeIR;
@@ -72,10 +74,7 @@ interface FunctionOptions {
 
 
 export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: FunctionOptions): FunctionIR | null {
-  const outer = ctx.scope;
-  const scope = new Scope(outer);
-  ctx.scope = scope;
-  try {
+  return ctx.inScope((scope) => {
     const params: ParamIR[] = [];
     if (options.paramTypes !== "contextual" && fn.parameters.length > options.paramTypes.length) {
       ctx.error(DiagnosticCode.InvalidHandler, `${options.what} takes at most ${options.paramTypes.length} parameter(s).`, fn.parameters[options.paramTypes.length]!);
@@ -106,9 +105,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
       body = stmt && [stmt];
     }
     return body && { kind: "Function", params, body };
-  } finally {
-    ctx.scope = outer;
-  }
+  });
 }
 
 /** Where statements are lowered: in a block scope of their own (`const`s declared inside do not leak out), and inside a loop. */
@@ -119,9 +116,7 @@ interface BlockOptions {
 }
 
 function lowerStatements(ctx: LoweringContext, statements: readonly Statement[], options: FunctionOptions, block: BlockOptions): StatementIR[] | null {
-  const outer = ctx.scope;
-  if (block.newScope) ctx.scope = new Scope(outer);
-  try {
+  const lower = (): StatementIR[] | null => {
     const out: StatementIR[] = [];
     let ok = true;
     for (const statement of statements) {
@@ -130,9 +125,8 @@ function lowerStatements(ctx: LoweringContext, statements: readonly Statement[],
       else ok = false;
     }
     return ok ? out : null;
-  } finally {
-    ctx.scope = outer;
-  }
+  };
+  return block.newScope ? ctx.inScope(lower) : lower();
 }
 
 function lowerStatement(ctx: LoweringContext, statement: Statement, options: FunctionOptions, inLoop: boolean): StatementIR | null {
@@ -235,18 +229,15 @@ function lowerForOf(ctx: LoweringContext, statement: Statement & { kind: SyntaxK
   }
   const iterable = ctx.lowerExpression(loop.expression);
   if (!iterable) return null;
-  const outer = ctx.scope;
-  ctx.scope = new Scope(outer);
-  try {
-    const name = decl.name.text;
-    if (!checkFreshName(ctx, name, decl.name)) return null;
+  const nameNode = decl.name;
+  return ctx.inScope((scope) => {
+    const name = nameNode.text;
+    if (!checkFreshName(ctx, name, nameNode)) return null;
     const item = localId(ctx.componentName, name, ctx.nextSerial());
-    ctx.scope.declare(name, { kind: "local", id: item, name, mutable: false });
+    scope.declare(name, { kind: "local", id: item, name, mutable: false });
     const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, inLoop: true });
     return body && { kind: "ForOf", item, name, iterable, body };
-  } finally {
-    ctx.scope = outer;
-  }
+  });
 }
 
 const ASSIGN_OPERATORS: ReadonlyMap<SyntaxKind, AssignOperator> = new Map([

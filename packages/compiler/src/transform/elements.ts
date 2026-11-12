@@ -4,7 +4,6 @@ import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isCon
 import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
 import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type ValuePropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
-import { Scope } from "./scope.ts";
 import { checkFreshName, lowerFunction } from "./statements.ts";
 import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute, nearest } from "./helpers.ts";
 import { HookLowering } from "./hooks.ts";
@@ -20,13 +19,13 @@ export class ElementLowering extends HookLowering {
     fn: Node & { kind: SyntaxKind.ArrowFunction },
     params?: readonly { readonly name: string; readonly type: string }[],
   ): CallbackPropIR | null {
-    this.functionDepth++;
-    const handler = lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
-      paramTypes: params ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
-      returns: "void",
-      what: `${name} callback`,
-    });
-    this.functionDepth--;
+    const handler = this.within({ inHandler: true }, () =>
+      lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
+        paramTypes: params ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
+        returns: "void",
+        what: `${name} callback`,
+      }),
+    );
     return handler && { kind: "CallbackProp", name, handler };
   }
 
@@ -222,9 +221,7 @@ export class ElementLowering extends HookLowering {
     const source = this.lowerNode(callee.expression);
     if (!source) return null;
 
-    const outer = this.scope;
-    this.scope = new Scope(outer);
-    try {
+    return this.inScope((): KeyedListChildIR | null => {
       const params: ParamIR[] = [];
       for (const param of fn.parameters) {
         if (!isIdentifier(param.name) || param.initializer || param.dotDotDotToken || param.type) {
@@ -323,9 +320,7 @@ export class ElementLowering extends HookLowering {
       if (!element || (alternate && !alternateElement)) return null;
       const dependencies = [...collectDependencies(source), ...(condition ? collectDependencies(condition) : [])];
       return { kind: "KeyedListChild", source, item, index, key, element, condition, alternate: alternateElement, dependencies };
-    } finally {
-      this.scope = outer;
-    }
+    });
   }
 
   /** `slotOk`: a `{children}` slot may appear in this element's children (it is in a static chain from the root). */
@@ -541,12 +536,8 @@ export class ElementLowering extends HookLowering {
           }
         }
         // `onX={onX}` forwards a callback prop whole.
-        this.allowCallbackRead = toComponent && (isIdentifier(expression) || isPropertyAccessExpression(expression));
-        try {
-          value = this.lowerNode(init.expression);
-        } finally {
-          this.allowCallbackRead = false;
-        }
+        const forwarded = init.expression;
+        value = this.within({ allowCallbackRead: toComponent && (isIdentifier(expression) || isPropertyAccessExpression(expression)) }, () => this.lowerNode(forwarded));
       } else {
         this.report(DiagnosticCode.UnsupportedAttribute, `Unsupported value for attribute '${name}'.`, init);
         continue;

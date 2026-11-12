@@ -329,9 +329,7 @@ class ComponentGenerator extends ElementEmitter {
         // state exists, so it gets a placeholder and its real value in the first `render()`, which the constructor runs.
         const required = this.requiredHostProps[c.root.component.name] ?? [];
         const placeholders = c.root.props.flatMap((p) => (p.kind === "DynamicProp" && required.includes(p.name) ? [`${propertyKey(p.name)}: undefined as never`] : []));
-        this.inlineMemos = true;
-        const hostEntries = [...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`), ...placeholders];
-        this.inlineMemos = false;
+        const hostEntries = this.within({ inlineMemos: true }, () => [...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`), ...placeholders]);
         const host = hostEntries.length > 0 ? `{ ${hostEntries.join(", ")} }` : "{}";
         if (c.propsType) w.line(`super(${host}, props${defaultsObject ? `, ${defaultsObject}` : ""});`);
         else w.line(hostEntries.length > 0 ? `super(${host});` : "super();");

@@ -45,7 +45,7 @@ export class ExpressionLowering extends LoweringBase {
           this.report(DiagnosticCode.UnsupportedExpression, "`children` can only be used as a JSX child, `{children}`: it is the elements a parent passes, not a value.", node);
           return null;
         case "prop":
-          if (binding.role === "callback" && !this.allowCallbackRead) {
+          if (binding.role === "callback" && !this.mode.allowCallbackRead) {
             this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a callback prop: call it (\`${node.text}?.()\`) or forward it whole (\`onX={${node.text}}\`).`, node);
             return null;
           }
@@ -218,7 +218,7 @@ export class ExpressionLowering extends LoweringBase {
     const propsObject = this.propsObjectMember(node);
     if (propsObject !== undefined) {
       if (propsObject === null) return null;
-      if (propsObject.role === "callback" && !this.allowCallbackRead) {
+      if (propsObject.role === "callback" && !this.mode.allowCallbackRead) {
         this.report(DiagnosticCode.UnsupportedExpression, `'${propsObject.name}' is a callback prop: call it (\`props.${propsObject.name}?.()\`) or forward it whole (\`onX={props.${propsObject.name}}\`).`, node);
         return null;
       }
@@ -227,7 +227,7 @@ export class ExpressionLowering extends LoweringBase {
     const ref = this.refAccess(node);
     if (ref === "error") return null;
     if (ref) {
-      if (this.functionDepth === 0) {
+      if (!this.mode.inHandler) {
         this.report(
           DiagnosticCode.HandleReadOutsideHandler,
           "`ref.current` can only be read inside handlers: refs never cause a render, so a read here would go stale. Use state for values JSX depends on.",
