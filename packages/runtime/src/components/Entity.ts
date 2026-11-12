@@ -1,6 +1,6 @@
-import { GameObject } from "../GameObject.ts";
+import { GameObject, type InputScopeProps } from "../GameObject.ts";
 
-export interface EntityProps {
+export interface EntityProps extends InputScopeProps {
   name?: string;
 }
 
@@ -14,5 +14,7 @@ export class Entity<P extends object = {}> extends GameObject<P> {
   constructor(hostProps: EntityProps = {}, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
     this.name = hostProps.name ?? "";
+    this.inert = hostProps.inert ?? false;
+    this.modal = hostProps.modal ?? false;
   }
 }

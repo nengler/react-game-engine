@@ -42,6 +42,8 @@ export class World {
   #onInput = new Set<GameObject>();
   #onUpdate = new Set<GameObject>();
   readonly #inert = new Set<GameObject>();
+  /** Objects with `modal`, in the order they were mounted: the last one in this world takes the input. */
+  readonly #modals: GameObject[] = [];
   /** Every `<Pointer>` and `<Flex>` in this world: what a `pressKey`, the focus and the confirm key look through. */
   readonly #pressables = new Set<GameObject & Pressable>();
   #focused: (GameObject & Pressable) | null = null;
@@ -179,17 +181,38 @@ export class World {
     else this.#inert.delete(object);
   }
 
-  /** Whether `object` is in a subtree made inert (see `setInert`). */
+  /**
+   * Make an object modal, or not, as a `<dialog>` opened with `showModal()`: while it is in this world, everything outside its
+   * subtree is inert (see `setInert`). The one made modal last takes the input. `GameObject.modal` calls it.
+   */
+  setModal(object: GameObject, modal: boolean): void {
+    const at = this.#modals.indexOf(object);
+    if (at !== -1) this.#modals.splice(at, 1);
+    if (modal) this.#modals.push(object);
+  }
+
+  /** The modal that takes the input now, or null: the last one made modal that is still in this world. */
+  get modal(): GameObject | null {
+    const modals = this.#modals;
+    while (modals.length > 0 && modals[modals.length - 1]!.world !== this) modals.pop();
+    return modals.at(-1) ?? null;
+  }
+
+  /** Whether `object` hears no input: it is in a subtree made inert (see `setInert`), or outside the modal (see `setModal`). */
   isInert(object: GameObject): boolean {
-    if (this.#inert.size === 0) return false;
-    for (let at: GameObject | null = object; at !== null; at = at.parent) if (this.#inert.has(at)) return true;
-    return false;
+    const modal = this.#modals.length > 0 ? this.modal : null;
+    if (this.#inert.size === 0 && modal === null) return false;
+    let insideModal = modal === null;
+    for (let at: GameObject | null = object; at !== null; at = at.parent) {
+      if (this.#inert.has(at)) return true;
+      if (at === modal) insideModal = true;
+    }
+    return !insideModal;
   }
 
   #hasInert(): boolean {
-    if (this.#inert.size === 0) return false;
     for (const object of this.#inert) if (object.world !== this) this.#inert.delete(object);
-    return this.#inert.size > 0;
+    return this.#inert.size > 0 || (this.#modals.length > 0 && this.modal !== null);
   }
 
   /** What has the focus (see `PressableProps.focusable`), or null. */

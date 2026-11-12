@@ -6,8 +6,8 @@
  *   node tools/docs-index.ts --check  # fail if any page's index is stale (a test runs this)
  *
  * There is one entry for each `<section id>` of the pages, in page order. Its text is the section's HTML with every tag replaced
- * by a space, entities decoded, in lower case (code included). A new section's title and group are its `data-title` and
- * `data-group`; an existing entry keeps the title and group it has (the navigation groups by them).
+ * by a space, entities decoded, in lower case (code included). A new section's title is its `data-title`, and its group is the
+ * one its `data-group` already has in the index (or the `data-group` itself); an existing entry keeps its title and group.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -49,15 +49,23 @@ export function buildIndex(): string {
   const current = MANIFEST.exec(html.get(PAGES[0]!)!);
   if (!current) throw new Error(`${PAGES[0]} has no MANIFEST`);
   const known = new Map((JSON.parse(current[1]!) as Entry[]).map((entry) => [entry.id, entry]));
-  const entries: Entry[] = [];
-  for (const [page, text] of html) {
-    for (const section of text.matchAll(/<section id="([^"]+)"([^>]*)>/g)) {
+  const sections = [...html].flatMap(([page, text]) =>
+    [...text.matchAll(/<section id="([^"]+)"([^>]*)>/g)].map((section) => {
       const id = section[1]!;
       const attribute = (name: string): string => decode(new RegExp(`${name}="([^"]*)"`).exec(section[2]!)?.[1] ?? id);
-      const old = known.get(id);
-      entries.push({ id, title: old?.title ?? attribute("data-title"), page, group: old?.group ?? attribute("data-group"), text: sectionText(text, id) });
-    }
+      return { id, page, text, title: attribute("data-title"), dataGroup: attribute("data-group") };
+    }),
+  );
+  // A new section joins the navigation group its `data-group` already maps to ("Start here" is shown as "Start").
+  const groupOf = new Map<string, string>();
+  for (const s of sections) {
+    const old = known.get(s.id);
+    if (old && !groupOf.has(s.dataGroup)) groupOf.set(s.dataGroup, old.group);
   }
+  const entries: Entry[] = sections.map((s) => {
+    const old = known.get(s.id);
+    return { id: s.id, title: old?.title ?? s.title, page: s.page, group: old?.group ?? groupOf.get(s.dataGroup) ?? s.dataGroup, text: sectionText(s.text, s.id) };
+  });
   // Non-ASCII characters are escaped, as the pages have always held them.
   return JSON.stringify(entries).replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }

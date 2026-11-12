@@ -71,7 +71,8 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
 5. **`rge check` under `node --test`:** the child's test run printed `?` for its counts because `NODE_TEST_CONTEXT` made it
    report to the outer run. `rge check` now clears it. (An engine-tooling finding, fixed.)
 6. **Compile errors name the generated file** (`generated/Play.ts:9:23 … './World.ts'`) when the real cause is in `src/` (the
-   source file had failed to compile, above in the output). Reading the whole output top-down is needed.
+   source file had failed to compile, above in the output). Reading the whole output top-down is needed. *Since:* the generated code
+   is not type-checked while a file fails to compile, and a type error in generated code is reported at its line in `src/`.
 
 7. **Props need a declared type** (`RGE1208`): `Menu({ top }: { top: number })` is refused; the type is declared in the file. The message
    says exactly that. Fine.
@@ -113,6 +114,17 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
 
 Escape opens it over the world (the world is not stepped): the inventory as eight slots, two rows, empty ones dark; then Resume and
 Save and quit (which writes the save and goes to the title). Picking up an item shows a card across the top.
+
+Since the engine's `modal` (2026-11-12), the pause screen is its own component (`Pause.tsx`) with `modal` on its root: while it is
+shown the play screen hears no keys, so it closes itself on Escape, and `Play` no longer returns early from `useInput` when paused.
+The settings screen's wait for a key is `KeyPrompt.tsx`, a modal with no children, so `Menu` lost its `disabled` prop.
+
+17. **Narrowing does not reach a callback in the generated code.** In `{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`,
+    TypeScript narrows `capturing` (a `const`) inside the arrow, but the generated callback reads `this.capturing`, which is not
+    narrowed, so the type-check of the generated code fails (`string | null` is not `string`). Written `capturing!` for now. *Should
+    become:* the generator keeps the narrowing (a callback created under a condition could read a `const` taken there). *Since:* the
+    generated callback starts with `$assume(this.capturing !== null)`, which narrows it as the source does (engine DESIGN.md, "Narrowing
+    in the generated code"); the `!` is gone.
 
 ## Enemies (M5)
 

@@ -2,7 +2,8 @@ import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
 import { analyzeSourceFile, type SourceAnalysis } from "./analyzer/analyzer.ts";
 import { checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
 import { hasErrors, type CompilerDiagnostic } from "./diagnostics/diagnostics.ts";
-import { generateModule, generateModuleWithMap, type GeneratorOptions } from "./generator/generator.ts";
+import { generateModuleWithMap, generateModuleWithOrigins, type GeneratorOptions } from "./generator/generator.ts";
+import { type LineOrigin } from "./generator/writer.ts";
 import type { IRModule } from "./ir/types.ts";
 import { TsxParser } from "./parser/parser.ts";
 import type { PrefabSchema } from "./prefabs/prefabs.ts";
@@ -17,7 +18,9 @@ export type { RuntimeManifest } from "@rge/runtime";
 export * from "./diagnostics/diagnostics.ts";
 export { analyzeSourceFile, AUTHORING_HOOKS, AUTHORING_TYPES, type PropsAnalysis, type TypeDeclarationAnalysis, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
-export { generateModule, generateModuleWithMap, type GeneratorOptions, type SourceMapOptions } from "./generator/generator.ts";
+export { generateModule, generateModuleWithMap, generateModuleWithOrigins, type GeneratorOptions, type SourceMapOptions } from "./generator/generator.ts";
+export { type LineOrigin } from "./generator/writer.ts";
+export { mapToSource, type GeneratedFile } from "./diagnostics/source.ts";
 export { parseGameState, type GameStateDefinition, type GameStateEntry, type GameStateLeaf, type GameStateNode, type GameStateValue, type GameStateSchemaResult } from "./gamestate/schema.ts";
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
 export { constantValue, exportedComponents, moduleSchemas, prefabSchema, type JsonValue, type PrefabPropSchema, type PrefabSchema } from "./prefabs/prefabs.ts";
@@ -52,6 +55,8 @@ export type CompileResult =
       readonly code: string;
       /** The source map for `code`, when `compile` was asked for one. */
       readonly sourceMap?: string;
+      /** For each line of `code` written for a construct of the source, where that construct is (see `mapToSource`). */
+      readonly origins: readonly LineOrigin[];
       readonly diagnostics: readonly CompilerDiagnostic[];
     }
   | {
@@ -137,9 +142,10 @@ export class Compiler {
       };
       if (sourceMap) {
         const generated = generateModuleWithMap(ir, options, { ...sourceMap, sourceContent: original });
-        return { ok: true, fileName, ir, code: generated.code, sourceMap: generated.map, diagnostics };
+        return { ok: true, fileName, ir, code: generated.code, sourceMap: generated.map, origins: generated.origins, diagnostics };
       }
-      return { ok: true, fileName, ir, code: generateModule(ir, options), diagnostics };
+      const generated = generateModuleWithOrigins(ir, options);
+      return { ok: true, fileName, ir, code: generated.code, origins: generated.origins, diagnostics };
     } finally {
       parsed.dispose();
     }

@@ -67,6 +67,14 @@ generated file. Each generated line maps to the start of the construct it was wr
 the IR's spans), not to the exact expression, so a stack trace through `node --enable-source-maps` names the right line of
 the `.tsx`. Spans already point at the source as written, through the custom-hook inliner's `EditMap`.
 
+**Errors in the source** (2026-11-12, PAIN_POINTS.md and Bramble finding 6). Every `compile` now returns the same line origins
+(`origins`), with or without a map. The command line keeps them per generated file, and `mapToSource` moves each type error the
+check of the generated code finds (`RGE9001`) to the source line of the construct its generated line was written for, keeping
+where it was found: `src/Settings.tsx:9:28 - error RGE9001: TS2345: … (in the generated out/Settings.ts:44:59)`. A line written for
+no construct (an import, the class header) keeps its generated position. And when a file fails to compile, the generated code is
+not type-checked at all ("skipped type-checking the generated code"), as scenes are not validated: the other files would only
+report its module as missing, or check against an old one.
+
 ## TypeScript 7.1 integration
 
 TypeScript 7 is the native (Go) compiler. The npm package ships a JS client
@@ -665,8 +673,33 @@ items map holds the union of the two classes, and a `#<field>Branches` map remem
 branch flipped queues removal of the old instance and adds the new one at the same `(slot, position)`, with the item's current props; the
 reorder that follows uses the new instance. The branches in the generated code test the condition itself, not a stored flag, so that
 TypeScript narrows what it reads (`p.tower ? new Tower({ …p.tower })`). A fragment is still not a branch, and the index parameter cannot
-be used when the items are conditional (it would count the items left out). The `&&` form is a filter, so TypeScript does not narrow
-inside it: spread a non-null source there.
+be used when the items are conditional (it would count the items left out). The `&&` form is a filter, which TypeScript does not narrow
+through; the generated loop narrows the item with `$assume` (see "Narrowing in the generated code"), so `p.tower && <Tower {...p.tower} />`
+type-checks.
+
+### Narrowing in the generated code (2026-11-12)
+
+What TypeScript narrows in the source, the generated code must narrow too, or the check of the generated code fails where the
+source passed (Bramble finding 17). Three places lost it:
+
+- **A callback made under a condition** (`{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`). In the
+  source the arrow closes over a narrowed `const`; in the generated code it reads `this.capturing`, which TypeScript does not narrow
+  inside a function even when the function is made inside `if (this.capturing !== null)`.
+- **A memo in such a condition** (`const waiting = pick(id)`): it is generated as a call, `this.$memo(…)`, which is never narrowed.
+- **A list's `&&` form**: the generated code filters the items, and TypeScript does not narrow through `filter`.
+
+The generator writes `$assume(condition)`, a function the module declares when it uses it,
+`function $assume(_condition: unknown): asserts _condition {}`. An assertion signature narrows what follows; the body checks nothing.
+`EmitMode.conditions` holds the conditions an element being made sits under (a `ConditionalChild`'s, and a keyed list's when it does
+not read the item, as a keyed element's does), and `callback` starts each callback with `$assume(c1 && c2)`. A memo a condition reads
+is first read into a local (`const $m0 = this.$memo(…)`, `EmitMode.memoLocals`) that the callback then reads everywhere, since a local
+can be narrowed: within one call it is the same value, because state is a snapshot and props do not change. In a list's loop the
+item is narrowed by the list's own condition, after the filter that makes it true.
+
+**It changes no behaviour.** A callback that runs after its condition stopped holding still runs, reading state as it is now: a
+`useUnmount` that tells the parent `onGone()` after `label` became `null` sees `null`, as before. (React's closure would see the value
+of the render that made it; this engine's callbacks read current state, see "Props and callbacks".) Not narrowed still: a condition
+on something that is not a path or a memo, which TypeScript cannot narrow in the source either.
 
 ### Children on list items (2026-11-11)
 
@@ -1821,6 +1854,23 @@ have no such action: `InputState.isAction` tells) move it to the nearest focusab
 a laid-out box's middle; along the direction, plus twice the distance across, so a row before the next row), and `confirm` (Enter and PadA
 without one) presses the focused one. A click on a focusable one focuses it before pressing it. `World.focus(p)` / `World.focused` for
 code. One focused or removed, inert or no longer focusable, loses it; the next tick an `autoFocus` one may take it.
+
+**Inert and modal** (2026-11-12, from PAIN_POINTS.md: "nothing lets a component own or consume the keys"). Input stays polled;
+what changed is who hears it, decided by subtree as in HTML. `inert` and `modal` are accessors on `GameObject` and props of
+`<Entity>`, `<Flex>` and `<Hud>` (`InputScopeProps`), so a component puts them on its root (`<Entity inert={disabled}>`) and they
+follow state like any prop. `inert` was already the router's mechanism (`World.setInert`, used on a screen being left); the prop
+calls it when set and when the object joins or leaves a world. `modal` calls `World.setModal`, which keeps a stack in mount order;
+the last modal still in the world is `World.modal`. `World.isInert(object)` is now: in an inert subtree, or a modal exists and the
+object is not inside it (ancestors included, as a dialog's page is). Everything that already asked `isInert` follows: `onInput` and
+`onUpdate` get `NO_INPUT`, presses and hover skip it, `pressKey` and the focus look only at pressables that are not inert, so the
+focus stays inside a modal and leaves what it made inert. A modal is pushed before its children attach, so an inner modal is above
+an outer one. `inert` and `modal` are reserved member names; they are not in `intrinsicMembers`, which lists what an intrinsic
+adds to `GameObject`.
+
+Bramble is the first user: the pause screen is a `modal` component that closes itself on Escape (the play screen behind it no
+longer hears the keys, so its `if (paused) return` in `useInput` went), and a settings row waiting for a key mounts `KeyPrompt`, a
+modal with no children, so `Menu` lost its `disabled` prop. Not done: a per-key "consume" (`input.consume("confirm")`) inside one
+subtree, which no game has needed beside these two.
 
 **Small things the same review found.** `<Pointer originX originY>` places the area's origin as a Sprite's does (a pad's 10 × 10 area
 centred on it). A bitmap-font `<Text>` without a `size` is drawn at the font's own cell height (`Text.sized`; setting `size` to
