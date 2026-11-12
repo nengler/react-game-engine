@@ -12,7 +12,7 @@
  *
  * `npm run bench:check` runs it under both and fails when a scene is over its budget in `budget.json` (CI does).
  */
-import { AnimatedSprite, Camera, Collider, Entity, Shape, Sprite, Tilemap, World, registerTilemaps } from "@rge/runtime";
+import { findPath, AnimatedSprite, Camera, Collider, Entity, Shape, Sprite, Tilemap, World, registerTilemaps } from "@rge/runtime";
 import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerInput, RGE_IN_DT, RGE_IN_QUIT, Warner, type Backend } from "@rge/player";
 
 /**
@@ -283,8 +283,27 @@ function mount(scene: Scene): number {
   return elapsed;
 }
 
+/** Plan M5.1: 100 searches across an 80 x 48 map with walls, corner to corner and back, in ms for all 100. */
+function pathSearches(): number {
+  const width = 80;
+  const height = 48;
+  const solid = (x: number, y: number): boolean => (x % 8 === 4 && y % 12 !== (Math.floor(x / 8) % 2 === 0 ? 3 : 8)) || (y % 12 === 6 && x % 10 !== 2);
+  const grid = { width, height };
+  const start = Date.now();
+  let found = 0;
+  for (let i = 0; i < 100; i++) {
+    const a = i % 2 === 0 ? { x: 0, y: 0 } : { x: 79, y: 47 };
+    const b = i % 2 === 0 ? { x: 79, y: 47 } : { x: 0, y: 0 };
+    if (findPath(grid, a, b, { blocked: solid, diagonal: i % 4 < 2 }) !== null) found++;
+  }
+  const elapsed = Date.now() - start;
+  if (found === 0) throw new Error("the path bench found no path: its map is walled off");
+  return elapsed;
+}
+
 console.log(hostOverlaps === undefined ? "collisions: the script's sweep" : "collisions: the host's broad phase");
 for (const [name, scene] of scenes) console.log(`${name.padEnd(35)}: ${measure(scene).toFixed(2)} ms per frame`);
+console.log(`${"100 paths on an 80 x 48 map".padEnd(35)}: ${pathSearches().toFixed(2)} ms once`);
 // The middle of three, since one mount is a single short measurement.
 for (const n of [5000, 20000]) {
   const runs = [0, 1, 2].map(() => mount({ n })).sort((a, b) => a - b);
