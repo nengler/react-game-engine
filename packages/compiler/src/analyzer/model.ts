@@ -137,10 +137,20 @@ export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | Use
  */
 export interface RenderConstAnalysis {
   readonly kind: "const";
+  /** The name; for a destructuring, the names it binds joined (`x,y,frame`), which names the shared value. */
   readonly name: string;
   readonly initializer: Expression;
   readonly declaration: VariableDeclaration;
+  /**
+   * `const { x, y: top } = heroOf(run)` (each name and the member it reads) or `const [first, , third] = pair` (a name per index, null
+   * for a hole). Null for a plain `const name = …`.
+   */
+  readonly pattern: RenderConstPattern | null;
 }
+
+export type RenderConstPattern =
+  | { readonly kind: "object"; readonly entries: readonly { readonly name: string; readonly key: string; readonly node: Node }[] }
+  | { readonly kind: "array"; readonly entries: readonly ({ readonly name: string; readonly node: Node } | null)[] };
 
 /** `const r = useRef<Sprite>()`. */
 export interface UseRefCallAnalysis {

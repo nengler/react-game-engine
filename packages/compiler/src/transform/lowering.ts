@@ -136,6 +136,10 @@ export class LoweringBase {
       case "StringLiteral":
       case "TemplateLiteral": return "string";
       case "BooleanLiteral": return "boolean";
+      case "StateRead": {
+        const type = this.stateTypes.get(expr.state);
+        return type?.kind === "Primitive" ? (type.name as ValueType) : null;
+      }
       case "PropRead": {
         const decl = this.propDecls.find((p) => p.name === expr.name);
         return decl?.role === "value" && decl.type.kind === "Primitive" ? decl.type.name : null;
@@ -340,6 +344,11 @@ export class LoweringBase {
     }
     this.usedNames.add(name);
     return true;
+  }
+
+  /** A member of the runtime's object (`name` of an `<Entity>` root, `render`), as opposed to a name this component declared. */
+  protected isRuntimeMember(name: string): boolean {
+    return this.manifest.reservedMembers.includes(name) || (this.manifest.intrinsicMembers[rootTag(this.component.jsx, this.manifest.hostIntrinsic)] ?? []).includes(name);
   }
 
   /** A free field name for an element; with a suffix (a list's `enemyItems`), the suffixed name is claimed too. */

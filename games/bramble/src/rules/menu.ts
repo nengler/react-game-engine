@@ -66,3 +66,8 @@ export function pauseRows(): Row[] {
     { id: "quit", label: "Save and quit", value: "" },
   ];
 }
+
+/** A cursor moved past either end of `count` rows comes round to the other. */
+export function wrap(cursor: number, count: number): number {
+  return (cursor + count) % count;
+}

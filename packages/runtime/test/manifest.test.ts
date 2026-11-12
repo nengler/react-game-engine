@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { AnimatedSprite, Camera, Fade, Music, Route, Router, Particles, ParticleLayer, createParticles, Tilemap, Collider, Entity, Flex, Game, GameObject, Hud, Pointer, SCREEN_FITS, SHAPE_KINDS, Screen, Shape, Sprite, Text, runtimeManifest } from "../src/index.ts";
+import { AnimatedSprite, Camera, Fade, Music, Route, Router, Particles, ParticleLayer, createParticles, Tilemap, Collider, Entity, Flex, Game, GameObject, Hud, Pointer, SCREEN_FITS, SHAPE_KINDS, Screen, Shape, Sprite, Text, createInputState, runtimeManifest } from "../src/index.ts";
 
 /** Every instance field and prototype member a generated subclass of `host` would inherit, excluding Object.prototype. */
 function inheritedMembers(host: object): Set<string> {
@@ -121,5 +121,17 @@ describe("runtime manifest", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
     const classes: Record<string, unknown> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex, Tilemap, Particles, ParticleLayer, Fade, Music, Router, Route };
     for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
+  });
+
+  it("lets components call every method of InputState and read every property (the compiler knows a handle by the manifest)", () => {
+    const input = createInputState({}) as unknown as Record<string, unknown>;
+    // `isAction` is how the player asks the controls; a component never calls it.
+    const internal = new Set(["isAction"]);
+    const methods = Object.keys(input).filter((k) => typeof input[k] === "function" && !internal.has(k));
+    const properties = Object.keys(input).filter((k) => typeof input[k] !== "function");
+    const known = runtimeManifest.handleTypes["InputState"]!;
+    assert.deepEqual(methods.filter((m) => known.methods[m] === undefined), [], "add these to handleTypes.InputState.methods, with their argument counts");
+    assert.deepEqual(properties.filter((p) => !known.properties.includes(p)), [], "add these to handleTypes.InputState.properties");
+    for (const m of methods) assert.equal((input[m] as (...a: unknown[]) => unknown).length, known.methods[m], `${m}'s argument count`);
   });
 });

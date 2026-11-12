@@ -1,5 +1,6 @@
 // Base of the component generator: the fields, the expression and field-reference emitters. Layer 0 of ComponentGenerator (see generator.ts).
 import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type RefId, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
+import { collectDependencies } from "../ir/walk.ts";
 import { CodeWriter } from "./writer.ts";
 import { param, escapeTemplate, propertyKey } from "./helpers.ts";
 
@@ -17,6 +18,8 @@ export class ExpressionEmitter {
   protected itemLookup: { readonly id: LocalId; readonly text: string } | null = null;
   /** Greater than zero while emitting a callback prop's body. */
   protected callbackDepth = 0;
+  /** While writing `super(…)`'s arguments, where `this` cannot be used: a memo is worked out in place (it reads nothing that changes there). */
+  protected inlineMemos = false;
   /** How many temporaries the `render()` being written has used (see `emitReportedWrites`). */
   protected renderTemps = 0;
   /** The imported game state (`useGame`), when the module uses one. */
@@ -124,6 +127,13 @@ export class ExpressionEmitter {
       case "Unary": return wrap(`${e.operator}${this.expr(e.operand)}`);
       case "Binary": return wrap(`${this.expr(e.left)} ${e.operator} ${this.expr(e.right)}`);
       case "Conditional": return wrap(`${this.expr(e.test)} ? ${this.expr(e.whenTrue)} : ${this.expr(e.whenFalse)}`);
+      case "Memo": {
+        if (this.inlineMemos) return this.expr(e.value, top);
+        // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
+        const deps = collectDependencies(e.value).map((d) => (d.kind === "State" ? `this.${this.state(d.state).name}` : d.kind === "Prop" ? `this.props.${d.name}` : null));
+        if (deps.includes(null)) throw new Error(`A memo of ${this.c.name} reads a list item`);
+        return `this.$memo(${JSON.stringify(e.key)}, [${deps.join(", ")}], () => ${this.arrowBody(e.value)})`;
+      }
       default: return assertNever(e, "expression");
     }
   }

@@ -32,7 +32,19 @@ export type ExprIR =
   | TemplateLiteralIR
   | UnaryExprIR
   | BinaryExprIR
-  | ConditionalExprIR;
+  | ConditionalExprIR
+  | MemoIR;
+
+/**
+ * A derived value that calls something (`const hero = heroOf(run)`, `const alive = enemies.filter(…)`), worked out once and again
+ * only when what it reads changes, as React's `useMemo`: the generated code is `this.$memo(key, [deps], () => value)`, the deps
+ * being the state and props `value` reads. `key` names it among the component's memos.
+ */
+export interface MemoIR {
+  readonly kind: "Memo";
+  readonly key: string;
+  readonly value: ExprIR;
+}
 
 /**
  * A function imported from a relative `.ts` file, used as a value (`<Router transition={crossfade} />`): the generated code writes
@@ -197,9 +209,28 @@ export const ARRAY_METHODS = {
   indexOf: { args: [1, 1], callback: false },
   slice: { args: [0, 2], callback: false },
   concat: { args: [1, Infinity], callback: false },
+  flatMap: { args: [1, 1], callback: true },
+  join: { args: [0, 1], callback: false },
+  at: { args: [1, 1], callback: false },
+  lastIndexOf: { args: [1, 1], callback: false },
+  flat: { args: [0, 1], callback: false },
 } as const satisfies Record<string, { readonly args: readonly [number, number]; readonly callback: boolean }>;
 
 export type ArrayMethodName = keyof typeof ARRAY_METHODS;
+
+/**
+ * Methods of strings and numbers, none of which changes anything: `name.toUpperCase()`, `String(n).padStart(2, "0")`,
+ * `id.startsWith("bind:")`, `speed.toFixed(1)`. They are called as written (`ValueMethod`), and the type-check of the generated code
+ * checks the receiver has them. (`slice`, `includes`, `indexOf`, `concat`, `at` are shared with arrays, in `ARRAY_METHODS`.)
+ */
+export const VALUE_METHODS: ReadonlySet<string> = new Set([
+  "padStart", "padEnd", "startsWith", "endsWith", "toUpperCase", "toLowerCase", "trim", "trimStart", "trimEnd", "split", "replace",
+  "replaceAll", "repeat", "charAt", "charCodeAt", "substring", "localeCompare", "normalize",
+  "toFixed", "toPrecision", "toString",
+]);
+
+/** Global conversions, called as functions: `String(n)`, `Number(text)`, `Boolean(x)`. Argument count. */
+export const GLOBAL_FUNCTIONS: Readonly<Record<string, number>> = { String: 1, Number: 1, Boolean: 1 };
 
 /** Array methods that change the array in place: reported with the immutable alternative. */
 export const MUTATING_ARRAY_METHODS: Readonly<Record<string, string>> = {

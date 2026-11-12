@@ -38,6 +38,8 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
       return [e.object, e.index];
     case "NonNull":
       return [e.expression];
+    case "Memo":
+      return [e.value];
     case "ArrayLiteral":
       return e.elements.map((el) => el.value);
     case "ObjectLiteral":

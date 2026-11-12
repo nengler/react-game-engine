@@ -4,7 +4,7 @@ import { SyntaxKind, type JsxElement, type JsxSelfClosingElement, type JsxAttrib
 import { isIdentifier, isJsxAttribute, isJsxElement, isNumericLiteral, isParenthesizedTypeNode, isLiteralTypeNode, isJsxFragment, isJsxSelfClosingElement, isStringLiteral } from "typescript/ast/is";
 import { type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { assertNever, type TypeIR, type PropTypeIR, type BinaryOperator, type ChildIR, type ComponentIR, type ExprIR, type UnaryOperator } from "../ir/types.ts";
+import { assertNever, type TypeIR, type PropTypeIR, type BinaryOperator, type ChildIR, type ComponentIR, type UnaryOperator } from "../ir/types.ts";
 
 
 
@@ -121,12 +121,6 @@ export function cleanJsxText(text: string): string {
 
 /** Attributes the compiler handles itself; they never become props. */
 export const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["transform"]);
-
-/** A list's source: a state or prop array, optionally followed by `.filter(…)` calls. */
-export function isListSource(e: ExprIR): boolean {
-  if (e.kind === "StateRead" || e.kind === "PropRead" || e.kind === "PlainRef") return true;
-  return e.kind === "Call" && e.callee.kind === "ArrayMethod" && e.callee.name === "filter" && isListSource(e.callee.receiver);
-}
 
 /** A declared prop's type as a state type (`useState(items)` takes the prop's type). */
 export function propTypeToType(type: PropTypeIR): TypeIR | null {

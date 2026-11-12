@@ -6,7 +6,7 @@ import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
 import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
 import { Scope } from "./scope.ts";
 import { checkFreshName, lowerFunction } from "./statements.ts";
-import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, isListSource, findAttribute } from "./helpers.ts";
+import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute } from "./helpers.ts";
 import { HookLowering } from "./hooks.ts";
 
 export class ElementLowering extends HookLowering {
@@ -218,12 +218,10 @@ export class ElementLowering extends HookLowering {
       this.report(code, `${shape}: the callback takes the item, and optionally its index.`, fn);
       return null;
     }
+    // The items are any array the component can compute: state or a prop, a member of one (`world.enemies`), a filtered or
+    // mapped array, or the result of a plain function (`spotsOf(run)`). The type-check of the generated code checks it is an array.
     const source = this.lowerNode(callee.expression);
     if (!source) return null;
-    if (!isListSource(source)) {
-      this.report(code, "A list's items come from a state or prop array, optionally followed by `.filter(…)`: `enemies.map(…)` or `enemies.filter((e) => e.alive).map(…)`.", callee.expression);
-      return null;
-    }
 
     const outer = this.scope;
     this.scope = new Scope(outer);
@@ -298,18 +296,29 @@ export class ElementLowering extends HookLowering {
         this.report(code, "A list item that switches between two elements cannot have children yet: make the branch a component that renders them.", jsx);
         return null;
       }
-      // The item's children are plain elements (no conditions, lists, `{children}` or children of their own yet); they may read the item.
-      const plainChildren = lowered.children.every((c) => c.kind === "StaticChild" && c.element.children.length === 0);
-      if (!plainChildren) {
-        this.report(code, "A list item's children must be plain elements for now (no conditions, lists or nested children inside them): make the item a component that renders them.", jsx);
-        return null;
-      }
-      const children: ChildIR[] = [];
-      for (const c of lowered.children) {
-        const child = c.kind === "StaticChild" ? this.asListItem(c.element, item, index) : null;
-        if (!child) return null;
-        children.push({ kind: "StaticChild", element: child });
-      }
+      // The item's children are elements and conditions of them (`{d.locked && <Lock …/>}`), nested as deep as needed; any of them
+      // may read the item. Not yet: a list, `{children}` or a <Route> among them.
+      const itemChildren = (kids: readonly ChildIR[]): ChildIR[] | null => {
+        const out: ChildIR[] = [];
+        for (const c of kids) {
+          if (c.kind === "KeyedListChild" || c.kind === "ChildrenSlot" || (c.element.component.kind === "Intrinsic" && c.element.component.name === ROUTE_TAG)) {
+            const what = c.kind === "KeyedListChild" ? "a list" : c.kind === "ChildrenSlot" ? "`{children}`" : "a <Route>";
+            this.report(code, `A list item cannot hold ${what} among its children yet: make the item a component that renders it.`, jsx);
+            return null;
+          }
+          const grand = itemChildren(c.element.children);
+          const element = grand && this.asListItem({ ...c.element, children: grand }, item, index);
+          if (!element) return null;
+          if (c.kind === "StaticChild") out.push({ kind: "StaticChild", element });
+          else {
+            const reads = readsParam(c.condition, item.id) || (index !== null && readsParam(c.condition, index.id));
+            out.push({ ...c, element, dependencies: reads ? [...c.dependencies, { kind: "Item" }] : c.dependencies });
+          }
+        }
+        return out;
+      };
+      const children = itemChildren(lowered.children);
+      if (!children) return null;
       const element = this.asListItem({ ...lowered, children }, item, index);
       const alternateElement = alternate && this.asListItem(alternate, item, index);
       if (!element || (alternate && !alternateElement)) return null;

@@ -171,6 +171,7 @@ export class Settings<S extends EngineSettings> {
   readonly #options: SettingsOptions<S>;
   #values: S;
   #warned = false;
+  readonly #listeners = new Set<(values: Readonly<S>) => void>();
 
   constructor(options: SettingsOptions<S>) {
     this.#options = options;
@@ -182,9 +183,20 @@ export class Settings<S extends EngineSettings> {
     return this.#values;
   }
 
+  /**
+   * Be told each time the settings change (`set`, `reset`, or a reload when storage is installed), after they are applied, so the
+   * controls already have their new keys. The way to show them: copy them into the game state, where components select them
+   * (`settings.subscribe((values) => useGame.setState({ settings: values }))`). Returns the function that stops it.
+   */
+  subscribe(listener: (values: Readonly<S>) => void): () => void {
+    this.#listeners.add(listener);
+    return () => void this.#listeners.delete(listener);
+  }
+
   /** Stop reloading when storage is installed: for a store that is made again (a test, a hot reload) and so would be read twice. */
   dispose(): void {
     settingsStores.delete(this);
+    this.#listeners.clear();
   }
 
   /** Change some settings, apply them, and keep them. True when they were written. */
@@ -230,10 +242,17 @@ export class Settings<S extends EngineSettings> {
     if (typeof v.effects === "number") setVolume("effects", v.effects);
     if (v.bindings !== undefined && v.bindings !== null) this.#options.controls?.load(v.bindings);
     if (typeof v.fullscreen === "boolean") sink?.setFullscreen?.(v.fullscreen);
+    for (const listener of [...this.#listeners]) listener(v);
   }
 }
 
+/**
+ * A setting's type, from its default: `fullscreen: false` is a setting that may be `true` too. TypeScript keeps a boolean default's
+ * literal type when the settings type is inferred, so without this `set({ fullscreen: true })` would not type-check.
+ */
+export type SettingsOf<S> = { [K in keyof S]: S[K] extends boolean ? boolean : S[K] };
+
 /** Make the settings. Keep the result in a module: `export const settings = createSettings({ name: "settings", defaults: { music: 0.6, … } })`. */
-export function createSettings<S extends EngineSettings>(options: SettingsOptions<S>): Settings<S> {
-  return new Settings(options);
+export function createSettings<S extends EngineSettings>(options: SettingsOptions<S>): Settings<SettingsOf<S> & EngineSettings> {
+  return new Settings(options as unknown as SettingsOptions<SettingsOf<S> & EngineSettings>);
 }

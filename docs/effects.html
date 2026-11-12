@@ -224,17 +224,20 @@ export const save = createSave({
 });
 save.write();  save.exists();  save.load();  save.remove();   // synchronous; call them from game-state actions
 
-interface Settings { music: number; effects: number; fullscreen: boolean; bindings: Record<string, string[]> | null }
-export const settings = createSettings<Settings>({     // name the type: from the defaults alone, `fullscreen: false` would be the type `false`
+export const settings = createSettings({                // each setting's type is its default's: `fullscreen` is a boolean
   name: "settings", controls,
-  defaults: { music: 0.6, effects: 0.8, fullscreen: false, bindings: null },
+  defaults: { music: 0.6, effects: 0.8, fullscreen: false, bindings: null as Record<string, string[]> | null },
 });
 settings.get();  settings.set({ music: 0.4 });  settings.reset();
+
+// Show them: mirror each change into the game state, where components select them and re-render.
+settings.subscribe((values) => useGame.setState({ settings: values, bindings: controls.toJSON() }));
 </script></pre>
   <ul>
     <li><strong>What is stored</strong> is JSON, <code>{ version, data }</code>. A file that does not parse is said once and read as no save; a save from a <em>newer</em> version than the game is refused with a message; <code>migrate</code> steps run in order up to the current version.</li>
     <li><strong>Settings</strong> are applied when the game starts, before the first frame, and on each <code>set</code>: <code>music</code> and <code>effects</code> are the two volume groups (<code>setVolume("music", v)</code> multiplies every <code>&lt;Music&gt;</code>; <code>effects</code> every sound), <code>fullscreen</code> switches the window, <code>bindings</code> goes to <code>controls.load</code>. Other settings are the game's own.</li>
-    <li><strong>Rebinding:</strong> <code>controls.bind("jump", ["Space"])</code> (false for an unknown action or a key that is not a key name), <code>controls.reset()</code>, <code>controls.toJSON()</code>, <code>controls.load(data)</code> (ignores unknown actions and keys). The change applies at once. <code>input.lastPressed()</code> is the first key pressed this step: "press a key for Jump".</li>
+    <li><strong>Showing them:</strong> <code>settings</code> and <code>controls</code> are not state a component reads, so <code>settings.subscribe(fn)</code> (after each <code>set</code>, <code>reset</code> and reload, once applied) and <code>controls.subscribe(fn)</code> (after each <code>bind</code>, <code>reset</code> and <code>load</code>) tell the game state; both return the function that stops it. A settings screen then selects <code>useGame((s) =&gt; s.settings)</code> and computes its rows from it.</li>
+    <li><strong>Rebinding:</strong> <code>controls.bind("jump", ["Space"])</code> (false for an unknown action or a key that is not a key name), <code>controls.reset()</code>, <code>controls.toJSON()</code>, <code>controls.load(data)</code> (ignores unknown actions and keys). The change applies at once. <code>input.lastPressed()</code> is the first key pressed this step, or <code>undefined</code>: "press a key for Jump" (<code>const key = input.lastPressed(); if (key !== undefined) bindKey(action, key);</code>).</li>
     <li><strong>Tests:</strong> <code>setStorage(createMemoryStorage())</code> in a runtime test; <code>new RecordingBackend({ storage: { save: "…" } })</code> starts a replay from a save, and <code>backend.stored</code> shows what was written.</li>
   </ul>
 </section>

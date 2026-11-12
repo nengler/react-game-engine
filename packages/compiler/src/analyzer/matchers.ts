@@ -1,8 +1,8 @@
 // Recognisers for the statements of a component body: state, render constants, stores, refs, sounds and handlers.
 import { NodeFlags, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
-import { isArrayBindingPattern, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isPropertyAccessExpression, isVariableStatement } from "typescript/ast/is";
+import { isArrayBindingPattern, isObjectBindingPattern, isOmittedExpression, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isPropertyAccessExpression, isVariableStatement } from "typescript/ast/is";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { type UseStoreCallAnalysis, type RenderConstAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type UseStateCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
+import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type UseStateCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
 import { unwrapParens } from "./util.ts";
 
 
@@ -64,8 +64,37 @@ export function matchRenderConst(statement: Statement): RenderConstAnalysis | nu
   const list = statement.declarationList;
   if ((list.flags & NodeFlags.Const) === 0 || list.declarations.length !== 1) return null;
   const declaration = list.declarations[0]!;
-  if (!isIdentifier(declaration.name) || !declaration.initializer) return null;
-  return { kind: "const", name: declaration.name.text, initializer: declaration.initializer, declaration };
+  if (!declaration.initializer) return null;
+  if (isIdentifier(declaration.name)) return { kind: "const", name: declaration.name.text, initializer: declaration.initializer, declaration, pattern: null };
+  const pattern = renderConstPattern(declaration.name);
+  if (pattern === null) return null;
+  const names = pattern.entries.flatMap((e) => (e === null ? [] : [e.name]));
+  return { kind: "const", name: names.join(","), initializer: declaration.initializer, declaration, pattern };
+}
+
+/** `{ x, y: top }` or `[a, , b]` with plain names only: no defaults, rests or nested patterns. Null for anything else. */
+function renderConstPattern(name: Node): RenderConstPattern | null {
+  if (isObjectBindingPattern(name)) {
+    const entries: { name: string; key: string; node: Node }[] = [];
+    for (const element of name.elements) {
+      if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) return null;
+      const key = element.propertyName === undefined ? element.name.text : isIdentifier(element.propertyName) ? element.propertyName.text : null;
+      if (key === null) return null;
+      entries.push({ name: element.name.text, key, node: element });
+    }
+    return entries.length > 0 ? { kind: "object", entries } : null;
+  }
+  if (isArrayBindingPattern(name)) {
+    const entries: ({ name: string; node: Node } | null)[] = [];
+    for (const element of name.elements) {
+      // A hole (`[a, , b]`): an omitted expression, or, as this parser gives it, an element with no name.
+      if (isOmittedExpression(element) || (!element.dotDotDotToken && !element.initializer && !element.name)) entries.push(null);
+      else if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) return null;
+      else entries.push({ name: element.name.text, node: element });
+    }
+    return entries.some((e) => e !== null) ? { kind: "array", entries } : null;
+  }
+  return null;
 }
 
 type StoreMatch =

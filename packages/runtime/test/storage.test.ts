@@ -148,6 +148,28 @@ describe("createSettings", () => {
     assert.equal("extra" in settings.get(), false);
   });
 
+  it("tells a subscriber each change, once applied, so the game state can show it", () => {
+    setStorage(createMemoryStorage());
+    const controls = createControls({ jump: ["Z"] });
+    const settings = createSettings({ name: "settings", defaults, controls });
+    const seen: [number, string][] = [];
+    const stop = settings.subscribe((values) => seen.push([values.music, controls.keysOf("jump")?.[0] ?? ""]));
+    settings.set({ music: 0.3, bindings: { jump: ["Space"] } });
+    settings.reset();
+    stop();
+    settings.set({ music: 0.9 });
+    assert.deepEqual(seen, [[0.3, "Space"], [0.6, "Z"]], "the controls are already rebound when it is called; nothing after stop");
+    settings.dispose();
+  });
+
+  it("types a setting from its default, so a `false` default can be set to true", () => {
+    setStorage(createMemoryStorage());
+    const settings = createSettings({ name: "settings", defaults: { fullscreen: false, hints: true } });
+    settings.set({ fullscreen: true, hints: false }); // type-checked by `npm run typecheck`
+    assert.equal(settings.get().fullscreen, true);
+    settings.dispose();
+  });
+
   it("says once that a file does not parse, and uses the defaults", () => {
     setStorage(createMemoryStorage({ settings: "garbage" }));
     const warnings: string[] = [];

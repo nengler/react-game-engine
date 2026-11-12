@@ -60,6 +60,7 @@ export class Controls<Name extends string = string> {
   /** The keys of each action now. Read every time an action is asked about, so `bind` and `load` apply at once; do not keep a copy. */
   bindings: Readonly<Record<Name, readonly KeyName[]>>;
   readonly #defaults: Readonly<Record<Name, readonly KeyName[]>>;
+  readonly #listeners = new Set<(bindings: Readonly<Record<Name, readonly KeyName[]>>) => void>();
 
   constructor(bindings: Readonly<Record<Name, readonly KeyName[]>>) {
     for (const [name, keys] of Object.entries<readonly string[]>(bindings)) {
@@ -73,12 +74,28 @@ export class Controls<Name extends string = string> {
   bind(action: string, keys: readonly string[]): boolean {
     if (!Object.hasOwn(this.bindings, action) || keys.length === 0 || !keys.every(isKeyName)) return false;
     this.bindings = { ...this.bindings, [action]: [...keys] as KeyName[] };
+    this.#changed();
     return true;
   }
 
   /** Back to the keys the game was written with. */
   reset(): void {
+    if (this.bindings === this.#defaults) return;
     this.bindings = this.#defaults;
+    this.#changed();
+  }
+
+  /**
+   * Be told each time the keys change (`bind`, `reset`, `load`), with the new bindings: a settings screen copies them into the game
+   * state so the rows that show them re-render. Returns the function that stops it.
+   */
+  subscribe(listener: (bindings: Readonly<Record<Name, readonly KeyName[]>>) => void): () => void {
+    this.#listeners.add(listener);
+    return () => void this.#listeners.delete(listener);
+  }
+
+  #changed(): void {
+    for (const listener of [...this.#listeners]) listener(this.bindings);
   }
 
   /** The bindings as plain data, for a settings file. */

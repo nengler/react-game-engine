@@ -18,6 +18,10 @@ export class ElementEmitter extends HandlerEmitter {
         if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
         this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
         if (this.listNeedsRecords(child)) this.w.line(`#${el.fieldName}Records: Map<string | number, ${this.recordType(child)}> = new Map();`);
+        if (!isNamedListSource(child.source)) {
+          // A computed source (`spotsOf(run)`, `world.enemies.map(…)`): worked out by a method, whose return type names the items' type.
+          this.w.line(`${listSourceMethod(child)}() { return ${this.expr(child.source, true)}; }`);
+        }
         continue;
       }
       const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
@@ -50,7 +54,7 @@ export class ElementEmitter extends HandlerEmitter {
         case "StaticChild": {
           const el = child.element;
           if (!this.elementNeedsRender(el)) break;
-          const ref = `this.${el.fieldName}`;
+          const ref = this.fieldRef(el);
           if (presence === "persistent") {
             this.emitElementUpdates(el, ref, "persistent");
           } else {
@@ -61,7 +65,7 @@ export class ElementEmitter extends HandlerEmitter {
         }
         case "ConditionalChild": {
           const el = child.element;
-          const ref = `this.${el.fieldName}`;
+          const ref = this.fieldRef(el);
           w.open(`if (${this.expr(child.condition, true)}) {`);
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.construct(el)};`);
@@ -146,9 +150,9 @@ export class ElementEmitter extends HandlerEmitter {
     const position = list.index?.name ?? "$n";
     const params = list.index ? `${item}, ${list.index.name}` : item;
     const where = `in the <${el.component.name}> list of ${this.c.name}`;
-    // The item's own children (`<MenuButton key …><Icon …/><Label …/></MenuButton>`) are made with the item and kept in its record, so a
-    // later render can apply their props from the item's current value.
-    const kids = el.children.flatMap((c) => (c.kind === "StaticChild" ? [c.element] : []));
+    // The item's own children (`<MenuButton key …><Icon …/>{d.locked && <Lock …/>}</MenuButton>`) live in its record (`$rec.kids`), one
+    // field each, made with the item and updated like a conditional subtree's on every render, from the item's current value.
+    const kids = el.children;
     // An item may switch between two elements (`cond ? <A/> : <B/>`): its instance is cast to the one that is current.
     const view = (e: ElementIR): string => (alt ? `($item as ${typeName(e.component)})` : "$item");
     // The branches test the condition itself (not `$branch`), so that TypeScript narrows what it reads (`p.tower ? … {...p.tower}`).
@@ -161,7 +165,7 @@ export class ElementEmitter extends HandlerEmitter {
     w.line(`const $parent = ${mount.ref};`);
     // `cond && <El/>`: an item whose condition is false has no instance, as if it were filtered out.
     const filter = list.condition !== null && alt === null ? `.filter((${item}) => ${this.arrowBody(list.condition)})` : "";
-    w.line(`const $list = ${this.expr(list.source, true)}${filter};`);
+    w.line(`const $list = ${isNamedListSource(list.source) ? this.expr(list.source, true) : `this.${listSourceMethod(list)}()`}${filter};`);
     w.line(`const $keys = $list.map((${params}) => ${this.arrowBody(list.key)});`);
     w.line("const $seen = new Set<string | number>();");
     w.block("for (const $key of $keys)", () => {
@@ -184,19 +188,19 @@ export class ElementEmitter extends HandlerEmitter {
       w.open("if ($item === undefined) {");
       // A callback is created once, with the item's first value. It reads the item's current value through this
       // holder, which every render refreshes, and which it keeps after the item is removed (an unmount hook may call it).
-      if (records) w.line(kids.length > 0 ? `const $rec: ${this.recordType(list)} = { current: ${item}, kids: undefined as never };` : `const $rec = { current: ${item} };`);
+      if (records) w.line(kids.length > 0 ? `const $rec: ${this.recordType(list)} = { current: ${item}, kids: ${this.emptyKids(list)} };` : `const $rec = { current: ${item} };`);
       this.itemLookup = records ? { id: list.item.id, text: "$rec.current" } : null;
       try {
         if (alt) {
           w.block(`if (${test})`, () => construct(el));
           w.block("else", () => construct(alt));
         } else construct(el);
-        kids.forEach((kid, i) => {
-          w.line(`const $c${i} = ${this.construct(kid)};`);
-          this.emitStaticTransform(kid.transform, `$c${i}`, transformTarget(kid));
-          w.line(el.component.kind === "Intrinsic" ? `$item.addChild($c${i}, ${i});` : `$item.attachPassedChild($c${i}, ${i});`);
-        });
-        if (kids.length > 0) w.line(`$rec.kids = [${kids.map((_, i) => `$c${i}`).join(", ")}];`);
+        if (kids.length > 0) {
+          this.withFieldBase("$rec.kids", () => {
+            this.emitMountStatics(kids, mountOf(el, "$item"));
+            this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional");
+          });
+        }
       } finally {
         this.itemLookup = null;
       }
@@ -206,12 +210,17 @@ export class ElementEmitter extends HandlerEmitter {
       if (records || hasDynamicProps(el.props) || (alt !== null && hasDynamicProps(alt.props))) {
         w.close();
         w.open("} else {");
-        if (records) w.line(kids.length > 0 ? `const $r = ${records}.get($key)!;` : `${records}.get($key)!.current = ${item};`);
-        if (records && kids.length > 0) w.line(`$r.current = ${item};`);
-        kids.forEach((kid, i) => {
-          this.emitPropUpdates(kid, `$r.kids[${i}]`);
-          this.emitDynamicTransform(kid.transform, `$r.kids[${i}]`, transformTarget(kid));
-        });
+        if (records) w.line(kids.length > 0 ? `const $rec = ${records}.get($key)!;` : `${records}.get($key)!.current = ${item};`);
+        if (records && kids.length > 0) {
+          w.line(`$rec.current = ${item};`);
+          // A child made now (its condition just turned on) may hold a callback: it reads the item through the record too.
+          this.itemLookup = { id: list.item.id, text: "$rec.current" };
+          try {
+            this.withFieldBase("$rec.kids", () => this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional"));
+          } finally {
+            this.itemLookup = null;
+          }
+        }
         if (alt) {
           w.block(`if (${test})`, () => this.emitPropUpdates(el, view(el)));
           w.block("else", () => this.emitPropUpdates(alt, view(alt)));
@@ -239,21 +248,28 @@ export class ElementEmitter extends HandlerEmitter {
     w.close("}");
   }
 
-  /** Whether a list's item callbacks read the item, so each key's current item must be kept. */
+  /** Whether a list keeps a record per key: when callbacks read the item, or the item has children (they live in the record). */
   protected listNeedsRecords(list: KeyedListChildIR): boolean {
-    if (list.element.children.some((c) => c.kind === "StaticChild")) return true;
+    if (list.element.children.length > 0) return true;
     const reads = (e: ElementIR): boolean => e.props.some((p) => p.kind === "CallbackProp" && functionReadsParam(p.handler, list.item.id)) || e.children.some((c) => c.kind === "StaticChild" && reads(c.element));
     return [list.element, ...(list.alternate ? [list.alternate] : [])].some(reads);
   }
 
-  /** What a list keeps for each key when callbacks or children read the item: its current value and, for an item with children, those children. */
+  /** What a list keeps for each key: the item's current value and, for an item with children, those children (each `null` until made). */
   protected recordType(list: KeyedListChildIR): string {
-    const kids = list.element.children.flatMap((c) => (c.kind === "StaticChild" ? [typeName(c.element.component)] : []));
-    return `{ current: ${this.listItemType(list)}${kids.length > 0 ? `; kids: [${kids.join(", ")}]` : ""} }`;
+    const kids = itemDescendants(list.element.children);
+    const fields = kids.map((k) => `${k.fieldName}: ${typeName(k.component)} | null`).join("; ");
+    return `{ current: ${this.listItemType(list)}${kids.length > 0 ? `; kids: { ${fields} }` : ""} }`;
   }
 
-  /** The element type of a list's source array, named through the state field or the props type. */
+  /** A new item's children, none made yet. */
+  protected emptyKids(list: KeyedListChildIR): string {
+    return `{ ${itemDescendants(list.element.children).map((k) => `${k.fieldName}: null`).join(", ")} }`;
+  }
+
+  /** The element type of a list's items: named through the state field, the props type or the constant, or else the return type of the method that computes them. */
   protected listItemType(list: KeyedListChildIR): string {
+    if (!isNamedListSource(list.source)) return `ReturnType<${this.c.name}[${JSON.stringify(listSourceMethod(list))}]>[number]`;
     let base = list.source;
     while (base.kind === "Call" && base.callee.kind === "ArrayMethod") base = base.callee.receiver;
     if (base.kind === "StateRead") return `${this.c.name}[${JSON.stringify(this.state(base.state).name)}][number]`;
@@ -262,10 +278,27 @@ export class ElementEmitter extends HandlerEmitter {
     throw new Error(`Unexpected list source in component ${this.c.name}`);
   }
 
+  /** Where element fields live: on the component (`this.sprite`), or, while a list item's children are written, in its record. */
+  protected fieldBase = "this";
+
+  protected fieldRef(el: ElementIR): string {
+    return `${this.fieldBase}.${el.fieldName}`;
+  }
+
+  protected withFieldBase(base: string, emit: () => void): void {
+    const outer = this.fieldBase;
+    this.fieldBase = base;
+    try {
+      emit();
+    } finally {
+      this.fieldBase = outer;
+    }
+  }
+
   /** What unmounting a conditional subtree resets: its element fields to null, its lists to empty. */
   protected subtreeResets(el: ElementIR): string[] {
     return [
-      `this.${el.fieldName} = null;`,
+      `${this.fieldRef(el)} = null;`,
       ...el.children.flatMap((c) => {
         if (c.kind === "ChildrenSlot") return [];
         if (c.kind !== "KeyedListChild") return this.subtreeResets(c.element);
@@ -279,7 +312,7 @@ export class ElementEmitter extends HandlerEmitter {
   protected emitMountStatics(children: readonly ChildIR[], mount: Mount): void {
     for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
-      const ref = `this.${child.element.fieldName}`;
+      const ref = this.fieldRef(child.element);
       this.w.line(`${ref} = ${this.construct(child.element)};`);
       this.emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
       this.w.line(`${addChild(mount, ref, children, index)};`);
@@ -331,6 +364,22 @@ export class ElementEmitter extends HandlerEmitter {
   protected propsObject(props: readonly PropIR[]): string {
     return `{ ${props.map((p) => (p.kind === "SpreadProp" ? `...(${this.expr(p.value, true)})` : `${propertyKey(p.name)}: ${p.kind === "CallbackProp" ? this.callback(p.handler) : this.expr(p.value, true)}`)).join(", ")} }`;
   }
+}
+
+/** A list source that names its own type: state, a prop or an imported constant, optionally filtered. Anything else is computed by a method. */
+function isNamedListSource(e: ExprIR): boolean {
+  if (e.kind === "StateRead" || e.kind === "PropRead" || e.kind === "PlainRef") return true;
+  return e.kind === "Call" && e.callee.kind === "ArrayMethod" && e.callee.name === "filter" && isNamedListSource(e.callee.receiver);
+}
+
+/** The method that computes a list's items when they are not a named array. */
+function listSourceMethod(list: KeyedListChildIR): string {
+  return `$${list.element.fieldName}List`;
+}
+
+/** Every element below a list item (through static and conditional children): each is a field of the item's record. */
+function itemDescendants(children: readonly ChildIR[]): ElementIR[] {
+  return children.flatMap((c) => (c.kind === "StaticChild" || c.kind === "ConditionalChild" ? [c.element, ...itemDescendants(c.element.children)] : []));
 }
 
 /** Whether a render has props to send: a dynamic prop, or a spread that reads something that changes. */

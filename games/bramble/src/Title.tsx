@@ -1,23 +1,17 @@
-import { Entity, Text, useInput, useMount } from "@rge/runtime/jsx";
+import { Entity, Text, useMount } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { Menu } from "./Menu.tsx";
+import { titleRows } from "./rules/menu.ts";
 
 export function Title() {
-  const moveCursor = useGame((s) => s.moveCursor);
-  const activate = useGame((s) => s.activate);
-  const openTitle = useGame((s) => s.openTitle);
-  useMount(() => {
-    openTitle();
-  });
-  useInput((input) => {
-    if (input.pressed("up")) moveCursor(-1);
-    if (input.pressed("down")) moveCursor(1);
-    if (input.pressed("confirm")) activate();
-  });
+  const hasSave = useGame((s) => s.hasSave);
+  const start = useGame((s) => s.titleCursor);
+  const { openTitle, choose } = useGame((s) => s);
+  useMount(() => openTitle());
   return (
     <Entity name="Title">
       <Text transform={{ x: 0, y: 30 }} width={320} align="center" size={30} color="#e8d9a8" text="BRAMBLE" />
-      <Menu top={90} />
+      <Menu top={90} rows={titleRows(hasSave)} start={start} onChoose={choose} />
     </Entity>
   );
 }
