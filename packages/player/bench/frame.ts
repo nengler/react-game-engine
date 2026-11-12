@@ -218,12 +218,18 @@ function measure(scene: Scene): number {
   const { n } = scene;
   const player = createPlayer(scene.scriptSweep ? { ...nothing, overlaps: undefined } : nothing, { width: 800, height: 600, title: "bench", root: () => buildScene(scene) });
   for (let i = 0; i < 10; i++) player.step(); // warm up
+  // The fastest of a few batches: a shared CI runner adds pauses (a collection, another job) that are not the engine's, and a
+  // scene that costs a few hundredths of a millisecond a frame would otherwise pass or fail its budget by chance.
   const frames = n >= 5000 ? 30 : 100;
-  const start = Date.now();
-  for (let i = 0; i < frames; i++) player.step();
-  const elapsed = Date.now() - start;
+  const batches = n >= 5000 ? 1 : 3;
+  let best = Infinity;
+  for (let b = 0; b < batches; b++) {
+    const start = Date.now();
+    for (let i = 0; i < frames; i++) player.step();
+    best = Math.min(best, (Date.now() - start) / frames);
+  }
   player.close();
-  return elapsed / frames;
+  return best;
 }
 
 /** Where a frame's time goes, by the three phases `step()` runs: the tick (hooks, state, renders), the tree walk and draw list, and collisions. Milliseconds per frame. */

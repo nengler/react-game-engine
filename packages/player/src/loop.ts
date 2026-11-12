@@ -2,7 +2,7 @@ import { Flex, Game, World, captureHotState, getSoundSink, getStorage, setStorag
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
-import { DrawList, estimateTextWidth, FrameBuilder, rootScreen } from "./draw.ts";
+import { DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame } from "./draw.ts";
 import { FixedDriver, MAX_STEPS_PER_FRAME } from "./fixed.ts";
 import { HOST_RUN_KEY } from "./host.ts";
 import { PlayerInput } from "./input.ts";
@@ -95,11 +95,14 @@ const ALT_KEY = KEY_INDEX.get("Alt") as number;
  *
  * 1. a left press goes to the topmost `Pointer` drawn under the mouse last frame (`world.reportPress`), unless it
  *    landed on the bars around a root `<Screen>`;
- * 2. `world.tick(dt, input)`: `useInput`, `useUpdate`, renders, structure;
- * 3. the tree is walked into draw records (and the camera's view is taken);
- * 4. colliders that started touching are reported (`world.reportCollision`; see `CollisionTracker`), so what
- *    their callbacks change is rendered by the next tick;
- * 5. the backend draws and presents the frame, then writes the next frame's input.
+ * 2. each step (`world.tick(dt, input)`: `useInput`, `useUpdate`, renders, structure; one a frame, or as many as the
+ *    fixed step holds) is followed by the collisions it made: the tree is walked (which is where colliders are placed),
+ *    contacts that started or ended are reported (`world.reportCollision`; see `CollisionTracker`), and what the
+ *    callbacks changed is rendered at once, so the next step's `useUpdate` sees it. Contacts are therefore found at the
+ *    same steps whatever the frame rate;
+ * 3. the tree is walked into draw records (and the camera's view is taken): the last step's walk, or a new one when a
+ *    collision callback changed something since, so a contact and what it caused are drawn in the same frame;
+ * 4. the backend draws and presents the frame, then writes the next frame's input.
  *
  * The press uses last frame's pointers because that is what the player was looking at when they
  * clicked, and the input it carries is the state polled at the end of last frame.
@@ -191,6 +194,19 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const world = new World();
   // The host's broad phase when it has one; the tracker sweeps in script otherwise.
   const collisions = new CollisionTracker(undefined, true, true, backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined);
+  /** The last step's walk, kept to be drawn when nothing has changed since; `stale` once a collision callback ran after it. */
+  let lastBuilt: BuiltFrame | null = null;
+  let stale = false;
+  /**
+   * The collisions of the step that just ran: walk the tree (which places the colliders), report the contacts that started and
+   * ended, and render what the callbacks changed, so the next step, and this frame's drawing, see it.
+   */
+  const collide = (): void => {
+    lastBuilt = builder.build(world.root, input.width, input.height);
+    collisions.update(world, lastBuilt.colliders);
+    stale = collisions.reported > 0;
+    if (stale) world.flush();
+  };
   let pointers: readonly Pressable[] = [];
   let hudPointersFrom = 0;
   let hudView: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
@@ -365,24 +381,31 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     dispatchPress();
     dispatchHover();
     const dt = input.values[RGE_IN_DT] as number;
-    if (driver === null) world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
-    else {
+    if (driver === null) {
+      world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
+      collide();
+    } else {
       const steps = driver.advance(dt > 0 ? Math.min(dt, MAX_DT) : 0, input.keys, (stepKeys, updateKeys, stepDt) => {
         const frozen = world.frozenSteps > 0;
         input.handlerKeys = stepKeys;
         world.tick(stepDt, input, () => (input.handlerKeys = updateKeys));
+        collide();
         return frozen;
       });
-      // With no step this frame nothing ticked: still settle what the hooks of the last one set.
-      if (steps === 0) world.flush();
+      // With no step this frame nothing ticked: still settle what the hooks of the last one set, and what that moved.
+      if (steps === 0) {
+        world.flush();
+        collide();
+      }
     }
-    const built = builder.build(world.root, input.width, input.height);
+    // The last walk is this frame's unless a collision callback has changed something since.
+    const built = lastBuilt !== null && !stale ? lastBuilt : builder.build(world.root, input.width, input.height);
+    lastBuilt = null;
     pointers = built.pointers;
     hudPointersFrom = built.hudPointersFrom;
     hudView = built.hudView;
     screen = built.screen;
     input.view = built.view;
-    collisions.update(world, built.colliders);
     if (showFps) {
       const ms = clock() - started;
       smoothMs = smoothMs === 0 ? ms : smoothMs * 0.9 + ms * 0.1;

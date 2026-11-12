@@ -1960,13 +1960,29 @@ in it, and no ancestor's own transform, was stamped since the frame the records 
    drawn (`world.reportPress`). One press, one pointer; if the topmost misses, the one below is tried.
 2. `world.tick(dt, input)`: `useInput`, `useUpdate`, renders, structure (as in "Handlers"). `dt` is
    what the backend measured, clamped to `[0, 0.1]` seconds so a stall cannot teleport things; the
-   first frame's `dt` is 0.
-3. The tree is walked once (`walkTree`, depth first) into draw records. The walk composes world
-   transforms on the way down and treats a `Camera` as transparent to its children, exactly as
-   `GameObject.worldTransform()` and `childSpace()` do, and a test holds the two equal over a real tree.
-4. Colliders that started touching are reported with `world.reportCollision` (see "Collisions" below).
-   Their callbacks' effects are rendered by the next tick.
+   first frame's `dt` is 0. With a fixed step, as many ticks as the frame holds (`FixedDriver`).
+3. After **each** tick, its collisions: the tree is walked (`walkTree`, depth first) into draw records,
+   which is where colliders get their world boxes; contacts that started or ended are reported with
+   `world.reportCollision` / `reportCollisionExit` (see "Collisions" below); and if any callback ran,
+   `world.flush()` renders what it changed. The walk composes world transforms on the way down and treats
+   a `Camera` as transparent to its children, exactly as `GameObject.worldTransform()` and `childSpace()`
+   do, and a test holds the two equal over a real tree.
+4. The last step's walk is the frame's, unless a collision callback changed something after it; then the
+   tree is walked again (cheap: only what changed is rebuilt, see "Reusing draw records").
 5. The backend draws and presents the frame, then writes the next frame's input.
+
+**Why collisions are per step** (2026-11-12). They used to be found once a frame, after the walk, and their
+callbacks' effects rendered by the next tick. That had three costs: the frame that showed a contact did not
+show what it caused (a spike touched but the character still standing); with a fixed step, a contact that
+began and ended inside one frame's steps was missed; and the step a contact was seen in depended on the frame
+rate, so a replay could play differently on a slower machine. Now a contact is found in the step that made it,
+the next step's `useUpdate` sees its effects, the frame draws them, and a run collides at the same steps at
+any frame rate (`test/collide-timing.test.ts`). **What it costs:** a frame of one step walks the tree as before
+(plus a cheap second walk only when a callback ran); a frame that catches up with k steps walks it k times:
+2,000 moving colliders under Node went from 3.9 to 5.8 ms for a two-step frame. A walk that places only the
+colliders would remove that if it matters. **What it does not change:** a callback runs after the step's
+`useUpdate`, not inside it, so movement code that must stop at a wall reads tiles; and nothing sweeps a
+collider's path, so a very fast, thin one can pass through another between two steps.
    `step()` returns false once that input says the window was closed (the frame is still drawn).
 
 **What is drawn.**
@@ -2067,7 +2083,7 @@ widths estimated (`estimateTextWidth`: 0.6 × size per character, a line as tall
 view of the frame last drawn, so a handler never needs the camera. A pointer or collider mounted this
 frame is not clickable until it has been drawn once.
 
-**Collisions.** `CollisionTracker` (called once per frame by the player) finds the moment two colliders
+**Collisions.** `CollisionTracker` (called by the player after every step) finds the moment two colliders
 *start* touching and calls `world.reportCollision(a, b)`, which calls each collider's own `onCollisionEnter`
 with the other. A collider is the box `width × height` with its **top-left corner at the object's position**
 (like a `Sprite`), scaled and turned by its world transform; a rotated collider is approximated by the smallest

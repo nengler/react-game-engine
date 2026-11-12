@@ -145,7 +145,7 @@ export const runtimeManifest: RuntimeManifest = {
     Screen: ["width", "height"],
     Hud: [],
     Flex: [],
-    Tilemap: ["map", "image"],
+    Tilemap: ["map"],
     Particles: [],
     ParticleLayer: ["particles"],
     Fade: [],

@@ -210,7 +210,7 @@ under "Findings while writing", as Kite and Hearth did. The engine is fixed only
 
   | File | What it holds |
   | --- | --- |
-  | `world.ts` | Maps as solid grids; the overworld and interiors written as text by `tools/make-maps.ts` until M6 |
+  | `world.ts` | Maps as solid grids; the overworld and interiors written as text by `tools/make-maps.ts` until M6 (since M6.2, read from the Tiled files by `rules/maps.ts`) |
   | `actor.ts` | Eight-way movement through `moveActorX`/`moveActorY`, diagonals normalised, a sub-pixel remainder, facing |
   | `doors.ts` | Stepping on a door, and which map and door the character arrives at |
   | `talk.ts` | What is in front of the character, which NPC, which page of their lines for the current progress |
@@ -416,7 +416,7 @@ lineOfSight(grid: TileGrid, from: Point, to: Point): boolean
 
 ### M6. Maps saved by Tiled (engine and a person; \~4 days plus the person's time)
 
-*(Partly built 2026-11-12. Done: base64 layers (uncompressed, zlib, gzip; zstd is a diagnostic), external `.tsj` tilesets read through the CLI, the `solid` tiles of every tileset, and each map's objects as data (`TilemapData.objects`, `TileGrid.objects(type?)`), all with fixtures. Not done: the `.tsx` reader and drawing from more than one sheet (`TilemapData.tilesets`, per-cell sheets, optional `<Tilemap image>`), reading Bramble's doors, people and items from objects (its text maps and `make-maps.ts` stay), and 6.3, which needs a person to save a map in Tiled. The fixtures are written by hand to Tiled's documented format, so they are not the evidence 6.3 asks for.)*
+*(6.1 and 6.2 built 2026-11-12. 6.1: base64 layers (uncompressed, zlib, gzip; zstd is a diagnostic), external tilesets as `.tsj` or `.tsx` (`scenes/tsx.ts`, a small reader of the tileset elements only), the `solid` tiles of every tileset, `TilemapData.tilesets` (each one's sheet as an asset name, columns, tile size, margin and spacing) and the map's own `properties`; `<Tilemap image>` is optional, and without it each tile is drawn from its own tileset's sheet, a larger tile on the bottom of its cell as in Tiled. A sheet is named from the map's folder, as Tiled saves it, so the tool-written maps of Kite, Hearth and Bramble now name `../assets/tiles.png`. 6.2: an object layer with the bool property `data` is the rules' and the scene importer skips it (found by Bramble: every object was taken for a prefab); objects are placed by their layers' offsets. Bramble reads its doors, people, items, shrines, enemies, gate and bushes from its `Things` layer through `readMap`, which names the map and object for each mistake; the maps it builds were compared with the old text maps and are the same, and `make-maps.ts` is gone. **Not done: 6.3**, which needs a person to save a map in Tiled; the fixtures and Bramble's maps are written to Tiled's documented format by tools, so they are not the evidence 6.3 asks for.)*
 
 **6.1 The importer** (`packages/compiler/src/scenes/tilemap.ts`):
 

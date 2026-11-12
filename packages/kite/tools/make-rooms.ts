@@ -19,7 +19,7 @@ mkdirSync(dir, { recursive: true });
 const tileset = {
   firstgid: 1,
   name: "tiles",
-  image: "tiles.png",
+  image: "../assets/tiles.png",
   imagewidth: 80,
   imageheight: 20,
   tilewidth: TILE,

@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { deflateSync, gzipSync } from "node:zlib";
 import { join, resolve } from "node:path";
-import { importTiled, importTilemap, tilemapsSource } from "../src/index.ts";
+import { importTiled, importTilemap, readTsx, tilemapsSource } from "../src/index.ts";
 
 const H = 0x80000000;
 const V = 0x40000000;
@@ -60,11 +60,10 @@ describe("importTilemap", () => {
     assert.match(wrongSize.diagnostics[0]!.message, /has 3 cells, but the map is 3 × 2 = 6/);
     const infinite = importTilemap("a.tmj", map({ infinite: true }));
     assert.match(infinite.diagnostics[0]!.message, /infinite/);
-    const two = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1 }, { firstgid: 50 }] }));
-    assert.ok(two.tilemap);
-    assert.match(two.diagnostics[0]!.message, /2 tilesets: tiles of all of them are drawn from the first one's sheet/);
-    const xml = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, source: "tiles.tsx" }] }));
-    assert.match(xml.diagnostics[0]!.message, /not JSON \(\.tsj\)/);
+    const other = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, source: "tiles.xml" }] }));
+    assert.match(other.diagnostics[0]!.message, /neither JSON \(\.tsj\) nor XML \(\.tsx\)/);
+    const collection = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, tiles: [{ id: 0, image: "a.png" }] }] }));
+    assert.match(collection.diagnostics[0]!.message, /collection of images/);
     const missing = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, source: "gone.tsj" }] }), { readFile: () => null });
     assert.match(missing.diagnostics[0]!.message, /cannot be read/);
     assert.equal(importTilemap("a.tmj", "{").tilemap, null, "bad JSON is the scene importer's to report");
@@ -160,9 +159,109 @@ describe("importTilemap: objects", () => {
     assert.match(source, /objects: \[\{"id":3,"name":"cave","type":"door"/);
   });
 
+  it("places objects where Tiled shows them: a layer's offset, and its groups', moves them", () => {
+    const { tilemap } = importTilemap("a.tmj", withObjects([{ type: "group", name: "G", offsetx: 100, offsety: 10, layers: [{ type: "objectgroup", name: "O", offsetx: 5, offsety: 1, objects: [{ id: 1, name: "a", type: "spot", x: 1, y: 2 }] }] }]));
+    assert.deepEqual([tilemap!.objects[0]!.x, tilemap!.objects[0]!.y], [106, 13]);
+  });
+
+  it("a layer marked `data` is data for the rules: its objects are read here, and the scene importer makes no entities of them", () => {
+    const text = withObjects([
+      { type: "objectgroup", name: "Things", properties: [{ name: "data", type: "bool", value: true }], objects: [{ id: 1, name: "cave", type: "door", x: 0, y: 0 }] },
+      { type: "objectgroup", name: "Prefabs", objects: [{ id: 2, type: "Coin", x: 5, y: 5 }] },
+    ]);
+    assert.deepEqual(importTilemap("a.tmj", text).tilemap!.objects.map((o) => o.name), ["cave", ""]);
+    assert.deepEqual(importTiled("a.tmj", text).scene.entities.map((e) => e.id), ["Prefabs/2"]);
+  });
+
   it("writes no objects line for a map without any", () => {
     const { tilemap } = importTilemap("a.tmj", map());
     assert.deepEqual(tilemap!.objects, []);
     assert.doesNotMatch(tilemapsSource(new Map([["room", tilemap!]]), "scenes"), /objects:/);
+  });
+});
+
+describe("importTilemap: tilesets as sheets", () => {
+  const TSX = `<?xml version="1.0" encoding="UTF-8"?>
+<tileset version="1.10" tiledversion="1.10.2" name="props &amp; things" tilewidth="16" tileheight="32" spacing="1" margin="2" tilecount="6" columns="3">
+ <!-- a comment, with <tags> in it -->
+ <image source="../art/props.png" width="53" height="69"/>
+ <tile id="1">
+  <properties>
+   <property name="solid" type="bool" value="true"/>
+   <property name="weight" type="int" value="3"/>
+   <property name="note">a multi-line
+string</property>
+  </properties>
+ </tile>
+ <tile id="4">
+  <animation><frame tileid="4" duration="100"/></animation>
+ </tile>
+ <wangsets><wangset name="w" type="corner" tile="-1"><wangcolor name="" color="#ff0000" tile="-1" probability="1"/></wangset></wangsets>
+</tileset>
+`;
+
+  it("reads an XML tileset (.tsx): its sheet, size, margin and spacing, and its tiles' properties", () => {
+    const set = readTsx(TSX);
+    assert.deepEqual([set.name, set.tilewidth, set.tileheight, set.columns, set.margin, set.spacing, set.image, set.imagewidth], ["props & things", 16, 32, 3, 2, 1, "../art/props.png", 53]);
+    assert.deepEqual(set.tiles, [{ id: 1, properties: [{ name: "solid", type: "bool", value: true }, { name: "weight", type: "int", value: 3 }, { name: "note", type: "string", value: "" }] }, { id: 4 }]);
+    assert.throws(() => readTsx("<map/>"), /not a Tiled tileset/);
+    assert.throws(() => readTsx("<tileset><image source='a.png'"), /not closed/);
+  });
+
+  it("gives each tileset its sheet, as an asset name, with the image relative to the tileset's own file", () => {
+    const asked: string[] = [];
+    const { tilemap, diagnostics } = importTilemap(
+      "a.tmj",
+      map({
+        properties: [{ name: "name", type: "string", value: "The valley" }, { name: "dark", type: "bool", value: true }],
+        tilesets: [
+          { firstgid: 1, name: "ground", image: "../assets/tiles.png", imagewidth: 30, imageheight: 20, tilewidth: 10, tileheight: 10, columns: 3 },
+          { firstgid: 100, source: "../tilesets/props.tsx" },
+          { firstgid: 50, source: "sets/more.tsj" },
+        ],
+      }),
+      {
+        readFile: (path) => (path.endsWith(".tsx") ? TSX : JSON.stringify({ image: "more.png", imagewidth: 45, tilewidth: 10, tileheight: 10, margin: 1, spacing: 1 })),
+        resolveImage: (path) => (asked.push(path), path.startsWith("../assets/") ? path.slice("../assets/".length) : null),
+      },
+    );
+    assert.deepEqual(asked, ["../assets/tiles.png", "../art/props.png", "sets/more.png"], "paths from the map's folder: a .tsx in ../tilesets names ../art/props.png from there");
+    assert.ok(tilemap);
+    assert.deepEqual(
+      tilemap.tilesets.map((t) => [t.firstGid, t.image, t.columns, t.tileWidth, t.tileHeight, t.margin, t.spacing]),
+      [[1, "tiles.png", 3, 10, 10, 0, 0], [50, "", 4, 10, 10, 1, 1], [100, "", 3, 16, 32, 2, 1]],
+      "sorted by first id; columns worked out from the image's width when the tileset does not say; sheets outside the assets folder have no image",
+    );
+    assert.deepEqual(tilemap.solid, [101], "the .tsx's tile 1");
+    assert.deepEqual(tilemap.properties, { name: "The valley", dark: true });
+    assert.equal(diagnostics.length, 2, "one warning for each sheet that is not in the assets folder");
+    assert.match(diagnostics[0]!.message, /'\.\.\/art\/props\.png' \(from the map's folder\) is not in the assets folder/);
+    const source = tilemapsSource(new Map([["room", tilemap]]), "scenes");
+    assert.match(source, /tilesets: \[\{"firstGid":1,"image":"tiles.png","columns":3/);
+    assert.match(source, /properties: \{"name":"The valley","dark":true\}/);
+  });
+
+  it("says why an XML tileset it cannot read is skipped", () => {
+    const { diagnostics } = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, source: "bad.tsx" }] }), { readFile: () => "<tileset><tile></tileset>" });
+    assert.match(diagnostics[0]!.message, /cannot be read: a <tile> has no id/);
+  });
+
+  it("the CLI names each sheet by its place in the assets folder, and warns for one that is not there", () => {
+    const dir = mkdtempSync(join(tmpdir(), "rge-tilesets-"));
+    try {
+      for (const sub of ["src", "scenes", "assets/art"]) mkdirSync(join(dir, sub), { recursive: true });
+      writeFileSync(join(dir, "src/A.tsx"), `import { Entity } from "@rge/runtime/jsx";\nexport function A() { return <Entity name="A" />; }\n`);
+      writeFileSync(join(dir, "assets/art/tiles.png"), "");
+      writeFileSync(join(dir, "scenes/props.tsx"), `<tileset name="p" tilewidth="10" tileheight="10" columns="2"><image source="../assets/gone.png" width="20" height="10"/></tileset>`);
+      writeFileSync(join(dir, "scenes/room.tmj"), map({ tilesets: [{ firstgid: 1, image: "../assets/art/tiles.png", tilewidth: 10, tileheight: 10, columns: 3 }, { firstgid: 10, source: "props.tsx" }] }));
+      const repo = resolve(import.meta.dirname, "../../..");
+      const out = execFileSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out"), "--scenes", join(dir, "scenes"), "--assets", join(dir, "assets"), "--no-check"], { cwd: repo, stdio: "pipe", encoding: "utf8" });
+      assert.match(out, /wrote tilemaps.ts/);
+      const generated = readFileSync(join(dir, "out/tilemaps.ts"), "utf8");
+      assert.match(generated, /\{"firstGid":1,"image":"art\/tiles.png"/);
+      assert.match(generated, /\{"firstGid":10,"image":"","columns":2/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

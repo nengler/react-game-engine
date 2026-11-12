@@ -25,7 +25,7 @@ three bells ──▶ gate
 | File | Holds |
 | --- | --- |
 | `constants.ts` | Every number: tile 16, hitbox 10, speed 56 px/s *(guess)*, reach 12 px *(guess)*, 5 hearts, 3 bells |
-| `maps.ts` | The four maps as text (`.` ground, `#` wall, `~` water, `b` bush), and the people, items, doors and shrines placed on them by tile |
+| `maps.ts` | The four maps, read from the Tiled files in `scenes/` and checked by `readMap`: the `Ground` layer as text (`.` ground, `#` wall, `~` water, `b` bush) and the people, items, doors, shrines, enemies, gate and bushes from the `Things` object layer (M6) |
 | `dialogue.ts` | What four people say: pages before and after the bell nearest them is found |
 | `run.ts` | `newRun()`, `step(run, input, dt)` returning the run and events, doors, talking, pickups, bushes, shrines, `hurt`, the gate, `saveOf` / `loadRun` |
 | `view.ts` | What the screen draws of a run (`spotsOf`, `heroOf`, `dialogueOf`), called by the components as they render |
@@ -45,7 +45,7 @@ three bells ──▶ gate
 ## Not in the greybox yet
 
 Enemies and the swing's damage (M5), saving to disk and settings (M3), the dialogue box with wrapped, revealed text and the
-inventory grid (M4), maps drawn in Tiled by a person (M6; these are written by `tools/make-maps.ts` from the text), pushable
+inventory grid (M4), maps drawn in Tiled by a person (M6; the `.tmj` files are the source since M6.2, but none has yet been saved by Tiled itself), pushable
 blocks in the maze, art, sound and music (M7).
 
 ## The world (M2)
@@ -101,6 +101,13 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
 13. **`name` is reserved as a `const`** inside a component (`RGE1103`): `const name = useGame(…)` fails. Renamed `speaker`. *Since:* a game-state value keeps its name (its field is `$name`); a `useState` called `name` still is not allowed.
 14. **Text wrapping and revealing needed no workaround**: `<Text maxWidth lineGap reveal>` (engine, M4.1/4.2) draws the dialogue box; the rules
     count the typed characters (`talk.shown`, 40 a second *(guess)*; a press finishes the page, the next turns it).
+15. **The scene importer took every Tiled object for a prefab** (M6.2). Moving the doors, people and items into an object layer made
+    `rge check` fail with `RGE1503: Unknown prefab 'door'` for each one, because every map in `scenes/` is also imported as a scene.
+    *Fixed in the engine:* an object layer with the bool property `data` is the rules' (read into `TilemapData.objects`) and the scene
+    importer skips it; Bramble's `Things` layer has it. The tile importer also places objects by their layers' offsets now, as the
+    scene importer did.
+16. **The maps read from Tiled are the text maps, exactly:** a one-off script wrote the objects from the old text maps, and the
+    `MAPS` that `readMap` builds from them was compared with the old `MAPS` before `make-maps.ts` was removed. The rules did not change.
 
 ## The pause screen (M4)
 
@@ -124,7 +131,8 @@ whole 80 × 48 map take 1.3 ms each under Node and 20 ms under QuickJS, which is
 ```
 npm install && npm run check      # compile, type-check, test, parity under Node and rge-host
 npm run dev                       # window with hot reload
-npm run assets && npm run maps    # rewrite assets/tiles.png and scenes/*.tmj
+npm run assets                    # rewrite the art and sound in assets/
+                                  # the maps are scenes/*.tmj: open and edit them in Tiled
 ```
 
 From the engine's repository: `npm run bramble:install` repacks the engine and installs it here; `npm run check:outside` checks
