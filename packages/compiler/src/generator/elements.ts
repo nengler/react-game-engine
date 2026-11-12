@@ -1,6 +1,6 @@
 // Layer 2 of ComponentGenerator: the element tree, keyed lists, mounts and transforms, and the code that builds and updates each element.
 import { assertNever, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam } from "../ir/types.ts";
-import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, transformTarget, typeName, propertyKey, access } from "./helpers.ts";
+import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, transformTarget, propertyKey, access } from "./helpers.ts";
 import { HandlerEmitter } from "./handlers.ts";
 
 export class ElementEmitter extends HandlerEmitter {
@@ -10,10 +10,10 @@ export class ElementEmitter extends HandlerEmitter {
     for (const child of children) {
       if (child.kind === "ChildrenSlot") continue;
       const el = child.element;
-      const type = typeName(el.component);
+      const type = el.component.name;
       if (child.kind === "KeyedListChild") {
         // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
-        const itemType = child.alternate ? `${type} | ${typeName(child.alternate.component)}` : type;
+        const itemType = child.alternate ? `${type} | ${child.alternate.component.name}` : type;
         this.w.line(`readonly ${el.fieldName}Items: Map<string | number, ${itemType}> = new Map();`);
         if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
         this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
@@ -154,7 +154,7 @@ export class ElementEmitter extends HandlerEmitter {
     // field each, made with the item and updated like a conditional subtree's on every render, from the item's current value.
     const kids = el.children;
     // An item may switch between two elements (`cond ? <A/> : <B/>`): its instance is cast to the one that is current.
-    const view = (e: ElementIR): string => (alt ? `($item as ${typeName(e.component)})` : "$item");
+    const view = (e: ElementIR): string => (alt ? `($item as ${e.component.name})` : "$item");
     // The branches test the condition itself (not `$branch`), so that TypeScript narrows what it reads (`p.tower ? … {...p.tower}`).
     const test = list.condition ? this.arrowBody(list.condition) : "true";
     const construct = (e: ElementIR): void => {
@@ -258,7 +258,7 @@ export class ElementEmitter extends HandlerEmitter {
   /** What a list keeps for each key: the item's current value and, for an item with children, those children (each `null` until made). */
   protected recordType(list: KeyedListChildIR): string {
     const kids = itemDescendants(list.element.children);
-    const fields = kids.map((k) => `${k.fieldName}: ${typeName(k.component)} | null`).join("; ");
+    const fields = kids.map((k) => `${k.fieldName}: ${k.component.name} | null`).join("; ");
     return `{ current: ${this.listItemType(list)}${kids.length > 0 ? `; kids: { ${fields} }` : ""} }`;
   }
 
@@ -347,18 +347,9 @@ export class ElementEmitter extends HandlerEmitter {
 
   // -- expressions ----------------------------------------------------------
 
+  /** Every prop goes in at construction, callbacks too; on a component, the dynamic ones are re-sent through `updateProps` on render. */
   protected construct(el: ElementIR): string {
-    switch (el.component.kind) {
-      case "Local":
-      case "Imported":
-        // Every value prop (static or dynamic) goes in at construction, with the callbacks; dynamic ones are
-        // re-sent through `updateProps` on render.
-        return el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
-      case "Intrinsic":
-        return el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
-      default:
-        return assertNever(el.component, "component ref");
-    }
+    return el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
   }
 
   protected propsObject(props: readonly PropIR[]): string {

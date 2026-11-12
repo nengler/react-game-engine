@@ -7,7 +7,7 @@
  */
 import { dirname, resolve } from "node:path";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "./diagnostics/diagnostics.ts";
-import type { ChildIR, ComponentIR, IRModule } from "./ir/types.ts";
+import { cycleThrough, type ChildIR, type ComponentIR, type IRModule } from "./ir/types.ts";
 import { exportedComponents, moduleSchemas, type PrefabSchema } from "./prefabs/prefabs.ts";
 
 export interface ProjectModule {
@@ -69,20 +69,9 @@ function checkCrossFileCycles(modules: readonly ProjectModule[]): CompilerDiagno
   const diagnostics: CompilerDiagnostic[] = [];
   const reported = new Set<string>();
   for (const start of nodes.keys()) {
-    const stack: string[] = [];
-    const dfs = (node: string): string[] | null => {
-      if (node === start && stack.length > 0) return [...stack];
-      if (stack.includes(node)) return null;
-      stack.push(node);
-      for (const next of edges.get(node) ?? []) {
-        const cycle = dfs(next);
-        if (cycle) return cycle;
-      }
-      stack.pop();
-      return null;
-    };
-    const cycle = dfs(start);
-    if (!cycle || reported.has(start)) continue;
+    if (reported.has(start)) continue;
+    const cycle = cycleThrough(start, edges);
+    if (!cycle) continue;
     const files = new Set(cycle.map((n) => n.split("#")[0]));
     if (files.size < 2) continue; // inside one file: the transform already reported it
     for (const n of cycle) reported.add(n);

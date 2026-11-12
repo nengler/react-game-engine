@@ -47,10 +47,6 @@ export interface MemoIR {
 }
 
 /**
- * A function imported from a relative `.ts` file, used as a value (`<Router transition={crossfade} />`): the generated code writes
- * the imported name. The compiler does not look inside it.
- */
-/**
  * A field of one of this component's own elements, by its field name: `this.route2.active`. Only the compiler writes it (a
  * `<Route>`'s children are shown while the route is active); it is read fresh on every render, so it has no dependencies.
  */
@@ -69,6 +65,11 @@ export interface ActionRefIR {
   readonly name: string;
 }
 
+/**
+ * A function imported from a relative `.ts` file, or a top-level constant of the file, used as a value (`<Router transition={crossfade} />`): the generated code writes
+ * the imported name. The compiler does not look inside it.
+ * Also `undefined` and `Math.PI`-style constants.
+ */
 export interface PlainRefIR {
   readonly kind: "PlainRef";
   readonly name: string;

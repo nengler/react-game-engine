@@ -136,6 +136,23 @@ export class ExpressionLowering extends LoweringBase {
     return null;
   }
 
+  /** The functions a call may name, for diagnostics: `Math.*`, the global conversions and the runtime's functions. */
+  protected allowlistedCalls(): string {
+    const math = Object.keys(MATH_FUNCTIONS).map((n) => n.slice("Math.".length));
+    return `Math.${math.join("/")}, ${Object.keys(GLOBAL_FUNCTIONS).join("/")}, ${Object.keys(this.manifest.functions).join("/")}`;
+  }
+
+  /** Lowers each expression in order; null (after reporting) at the first that fails. */
+  lowerAll(nodes: readonly Expression[]): ExprIR[] | null {
+    const out: ExprIR[] = [];
+    for (const node of nodes) {
+      const lowered = this.lowerNode(node);
+      if (!lowered) return null;
+      out.push(lowered);
+    }
+    return out;
+  }
+
   /** `{ id, speed: 2, ...e }`: plain, shorthand and spread properties. */
   protected lowerObjectLiteral(node: ObjectLiteralExpression): ExprIR | null {
     const properties: ObjectPropertyIR[] = [];
@@ -251,12 +268,8 @@ export class ExpressionLowering extends LoweringBase {
           this.report(DiagnosticCode.UnsupportedExpression, `Prop '${member.name}' is not a function, so it cannot be called.`, callee);
           return null;
         }
-        const args: ExprIR[] = [];
-        for (const argument of node.arguments) {
-          const lowered = this.lowerNode(argument);
-          if (!lowered) return null;
-          args.push(lowered);
-        }
+        const args = this.lowerAll(node.arguments);
+        if (!args) return null;
         return { kind: "Call", callee: { kind: "Prop", name: member.name, optional: node.questionDotToken !== undefined }, args };
       }
     }
@@ -276,23 +289,15 @@ export class ExpressionLowering extends LoweringBase {
           this.report(DiagnosticCode.UnsupportedExpression, `Prop '${callee.text}' is not a function, so it cannot be called.`, callee);
           return null;
         }
-        const args: ExprIR[] = [];
-        for (const argument of node.arguments) {
-          const lowered = this.lowerNode(argument);
-          if (!lowered) return null;
-          args.push(lowered);
-        }
+        const args = this.lowerAll(node.arguments);
+        if (!args) return null;
         return { kind: "Call", callee: { kind: "Prop", name: binding.name, optional: node.questionDotToken !== undefined }, args };
       }
     }
     // A function imported from a relative .ts file: any arguments, opaque to the compiler and assumed pure.
     if (isIdentifier(callee) && this.plainImports.has(callee.text) && !this.scope.has(callee.text)) {
-      const args: ExprIR[] = [];
-      for (const argument of node.arguments) {
-        const lowered = this.lowerNode(argument);
-        if (!lowered) return null;
-        args.push(lowered);
-      }
+      const args = this.lowerAll(node.arguments);
+      if (!args) return null;
       return { kind: "Call", callee: { kind: "Plain", name: callee.text }, args };
     }
     // A method of a value imported from a relative .ts file (`fx.burst("dust", x, y)`): opaque too. An array method on an
@@ -304,12 +309,8 @@ export class ExpressionLowering extends LoweringBase {
       !this.scope.has(callee.expression.text) &&
       !Object.hasOwn(ARRAY_METHODS, callee.name.text)
     ) {
-      const args: ExprIR[] = [];
-      for (const argument of node.arguments) {
-        const lowered = this.lowerNode(argument);
-        if (!lowered) return null;
-        args.push(lowered);
-      }
+      const args = this.lowerAll(node.arguments);
+      if (!args) return null;
       return { kind: "Call", callee: { kind: "Plain", name: `${callee.expression.text}.${callee.name.text}` }, args };
     }
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
@@ -335,20 +336,17 @@ export class ExpressionLowering extends LoweringBase {
       result = { callee: { kind: "Method", receiver: receiver.read, name: callee.name.text }, expected, label: callee.name.text };
     }
     if (!result) {
-      this.report(DiagnosticCode.UnsupportedExpression, "Only allowlisted calls are supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, runtime functions from the manifest, and methods of handler parameters.", node);
+      this.report(DiagnosticCode.UnsupportedExpression, `Only allowlisted calls are supported: ${this.allowlistedCalls()}, and methods of handler parameters.`, node);
       return null;
     }
     const count = node.arguments.length;
-    if (result.expected === -2 ? false : result.expected === -1 ? count < 1 : count !== result.expected) {
+    // The manifest's arity: a count, -1 for at least one, -2 for any.
+    if (result.expected !== -2 && (result.expected === -1 ? count < 1 : count !== result.expected)) {
       this.report(DiagnosticCode.UnsupportedExpression, `${result.label} expects ${result.expected === -1 ? "at least one" : result.expected} argument(s).`, node);
       return null;
     }
-    const args: ExprIR[] = [];
-    for (const argument of node.arguments) {
-      const lowered = this.lowerNode(argument);
-      if (!lowered) return null;
-      args.push(lowered);
-    }
+    const args = this.lowerAll(node.arguments);
+    if (!args) return null;
     return { kind: "Call", callee: result.callee, args };
   }
 
@@ -362,12 +360,8 @@ export class ExpressionLowering extends LoweringBase {
       if (binding?.kind === "state" && this.handleStates.has(binding.id)) {
         const receiver = this.lowerNode(callee.expression);
         if (!receiver) return null;
-        const args: ExprIR[] = [];
-        for (const argument of node.arguments) {
-          const lowered = this.lowerNode(argument);
-          if (!lowered) return null;
-          args.push(lowered);
-        }
+        const args = this.lowerAll(node.arguments);
+        if (!args) return null;
         return { kind: "Call", callee: { kind: "ValueMethod", receiver, name }, args };
       }
     }
@@ -379,12 +373,8 @@ export class ExpressionLowering extends LoweringBase {
       }
       const receiver = this.lowerNode(callee.expression);
       if (!receiver) return null;
-      const args: ExprIR[] = [];
-      for (const argument of node.arguments) {
-        const lowered = this.lowerNode(argument);
-        if (!lowered) return null;
-        args.push(lowered);
-      }
+      const args = this.lowerAll(node.arguments);
+      if (!args) return null;
       return { kind: "Call", callee: { kind: "ValueMethod", receiver, name }, args };
     }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
@@ -398,7 +388,7 @@ export class ExpressionLowering extends LoweringBase {
     if (!Object.hasOwn(ARRAY_METHODS, name)) {
       this.report(
         code,
-        `'${name}' is not an allowlisted call. Supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, String/Number/Boolean, runtime functions from the manifest, methods of handler parameters, the array methods ${Object.keys(ARRAY_METHODS).join(", ")}, and the string and number methods ${[...VALUE_METHODS].join(", ")}.`,
+        `'${name}' is not an allowlisted call. Supported: ${this.allowlistedCalls()}, methods of handler parameters, the array methods ${Object.keys(ARRAY_METHODS).join(", ")}, and the string and number methods ${[...VALUE_METHODS].join(", ")}.`,
         callee.name,
       );
       return null;
@@ -428,13 +418,9 @@ export class ExpressionLowering extends LoweringBase {
 
   /** Resolves an expression that must be a handler parameter of a named runtime type. */
   protected lowerHandle(node: Expression): { type: string; read: ParamReadIR } | null {
-    const target = unwrapParens(node);
-    const binding = isIdentifier(target) ? this.scope.get(target.text) : undefined;
-    if (binding?.kind !== "param" || binding.type.kind !== "Named") {
-      this.report(DiagnosticCode.UnsupportedExpression, "Members can only be accessed on handler parameters of a runtime type (e.g. `input`).", node);
-      return null;
-    }
-    return { type: binding.type.name, read: { kind: "ParamRead", param: binding.id, name: binding.name } };
+    const handle = this.handleParam(node);
+    if (!handle) this.report(DiagnosticCode.UnsupportedExpression, "Members can only be accessed on handler parameters of a runtime type (e.g. `input`).", node);
+    return handle;
   }
 
   /** `s.battle.gold` in a computed selector; overridden where the hooks are lowered. */

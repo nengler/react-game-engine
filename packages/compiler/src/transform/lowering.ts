@@ -13,6 +13,25 @@ import { type AuthoringImports, rootTag, unwrapTypeParens, literalValue, nearest
 /** The CSS names of keyword values that the runtime spells differently. */
 const CSS_ALIASES: Readonly<Record<string, string>> = { "flex-start": "start", "flex-end": "end" };
 
+/** What every component of a module is lowered against: built once per file in `buildModuleIR`, shared by its components. */
+export interface ModuleContext {
+  readonly sourceFile: SourceFile;
+  readonly fileName: string;
+  readonly manifest: RuntimeManifest;
+  /** Components declared in this file. */
+  readonly locals: ReadonlySet<string>;
+  /** Components imported from other `.tsx` files, by local name. */
+  readonly imported: ReadonlyMap<string, { module: string; isDefault: boolean }>;
+  readonly authoring: AuthoringImports;
+  readonly typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>;
+  /** Shared by every component: each pushes its diagnostics here. */
+  readonly diagnostics: CompilerDiagnostic[];
+  readonly gameState: GameStateDefinition | undefined;
+  readonly storeImports: ReadonlySet<string>;
+  /** Functions and constants from relative `.ts` files and the file's own top-level declarations. */
+  readonly plainImports: ReadonlySet<string>;
+}
+
 export class LoweringBase {
   readonly componentName: string;
   /** Component scope; function lowering nests scopes beneath it via `scope`. */
@@ -61,37 +80,24 @@ export class LoweringBase {
   /** Set while a computed selector is lowered: where the snapshots of the paths it reads go. */
   protected storeReads: { readonly state: StateIR[]; readonly hooks: HookIR[]; readonly storeName: string } | null = null;
 
-  constructor(
-    component: ComponentAnalysis,
-    sourceFile: SourceFile,
-    fileName: string,
-    manifest: RuntimeManifest,
-    locals: ReadonlySet<string>,
-    imported: ReadonlyMap<string, { module: string; isDefault: boolean }>,
-    authoring: AuthoringImports,
-    typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>,
-    diagnostics: CompilerDiagnostic[],
-    gameState: GameStateDefinition | undefined,
-    storeImports: ReadonlySet<string>,
-    plainImports: ReadonlySet<string> = new Set(),
-  ) {
-    this.gameState = gameState;
-    this.storeImports = storeImports;
-    this.plainImports = plainImports;
-    this.typeDecls = typeDecls;
-    this.authoring = authoring;
+  constructor(component: ComponentAnalysis, module: ModuleContext) {
+    this.gameState = module.gameState;
+    this.storeImports = module.storeImports;
+    this.plainImports = module.plainImports;
+    this.typeDecls = module.typeDecls;
+    this.authoring = module.authoring;
     this.component = component;
     this.componentName = component.name;
-    this.sourceFile = sourceFile;
-    this.fileName = fileName;
-    this.manifest = manifest;
-    this.intrinsics = new Set(manifest.intrinsics);
-    this.imported = imported;
+    this.sourceFile = module.sourceFile;
+    this.fileName = module.fileName;
+    this.manifest = module.manifest;
+    this.intrinsics = new Set(module.manifest.intrinsics);
+    this.imported = module.imported;
     // A component extends its root element's class, so it may not reuse that class's own field names.
-    this.usedNames = new Set([...manifest.reservedMembers, ...(manifest.intrinsicMembers[rootTag(component.jsx, manifest.hostIntrinsic)] ?? [])]);
-    this.locals = locals;
-    this.hostIntrinsic = manifest.hostIntrinsic;
-    this.diagnostics = diagnostics;
+    this.usedNames = new Set([...module.manifest.reservedMembers, ...(module.manifest.intrinsicMembers[rootTag(component.jsx, module.manifest.hostIntrinsic)] ?? [])]);
+    this.locals = module.locals;
+    this.hostIntrinsic = module.manifest.hostIntrinsic;
+    this.diagnostics = module.diagnostics;
   }
 
   /** A prop type as the compiler understands it; anything else is carried as source text. */

@@ -2,17 +2,22 @@
 import { NodeFlags, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
 import { isArrayBindingPattern, isObjectBindingPattern, isOmittedExpression, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isPropertyAccessExpression, isVariableStatement } from "typescript/ast/is";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type UseStateCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
+import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type HookCallAnalysis, type UseStateCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
 import { unwrapParens } from "./util.ts";
 
 
 
-type UseStateMatch =
-  | { readonly kind: "ok"; readonly hook: UseStateCallAnalysis }
-  | { readonly kind: "invalid"; readonly message: string; readonly call: CallExpression };
+/**
+ * What a matcher makes of a component-body statement: the hooks it declares, or why it is malformed (reported at the
+ * statement; `call` is the hook call, so it is not reported again as misplaced). A matcher returns null for a statement that
+ * is not its kind at all.
+ */
+export type StatementMatch =
+  | { readonly kind: "ok"; readonly hooks: readonly HookCallAnalysis[] }
+  | { readonly kind: "invalid"; readonly code: DiagnosticCode; readonly message: string; readonly call: CallExpression | null };
 
 /** Recognises `const [value, setValue] = useState(init)`; returns null if the statement is not a useState call at all. */
-export function matchUseStateStatement(statement: Statement): UseStateMatch | null {
+export function matchUseStateStatement(statement: Statement): StatementMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
   if (list.declarations.length !== 1) return null;
@@ -20,7 +25,7 @@ export function matchUseStateStatement(statement: Statement): UseStateMatch | nu
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useState") return null;
 
-  const invalid = (message: string): UseStateMatch => ({ kind: "invalid", message, call: init });
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
   if ((list.flags & NodeFlags.Const) === 0) return invalid("useState must be bound with `const`.");
   if (!isArrayBindingPattern(declaration.name)) {
     return invalid("useState must be destructured: `const [value, setValue] = useState(initial)`.");
@@ -44,18 +49,16 @@ export function matchUseStateStatement(statement: Statement): UseStateMatch | nu
   if (!valueName) return invalid("useState must bind the state value.");
   if (init.arguments.length > 1) return invalid("useState takes at most one argument.");
 
-  return {
-    kind: "ok",
-    hook: {
-      kind: "useState",
-      valueName,
-      setterName: names[1] ?? null,
-      initializer: init.arguments[0] ?? null,
-      typeArgument: init.typeArguments?.[0] ?? null,
-      call: init,
-      declaration,
-    },
+  const hook: UseStateCallAnalysis = {
+    kind: "useState",
+    valueName,
+    setterName: names[1] ?? null,
+    initializer: init.arguments[0] ?? null,
+    typeArgument: init.typeArguments?.[0] ?? null,
+    call: init,
+    declaration,
   };
+  return { kind: "ok", hooks: [hook] };
 }
 
 /** `const name = expression;` that is not a hook call (hooks are matched first). */
@@ -97,10 +100,6 @@ function renderConstPattern(name: Node): RenderConstPattern | null {
   return null;
 }
 
-type StoreMatch =
-  | { readonly kind: "ok"; readonly hooks: readonly UseStoreCallAnalysis[] }
-  | { readonly kind: "invalid"; readonly message: string; readonly call: CallExpression };
-
 /** `s.player.hp` from the selector's parameter: the path, or null when the expression is not a plain path (`s` alone is `[]`). */
 function plainPath(node: Node, parameter: string): string[] | null {
   const path: string[] = [];
@@ -121,7 +120,7 @@ function plainPath(node: Node, parameter: string): string[] | null {
  *
  * Destructuring (`const { gold, lives } = useGame((s) => s.battle)`) reaches here split into one statement per name.
  */
-export function matchStoreStatement(statement: Statement, storeNames: ReadonlySet<string>): StoreMatch | null {
+export function matchStoreStatement(statement: Statement, storeNames: ReadonlySet<string>): StatementMatch | null {
   if (storeNames.size === 0 || !isVariableStatement(statement)) return null;
   const list = statement.declarationList;
   if (list.declarations.length !== 1) return null;
@@ -129,7 +128,7 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || !storeNames.has(init.expression.text)) return null;
   const storeName = init.expression.text;
-  const invalid = (message: string): StoreMatch => ({ kind: "invalid", message, call: init });
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
   const example = `const hp = ${storeName}((s) => s.player.hp);`;
   if ((list.flags & NodeFlags.Const) === 0) return invalid(`${storeName}(…) must be bound with \`const\`: \`${example}\``);
   const selector = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
@@ -153,12 +152,8 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   return typeof one === "string" ? invalid(one) : { kind: "ok", hooks: [one] };
 }
 
-type HandleMatch =
-  | { readonly kind: "ok"; readonly hook: UseRefCallAnalysis | UseSoundCallAnalysis }
-  | { readonly kind: "invalid"; readonly code: typeof DiagnosticCode.InvalidUseRef | typeof DiagnosticCode.InvalidUseSound; readonly message: string; readonly call: CallExpression };
-
 /** Recognises `const r = useRef<T>()` and `const play = useSound("a.wav")`; null if the statement is not one. */
-export function matchHandleStatement(statement: Statement): HandleMatch | null {
+export function matchHandleStatement(statement: Statement): StatementMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
   if (list.declarations.length !== 1) return null;
@@ -169,21 +164,19 @@ export function matchHandleStatement(statement: Statement): HandleMatch | null {
   if (hook !== "useRef" && hook !== "useSound") return null;
 
   const code = hook === "useSound" ? DiagnosticCode.InvalidUseSound : DiagnosticCode.InvalidUseRef;
-  const invalid = (message: string): HandleMatch => ({ kind: "invalid", code, message, call: init });
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code, message, call: init });
   if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) {
     return invalid(`${hook} must be bound with a plain \`const\` name: \`const handle = ${hook}(...)\`.`);
   }
   const name = declaration.name.text;
-  if (hook === "useSound") return { kind: "ok", hook: { kind: "useSound", name, arguments: init.arguments, call: init, declaration } };
-  return { kind: "ok", hook: { kind: "useRef", name, typeArgument: init.typeArguments?.[0] ?? null, arguments: init.arguments, call: init, declaration } };
+  const analysis: UseRefCallAnalysis | UseSoundCallAnalysis = hook === "useSound"
+    ? { kind: "useSound", name, arguments: init.arguments, call: init, declaration }
+    : { kind: "useRef", name, typeArgument: init.typeArguments?.[0] ?? null, arguments: init.arguments, call: init, declaration };
+  return { kind: "ok", hooks: [analysis] };
 }
 
-type HandlerMatch =
-  | { readonly kind: "ok"; readonly hook: HandlerCallAnalysis }
-  | { readonly kind: "invalid"; readonly code: DiagnosticCode; readonly message: string; readonly call: CallExpression | null };
-
 /** Recognises `useUpdate(arrow)`, `useInput(arrow)`, `useMount(arrow)` and `useUnmount(arrow)`; null if the statement is not a call to one of them. */
-export function matchHandlerStatement(statement: Statement): HandlerMatch | null {
+export function matchHandlerStatement(statement: Statement): StatementMatch | null {
   if (!isExpressionStatement(statement)) return null;
   const call = unwrapParens(statement.expression);
   if (!isCallExpression(call) || !isIdentifier(call.expression)) return null;
@@ -195,5 +188,5 @@ export function matchHandlerStatement(statement: Statement): HandlerMatch | null
   if (!handler || !isArrowFunction(handler)) {
     return { kind: "invalid", code: DiagnosticCode.InvalidHandler, message: `${name} takes exactly one arrow function: \`${name}(() => { ... })\`.`, call };
   }
-  return { kind: "ok", hook: { kind: name, handler, call, statement } };
+  return { kind: "ok", hooks: [{ kind: name, handler, call, statement }] };
 }

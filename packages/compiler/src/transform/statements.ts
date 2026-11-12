@@ -31,6 +31,8 @@ export interface LoweringContext {
   /** Innermost scope; expression lowering resolves identifiers against it. */
   scope: Scope;
   lowerExpression(node: Expression): ExprIR | null;
+  /** Lowers each expression in order; null at the first that fails. */
+  lowerAll(nodes: readonly Expression[]): ExprIR[] | null;
   /** Resolves `r.current.prop`; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
   lowerAssignTarget(node: Expression): AssignTargetIR | null;
   stateType(state: StateId): TypeIR;
@@ -162,12 +164,8 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
         ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${action.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler.`, init);
         return null;
       }
-      const args: ExprIR[] = [];
-      for (const argument of init.arguments) {
-        const lowered = ctx.lowerExpression(argument);
-        if (!lowered) return null;
-        args.push(lowered);
-      }
+      const args = ctx.lowerAll(init.arguments);
+      if (!args) return null;
       value = { kind: "Call", callee: { kind: "Action", name: action.action }, args };
     } else value = ctx.lowerExpression(decl.initializer); // lowered before the name exists: no self-reference
     const name = decl.name.text;
@@ -233,12 +231,8 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
         ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler, next to the setter call.`, call);
         return null;
       }
-      const args: ExprIR[] = [];
-      for (const argument of call.arguments) {
-        const lowered = ctx.lowerExpression(argument);
-        if (!lowered) return null;
-        args.push(lowered);
-      }
+      const args = ctx.lowerAll(call.arguments);
+      if (!args) return null;
       return { kind: "CallAction", action: callee.action, args };
     }
     if (callee?.kind === "setter") {

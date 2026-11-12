@@ -1,4 +1,4 @@
-import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type StatementIR, type TypeIR, walkExpr } from "../ir/types.ts";
+import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type TypeIR, walkExpr, walkFunction } from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
 import { CodeWriter } from "./writer.ts";
 import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
@@ -134,13 +134,13 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
   const visitType = (type: TypeIR): void => {
     if (type.kind === "Named") types.add(type.name);
   };
-  const visitExpr = (expr: ExprIR): void =>
-    walkExpr(expr, (e) => {
-      if (e.kind === "Call" && e.callee.kind === "Function" && runtimeFunctions.has(e.callee.name)) values.add(e.callee.name);
-      if ((e.kind === "Call" && e.callee.kind === "Action") || e.kind === "ActionRef") usage.store = true;
-      if (e.kind === "PlainRef") usage.plain.add(e.name);
-      if (e.kind === "Call" && e.callee.kind === "Plain") usage.plain.add(e.callee.name.split(".")[0]!);
-    });
+  const onExpr = (e: ExprIR): void => {
+    if (e.kind === "Call" && e.callee.kind === "Function" && runtimeFunctions.has(e.callee.name)) values.add(e.callee.name);
+    if ((e.kind === "Call" && e.callee.kind === "Action") || e.kind === "ActionRef") usage.store = true;
+    if (e.kind === "PlainRef") usage.plain.add(e.name);
+    if (e.kind === "Call" && e.callee.kind === "Plain") usage.plain.add(e.callee.name.split(".")[0]!);
+  };
+  const visitExpr = (expr: ExprIR): void => walkExpr(expr, onExpr);
   const visitProps = (props: readonly PropIR[]): void =>
     props.forEach((p) => {
       if (p.kind === "CallbackProp") visitFunction(p.handler);
@@ -168,22 +168,9 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
   };
   const visitFunction = (fn: FunctionIR): void => {
     fn.params.forEach((p) => visitType(p.type));
-    visitStatements(fn.body);
-  };
-  const visitStatements = (body: readonly StatementIR[]): void => {
-    for (const stmt of body) {
-      switch (stmt.kind) {
-        case "ExpressionStatement": visitExpr(stmt.expression); break;
-        case "LocalConst": visitExpr(stmt.value); break;
-        case "If": visitExpr(stmt.test); visitStatements(stmt.then); visitStatements(stmt.else); break;
-        case "Return": if (stmt.value) visitExpr(stmt.value); break;
-        case "SetState": if ("updater" in stmt) visitFunction(stmt.updater); else visitExpr(stmt.value); break;
-        case "Assign": visitExpr(stmt.value); break;
-        case "PlaySound": if (stmt.volume) visitExpr(stmt.volume); break;
-        case "CallAction": usage.store = true; stmt.args.forEach(visitExpr); break;
-        default: assertNever(stmt, "statement");
-      }
-    }
+    walkFunction(fn, onExpr, (stmt) => {
+      if (stmt.kind === "CallAction") usage.store = true;
+    });
   };
   if (exportedComponents(module).length > 0) types.add("PrefabDefinition");
   for (const c of module.components) {

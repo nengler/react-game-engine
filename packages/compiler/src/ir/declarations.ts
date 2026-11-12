@@ -144,46 +144,33 @@ export interface UseStateHookIR {
   readonly span: SourceSpan;
 }
 
-/** `onUpdate((dt) => { ... })`: runs once per `World.tick(dt, input)`, after `onInput`. */
-export interface OnUpdateHookIR {
-  readonly kind: "OnUpdate";
-  readonly handler: FunctionIR;
-  readonly span: SourceSpan;
-}
-
-/** `onInput((input) => { ... })`: runs once per tick with the polled `InputState`, before `onUpdate`. */
-export interface OnInputHookIR {
-  readonly kind: "OnInput";
-  readonly handler: FunctionIR;
-  readonly span: SourceSpan;
-}
-
 /**
- * `useMount(() => { ... })`: runs once when the component joins a `World`,
- * after its children have mounted (and its first render, which the
- * constructor runs). Setting state here renders in the same flush.
+ * A handler hook, by when the runtime calls it:
+ *
+ * - `OnUpdate` (`useUpdate((dt) => …)`): once per `World.tick(dt, input)`, after `OnInput`.
+ * - `OnInput` (`useInput((input) => …)`): once per tick with the polled `InputState`, before `OnUpdate`.
+ * - `OnMount` (`useMount(() => …)`): once when the component joins a `World`, after its children have mounted (and its first
+ *   render, which the constructor runs). Setting state here renders in the same flush.
+ * - `OnUnmount` (`useUnmount(() => …)`): once when the component leaves its `World`. It cannot set state (the component is going
+ *   away); refs and callback props work.
  */
-export interface OnMountHookIR {
-  readonly kind: "OnMount";
+export interface HandlerHookIR<K extends HandlerHookKind = HandlerHookKind> {
+  readonly kind: K;
   readonly handler: FunctionIR;
   readonly span: SourceSpan;
 }
 
-/**
- * `useUnmount(() => { ... })`: runs once when the component leaves its
- * `World`. It cannot set state (the component is going away); refs and
- * callback props work.
- */
-export interface OnUnmountHookIR {
-  readonly kind: "OnUnmount";
-  readonly handler: FunctionIR;
-  readonly span: SourceSpan;
-}
+export const HANDLER_HOOK_KINDS = ["OnUpdate", "OnInput", "OnMount", "OnUnmount"] as const;
 
-export type HandlerHookIR = OnUpdateHookIR | OnInputHookIR | OnMountHookIR | OnUnmountHookIR;
+export type HandlerHookKind = (typeof HANDLER_HOOK_KINDS)[number];
+
+export type OnUpdateHookIR = HandlerHookIR<"OnUpdate">;
+export type OnInputHookIR = HandlerHookIR<"OnInput">;
+export type OnMountHookIR = HandlerHookIR<"OnMount">;
+export type OnUnmountHookIR = HandlerHookIR<"OnUnmount">;
 
 export function isHandlerHook(hook: HookIR): hook is HandlerHookIR {
-  return hook.kind === "OnUpdate" || hook.kind === "OnInput" || hook.kind === "OnMount" || hook.kind === "OnUnmount";
+  return (HANDLER_HOOK_KINDS as readonly string[]).includes(hook.kind);
 }
 
 export interface StateIR {

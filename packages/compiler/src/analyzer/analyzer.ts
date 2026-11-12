@@ -1,13 +1,11 @@
 import { ModifierFlags, NodeFlags, type Node, type SourceFile } from "typescript/ast";
-import { isArrowFunction, isExportAssignment, isFunctionDeclaration, isIdentifier, isImportDeclaration, isInterfaceDeclaration, isJsxElement, isJsxFragment, isJsxSelfClosingElement, isNamedImports, isTypeAliasDeclaration, isStringLiteral, isVariableStatement } from "typescript/ast/is";
+import { isArrowFunction, isExportAssignment, isFunctionDeclaration, isIdentifier, isImportDeclaration, isInterfaceDeclaration, isJsxElement, isJsxFragment, isJsxSelfClosingElement, isTypeAliasDeclaration, isStringLiteral, isVariableStatement } from "typescript/ast/is";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { spanOf } from "../parser/parser.ts";
 import { type SourceAnalysis, type ImportAnalysis, type TypeDeclarationAnalysis, type ComponentAnalysis, type ModuleDeclarationAnalysis } from "./model.ts";
-import { unwrapParens, visit } from "./util.ts";
+import { RELATIVE_TS, relativeTsImportNames, unwrapParens, visit } from "./util.ts";
 import { analyzeNamedImport, analyzeComponent } from "./component.ts";
 import { HOOK_NAME } from "./model.ts";
-
-
 
 /**
  * @param fileName Name used in spans and diagnostics. Defaults to the parsed
@@ -53,12 +51,7 @@ export function analyzeSourceFile(
   const span = (node: Node) => spanOf(node, sourceFile, fileName);
 
   // The names a relative `.ts` import binds, known before any component is read (imports may follow the components in source).
-  const storeNames = new Set<string>();
-  for (const statement of sourceFile.statements) {
-    if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || !/^\.\.?\/.*\.ts$/.test(statement.moduleSpecifier.text)) continue;
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && isNamedImports(bindings)) for (const element of bindings.elements) if (HOOK_NAME.test(element.name.text)) storeNames.add(element.name.text);
-  }
+  const storeNames = new Set([...relativeTsImportNames(sourceFile)].filter((name) => HOOK_NAME.test(name)));
   for (const statement of sourceFile.statements) {
     if (isImportDeclaration(statement)) {
       // Two kinds of import are understood: components from relative `.tsx` files, and hooks, built-ins and
@@ -66,7 +59,7 @@ export function analyzeSourceFile(
       const specifier = isStringLiteral(statement.moduleSpecifier) ? statement.moduleSpecifier.text : null;
       if (specifier !== null && /^\.\.?\/.*\.tsx$/.test(specifier)) {
         analyzeNamedImport(statement, specifier, imports, diagnostics, span, "Component imports", `import { Name } from "${specifier}"`, true);
-      } else if (specifier !== null && /^\.\.?\/.*\.ts$/.test(specifier)) {
+      } else if (specifier !== null && RELATIVE_TS.test(specifier)) {
         analyzeNamedImport(statement, specifier, relativeImports, diagnostics, span, "Imports from a .ts file", `import { useGame } from "${specifier}"`, false, true);
       } else if (specifier !== null && specifier === authoringModule) {
         analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity, type Child } from "${specifier}"`, false, true);

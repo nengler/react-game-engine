@@ -49,7 +49,8 @@ import {
   isStringLiteral,
   isVariableStatement,
 } from "typescript/ast/is";
-import { AUTHORING_HOOKS } from "../analyzer/model.ts";
+import { AUTHORING_HOOKS, HOOK_NAME } from "../analyzer/model.ts";
+import { relativeTsImportNames } from "../analyzer/util.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { spanOf, type TsxParser } from "../parser/parser.ts";
 import { LIBRARY_FILE, LIBRARY_HOOKS, LIBRARY_SOURCE } from "./library.ts";
@@ -65,7 +66,7 @@ export interface HookSource {
 /** Finds the source of a relative `.tsx` module (`"./hooks.tsx"`) imported by `fromFile`, or null. */
 export type HookResolver = (specifier: string, fromFile: string) => HookSource | null;
 
-const HOOK = /^use[A-Z0-9]/;
+const HOOK = HOOK_NAME;
 const MAX_DEPTH = 6;
 
 interface Hook {
@@ -86,15 +87,7 @@ function isCustomName(name: string, stores: ReadonlySet<string>): boolean {
 }
 
 /** The names bound by relative `.ts` imports: the game state's store, which looks like a hook and is not one. */
-function storeNames(sourceFile: SourceFile): Set<string> {
-  const names = new Set<string>();
-  for (const statement of sourceFile.statements) {
-    if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || !/^\.\.?\/.*\.ts$/.test(statement.moduleSpecifier.text)) continue;
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && isNamedImports(bindings)) for (const element of bindings.elements) names.add(element.name.text);
-  }
-  return names;
-}
+const storeNames = relativeTsImportNames;
 
 /**
  * Inline the custom hooks used in `text`. Returns the text unchanged when it uses none. Problems are pushed to `diagnostics`

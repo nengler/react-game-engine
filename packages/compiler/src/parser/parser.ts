@@ -31,22 +31,17 @@ export class TsxParser {
   }
 
   parse(fileName: string, text: string): ParsedSource {
-    const retained: RetainedSourceFile = this.api.createSourceFile(fileName, text, { scriptKind: ScriptKind.TSX });
-    return {
-      fileName,
-      sourceFile: retained.sourceFile,
-      dispose: () => retained.dispose(),
-    };
+    return this.#create(fileName, text, ScriptKind.TSX);
   }
 
   /** Parse a JSON file (a scene) into the same kind of AST, so diagnostics can point at a value's line and column. */
   parseJson(fileName: string, text: string): ParsedSource {
-    const retained: RetainedSourceFile = this.api.createSourceFile(fileName, text, { scriptKind: ScriptKind.JSON });
-    return {
-      fileName,
-      sourceFile: retained.sourceFile,
-      dispose: () => retained.dispose(),
-    };
+    return this.#create(fileName, text, ScriptKind.JSON);
+  }
+
+  #create(fileName: string, text: string, scriptKind: ScriptKind): ParsedSource {
+    const retained: RetainedSourceFile = this.api.createSourceFile(fileName, text, { scriptKind });
+    return { fileName, sourceFile: retained.sourceFile, dispose: () => retained.dispose() };
   }
 
   close(): void {

@@ -3,7 +3,7 @@ import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, ty
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isConditionalExpression, isIdentifier, isJsxAttribute, isJsxSpreadAttribute, isJsxElement, isJsxExpression, isJsxSelfClosingElement, isJsxText, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isJsxFragment, isStringLiteral, isBlock, isReturnStatement } from "typescript/ast/is";
 import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
-import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
+import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type ValuePropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
 import { Scope } from "./scope.ts";
 import { checkFreshName, lowerFunction } from "./statements.ts";
 import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute } from "./helpers.ts";
@@ -167,8 +167,7 @@ export class ElementLowering extends HookLowering {
     const only = expressions.length === 1 && quasis.every((q) => q === "") ? expressions[0]! : null;
     const value: ExprIR =
       expressions.length === 0 ? { kind: "StringLiteral", value: quasis[0]! } : only && only.kind === "TemplateLiteral" ? only : { kind: "TemplateLiteral", quasis, expressions };
-    const dependencies = collectDependencies(value);
-    return [dependencies.length > 0 ? { kind: "DynamicProp", name: prop, value, dependencies } : { kind: "StaticProp", name: prop, value }];
+    return [valueProp(prop, value)];
   }
 
   /**
@@ -445,9 +444,7 @@ export class ElementLowering extends HookLowering {
       }
       const value = this.lowerNode(valueNode);
       if (!value) continue;
-      const name = field as TransformField;
-      const dependencies = collectDependencies(value);
-      out.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
+      out.push(valueProp(field as TransformField, value));
     }
     return out;
   }
@@ -555,8 +552,7 @@ export class ElementLowering extends HookLowering {
       }
       if (!value) continue;
       if (!toComponent && !this.checkLiteralChoice(tag, name, value, attribute)) continue;
-      const dependencies = collectDependencies(value);
-      props.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
+      props.push(valueProp(name, value));
     }
     return props;
   }
@@ -714,6 +710,12 @@ export class ElementLowering extends HookLowering {
 }
 
 const ROUTE_TAG = "Route";
+
+/** A prop that reads nothing that changes is static (evaluated once); otherwise it is dynamic, re-applied when what it reads changes. */
+function valueProp<N extends string>(name: N, value: ExprIR): ValuePropIR & { readonly name: N } {
+  const dependencies = collectDependencies(value);
+  return dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value };
+}
 
 /** Is the attribute written as `name` or `name={true}`? */
 function hasTrueAttribute(attributes: JsxAttributes, name: string): boolean {
