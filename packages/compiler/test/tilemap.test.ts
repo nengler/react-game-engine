@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { deflateSync, gzipSync } from "node:zlib";
 import { join, resolve } from "node:path";
 import { importTiled, importTilemap, tilemapsSource } from "../src/index.ts";
 
@@ -50,16 +51,22 @@ describe("importTilemap", () => {
   it("says plainly what it cannot read, instead of drawing garbage", () => {
     const base64 = importTilemap("a.tmj", map({ layers: [{ type: "tilelayer", name: "T", encoding: "base64", data: "AAAA" }] }));
     assert.equal(base64.tilemap, null);
-    assert.match(base64.diagnostics[0]!.message, /Tile Layer Format to CSV/);
+    assert.match(base64.diagnostics[0]!.message, /holds 3 bytes, not 24 \(6 cells\)/);
+    const zstd = importTilemap("a.tmj", map({ layers: [{ type: "tilelayer", name: "T", encoding: "base64", compression: "zstd", data: "AAAA" }] }));
+    assert.match(zstd.diagnostics[0]!.message, /compression 'zstd' is not supported/);
+    const broken = importTilemap("a.tmj", map({ layers: [{ type: "tilelayer", name: "T", encoding: "base64", compression: "zlib", data: "AAAA" }] }));
+    assert.match(broken.diagnostics[0]!.message, /does not decompress/);
     const wrongSize = importTilemap("a.tmj", map({ layers: [{ type: "tilelayer", name: "T", data: [1, 2, 3] }] }));
     assert.match(wrongSize.diagnostics[0]!.message, /has 3 cells, but the map is 3 × 2 = 6/);
     const infinite = importTilemap("a.tmj", map({ infinite: true }));
     assert.match(infinite.diagnostics[0]!.message, /infinite/);
     const two = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1 }, { firstgid: 50 }] }));
     assert.ok(two.tilemap);
-    assert.match(two.diagnostics[0]!.message, /2 tilesets: only the first is used/);
-    const external = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, source: "tiles.tsx" }] }));
-    assert.match(external.diagnostics[0]!.message, /external/);
+    assert.match(two.diagnostics[0]!.message, /2 tilesets: tiles of all of them are drawn from the first one's sheet/);
+    const xml = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, source: "tiles.tsx" }] }));
+    assert.match(xml.diagnostics[0]!.message, /not JSON \(\.tsj\)/);
+    const missing = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, source: "gone.tsj" }] }), { readFile: () => null });
+    assert.match(missing.diagnostics[0]!.message, /cannot be read/);
     assert.equal(importTilemap("a.tmj", "{").tilemap, null, "bad JSON is the scene importer's to report");
   });
 
@@ -102,5 +109,60 @@ describe("importTiled: hidden layers and objects", () => {
     const plain = importTiled("m.tmj", objects([{ id: 1, class: "Coin", gid: 5, x: 10, y: 20, height: 16, width: 16 }]));
     const flipped = importTiled("m.tmj", objects([{ id: 1, class: "Coin", gid: 5 + H + D, x: 10, y: 20, height: 16, width: 16 }]));
     assert.deepEqual(flipped.scene.entities[0]!.transform, plain.scene.entities[0]!.transform);
+  });
+});
+
+describe("importTilemap: encoded layers and external tilesets", () => {
+  const cells = [1, 2, 0, 3, 2 + H, 2 + (V | D)];
+  const bytes = Buffer.alloc(cells.length * 4);
+  cells.forEach((c, i) => bytes.writeUInt32LE(c >>> 0, i * 4));
+  const layerOf = (data: string, compression?: string) => ({ type: "tilelayer", name: "Tiles", width: 3, height: 2, encoding: "base64", ...(compression === undefined ? {} : { compression }), data });
+
+  it("reads base64 layers: uncompressed, zlib and gzip, with the same cells and flips as CSV", () => {
+    const csv = importTilemap("a.tmj", map({ layers: [{ type: "tilelayer", name: "Tiles", width: 3, height: 2, data: cells }] })).tilemap!;
+    for (const [data, compression] of [[bytes.toString("base64"), undefined], [deflateSync(bytes).toString("base64"), "zlib"], [gzipSync(bytes).toString("base64"), "gzip"]] as const) {
+      const { tilemap, diagnostics } = importTilemap("a.tmj", map({ layers: [layerOf(data, compression)] }));
+      assert.deepEqual(diagnostics, [], String(compression));
+      assert.deepEqual(tilemap!.layers[0], csv.layers[0], `${String(compression)} gives the CSV layer`);
+    }
+  });
+
+  it("reads an external .tsj tileset through readFile, and the solid tiles of every tileset", () => {
+    const tsj = JSON.stringify({ tiles: [{ id: 0, properties: [{ name: "solid", type: "bool", value: true }] }] });
+    const asked: string[] = [];
+    const { tilemap, diagnostics } = importTilemap("a.tmj", map({ tilesets: [{ firstgid: 1, source: "../tilesets/ground.tsj" }, { firstgid: 100, tiles: [{ id: 3, properties: [{ name: "solid", value: true }] }] }] }), {
+      readFile: (path) => (asked.push(path), tsj),
+    });
+    assert.deepEqual(asked, ["../tilesets/ground.tsj"]);
+    assert.deepEqual(tilemap!.solid, [1, 103], "tile 0 of the first (firstgid 1) and tile 3 of the second (firstgid 100)");
+    assert.equal(diagnostics.filter((d) => d.severity === "error").length, 0);
+  });
+});
+
+describe("importTilemap: objects", () => {
+  const withObjects = (layers: unknown[]) =>
+    map({ layers: [{ type: "tilelayer", name: "Tiles", width: 3, height: 2, data: [1, 1, 1, 1, 1, 1] }, ...layers] });
+
+  it("reads the objects of visible object layers with their custom properties, and writes them into tilemaps.ts", () => {
+    const { tilemap, diagnostics } = importTilemap(
+      "a.tmj",
+      withObjects([
+        { type: "objectgroup", name: "Doors", objects: [{ id: 3, name: "cave", type: "door", x: 32, y: 48, width: 16, height: 16, properties: [{ name: "to", type: "string", value: "cave-exit" }, { name: "needs", type: "string", value: "lantern" }, { name: "locked", type: "bool", value: true }, { name: "bad", type: "object", value: { x: 1 } }] }] },
+        { type: "objectgroup", name: "Hidden", visible: false, objects: [{ id: 9, name: "nope", type: "door", x: 0, y: 0 }] },
+        { type: "group", name: "G", layers: [{ type: "objectgroup", name: "People", objects: [{ id: 4, name: "wren", class: "npc", x: 1, y: 2, properties: [{ name: "page", value: 2 }] }, { id: 5, name: "hidden one", visible: false }] }] },
+      ]),
+    );
+    assert.deepEqual(diagnostics, []);
+    assert.deepEqual(tilemap!.objects.map((o) => [o.id, o.name, o.type]), [[3, "cave", "door"], [4, "wren", "npc"]]);
+    assert.deepEqual(tilemap!.objects[0]!.properties, { to: "cave-exit", needs: "lantern", locked: true }, "only strings, numbers and booleans");
+    assert.deepEqual([tilemap!.objects[0]!.x, tilemap!.objects[0]!.y, tilemap!.objects[0]!.width], [32, 48, 16]);
+    const source = tilemapsSource(new Map([["room", tilemap!]]), "scenes");
+    assert.match(source, /objects: \[\{"id":3,"name":"cave","type":"door"/);
+  });
+
+  it("writes no objects line for a map without any", () => {
+    const { tilemap } = importTilemap("a.tmj", map());
+    assert.deepEqual(tilemap!.objects, []);
+    assert.doesNotMatch(tilemapsSource(new Map([["room", tilemap!]]), "scenes"), /objects:/);
   });
 });

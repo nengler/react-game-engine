@@ -19,6 +19,20 @@ export interface TilemapLayerData {
   readonly flips?: readonly number[];
 }
 
+/** A Tiled object as data for the rules: a door, a person, a spawn. Position and size in pixels of the map. */
+export interface TilemapObject {
+  readonly id: number;
+  readonly name: string;
+  /** Tiled's "Class" (or "Type") field. */
+  readonly type: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  /** The object's custom properties. */
+  readonly properties: Readonly<Record<string, string | number | boolean>>;
+}
+
 export interface TilemapData {
   readonly width: number;
   readonly height: number;
@@ -29,6 +43,8 @@ export interface TilemapData {
   /** The global ids of the tiles that are solid (the tile property `solid` in Tiled). */
   readonly solid: readonly number[];
   readonly layers: readonly TilemapLayerData[];
+  /** The objects of the map's visible object layers, in file order. Absent when there are none. */
+  readonly objects?: readonly TilemapObject[];
 }
 
 /** A map's cells, asked about by column and row or by pixel. Reading outside the map gives an empty cell, not an error. */
@@ -52,6 +68,12 @@ export class TileGrid {
   }
   get tileHeight(): number {
     return this.data.tileHeight;
+  }
+
+  /** The map's objects, all of them or only those of one `type` (Tiled's Class). */
+  objects(type?: string): readonly TilemapObject[] {
+    const all = this.data.objects ?? [];
+    return type === undefined ? all : all.filter((o) => o.type === type);
   }
 
   layer(name: string): TilemapLayerData | undefined {

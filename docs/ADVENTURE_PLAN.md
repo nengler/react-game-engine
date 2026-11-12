@@ -416,6 +416,8 @@ lineOfSight(grid: TileGrid, from: Point, to: Point): boolean
 
 ### M6. Maps saved by Tiled (engine and a person; \~4 days plus the person's time)
 
+*(Partly built 2026-11-12. Done: base64 layers (uncompressed, zlib, gzip; zstd is a diagnostic), external `.tsj` tilesets read through the CLI, the `solid` tiles of every tileset, and each map's objects as data (`TilemapData.objects`, `TileGrid.objects(type?)`), all with fixtures. Not done: the `.tsx` reader and drawing from more than one sheet (`TilemapData.tilesets`, per-cell sheets, optional `<Tilemap image>`), reading Bramble's doors, people and items from objects (its text maps and `make-maps.ts` stay), and 6.3, which needs a person to save a map in Tiled. The fixtures are written by hand to Tiled's documented format, so they are not the evidence 6.3 asks for.)*
+
 **6.1 The importer** (`packages/compiler/src/scenes/tilemap.ts`):
 
 - **Layer data:** base64 layers, uncompressed, zlib and gzip (`node:zlib`). zstd stays a diagnostic.
