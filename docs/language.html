@@ -133,7 +133,7 @@ mark { background: var(--accent-soft); color: inherit; }
   <p>A component is a top-level <code>function</code> or <code>const</code> arrow with a <strong>capitalised name</strong>, optionally exported (one per module may be the default, and it needs a name). Its body, in order:</p>
   <ol>
     <li>Hooks: <code>useState</code>, <code>useRef</code>, <code>useSound</code>, <code>useGame(...)</code>, and the handler hooks.</li>
-    <li>Derived values: <code>const hurt = health &lt; 25;</code>, inlined where used.</li>
+    <li>Derived values: <code>const hurt = health &lt; 25;</code>, and destructured ones, <code>const { x, y } = heroOf(run);</code> or <code>const [a, , c] = trio;</code> (plain names: no defaults, rests or nesting). One that calls a function or a method is worked out once and again only when the state or props it reads change, as with <code>useMemo</code>; one that only combines values is written where it is used.</li>
     <li>One <code>return</code> of JSX, a condition of it (<code>on ? &lt;Spark /&gt; : null</code>, <code>open &amp;&amp; &lt;Menu /&gt;</code>) or <code>null</code>.</li>
   </ol>
   <p>An arrow with an expression body is just its return: <code>const Dot = () =&gt; &lt;Sprite image="dot.png" /&gt;</code>.</p>
@@ -165,12 +165,13 @@ const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : 
       <li><code>a ? b : c</code>, parentheses, template literals</li>
       <li>Array and object literals, with spreads</li>
       <li>Member reads (<code>e.id</code>, <code>items.length</code>, <code>found?.hp</code>)</li>
-      <li>Non-mutating array methods (<code>map</code>, <code>filter</code>, <code>some</code>…)</li>
+      <li>Non-mutating array methods (<code>map</code>, <code>filter</code>, <code>some</code>, <code>flatMap</code>, <code>join</code>, <code>at</code>…)</li>
+      <li>Methods of strings and numbers that change nothing (<code>padStart</code>, <code>startsWith</code>, <code>slice</code>, <code>toUpperCase</code>, <code>split</code>, <code>replace</code>, <code>toFixed</code>…), and <code>String(n)</code>, <code>Number(s)</code>, <code>Boolean(x)</code></li>
       <li>Calling a function from a relative <code>.ts</code> file or the same file (<code>spotsOf(run)</code>): assumed pure</li>
     </ul></div>
     <div class="no"><h5>Not allowed</h5><ul>
       <li>Loops, <code>try</code>, <code>let</code>, <code>await</code>, <code>this</code></li>
-      <li>Calling methods of values (<code>name.toUpperCase()</code>): put them in a plain function</li>
+      <li>Methods that change their array (<code>push</code>, <code>sort</code>…), and other methods of values: put them in a plain function</li>
       <li>Text children and spread attributes in JSX</li>
       <li><code>useEffect</code>, <code>ref={…}</code>, <code>useContext</code></li>
       <li>Hooks inside conditions, loops or handlers</li>
@@ -209,7 +210,7 @@ setHealth((h) => h - 10);                          // updater form: chains withi
 setSpawns((list) => [...list, { id: "a", x: 0 }]); // immutable update
 </script></pre>
   <ul>
-    <li>Form: top-level <code>const [a, setA] = useState(...)</code> (<code>RGE1103</code>). The initial value is a <strong>constant or a prop</strong> (<code>RGE1303</code>).</li>
+    <li>Form: top-level <code>const [a, setA] = useState(...)</code> (<code>RGE1103</code>). The initial value is a constant, a prop or a value of the game state (<code>useState(start)</code> with <code>const start = useGame((s) =&gt; s.titleCursor)</code>), taken when the component is made; not this component's other state (<code>RGE1303</code>).</li>
     <li><strong>State is a snapshot.</strong> <code>setN(n + 1)</code> twice adds 1; <code>setN((n) =&gt; n + 1)</code> twice adds 2.</li>
     <li><code>useState(() =&gt; makeThing())</code> is React's lazy initial value, for a per-instance object with methods. A value that changes over time is plain state.</li>
     <li>Arrays and records are updated <strong>immutably</strong>: a setter renders only for a <em>new</em> value. They need a type declared in the same file; <code>useState([])</code> is <code>RGE1104</code>.</li>
@@ -288,6 +289,7 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
     </ul></div>
     <div class="yes"><h5>Calls and members</h5><ul>
       <li><code>Math.abs floor ceil round sign sqrt sin cos min max</code></li>
+      <li>The array, string and number methods allowed in a component body (<code>id.startsWith("bind:")</code>, <code>id.slice(5)</code>)</li>
       <li><code>clamp(value, min, max)</code> (3 args)</li>
       <li><code>freeze(steps)</code>: skip every <code>useUpdate</code> for that many steps</li>
       <li><code>input.pressed / down / released</code>, <code>input.pointerX / pointerY</code></li>

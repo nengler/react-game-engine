@@ -3,7 +3,7 @@ import { SyntaxKind, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type StateId, type TypeIR, collectDependencies, stateReads, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
+import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { lowerFunction } from "./statements.ts";
@@ -152,13 +152,28 @@ export class HookLowering extends ExpressionLowering {
           break;
         case "const": {
           // Lowered now, against what is declared above it (state, refs, earlier consts), outside any handler.
-          const value = this.lowerNode(hook.initializer);
-          if (!value) break;
-          if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
-            this.report(DiagnosticCode.InvalidComponentBody, `'${hook.name}' is already declared in this component (or reserved).`, hook.declaration.name);
+          const lowered = this.lowerNode(hook.initializer);
+          if (!lowered) break;
+          const value = memoized(hook.name, lowered);
+          if (hook.pattern === null) {
+            if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
+              this.report(DiagnosticCode.InvalidComponentBody, `'${hook.name}' is already declared in this component (or reserved).`, hook.declaration.name);
+              break;
+            }
+            this.componentScope.declare(hook.name, { kind: "derived", name: hook.name, value });
             break;
           }
-          this.componentScope.declare(hook.name, { kind: "derived", name: hook.name, value });
+          // `const { x, y } = heroOf(run)`: each name is a member of the one value, which is worked out once (a memo) when it calls something.
+          const entries = hook.pattern.kind === "object"
+            ? hook.pattern.entries.map((e) => ({ name: e.name, node: e.node, read: { kind: "MemberRead", object: value, name: e.key, optional: false } as ExprIR }))
+            : hook.pattern.entries.flatMap((e, i) => (e === null ? [] : [{ name: e.name, node: e.node, read: { kind: "IndexRead", object: value, index: { kind: "NumberLiteral", value: i }, optional: false } as ExprIR }]));
+          for (const entry of entries) {
+            if (this.componentScope.hasOwn(entry.name) || this.isCallableName(entry.name)) {
+              this.report(DiagnosticCode.InvalidComponentBody, `'${entry.name}' is already declared in this component (or reserved).`, entry.node);
+              continue;
+            }
+            this.componentScope.declare(entry.name, { kind: "derived", name: entry.name, value: entry.read });
+          }
           break;
         }
         case "useState": {
@@ -188,8 +203,12 @@ export class HookLowering extends ExpressionLowering {
           }
           const initialValue = this.lowerNode(initializer);
           if (!initialValue) continue;
-          if (stateReads(initialValue).length > 0) {
-            this.report(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state (it may read props).", hook.initializer);
+          // It may read props and the game state (`useState(start)` with `const start = useGame((s) => s.titleCursor)`): both are
+          // there when the component is made, which is when the initial value is taken, as in a React first render. Not this
+          // component's own state, which is being made alongside it.
+          const ownReads = stateReads(initialValue).filter((read) => state.find((s) => s.id === read)?.globalKey === undefined);
+          if (ownReads.length > 0) {
+            this.report(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state of this component (it may read props and the game state).", hook.initializer);
             continue;
           }
           const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
@@ -236,7 +255,7 @@ export class HookLowering extends ExpressionLowering {
         this.scope = outer;
         this.storeReads = previous;
       }
-      if (value) this.componentScope.declare(hook.valueName, { kind: "derived", name: hook.valueName, value });
+      if (value) this.componentScope.declare(hook.valueName, { kind: "derived", name: hook.valueName, value: memoized(hook.valueName, value) });
       return;
     }
     if (this.componentScope.hasOwn(hook.valueName)) {
@@ -405,6 +424,11 @@ export class HookLowering extends ExpressionLowering {
       const decl = this.propDecls.find((p) => p.name === initial.name);
       if (decl?.role === "value") return propTypeToType(decl.type);
     }
+    // A value of the game state (`useState(battle)`): its type, as the store gives it.
+    if (initial.kind === "StateRead") {
+      const type = this.stateTypes.get(initial.state);
+      if (type) return type;
+    }
     // Made by a function (a runtime factory, or one from a .ts file): typed by what the function returns.
     if (initial.kind === "Call" && (initial.callee.kind === "Function" || initial.callee.kind === "Plain") && !initial.callee.name.startsWith("Math.")) {
       return { kind: "SourceType", text: `ReturnType<typeof ${initial.callee.name}>` };
@@ -436,4 +460,17 @@ export class HookLowering extends ExpressionLowering {
     }
     return inferred;
   }
+}
+
+/**
+ * A derived value that calls a function or a method (`heroOf(run)`, `enemies.filter(…)`, `name.toUpperCase()`) is a memo: worked out
+ * once, and again only when what it reads changes, rather than at each place it is used. One that only reads and combines values
+ * (`health < 25`, `hero.x`) is written where it is used, which costs nothing.
+ */
+function memoized(key: string, value: ExprIR): ExprIR {
+  if (value.kind === "Memo") return value;
+  // A call inside another memo (`const cost = focus.upgrade`, `focus` being one) is already worked out once: reading it costs nothing.
+  const calls = (e: ExprIR): boolean =>
+    e.kind !== "Memo" && ((e.kind === "Call" && (e.callee.kind === "Plain" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod")) || childExpressions(e).some(calls));
+  return calls(value) ? { kind: "Memo", key, value } : value;
 }

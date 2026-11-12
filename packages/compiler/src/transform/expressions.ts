@@ -3,7 +3,7 @@ import { SyntaxKind, type Node, type ObjectLiteralExpression, type CallExpressio
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock, isElementAccessExpression, isNonNullExpression } from "typescript/ast/is";
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { assertNever, ARRAY_METHODS, MUTATING_ARRAY_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
+import { assertNever, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
 import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
 import { lowerFunction } from "./statements.ts";
 import { BINARY_OPERATORS, UNARY_OPERATORS } from "./helpers.ts";
@@ -317,6 +317,8 @@ export class ExpressionLowering extends LoweringBase {
       const name = `Math.${callee.name.text}`;
       const expected = MATH_FUNCTIONS[name];
       if (expected !== undefined) result = { callee: { kind: "Function", name }, expected, label: name };
+    } else if (isIdentifier(callee) && Object.hasOwn(GLOBAL_FUNCTIONS, callee.text) && !this.scope.has(callee.text) && !this.plainImports.has(callee.text)) {
+      result = { callee: { kind: "Function", name: callee.text }, expected: GLOBAL_FUNCTIONS[callee.text]!, label: callee.text };
     } else if (isIdentifier(callee) && this.manifest.functions[callee.text] !== undefined && !this.scope.has(callee.text)) {
       this.requireImport(callee.text, callee);
       result = { callee: { kind: "Function", name: callee.text }, expected: this.manifest.functions[callee.text]!, label: callee.text };
@@ -369,6 +371,22 @@ export class ExpressionLowering extends LoweringBase {
         return { kind: "Call", callee: { kind: "ValueMethod", receiver, name }, args };
       }
     }
+    // A method of a string or a number (`name.toUpperCase()`, `id.startsWith("bind:")`): changes nothing, so it is called as written.
+    if (VALUE_METHODS.has(name) && !Object.hasOwn(ARRAY_METHODS, name)) {
+      if (callee.questionDotToken || node.questionDotToken) {
+        this.report(code, `Optional calls of \`${name}\` are not supported: check the value first.`, node);
+        return null;
+      }
+      const receiver = this.lowerNode(callee.expression);
+      if (!receiver) return null;
+      const args: ExprIR[] = [];
+      for (const argument of node.arguments) {
+        const lowered = this.lowerNode(argument);
+        if (!lowered) return null;
+        args.push(lowered);
+      }
+      return { kind: "Call", callee: { kind: "ValueMethod", receiver, name }, args };
+    }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
       this.report(
         code,
@@ -380,7 +398,7 @@ export class ExpressionLowering extends LoweringBase {
     if (!Object.hasOwn(ARRAY_METHODS, name)) {
       this.report(
         code,
-        `'${name}' is not an allowlisted call. Supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, runtime functions from the manifest, methods of handler parameters, and the array methods ${Object.keys(ARRAY_METHODS).join(", ")}.`,
+        `'${name}' is not an allowlisted call. Supported: Math.abs/floor/ceil/round/sign/sqrt/sin/cos/min/max, String/Number/Boolean, runtime functions from the manifest, methods of handler parameters, the array methods ${Object.keys(ARRAY_METHODS).join(", ")}, and the string and number methods ${[...VALUE_METHODS].join(", ")}.`,
         callee.name,
       );
       return null;

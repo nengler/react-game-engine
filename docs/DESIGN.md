@@ -595,6 +595,18 @@ list, `{children}`, a `<Route>`, and children on an item that switches between t
 **`undefined` is a value** (`PlainRef "undefined"`), in render and in handlers: `{gate !== undefined && <Sprite … />}`,
 `if (key !== undefined) bindKey(action, key)`.
 
+**Methods of strings and numbers, destructured and memoized derived values, and `useState` from the game state** (also 2026-11-12,
+from the second Bramble review). `VALUE_METHODS` lists the string and number methods that change nothing (`padStart`, `startsWith`,
+`toUpperCase`, `toFixed`, …), called as written (`CalleeIR` `ValueMethod`); `String`, `Number` and `Boolean` are allowed as
+functions; `flatMap`, `join`, `at`, `lastIndexOf` and `flat` joined the array methods (ES2023's `toSorted` and the like wait for the
+target to move past ES2022). A derived `const` may destructure (`const { x, y: top } = heroOf(run)`, `const [a, , c] = trio`): each
+name is a member or index read of the one value. A derived value that calls a function or a method is an `ExprIR` `Memo`: the
+generated code is `this.$memo(key, [deps], () => value)` (`GameObject.$memo`), the deps being the state and props it reads, so it
+is worked out once per change of them wherever it is used (render, handlers, field initialisers), as React's `useMemo`; in `super(…)`'s
+arguments, where `this` is not there yet, it is written in place. A call inside a nested memo does not make a memo of its own.
+`useState`'s initial value may read the game state (the component's snapshot of it, already a field above), not the component's
+own state.
+
 **A game-state value named like a member of the root** (`const name = useGame((s) => s.speaker)` in an `<Entity>` root) is kept in the
 field `$name`; the author's name is unchanged. A `useState` with such a name is still `RGE1103`, since its field and setter are the
 component's public API.

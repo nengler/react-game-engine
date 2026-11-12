@@ -136,6 +136,10 @@ export class LoweringBase {
       case "StringLiteral":
       case "TemplateLiteral": return "string";
       case "BooleanLiteral": return "boolean";
+      case "StateRead": {
+        const type = this.stateTypes.get(expr.state);
+        return type?.kind === "Primitive" ? (type.name as ValueType) : null;
+      }
       case "PropRead": {
         const decl = this.propDecls.find((p) => p.name === expr.name);
         return decl?.role === "value" && decl.type.kind === "Primitive" ? decl.type.name : null;

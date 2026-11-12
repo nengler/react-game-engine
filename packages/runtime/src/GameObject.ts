@@ -333,6 +333,22 @@ export class GameObject<P extends object = {}> {
     }
   }
 
+  #memos: Map<string, { readonly deps: readonly unknown[]; readonly value: unknown }> | undefined;
+
+  /**
+   * For generated code: a component's derived value (`const hero = heroOf(run)`), worked out again only when one of `deps` (the state
+   * and props it reads) is a different value than last time (`===`), as React's `useMemo`. So a render, and each handler that reads
+   * it, sees the same value for as long as what it is made from stays the same.
+   */
+  $memo<T>(key: string, deps: readonly unknown[], compute: () => T): T {
+    this.#memos ??= new Map();
+    const last = this.#memos.get(key);
+    if (last !== undefined && last.deps.length === deps.length && last.deps.every((d, i) => d === deps[i])) return last.value as T;
+    const value = compute();
+    this.#memos.set(key, { deps, value });
+    return value;
+  }
+
   /** Request a render pass for this object. */
   markDirty(): void {
     if (this.#dirty) return;
