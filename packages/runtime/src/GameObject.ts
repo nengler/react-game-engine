@@ -19,6 +19,9 @@ type StructureOp =
  * built-in's constructor, so they are available to field initialisers, which
  * run right after `super()` returns.
  */
+/** The memos of each object that has any (`GameObject.$memo`); gone with the object. */
+const memoCaches = new WeakMap<object, Map<string, { readonly deps: readonly unknown[]; readonly value: unknown }>>();
+
 export class GameObject<P extends object = {}> {
   /** Marks runtime-provided classes; compiled components do not have this as an own static. */
   static readonly intrinsic = true;
@@ -333,19 +336,19 @@ export class GameObject<P extends object = {}> {
     }
   }
 
-  #memos: Map<string, { readonly deps: readonly unknown[]; readonly value: unknown }> | undefined;
-
   /**
    * For generated code: a component's derived value (`const hero = heroOf(run)`), worked out again only when one of `deps` (the state
    * and props it reads) is a different value than last time (`===`), as React's `useMemo`. So a render, and each handler that reads
-   * it, sees the same value for as long as what it is made from stays the same.
+   * it, sees the same value for as long as what it is made from stays the same. (The cache is kept outside the object, so objects
+   * that have no memos are laid out exactly as before: the bench's frame time is measured on those.)
    */
   $memo<T>(key: string, deps: readonly unknown[], compute: () => T): T {
-    this.#memos ??= new Map();
-    const last = this.#memos.get(key);
+    let memos = memoCaches.get(this);
+    if (memos === undefined) memoCaches.set(this, (memos = new Map()));
+    const last = memos.get(key);
     if (last !== undefined && last.deps.length === deps.length && last.deps.every((d, i) => d === deps[i])) return last.value as T;
     const value = compute();
-    this.#memos.set(key, { deps, value });
+    memos.set(key, { deps, value });
     return value;
   }
 
