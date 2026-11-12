@@ -83,7 +83,8 @@ export async function checkCommand(args: readonly string[]): Promise<number> {
         if (!hasTests(game)) return { ok: true, detail: "no tests", output: "" };
         // Under an outer `node --test`, NODE_TEST_CONTEXT would make the inner run report to it instead of printing.
         const { NODE_TEST_CONTEXT: _outer, ...env } = process.env;
-        const r = node(["--test", "--test-reporter=spec", "test/**/*.test.ts"], game.dir, env);
+        // `--enable-source-maps`: a failure inside a component names its own line in `src/`, not the generated file's.
+        const r = node(["--enable-source-maps", "--test", "--test-reporter=spec", "test/**/*.test.ts"], game.dir, env);
         const count = (label: string): string => new RegExp(`^ℹ ${label} (\\d+)`, "m").exec(r.output)?.[1] ?? "?";
         return { ok: r.ok, detail: `${count("pass")} passed, ${count("fail")} failed, ${count("skipped")} skipped`, output: r.output };
       },

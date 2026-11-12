@@ -66,10 +66,13 @@ export function compilerCli(): string {
   return [join(dir, "cli.ts"), join(dir, "cli.js")].find((path) => existsSync(path)) ?? join(dir, "cli.js");
 }
 
-/** The command line that compiles the game in `gameDir`, as `rge check` does. */
+/**
+ * The command line that compiles the game in `gameDir`, as `rge check` does. It writes a source map beside each generated file, so
+ * a Node run with `--enable-source-maps` names the component's own line in an error (`src/Play.tsx:20:3`), not the generated one.
+ */
 export function compileArgs(gameDir: string): string[] {
   const settings = readGameSettings(gameDir);
-  const args = [compilerCli(), settings.src ?? "src", settings.generated ?? "generated"];
+  const args = [compilerCli(), settings.src ?? "src", settings.generated ?? "generated", "--source-maps"];
   const scenes = settings.scenes ?? "scenes";
   if (existsSync(join(gameDir, scenes))) args.push("--scenes", scenes);
   const assets = settings.assets ?? "assets";
