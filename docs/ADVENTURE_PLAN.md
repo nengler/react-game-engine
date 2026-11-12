@@ -264,7 +264,7 @@ record for every filled cell ("culled to none (a map is a room, not a world)").
   - If it is building the subtree, mount the next map one step early, as Kite finding 10 suggested.
 - **Target:** no step over 16.7 ms under Node on the cloud VM, recorded in `NATIVE_PLAN.md`.
 
-**2.4 Entities off screen, measured.** *(Not yet: there are no enemies until M5; the ones in the world now are 4 people.)* One overworld map holds about 40 enemies and NPCs. Measure the busiest view first. If
+**2.4 Entities off screen, measured.** *(Measured after M5, 2026-11-12: 11 enemies and 4 people, mean step 0.75 ms; no filtering needed.)* One overworld map holds about 40 enemies and NPCs. Measure the busiest view first. If
 rendering the ones off screen costs too much:
 
 - **First**, the game filters its lists by distance to the view, with a computed selector (no engine change).
@@ -387,6 +387,8 @@ a built-in only if it is awkward, and the outcome is recorded either way.
 and mouse.
 
 ### M5. Enemies (engine and game; \~4 days)
+
+*(Built 2026-11-12: `findPath` / `lineOfSight` with tests and a bench scene; Bramble's beetle and wisp, combat and invulnerability, with 10 tests including a wisp that follows a path round a wall. The `blocked` function stayed in the game: it was not written twice.)*
 
 **5.1 `findPath` and `lineOfSight`** in `packages/runtime/src/path.ts`, exported from `@rge/runtime`:
 

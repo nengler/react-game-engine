@@ -6,9 +6,10 @@
  * talking, picking things up, cutting bushes, shrines, hearts and dying, the gate, and the save (`saveOf`, `loadRun`).
  */
 import { moveActorX, moveActorY, type PixelActor } from "@rge/runtime";
-import { BELLS_NEEDED, BODY, BODY_OFFSET, INVENTORY_SLOTS, MAX_HEARTS, NOTICE_SECONDS, REACH, REVEAL_CPS, SAVE_VERSION, SPEED, TILE } from "./constants.ts";
+import { BELLS_NEEDED, BODY, BODY_OFFSET, INVENTORY_SLOTS, INVULNERABLE, MAX_HEARTS, NOTICE_SECONDS, REACH, REVEAL_CPS, SAVE_VERSION, SPEED, SWING_SIZE, SWING_TIME, TILE } from "./constants.ts";
+import { knockBack, spawnEnemy, stepEnemy, type Enemy, type EnemyWorld } from "./enemies.ts";
 import { DIALOGUE, NEAREST_BELL, type NpcId } from "./dialogue.ts";
-import { cellAt, findDoor, MAPS, type Door, type ItemId, type MapId } from "./maps.ts";
+import { cellAt, findDoor, MAP_IDS, MAPS, mapSize, type Door, type ItemId, type MapId } from "./maps.ts";
 
 export interface Talk {
   readonly npc: NpcId;
@@ -36,6 +37,15 @@ export interface Run {
   /** The last shrine touched: where the character returns when the hearts run out. */
   readonly shrine: { readonly map: MapId; readonly col: number; readonly row: number };
   readonly talk: Talk | null;
+  /** Every enemy still alive, on every map: only the ones on the character's map are stepped, the rest keep their place. */
+  readonly enemies: readonly Enemy[];
+  /** Ids of enemies defeated (kept in a save: they stay defeated). */
+  readonly defeated: readonly string[];
+  /** Seconds the character cannot be hurt, and seconds left of the swing. */
+  readonly invuln: number;
+  readonly swing: number;
+  /** The state of the generator the enemies use (see `nextRandom`). */
+  readonly rng: number;
   /** The shrine the character is standing on, so that stepping onto one saves once and standing there does not save every step. */
   readonly onShrine: string | null;
   /** A line shown for a moment (an item card, a locked door), and how long it has left. */
@@ -64,6 +74,8 @@ export type GameEvent =
   | { readonly type: "gate-locked"; readonly bells: number }
   | { readonly type: "cut"; readonly col: number; readonly row: number }
   | { readonly type: "swing" }
+  | { readonly type: "enemy-hit"; readonly id: string }
+  | { readonly type: "enemy-defeated"; readonly id: string }
   | { readonly type: "shrine"; readonly id: string }
   | { readonly type: "hurt"; readonly hearts: number }
   | { readonly type: "died" }
@@ -81,6 +93,11 @@ const START: Run["shrine"] = { map: "overworld", col: 6, row: 42 };
 /** Where a body stands when placed on a tile. */
 export const bodyAt = (col: number, row: number): { x: number; y: number } => ({ x: col * TILE + BODY_OFFSET, y: row * TILE + BODY_OFFSET });
 
+/** Every enemy of every map that has not been defeated, at its spawn. */
+export function spawnAll(defeated: readonly string[]): Enemy[] {
+  return MAP_IDS.flatMap((map) => MAPS[map].enemies.filter((e) => !defeated.includes(e.id)).map((e) => spawnEnemy(e.id, e.kind, map, e.col, e.row)));
+}
+
 export function newRun(): Run {
   const at = bodyAt(START.col, START.row + 1);
   return {
@@ -97,6 +114,11 @@ export function newRun(): Run {
     cut: [],
     shrine: START,
     talk: null,
+    enemies: spawnAll([]),
+    defeated: [],
+    invuln: 0,
+    swing: 0,
+    rng: 12345,
     onShrine: null,
     notice: null,
     noticeLeft: 0,
@@ -111,12 +133,38 @@ export const bushKey = (map: MapId, col: number, row: number): string => `${map}
 
 /** Is the tile solid to the character: wall, water, or a bush that has not been cut. */
 function solidTile(run: Run, col: number, row: number): boolean {
-  const def = MAPS[run.map];
-  // Doors and the gate are set into walls: the cell is open to step on.
-  if (def.doors.some((d) => d.col === col && d.row === row) || (def.gate?.col === col && def.gate.row === row)) return false;
-  const ch = cellAt(run.map, col, row);
+  return solidOn(run, run.map, col, row, false);
+}
+
+/** `solidTile` for any map. `doorsSolid`: doors and the gate are walls to enemies, which never go through them. */
+function solidOn(run: Run, map: MapId, col: number, row: number, doorsSolid: boolean): boolean {
+  const def = MAPS[map];
+  // Doors and the gate are set into walls: the cell is open to step on (by the character).
+  if (def.doors.some((d) => d.col === col && d.row === row) || (def.gate?.col === col && def.gate.row === row)) return doorsSolid;
+  const ch = cellAt(map, col, row);
   if (ch === "#" || ch === "~") return true;
-  return ch === "b" && !run.cut.includes(bushKey(run.map, col, row));
+  return ch === "b" && !run.cut.includes(bushKey(map, col, row));
+}
+
+const overlaps = (ax: number, ay: number, bx: number, by: number, w: number): boolean => ax < bx + w && ax + w > bx && ay < by + w && ay + w > by;
+
+/** What enemies walk through: the rules for tiles and people, seen from one run. Actors block each other (people, other enemies). */
+function enemyWorld(run: Run): EnemyWorld {
+  return {
+    solid: (map, col, row) => solidOn(run, map, col, row, true),
+    blocked: (map, x, y, self) => {
+      const c0 = Math.floor(x / TILE);
+      const c1 = Math.floor((x + BODY - 1) / TILE);
+      const r0 = Math.floor(y / TILE);
+      const r1 = Math.floor((y + BODY - 1) / TILE);
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) if (solidOn(run, map, c, r, true)) return true;
+      for (const npc of MAPS[map].npcs) if (overlaps(x, y, npc.col * TILE, npc.row * TILE, TILE) && BODY <= TILE) return true;
+      for (const other of run.enemies) if (other.id !== self && other.map === map && overlaps(x, y, other.x, other.y, BODY)) return true;
+      return false;
+    },
+    width: (map) => mapSize(map).cols,
+    height: (map) => mapSize(map).rows,
+  };
 }
 
 /** The people on the map are solid boxes the size of a tile. */
@@ -269,7 +317,27 @@ function act(run: Run, events: GameEvent[]): Run {
     return withNotice(run, "The bush is too thick to push through.");
   }
   events.push({ type: "swing" });
-  return run;
+  // The swing: a small box in front of the character. Each enemy in it loses a heart and is knocked back; at none it is defeated.
+  const c = centre(run);
+  const len = Math.hypot(run.fx, run.fy) || 1;
+  const sx = c.x + (run.fx / len) * REACH - SWING_SIZE / 2;
+  const sy = c.y + (run.fy / len) * REACH - SWING_SIZE / 2;
+  const world = enemyWorld(run);
+  let enemies: Enemy[] = [];
+  let defeated = run.defeated;
+  for (const e of run.enemies) {
+    if (e.map !== run.map || !(sx < e.x + BODY && sx + SWING_SIZE > e.x && sy < e.y + BODY && sy + SWING_SIZE > e.y)) {
+      enemies.push(e);
+      continue;
+    }
+    const hp = e.hp - 1;
+    events.push({ type: "enemy-hit", id: e.id });
+    if (hp <= 0) {
+      events.push({ type: "enemy-defeated", id: e.id });
+      defeated = [...defeated, e.id];
+    } else enemies.push({ ...knockBack({ ...e, hp }, c.x, c.y, world), flash: 0.2, path: [] });
+  }
+  return { ...run, swing: SWING_TIME, enemies, defeated };
 }
 
 export function step(run: Run, input: Input, dt: number): StepResult {
@@ -279,6 +347,7 @@ export function step(run: Run, input: Input, dt: number): StepResult {
   if (next.noticeLeft === 0 && next.notice !== null) next = { ...next, notice: null };
 
   if (input.action) next = act(next, events);
+  next = { ...next, invuln: Math.max(0, next.invuln - dt), swing: Math.max(0, next.swing - dt) };
   if (next.talk !== null) {
     // The world waits while someone is talking; the page types itself out.
     const length = [...(pagesOf(next, next.talk.npc)[next.talk.page] ?? "")].length;
@@ -294,6 +363,27 @@ export function step(run: Run, input: Input, dt: number): StepResult {
     next = { ...next, x: actor.x, y: actor.y, rx: actor.rx, ry: actor.ry, fx: Math.sign(input.dx) || (input.dy !== 0 ? 0 : next.fx), fy: Math.sign(input.dy) || (input.dx !== 0 ? 0 : next.fy) };
     next = touch(next, events);
   }
+  // The enemies on this map: each moves, and one touching the character hurts them (then they have a moment of safety).
+  if (next.enemies.some((e) => e.map === next.map)) {
+    const world = enemyWorld(next);
+    let random = next.rng;
+    const moved: Enemy[] = [];
+    for (const e of next.enemies) {
+      if (e.map !== next.map) {
+        moved.push(e);
+        continue;
+      }
+      const stepped = stepEnemy(e, dt, next, world, random);
+      random = stepped.random;
+      moved.push(stepped.enemy);
+    }
+    next = { ...next, enemies: moved, rng: random };
+    if (next.invuln === 0 && moved.some((e) => e.map === next.map && overlaps(next.x, next.y, e.x, e.y, BODY))) {
+      const hit = hurt(next, 1);
+      events.push(...hit.events);
+      next = { ...hit.run, invuln: hit.events.some((e) => e.type === "died") ? 0 : INVULNERABLE };
+    }
+  }
   return { run: next, events };
 }
 
@@ -305,10 +395,12 @@ export interface SaveData {
   readonly cut: readonly string[];
   readonly shrine: Run["shrine"];
   readonly time: number;
+  /** Ids of enemies defeated. Optional so a save made before there were enemies still loads. */
+  readonly defeated?: readonly string[];
 }
 
 export function saveOf(run: Run): SaveData {
-  return { version: SAVE_VERSION, items: { ...run.items }, taken: [...run.taken], cut: [...run.cut], shrine: { ...run.shrine }, time: run.time };
+  return { version: SAVE_VERSION, items: { ...run.items }, taken: [...run.taken], cut: [...run.cut], shrine: { ...run.shrine }, time: run.time, defeated: [...run.defeated] };
 }
 
 /** A run from a save: standing at its shrine with full hearts. Null for a save of another version or one that is not a save. */
@@ -317,7 +409,8 @@ export function loadRun(save: unknown): Run | null {
   const s = save as Partial<SaveData>;
   if (s.version !== SAVE_VERSION || s.items === undefined || s.taken === undefined || s.cut === undefined || s.shrine === undefined || typeof s.time !== "number") return null;
   const at = bodyAt(s.shrine.col, s.shrine.row + 1);
-  return { ...newRun(), map: s.shrine.map, x: at.x, y: at.y, items: { ...s.items }, taken: [...s.taken], cut: [...s.cut], shrine: { ...s.shrine }, time: s.time };
+  const defeated = Array.isArray(s.defeated) ? [...s.defeated] : [];
+  return { ...newRun(), map: s.shrine.map, x: at.x, y: at.y, items: { ...s.items }, taken: [...s.taken], cut: [...s.cut], shrine: { ...s.shrine }, time: s.time, defeated, enemies: spawnAll(defeated) };
 }
 
 /** The inventory's slots, eight of them, in a fixed order; a slot the character has nothing for is empty (`item` is ""). */

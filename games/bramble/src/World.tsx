@@ -5,7 +5,7 @@ import { TILE } from "./rules/constants.ts";
 /** The map the character is on: its ground from the Tiled map, and over it the things the rules know about, drawn as plain shapes until the art exists. */
 export function World() {
   const map = useGame((s) => s.run.map);
-  const { bushes, doors, gates, shrines, pickups, npcs } = useGame((s) => s.view);
+  const { bushes, doors, gates, shrines, pickups, npcs, beetles, wisps, swings } = useGame((s) => s.view);
   return (
     <Entity name="World">
       <Tilemap map={map} image="tiles.png" layer="Ground" />
@@ -26,6 +26,15 @@ export function World() {
       ))}
       {npcs.map((n) => (
         <Shape key={n.id} kind="rect" width={12} height={14} color="#6a8be0" transform={{ x: n.x, y: n.y }} />
+      ))}
+      {beetles.map((b) => (
+        <Shape key={b.id} kind="rect" width={12} height={12} color="#7a3b2a" transform={{ x: b.x, y: b.y }} />
+      ))}
+      {wisps.map((w) => (
+        <Shape key={w.id} kind="circle" width={12} height={12} color="#b58cff" transform={{ x: w.x, y: w.y }} />
+      ))}
+      {swings.map((w) => (
+        <Shape key={w.id} kind="rect" width={14} height={14} color="#ffffffaa" transform={{ x: w.x, y: w.y }} />
       ))}
     </Entity>
   );

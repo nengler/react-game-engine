@@ -34,6 +34,13 @@ export interface Placed {
   readonly row: number;
 }
 
+export type EnemyKind = "beetle" | "wisp";
+
+export interface EnemySpawn extends Placed {
+  readonly id: string;
+  readonly kind: EnemyKind;
+}
+
 export interface MapDef {
   readonly id: MapId;
   readonly name: string;
@@ -42,6 +49,7 @@ export interface MapDef {
   readonly pickups: readonly Pickup[];
   readonly npcs: readonly (Placed & { readonly id: NpcId })[];
   readonly shrines: readonly (Placed & { readonly id: string })[];
+  readonly enemies: readonly EnemySpawn[];
   /** The gate that ends the game, on the overworld only. */
   readonly gate?: Placed;
 }
@@ -91,6 +99,15 @@ function overworld(): MapDef {
       { id: "shrine-middle", col: 21, row: 29 },
       { id: "shrine-north", col: 72, row: 9 },
     ],
+    enemies: [
+      { id: "beetle-1", kind: "beetle", col: 16, row: 38 },
+      { id: "beetle-2", kind: "beetle", col: 34, row: 44 },
+      { id: "beetle-3", kind: "beetle", col: 12, row: 18 },
+      { id: "beetle-4", kind: "beetle", col: 56, row: 40 },
+      { id: "wisp-1", kind: "wisp", col: 22, row: 20 },
+      { id: "wisp-2", kind: "wisp", col: 48, row: 16 },
+      { id: "wisp-3", kind: "wisp", col: 60, row: 8 },
+    ],
     gate: { col: 40, row: 2 },
   };
 }
@@ -114,6 +131,7 @@ function cave(): MapDef {
     ],
     npcs: [],
     shrines: [],
+    enemies: [{ id: "wisp-cave", kind: "wisp", col: 20, row: 8 }, { id: "beetle-cave", kind: "beetle", col: 8, row: 13 }],
   };
 }
 
@@ -132,6 +150,7 @@ function house(): MapDef {
     ],
     npcs: [],
     shrines: [],
+    enemies: [],
   };
 }
 
@@ -156,6 +175,7 @@ function maze(): MapDef {
     pickups: [{ id: "bell-maze", item: "bell", col: 15, row: 1 }],
     npcs: [],
     shrines: [],
+    enemies: [{ id: "beetle-maze", kind: "beetle", col: 10, row: 13 }],
   };
 }
 

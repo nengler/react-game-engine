@@ -50,7 +50,7 @@ export function Play() {
       <World />
       <Camera bounds={[0, 0, size.width, size.height]} deadzone={[24, 16]} smoothing={0.12}>
         <Entity name="Hero" transform={{ x: run.x, y: run.y }}>
-          <Shape kind="rect" width={BODY} height={BODY} color="#f28b3c" />
+          <Shape kind="rect" width={BODY} height={BODY} color={run.invuln > 0 ? "#fbd2a8" : "#f28b3c"} />
         </Entity>
       </Camera>
       <Hud>

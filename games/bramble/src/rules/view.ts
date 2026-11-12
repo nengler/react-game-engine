@@ -2,7 +2,7 @@
  * What the screen shows of a map, as plain lists: the compiler's lists come from state or props, not from a computation in a
  * component, so the rules make them and the game state holds them (`view`), updated when the run changes.
  */
-import { TILE } from "./constants.ts";
+import { BODY, REACH, SWING_SIZE, TILE } from "./constants.ts";
 import { DIALOGUE } from "./dialogue.ts";
 import { MAPS } from "./maps.ts";
 import { bushKey, pagesOf, slotsOf, type Run, type Slot } from "./run.ts";
@@ -32,6 +32,10 @@ export interface View {
   readonly npcs: readonly Spot[];
   /** The inventory's eight slots, empty ones too. */
   readonly slots: readonly Slot[];
+  /** The enemies on this map, by kind, and the swing's box while it lasts (zero or one). */
+  readonly beetles: readonly Spot[];
+  readonly wisps: readonly Spot[];
+  readonly swings: readonly Spot[];
   readonly dialogue: DialogueView;
 }
 
@@ -52,6 +56,9 @@ export function viewOf(run: Run): View {
     pickups: def.pickups.filter((p) => !run.taken.includes(p.id)).map((p) => at(p.id, p.col, p.row, 4, 4)),
     npcs: def.npcs.map((n) => at(n.id, n.col, n.row, 2, 1)),
     slots: slotsOf(run),
+    beetles: run.enemies.filter((e) => e.map === run.map && e.kind === "beetle").map((e) => ({ id: e.id, x: e.x - 1, y: e.y - 1 })),
+    wisps: run.enemies.filter((e) => e.map === run.map && e.kind === "wisp").map((e) => ({ id: e.id, x: e.x - 1, y: e.y - 1 })),
+    swings: run.swing > 0 ? [{ id: "swing", x: run.x + BODY / 2 + (run.fx / (Math.hypot(run.fx, run.fy) || 1)) * REACH - SWING_SIZE / 2, y: run.y + BODY / 2 + (run.fy / (Math.hypot(run.fx, run.fy) || 1)) * REACH - SWING_SIZE / 2 }] : [],
     dialogue: dialogueOf(run),
   };
 }

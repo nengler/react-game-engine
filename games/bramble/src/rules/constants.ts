@@ -23,3 +23,20 @@ export const BELLS_NEEDED = 3;
 export const SAVE_VERSION = 1;
 /** How fast a conversation's page types out, in characters a second. (guess) */
 export const REVEAL_CPS = 40;
+
+/** Enemies. All numbers are guesses until played. */
+export const BEETLE_SPEED = 22;
+export const BEETLE_HP = 2;
+export const WISP_SPEED = 34;
+export const WISP_HP = 3;
+/** A wisp notices the character this close (pixels) and in sight. */
+export const WISP_SIGHT = 6 * TILE;
+/** How often a chasing wisp finds a new path, and how long it chases after losing sight. */
+export const WISP_REPATH = 0.5;
+export const WISP_GIVE_UP = 4;
+/** How long the character cannot be hurt after being hurt, in seconds. */
+export const INVULNERABLE = 1;
+/** The swing: its box (pixels), how long it lasts, and how far it knocks an enemy back. */
+export const SWING_SIZE = 14;
+export const SWING_TIME = 0.15;
+export const KNOCKBACK = 14;

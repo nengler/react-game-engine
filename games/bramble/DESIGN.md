@@ -107,6 +107,18 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
 Escape opens it over the world (the world is not stepped): the inventory as eight slots, two rows, empty ones dark; then Resume and
 Save and quit (which writes the save and goes to the title). Picking up an item shows a card across the top.
 
+## Enemies (M5)
+
+`rules/enemies.ts`. A **beetle** (2 hearts, 22 px/s) wanders and turns at walls. A **wisp** (3 hearts, 34 px/s) drifts until the character
+is within six tiles and in sight (`lineOfSight`), then follows `findPath` (diagonals, `maxNodes` 600), found again every 0.5 s and
+not each step, and gives up 4 s after last seeing them. The swing (the action with nothing else in front) is a 14 px box that costs
+each enemy in it a heart and knocks it back 14 px; contact costs the character a heart, then a second of safety. Actors block each
+other (people, other enemies; doors are walls to enemies). Enemies keep their place when the character leaves a map; defeated ones
+are kept in the save. A seeded generator (`nextRandom`) makes wandering repeat exactly. Eleven enemies in all: seven on the overworld,
+two in the cave, one in the maze. With them the mean step is 0.75 ms under Node (was 0.6), so **plan 2.4 needs no filtering by
+distance**; the busiest view has a handful. Path searches are bounded by `maxNodes`: the bench's 100 corner-to-corner searches of the
+whole 80 × 48 map take 1.3 ms each under Node and 20 ms under QuickJS, which is why a wisp never searches the whole map.
+
 ## Run it
 
 ```
