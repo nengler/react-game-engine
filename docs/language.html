@@ -284,7 +284,8 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
       <li><code>const</code> locals</li>
       <li>Ref assignment: <code>r.current = …</code> (and <code>+=</code>, <code>%=</code>, <code>**=</code>, <code>??=</code>, <code>||=</code>, <code>&amp;&amp;=</code>, <code>r.current++</code>)</li>
       <li><code>let</code> locals, optionally typed (<code>let best: Enemy | null = null</code>), assigned the same ways</li>
-      <li><code>for (const e of enemies) { … }</code> with <code>break</code> and <code>continue</code></li>
+      <li><code>for (const e of enemies) { … }</code> with <code>break</code> and <code>continue</code>, destructuring too: <code>for (const [i, { id }] of enemies.entries())</code></li>
+      <li><code>switch</code> (falling through as in JS) and <code>{ … }</code> blocks</li>
       <li>Calling a sound function or a <code>useGame</code> action (<code>const events = step(input, dt)</code> may use its result)</li>
       <li>Calling a plain function, or a method of an imported object (<code>fx.burst(…)</code>)</li>
       <li>Calling a callback prop: <code>onDone?.()</code></li>

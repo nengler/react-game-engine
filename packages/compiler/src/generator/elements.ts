@@ -9,29 +9,33 @@ export class ElementEmitter extends HandlerEmitter {
   protected emitElementFields(children: readonly ChildIR[], presence: Presence): void {
     for (const child of children) {
       if (child.kind === "ChildrenSlot") continue;
-      const el = child.element;
-      const type = el.component.name;
-      if (child.kind === "KeyedListChild") {
-        // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
-        const itemType = child.alternate ? `${type} | ${child.alternate.component.name}` : type;
-        this.w.line(`readonly ${el.fieldName}Items: Map<string | number, ${itemType}> = new Map();`);
-        if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
-        this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
-        if (this.listNeedsRecords(child)) this.w.line(`#${el.fieldName}Records: Map<string | number, ${this.recordType(child)}> = new Map();`);
-        if (!isNamedListSource(child.source)) {
-          // A computed source (`spotsOf(run)`, `world.enemies.map(…)`): worked out by a method, whose return type names the items' type.
-          this.w.line(`${listSourceMethod(child)}() { return ${this.expr(child.source, true)}; }`);
-        }
-        continue;
-      }
-      const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
-      if (childPresence === "persistent") {
-        this.w.line(`readonly ${el.fieldName}: ${type} = ${this.construct(el)};`);
-      } else {
-        this.w.line(`${el.fieldName}: ${type} | null = null;`);
-      }
-      this.emitElementFields(el.children, childPresence);
+      this.w.at(child.element.span, () => this.emitElementField(child, presence));
     }
+  }
+
+  protected emitElementField(child: Exclude<ChildIR, { kind: "ChildrenSlot" }>, presence: Presence): void {
+    const el = child.element;
+    const type = el.component.name;
+    if (child.kind === "KeyedListChild") {
+      // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
+      const itemType = child.alternate ? `${type} | ${child.alternate.component.name}` : type;
+      this.w.line(`readonly ${el.fieldName}Items: Map<string | number, ${itemType}> = new Map();`);
+      if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
+      this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
+      if (this.listNeedsRecords(child)) this.w.line(`#${el.fieldName}Records: Map<string | number, ${this.recordType(child)}> = new Map();`);
+      if (!isNamedListSource(child.source)) {
+        // A computed source (`spotsOf(run)`, `world.enemies.map(…)`): worked out by a method, whose return type names the items' type.
+        this.w.line(`${listSourceMethod(child)}() { return ${this.expr(child.source, true)}; }`);
+      }
+      return;
+    }
+    const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
+    if (childPresence === "persistent") {
+      this.w.line(`readonly ${el.fieldName}: ${type} = ${this.construct(el)};`);
+    } else {
+      this.w.line(`${el.fieldName}: ${type} | null = null;`);
+    }
+    this.emitElementFields(el.children, childPresence);
   }
 
   /** Attach persistent children to their parents (constructor only). */
@@ -39,8 +43,10 @@ export class ElementEmitter extends HandlerEmitter {
     for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
-      this.emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
-      this.w.line(`${addChild(mount, ref, children, index)};`);
+      this.w.at(child.element.span, () => {
+        this.emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
+        this.w.line(`${addChild(mount, ref, children, index)};`);
+      });
       this.emitStaticWiring(child.element.children, mountOf(child.element, ref));
     }
   }
@@ -48,47 +54,52 @@ export class ElementEmitter extends HandlerEmitter {
   // -- render ---------------------------------------------------------------
 
   protected emitChildUpdates(children: readonly ChildIR[], mount: Mount, presence: Presence): void {
-    const w = this.w;
     for (const [index, child] of children.entries()) {
-      switch (child.kind) {
-        case "StaticChild": {
-          const el = child.element;
-          if (!this.elementNeedsRender(el)) break;
-          const ref = this.fieldRef(el);
-          if (presence === "persistent") {
-            this.emitElementUpdates(el, ref, "persistent");
-          } else {
-            // Inside a conditional subtree the field may be null (e.g. the subtree is unmounted).
-            w.block(`if (${ref} !== null)`, () => this.emitElementUpdates(el, ref, "conditional"));
-          }
-          break;
+      if (child.kind === "ChildrenSlot") continue; // nothing renders here: the parent mounts its elements
+      this.w.at(child.element.span, () => this.emitChildUpdate(child, children, index, mount, presence));
+    }
+  }
+
+  protected emitChildUpdate(child: ChildIR, children: readonly ChildIR[], index: number, mount: Mount, presence: Presence): void {
+    const w = this.w;
+    switch (child.kind) {
+      case "StaticChild": {
+        const el = child.element;
+        if (!this.elementNeedsRender(el)) return;
+        const ref = this.fieldRef(el);
+        if (presence === "persistent") {
+          this.emitElementUpdates(el, ref, "persistent");
+        } else {
+          // Inside a conditional subtree the field may be null (e.g. the subtree is unmounted).
+          w.block(`if (${ref} !== null)`, () => this.emitElementUpdates(el, ref, "conditional"));
         }
-        case "ConditionalChild": {
-          const el = child.element;
-          const ref = this.fieldRef(el);
-          w.open(`if (${this.expr(child.condition, true)}) {`);
-          w.block(`if (${ref} === null)`, () => {
-            w.line(`${ref} = ${this.construct(el)};`);
-            this.emitStaticTransform(el.transform, ref, transformTarget(el));
-            this.emitMountStatics(el.children, mountOf(el, ref));
-            w.line(`${queueAddChild(mount, ref, children, index)};`);
-          });
-          this.emitElementUpdates(el, ref, "conditional");
-          w.close();
-          w.open(`} else if (${ref} !== null) {`);
-          w.line(`${queueRemoveChild(mount, ref)};`);
-          for (const line of this.subtreeResets(el)) w.line(line);
-          w.close("}");
-          break;
-        }
-        case "KeyedListChild":
-          this.emitList(child, mount, index);
-          break;
-        case "ChildrenSlot":
-          break; // nothing renders here: the parent mounts its elements
-        default:
-          assertNever(child, "child");
+        break;
       }
+      case "ConditionalChild": {
+        const el = child.element;
+        const ref = this.fieldRef(el);
+        w.open(`if (${this.expr(child.condition, true)}) {`);
+        w.block(`if (${ref} === null)`, () => {
+          w.line(`${ref} = ${this.construct(el)};`);
+          this.emitStaticTransform(el.transform, ref, transformTarget(el));
+          this.emitMountStatics(el.children, mountOf(el, ref));
+          w.line(`${queueAddChild(mount, ref, children, index)};`);
+        });
+        this.emitElementUpdates(el, ref, "conditional");
+        w.close();
+        w.open(`} else if (${ref} !== null) {`);
+        w.line(`${queueRemoveChild(mount, ref)};`);
+        for (const line of this.subtreeResets(el)) w.line(line);
+        w.close("}");
+        break;
+      }
+      case "KeyedListChild":
+        this.emitList(child, mount, index);
+        break;
+      case "ChildrenSlot":
+        break; // nothing renders here: the parent mounts its elements
+      default:
+        assertNever(child, "child");
     }
   }
 

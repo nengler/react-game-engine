@@ -14,6 +14,8 @@ export type StatementIR =
   | LocalConstStmtIR
   | IfStmtIR
   | ForOfStmtIR
+  | SwitchStmtIR
+  | BlockStmtIR
   | LoopJumpStmtIR
   | ReturnStmtIR
   | SetStateStmtIR
@@ -22,18 +24,44 @@ export type StatementIR =
   | CallActionStmtIR;
 
 /**
- * `for (const enemy of enemies) { … }`: the body once per item of an array, in order. The item is a `const` local of the
- * body's scope. Bounded by the array, so a handler cannot loop forever (there is no `while`).
+ * `for (const enemy of enemies) { … }`: the body once per item of an array (or of `entries()`, `keys()`, `values()`), in order.
+ * The item is bound by `const`, as a name or destructured, in the body's scope. Bounded by the array, so a handler cannot loop
+ * forever (there is no `while`).
  */
 export interface ForOfStmtIR {
   readonly kind: "ForOf";
-  readonly item: LocalId;
-  readonly name: string;
+  readonly binding: LoopBindingIR;
   readonly iterable: ExprIR;
   readonly body: readonly StatementIR[];
 }
 
-/** `break;` or `continue;`, only inside a `for…of` of the same function. */
+/**
+ * How a `for…of` binds each item: a name, `[index, item]` (a hole is null), or `{ id, hp: health }`, nested as deep as written
+ * (`[i, { id }]`). Each name is a `const` local.
+ */
+export type LoopBindingIR =
+  | { readonly kind: "Name"; readonly local: LocalId; readonly name: string }
+  | { readonly kind: "Array"; readonly elements: readonly (LoopBindingIR | null)[] }
+  | { readonly kind: "Object"; readonly entries: readonly { readonly key: string; readonly value: LoopBindingIR }[] };
+
+/** `{ … }`: statements in a scope of their own. */
+export interface BlockStmtIR {
+  readonly kind: "Block";
+  readonly body: readonly StatementIR[];
+}
+
+/**
+ * `switch (kind) { case "a": …; break; default: … }`, written as it is: cases fall through as in JS. The cases share one scope,
+ * as in JS. `break` leaves the switch; `continue` belongs to an enclosing loop.
+ */
+export interface SwitchStmtIR {
+  readonly kind: "Switch";
+  readonly discriminant: ExprIR;
+  /** In source order; `test` is null for `default`. */
+  readonly cases: readonly { readonly test: ExprIR | null; readonly body: readonly StatementIR[] }[];
+}
+
+/** `break;` (in a `for…of` or a `switch`) or `continue;` (in a `for…of`), of the same function. */
 export interface LoopJumpStmtIR {
   readonly kind: "Break" | "Continue";
 }

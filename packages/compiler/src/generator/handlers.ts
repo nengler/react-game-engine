@@ -1,8 +1,19 @@
 // Layer 1 of ComponentGenerator: the handler methods, state setters and updaters, and the statements and callbacks inside them.
-import { assertNever, type FunctionIR, type HandlerHookIR, type IfStmtIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
+import { assertNever, type FunctionIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
-import { param, annotated, pendingRef } from "./helpers.ts";
+import { param, annotated, pendingRef, propertyKey } from "./helpers.ts";
 import { ExpressionEmitter } from "./expressions.ts";
+
+/** A `for…of` binding as written: `e`, `[i, e]`, `{ id, hp: health }`. */
+function loopBinding(binding: LoopBindingIR): string {
+  switch (binding.kind) {
+    case "Name": return binding.name;
+    case "Array": return `[${binding.elements.map((e) => (e === null ? "" : loopBinding(e))).join(", ")}]`;
+    case "Object":
+      return `{ ${binding.entries.map((e) => (e.value.kind === "Name" && e.value.name === e.key ? e.key : `${propertyKey(e.key)}: ${loopBinding(e.value)}`)).join(", ")} }`;
+    default: return assertNever(binding, "loop binding");
+  }
+}
 
 export class HandlerEmitter extends ExpressionEmitter {
   // -- handlers -------------------------------------------------------------
@@ -26,7 +37,7 @@ export class HandlerEmitter extends ExpressionEmitter {
       w.blank();
       if (hooks.length === 1 && !callsSuper) {
         const handler = hooks[0]!.handler;
-        w.block(`override ${signature.method}(${this.params(handler)}): void`, () => this.stmts(handler.body));
+        w.at(hooks[0]!.span, () => w.block(`override ${signature.method}(${this.params(handler)}): void`, () => this.stmts(handler.body)));
         continue;
       }
       // Every parameter the runtime passes when `super` is called with them; otherwise only as many as some handler declares (an unused one is a type error).
@@ -41,7 +52,7 @@ export class HandlerEmitter extends ExpressionEmitter {
       });
       hooks.forEach((hook, i) => {
         w.blank();
-        w.block(`#${signature.method}${i}(${this.params(hook.handler)}): void`, () => this.stmts(hook.handler.body));
+        w.at(hook.span, () => w.block(`#${signature.method}${i}(${this.params(hook.handler)}): void`, () => this.stmts(hook.handler.body)));
       });
     }
   }
@@ -125,7 +136,19 @@ export class HandlerEmitter extends ExpressionEmitter {
           w.line(`${stmt.mutable ? "let" : "const"} ${stmt.type ? annotated(stmt.name, stmt.type) : stmt.name} = ${this.expr(stmt.value, true)};`);
           break;
         case "ForOf":
-          w.block(`for (const ${stmt.name} of ${this.expr(stmt.iterable, true)})`, () => this.stmts(stmt.body));
+          w.block(`for (const ${loopBinding(stmt.binding)} of ${this.expr(stmt.iterable, true)})`, () => this.stmts(stmt.body));
+          break;
+        case "Block":
+          w.block("", () => this.stmts(stmt.body));
+          break;
+        case "Switch":
+          w.block(`switch (${this.expr(stmt.discriminant, true)})`, () => {
+            for (const c of stmt.cases) {
+              w.open(c.test === null ? "default:" : `case ${this.expr(c.test, true)}:`);
+              this.stmts(c.body);
+              w.close();
+            }
+          });
           break;
         case "Break":
           w.line("break;");

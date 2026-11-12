@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>] [--assets <dir>] [--assets <dir>]
+ * Usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>]
  * Type-checks every .tsx file in srcDir (imports from the authoring module,
  * prop types, hook arguments), compiles each to a .ts file in outDir, writes
  * the IR next to it as .ir.json, then type-checks the output. `--no-check`
@@ -17,6 +17,9 @@
  * `--assets <dir>` checks that every image, font and sound a component names with a literal is a file in that folder: a
  * build-time error with the nearest file name, not a magenta square or a silent sound at run time. The files of a
  * `createSounds({ … })` in any `.ts` or `.tsx` file under the source folder are checked too.
+ *
+ * `--source-maps` writes `<Name>.ts.map` next to each generated file, mapping each line to the component, hook or element of
+ * the `.tsx` it came from, so stack traces and debuggers show the source as written.
  *
  * `--scenes <dir>` validates every scene (.json) in the directory against
  * those prefabs, and imports every Tiled map (.tmj) to
@@ -46,9 +49,10 @@ function main(argv: readonly string[]): number {
   const positional: string[] = [];
   let runtimeModule: string | undefined;
   let check = true;
+  let sourceMaps = false;
   let scenesDir: string | undefined;
   let assetsDir: string | undefined;
-  const usage = "usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--scenes <dir>] [--assets <dir>]";
+  const usage = "usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>]";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === "--runtime" || arg === "--scenes" || arg === "--assets") {
@@ -63,6 +67,7 @@ function main(argv: readonly string[]): number {
       else if (arg === "--assets") assetsDir = value;
       else scenesDir = value;
     } else if (arg === "--no-check") check = false;
+    else if (arg === "--source-maps") sourceMaps = true;
     else if (arg.startsWith("--")) {
       console.error(`unknown option ${arg}\n${usage}`);
       return 2;
@@ -138,12 +143,14 @@ function main(argv: readonly string[]): number {
     for (const name of sourceNames) {
       const sourcePath = resolve(srcDir, name);
       // Use a cwd-relative name so generated headers and IR spans are machine-independent.
-      const result = compiler.compile(relative(process.cwd(), sourcePath), readFileSync(sourcePath, "utf8"));
+      const outPath = resolve(outDir, generatedFileName(name));
+      const map = sourceMaps ? { file: generatedFileName(name), source: relative(dirname(outPath), sourcePath).split(sep).join("/") } : undefined;
+      const result = compiler.compile(relative(process.cwd(), sourcePath), readFileSync(sourcePath, "utf8"), map);
       diagnostics.push(...result.diagnostics);
       if (!result.ok) continue;
-      const outPath = resolve(outDir, generatedFileName(name));
       const code = result.code;
       writeFileSync(outPath, code);
+      if (result.sourceMap !== undefined) writeFileSync(`${outPath}.map`, result.sourceMap);
       writeFileSync(join(outDir, name.replace(/\.tsx$/, ".ir.json")), JSON.stringify(result.ir, null, 2) + "\n");
       outputs.push({ fileName: outPath, text: code });
       modules.push({ ir: result.ir, generatedName: generatedFileName(name) });

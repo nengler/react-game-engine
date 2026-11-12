@@ -4,7 +4,12 @@ import {
   isBinaryExpression,
   isBlock,
   isCallExpression,
+  isArrayBindingPattern,
   isBreakStatement,
+  isObjectBindingPattern,
+  isOmittedExpression,
+  isCaseClause,
+  isSwitchStatement,
   isContinueStatement,
   isExpressionStatement,
   isForOfStatement,
@@ -23,6 +28,7 @@ import {
   localId,
   type AssignOperator,
   type AssignTargetIR,
+  type LoopBindingIR,
   type ExprIR,
   type FunctionIR,
   type ParamIR,
@@ -96,7 +102,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
     let body: StatementIR[] | null;
     if (isBlock(fn.body)) {
       // The body's top-level block shares the parameters' scope, as in JS: `(n) => { const n = 1; }` is a redeclaration.
-      body = lowerStatements(ctx, fn.body.statements, options, { newScope: false, inLoop: false });
+      body = lowerStatements(ctx, fn.body.statements, options, { newScope: false, jumps: NO_JUMPS });
     } else if (options.returns === "value") {
       const value = ctx.lowerExpression(fn.body);
       body = value && [{ kind: "Return", value }];
@@ -108,11 +114,18 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
   });
 }
 
-/** Where statements are lowered: in a block scope of their own (`const`s declared inside do not leak out), and inside a loop. */
+/** Which jumps the statements may make: `break` in a `for…of` or a `switch`, `continue` in a `for…of`, of the same function. */
+interface Jumps {
+  readonly break: boolean;
+  readonly continue: boolean;
+}
+
+const NO_JUMPS: Jumps = { break: false, continue: false };
+
+/** Where statements are lowered: in a block scope of their own (`const`s declared inside do not leak out), and what they may jump out of. */
 interface BlockOptions {
   readonly newScope: boolean;
-  /** `break` and `continue` are allowed: an enclosing `for…of` of the same function. */
-  readonly inLoop: boolean;
+  readonly jumps: Jumps;
 }
 
 function lowerStatements(ctx: LoweringContext, statements: readonly Statement[], options: FunctionOptions, block: BlockOptions): StatementIR[] | null {
@@ -120,7 +133,7 @@ function lowerStatements(ctx: LoweringContext, statements: readonly Statement[],
     const out: StatementIR[] = [];
     let ok = true;
     for (const statement of statements) {
-      const lowered = lowerStatement(ctx, statement, options, block.inLoop);
+      const lowered = lowerStatement(ctx, statement, options, block.jumps);
       if (lowered) out.push(lowered);
       else ok = false;
     }
@@ -129,12 +142,12 @@ function lowerStatements(ctx: LoweringContext, statements: readonly Statement[],
   return block.newScope ? ctx.inScope(lower) : lower();
 }
 
-function lowerStatement(ctx: LoweringContext, statement: Statement, options: FunctionOptions, inLoop: boolean): StatementIR | null {
+function lowerStatement(ctx: LoweringContext, statement: Statement, options: FunctionOptions, jumps: Jumps): StatementIR | null {
   if (isExpressionStatement(statement)) return lowerExpressionStatement(ctx, statement.expression, statement);
 
   if (isIfStatement(statement)) {
     const test = ctx.lowerExpression(statement.expression);
-    const branch = (s: Statement) => lowerStatements(ctx, isBlock(s) ? s.statements : [s], options, { newScope: true, inLoop });
+    const branch = (s: Statement) => lowerStatements(ctx, isBlock(s) ? s.statements : [s], options, { newScope: true, jumps });
     const thenBranch = branch(statement.thenStatement);
     const elseBranch = statement.elseStatement ? branch(statement.elseStatement) : [];
     return test && thenBranch && elseBranch && { kind: "If", test, then: thenBranch, else: elseBranch };
@@ -142,17 +155,25 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
 
   if (isForOfStatement(statement)) return lowerForOf(ctx, statement, options);
 
+  if (isBlock(statement)) {
+    const body = lowerStatements(ctx, statement.statements, options, { newScope: true, jumps });
+    return body && { kind: "Block", body };
+  }
+
+  if (isSwitchStatement(statement)) return lowerSwitch(ctx, statement, options, jumps);
+
   if (isBreakStatement(statement) || isContinueStatement(statement)) {
-    const word = isBreakStatement(statement) ? "break" : "continue";
+    const isBreak = isBreakStatement(statement);
+    const word = isBreak ? "break" : "continue";
     if (statement.label) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, `Labelled \`${word}\` is not supported: it leaves the innermost \`for…of\`.`, statement);
+      ctx.error(DiagnosticCode.UnsupportedStatement, `Labelled \`${word}\` is not supported: it leaves the innermost ${isBreak ? "`for…of` or `switch`" : "`for…of`"}.`, statement);
       return null;
     }
-    if (!inLoop) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, `\`${word}\` is only valid inside a \`for…of\` loop of the same function.`, statement);
+    if (!(isBreak ? jumps.break : jumps.continue)) {
+      ctx.error(DiagnosticCode.UnsupportedStatement, `\`${word}\` is only valid inside a ${isBreak ? "`for…of` loop or a `switch`" : "`for…of` loop"} of the same function.`, statement);
       return null;
     }
-    return { kind: isBreakStatement(statement) ? "Break" : "Continue" };
+    return { kind: isBreak ? "Break" : "Continue" };
   }
 
   if (isReturnStatement(statement)) {
@@ -204,39 +225,130 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
 
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
-    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`for…of\` (with \`break\` and \`continue\`), \`const\`, \`let\` and \`return\`.`,
+    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, \`for…of\` (with \`break\` and \`continue\`), \`const\`, \`let\` and \`return\`.`,
     statement,
   );
   return null;
 }
 
 /**
- * `for (const enemy of enemies) { … }`: the array is lowered first (it cannot read the item), then the body in a scope where
- * the item is a `const`, and `break` / `continue` are allowed.
+ * `for (const enemy of enemies) { … }`, `for (const [i, e] of enemies.entries())`, `for (const { id, hp } of enemies)`: the array is
+ * lowered first (it cannot read the item), then the body in a scope where the item's names are `const`s, and `break` /
+ * `continue` are allowed.
  */
 function lowerForOf(ctx: LoweringContext, statement: Statement & { kind: SyntaxKind.ForOfStatement }, options: FunctionOptions): StatementIR | null {
   const loop = statement as unknown as { awaitModifier?: Node; initializer: Node; expression: Expression; statement: Statement };
-  const shape = "A loop is written `for (const item of items) { … }`";
+  const shape = "A loop is written `for (const item of items) { … }` (or `const [i, item]`, `const { id, hp }`)";
   if (loop.awaitModifier) {
     ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: no \`await\`.`, statement);
     return null;
   }
   const list = loop.initializer;
   const decl = isVariableDeclarationList(list) && list.declarations.length === 1 ? list.declarations[0]! : null;
-  if (!decl || !isVariableDeclarationList(list) || (list.flags & NodeFlags.Const) === 0 || !isIdentifier(decl.name) || decl.type) {
-    ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: one \`const\` name, without destructuring or a type (the array gives it).`, list);
+  if (!decl || !isVariableDeclarationList(list) || (list.flags & NodeFlags.Const) === 0 || decl.type) {
+    ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: one \`const\`, without a type (the array gives it).`, list);
+    return null;
+  }
+  const pattern = loopPattern(decl.name);
+  if (pattern === null) {
+    ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: names and \`[…]\` / \`{…}\` patterns of them, no defaults or rests.`, decl.name);
     return null;
   }
   const iterable = ctx.lowerExpression(loop.expression);
   if (!iterable) return null;
-  const nameNode = decl.name;
   return ctx.inScope((scope) => {
-    const name = nameNode.text;
-    if (!checkFreshName(ctx, name, nameNode)) return null;
-    const item = localId(ctx.componentName, name, ctx.nextSerial());
-    scope.declare(name, { kind: "local", id: item, name, mutable: false });
-    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, inLoop: true });
-    return body && { kind: "ForOf", item, name, iterable, body };
+    // Each name of the pattern, declared as a `const` of the body's scope.
+    const bind = (pattern: LoopPattern): LoopBindingIR | null => {
+      switch (pattern.kind) {
+        case "name": {
+          if (!checkFreshName(ctx, pattern.name, pattern.node)) return null;
+          const local = localId(ctx.componentName, pattern.name, ctx.nextSerial());
+          scope.declare(pattern.name, { kind: "local", id: local, name: pattern.name, mutable: false });
+          return { kind: "Name", local, name: pattern.name };
+        }
+        case "array": {
+          const elements: (LoopBindingIR | null)[] = [];
+          for (const e of pattern.elements) {
+            const bound = e === null ? null : bind(e);
+            if (e !== null && bound === null) return null;
+            elements.push(bound);
+          }
+          return { kind: "Array", elements };
+        }
+        case "object": {
+          const entries: { key: string; value: LoopBindingIR }[] = [];
+          for (const e of pattern.entries) {
+            const value = bind(e.value);
+            if (!value) return null;
+            entries.push({ key: e.key, value });
+          }
+          return { kind: "Object", entries };
+        }
+      }
+    };
+    const binding = bind(pattern);
+    if (!binding) return null;
+    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: { break: true, continue: true } });
+    return body && { kind: "ForOf", binding, iterable, body };
+  });
+}
+
+type LoopPattern =
+  | { readonly kind: "name"; readonly name: string; readonly node: Node }
+  | { readonly kind: "array"; readonly elements: readonly (LoopPattern | null)[] }
+  | { readonly kind: "object"; readonly entries: readonly { readonly key: string; readonly value: LoopPattern }[] };
+
+/** A loop's binding: a name, or `[a, , b]` / `{ a, b: c }` of names and such patterns. Null for defaults, rests and computed keys. */
+function loopPattern(name: Node): LoopPattern | null {
+  if (isIdentifier(name)) return { kind: "name", name: name.text, node: name };
+  if (isArrayBindingPattern(name)) {
+    const elements: (LoopPattern | null)[] = [];
+    for (const element of name.elements) {
+      // A hole (`[, b]`): an omitted expression, or, as this parser gives it, an element with no name.
+      if (isOmittedExpression(element) || (!element.dotDotDotToken && !element.initializer && !element.name)) {
+        elements.push(null);
+        continue;
+      }
+      if (element.dotDotDotToken || element.initializer || !element.name) return null;
+      const inner = loopPattern(element.name);
+      if (!inner) return null;
+      elements.push(inner);
+    }
+    return elements.some((e) => e !== null) ? { kind: "array", elements } : null;
+  }
+  if (isObjectBindingPattern(name)) {
+    const entries: { key: string; value: LoopPattern }[] = [];
+    for (const element of name.elements) {
+      if (element.dotDotDotToken || element.initializer || !element.name) return null;
+      const key = element.propertyName === undefined ? (isIdentifier(element.name) ? element.name.text : null) : isIdentifier(element.propertyName) ? element.propertyName.text : null;
+      const value = loopPattern(element.name);
+      if (key === null || !value) return null;
+      entries.push({ key, value });
+    }
+    return entries.length > 0 ? { kind: "object", entries } : null;
+  }
+  return null;
+}
+
+/**
+ * `switch (x) { case a: …; break; default: … }`: written as it is, falling through as in JS. The cases share one scope (as in
+ * JS); `break` leaves the switch, and `continue` still belongs to an enclosing loop.
+ */
+function lowerSwitch(ctx: LoweringContext, statement: Statement & { kind: SyntaxKind.SwitchStatement }, options: FunctionOptions, jumps: Jumps): StatementIR | null {
+  const node = statement as unknown as { expression: Expression; caseBlock: { clauses: readonly Node[] } };
+  const discriminant = ctx.lowerExpression(node.expression);
+  return ctx.inScope(() => {
+    const cases: { test: ExprIR | null; body: StatementIR[] }[] = [];
+    let ok = discriminant !== null;
+    for (const clause of node.caseBlock.clauses) {
+      const isCase = isCaseClause(clause);
+      const test = isCase ? ctx.lowerExpression(clause.expression) : null;
+      const statements = (clause as unknown as { statements: readonly Statement[] }).statements;
+      const body = lowerStatements(ctx, statements, options, { newScope: false, jumps: { break: true, continue: jumps.continue } });
+      if ((isCase && !test) || !body) ok = false;
+      else cases.push({ test, body });
+    }
+    return ok && discriminant ? { kind: "Switch", discriminant, cases } : null;
   });
 }
 

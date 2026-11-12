@@ -62,6 +62,11 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 Each stage is a pure function of the previous stage's output. Only the parser
 and type checker talk to the TypeScript process.
 
+**Source maps** (`rge-compile --source-maps`, or `compile(name, text, { file, source })`): a version 3 map beside each
+generated file. Each generated line maps to the start of the construct it was written for (the component, a hook, an element:
+the IR's spans), not to the exact expression, so a stack trace through `node --enable-source-maps` names the right line of
+the `.tsx`. Spans already point at the source as written, through the custom-hook inliner's `EditMap`.
+
 ## TypeScript 7.1 integration
 
 TypeScript 7 is the native (Go) compiler. The npm package ships a JS client
@@ -236,9 +241,11 @@ only inside functions.
 **Statements** (`StatementIR`): `ExpressionStatement` (allowlisted calls),
 `LocalConst` (`const`, or `let` with `mutable`, either with an optional type
 annotation: `let best: Enemy | null = null`), `If` (an `else` holding only an
-`if` is written `else if`), `ForOf` (`for (const e of enemies) { … }`, one
-`const` name, no destructuring), `Break` / `Continue` (only inside a `for…of`
-of the same function), `Return`, and `SetState`, which is either
+`if` is written `else if`), `ForOf` (`for (const e of enemies) { … }`; the
+`const` may destructure, nested, `for (const [i, { id }] of xs.entries())`),
+`Switch` (written as is, falling through as in JS, its cases sharing one
+scope), `Block` (`{ … }`), `Break` (inside a `for…of` or `switch`) /
+`Continue` (inside a `for…of`), of the same function, `Return`, and `SetState`, which is either
 `{ state, value }` or `{ state, updater: FunctionIR }` for `setX(prev => …)`.
 Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
 `Assign` (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `||=`, `&&=`, `??=`) writes

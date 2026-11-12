@@ -80,7 +80,7 @@ describe("for…of, let and compound assignment in handlers", () => {
     const [sum, best, loop] = body as [StatementIR, StatementIR, StatementIR];
     assert.ok(sum.kind === "LocalConst" && sum.mutable === true && sum.type === undefined);
     assert.ok(best.kind === "LocalConst" && best.mutable === true && best.type?.kind === "SourceType" && best.type.text === "Enemy | null");
-    assert.ok(loop.kind === "ForOf" && loop.name === "e" && loop.iterable.kind === "StateRead");
+    assert.ok(loop.kind === "ForOf" && loop.binding.kind === "Name" && loop.binding.name === "e" && loop.iterable.kind === "StateRead");
     const kinds = loop.body.flatMap((s) => (s.kind === "If" ? s.then.map((t) => t.kind) : [s.kind]));
     assert.deepEqual(kinds, ["Continue", "Assign", "Assign", "Break"]);
     const increment = body.find((s): s is Extract<StatementIR, { kind: "Assign" }> => s.kind === "Assign" && s.target.kind === "Local" && s.target.name === "count");
@@ -153,7 +153,75 @@ function C() {
   });
 });
 
+describe("destructuring loops and switch", () => {
+  const SOURCE = `
+interface Enemy { id: string; hp: number; kind: "grunt" | "boss" | "ghost" }
+function C() {
+  const [enemies, setEnemies] = useState<Enemy[]>([
+    { id: "a", hp: 3, kind: "grunt" },
+    { id: "b", hp: 5, kind: "boss" },
+    { id: "c", hp: 2, kind: "ghost" },
+    { id: "d", hp: 4, kind: "grunt" },
+  ]);
+  const [log, setLog] = useState("");
+  useUpdate(() => {
+    let out = "";
+    for (const [i, { id, hp: health, kind }] of enemies.entries()) {
+      switch (kind) {
+        case "ghost":
+          continue;
+        case "boss":
+          out += \`\${i}:\${id}!\${health} \`;
+          break;
+        default:
+          out += \`\${i}:\${id}\${health} \`;
+      }
+      if (health > 3) {
+        switch (i) {
+          case 0:
+          case 1:
+            out += "early ";
+            break;
+          default:
+            out += "late ";
+        }
+      }
+    }
+    for (const [, second] of [[1, 2], [3, 4]]) out += String(second);
+    setLog(out);
+  });
+  return <Entity name="C" />;
+}`;
+
+  it("lower to ForOf bindings and Switch, and generate them as written", () => {
+    const compiled = compile(SOURCE);
+    const hook = compiled.ir.components[0]!.hooks.find((h) => h.kind === "OnUpdate");
+    assert.ok(hook?.kind === "OnUpdate");
+    const loop = hook.handler.body[1]!;
+    assert.ok(loop.kind === "ForOf" && loop.binding.kind === "Array");
+    assert.deepEqual(loop.binding.elements.map((e) => (e?.kind === "Name" ? e.name : e?.kind)), ["i", "Object"]);
+    assert.match(compiled.code, /for \(const \[i, \{ id, hp: health, kind \}\] of this\.enemies\.entries\(\)\) \{/);
+    assert.match(compiled.code, /switch \(kind\) \{\s*case "ghost":\s*continue;\s*case "boss":/);
+    assert.match(compiled.code, /for \(const \[, second\] of/);
+    assert.deepEqual(typeCheck(compiled), []);
+  });
+
+  it("run: destructured items, fallthrough, default, break and continue behave as in JS", async () => {
+    const { C } = await load<{ C: new () => Entity & { log: string } }>(compile(SOURCE));
+    const world = new World();
+    const c = new C();
+    world.mount(c);
+    world.tick(1);
+    assert.equal(c.log, "0:a3 1:b!5 early 3:d4 late 24");
+  });
+});
+
 describe("diagnostics for the new statements", () => {
+  it("rejects `continue` in a switch outside a loop, and two `const`s of one name across its cases (they share a scope)", () => {
+    assert.deepEqual(codes(handler(`switch (n) { case 1: continue; }`)), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(codes(handler(`switch (n) { case 1: { const a = 1; break; } case 2: const b = 1; const b = 2; }`)), [DiagnosticCode.InvalidHandler]);
+  });
+
   it("rejects `break` and `continue` outside a loop, and labels", () => {
     assert.deepEqual(codes(handler("break;")), [DiagnosticCode.UnsupportedStatement]);
     assert.deepEqual(codes(handler("if (dt > 1) { continue; }")), [DiagnosticCode.UnsupportedStatement]);
@@ -163,7 +231,7 @@ describe("diagnostics for the new statements", () => {
   });
 
   it("rejects loops other than `for (const x of …)`", () => {
-    for (const loop of ["for (let x of [1]) { }", "for (const [a, b] of [[1, 2]]) { }", "for (const x: number of [1]) { }", "for (const k in { a: 1 }) { }", "while (dt > 0) { }", "for (let i = 0; i < 3; i++) { }"]) {
+    for (const loop of ["for (let x of [1]) { }", "for (const [a, ...rest] of [[1, 2]]) { }", "for (const { a = 1 } of [{ a: 2 }]) { }", "for (const x: number of [1]) { }", "for (const k in { a: 1 }) { }", "while (dt > 0) { }", "for (let i = 0; i < 3; i++) { }"]) {
       assert.ok(codes(handler(loop)).includes(DiagnosticCode.UnsupportedStatement), loop);
     }
   });
