@@ -129,7 +129,7 @@ export const runtimeManifest: RuntimeManifest = {
     Route: ["name", "keepAlive", "visible", "active"],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint", "box",
+      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "transition", "transitionState", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint", "box",
     ],
   },
   intrinsicRequired: {
