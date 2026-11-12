@@ -29,6 +29,7 @@ Run what the change touches, and for a CI fix show the failing check passing loc
 | Changed | Run |
 | --- | --- |
 | Anything | `npm run generate`, `npm test`, `npm run typecheck` |
+| The guide (`docs/*.html`) | `npm run docs:index` (rebuilds the search index in every page; a test fails if it is stale) |
 | A game (`packages/kite`, `packages/hearth`, `packages/demo`) or the engine it uses | `npm run check:<game>` |
 | `games/bramble`, packaging, `packages/cli`, or a package's exports | `npm run native:build:headless`, then `npm run check:outside` |
 | The player, runtime, compiler output, or anything on the frame path | `npm run bench:check` |

@@ -415,6 +415,9 @@ kept cleanup once in the order kept, and clears the list, before it detaches the
 its children's, and a second stay in a world keeps its own. A hot reload removes the old root, so its cleanups run and the new
 tree subscribes again. `keepCleanup` is a reserved member name.
 
+Bramble's settings screen is the first user: it subscribes to `settings` in `useMount` and keeps what it shows as its own state,
+which replaced the module-level `settings.subscribe` that mirrored the settings into `useGame`.
+
 ## Why there is no `useEffect` (2026-11-12)
 
 `useEffect` is the first hook a React author reaches for, and it stays out on purpose. This section says why, and what
