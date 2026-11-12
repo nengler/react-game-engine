@@ -17,6 +17,8 @@ import {
   RGE_KEY_RELEASED,
   RGE_OP_CANVAS,
   RGE_OP_CANVAS_LEN,
+  RGE_OP_BOX,
+  RGE_OP_BOX_LEN,
   RGE_OP_ELLIPSE,
   RGE_OP_ELLIPSE_LEN,
   RGE_OP_RECT,
@@ -67,6 +69,7 @@ export type DecodedRecord =
     } & Placed)
   | ({ readonly op: "rect"; readonly width: number; readonly height: number; readonly color: string } & Placed)
   | ({ readonly op: "ellipse"; readonly width: number; readonly height: number; readonly color: string } & Placed)
+  | ({ readonly op: "box"; readonly width: number; readonly height: number; readonly fill: string; readonly borderColor: string; readonly borderWidth: number; readonly radius: number } & Placed)
   | ({ readonly op: "text"; readonly text: string; readonly size: number; readonly color: string } & Placed);
 
 export interface RecordedFrame {
@@ -322,6 +325,21 @@ export class RecordingBackend implements Backend {
           need(RGE_OP_RECT_LEN);
           out.push({ op: op === RGE_OP_RECT ? "rect" : "ellipse", ...placed(), width: records[at + 6]!, height: records[at + 7]!, color: colorToHex(records[at + 8]!) });
           at += op === RGE_OP_RECT ? RGE_OP_RECT_LEN : RGE_OP_ELLIPSE_LEN;
+          break;
+        }
+        case RGE_OP_BOX: {
+          need(RGE_OP_BOX_LEN);
+          out.push({
+            op: "box",
+            ...placed(),
+            width: records[at + 6]!,
+            height: records[at + 7]!,
+            fill: colorToHex(records[at + 8]!),
+            borderColor: colorToHex(records[at + 9]!),
+            borderWidth: records[at + 10]!,
+            radius: records[at + 11]!,
+          });
+          at += RGE_OP_BOX_LEN;
           break;
         }
         case RGE_OP_TEXT: {

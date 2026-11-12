@@ -33,6 +33,8 @@ import {
 import { MAGENTA, parseColor, type PackedColor } from "./color.ts";
 import { Layouter, type MeasuredSize } from "./layout.ts";
 import {
+  RGE_OP_BOX,
+  RGE_OP_BOX_LEN,
   RGE_OP_ELLIPSE,
   RGE_OP_ELLIPSE_LEN,
   RGE_OP_RECT,
@@ -140,6 +142,7 @@ function recordLength(op: number): number {
     case RGE_OP_SPRITE_REGION: return RGE_OP_SPRITE_REGION_LEN;
     case RGE_OP_RECT: return RGE_OP_RECT_LEN;
     case RGE_OP_ELLIPSE: return RGE_OP_ELLIPSE_LEN;
+    case RGE_OP_BOX: return RGE_OP_BOX_LEN;
     case RGE_OP_TEXT: return RGE_OP_TEXT_LEN;
     case RGE_OP_SCISSOR: return RGE_OP_SCISSOR_LEN;
     case RGE_OP_SCISSOR_END: return RGE_OP_SCISSOR_END_LEN;
@@ -360,6 +363,18 @@ export class DrawList {
     this.records[at + 2] = color;
   }
 
+  /** A box with a border inside its edge and rounded corners: the record `RGE_OP_BOX`. A fill or border colour of 0 (no alpha) draws nothing. */
+  box(world: WorldTransform, width: number, height: number, fill: PackedColor, border: PackedColor, borderWidth: number, radius: number): void {
+    const at = this.#header(RGE_OP_BOX, RGE_OP_BOX_LEN, world);
+    const r = this.records;
+    r[at] = width;
+    r[at + 1] = height;
+    r[at + 2] = fill;
+    r[at + 3] = border;
+    r[at + 4] = borderWidth;
+    r[at + 5] = radius;
+  }
+
   text(world: WorldTransform, text: string, size: number, color: PackedColor): void {
     const at = this.#header(RGE_OP_TEXT, RGE_OP_TEXT_LEN, world);
     this.records[at] = this.texts.length;
@@ -369,9 +384,14 @@ export class DrawList {
   }
 }
 
-/** A `<Flex>` takes the mouse when it has a press or a hover callback. */
+/** A `<Flex>` takes the mouse when it has a press or a hover callback, or a prop that is drawn while the mouse is over it. */
 function hoverable(flex: Flex): boolean {
-  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined;
+  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined;
+}
+
+/** Whether a `<Flex>` draws anything of its own, in any state: a background or a border, or a colour for one while hovered or focused. */
+function paints(flex: Flex): boolean {
+  return flex.background !== undefined || flex.borderColor !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined || flex.focusBackground !== undefined || flex.focusBorderColor !== undefined;
 }
 
 export interface FrameBuilderOptions {
@@ -914,7 +934,7 @@ export class FrameBuilder {
           huds.push({ world: at, object: node });
           return WALK_VOLATILE; // drawn in a layer of its own, and not entered here
         case KIND_FLEX: {
-          if (drawZ !== listZ && (node as Flex).background !== undefined) list.setZ((listZ = drawZ));
+          if (drawZ !== listZ && paints(node as Flex)) list.setZ((listZ = drawZ));
           const placed = this.#flex(node as Flex, at, gameWidth, gameHeight);
           if (hoverable(node as Flex)) {
             pointers.push(node as Flex);
@@ -1199,7 +1219,7 @@ export class FrameBuilder {
                   }
                   break;
                 case KIND_FLEX: {
-                  if (z !== listZ && (object as Flex).background !== undefined) list.setZ((listZ = z));
+                  if (z !== listZ && paints(object as Flex)) list.setZ((listZ = z));
                   const placed = this.#flex(object as Flex, world, gameWidth, gameHeight);
                   if (hoverable(object as Flex)) {
                     hudPointers.push(object as Flex);
@@ -1338,8 +1358,39 @@ export class FrameBuilder {
       // The world was worked out before layout; a floating root's own offset is only known now.
       if (flex.float) world = placed = flex.worldTransform();
     }
-    if (flex.background !== undefined) this.#list.rect(world, flex.box.size[0] as number, flex.box.size[1] as number, this.#color(flex.background));
+    if (paints(flex)) this.#paintFlex(flex, world);
     return placed;
+  }
+
+  /**
+   * A `<Flex>`'s own drawing: its background and border, in the colours of the state it is in. The focus colours replace the plain
+   * ones, and the hover colours replace those, so a hovered, focused box shows its hover colours. A box with no border and square
+   * corners is the plain `rect` record, as it always was; anything else is a `box`.
+   */
+  #paintFlex(flex: Flex, world: WorldTransform): void {
+    let background = flex.background;
+    let borderColor = flex.borderColor;
+    const host = flex.world;
+    if (host !== null) {
+      if (host.focused === flex) {
+        background = flex.focusBackground ?? background;
+        borderColor = flex.focusBorderColor ?? borderColor;
+      }
+      if (host.hovered === flex) {
+        background = flex.hoverBackground ?? background;
+        borderColor = flex.hoverBorderColor ?? borderColor;
+      }
+    }
+    const width = flex.box.size[0] as number;
+    const height = flex.box.size[1] as number;
+    const borderWidth = flex.borderWidth > 0 && borderColor !== undefined ? flex.borderWidth : 0;
+    const radius = flex.borderRadius > 0 ? flex.borderRadius : 0;
+    if (borderWidth === 0 && radius === 0) {
+      if (background !== undefined) this.#list.rect(world, width, height, this.#color(background));
+      return;
+    }
+    if (background === undefined && borderWidth === 0) return;
+    this.#list.box(world, width, height, background === undefined ? 0 : this.#color(background), borderWidth === 0 || borderColor === undefined ? 0 : this.#color(borderColor), borderWidth, radius);
   }
 
   /** The size of one line of `object` in `font` (undefined: the built-in font). An empty line has the height of a line. */

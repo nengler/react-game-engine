@@ -49,6 +49,11 @@ export interface LayoutHost {
   warn(key: string, message: string): void;
 }
 
+/** Whether a `<Flex>` has a border in any state (a colour for it plain, hovered or focused), so its room is kept whichever it is in and layout does not move when the mouse does. */
+function hasBorder(f: Flex): boolean {
+  return f.borderColor !== undefined || f.hoverBorderColor !== undefined || f.focusBorderColor !== undefined;
+}
+
 function finiteOr0(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
@@ -145,12 +150,16 @@ export class Layouter {
     return v !== undefined && v >= 0 ? v : Infinity;
   }
 
-  /** Padding at the start (left, top) or end (right, bottom) of an axis: the side's own prop, else the axis's, else `padding`. */
+  /**
+   * Padding at the start (left, top) or end (right, bottom) of an axis: the side's own prop, else the axis's, else `padding`,
+   * and the border's width on top, because a border takes room from the inside. A border that has no colour in any state is not drawn and takes none.
+   */
   #pad(f: Flex, axis: number, end: boolean): number {
     const side = axis === X ? (end ? f.paddingRight : f.paddingLeft) : end ? f.paddingBottom : f.paddingTop;
     const both = axis === X ? f.paddingX : f.paddingY;
     const v = side ?? both ?? f.padding;
-    return v !== undefined && v > 0 && Number.isFinite(v) ? v : 0;
+    const padding = v !== undefined && v > 0 && Number.isFinite(v) ? v : 0;
+    return f.borderWidth > 0 && Number.isFinite(f.borderWidth) && hasBorder(f) ? padding + f.borderWidth : padding;
   }
 
   #gap(f: Flex): number {

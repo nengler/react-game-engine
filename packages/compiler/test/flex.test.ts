@@ -295,3 +295,61 @@ describe("Flex: floating props", () => {
     assert.match(JSON.stringify(out), /float: true, anchor: \\"top-right\\"|float: true, anchor: "top-right"/);
   });
 });
+
+describe("Flex: border, rounded corners, and hover and focus colours", () => {
+  const STYLED = `
+function Tile() {
+  const [accent, setAccent] = useState("gold");
+  const [round, setRound] = useState(4);
+  return (
+    <Flex
+      width={40}
+      height={20}
+      background="navy"
+      borderWidth={2}
+      borderColor={accent}
+      borderRadius={round}
+      hoverBackground="#334"
+      hoverBorderColor="white"
+      focusable
+      focusBackground="#223"
+      focusBorderColor="yellow"
+    />
+  );
+}
+`;
+
+  it("takes every prop from the element, static or from state, and updates them when state changes", async () => {
+    const { Tile } = await load<{ Tile: new () => Flex & { setAccent(v: string): void; setRound(v: number): void } }>(compile(STYLED, "FlexStyled.tsx"));
+    const world = new World();
+    const tile = new Tile();
+    world.mount(tile);
+    assert.deepEqual(
+      [tile.background, tile.borderWidth, tile.borderColor, tile.borderRadius, tile.hoverBackground, tile.hoverBorderColor, tile.focusBackground, tile.focusBorderColor],
+      ["navy", 2, "gold", 4, "#334", "white", "#223", "yellow"],
+    );
+    tile.setAccent("red");
+    tile.setRound(8);
+    world.flush();
+    assert.deepEqual([tile.borderColor, tile.borderRadius], ["red", 8]);
+  });
+
+  it("type-checks the generated code, and rejects a prop of the wrong type, in the source", () => {
+    assert.deepEqual(typeCheck(compile(STYLED, "FlexStyled.tsx")), []);
+    const check = (element: string) =>
+      getCompiler().typeCheckSources([
+        { fileName: `${process.cwd()}/.test-output/Styled${Math.random()}.tsx`, text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }` },
+      ]);
+    assert.deepEqual(check(`<Flex borderWidth={wide ? 2 : 0} borderColor="red" borderRadius={4} hoverBackground="blue" focusBorderColor="white" />`), []);
+    assert.ok(check(`<Flex borderWidth="thick" />`).length > 0, "a width is a number");
+    assert.ok(check(`<Flex hoverBackground={4} />`).length > 0, "a colour is a string");
+    assert.ok(check(`<Flex hoverWidth={4} />`).length > 0, "and a made-up prop is not accepted");
+  });
+
+  it("reserves the new names for a component rooted at a Flex", () => {
+    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor"]) {
+      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
+      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+    }
+  });
+});

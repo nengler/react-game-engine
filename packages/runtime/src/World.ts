@@ -137,6 +137,11 @@ export class World {
 
   #hovered: Pressable | null = null;
 
+  /** The pressable the mouse is over, as of the last `reportHover` (null for none): what a `<Flex>`'s `hover*` props are drawn for. */
+  get hovered(): Pressable | null {
+    return this.#hovered;
+  }
+
   /**
    * The topmost pressable under the mouse this frame (null for none, or for a mouse off the screen): when it is not the one
    * before, the one before hears `onPointerLeave` (if it is still in this world) and the new one `onPointerEnter`, as the DOM's
