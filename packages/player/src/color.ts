@@ -96,3 +96,9 @@ export function parseColor(input: string): PackedColor | null {
   if (Object.hasOwn(NAMED, text)) return (((NAMED[text] as number) << 8) | 0xff) >>> 0;
   return null;
 }
+
+/** The colour `t` of the way (0 to 1) from `a` to `b`, channel by channel. */
+export function mixColors(a: PackedColor, b: PackedColor, t: number): PackedColor {
+  const mix = (shift: number): number => Math.round(((a >>> shift) & 255) * (1 - t) + ((b >>> shift) & 255) * t);
+  return (((mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | mix(0)) >>> 0);
+}

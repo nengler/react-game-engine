@@ -319,6 +319,7 @@ function Tile() {
       disabled={round > 100}
       disabledBackground="gray"
       disabledBorderColor="silver"
+      transition={0.15}
     />
   );
 }
@@ -334,6 +335,7 @@ function Tile() {
       ["navy", 2, "gold", 4, "#334", "white", "#223", "yellow"],
     );
     assert.deepEqual([tile.pressedBackground, tile.pressedBorderColor, tile.disabled, tile.disabledBackground, tile.disabledBorderColor], ["#112", "orange", false, "gray", "silver"]);
+    assert.equal(tile.transition, 0.15);
     tile.setAccent("red");
     tile.setRound(800);
     world.flush();
@@ -346,7 +348,8 @@ function Tile() {
       getCompiler().typeCheckSources([
         { fileName: `${process.cwd()}/.test-output/Styled${Math.random()}.tsx`, text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }` },
       ]);
-    assert.deepEqual(check(`<Flex borderWidth={wide ? 2 : 0} borderColor="red" borderRadius={4} hoverBackground="blue" focusBorderColor="white" pressedBackground="navy" disabled={wide} disabledBorderColor="gray" />`), []);
+    assert.deepEqual(check(`<Flex borderWidth={wide ? 2 : 0} borderColor="red" borderRadius={4} hoverBackground="blue" focusBorderColor="white" pressedBackground="navy" disabled={wide} disabledBorderColor="gray" transition={wide ? 0.2 : 0} />`), []);
+    assert.ok(check(`<Flex transition="slow" />`).length > 0, "a transition is a number of seconds");
     assert.ok(check(`<Flex disabled="yes" />`).length > 0, "disabled is a boolean");
     assert.ok(check(`<Flex borderWidth="thick" />`).length > 0, "a width is a number");
     assert.ok(check(`<Flex hoverBackground={4} />`).length > 0, "a colour is a string");
@@ -354,7 +357,7 @@ function Tile() {
   });
 
   it("reserves the new names for a component rooted at a Flex", () => {
-    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled"]) {
+    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "transition", "transitionState"]) {
       const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
       assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
     }

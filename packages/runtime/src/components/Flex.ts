@@ -23,6 +23,18 @@ export type FlexAnchor = (typeof FLEX_ANCHORS)[number];
  */
 export type FlexSizing = number | "fit" | "grow" | `${number}%`;
 
+/**
+ * The colours a `<Flex>` with a `transition` is fading between, as packed 0xRRGGBBAA numbers, and when the fade began on the
+ * player's animation clock. Written by the player's draw pass and nothing else.
+ */
+export interface FlexTransition {
+  fromFill: number;
+  fromEdge: number;
+  toFill: number;
+  toEdge: number;
+  since: number;
+}
+
 export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopeProps {
   /** The main axis: children go left to right (`"row"`, the default) or top to bottom. */
   direction?: FlexDirection;
@@ -88,6 +100,11 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   pressedBackground?: string;
   /** `borderColor` while the box is pressed. */
   pressedBorderColor?: string;
+  /**
+   * Seconds to fade the background and border colour when the state changes (hover, press, focus, disabled), instead of snapping.
+   * A fade cut short turns round from the colour it had reached. Default 0: snap. Only colours fade, so nothing moves.
+   */
+  transition?: number;
   /** `background` while the box is `disabled`. Over every other state. */
   disabledBackground?: string;
   /** `borderColor` while the box is `disabled`. */
@@ -180,6 +197,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   focusBorderColor: string | undefined;
   pressedBackground: string | undefined;
   pressedBorderColor: string | undefined;
+  transition: number;
+  /** What the draw pass keeps for a `transition`: the colours it is fading between. Null until the box is first drawn with one. */
+  transitionState: FlexTransition | null = null;
   disabledBackground: string | undefined;
   disabledBorderColor: string | undefined;
   disabled: boolean;
@@ -231,6 +251,7 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.focusBorderColor = hostProps.focusBorderColor;
     this.pressedBackground = hostProps.pressedBackground;
     this.pressedBorderColor = hostProps.pressedBorderColor;
+    this.transition = hostProps.transition ?? 0;
     this.disabledBackground = hostProps.disabledBackground;
     this.disabledBorderColor = hostProps.disabledBorderColor;
     this.disabled = hostProps.disabled ?? false;
