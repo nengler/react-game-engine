@@ -59,7 +59,8 @@ test("check passes on the template: compile, typecheck, tests, parity", { timeou
   const checked = rge(["check", game]);
   assert.equal(checked.status, 0, checked.stdout + checked.stderr);
   for (const step of ["compile", "typecheck", "tests", "parity"]) assert.match(checked.stdout, new RegExp(`ok   ${step}`));
-  assert.match(checked.stdout, /1 passed, 0 failed/);
+  // The template ships two tests: the rules (move.test.ts) and the components played on a recording backend (play.test.ts).
+  assert.match(checked.stdout, /2 passed, 0 failed/);
 });
 
 test("check fails, and says which step, when a test fails", { timeout: 120_000 }, () => {
@@ -68,6 +69,40 @@ test("check fails, and says which step, when a test fails", { timeout: 120_000 }
   assert.equal(checked.status, 1);
   assert.match(checked.stdout, /FAIL tests/);
   assert.match(checked.stdout, /check fixture: FAILED/);
+});
+
+test("an error in a component names its own line in src/, not the generated file's", { timeout: 120_000 }, () => {
+  const errors = join(root, "errors");
+  assert.equal(rge(["create", errors]).status, 0);
+  // Z calls a plain function that throws, from the useInput handler of the template's Main.
+  const main = readFileSync(join(errors, "src/Main.tsx"), "utf8")
+    .replace('if (input.pressed("Z")) step();', 'if (input.pressed("Z")) boom();')
+    .replace('import { useGame }', 'import { boom } from "./rules/boom.ts";\nimport { useGame }');
+  writeFileSync(join(errors, "src/Main.tsx"), main);
+  writeFileSync(join(errors, "src/rules/boom.ts"), 'export function boom(): void {\n  throw new Error("boom");\n}\n');
+  const built = rge(["build", errors]);
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  assert.ok(existsSync(join(errors, "generated/Main.ts.map")), "a source map is written beside each generated file");
+  writeFileSync(
+    join(errors, "boom.ts"),
+    `import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+import { bindings, gameConfig } from "./game.ts";
+const frames = parseInputScript("_*2, Z, _", { bindings });
+const backend = new RecordingBackend();
+for (const frame of frames) backend.queueInput(frame);
+const player = createPlayer(backend, { ...gameConfig, showErrors: true } as never);
+for (let i = 0; i < frames.length + 1; i++) player.step();
+console.log(String((player.failure?.error as Error | undefined)?.stack));
+`,
+  );
+  // `rge dev` and `rge check` run Node with this flag; so does this.
+  const ran = spawnSync(process.execPath, ["--enable-source-maps", "boom.ts"], { cwd: errors, encoding: "utf8" });
+  const frame = ran.stdout.split("\n").find((line) => line.includes("Main.onInput"));
+  assert.ok(frame, ran.stdout + ran.stderr);
+  // The line of the `useInput(` the handler is written in (a source map keeps a line for the construct it came from).
+  const line = main.split("\n").findIndex((l) => l.includes("useInput((input)")) + 1;
+  assert.match(frame!, new RegExp(`src/Main\\.tsx:${line}:\\d+\\)$`), frame);
+  assert.doesNotMatch(ran.stdout, /generated\/Main\.ts:/, "no frame names the generated file");
 });
 
 test("a folder that is not a game, and an unknown command, are usage errors", () => {

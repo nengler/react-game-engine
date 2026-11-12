@@ -75,6 +75,14 @@ no construct (an import, the class header) keeps its generated position. And whe
 not type-checked at all ("skipped type-checking the generated code"), as scenes are not validated: the other files would only
 report its module as missing, or check against an old one.
 
+**Errors while the game runs** (2026-11-12). A thrown error read `at Main.onInput (generated/Main.ts:71:7)`: a generated file and a
+method the author never wrote. `compileArgs` (what `rge dev`, `build` and `check` compile with) now passes `--source-maps`, and `rge dev`
+runs the window, and `rge check` its tests, under `node --enable-source-maps`, so the same error reads
+`at Main.onInput (src/Main.tsx:14:3)`, the line of the hook (the map is line-level: a generated line maps to the start of the construct
+it was written for). The dev window's error screen shows the stack as Node formats it, so it is mapped too, and hot reload's
+`?v=N` module URLs map (the `sourceMappingURL` is read relative to the module). The method name stays: it is the component's class
+and the hook as the runtime calls it. Not mapped: a packaged game (esbuild's `game.js`) and the Rust host, which have no map to read.
+
 ## TypeScript 7.1 integration
 
 TypeScript 7 is the native (Go) compiler. The npm package ships a JS client

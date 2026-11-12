@@ -23,6 +23,7 @@
     "bench:check": "node tools/bench-check.ts",
     "docs:index": "node tools/docs-index.ts",
     "pack": "node tools/pack.ts",
+    "dist": "node tools/pack.ts --build",
     "package": "rge package packages/demo",
     "host:build": "cargo build --release --manifest-path host/Cargo.toml",
     "host:build:headless": "cargo build --release --features headless --manifest-path host/Cargo.toml",

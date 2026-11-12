@@ -34,8 +34,10 @@ TSX invites people to write React, and then they hit `RGE` codes.
   `disabled` prop and `Play` wrote `if (paused) return` so that two components did not both act on one press. *Since:* `inert` and
   `modal` on `<Entity>`, `<Flex>` and `<Hud>`, as in HTML, decide which subtrees hear input; Bramble's pause screen and its "press a
   key" prompt are modals, and `Menu` has no `disabled` prop.
-- **Refs carry input from `useInput` to `useUpdate`.** `Play.tsx` keeps three (`dx`, `dy`, `action`) and keeps a press until the update
-  takes it. A newcomer asks why there are two hooks.
+- **Refs carried input from `useInput` to `useUpdate`.** `Play.tsx` kept three (`dx`, `dy`, `action`) and kept a press until the
+  update took it, and the demo and the project template did the same. A newcomer asks why there are two hooks. *Since:* they were
+  never needed: `useUpdate((dt, input) => …)` gets the same input in the same step (Kite always read it there). The template, the demo
+  and Bramble do, and the guide says which hook is for what (a press goes in `useInput`, movement reads the keys in `useUpdate`).
 - **Frame timing.** State set in a handler shows next render; objects attached mid-frame get hooks next frame; collision callbacks run
   after `useUpdate`, which is why the guide says to read tiles, not colliders, for movement and deaths.
 - **`transform={{ x, y }}`** rather than style or position props. The origin is top-left except where `originX` / `originY` exist, and
@@ -79,9 +81,15 @@ no React equivalent.
 - **Errors name generated files.** `generated/Play.ts:9:23 … './World.ts'` when the real cause is a `src/` file that failed to compile
   earlier in the output (Bramble finding 6). *Since:* a type error in generated code is reported at the `.tsx` line it was written
   for, and a file that fails to compile is not reported again as a missing module.
-- **The generated code shows through.** `game.ts` imports `./generated/Main.ts` and calls `new Main()`: a function became a class.
+- **The generated code shows through.** `game.ts` imports `./generated/Main.ts` and calls `new Main()`: a function became a class, and
+  an error thrown while the game ran read `at Main.onInput (generated/Main.ts:71:7)`. *Since:* `rge` compiles with source maps and runs
+  the window and the tests under `--enable-source-maps`, so it reads `at Main.onInput (src/Main.tsx:14:3)`; the template's `game.ts`
+  says why the root is made with `new`; and "Coming from React" has a "When something goes wrong" table. Not yet: a packaged game and
+  the Rust host report the bundled `game.js`.
 - **Setup is heavy.** cmake, a C compiler and cargo are needed to make the tarballs before `rge create` works, since nothing is
-  published.
+  published. *Since:* only Node is needed to write, test and check a game: `npm run dist` builds what the machine can, keeps going
+  when cmake or cargo is missing, and ends with what the author has and what to install for the rest (the guide's step 0 is a table of
+  the same). Nothing is published, so a checkout and `npm run dist` is still the way in.
 - **Input scripts hold a key until it changes**: `right, right` is one press, `right, _, right` is two (Bramble finding 11).
 - **The guide is dense and terse** and mixes design reasons with usage; priority 8's "checked by following it from scratch" is not
   ticked yet.

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { findNativeLibrary } from "../src/index.ts";
-import { packAll, rewriteSpecifiers } from "../../../tools/pack.ts";
+import { packAll, rewriteSpecifiers, setupNotes } from "../../../tools/pack.ts";
 
 test("rewriteSpecifiers turns relative .ts imports into .js and leaves packages alone", () => {
   const before = [
@@ -56,4 +56,30 @@ test("the packs install into an empty project and every entry point imports unde
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+const DESKTOP = ["lib/linux-x64/desktop/librge.so", "bin/linux-x64/desktop/rge-host"];
+const HEADLESS = ["lib/linux-x64/headless/librge.so", "bin/linux-x64/headless/rge-host"];
+
+test("setupNotes: with everything built, every line says ready and nothing is asked of the author", () => {
+  const notes = setupNotes([...DESKTOP, ...HEADLESS], { cmake: true, cargo: true });
+  assert.equal(notes.length, 4);
+  for (const line of notes) assert.match(line, /ready/);
+  assert.ok(!notes.some((line) => /install|Install/.test(line)));
+});
+
+test("setupNotes: with no tools and nothing built, games can still be written and checked, and each gap says what to install", () => {
+  const notes = setupNotes([], { cmake: false, cargo: false }).join("\n");
+  assert.match(notes, /Write, test and check games: ready/);
+  assert.match(notes, /Screenshots and `rge package`: no librge, because cmake was not found.*build-essential cmake/);
+  assert.match(notes, /no rge-host, because cargo was not found.*rustup\.rs.*compares against Node only/);
+  assert.match(notes, /A window \(`rge dev`\): not built.*libx11-dev.*libgl1-mesa-dev/);
+});
+
+test("setupNotes: a headless build without a window or a host says what is missing, and says a failed build is not a missing tool", () => {
+  const notes = setupNotes(["lib/linux-x64/headless/librge.so"], { cmake: true, cargo: true }).join("\n");
+  assert.match(notes, /Screenshots and `rge package --headless`: ready/);
+  assert.match(notes, /A window \(`rge dev`\): not built/);
+  assert.match(notes, /no rge-host, because the build failed/);
+  assert.doesNotMatch(notes, /was not found/);
 });

@@ -1,4 +1,4 @@
-import { Camera, Entity, Hud, ParticleLayer, Shape, Sprite, Text, useInput, useRef, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Hud, ParticleLayer, Shape, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
 import { fx } from "./effects.ts";
 import { Dialogue } from "./Dialogue.tsx";
 import { useGame } from "./GameState.ts";
@@ -14,28 +14,17 @@ export function Play() {
   const run = useGame((s) => s.run);
   const paused = useGame((s) => s.paused);
   const { advance, togglePause } = useGame((s) => s);
-  // What the keys said this step: refs hold values that must not cause a render. A press is kept until the update takes it.
-  const dx = useRef(0);
-  const dy = useRef(0);
-  const action = useRef(false);
   const { x, y, frame } = heroOf(run);
   const { width, height } = mapPixels(run.map);
 
-  // While the pause screen is shown it is modal: this hears no keys (the held ones read as released), and it closes itself.
+  // While the pause screen is shown it is modal: this hears no keys, and the pause screen closes itself.
   useInput((input) => {
-    if (input.pressed("back")) {
-      togglePause();
-      return;
-    }
-    const held = readInput(input);
-    dx.current = held.dx;
-    dy.current = held.dy;
-    if (held.action) action.current = true;
+    if (input.pressed("back")) togglePause();
   });
-  useUpdate((dt) => {
-    if (paused) return;
-    advance({ dx: dx.current, dy: dy.current, action: action.current }, dt);
-    action.current = false;
+  // The step reads the keys itself: useUpdate gets the same input as useInput, so nothing is carried between them.
+  useUpdate((dt, input) => {
+    if (paused) return; // not stepped while paused
+    advance(readInput(input), dt);
   });
 
   return (
