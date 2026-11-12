@@ -198,9 +198,17 @@ export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useState", "useRef", "
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS];
 
+/** Why there is no `useEffect`, and what to write for each of its uses (DESIGN.md, "Why there is no `useEffect`"). */
+const EFFECT_MESSAGE = (hook: string): string =>
+  `There is no '${hook}'. Do the work where the change happens: an action that answers the rules' events with an effect store (\`sfx.play("hit")\`, \`fx.burst(…)\`), ` +
+  "a derived `const` for a value worked out from state or props, a built-in with props (`<Music>`, `<Particles emitting>`) for something that follows state, " +
+  "or `useMount` / `useUnmount` for when the component comes or goes.";
+
 /** Hooks that were renamed or replaced, reported with what to write instead. */
 export const REMOVED_HOOKS: Readonly<Record<string, string>> = {
   onUpdate: "'onUpdate' was renamed to 'useUpdate' (hooks start with `use`, as in React).",
   onInput: "'onInput' was renamed to 'useInput' (hooks start with `use`, as in React).",
+  useEffect: EFFECT_MESSAGE("useEffect"),
+  useLayoutEffect: EFFECT_MESSAGE("useLayoutEffect"),
   onCollisionEnter: "'onCollisionEnter' is no longer a hook: pass it to the collider, `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`, so you know which collider was hit.",
 };

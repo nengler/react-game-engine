@@ -263,10 +263,23 @@ function Banner({ text, onDone }: BannerProps) {
 }
 </script></pre>
   <ul>
-    <li>No cleanup return and no <code>useEffect</code>.</li>
+    <li>No cleanup return and no <code>useEffect</code> (see <a href="#no-useeffect">below</a>).</li>
     <li>Mounts when attached to the world (a condition turns on, a list item is added); unmounts when detached.</li>
     <li>Takes one arrow function with <strong>no parameters</strong>.</li>
   </ul>
+
+  <h3 id="no-useeffect">No <code>useEffect</code>: what to write instead</h3>
+  <p>There is no <code>useEffect</code>, on purpose. Here an effect would run a frame after the change it answers (and a frame more for each effect it sets off), and it would pull game logic out of the rules, which are plain functions you can test and replay without a window. Each thing an effect is used for has its own answer:</p>
+  <div class="tablewrap"><table>
+    <tr><th>You want</th><th>Write</th></tr>
+    <tr><td>A sound, a burst or a shake when something happens</td><td>Do it where it happens: the rules return events, a game-state action answers them through effect stores (<code>sfx.play("hit")</code>, <code>fx.burst(…)</code>). See <a href="effects.html">Effects</a>.</td></tr>
+    <tr><td>A value computed from state or props</td><td>A derived <code>const</code>: worked out again when what it reads changes.</td></tr>
+    <tr><td>Music, an emitter or the camera to follow state</td><td>A built-in with props: <code>&lt;Music&gt;</code>, <code>&lt;Particles emitting&gt;</code>, <code>&lt;Camera bounds&gt;</code>.</td></tr>
+    <tr><td>Something when the component comes or goes</td><td><code>useMount</code> / <code>useUnmount</code>.</td></tr>
+    <tr><td>To subscribe to something outside the game state</td><td>For now, subscribe once in a <code>.ts</code> module and copy what changes into the game state (<code>settings.subscribe(() =&gt; useGame.setState(…))</code>). A cleanup returned from <code>useMount</code> is planned.</td></tr>
+    <tr><td>To start a component's state over when what it shows changes</td><td>For now, keep that state in the game state, or reset it in the action that changes what is shown. <code>key</code> on any element (as in React) is planned.</td></tr>
+  </table></div>
+  <p>Writing <code>useEffect</code> is <code>RGE1102</code>, and the message points here. The reasons in full are in <code>docs/DESIGN.md</code>, “Why there is no <code>useEffect</code>”.</p>
 
   <h3 id="hook-usesound"><code>useSound</code></h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">

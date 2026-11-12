@@ -30,7 +30,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Global state | One nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
 | Refs | Refs hold values only (`const timer = useRef(0)`, or any type given as an argument, `useRef<Point[]>([])`, except one that names an element; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
-| Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) |
+| Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
 | Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09) |
@@ -365,6 +365,45 @@ there (see "Keyed lists").
 **Rules.** Top-level only, imported from the authoring module (`RGE1005`),
 one arrow function with no parameters (`RGE1401`), several of a kind allowed
 and run in source order.
+
+## Why there is no `useEffect` (2026-11-12)
+
+`useEffect` is the first hook a React author reaches for, and it stays out on purpose. This section says why, and what
+stands in for each thing it is used for. Asked again on 2026-11-12, after the review in [PAIN_POINTS.md](PAIN_POINTS.md):
+the worry is not that it cannot be built (the compiler knows what every expression reads, so it could even work out the
+dependencies itself) but that it would be used for everything, including what it should not be used for.
+
+**What it would give.** It is familiar, and a few needs have no good answer without something like it: subscribing to
+something outside the game state *with a cleanup* (Bramble mirrors `settings` into `useGame` at module level because
+`useMount` returns nothing), and a reusable component reacting to a prop changing (a `<HealthBar hp>` that flashes when `hp`
+drops, where the rules' events cannot help because the component does not know the game).
+
+**What it would cost, here more than in React.**
+
+- **A frame late, per link.** An effect runs after the render that saw the change; a setter it calls renders next frame,
+  and an effect that triggers another adds a frame each. Kite's first version, which compared counters with refs to play
+  sounds, was "one step late" for exactly this reason (NEXT_PRIORITIES.md, finding 3 of the first level).
+- **The patterns React's own docs warn against** become the easy path: state copied from other state (here a derived
+  `const` already does it), chains of effects that set state, and "when X changes, do Y" where Y belongs where X was changed.
+- **Game logic leaves the rules.** Both games found that the rules as plain functions returning events, answered by
+  effect stores, was the shape that worked: headless tests, replays, the same output under V8 and QuickJS. An effect is
+  game logic that runs only in the component tree, at a moment set by renders.
+- **It cannot be taken back.** Once games depend on it, removing it is a migration.
+
+**What to write instead.** Each answer covers one legitimate use and no more:
+
+| The need | Instead of `useEffect` | Status |
+| --- | --- | --- |
+| A sound, a burst or a shake when something happens | Do it where it happens: the rules return events and an action answers them through effect stores (`createSounds`, `createParticles`, `createShake`; see "Effects that happen at a moment"). This is React's own advice: do it in the handler that caused the change. | Built |
+| A value computed from state or props | A derived `const`, worked out again when what it reads changes. | Built |
+| Something on screen that follows state (music, an emitter, the camera) | A built-in driven by props: `<Music>`, `<Particles emitting>`, `<Camera bounds>`. A wish for an effect here means a built-in is missing. | Built; add built-ins as games ask |
+| Run something when the component comes or goes | `useMount` / `useUnmount`. | Built |
+| Subscribe to something outside the game state, and stop | A cleanup returned from `useMount` (`useMount(() => settings.subscribe(…))`), or a hook that reads an outside store and re-renders when it changes (as React's `useSyncExternalStore`). | Planned |
+| Start a component's state over when what it shows changes | `key` on any element, not only on a list's items (`<Dialogue key={talk.id} />`), React's own answer. Today `key` outside a list is `RGE1203`. | Planned |
+| A reusable component reacting to a prop changing | Only if a game hits it: `useChange(value, (prev) => …)`, run in the same step as the change (no frame of lag), with no cleanup, and allowed to call only effect stores, sounds, refs, `freeze` and the component's **own** setters. Calling a game-state action in it is a diagnostic, so effects cannot chain through the store. | Not built; waits for a game |
+
+**The diagnostic.** `useEffect` and `useLayoutEffect` are `RGE1102` with a message that names these answers (`REMOVED_HOOKS`
+in `analyzer/model.ts`), not a bare "Unknown hook".
 
 ## Arrays and records
 

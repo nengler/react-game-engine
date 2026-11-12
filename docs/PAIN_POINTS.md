@@ -5,7 +5,8 @@ reading the authoring guide (`docs/*.html`), the findings in [NEXT_PRIORITIES.md
 [`games/bramble/DESIGN.md`](../games/bramble/DESIGN.md), and Bramble's code. Findings that have already been fixed (computed lists,
 conditions in `.map`, spread props, `!== undefined`, component roots, objects in the game state) are left out.
 
-Whether to add `useEffect` is an open question and is not covered here.
+`useEffect` stays out; what replaces each of its uses, and what is planned, is decided in [DESIGN.md](DESIGN.md), "Why there
+is no `useEffect`" (2026-11-12).
 
 ## 1. It looks like React but compiles a subset
 
@@ -69,8 +70,7 @@ no React equivalent.
   says any type (`useRef<Point[]>([])`).
 - **The manifest gates the API.** A new runtime method compiles in plain TypeScript but fails in a component until
   `runtime/src/manifest.ts` lists it (Bramble finding 8).
-- **`useEffect` gives a bare `Unknown hook 'useEffect'.`** The first thing a React author types deserves a message that says what to
-  do instead (`REMOVED_HOOKS` in `analyzer/model.ts` is where such messages live).
+- ~~**`useEffect` gave a bare `Unknown hook 'useEffect'.`**~~ *Since:* its message names what to write instead.
 
 ## 7. Tooling and getting started
 
