@@ -218,7 +218,9 @@ export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
  * A container that places its children in a row or a column. It takes the props of CSS flexbox (`direction`,
  * `alignItems`, `justifyContent`, `gap`, `padding`) and sizes itself the way Clay does: each axis is `"fit"` (the
  * default), `"grow"`, a number of pixels or a percentage such as `"50%"`, with optional `minWidth` / `maxWidth` /
- * `minHeight` / `maxHeight`. A child's own `transform` moves it within its slot. `background` fills the box.
+ * `minHeight` / `maxHeight`. A child's own `transform` moves it within its slot. `background` fills the box, and `borderWidth`, `borderColor` and `borderRadius`
+ * give it a border (which takes room like padding) and rounded corners; `hoverBackground`, `hoverBorderColor`, `focusBackground` and `focusBorderColor`
+ * are the colours it is drawn in while the mouse is over it or it has the focus.
  */
 export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Flex");

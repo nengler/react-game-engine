@@ -138,6 +138,66 @@ static void begin_scissor(int x, int y, int width, int height) {
 #endif
 }
 
+/* A bad number (NaN, infinite) is nothing; a size is at least 0. */
+static float finite_or_zero(float value) {
+  return isfinite(value) ? value : 0.0f;
+}
+
+/* RGE_OP_BOX at the local origin: the fill over the whole box, then the border inside its edge (as CSS paints a background
+ * under its border). The border is built from exact pieces, so no pixel is painted twice (a translucent border stays even):
+ * four edge rectangles between the corners, and in each corner block (c x c, c the larger of the radius and the border
+ * width) a quarter ring when the radius covers the border, else the quarter disc of the outer corner and the rest of the block. */
+static void draw_box(float width, float height, uint32_t fill, uint32_t border, float border_width, float radius) {
+  width = finite_or_zero(width);
+  height = finite_or_zero(height);
+  if (!(width > 0.0f && height > 0.0f)) return;
+  float half = (width < height ? width : height) / 2.0f;
+  radius = finite_or_zero(radius);
+  if (radius > half) radius = half;
+  if (radius < 0.0f) radius = 0.0f;
+  border_width = finite_or_zero(border_width);
+  if (border_width > half) border_width = half;
+  if (fill & 0xffu) {
+    if (radius > 0.0f) DrawRectangleRounded((Rectangle){ 0.0f, 0.0f, width, height }, radius / half, 0, unpack_color(fill));
+    else DrawRectangleRec((Rectangle){ 0.0f, 0.0f, width, height }, unpack_color(fill));
+  }
+  if (!((border & 0xffu) != 0 && border_width > 0.0f)) return;
+  Color c = unpack_color(border);
+  float bw = border_width, r = radius;
+  float k = r > bw ? r : bw; /* the corner block */
+  /* The edges, between the corner blocks. */
+  float run_x = width - 2.0f * k, run_y = height - 2.0f * k;
+  if (run_x > 0.0f) {
+    DrawRectangleRec((Rectangle){ k, 0.0f, run_x, bw }, c);
+    DrawRectangleRec((Rectangle){ k, height - bw, run_x, bw }, c);
+  }
+  if (run_y > 0.0f) {
+    DrawRectangleRec((Rectangle){ 0.0f, k, bw, run_y }, c);
+    DrawRectangleRec((Rectangle){ width - bw, k, bw, run_y }, c);
+  }
+  /* The corners: top left, top right, bottom right, bottom left. Angles run clockwise on screen from +x (y points down). */
+  for (int corner = 0; corner < 4; corner++) {
+    bool right = corner == 1 || corner == 2, bottom = corner == 2 || corner == 3;
+    float block_x = right ? width - k : 0.0f, block_y = bottom ? height - k : 0.0f;
+    if (r <= 0.0f) { /* square: the whole block is border */
+      DrawRectangleRec((Rectangle){ block_x, block_y, k, k }, c);
+      continue;
+    }
+    Vector2 center = { right ? width - r : r, bottom ? height - r : r };
+    float from = 180.0f + 90.0f * (float)corner;
+    if (r >= bw) {
+      DrawRing(center, r - bw, r, from, from + 90.0f, 0, c);
+    } else {
+      /* The radius is smaller than the border: the outer corner's quarter disc, and the rest of the block, which is all border. */
+      DrawCircleSector(center, r, from, from + 90.0f, 0, c);
+      float rest = k - r;
+      /* The strip of the block beside the disc's square, across its full height, then the strip above or below that square. */
+      DrawRectangleRec((Rectangle){ right ? block_x : block_x + r, block_y, rest, k }, c);
+      DrawRectangleRec((Rectangle){ right ? block_x + rest : block_x, bottom ? block_y : block_y + r, r, rest }, c);
+    }
+  }
+}
+
 static void execute_records(const double *records, int32_t length, const char *text, const int32_t *text_offsets, int32_t text_count) {
   bool view_pushed = false;
   bool scissor_on = false;
@@ -153,6 +213,7 @@ static void execute_records(const double *records, int32_t length, const char *t
       case RGE_OP_ELLIPSE: need = RGE_OP_ELLIPSE_LEN; break;
       case RGE_OP_TEXT: need = RGE_OP_TEXT_LEN; break;
       case RGE_OP_SPRITE_REGION: need = RGE_OP_SPRITE_REGION_LEN; break;
+      case RGE_OP_BOX: need = RGE_OP_BOX_LEN; break;
       case RGE_OP_SCISSOR: need = RGE_OP_SCISSOR_LEN; break;
       case RGE_OP_SCISSOR_END: need = RGE_OP_SCISSOR_END_LEN; break;
       case RGE_OP_CANVAS: report_bad_frame("canvas record that is not first", at); goto done;
@@ -222,6 +283,12 @@ static void execute_records(const double *records, int32_t length, const char *t
       case RGE_OP_RECT: {
         push_transform(r);
         DrawRectangleV((Vector2){ 0.0f, 0.0f }, (Vector2){ (float)r[6], (float)r[7] }, unpack_color(to_color(r[8])));
+        rlPopMatrix();
+        break;
+      }
+      case RGE_OP_BOX: {
+        push_transform(r);
+        draw_box((float)r[6], (float)r[7], to_color(r[8]), to_color(r[9]), (float)r[10], (float)r[11]);
         rlPopMatrix();
         break;
       }

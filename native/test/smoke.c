@@ -47,6 +47,9 @@ static void sprite(double x, double y, double sx, double sy, int32_t texture) {
 static void region(double x, double y, int32_t texture, double sx, double sy, double sw, double sh, double ox, double oy, int flags, uint32_t tint) {
   header(RGE_OP_SPRITE_REGION, x, y, 0, 1, 1); push(texture); push(sx); push(sy); push(sw); push(sh); push(ox); push(oy); push(flags); push(tint);
 }
+static void box(double x, double y, double w, double h, uint32_t fill, uint32_t border, double border_width, double radius) {
+  header(RGE_OP_BOX, x, y, 0, 1, 1); push(w); push(h); push(fill); push(border); push(border_width); push(radius);
+}
 static void text(double x, double y, int32_t index, double size, uint32_t color) {
   header(RGE_OP_TEXT, x, y, 0, 1, 1); push(index); push(size); push(color);
 }
@@ -363,6 +366,58 @@ int main(void) {
   reset(); view(2, 0, 0, 2, 0, 0); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 10, 10, C_RED); frame();
   expect(8, 8, C_RED, "a second view of scale 1 after a zoom of 2");
   expect(15, 15, CLEAR, "...is not zoomed");
+
+  /* A box: a fill with a border drawn inside its edge, and optionally rounded corners. */
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 2, 0); frame();
+  expect(10, 10, C_GREEN, "a border covers the box's top-left pixel");
+  expect(39, 29, C_GREEN, "...and its bottom-right pixel");
+  expect(11, 20, C_GREEN, "...2 pixels wide on the left");
+  expect(12, 20, C_RED, "...and the fill starts after it");
+  expect(20, 11, C_GREEN, "...2 pixels wide on the top");
+  expect(20, 12, C_RED, "...and the fill starts after it");
+  expect(9, 20, CLEAR, "nothing is drawn outside the box");
+  expect(40, 20, CLEAR, "...on the right either");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, 0xff000000u, C_GREEN, 2, 0); frame();
+  expect(20, 20, CLEAR, "a fill with no alpha draws nothing");
+  expect(10, 20, C_GREEN, "...and the border is still drawn");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 0, 0); frame();
+  expect(10, 10, C_RED, "a border width of 0 draws no border");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, 0x00ff0000u, 3, 0); frame();
+  expect(10, 20, C_RED, "a border with no alpha draws nothing");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 99, 0); frame();
+  expect(10, 10, C_GREEN, "a border wider than half the box fills it with the border");
+  expect(25, 20, C_GREEN, "...all of it");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 0, 8); frame();
+  expect(10, 10, CLEAR, "a rounded corner leaves the corner pixel clear");
+  expect(25, 10, C_RED, "...and the middle of the top edge is filled");
+  expect(10, 20, C_RED, "...and the middle of the left edge");
+  expect(13, 13, C_RED, "...and the fill reaches into the corner diagonally");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 2, 8); frame();
+  expect(10, 10, CLEAR, "a rounded, bordered box leaves the corner clear");
+  expect(25, 10, C_GREEN, "...the border runs along the top");
+  expect(25, 11, C_GREEN, "...2 pixels deep");
+  expect(25, 12, C_RED, "...then the fill");
+  expect(10, 20, C_GREEN, "...and down the left side");
+  /* A radius smaller than the border: the outer corner is rounded, and everything else of the 4 pixel block is border. */
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 4, 2); frame();
+  expect(10, 10, CLEAR, "a radius of 2 rounds off the outer corner pixel");
+  expect(13, 13, C_GREEN, "...and the border's corner block is border to its inner corner");
+  expect(10, 14, C_GREEN, "...down the left");
+  expect(14, 14, C_RED, "...and the fill starts at the border's inner edge");
+  expect(25, 12, C_GREEN, "...the top border is 4 pixels deep");
+  expect(25, 14, C_RED, "...and no deeper");
+  /* A translucent border over a translucent fill: the corner block and the edges are each painted once. */
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, 0x00000000u, 0xffffff80u, 4, 6); frame();
+  { const uint8_t *edge = &pixels[(20 * W + 11) * 4], *corner = &pixels[(14 * W + 14) * 4], *top = &pixels[(11 * W + 25) * 4];
+    CHECK(edge[0] == top[0] && edge[1] == top[1] && edge[2] == top[2], "a translucent border is one colour along its edges (%d vs %d)", edge[0], top[0]);
+    CHECK(corner[0] == edge[0] && corner[1] == edge[1], "...and in its rounded corner, where no pixel is painted twice (%d vs %d)", corner[0], edge[0]); }
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 2, 1000); frame();
+  expect(10, 10, CLEAR, "a radius over half the shorter side is clamped, so the corner is clear");
+  expect(25, 20, C_RED, "...and the middle is filled");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, NAN, 20, C_RED, C_GREEN, 2, 0); box(10, 10, 30, 20, C_RED, C_GREEN, NAN, NAN); frame();
+  expect(10, 10, C_RED, "a NaN size draws nothing and a NaN border width or radius is none");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 2, 0); push(RGE_OP_BOX); push(1); frame();
+  expect(10, 10, C_GREEN, "a truncated box record stops the frame, after what was drawn");
 
   /* Scissor clips to a rectangle in target pixels, whatever the view, until SCISSOR_END. */
   reset(); view(1, 0, 0, 1, 0, 0); scissor(10, 10, 10, 10); rect(0, 0, 0, 1, 1, 40, 40, C_RED); scissor_end(); rect(30, 30, 0, 1, 1, 10, 10, C_GREEN); frame();

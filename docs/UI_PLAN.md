@@ -71,6 +71,9 @@ It keeps the CSS vocabulary already decided (`direction`, `alignItems`, `justify
 | `width`, `height` | `"fit"`, `"grow"`, a number, or a percentage such as `"50%"` | `"fit"` | How big the box is on that axis (see "Sizing") |
 | `minWidth`, `maxWidth`, `minHeight`, `maxHeight` | pixels | none | Bounds for `"fit"` and `"grow"` |
 | `background` | a CSS colour | none | Draw a filled rectangle behind the children, the size of the box |
+| `borderWidth`, `borderColor`, `borderRadius` | pixels, a CSS colour, pixels | `0`, none, `0` | A border drawn inside the edge (it counts as padding, so children never sit on it; no colour in any state, no border), with rounded corners on the background and the border. Drawn by `RGE_OP_BOX` (ABI v8); a box with no border and no radius is still a plain `RECT` |
+| `hoverBackground`, `hoverBorderColor` | a CSS colour | none | `background` / `borderColor` while the mouse is over the box (`World.hovered`). The box takes the mouse, and lets a press through to what is under it unless it has an `onPress`. Colours only, so layout never moves on hover |
+| `focusBackground`, `focusBorderColor` | a CSS colour | none | The same while the box has the focus. Hover wins when both apply |
 | `onPress` | a callback | none | Pressable over the laid-out box (U4) |
 
 Every one is a plain string, number or boolean, so each is a field on the object, set in place by `render()` like `Shape.width` is. There are no object-valued props (`padding={{ x: 8 }}`): an object would be allocated on every render, which the performance work in priority 4 is trying to remove, and the compiler today only special-cases `transform` as an object. That is why padding is spelled out as separate props.
@@ -390,7 +393,6 @@ Also decided on 2026-11-09, each as recommended:
 | Text wrapping inside a box | One-line text covers a HUD; the steps already leave its slot (step 2), and `rge_measure_text` already measures words | A dialogue box, or any text longer than its box |
 | Wrapping rows (`flex-wrap`) | A HUD row rarely wraps | An inventory grid; or a separate `Grid` built-in |
 | Aspect-ratio boxes | Nothing in a HUD needs one | A portrait or a minimap frame that must keep its shape while growing |
-| Borders and rounded corners on `background` | Needs new draw records (outline, rounded rectangle), as Clay's renderer has | The first real menu design |
 | Scrolling containers | Needs scroll state, on top of the scissor record U0 adds | A long settings menu or a chat log |
 | Layout transitions (animating size and position changes) | Clay has them; a game can animate `transform` today | A menu that should slide or resize smoothly |
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |

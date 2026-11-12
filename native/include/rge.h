@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 7
+#define RGE_ABI_VERSION 8
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -35,6 +35,12 @@
  *                                                origin; flags: RGE_SPRITE_FLIP_X, RGE_SPRITE_FLIP_Y, mirroring the
  *                                                region about the origin; tint is packed 0xRRGGBBAA, which multiplies
  *                                                the texel colours (alpha included, so it is also opacity).
+ *   RGE_OP_BOX      op, x, y, rot, sx, sy, width, height, fill, borderColor, borderWidth, radius
+ *                                                A width x height box at the local origin: filled with `fill`, then an
+ *                                                outline of `borderWidth` drawn inside its edge in `borderColor`, with
+ *                                                corners rounded by `radius` pixels (clamped to half the shorter side).
+ *                                                A fill or border colour with alpha 0, or a borderWidth <= 0, draws
+ *                                                nothing for that part; a radius <= 0 is square.
  *   RGE_OP_CANVAS   op, width, height, destX, destY, destW, destH, borderColor
  *                                                Only as the first record of a frame. Everything after it is drawn
  *                                                into an off-screen width x height texture (point filtered, cleared to
@@ -50,6 +56,7 @@
 #define RGE_OP_SCISSOR_END  7
 #define RGE_OP_CANVAS       8
 #define RGE_OP_SPRITE_REGION 9
+#define RGE_OP_BOX          10
 
 /* Record lengths in doubles, op included. */
 #define RGE_OP_VIEW_LEN    7
@@ -61,6 +68,7 @@
 #define RGE_OP_SCISSOR_END_LEN 1
 #define RGE_OP_CANVAS_LEN      8
 #define RGE_OP_SPRITE_REGION_LEN 15
+#define RGE_OP_BOX_LEN     12
 
 /* RGE_OP_SPRITE_REGION flags. */
 #define RGE_SPRITE_FLIP_X 1

@@ -5,7 +5,7 @@
  */
 import { KEY_NAMES, type KeyName } from "@rge/runtime";
 
-export const RGE_ABI_VERSION = 7;
+export const RGE_ABI_VERSION = 8;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const RGE_OP_VIEW = 1;
@@ -17,6 +17,7 @@ export const RGE_OP_SCISSOR = 6;
 export const RGE_OP_SCISSOR_END = 7;
 export const RGE_OP_CANVAS = 8;
 export const RGE_OP_SPRITE_REGION = 9;
+export const RGE_OP_BOX = 10;
 
 // Record lengths in doubles, op included.
 export const RGE_OP_VIEW_LEN = 7;
@@ -28,6 +29,7 @@ export const RGE_OP_SCISSOR_LEN = 5;
 export const RGE_OP_SCISSOR_END_LEN = 1;
 export const RGE_OP_CANVAS_LEN = 8;
 export const RGE_OP_SPRITE_REGION_LEN = 15;
+export const RGE_OP_BOX_LEN = 12;
 
 // Flags of a sprite region record.
 export const RGE_SPRITE_FLIP_X = 1;
@@ -70,6 +72,7 @@ export const PROTOCOL = {
   RGE_OP_SCISSOR_END,
   RGE_OP_CANVAS,
   RGE_OP_SPRITE_REGION,
+  RGE_OP_BOX,
   RGE_OP_VIEW_LEN,
   RGE_OP_SPRITE_LEN,
   RGE_OP_RECT_LEN,
@@ -79,6 +82,7 @@ export const PROTOCOL = {
   RGE_OP_SCISSOR_END_LEN,
   RGE_OP_CANVAS_LEN,
   RGE_OP_SPRITE_REGION_LEN,
+  RGE_OP_BOX_LEN,
   RGE_SPRITE_FLIP_X,
   RGE_SPRITE_FLIP_Y,
   RGE_SOUND_VOICES,
