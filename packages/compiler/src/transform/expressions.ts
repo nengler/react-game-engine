@@ -6,7 +6,7 @@ import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import { assertNever, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
 import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
 import { lowerFunction } from "./statements.ts";
-import { BINARY_OPERATORS, UNARY_OPERATORS } from "./helpers.ts";
+import { BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
 
 export class ExpressionLowering extends LoweringBase {
@@ -26,7 +26,8 @@ export class ExpressionLowering extends LoweringBase {
       // `x !== undefined`, `cond ? undefined : x`: the global, which no import or declaration can shadow here.
       if (!binding && node.text === "undefined") return { kind: "PlainRef", name: "undefined" };
       if (!binding) {
-        this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component.`, node);
+        const near = nearest(node.text, [...new Set([...this.scope.names(), ...this.plainImports])]);
+        this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${near ? ` (did you mean '${near}'?)` : ""}.`, node);
         return null;
       }
       if (binding.kind === "setter") {
@@ -439,9 +440,15 @@ export class ExpressionLowering extends LoweringBase {
     const ref = isPropertyAccessExpression(node) ? this.refAccess(node) : undefined;
     if (ref === "error") return null;
     if (ref) return { kind: "RefCurrent", ref };
+    const binding = isIdentifier(node) ? this.scope.get(node.text) : undefined;
+    if (binding?.kind === "local") {
+      if (binding.mutable) return { kind: "Local", local: binding.id, name: binding.name };
+      this.report(DiagnosticCode.UnsupportedStatement, `'${binding.name}' is a \`const\`: declare it with \`let\` to assign to it.`, node);
+      return null;
+    }
     this.report(
       DiagnosticCode.UnsupportedStatement,
-      "Only `ref.current` can be assigned. Use the state setter to change state, including position (`transform={{ x }}`).",
+      "Only `ref.current` and `let` locals can be assigned. Use the state setter to change state, including position (`transform={{ x }}`).",
       node,
     );
     return null;

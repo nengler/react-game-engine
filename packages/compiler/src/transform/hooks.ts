@@ -1,9 +1,9 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type Node } from "typescript/ast";
-import { isArrowFunction, isBlock, isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
-import { unwrapParens, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
+import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
+import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
+import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { lowerFunction } from "./statements.ts";
@@ -374,7 +374,7 @@ export class HookLowering extends ExpressionLowering {
       this.report(code, "useRef's initial value must not read state; it is evaluated once (it may read props).", hook.arguments[0]!);
       return;
     }
-    const type = this.valueType(hook.typeArgument, initialValue, hook.call, "useRef", code);
+    const type = this.refType(hook.typeArgument, initialValue, hook.call);
     if (!type || !this.claimName(hook.name, hook.declaration, code)) return;
     const id = refId(this.component.name, hook.name);
     this.refs.push({ kind: "Ref", id, name: hook.name, type, initialValue, span: this.span(hook.declaration) });
@@ -442,23 +442,28 @@ export class HookLowering extends ExpressionLowering {
     return null;
   }
 
-  /** The type of a `useRef` value: its type argument, or inferred from a literal initial value. Refs hold primitives only. */
-  protected valueType(typeArgument: Node | null, initial: ExprIR, at: Node, hook: string, code: CompilerDiagnostic["code"]): ValueType | null {
+  /**
+   * The type of a `useRef` value: its type argument (any type: `useRef<Point[]>([])`, `useRef<Enemy | null>(null)`), or inferred
+   * from a primitive initial value. A type that names an element (`useRef<Sprite>(null)`) is rejected: refs hold values, and
+   * what is on screen is driven by state and props.
+   */
+  protected refType(typeArgument: Node | null, initial: ExprIR, at: Node): TypeIR | null {
+    const code = DiagnosticCode.InvalidUseRef;
     if (typeArgument) {
-      switch (typeArgument.kind) {
-        case SyntaxKind.NumberKeyword: return "number";
-        case SyntaxKind.StringKeyword: return "string";
-        case SyntaxKind.BooleanKeyword: return "boolean";
-        default:
-          this.report(code, `${hook} type argument must be number, string or boolean.`, typeArgument);
-          return null;
+      let element: string | null = null;
+      visit(typeArgument, (n) => {
+        if (element === null && isTypeReferenceNode(n) && isIdentifier(n.typeName) && (this.intrinsics.has(n.typeName.text) || this.locals.has(n.typeName.text) || this.imported.has(n.typeName.text))) element = n.typeName.text;
+      });
+      if (element !== null) {
+        this.report(code, `Refs hold values, not elements: <${element}> is driven by state and props. Keep what you need from it (a position, a count) in a ref or in state.`, typeArgument);
+        return null;
       }
+      return this.typeFromNode(typeArgument);
     }
     const inferred = this.inferType(initial);
-    if (!inferred) {
-      this.report(code, `Cannot infer the type; use a number/string/boolean literal, a prop, or \`${hook}<T>(...)\`.`, at);
-    }
-    return inferred;
+    if (inferred) return { kind: "Primitive", name: inferred };
+    this.report(code, "Cannot infer the type: use a number/string/boolean literal, or give it: `useRef<Point[]>([])`, `useRef<Enemy | null>(null)`.", at);
+    return null;
   }
 }
 

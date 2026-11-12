@@ -105,9 +105,9 @@ describe("M3: IR shape", () => {
   it("lowers useRef to a typed value with an initial value", () => {
     assert.deepEqual(
       ir(RUNNER).refs.map((r) => [r.name, r.type, r.initialValue]),
-      [["travelled", "number", { kind: "NumberLiteral", value: 0 }]],
+      [["travelled", { kind: "Primitive", name: "number" }, { kind: "NumberLiteral", value: 0 }]],
     );
-    assert.deepEqual(ir(TIMER).refs.map((r) => [r.name, r.type]), [["elapsed", "number"], ["label", "string"]]);
+    assert.deepEqual(ir(TIMER).refs.map((r) => [r.name, r.type]), [["elapsed", { kind: "Primitive", name: "number" }], ["label", { kind: "Primitive", name: "string" }]]);
   });
 
   it("lowers `.current` writes to Assign and reads to RefRead", () => {
@@ -360,7 +360,7 @@ function C() {
     assert.deepEqual(codes("useUpdate(() => { const q = r; });", r), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes("useUpdate(() => { r.other = 1; });", r), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes("useUpdate(() => { r = 1; });", r), [DiagnosticCode.UnsupportedStatement]);
-    assert.deepEqual(codes("useUpdate(() => { r.current ||= 1; });", r), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(codes("useUpdate(() => { r.current |= 1; });", r), [DiagnosticCode.UnsupportedStatement]);
     assert.deepEqual(codes("useUpdate(() => { n = 2; });"), [DiagnosticCode.UnsupportedStatement]);
   });
 });

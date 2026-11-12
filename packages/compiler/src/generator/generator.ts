@@ -259,7 +259,7 @@ class ComponentGenerator extends ElementEmitter {
       }
       // Refs: plain fields. Reading or writing them never marks anything dirty.
       for (const r of c.refs) {
-        w.line(`${r.name}: ${r.type} = ${this.expr(r.initialValue, true)};`);
+        w.line(`${r.name}: ${typeText(r.type)} = ${this.expr(r.initialValue, true)};`);
       }
       // Sounds: one per useSound. Playing is an effect, so nothing is marked dirty.
       for (const s of c.sounds) {
@@ -375,7 +375,7 @@ class ComponentGenerator extends ElementEmitter {
           }
           for (const r of c.refs) {
             w.line(`value = saved[${JSON.stringify(r.id)}];`);
-            w.line(`if (this.hotFits(value, this.${r.name})) this.${r.name} = value as ${r.type};`);
+            w.line(`if (this.hotFits(value, this.${r.name})) this.${r.name} = value as ${typeText(r.type)};`);
           }
           // A setter's value reaches its field, and a field's value reaches what is drawn, on the next render.
           if (hasRender || settable.length > 0) w.line("this.markDirty();");

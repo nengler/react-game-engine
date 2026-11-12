@@ -1,6 +1,6 @@
 // The IR of a module and its declarations: components, hooks, state, refs and sounds.
 import { type StateId, type RefId, type SoundId, type SourceSpan } from "./ids.ts";
-import { type ValueType, type TypeIR, type FunctionIR } from "./values.ts";
+import { type TypeIR, type FunctionIR } from "./values.ts";
 import { type HostElementIR, type PropDeclIR } from "./elements.ts";
 import { type ExprIR } from "./expressions.ts";
 
@@ -130,7 +130,8 @@ export interface RefIR {
   readonly id: RefId;
   /** Also the generated field name. */
   readonly name: string;
-  readonly type: ValueType;
+  /** A primitive inferred from the initial value, or the type argument (`useRef<Point[]>([])`). */
+  readonly type: TypeIR;
   /** Must not read state. */
   readonly initialValue: ExprIR;
   readonly span: SourceSpan;

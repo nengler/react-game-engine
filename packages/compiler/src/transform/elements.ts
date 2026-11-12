@@ -6,7 +6,7 @@ import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
 import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type ValuePropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
 import { Scope } from "./scope.ts";
 import { checkFreshName, lowerFunction } from "./statements.ts";
-import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute } from "./helpers.ts";
+import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute, nearest } from "./helpers.ts";
 import { HookLowering } from "./hooks.ts";
 
 export class ElementLowering extends HookLowering {
@@ -347,7 +347,8 @@ export class ElementLowering extends HookLowering {
       component = { kind: "Imported", name: tag.text, module, isDefault };
     }
     else {
-      this.report(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`, tag);
+      const near = nearest(tag.text, [...this.intrinsics, ...this.locals, ...this.imported.keys()]);
+      this.report(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>${near ? ` (did you mean <${near}>?)` : ""}. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`, tag);
       return null;
     }
 

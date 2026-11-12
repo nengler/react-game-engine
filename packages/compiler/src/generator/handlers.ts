@@ -1,5 +1,5 @@
 // Layer 1 of ComponentGenerator: the handler methods, state setters and updaters, and the statements and callbacks inside them.
-import { assertNever, type FunctionIR, type HandlerHookIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
+import { assertNever, type FunctionIR, type HandlerHookIR, type IfStmtIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { CodeWriter } from "./writer.ts";
 import { param, annotated, pendingRef } from "./helpers.ts";
@@ -123,30 +123,53 @@ export class HandlerEmitter extends ExpressionEmitter {
           w.line(`${this.storeName}.getState().${stmt.action}(${stmt.args.map((a) => this.expr(a, true)).join(", ")});`);
           break;
         case "Assign": {
-          const target = `this.${this.refField(stmt.target.ref)}`;
+          const target = stmt.target.kind === "RefCurrent" ? `this.${this.refField(stmt.target.ref)}` : stmt.target.name;
           w.line(`${target} ${stmt.operator} ${this.expr(stmt.value, true)};`);
           break;
         }
         case "LocalConst":
-          w.line(`const ${stmt.name} = ${this.expr(stmt.value, true)};`);
+          w.line(`${stmt.mutable ? "let" : "const"} ${stmt.type ? annotated(stmt.name, stmt.type) : stmt.name} = ${this.expr(stmt.value, true)};`);
+          break;
+        case "ForOf":
+          w.block(`for (const ${stmt.name} of ${this.expr(stmt.iterable, true)})`, () => this.stmts(stmt.body));
+          break;
+        case "Break":
+          w.line("break;");
+          break;
+        case "Continue":
+          w.line("continue;");
           break;
         case "Return":
           w.line(stmt.value ? `return ${this.expr(stmt.value, true)};` : "return;");
           break;
         case "If":
-          w.open(`if (${this.expr(stmt.test, true)}) {`);
-          this.stmts(stmt.then);
-          if (stmt.else.length > 0) {
-            w.close();
-            w.open("} else {");
-            this.stmts(stmt.else);
-          }
-          w.close("}");
+          this.emitIf(stmt);
           break;
         default:
           assertNever(stmt, "statement");
       }
     }
+  }
+
+  /** `if … else if … else`: an `else` that holds only another `if` is written as `else if`, not nested a level deeper. */
+  protected emitIf(stmt: IfStmtIR): void {
+    const w = this.w;
+    w.open(`if (${this.expr(stmt.test, true)}) {`);
+    this.stmts(stmt.then);
+    let rest: readonly StatementIR[] = stmt.else;
+    while (rest.length === 1 && rest[0]!.kind === "If") {
+      const next: IfStmtIR = rest[0];
+      w.close();
+      w.open(`} else if (${this.expr(next.test, true)}) {`);
+      this.stmts(next.then);
+      rest = next.else;
+    }
+    if (rest.length > 0) {
+      w.close();
+      w.open("} else {");
+      this.stmts(rest);
+    }
+    w.close("}");
   }
 
   /** A callback passed to a child: an arrow with unannotated parameters, typed by the child's props type. */

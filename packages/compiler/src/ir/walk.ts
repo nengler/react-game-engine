@@ -105,6 +105,8 @@ export function walkStatements(body: readonly StatementIR[], visit: (e: ExprIR) 
       case "ExpressionStatement": walkExpr(stmt.expression, visit); break;
       case "LocalConst": walkExpr(stmt.value, visit); break;
       case "If": walkExpr(stmt.test, visit); walkStatements(stmt.then, visit, visitStatement); walkStatements(stmt.else, visit, visitStatement); break;
+      case "ForOf": walkExpr(stmt.iterable, visit); walkStatements(stmt.body, visit, visitStatement); break;
+      case "Break": case "Continue": break;
       case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
       case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit, visitStatement); else walkExpr(stmt.value, visit); break;
       case "Assign": walkExpr(stmt.value, visit); break;

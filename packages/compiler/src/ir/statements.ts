@@ -1,6 +1,6 @@
 // The IR of statements: assignments, state setters, sounds, control flow and actions.
 import { type StateId, type LocalId, type RefId, type SoundId } from "./ids.ts";
-import { type FunctionIR } from "./values.ts";
+import { type FunctionIR, type TypeIR } from "./values.ts";
 import { type ExprIR } from "./expressions.ts";
 
 
@@ -9,7 +9,34 @@ import { type ExprIR } from "./expressions.ts";
  * Statements are only valid inside functions. State reads are live: after a
  * `SetState`, later reads in the same function see the new value.
  */
-export type StatementIR = ExpressionStatementIR | LocalConstStmtIR | IfStmtIR | ReturnStmtIR | SetStateStmtIR | AssignStmtIR | PlaySoundStmtIR | CallActionStmtIR;
+export type StatementIR =
+  | ExpressionStatementIR
+  | LocalConstStmtIR
+  | IfStmtIR
+  | ForOfStmtIR
+  | LoopJumpStmtIR
+  | ReturnStmtIR
+  | SetStateStmtIR
+  | AssignStmtIR
+  | PlaySoundStmtIR
+  | CallActionStmtIR;
+
+/**
+ * `for (const enemy of enemies) { … }`: the body once per item of an array, in order. The item is a `const` local of the
+ * body's scope. Bounded by the array, so a handler cannot loop forever (there is no `while`).
+ */
+export interface ForOfStmtIR {
+  readonly kind: "ForOf";
+  readonly item: LocalId;
+  readonly name: string;
+  readonly iterable: ExprIR;
+  readonly body: readonly StatementIR[];
+}
+
+/** `break;` or `continue;`, only inside a `for…of` of the same function. */
+export interface LoopJumpStmtIR {
+  readonly kind: "Break" | "Continue";
+}
 
 /**
  * `collect(5)`, where `collect` is a game-state action bound with `const collect = useGame((s) => s.collect)`. It runs
@@ -29,10 +56,17 @@ export interface PlaySoundStmtIR {
   readonly volume: ExprIR | null;
 }
 
-export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=";
+export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | "||=" | "&&=" | "??=";
 
 /** Where an assignment writes. Not reactive: no write marks anything dirty. */
-export type AssignTargetIR = RefCurrentTargetIR;
+export type AssignTargetIR = RefCurrentTargetIR | LocalTargetIR;
+
+/** A `let` local of the enclosing function: `best = enemy`, `total += e.hp`. */
+export interface LocalTargetIR {
+  readonly kind: "Local";
+  readonly local: LocalId;
+  readonly name: string;
+}
 
 /** `r.current`, where `r` is a `useRef` value. */
 export interface RefCurrentTargetIR {
@@ -54,12 +88,16 @@ export interface ExpressionStatementIR {
   readonly expression: ExprIR;
 }
 
-/** `const name = expr;` scoped to the enclosing block. */
+/** `const name = expr;` (or `let`, with `mutable`) scoped to the enclosing block. */
 export interface LocalConstStmtIR {
   readonly kind: "LocalConst";
   readonly id: LocalId;
   readonly name: string;
   readonly value: ExprIR;
+  /** `let`: an assignment may change it later in the function. Absent for `const`. */
+  readonly mutable?: true;
+  /** `let best: Enemy | null = null`: the annotation, written into the generated code. Absent when TypeScript infers it. */
+  readonly type?: TypeIR;
 }
 
 export interface IfStmtIR {

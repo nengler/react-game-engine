@@ -4,10 +4,17 @@ import {
   isBinaryExpression,
   isBlock,
   isCallExpression,
+  isBreakStatement,
+  isContinueStatement,
   isExpressionStatement,
+  isForOfStatement,
   isIdentifier,
   isIfStatement,
+  isPostfixUnaryExpression,
+  isPrefixUnaryExpression,
+  isPropertyAccessExpression,
   isReturnStatement,
+  isVariableDeclarationList,
   isVariableStatement,
 } from "typescript/ast/is";
 import { unwrapParens } from "../analyzer/analyzer.ts";
@@ -43,6 +50,8 @@ export interface LoweringContext {
   /** Lowers a state updater: sounds cannot be played in it. */
   inUpdater<T>(lower: () => T): T;
   nextSerial(): number;
+  /** A type annotation (`let best: Enemy | null`): primitives and arrays understood, anything else kept as source text. */
+  typeFromNode(node: Node): TypeIR;
   /** Names handler code may never rebind, because the call allowlist refers to them (`Math`, runtime functions). */
   isCallableName(name: string): boolean;
   error(code: (typeof DiagnosticCode)[keyof typeof DiagnosticCode], message: string, node: Node): void;
@@ -88,7 +97,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
     let body: StatementIR[] | null;
     if (isBlock(fn.body)) {
       // The body's top-level block shares the parameters' scope, as in JS: `(n) => { const n = 1; }` is a redeclaration.
-      body = lowerStatements(ctx, fn.body.statements, options, false);
+      body = lowerStatements(ctx, fn.body.statements, options, { newScope: false, inLoop: false });
     } else if (options.returns === "value") {
       const value = ctx.lowerExpression(fn.body);
       body = value && [{ kind: "Return", value }];
@@ -102,15 +111,21 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
   }
 }
 
-/** Lowers statements in a fresh block scope, so `const`s declared inside do not leak out. */
-function lowerStatements(ctx: LoweringContext, statements: readonly Statement[], options: FunctionOptions, newScope = true): StatementIR[] | null {
+/** Where statements are lowered: in a block scope of their own (`const`s declared inside do not leak out), and inside a loop. */
+interface BlockOptions {
+  readonly newScope: boolean;
+  /** `break` and `continue` are allowed: an enclosing `for…of` of the same function. */
+  readonly inLoop: boolean;
+}
+
+function lowerStatements(ctx: LoweringContext, statements: readonly Statement[], options: FunctionOptions, block: BlockOptions): StatementIR[] | null {
   const outer = ctx.scope;
-  if (newScope) ctx.scope = new Scope(outer);
+  if (block.newScope) ctx.scope = new Scope(outer);
   try {
     const out: StatementIR[] = [];
     let ok = true;
     for (const statement of statements) {
-      const lowered = lowerStatement(ctx, statement, options);
+      const lowered = lowerStatement(ctx, statement, options, block.inLoop);
       if (lowered) out.push(lowered);
       else ok = false;
     }
@@ -120,15 +135,30 @@ function lowerStatements(ctx: LoweringContext, statements: readonly Statement[],
   }
 }
 
-function lowerStatement(ctx: LoweringContext, statement: Statement, options: FunctionOptions): StatementIR | null {
+function lowerStatement(ctx: LoweringContext, statement: Statement, options: FunctionOptions, inLoop: boolean): StatementIR | null {
   if (isExpressionStatement(statement)) return lowerExpressionStatement(ctx, statement.expression, statement);
 
   if (isIfStatement(statement)) {
     const test = ctx.lowerExpression(statement.expression);
-    const branch = (s: Statement) => lowerStatements(ctx, isBlock(s) ? s.statements : [s], options);
+    const branch = (s: Statement) => lowerStatements(ctx, isBlock(s) ? s.statements : [s], options, { newScope: true, inLoop });
     const thenBranch = branch(statement.thenStatement);
     const elseBranch = statement.elseStatement ? branch(statement.elseStatement) : [];
     return test && thenBranch && elseBranch && { kind: "If", test, then: thenBranch, else: elseBranch };
+  }
+
+  if (isForOfStatement(statement)) return lowerForOf(ctx, statement, options);
+
+  if (isBreakStatement(statement) || isContinueStatement(statement)) {
+    const word = isBreakStatement(statement) ? "break" : "continue";
+    if (statement.label) {
+      ctx.error(DiagnosticCode.UnsupportedStatement, `Labelled \`${word}\` is not supported: it leaves the innermost \`for…of\`.`, statement);
+      return null;
+    }
+    if (!inLoop) {
+      ctx.error(DiagnosticCode.UnsupportedStatement, `\`${word}\` is only valid inside a \`for…of\` loop of the same function.`, statement);
+      return null;
+    }
+    return { kind: isBreakStatement(statement) ? "Break" : "Continue" };
   }
 
   if (isReturnStatement(statement)) {
@@ -150,8 +180,10 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
   if (isVariableStatement(statement)) {
     const list = statement.declarationList;
     const decl = list.declarations[0]!;
-    if ((list.flags & NodeFlags.Const) === 0 || list.declarations.length !== 1 || !isIdentifier(decl.name) || !decl.initializer) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, "Only `const name = expression;` declarations are supported in handlers.", statement);
+    const mutable = (list.flags & NodeFlags.Let) !== 0;
+    const isConst = (list.flags & NodeFlags.Const) !== 0;
+    if ((!isConst && !mutable) || list.declarations.length !== 1 || !isIdentifier(decl.name) || !decl.initializer) {
+      ctx.error(DiagnosticCode.UnsupportedStatement, "Only `const name = expression;` and `let name = expression;` declarations (one name, with a value) are supported in handlers.", statement);
       return null;
     }
     // `const events = step(input, dt);`: a game-state action whose result the handler uses (only here, in a handler, where it
@@ -171,35 +203,71 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const name = decl.name.text;
     if (!value || !checkFreshName(ctx, name, decl.name)) return null;
     const id = localId(ctx.componentName, name, ctx.nextSerial());
-    ctx.scope.declare(name, { kind: "local", id, name });
-    return { kind: "LocalConst", id, name, value };
+    ctx.scope.declare(name, { kind: "local", id, name, mutable });
+    const type = decl.type ? ctx.typeFromNode(decl.type) : undefined;
+    return { kind: "LocalConst", id, name, value, ...(mutable ? { mutable: true as const } : {}), ...(type ? { type } : {}) };
   }
 
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
-    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, ref property assignments, allowlisted calls, \`if\`/\`else\`, \`const\` and \`return\`.`,
+    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`for…of\` (with \`break\` and \`continue\`), \`const\`, \`let\` and \`return\`.`,
     statement,
   );
   return null;
 }
 
+/**
+ * `for (const enemy of enemies) { … }`: the array is lowered first (it cannot read the item), then the body in a scope where
+ * the item is a `const`, and `break` / `continue` are allowed.
+ */
+function lowerForOf(ctx: LoweringContext, statement: Statement & { kind: SyntaxKind.ForOfStatement }, options: FunctionOptions): StatementIR | null {
+  const loop = statement as unknown as { awaitModifier?: Node; initializer: Node; expression: Expression; statement: Statement };
+  const shape = "A loop is written `for (const item of items) { … }`";
+  if (loop.awaitModifier) {
+    ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: no \`await\`.`, statement);
+    return null;
+  }
+  const list = loop.initializer;
+  const decl = isVariableDeclarationList(list) && list.declarations.length === 1 ? list.declarations[0]! : null;
+  if (!decl || !isVariableDeclarationList(list) || (list.flags & NodeFlags.Const) === 0 || !isIdentifier(decl.name) || decl.type) {
+    ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: one \`const\` name, without destructuring or a type (the array gives it).`, list);
+    return null;
+  }
+  const iterable = ctx.lowerExpression(loop.expression);
+  if (!iterable) return null;
+  const outer = ctx.scope;
+  ctx.scope = new Scope(outer);
+  try {
+    const name = decl.name.text;
+    if (!checkFreshName(ctx, name, decl.name)) return null;
+    const item = localId(ctx.componentName, name, ctx.nextSerial());
+    ctx.scope.declare(name, { kind: "local", id: item, name, mutable: false });
+    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, inLoop: true });
+    return body && { kind: "ForOf", item, name, iterable, body };
+  } finally {
+    ctx.scope = outer;
+  }
+}
+
 const ASSIGN_OPERATORS: ReadonlyMap<SyntaxKind, AssignOperator> = new Map([
   [SyntaxKind.EqualsToken, "="], [SyntaxKind.PlusEqualsToken, "+="], [SyntaxKind.MinusEqualsToken, "-="],
-  [SyntaxKind.AsteriskEqualsToken, "*="], [SyntaxKind.SlashEqualsToken, "/="],
+  [SyntaxKind.AsteriskEqualsToken, "*="], [SyntaxKind.SlashEqualsToken, "/="], [SyntaxKind.PercentEqualsToken, "%="],
+  [SyntaxKind.AsteriskAsteriskEqualsToken, "**="], [SyntaxKind.BarBarEqualsToken, "||="],
+  [SyntaxKind.AmpersandAmpersandEqualsToken, "&&="], [SyntaxKind.QuestionQuestionEqualsToken, "??="],
 ] as const);
 
-/** Every assignment-shaped operator, so unsupported ones (`||=`, `%=`) get a precise diagnostic. */
+/** Every assignment-shaped operator, so unsupported ones (the bitwise and shift forms) get a precise diagnostic. */
 const ASSIGNMENT_TOKENS: ReadonlySet<SyntaxKind> = new Set([
   ...ASSIGN_OPERATORS.keys(),
-  SyntaxKind.PercentEqualsToken, SyntaxKind.AsteriskAsteriskEqualsToken, SyntaxKind.BarBarEqualsToken,
-  SyntaxKind.AmpersandAmpersandEqualsToken, SyntaxKind.QuestionQuestionEqualsToken,
+  SyntaxKind.AmpersandEqualsToken, SyntaxKind.BarEqualsToken, SyntaxKind.CaretEqualsToken, SyntaxKind.LessThanLessThanEqualsToken,
+  SyntaxKind.GreaterThanGreaterThanEqualsToken, SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
 ]);
 
 /** `target = value` / `target += value` (ref properties). */
 function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): StatementIR | null {
   const operator = ASSIGN_OPERATORS.get(expression.operatorToken.kind);
   if (!operator) {
-    ctx.error(DiagnosticCode.UnsupportedStatement, "Supported assignment operators: =, +=, -=, *=, /=.", expression.operatorToken);
+    ctx.error(DiagnosticCode.UnsupportedStatement, `Supported assignment operators: ${[...ASSIGN_OPERATORS.values()].join(", ")}.`, expression.operatorToken);
     return null;
   }
   const target = ctx.lowerAssignTarget(unwrapParens(expression.left));
@@ -207,10 +275,29 @@ function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): St
   return target && value && { kind: "Assign", target, operator, value };
 }
 
+/**
+ * `n++`, `--r.current`: as a statement, the same as `+= 1` / `-= 1` on a `let` local or a ref. (Anywhere else, `++` stays an
+ * error: it would change state in place.)
+ */
+function lowerIncrement(ctx: LoweringContext, expression: Expression): StatementIR | null | undefined {
+  if (!isPrefixUnaryExpression(expression) && !isPostfixUnaryExpression(expression)) return undefined;
+  const operator = expression.operator === SyntaxKind.PlusPlusToken ? "+=" : expression.operator === SyntaxKind.MinusMinusToken ? "-=" : null;
+  if (operator === null) return undefined;
+  const operand = unwrapParens(expression.operand);
+  // Only a local or `ref.current`; anything else (`count++` on state) is left to the expression's own diagnostic.
+  const object = isPropertyAccessExpression(operand) ? unwrapParens(operand.expression) : null;
+  const kind = isIdentifier(operand) ? ctx.scope.get(operand.text)?.kind : object && isIdentifier(object) ? ctx.scope.get(object.text)?.kind : undefined;
+  if (kind !== (isIdentifier(operand) ? "local" : "ref")) return undefined;
+  const target = ctx.lowerAssignTarget(operand);
+  return target && { kind: "Assign", target, operator, value: { kind: "NumberLiteral", value: 1 } };
+}
+
 /** `setX(value)`, `setX(prev => ...)`, an assignment, or an allowlisted call. */
 function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, at: Node): StatementIR | null {
   const call = unwrapParens(expression);
   if (isBinaryExpression(call) && ASSIGNMENT_TOKENS.has(call.operatorToken.kind)) return lowerAssignment(ctx, call);
+  const increment = lowerIncrement(ctx, call);
+  if (increment !== undefined) return increment;
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
     if (callee?.kind === "sound") {

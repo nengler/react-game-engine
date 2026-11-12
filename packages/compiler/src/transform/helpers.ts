@@ -16,7 +16,7 @@ export const SOUND_CLASS = "Sound";
 
 export const BINARY_OPERATORS: ReadonlyMap<SyntaxKind, BinaryOperator> = new Map([
   [SyntaxKind.PlusToken, "+"], [SyntaxKind.MinusToken, "-"], [SyntaxKind.AsteriskToken, "*"],
-  [SyntaxKind.SlashToken, "/"], [SyntaxKind.PercentToken, "%"],
+  [SyntaxKind.SlashToken, "/"], [SyntaxKind.PercentToken, "%"], [SyntaxKind.AsteriskAsteriskToken, "**"],
   [SyntaxKind.LessThanToken, "<"], [SyntaxKind.LessThanEqualsToken, "<="],
   [SyntaxKind.GreaterThanToken, ">"], [SyntaxKind.GreaterThanEqualsToken, ">="],
   [SyntaxKind.EqualsEqualsEqualsToken, "==="], [SyntaxKind.ExclamationEqualsEqualsToken, "!=="],

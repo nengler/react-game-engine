@@ -119,7 +119,7 @@ export class LoweringBase {
   }
 
   /** A type argument: primitives and arrays are understood; anything else is kept as source text for the type-check. */
-  protected typeFromNode(node: Node): TypeIR {
+  typeFromNode(node: Node): TypeIR {
     const t = unwrapTypeParens(node);
     switch (t.kind) {
       case SyntaxKind.NumberKeyword: return { kind: "Primitive", name: "number" };
@@ -154,7 +154,7 @@ export class LoweringBase {
       case "Binary": {
         switch (expr.operator) {
           case "<": case "<=": case ">": case ">=": case "===": case "!==": case "==": case "!=": return "boolean";
-          case "-": case "*": case "/": case "%": return this.inferType(expr.left) === "number" && this.inferType(expr.right) === "number" ? "number" : null;
+          case "-": case "*": case "/": case "%": case "**": return this.inferType(expr.left) === "number" && this.inferType(expr.right) === "number" ? "number" : null;
           case "+": {
             const [left, right] = [this.inferType(expr.left), this.inferType(expr.right)];
             if (left === "string" || right === "string") return left && right ? "string" : null;

@@ -344,8 +344,8 @@ describe("M5a: diagnostics", () => {
     assert.match(compileErrors(withHandler(`const [items, setItems] = useState([]);`, ``))[0]!.message, /useState<EnemyData\[\]>/);
   });
 
-  it("keeps refs to primitives", () => {
-    assert.deepEqual(codes(withHandler(`const r = useRef<Item[]>([]);`, ``)), [DiagnosticCode.InvalidUseRef]);
+  it("keeps refs to values: a type that names an element is rejected", () => {
+    assert.deepEqual(codes(withHandler(`const r = useRef<Sprite | null>(null);`, ``)), [DiagnosticCode.InvalidUseRef]);
   });
 
   it("rejects mutating array methods, naming the immutable alternative", () => {

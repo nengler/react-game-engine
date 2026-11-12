@@ -28,7 +28,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | React's snapshot semantics: reads see the value from the last render; setters queue, updaters chain on the pending value, and `commitState()` applies them just before the render. Every handler in a frame sees the same state (decided 2026-11-08) |
 | Global state | One nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
-| Refs | Refs hold values only (`const timer = useRef(0)`; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
+| Refs | Refs hold values only (`const timer = useRef(0)`, or any type given as an argument, `useRef<Point[]>([])`, except one that names an element; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
@@ -234,20 +234,28 @@ lowered to a `FunctionIR { params, body: StatementIR[] }`. Statements exist
 only inside functions.
 
 **Statements** (`StatementIR`): `ExpressionStatement` (allowlisted calls),
-`LocalConst`, `If`, `Return`, and `SetState`, which is either
+`LocalConst` (`const`, or `let` with `mutable`, either with an optional type
+annotation: `let best: Enemy | null = null`), `If` (an `else` holding only an
+`if` is written `else if`), `ForOf` (`for (const e of enemies) { … }`, one
+`const` name, no destructuring), `Break` / `Continue` (only inside a `for…of`
+of the same function), `Return`, and `SetState`, which is either
 `{ state, value }` or `{ state, updater: FunctionIR }` for `setX(prev => …)`.
 Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
-`Assign` (`=`, `+=`, `-=`, `*=`, `/=`) writes `ref.current`; see
-"Transforms and refs". Position is not assigned: it is state.
+`Assign` (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `||=`, `&&=`, `??=`) writes
+`ref.current` or a `let` local; `n++` / `--r.current` as a statement is
+`+= 1` / `-= 1` on those two. See "Transforms and refs". Position is not
+assigned: it is state. There is no `while` or C-style `for`: a `for…of` is
+bounded by its array, so a handler cannot hang a frame.
 
 **Expressions** added: `ParamRead`, `LocalRead`, `PropertyRead` (only on a
 parameter of a runtime handle type, e.g. `input.pointerX`), `Call` and
 `TemplateLiteral`. `Call` is limited to an allowlist (`Math.abs/floor/ceil/
 round/sign/sqrt/sin/cos/min/max`, `clamp`) and to methods of handle
 parameters (`input.pressed/down/released`); the tables live in
-`transform/handles.ts`. Everything else (loops, `try`, `let`, assignment,
-closures that escape, `this`, `await`, other calls) is a diagnostic
-(`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but `ref.current` is `RGE1402`.
+`transform/handles.ts`. Everything else (`while` and C-style `for`, `try`,
+`var`, closures that escape, `this`, `await`, other calls) is a diagnostic
+(`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but `ref.current` or a
+`let` local is `RGE1402`, and `++` on anything else stays `RGE1301`.
 
 **Scoping**: component scope (state, setters) → function scope (parameters) →
 block scope (`const`s). Shadowing follows JS, so the React idiom

@@ -244,7 +244,7 @@ export const MUTATING_ARRAY_METHODS: Readonly<Record<string, string>> = {
   reverse: "a reversed copy (not supported yet)",
   fill: "`map`",
   copyWithin: "`map`",
-  forEach: "`map`, `filter` or `some` (handler code builds new arrays rather than looping)",
+  forEach: "a `for (const item of items) { … }` loop in a handler, or `map`, `filter` or `some`",
 };
 
 /** A call to a fixed allowlist (`Math.*`, `clamp`) or a method of a runtime handle parameter. */
@@ -287,7 +287,7 @@ export interface UnaryExprIR {
 }
 
 export type BinaryOperator =
-  | "+" | "-" | "*" | "/" | "%"
+  | "+" | "-" | "*" | "/" | "%" | "**"
   | "<" | "<=" | ">" | ">="
   | "===" | "!==" | "==" | "!="
   | "&&" | "||" | "??";
