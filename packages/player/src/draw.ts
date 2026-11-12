@@ -32,7 +32,7 @@ import {
 } from "@rge/runtime";
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
 import { stepTransition, type ShownColors } from "./transition.ts";
-import { Layouter, type MeasuredSize } from "./layout.ts";
+import { borderRoom, Layouter, type MeasuredSize } from "./layout.ts";
 import {
   RGE_OP_BOX,
   RGE_OP_BOX_LEN,
@@ -82,7 +82,8 @@ interface TileSheet {
  * with `global` cutting the chain as it does for position (see `Transform`). A camera is transparent here too.
  *
  * A `<Hud>` is visited but not entered, because its subtree is drawn in a layer of its own (see `FrameBuilder.build`);
- * `intoHuds` walks it as a plain container instead, which is how that layer is walked.
+ * `intoHuds` walks it as a plain container instead, which is how that layer is walked. `leave`, when given, is called for each
+ * object once everything under it has been visited (not for a `<Hud>` that is not entered).
  */
 export function walkTree(
   root: GameObject,
@@ -90,8 +91,9 @@ export function walkTree(
   parentSpace: WorldTransform = IDENTITY_TRANSFORM,
   parentZ = 0,
   intoHuds = false,
+  leave: ((object: GameObject, kind: number) => void) | null = null,
 ): void {
-  walk(root, visit, parentSpace, parentZ, intoHuds);
+  walk(root, visit, parentSpace, parentZ, intoHuds, leave);
 }
 
 /**
@@ -104,6 +106,7 @@ function walk(
   parentSpace: WorldTransform,
   parentZ: number,
   intoHuds: boolean,
+  leave: ((object: GameObject, kind: number) => void) | null,
 ): void {
   const transform = root.transform;
   const placement = root.placement;
@@ -132,7 +135,8 @@ function walk(
   const childZ = isCamera ? parentZ : z;
   // Indexed, not `for…of`: QuickJS makes an iterator object for every `for…of`, and this runs for every object every frame.
   const children = root.children;
-  for (let i = 0; i < children.length; i++) walk(children[i] as GameObject, visit, childSpace, childZ, intoHuds);
+  for (let i = 0; i < children.length; i++) walk(children[i] as GameObject, visit, childSpace, childZ, intoHuds, leave);
+  if (leave !== null) leave(root, kind);
 }
 
 /** How many doubles the record starting with this op takes. */
@@ -171,6 +175,13 @@ function orderByZ(zs: readonly number[]): number[] | null {
   return order;
 }
 
+/** Numbers kept per clipping box (see `DrawList.pushClip`), and where its parent's id is among them. */
+const CLIP_STRIDE = 9;
+const CLIP_PARENT = 7;
+const CLIP_INSET = 8;
+/** The most doubles of clip records a record can need ahead of it: a clip record is the longest. */
+const CLIP_RECORD_ROOM = RGE_OP_SCISSOR_LEN;
+
 /** A growable frame of draw records (see `native/include/rge.h`) and the strings its text records refer to. */
 export class DrawList {
   records = new Float64Array(1024);
@@ -183,12 +194,46 @@ export class DrawList {
   readonly #zRuns: number[] = [];
   #z = 0;
   #scratch = new Float64Array(1024);
+  /**
+   * The clipping boxes of a layer (see `pushClip`), from id 1: `CLIP_STRIDE` numbers each, the box's world transform (x, y,
+   * rotation, scale x and y), its width and height, its parent's id (0 for none) and how far in from the edge it clips.
+   */
+  readonly #clipData: number[] = [];
+  /** Where clipping changes, as `#zRuns` does for z: `[offset, clip id, …]`. A record is clipped to the id of the last run at or before it. */
+  readonly #clipRuns: number[] = [];
+  #clip = 0;
+  /** Whether any clipping box was pushed since `reset`, which `sortByZ` clears for each layer: what the player checks to see if it needs to look. */
+  anyClips = false;
 
   reset(): void {
     this.length = 0;
     this.texts.length = 0;
     this.#zRuns.length = 0;
     this.#z = 0;
+    this.#clipData.length = 0;
+    this.#clipRuns.length = 0;
+    this.#clip = 0;
+    this.anyClips = false;
+  }
+
+  /**
+   * Clip what is written from now on, until the matching `popClip`, to the box `width` × `height` at `world` (in this layer's
+   * coordinates) less `inset` pixels on every side (a box clips inside its border), and to the boxes it is inside. The native clip does not nest and works in pixels the view maps to, so the
+   * boxes are kept as they are, each record is tagged with its box, and `sortByZ` turns them into clip records once the layer's
+   * view is known and the records are in draw order (a box stays around its own records whatever their z).
+   */
+  pushClip(world: WorldTransform, width: number, height: number, inset: number): void {
+    const data = this.#clipData;
+    data.push(world.x, world.y, world.rotation, world.scaleX, world.scaleY, width, height, this.#clip, inset);
+    this.#clip = data.length / CLIP_STRIDE;
+    this.#clipRuns.push(this.length, this.#clip);
+    this.anyClips = true;
+  }
+
+  /** Stop clipping to the innermost box: back to the one it is inside, if any. */
+  popClip(): void {
+    this.#clip = this.#clipData[(this.#clip - 1) * CLIP_STRIDE + CLIP_PARENT] as number;
+    this.#clipRuns.push(this.length, this.#clip);
   }
 
   /** The draw order of the records written from now on. Only a change is kept. */
@@ -203,12 +248,145 @@ export class DrawList {
    * higher `z` is drawn later, so on top. The records before `from` (the view) and any written after the sort
    * (the screen's bars) stay where they are. Text records refer to `texts` by index, so they move freely.
    */
-  sortByZ(from: number): void {
-    if (this.#zRuns.length === 0) return;
-    this.#sort(from);
+  sortByZ(from: number, view: ViewTransform): void {
+    if (this.#clipRuns.length > 0) this.#sortClipped(from, view);
+    else if (this.#zRuns.length > 0) this.#sort(from);
     // The runs belong to the records just sorted; a later layer (the HUD) starts its own.
     this.#zRuns.length = 0;
     this.#z = 0;
+    this.#clipData.length = 0;
+    this.#clipRuns.length = 0;
+    this.#clip = 0;
+  }
+
+  /**
+   * `sortByZ` for a layer with clipping: the same order, then a clip record wherever the records' boxes change. `view` is the
+   * layer's view (the one its view record carries), which takes a box's corners to the pixels `RGE_OP_SCISSOR` is in.
+   */
+  #sortClipped(from: number, view: ViewTransform): void {
+    const zRuns = this.#zRuns;
+    const clipRuns = this.#clipRuns;
+    const starts: number[] = [];
+    const zs: number[] = [];
+    const clips: number[] = [];
+    let zRun = 0;
+    let clipRun = 0;
+    let z = 0;
+    let clip = 0;
+    for (let at = from; at < this.length; at += recordLength(this.records[at] as number)) {
+      while (zRun < zRuns.length && (zRuns[zRun] as number) <= at) {
+        z = zRuns[zRun + 1] as number;
+        zRun += 2;
+      }
+      while (clipRun < clipRuns.length && (clipRuns[clipRun] as number) <= at) {
+        clip = clipRuns[clipRun + 1] as number;
+        clipRun += 2;
+      }
+      starts.push(at);
+      zs.push(z);
+      clips.push(clip);
+    }
+    const order = zRuns.length > 0 ? orderByZ(zs) : null;
+    const rects = this.#clipRects(view);
+    const total = this.length - from;
+    const room = total + CLIP_RECORD_ROOM * (starts.length + 1);
+    if (this.#scratch.length < room) this.#scratch = new Float64Array(Math.max(this.#scratch.length * 2, room));
+    const scratch = this.#scratch;
+    const records = this.records;
+    let write = 0;
+    let current = 0;
+    for (let i = 0; i < starts.length; i++) {
+      const k = order === null ? i : (order[i] as number);
+      const start = starts[k] as number;
+      const length = recordLength(records[start] as number);
+      const wanted = clips[k] as number;
+      if (wanted !== current) {
+        if (wanted === 0) scratch[write++] = RGE_OP_SCISSOR_END;
+        else {
+          // A later clip record replaces the one before it, so going from one box to another needs no end between.
+          const r = (wanted - 1) * 4;
+          scratch[write] = RGE_OP_SCISSOR;
+          scratch[write + 1] = rects[r] as number;
+          scratch[write + 2] = rects[r + 1] as number;
+          scratch[write + 3] = rects[r + 2] as number;
+          scratch[write + 4] = rects[r + 3] as number;
+          write += RGE_OP_SCISSOR_LEN;
+        }
+        current = wanted;
+      }
+      for (let n = 0; n < length; n++) scratch[write + n] = records[start + n] as number;
+      write += length;
+    }
+    // A clip does not carry over into the next layer (the next layer's view would not map it).
+    if (current !== 0) scratch[write++] = RGE_OP_SCISSOR_END;
+    if (from + write > this.records.length) this.grow(from + write - this.length);
+    this.records.set(scratch.subarray(0, write), from);
+    this.length = from + write;
+  }
+
+  /**
+   * Each box as the rectangle of pixels to clip to, `[x, y, width, height]`: its corners taken through its world transform and the
+   * `view` (so a box inside a zoomed camera or a scaled screen is where it is drawn; one that is turned is clipped to the
+   * rectangle around it), cut down to the box it is inside. A box with a corner that is not a number clips everything.
+   */
+  #clipRects(view: ViewTransform): number[] {
+    const data = this.#clipData;
+    const count = data.length / CLIP_STRIDE;
+    const out: number[] = new Array(count * 4);
+    for (let id = 1; id <= count; id++) {
+      const o = (id - 1) * CLIP_STRIDE;
+      const x = data[o] as number;
+      const y = data[o + 1] as number;
+      const cos = Math.cos(data[o + 2] as number);
+      const sin = Math.sin(data[o + 2] as number);
+      const sx = data[o + 3] as number;
+      const sy = data[o + 4] as number;
+      const inset = data[o + CLIP_INSET] as number;
+      const w = data[o + 5] as number;
+      const h = data[o + 6] as number;
+      // The corners of the part inside the border, which is nothing (a line) for a box the border fills.
+      const u0 = inset;
+      const v0 = inset;
+      const u1 = Math.max(inset, w - inset);
+      const v1 = Math.max(inset, h - inset);
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (let corner = 0; corner < 4; corner++) {
+        const u = (corner & 1) === 0 ? u0 : u1;
+        const v = (corner & 2) === 0 ? v0 : v1;
+        const wx = x + sx * u * cos - sy * v * sin;
+        const wy = y + sx * u * sin + sy * v * cos;
+        const px = view.a * wx + view.c * wy + view.e;
+        const py = view.b * wx + view.d * wy + view.f;
+        if (px < x0) x0 = px;
+        if (px > x1) x1 = px;
+        if (py < y0) y0 = py;
+        if (py > y1) y1 = py;
+      }
+      let left = Math.round(x0);
+      let top = Math.round(y0);
+      let right = Math.round(x1);
+      let bottom = Math.round(y1);
+      if (!(Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(right) && Number.isFinite(bottom))) left = top = right = bottom = 0;
+      const parent = data[o + CLIP_PARENT] as number;
+      if (parent !== 0) {
+        const p = (parent - 1) * 4;
+        const pl = out[p] as number;
+        const pt = out[p + 1] as number;
+        left = Math.max(left, pl);
+        top = Math.max(top, pt);
+        right = Math.min(right, pl + (out[p + 2] as number));
+        bottom = Math.min(bottom, pt + (out[p + 3] as number));
+      }
+      const r = (id - 1) * 4;
+      out[r] = left;
+      out[r + 1] = top;
+      out[r + 2] = Math.max(0, right - left);
+      out[r + 3] = Math.max(0, bottom - top);
+    }
+    return out;
   }
 
   #sort(from: number): void {
@@ -449,6 +627,11 @@ export interface BuiltFrame {
   readonly pointers: readonly Pressable[];
   /** Where the HUD's pointers start in `pointers`: they are pressed at `hudView`'s coordinates, not the world's. */
   readonly hudPointersFrom: number;
+  /** The `overflow="scroll"` boxes, in draw order, the world's then (from `hudScrollersFrom`) those inside a `<Hud>`: what the mouse wheel moves. */
+  readonly scrollers: readonly Flex[];
+  readonly hudScrollersFrom: number;
+  /** Whether anything is clipped (`overflow` on a `<Flex>`): when it is, a press must also be inside every box that clips what it lands on. */
+  readonly hasClips: boolean;
   readonly colliders: readonly ColliderEntry[];
 }
 
@@ -796,6 +979,8 @@ export class FrameBuilder {
     let camera: Camera | null = null;
     let pointers: Pressable[] = [];
     const pointerZs: number[] = [];
+    const scrollers: Flex[] = [];
+    let anyClips = false;
     const colliders: ColliderEntry[] = [];
     const huds: { readonly world: WorldTransform; readonly object: GameObject }[] = [];
     const covers: Router[] = [];
@@ -955,6 +1140,12 @@ export class FrameBuilder {
             pointerZs.push(drawZ);
           }
           if (placed !== undefined) at = placed;
+          if ((node as Flex).overflow !== "visible") {
+            if ((node as Flex).overflow === "scroll") scrollers.push(node as Flex);
+            // Only a box with children is paired with the pop below (a leaf returns before it).
+            if (count > 0) list.pushClip(at, (node as Flex).box.size[0] as number, (node as Flex).box.size[1] as number, borderRoom(node as Flex));
+            anyClips = true;
+          }
           break;
         }
       }
@@ -1048,6 +1239,7 @@ export class FrameBuilder {
         }
       }
       flatWalk = flat;
+      if (kind === KIND_FLEX && (node as Flex).overflow !== "visible") list.popClip();
       return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
     };
 
@@ -1168,13 +1360,6 @@ export class FrameBuilder {
       this.#lastWorld = world;
     }
 
-    // Draw order: by z, tree order among equals. A pointer that is drawn on top is pressed first, so the pointers move with it.
-    list.sortByZ(worldStart + RGE_OP_VIEW_LEN);
-    if (anyZ) {
-      const order = orderByZ(pointerZs);
-      if (order !== null) pointers = order.map((i) => pointers[i] as Pressable);
-    }
-
     // The camera centres on the middle of the game's area; a screen's placement then takes game pixels to the window.
     if (camera !== null) {
       (camera as Camera).viewWidth = gameWidth;
@@ -1185,8 +1370,17 @@ export class FrameBuilder {
     const hudView = placement === null ? IDENTITY_VIEW : viewToWindow(IDENTITY_VIEW, placement);
     list.setView(worldStart, pixelPerfect ? cameraView : view);
 
+    // Draw order: by z, tree order among equals (and the clip records of what is clipped, which need the view). A pointer that is
+    // drawn on top is pressed first, so the pointers move with it.
+    list.sortByZ(worldStart + RGE_OP_VIEW_LEN, pixelPerfect ? cameraView : view);
+    if (anyZ) {
+      const order = orderByZ(pointerZs);
+      if (order !== null) pointers = order.map((i) => pointers[i] as Pressable);
+    }
+
     // The HUD layers, after the world, each through a view the camera does not touch.
     const hudPointersFrom = pointers.length;
+    const hudScrollersFrom = scrollers.length;
     if (huds.length > 0) {
       list.view(pixelPerfect ? IDENTITY_VIEW : hudView);
       for (const { world: hudWorld, object: hud } of huds) {
@@ -1239,6 +1433,12 @@ export class FrameBuilder {
                     hudPointers.push(object as Flex);
                     hudPointerZs.push(z);
                   }
+                  if ((object as Flex).overflow !== "visible") {
+                    if ((object as Flex).overflow === "scroll") scrollers.push(object as Flex);
+                    // Every box pushed here is popped by `leave` below, which runs for a leaf too.
+                    list.pushClip(placed ?? world, (object as Flex).box.size[0] as number, (object as Flex).box.size[1] as number, borderRoom(object as Flex));
+                    anyClips = true;
+                  }
                   return placed;
                 }
                 case KIND_POINTER:
@@ -1253,9 +1453,12 @@ export class FrameBuilder {
             hudWorld,
             0,
             true,
+            (object, kind) => {
+              if (kind === KIND_FLEX && (object as Flex).overflow !== "visible") list.popClip();
+            },
           );
         }
-        list.sortByZ(layerStart);
+        list.sortByZ(layerStart, pixelPerfect ? IDENTITY_VIEW : hudView);
         let ordered: Pressable[] = hudPointers;
         if (hudAnyZ) {
           const order = orderByZ(hudPointerZs);
@@ -1280,7 +1483,7 @@ export class FrameBuilder {
 
     // Bars around a game that is not pixel-perfect: window pixels, drawn last. (A pixel-perfect game's canvas record clears them.)
     if (placement !== null && !pixelPerfect) this.#borders(placement, width, height, borderColor);
-    const built: BuiltFrame = { list, view, hudView, screen: placement, camera, pointers, hudPointersFrom, colliders };
+    const built: BuiltFrame = { list, view, hudView, screen: placement, camera, pointers, hudPointersFrom, scrollers, hudScrollersFrom, hasClips: anyClips, colliders };
     return built;
   }
 

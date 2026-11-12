@@ -6,8 +6,9 @@ import { DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame 
 import { FixedDriver, MAX_STEPS_PER_FRAME } from "./fixed.ts";
 import { HOST_RUN_KEY } from "./host.ts";
 import { PlayerInput } from "./input.ts";
+import { borderRoom } from "./layout.ts";
 import { onScreen, type ScreenPlacement } from "./screen.ts";
-import { KEYS, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
+import { KEYS, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WHEEL, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
 import { Warner } from "./warn.ts";
 
 /** The window a game gets when neither its `<Game>` root nor the player's config say otherwise. */
@@ -211,6 +212,9 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   };
   let pointers: readonly Pressable[] = [];
   let hudPointersFrom = 0;
+  let scrollers: readonly Flex[] = [];
+  let hudScrollersFrom = 0;
+  let hasClips = false;
   let hudView: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
   let screen: ScreenPlacement | null = null;
   let closed = false;
@@ -299,7 +303,47 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       const pointer = pointers[i] as Pressable;
       if (pointer.onPress === undefined && pointer instanceof Flex) continue;
       const point = i >= hudPointersFrom ? hudAt : at;
+      if (clippedOff(pointer as unknown as GameObject, point.x, point.y)) continue;
       if (world.reportPress(pointer, point.x, point.y)) return;
+    }
+  };
+
+  /** Whether a point is cut off from `object` by an ancestor that clips (`overflow`): a part of a child outside the box that clips it cannot be pressed or hovered. */
+  const clippedOff = (object: GameObject, x: number, y: number): boolean => {
+    if (!hasClips) return false;
+    for (let up = object.parent; up !== null; up = up.parent) {
+      if (up instanceof Flex && up.overflow !== "visible" && !up.contains(x, y, borderRoom(up))) return true;
+    }
+    return false;
+  };
+
+  /** Pixels one notch of the mouse wheel scrolls a box. */
+  const SCROLL_STEP = 32;
+
+  /**
+   * The wheel scrolls the topmost `overflow="scroll"` box under the mouse that can still move that way (up and down when it can,
+   * else left and right); one already at its end passes the wheel on to the box around it, as a browser does.
+   */
+  const dispatchWheel = (): void => {
+    const wheel = input.values[RGE_IN_WHEEL] as number;
+    if (!(wheel !== 0) || scrollers.length === 0) return;
+    if (screen !== null && !onScreen(screen, input.screenX, input.screenY)) return;
+    const at = input.worldPoint(input.screenX, input.screenY);
+    const hudAt = input.pointThrough(hudView, input.screenX, input.screenY);
+    for (let i = scrollers.length - 1; i >= 0; i--) {
+      const box = scrollers[i] as Flex;
+      if (box.world !== world || (world.isInert(box))) continue;
+      const point = i >= hudScrollersFrom ? hudAt : at;
+      if (!box.contains(point.x, point.y) || clippedOff(box, point.x, point.y)) continue;
+      const max = box.box.scrollMax;
+      const axis = (max[1] as number) > 0 ? 1 : 0;
+      if (!((max[axis] as number) > 0)) continue;
+      const before = axis === 1 ? box.scrollY : box.scrollX;
+      const after = Math.min(Math.max(before - wheel * SCROLL_STEP, 0), max[axis] as number);
+      if (after === before) continue; // at its end that way: the box around it may still move
+      if (axis === 1) box.scrollY = after;
+      else box.scrollX = after;
+      return;
     }
   };
 
@@ -312,7 +356,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       for (let i = pointers.length - 1; i >= 0 && hovered === null; i--) {
         const pointer = pointers[i] as Pressable;
         const point = i >= hudPointersFrom ? hudAt : at;
-        if (pointer.world === world && pointer.contains(point.x, point.y)) hovered = pointer;
+        if (pointer.world === world && pointer.contains(point.x, point.y) && !clippedOff(pointer as unknown as GameObject, point.x, point.y)) hovered = pointer;
       }
     }
     world.reportHover(hovered);
@@ -384,6 +428,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     if (realDt > 0) smoothDt = smoothDt === 0 ? realDt : smoothDt * 0.9 + realDt * 0.1;
     dispatchPress();
     dispatchHover();
+    dispatchWheel();
     const dt = input.values[RGE_IN_DT] as number;
     animationTime += dt > 0 ? Math.min(dt, MAX_DT) : 0;
     if (driver === null) {
@@ -408,6 +453,9 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     lastBuilt = null;
     pointers = built.pointers;
     hudPointersFrom = built.hudPointersFrom;
+    scrollers = built.scrollers;
+    hudScrollersFrom = built.hudScrollersFrom;
+    hasClips = built.hasClips;
     hudView = built.hudView;
     screen = built.screen;
     input.view = built.view;

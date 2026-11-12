@@ -54,6 +54,11 @@ function hasBorder(f: Flex): boolean {
   return f.borderColor !== undefined || f.hoverBorderColor !== undefined || f.focusBorderColor !== undefined || f.pressedBorderColor !== undefined || f.disabledBorderColor !== undefined;
 }
 
+/** The pixels of border a `<Flex>` keeps room for on each side: its `borderWidth` when it has a border colour in any state, else 0. A clip stops at the inside of it. */
+export function borderRoom(f: Flex): number {
+  return f.borderWidth > 0 && Number.isFinite(f.borderWidth) && hasBorder(f) ? f.borderWidth : 0;
+}
+
 function finiteOr0(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
@@ -159,7 +164,7 @@ export class Layouter {
     const both = axis === X ? f.paddingX : f.paddingY;
     const v = side ?? both ?? f.padding;
     const padding = v !== undefined && v > 0 && Number.isFinite(v) ? v : 0;
-    return f.borderWidth > 0 && Number.isFinite(f.borderWidth) && hasBorder(f) ? padding + f.borderWidth : padding;
+    return padding + borderRoom(f);
   }
 
   #gap(f: Flex): number {
@@ -291,7 +296,8 @@ export class Layouter {
     const edges = this.#pad(f, axis, false) + this.#pad(f, axis, true);
     const gaps = along && flow > 1 ? this.#gap(f) * (flow - 1) : 0;
     const content = edges + gaps + (along ? sum : largest);
-    const contentMinimum = edges + gaps + (along ? sumMinimum : largestMinimum);
+    // A box that scrolls can be made as small as its edges: what does not fit is scrolled to, so it asks its parent for no more.
+    const contentMinimum = f.overflow === "scroll" ? edges : edges + gaps + (along ? sumMinimum : largestMinimum);
     const mode = box.sizingMode[axis] as number;
     if (mode === FIXED) {
       box.preferred[axis] = box.sizingValue[axis] as number;
@@ -350,7 +356,7 @@ export class Layouter {
     if (along) {
       const free = inner - gaps - total;
       if (free > EPSILON) this.#grow(f, axis, free);
-      else if (free < -EPSILON) this.#shrink(f, axis, -free);
+      else if (free < -EPSILON && f.overflow !== "scroll") this.#shrink(f, axis, -free); // a scroll box's children keep their size, and overflow
     } else {
       for (let i = 0; i < n; i++) {
         if (box.childKind[i] !== IN_FLOW) continue;
@@ -487,8 +493,13 @@ export class Layouter {
     const mainSizes = box.childSize[main] as Float64Array;
     const crossSizes = box.childSize[cross] as Float64Array;
     const gap = this.#gap(f);
-    const innerMain = Math.max((box.size[main] as number) - this.#pad(f, main, false) - this.#pad(f, main, true), 0);
-    const innerCross = Math.max((box.size[cross] as number) - this.#pad(f, cross, false) - this.#pad(f, cross, true), 0);
+    // Each padding once: a call that returns a number allocates when it is not inlined, and this runs for every box every frame.
+    const padMainStart = this.#pad(f, main, false);
+    const padMainEnd = this.#pad(f, main, true);
+    const padCrossStart = this.#pad(f, cross, false);
+    const padCrossEnd = this.#pad(f, cross, true);
+    const innerMain = Math.max((box.size[main] as number) - padMainStart - padMainEnd, 0);
+    const innerCross = Math.max((box.size[cross] as number) - padCrossStart - padCrossEnd, 0);
 
     let flow = 0;
     for (let i = 0; i < n; i++) if (box.childKind[i] !== FLOATING) flow++;
@@ -506,7 +517,12 @@ export class Layouter {
       default: break;
     }
 
-    let cursor = this.#pad(f, main, false) + lead;
+    let cursor = padMainStart + lead;
+    // Where the children end (a floating one is out of the flow and does not count), for how far a scroll box can scroll. Kept in
+    // the box's own array, not in locals that the loop carries: those made this recursive pass allocate a number per box.
+    const ends = box.contentEnd;
+    ends[main] = padMainStart;
+    ends[cross] = padCrossStart;
     for (let i = 0; i < n; i++) {
       const kid = kids[i] as GameObject;
       if (box.childKind[i] === FLOATING) {
@@ -519,7 +535,7 @@ export class Layouter {
       if (f.alignItems === "center") across = (innerCross - crossSize) / 2;
       else if (f.alignItems === "end") across = innerCross - crossSize;
       const along = cursor - ((box.childOrigin[main] as Float64Array)[i] as number);
-      const side = this.#pad(f, cross, false) + across - ((box.childOrigin[cross] as Float64Array)[i] as number);
+      const side = padCrossStart + across - ((box.childOrigin[cross] as Float64Array)[i] as number);
       // Whole pixels, so centred text and edges are not blurred by half a pixel.
       if (main === X) {
         kid.layoutX = Math.round(along);
@@ -528,8 +544,34 @@ export class Layouter {
         kid.layoutX = Math.round(side);
         kid.layoutY = Math.round(along);
       }
+      if (cursor + (mainSizes[i] as number) > (ends[main] as number)) ends[main] = cursor + (mainSizes[i] as number);
+      if (padCrossStart + across + crossSize > (ends[cross] as number)) ends[cross] = padCrossStart + across + crossSize;
       cursor += (mainSizes[i] as number) + gap + between;
       if (box.childKind[i] === IN_FLOW) this.#position(kid as Flex);
+    }
+    ends[main] = (ends[main] as number) + padMainEnd;
+    ends[cross] = (ends[cross] as number) + padCrossEnd;
+    for (let axis = 0; axis < 2; axis++) {
+      const room = (box.contentEnd[axis] as number) - (box.size[axis] as number);
+      box.scrollMax[axis] = f.overflow === "scroll" && room > 0 ? room : 0;
+    }
+    if (f.overflow === "scroll") this.#scroll(f);
+  }
+
+  /** Clamp a scroll box's offset to its content and move the children by it (a floating child stays where it is attached). */
+  #scroll(f: Flex): void {
+    const box = f.box;
+    const x = Math.round(Math.min(Math.max(Number.isFinite(f.scrollX) ? f.scrollX : 0, 0), box.scrollMax[X] as number));
+    const y = Math.round(Math.min(Math.max(Number.isFinite(f.scrollY) ? f.scrollY : 0, 0), box.scrollMax[Y] as number));
+    f.scrollX = x;
+    f.scrollY = y;
+    if (x === 0 && y === 0) return;
+    const kids = box.kids;
+    for (let i = 0; i < kids.length; i++) {
+      if (box.childKind[i] === FLOATING) continue;
+      const kid = kids[i] as GameObject;
+      kid.layoutX -= x;
+      kid.layoutY -= y;
     }
   }
 }
