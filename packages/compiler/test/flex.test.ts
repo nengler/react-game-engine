@@ -314,6 +314,11 @@ function Tile() {
       focusable
       focusBackground="#223"
       focusBorderColor="yellow"
+      pressedBackground="#112"
+      pressedBorderColor="orange"
+      disabled={round > 100}
+      disabledBackground="gray"
+      disabledBorderColor="silver"
     />
   );
 }
@@ -328,10 +333,11 @@ function Tile() {
       [tile.background, tile.borderWidth, tile.borderColor, tile.borderRadius, tile.hoverBackground, tile.hoverBorderColor, tile.focusBackground, tile.focusBorderColor],
       ["navy", 2, "gold", 4, "#334", "white", "#223", "yellow"],
     );
+    assert.deepEqual([tile.pressedBackground, tile.pressedBorderColor, tile.disabled, tile.disabledBackground, tile.disabledBorderColor], ["#112", "orange", false, "gray", "silver"]);
     tile.setAccent("red");
-    tile.setRound(8);
+    tile.setRound(800);
     world.flush();
-    assert.deepEqual([tile.borderColor, tile.borderRadius], ["red", 8]);
+    assert.deepEqual([tile.borderColor, tile.borderRadius, tile.disabled], ["red", 800, true], "disabled follows state");
   });
 
   it("type-checks the generated code, and rejects a prop of the wrong type, in the source", () => {
@@ -340,14 +346,15 @@ function Tile() {
       getCompiler().typeCheckSources([
         { fileName: `${process.cwd()}/.test-output/Styled${Math.random()}.tsx`, text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }` },
       ]);
-    assert.deepEqual(check(`<Flex borderWidth={wide ? 2 : 0} borderColor="red" borderRadius={4} hoverBackground="blue" focusBorderColor="white" />`), []);
+    assert.deepEqual(check(`<Flex borderWidth={wide ? 2 : 0} borderColor="red" borderRadius={4} hoverBackground="blue" focusBorderColor="white" pressedBackground="navy" disabled={wide} disabledBorderColor="gray" />`), []);
+    assert.ok(check(`<Flex disabled="yes" />`).length > 0, "disabled is a boolean");
     assert.ok(check(`<Flex borderWidth="thick" />`).length > 0, "a width is a number");
     assert.ok(check(`<Flex hoverBackground={4} />`).length > 0, "a colour is a string");
     assert.ok(check(`<Flex hoverWidth={4} />`).length > 0, "and a made-up prop is not accepted");
   });
 
   it("reserves the new names for a component rooted at a Flex", () => {
-    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor"]) {
+    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled"]) {
       const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
       assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
     }

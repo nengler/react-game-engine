@@ -220,7 +220,8 @@ export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
  * default), `"grow"`, a number of pixels or a percentage such as `"50%"`, with optional `minWidth` / `maxWidth` /
  * `minHeight` / `maxHeight`. A child's own `transform` moves it within its slot. `background` fills the box, and `borderWidth`, `borderColor` and `borderRadius`
  * give it a border (which takes room like padding) and rounded corners; `hoverBackground`, `hoverBorderColor`, `focusBackground` and `focusBorderColor`
- * are the colours it is drawn in while the mouse is over it or it has the focus.
+ * are the colours it is drawn in while the mouse is over it or it has the focus; `pressedBackground` / `pressedBorderColor` while the button is held on it;
+ * `disabled` switches it off (and shows `disabledBackground` / `disabledBorderColor` over every other state).
  */
 export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Flex");
