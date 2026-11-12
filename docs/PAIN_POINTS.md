@@ -70,8 +70,7 @@ no React equivalent.
 - **No list inside a list item**, nor `{children}` or a `<Route>` there; the workaround is "make the item a component".
 - **Side-effect imports** are refused in component files (`RGE1001`); registering tilemaps moved into a `.ts` file `GameState.ts`
   imports.
-- **Docs disagree about refs.** The Language page and Bramble's notes say a ref holds a number, string or boolean only; `DESIGN.md`
-  says any type (`useRef<Point[]>([])`).
+- ~~**Docs disagree about refs.**~~ *Done:* the guide says what the compiler allows (any value but an element, RGE1106), as `DESIGN.md` did.
 - **The manifest gates the API.** A new runtime method compiles in plain TypeScript but fails in a component until
   `runtime/src/manifest.ts` lists it (Bramble finding 8).
 - ~~**`useEffect` gave a bare `Unknown hook 'useEffect'.`**~~ *Since:* its message names what to write instead.
@@ -90,7 +89,7 @@ no React equivalent.
   published. *Since:* only Node is needed to write, test and check a game: `npm run dist` builds what the machine can, keeps going
   when cmake or cargo is missing, and ends with what the author has and what to install for the rest (the guide's step 0 is a table of
   the same). Nothing is published, so a checkout and `npm run dist` is still the way in.
-- **Input scripts hold a key until it changes**: `right, right` is one press, `right, _, right` is two (Bramble finding 11).
+- ~~**Input scripts hold a key until it changes**~~ *Done:* the guide's testing section says it, and what an unknown name does.
 - **The guide is dense and terse** and mixes design reasons with usage; priority 8's "checked by following it from scratch" is not
   ticked yet.
 
