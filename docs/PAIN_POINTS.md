@@ -5,8 +5,8 @@ reading the authoring guide (`docs/*.html`), the findings in [NEXT_PRIORITIES.md
 [`games/bramble/DESIGN.md`](../games/bramble/DESIGN.md), and Bramble's code. Findings that have already been fixed (computed lists,
 conditions in `.map`, spread props, `!== undefined`, component roots, objects in the game state) are left out.
 
-`useEffect` stays out; what replaces each of its uses, and what is planned, is decided in [DESIGN.md](DESIGN.md), "Why there
-is no `useEffect`" (2026-11-12).
+`useEffect` stays out; what replaces each of its uses is decided in [DESIGN.md](DESIGN.md), "Why there is no `useEffect`"
+(2026-11-12). Two of those answers are built since: a cleanup returned from `useMount`, and `key` on any element.
 
 ## 1. It looks like React but compiles a subset
 
@@ -24,8 +24,9 @@ TSX invites people to write React, and then they hit `RGE` codes.
 
 - **No `ref={…}`**: there is no handle on a node.
 - **No context**: deep trees pass props by hand or use the global store.
-- **`useMount` / `useUnmount`** stand in for `useEffect(…, [])`, with no cleanup return and an unusual order (mount runs children
-  first, unmount runs the parent first).
+- **`useMount` / `useUnmount`** stand in for `useEffect(…, [])`, with an unusual order (mount runs children first, unmount runs
+  the parent first). *Since:* `useMount` may return a cleanup, and a handler may hand an arrow to a function
+  (`useMount(() => settings.subscribe(() => …))`).
 
 ## 3. Game-engine semantics on React concepts
 
@@ -59,8 +60,8 @@ no React equivalent.
 
 - **Text.** Text children are an error everywhere but inside `<Text>`, yet the games use `text={…}` almost always while the README
   writes `<Text>{coins}</Text>`. Two ways to write one thing.
-- **Keys.** `key` only inside a `.map` (`RGE1203`), so there is no `key` on a single element to reset its state when an identity
-  changes. A key reading only the index warns; a callback on a list item cannot read the index.
+- **Keys.** A key reading only the index warns; a callback on a list item cannot read the index. ~~`key` only inside a `.map`~~
+  *Since:* `key` works on any element but a component's root, and starts it over when it changes (`<Dialogue key={talk.id} />`).
 - **Props** need a named type declared in the same file (an inline `{ top: number }` is refused); the props object cannot be passed on
   or spread except onto components.
 - **No list inside a list item**, nor `{children}` or a `<Route>` there; the workaround is "make the item a component".

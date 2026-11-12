@@ -118,6 +118,8 @@ export class GameObject<P extends object = {}> {
   #order = 0;
   /** `onMount` has run and `onUnmount` has not: each runs once per stay in a World. */
   #mounted = false;
+  /** What `useMount` handlers returned this stay in a World (`keepCleanup`), run after `onUnmount` when it leaves. */
+  #cleanups: (() => void)[] = [];
 
   /**
    * Where children passed by a parent (`<Panel><Button /></Panel>`) mount: a
@@ -405,6 +407,15 @@ export class GameObject<P extends object = {}> {
    */
   onUnmount(): void {}
 
+  /**
+   * A `useMount` handler's result: a function is kept and called once when this object leaves its World, after its
+   * `onUnmount`, in the order they were kept (`useMount(() => settings.subscribe(…))` stops listening). Anything else is
+   * ignored. Generated code calls it from `onMount`.
+   */
+  protected keepCleanup(cleanup: unknown): void {
+    if (typeof cleanup === "function") this.#cleanups.push(cleanup as () => void);
+  }
+
   /** Recompute dynamic props and conditional children. Generated code overrides this. */
   render(): void {}
 
@@ -458,6 +469,9 @@ export class GameObject<P extends object = {}> {
     if (this.#mounted) {
       this.#mounted = false;
       this.onUnmount();
+      const cleanups = this.#cleanups;
+      this.#cleanups = [];
+      for (const cleanup of cleanups) cleanup();
     }
     this.world?.unregisterObject(this);
     this.world = null;

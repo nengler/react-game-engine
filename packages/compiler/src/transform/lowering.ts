@@ -416,7 +416,11 @@ export class LoweringBase {
     return !this.mode.inUnmount;
   }
 
-  canPlaySound(): boolean {
+  canPassCallback(): boolean {
+    return this.mode.inHandler && !this.mode.inUpdater;
+  }
+
+    canPlaySound(): boolean {
     return !this.mode.inUpdater;
   }
 

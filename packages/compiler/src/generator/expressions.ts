@@ -83,6 +83,11 @@ export class ExpressionEmitter {
     return `(${params}) => {\n${lines.map((l) => `${base}  ${l}`).join("\n")}\n${base}}`;
   }
 
+  /** A handler passed as a value (`settings.subscribe(() => …)`): written by the handler layer, which writes statements. */
+  protected callback(_fn: FunctionIR): string {
+    throw new Error(`A callback in ${this.c.name} reached the expression layer`);
+  }
+
   /** A sound's name is its field. */
   protected soundField(id: SoundId): string {
     const sound = this.c.sounds.find((s) => s.id === id);
@@ -140,11 +145,13 @@ export class ExpressionEmitter {
         if (e.properties.length === 0) return "{}";
         return `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
       case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.arrowBody(e.body)}`);
+      case "Callback": return this.callback(e.fn);
       case "Call": {
         const args = e.args.map((a) => this.expr(a, true)).join(", ");
         switch (e.callee.kind) {
           case "Function": return `${e.callee.name}(${args})`;
           case "Plain": return `${e.callee.name}(${args})`;
+          case "Local": return `${e.callee.name}(${args})`;
           case "Method": return `${e.callee.receiver.name}.${e.callee.name}(${args})`;
           case "Prop": return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
           case "ArrayMethod": return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;

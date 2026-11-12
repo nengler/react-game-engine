@@ -292,28 +292,7 @@ export class ElementLowering extends HookLowering {
         this.report(code, "A list item that switches between two elements cannot have children yet: make the branch a component that renders them.", jsx);
         return null;
       }
-      // The item's children are elements and conditions of them (`{d.locked && <Lock …/>}`), nested as deep as needed; any of them
-      // may read the item. Not yet: a list, `{children}` or a <Route> among them.
-      const itemChildren = (kids: readonly ChildIR[]): ChildIR[] | null => {
-        const out: ChildIR[] = [];
-        for (const c of kids) {
-          if (c.kind === "KeyedListChild" || c.kind === "ChildrenSlot" || (c.element.component.kind === "Intrinsic" && c.element.component.name === ROUTE_TAG)) {
-            const what = c.kind === "KeyedListChild" ? "a list" : c.kind === "ChildrenSlot" ? "`{children}`" : "a <Route>";
-            this.report(code, `A list item cannot hold ${what} among its children yet: make the item a component that renders it.`, jsx);
-            return null;
-          }
-          const grand = itemChildren(c.element.children);
-          const element = grand && this.asListItem({ ...c.element, children: grand }, item, index);
-          if (!element) return null;
-          if (c.kind === "StaticChild") out.push({ kind: "StaticChild", element });
-          else {
-            const reads = readsParam(c.condition, item.id) || (index !== null && readsParam(c.condition, index.id));
-            out.push({ ...c, element, dependencies: reads ? [...c.dependencies, { kind: "Item" }] : c.dependencies });
-          }
-        }
-        return out;
-      };
-      const children = itemChildren(lowered.children);
+      const children = this.listItemChildren(lowered.children, item, index, jsx);
       if (!children) return null;
       const element = this.asListItem({ ...lowered, children }, item, index);
       const alternateElement = alternate && this.asListItem(alternate, item, index);
@@ -321,6 +300,59 @@ export class ElementLowering extends HookLowering {
       const dependencies = [...collectDependencies(source), ...(condition ? collectDependencies(condition) : [])];
       return { kind: "KeyedListChild", source, item, index, key, element, condition, alternate: alternateElement, dependencies };
     });
+  }
+
+  /**
+   * A list item's children: elements and conditions of them (`{d.locked && <Lock …/>}`), nested as deep as needed; any of them
+   * may read the item. Not yet: a list, `{children}` or a <Route> among them. Null (after reporting) for one of those.
+   */
+  protected listItemChildren(kids: readonly ChildIR[], item: ParamIR, index: ParamIR | null, at: Node): ChildIR[] | null {
+    const out: ChildIR[] = [];
+    for (const c of kids) {
+      if (c.kind === "KeyedListChild" || c.kind === "ChildrenSlot" || (c.element.component.kind === "Intrinsic" && c.element.component.name === ROUTE_TAG)) {
+        const what = c.kind === "KeyedListChild" ? (isKeyedElement(c) ? "a keyed element" : "a list") : c.kind === "ChildrenSlot" ? "`{children}`" : "a <Route>";
+        const holder = isKeyedElement({ item }) ? "A keyed element" : "A list item";
+        this.report(DiagnosticCode.InvalidList, `${holder} cannot hold ${what} among its children yet: make it a component that renders it.`, at);
+        return null;
+      }
+      const grand = this.listItemChildren(c.element.children, item, index, at);
+      const element = grand && this.asListItem({ ...c.element, children: grand }, item, index);
+      if (!element) return null;
+      if (c.kind === "StaticChild") out.push({ kind: "StaticChild", element });
+      else {
+        const reads = readsParam(c.condition, item.id) || (index !== null && readsParam(c.condition, index.id));
+        out.push({ ...c, element, dependencies: reads ? [...c.dependencies, { kind: "Item" }] : c.dependencies });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * `<Dialogue key={talk.id} />` outside a list: React's way to start an element over when what it shows changes. It is a keyed
+   * list of one item, the key itself (`[talk.id]`), so a new key unmounts the old instance and mounts a new one, with fresh state,
+   * and the list machinery does the rest. `condition`: the element is a branch of `cond && …` or `cond ? … : …`.
+   */
+  protected lowerKeyedElement(jsx: JsxElementNode, path: readonly number[], condition: ExprIR | null): KeyedListChildIR | null {
+    const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
+    const keyAttribute = findAttribute(opening.attributes, "key")!;
+    const init = keyAttribute.initializer;
+    const keyNode = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? init.expression : init && isStringLiteral(init) ? init : null;
+    if (!keyNode) {
+      this.report(DiagnosticCode.UnsupportedAttribute, "`key` takes a value that identifies what the element shows: `key={talk.id}`.", keyAttribute);
+      return null;
+    }
+    const keyValue = this.lowerNode(keyNode);
+    if (!keyValue) return null;
+    const id = localId(this.componentName, KEYED_ITEM, this.nextSerial());
+    const item: ParamIR = { id, name: KEYED_ITEM, type: { kind: "Contextual" } };
+    const lowered = this.lowerElement(jsx, path, true);
+    if (!lowered) return null;
+    const children = this.listItemChildren(lowered.children, item, null, jsx);
+    if (!children) return null;
+    const source: ExprIR = { kind: "ArrayLiteral", elements: [{ spread: false, value: keyValue }] };
+    const key: ExprIR = { kind: "ParamRead", param: id, name: KEYED_ITEM };
+    const dependencies = [...collectDependencies(source), ...(condition ? collectDependencies(condition) : [])];
+    return { kind: "KeyedListChild", source, item, index: null, key, element: { ...lowered, children }, condition, alternate: null, dependencies };
   }
 
   /** `slotOk`: a `{children}` slot may appear in this element's children (it is in a static chain from the root). */
@@ -361,9 +393,10 @@ export class ElementLowering extends HookLowering {
     if (textProp !== undefined) props.push(...this.lowerTextContent(isJsxElement(jsx) ? jsx.children : [], textProp, props, tag.text, jsx));
     else if (isJsxElement(jsx)) children = this.lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent, forward: slotOk && isComponent });
     if (isComponent && children.some((c) => c.kind === "KeyedListChild") && children.length > 1) {
+      const what = children.some((c) => c.kind === "KeyedListChild" && !isKeyedElement(c)) ? "A list" : "A keyed element";
       this.report(
         DiagnosticCode.InvalidList,
-        `A list passed to <${tag.text}> must be its only child: the list's items and the other children would share positions. Wrap the list in an <${this.hostIntrinsic}> or make the others part of the list.`,
+        `${what} passed to <${tag.text}> must be its only child: its items and the other children would share positions. Wrap it in an <${this.hostIntrinsic}>.`,
         jsx,
       );
     }
@@ -479,7 +512,9 @@ export class ElementLowering extends HookLowering {
       if (name === "key" || name === "children") {
         this.report(
           DiagnosticCode.UnsupportedAttribute,
-          name === "key" ? "`key` belongs on the element a list returns: `{items.map((item) => <Element key={item.id} />)}`." : "`children` cannot be passed yet.",
+          name === "key"
+            ? "`key` goes where the component is used, not on its root: `<Dialogue key={talk.id} />` starts it over when the key changes."
+            : "`children` cannot be passed yet.",
           attribute,
         );
         continue;
@@ -627,6 +662,11 @@ export class ElementLowering extends HookLowering {
       if (isJsxExpression(child) && !child.expression) continue; // `{/* comment */}`
       const path = [...parentPath, index++];
 
+      if (hasKey(child)) {
+        const keyed = this.lowerKeyedElement(child, path, null);
+        if (keyed) out.push(keyed);
+        continue;
+      }
       if (isJsxElement(child) || isJsxSelfClosingElement(child)) {
         const element = this.lowerElement(child, path, false, context.slot);
         if (element) out.push({ kind: "StaticChild", element });
@@ -670,6 +710,11 @@ export class ElementLowering extends HookLowering {
       const right = unwrapParens(expression.right);
       if (isJsxElement(right) || isJsxSelfClosingElement(right) || isJsxFragment(right)) {
         const condition = this.lowerNode(expression.left);
+        if (hasKey(right)) {
+          const keyed = condition && this.lowerKeyedElement(right, path, condition);
+          if (keyed) out.push(keyed);
+          return;
+        }
         const element = isJsxFragment(right) ? this.lowerFragment(right, path) : this.lowerElement(right, path);
         if (condition && element) {
           out.push({ kind: "ConditionalChild", condition, dependencies: collectDependencies(condition), element });
@@ -690,8 +735,13 @@ export class ElementLowering extends HookLowering {
         branches.forEach((branch, i) => {
           if (!(isJsxElement(branch) || isJsxSelfClosingElement(branch) || isJsxFragment(branch))) return;
           const at = i === 0 ? path : next();
-          const element = isJsxFragment(branch) ? this.lowerFragment(branch, at) : this.lowerElement(branch, at);
           const when = conditions[i]!;
+          if (hasKey(branch)) {
+            const keyed = this.lowerKeyedElement(branch, at, when);
+            if (keyed) out.push(keyed);
+            return;
+          }
+          const element = isJsxFragment(branch) ? this.lowerFragment(branch, at) : this.lowerElement(branch, at);
           if (element) out.push({ kind: "ConditionalChild", condition: when, dependencies: collectDependencies(when), element });
         });
         return;
@@ -702,6 +752,21 @@ export class ElementLowering extends HookLowering {
 }
 
 const ROUTE_TAG = "Route";
+
+/** The item of a keyed element's list of one (`lowerKeyedElement`): a name source code cannot write (`$` is reserved). */
+const KEYED_ITEM = "$keyed";
+
+/** Whether a keyed list is a keyed element outside a list (`<Dialogue key={talk.id} />`), a list of one made by the compiler. */
+function isKeyedElement(list: { readonly item: ParamIR }): boolean {
+  return list.item.name === KEYED_ITEM;
+}
+
+/** Does the element carry a `key` (outside a list: a keyed element)? */
+function hasKey(jsx: Node): jsx is JsxElementNode {
+  if (!isJsxElement(jsx) && !isJsxSelfClosingElement(jsx)) return false;
+  const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
+  return findAttribute(opening.attributes, "key") !== null;
+}
 
 /** A prop that reads nothing that changes is static (evaluated once); otherwise it is dynamic, re-applied when what it reads changes. */
 function valueProp<N extends string>(name: N, value: ExprIR): ValuePropIR & { readonly name: N } {

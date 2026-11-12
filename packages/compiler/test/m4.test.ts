@@ -475,9 +475,9 @@ export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Cap
     assert.doesNotThrow(() => compile(withProps(P, `{ a, f }: P`, `useUpdate(() => { f?.(); });`)), "calling a callback prop is fine");
   });
 
-  it("rejects a function passed to a built-in, and key or children as attributes", () => {
+  it("rejects a function passed to a built-in, key on a component's root, and children as attributes", () => {
     assert.deepEqual(codes(`function A() { return <Entity name="A"><Sprite image="a" onClick={() => {}} /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
-    assert.deepEqual(codes(`function B() { return <Entity name="B" />; } function A() { return <Entity name="A"><B key="x" /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
+    assert.deepEqual(codes(`function B() { return <Entity name="B" key="x" />; } function A() { return <Entity name="A"><B /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
     assert.deepEqual(codes(`function B() { return <Entity name="B" />; } function A() { return <Entity name="A"><B children={1} /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
   });
 });

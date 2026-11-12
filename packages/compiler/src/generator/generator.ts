@@ -135,6 +135,7 @@ function typeTexts(module: IRModule): string[] {
     f.params.forEach((p) => type(p.type));
     walkFunction(f, (e) => {
       if (e.kind === "Arrow") e.params.forEach((p) => type(p.type));
+      if (e.kind === "Callback") fn(e.fn); // its own `let` types
     }, (stmt) => {
       if (stmt.kind === "LocalConst" && stmt.type) type(stmt.type);
       if (stmt.kind === "SetState" && "updater" in stmt) stmt.updater.params.forEach((p) => type(p.type));

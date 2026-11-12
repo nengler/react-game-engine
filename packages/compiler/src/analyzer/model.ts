@@ -202,7 +202,8 @@ export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS];
 const EFFECT_MESSAGE = (hook: string): string =>
   `There is no '${hook}'. Do the work where the change happens: an action that answers the rules' events with an effect store (\`sfx.play("hit")\`, \`fx.burst(…)\`), ` +
   "a derived `const` for a value worked out from state or props, a built-in with props (`<Music>`, `<Particles emitting>`) for something that follows state, " +
-  "or `useMount` / `useUnmount` for when the component comes or goes.";
+  "`useMount` / `useUnmount` for when the component comes or goes (a function `useMount` returns is its cleanup: `useMount(() => settings.subscribe(…))`), " +
+  "or `key` on an element to start it over when what it shows changes (`<Dialogue key={talk.id} />`).";
 
 /** Hooks that were renamed or replaced, reported with what to write instead. */
 export const REMOVED_HOOKS: Readonly<Record<string, string>> = {

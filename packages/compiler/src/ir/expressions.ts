@@ -1,6 +1,6 @@
 // The IR of expressions: reads, literals, calls, array methods and operators.
 import { type StateId, type LocalId, type RefId } from "./ids.ts";
-import { type ParamIR } from "./values.ts";
+import { type FunctionIR, type ParamIR } from "./values.ts";
 
 
 
@@ -28,6 +28,7 @@ export type ExprIR =
   | ArrayLiteralIR
   | ObjectLiteralIR
   | ArrowIR
+  | CallbackIR
   | CallIR
   | TemplateLiteralIR
   | UnaryExprIR
@@ -198,6 +199,16 @@ export interface ArrowIR {
   readonly body: ExprIR;
 }
 
+/**
+ * `() => setView(read())` passed to a function or a method of an imported object in a handler
+ * (`settings.subscribe(() => …)`), or returned from `useMount` as its cleanup: a handler of its own, which may run later
+ * (it escapes), lowered like a callback prop. Its parameters are `Contextual`: the function it is passed to types them.
+ */
+export interface CallbackIR {
+  readonly kind: "Callback";
+  readonly fn: FunctionIR;
+}
+
 /** Array methods handler code may call. None mutates its receiver (state updates must be immutable). */
 export const ARRAY_METHODS = {
   filter: { args: [1, 1], callback: true },
@@ -280,7 +291,9 @@ export type CalleeIR =
   /** `squash.start(0.6, 1.4)`: a method of a per-instance object, state made by a factory (`useState(() => createSquash())`). Opaque. */
   | { readonly kind: "ValueMethod"; readonly receiver: ExprIR; readonly name: string }
   /** A callback prop: `onDefeated()` or `onDefeated?.()`. Argument counts and types are left to the type-check. */
-  | { readonly kind: "Prop"; readonly name: string; readonly optional: boolean };
+  | { readonly kind: "Prop"; readonly name: string; readonly optional: boolean }
+  /** A handler's own `const` or `let` holding a function: `const stop = settings.subscribe(…); … stop();`. The type-check checks it is one. */
+  | { readonly kind: "Local"; readonly name: string };
 
 export interface TemplateLiteralIR {
   readonly kind: "TemplateLiteral";

@@ -53,6 +53,8 @@ export interface LoweringContext {
   canSetState(): boolean;
   /** False in a state updater: it runs inside the setter, whether or not the update changes anything. */
   canPlaySound(): boolean;
+  /** True in a handler, outside a state updater: where a handler may hand a callback to a function (`settings.subscribe(() => …)`). */
+  canPassCallback(): boolean;
   /** Lowers a state updater: sounds cannot be played in it. */
   inUpdater<T>(lower: () => T): T;
   /** Lowers something in a new scope beneath the current one, restored afterwards. */
@@ -72,8 +74,11 @@ interface FunctionOptions {
    * (a callback passed to a child, typed by the child's props type).
    */
   readonly paramTypes: readonly TypeIR[] | "contextual";
-  /** `void`: handlers (`return;` only). `value`: updaters (`return expr;` required). */
-  readonly returns: "void" | "value";
+  /**
+   * `void`: handlers (`return;` only). `value`: updaters (`return expr;` required). `cleanup`: `useMount`, which may return
+   * a cleanup (`return () => …;`, `return settings.subscribe(…);`, or an expression body that calls a function).
+   */
+  readonly returns: "void" | "value" | "cleanup";
   /** What to call the function in diagnostics. */
   readonly what: string;
 }
@@ -108,10 +113,25 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
       body = value && [{ kind: "Return", value }];
     } else {
       const stmt = lowerExpressionStatement(ctx, fn.body, fn.body);
-      body = stmt && [stmt];
+      // `useMount(() => settings.subscribe(…))`: what a call returns is the cleanup (kept only if it is a function, as in React).
+      body = stmt && [options.returns === "cleanup" && stmt.kind === "ExpressionStatement" ? { kind: "Return", value: stmt.expression } : stmt];
     }
     return body && { kind: "Function", params, body };
   });
+}
+
+/**
+ * `() => setView(read())` as a value in a handler: handed to a function (`settings.subscribe(() => …)`) or returned from
+ * `useMount` as its cleanup. It is a handler of its own, which may run later, lowered like a callback prop. Null (after
+ * reporting) when it is not allowed here or its body is not handler code.
+ */
+export function lowerCallbackValue(ctx: LoweringContext, fn: ArrowFunction, what: string): ExprIR | null {
+  if (!ctx.canPassCallback()) {
+    ctx.error(DiagnosticCode.UnsupportedExpression, `An arrow function can be handed to a function only in a handler (\`useMount(() => settings.subscribe(() => …))\`), not in ${what}.`, fn);
+    return null;
+  }
+  const lowered = lowerFunction(ctx, fn, { paramTypes: "contextual", returns: "void", what: "A callback" });
+  return lowered && { kind: "Callback", fn: lowered };
 }
 
 /** Which jumps the statements may make: `break` in a `for…of` or a `switch`, `continue` in a `for…of`, of the same function. */
@@ -177,6 +197,12 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
   }
 
   if (isReturnStatement(statement)) {
+    if (options.returns === "cleanup") {
+      if (!statement.expression) return { kind: "Return", value: null };
+      const returned = unwrapParens(statement.expression);
+      const value = isArrowFunction(returned) ? lowerCallbackValue(ctx, returned, "this place") : ctx.lowerExpression(statement.expression);
+      return value && { kind: "Return", value };
+    }
     if (options.returns === "void") {
       if (statement.expression) {
         ctx.error(DiagnosticCode.InvalidHandler, `${options.what} cannot return a value.`, statement);

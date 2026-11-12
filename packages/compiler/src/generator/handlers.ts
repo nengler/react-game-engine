@@ -15,6 +15,19 @@ function loopBinding(binding: LoopBindingIR): string {
   }
 }
 
+/** Whether a function's own statements return a value (a `useMount` cleanup); nested callbacks and updaters are not its own. */
+function returnsValue(body: readonly StatementIR[]): boolean {
+  return body.some((stmt) => {
+    switch (stmt.kind) {
+      case "Return": return stmt.value !== null;
+      case "If": return returnsValue(stmt.then) || returnsValue(stmt.else);
+      case "ForOf": case "Block": return returnsValue(stmt.body);
+      case "Switch": return stmt.cases.some((c) => returnsValue(c.body));
+      default: return false;
+    }
+  });
+}
+
 export class HandlerEmitter extends ExpressionEmitter {
   // -- handlers -------------------------------------------------------------
 
@@ -35,7 +48,9 @@ export class HandlerEmitter extends ExpressionEmitter {
       // Overriding it would silently stop that, so the override calls `super` first, with the hook's own parameters.
       const callsSuper = (this.intrinsicHooks[this.c.root.component.name] ?? []).includes(signature.method);
       w.blank();
-      if (hooks.length === 1 && !callsSuper) {
+      // A `useMount` that returns a cleanup is a method of its own, whose result the override keeps (`keepCleanup`).
+      const cleanups = hooks.map((hook) => kind === "OnMount" && returnsValue(hook.handler.body));
+      if (hooks.length === 1 && !callsSuper && !cleanups[0]) {
         const handler = hooks[0]!.handler;
         w.at(hooks[0]!.span, () => w.block(`override ${signature.method}(${this.params(handler)}): void`, () => this.stmts(handler.body)));
         continue;
@@ -47,12 +62,13 @@ export class HandlerEmitter extends ExpressionEmitter {
         if (callsSuper) w.line(`super.${signature.method}(${signature.params.map((p) => p.name).join(", ")});`);
         hooks.forEach((hook, i) => {
           const args = signature.params.slice(0, hook.handler.params.length).map((p) => p.name).join(", ");
-          w.line(`this.#${signature.method}${i}(${args});`);
+          w.line(cleanups[i] ? `this.keepCleanup(this.#${signature.method}${i}(${args}));` : `this.#${signature.method}${i}(${args});`);
         });
       });
       hooks.forEach((hook, i) => {
         w.blank();
-        w.at(hook.span, () => w.block(`#${signature.method}${i}(${this.params(hook.handler)}): void`, () => this.stmts(hook.handler.body)));
+        const returns = cleanups[i] ? "(() => void) | void" : "void";
+        w.at(hook.span, () => w.block(`#${signature.method}${i}(${this.params(hook.handler)}): ${returns}`, () => this.stmts(hook.handler.body)));
       });
     }
   }
@@ -189,8 +205,11 @@ export class HandlerEmitter extends ExpressionEmitter {
     w.close("}");
   }
 
-  /** A callback passed to a child: an arrow with unannotated parameters, typed by the child's props type. */
-  protected callback(fn: FunctionIR): string {
+  /**
+   * A callback passed to a child, handed to a function (`settings.subscribe(() => …)`) or returned as a cleanup: an arrow
+   * with unannotated parameters, typed by where it goes.
+   */
+  protected override callback(fn: FunctionIR): string {
     const params = fn.params.map(param).join(", ");
     return this.arrow(params, this.within({ inCallback: true }, () => this.capture(() => this.stmts(fn.body))), fn);
   }
