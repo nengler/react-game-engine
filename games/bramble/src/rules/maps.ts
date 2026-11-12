@@ -1,10 +1,25 @@
 /**
- * The world: four maps as text, with the people, items, doors and shrines placed on them by tile. `tools/make-maps.ts` writes
- * the text as Tiled maps (`scenes/*.tmj`, the ground layer the game draws), and `test/maps.test.ts` checks they still agree. The
- * rules read the text: `.` ground, `#` wall, `~` water, `b` a bush (solid until cut with the shears).
+ * The world: four maps drawn in Tiled (`scenes/*.tmj`). Each has a tile layer, `Ground` (floor, wall, water; the tileset marks
+ * wall and water `solid`), and an object layer of the things on it, each a one-tile object whose Class says what it is:
+ *
+ * | Class | Name | Properties |
+ * | --- | --- | --- |
+ * | `door` | the door's id | `to` (`map/door`, where it leads), `out` (`up`, `down`, `left` or `right`: which way it faces), `needs` (an item, optional) |
+ * | `item` | the pickup's id (unique in the world) | `item` (`lantern`, `key`, `shears` or `bell`) |
+ * | `npc` | who it is (`guide`, `gardener`, `hermit`, `keeper`) | |
+ * | `shrine` | the shrine's id | |
+ * | `enemy` | the enemy's id | `kind` (`beetle` or `wisp`) |
+ * | `gate` | | (one, on the overworld) |
+ * | `bush` | | (solid until cut with the shears) |
+ *
+ * The map's own property `name` is the name shown on arrival. `readMap` checks all of it and says what is wrong, by map and object,
+ * so a map saved by Tiled with a mistake fails `test/maps.test.ts` rather than the game. The rules see each map as text, as
+ * before: `.` ground, `#` wall, `~` water, `b` a bush.
  */
+import type { TilemapData } from "@rge/runtime";
+import { tilemaps } from "../../generated/tilemaps.ts";
 import { TILE } from "./constants.ts";
-import type { NpcId } from "./dialogue.ts";
+import { DIALOGUE, type NpcId } from "./dialogue.ts";
 
 export type MapId = "overworld" | "cave" | "house" | "maze";
 export type ItemId = "lantern" | "key" | "shears" | "bell";
@@ -54,133 +69,117 @@ export interface MapDef {
   readonly gate?: Placed;
 }
 
-function grid(width: number, height: number): string[][] {
-  return Array.from({ length: height }, (_, r) => Array.from({ length: width }, (_, c) => (r === 0 || c === 0 || r === height - 1 || c === width - 1 ? "#" : ".")));
-}
-
-function fill(g: string[][], ch: string, c0: number, r0: number, c1: number, r1: number): void {
-  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) g[r]![c] = ch;
-}
-
-const text = (g: string[][]): string[] => g.map((row) => row.join(""));
-
-function overworld(): MapDef {
-  const g = grid(80, 48);
-  fill(g, "#", 1, 32, 19, 32); // a ridge across the valley, with a pass at cols 20 to 22
-  fill(g, "#", 23, 32, 78, 32);
-  fill(g, "#", 40, 33, 40, 39); // a second ridge, with a gap at rows 40 and 41 into the south-east
-  fill(g, "#", 40, 42, 40, 46);
-  fill(g, "~", 10, 24, 16, 28); // two ponds
-  fill(g, "~", 60, 24, 66, 29);
-  fill(g, "#", 36, 1, 44, 2); // the gate's wall
-  fill(g, "#", 4, 21, 8, 23); // the house, in the west
-  fill(g, "#", 70, 3, 74, 5); // the maze's front, in the north-east
-  fill(g, "#", 66, 42, 70, 44); // the cave, in the south-east
-  fill(g, "#", 28, 8, 28, 20); // a hedge-row of rock in the north, to walk round
-  fill(g, "#", 50, 10, 58, 10);
-  return {
-    id: "overworld",
-    name: "The valley",
-    rows: text(g),
-    doors: [
-      { id: "cave", col: 68, row: 44, to: { map: "cave", door: "cave-exit" }, out: [0, 1], needs: "lantern" },
-      { id: "house", col: 6, row: 23, to: { map: "house", door: "house-exit" }, out: [0, 1], needs: "key" },
-      { id: "maze", col: 72, row: 5, to: { map: "maze", door: "maze-exit" }, out: [0, 1] },
-    ],
-    pickups: [{ id: "lantern", item: "lantern", col: 9, row: 43 }],
-    npcs: [
-      { id: "guide", col: 12, row: 41 },
-      { id: "gardener", col: 9, row: 25 },
-      { id: "hermit", col: 68, row: 6 },
-      { id: "keeper", col: 37, row: 4 },
-    ],
-    shrines: [
-      { id: "shrine-south", col: 6, row: 42 },
-      { id: "shrine-middle", col: 21, row: 29 },
-      { id: "shrine-north", col: 72, row: 9 },
-    ],
-    enemies: [
-      { id: "beetle-1", kind: "beetle", col: 16, row: 38 },
-      { id: "beetle-2", kind: "beetle", col: 34, row: 44 },
-      { id: "beetle-3", kind: "beetle", col: 12, row: 18 },
-      { id: "beetle-4", kind: "beetle", col: 56, row: 40 },
-      { id: "wisp-1", kind: "wisp", col: 22, row: 20 },
-      { id: "wisp-2", kind: "wisp", col: 48, row: 16 },
-      { id: "wisp-3", kind: "wisp", col: 60, row: 8 },
-    ],
-    gate: { col: 40, row: 2 },
-  };
-}
-
-function cave(): MapDef {
-  const g = grid(30, 16);
-  fill(g, "#", 5, 3, 5, 10);
-  fill(g, "#", 5, 10, 20, 10);
-  fill(g, "#", 10, 4, 24, 4);
-  fill(g, "#", 24, 4, 24, 8);
-  fill(g, "#", 14, 7, 14, 10);
-  return {
-    id: "cave",
-    name: "The cave",
-    rows: text(g),
-    // The way out is in the bottom wall: a door tile in the wall row, reached from above.
-    doors: [{ id: "cave-exit", col: 15, row: 15, to: { map: "overworld", door: "cave" }, out: [0, -1] }],
-    pickups: [
-      { id: "key", item: "key", col: 3, row: 3 },
-      { id: "bell-cave", item: "bell", col: 27, row: 2 },
-    ],
-    npcs: [],
-    shrines: [],
-    enemies: [{ id: "wisp-cave", kind: "wisp", col: 20, row: 8 }, { id: "beetle-cave", kind: "beetle", col: 8, row: 13 }],
-  };
-}
-
-function house(): MapDef {
-  const g = grid(20, 12);
-  fill(g, "#", 8, 3, 8, 6);
-  fill(g, "#", 12, 6, 12, 9);
-  return {
-    id: "house",
-    name: "The old house",
-    rows: text(g),
-    doors: [{ id: "house-exit", col: 10, row: 11, to: { map: "overworld", door: "house" }, out: [0, -1] }],
-    pickups: [
-      { id: "shears", item: "shears", col: 3, row: 3 },
-      { id: "bell-house", item: "bell", col: 16, row: 3 },
-    ],
-    npcs: [],
-    shrines: [],
-    enemies: [],
-  };
-}
-
-function maze(): MapDef {
-  const g = grid(30, 16);
-  // A ring of hedge with its entrance at the bottom, a solid block inside it, and the way on to the bell blocked by bushes that
-  // only the shears clear.
-  fill(g, "#", 3, 3, 26, 3);
-  fill(g, "#", 3, 3, 3, 12);
-  fill(g, "#", 26, 3, 26, 12);
-  fill(g, "#", 3, 12, 13, 12);
-  fill(g, "#", 16, 12, 26, 12);
-  fill(g, "#", 7, 6, 22, 9);
-  fill(g, "#", 4, 4, 12, 4);
-  fill(g, "#", 17, 4, 25, 4);
-  fill(g, "b", 14, 3, 15, 3);
-  return {
-    id: "maze",
-    name: "The hedge maze",
-    rows: text(g),
-    doors: [{ id: "maze-exit", col: 15, row: 15, to: { map: "overworld", door: "maze" }, out: [0, -1] }],
-    pickups: [{ id: "bell-maze", item: "bell", col: 15, row: 1 }],
-    npcs: [],
-    shrines: [],
-    enemies: [{ id: "beetle-maze", kind: "beetle", col: 10, row: 13 }],
-  };
-}
-
-export const MAPS: Readonly<Record<MapId, MapDef>> = { overworld: overworld(), cave: cave(), house: house(), maze: maze() };
+/** Global tile ids of `assets/tiles.png` in the `Ground` layer, as the rules' text. Any other tile is ground, or wall if solid. */
+const GROUND: Readonly<Record<number, string>> = { 1: ".", 2: "#", 3: "~" };
+const ITEMS: readonly ItemId[] = ["lantern", "key", "shears", "bell"];
+const KINDS: readonly EnemyKind[] = ["beetle", "wisp"];
+const FACING: Readonly<Record<string, readonly [number, number]>> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 export const MAP_IDS: readonly MapId[] = ["overworld", "cave", "house", "maze"];
+
+/**
+ * A map as the rules use it, from its Tiled data. Throws, naming the map and the object, for anything the rules cannot use: an
+ * unknown Class, a missing or wrong property, an object off the map or two with the same id.
+ */
+export function readMap(id: MapId, data: TilemapData): MapDef {
+  const fail = (message: string): never => {
+    throw new Error(`scenes/${id}.tmj: ${message}`);
+  };
+  const ground = data.layers.find((l) => l.name === "Ground") ?? fail("it has no tile layer named Ground.");
+  const solid = new Set(data.solid);
+  const cells: string[][] = [];
+  for (let r = 0; r < data.height; r++) {
+    const row: string[] = [];
+    for (let c = 0; c < data.width; c++) {
+      const gid = ground.data[r * data.width + c] ?? 0;
+      row.push(GROUND[gid] ?? (solid.has(gid) ? "#" : "."));
+    }
+    cells.push(row);
+  }
+  const doors: Door[] = [];
+  const pickups: Pickup[] = [];
+  const npcs: (Placed & { id: NpcId })[] = [];
+  const shrines: (Placed & { id: string })[] = [];
+  const enemies: EnemySpawn[] = [];
+  let gate: Placed | undefined;
+  const seen = new Set<string>();
+  for (const o of data.objects ?? []) {
+    const what = `object ${o.id}${o.name === "" ? "" : ` '${o.name}'`} (${o.type === "" ? "no Class" : o.type})`;
+    // The cell under the object's middle; a point object is the cell it is in.
+    const col = Math.floor((o.x + o.width / 2) / TILE);
+    const row = Math.floor((o.y + o.height / 2) / TILE);
+    if (!(col >= 0 && col < data.width && row >= 0 && row < data.height)) fail(`${what} is off the map.`);
+    const text = (name: string, optional = false): string | undefined => {
+      const value = o.properties[name];
+      if (value === undefined && optional) return undefined;
+      return typeof value === "string" && value !== "" ? value : fail(`${what} needs a string property '${name}'.`);
+    };
+    const oneOf = <T extends string>(value: string | undefined, allowed: readonly T[], name: string): T =>
+      allowed.includes(value as T) ? (value as T) : fail(`${what}: '${name}' is '${String(value)}', not one of ${allowed.join(", ")}.`);
+    const named = (): string => {
+      if (o.name === "") fail(`${what} needs a name: its id.`);
+      if (seen.has(`${o.type}:${o.name}`)) fail(`${what}: another ${o.type} on this map has the same name.`);
+      seen.add(`${o.type}:${o.name}`);
+      return o.name;
+    };
+    switch (o.type) {
+      case "door": {
+        const door = named();
+        const [toMap, toDoor] = text("to")!.split("/");
+        const facing = FACING[text("out")!] ?? fail(`${what}: 'out' must be up, down, left or right.`);
+        const needs = text("needs", true);
+        doors.push({ id: door, col, row, to: { map: oneOf(toMap, MAP_IDS, "to"), door: toDoor ?? fail(`${what}: 'to' is map/door.`) }, out: facing, ...(needs === undefined ? {} : { needs: oneOf(needs, ITEMS, "needs") }) });
+        break;
+      }
+      case "item":
+        pickups.push({ id: named(), item: oneOf(text("item"), ITEMS, "item"), col, row });
+        break;
+      case "npc":
+        npcs.push({ id: oneOf(named(), Object.keys(DIALOGUE) as NpcId[], "name"), col, row });
+        break;
+      case "shrine":
+        shrines.push({ id: named(), col, row });
+        break;
+      case "enemy":
+        enemies.push({ id: named(), kind: oneOf(text("kind"), KINDS, "kind"), col, row });
+        break;
+      case "gate":
+        if (gate !== undefined) fail(`${what}: a map has one gate.`);
+        gate = { col, row };
+        break;
+      case "bush":
+        cells[row]![col] = "b";
+        break;
+      default:
+        fail(`${what}: the Class must be door, item, npc, shrine, enemy, gate or bush.`);
+    }
+  }
+  const name = data.properties?.["name"];
+  return {
+    id,
+    name: typeof name === "string" ? name : fail("it needs a map property 'name' (Map → Map Properties)."),
+    rows: cells.map((r) => r.join("")),
+    doors,
+    pickups,
+    npcs,
+    shrines,
+    enemies,
+    ...(gate === undefined ? {} : { gate }),
+  };
+}
+
+/** Every map, read from `generated/tilemaps.ts`; a door that leads nowhere is an error here too. */
+function readWorld(maps: Readonly<Record<string, TilemapData>>): Record<MapId, MapDef> {
+  const world = {} as Record<MapId, MapDef>;
+  for (const id of MAP_IDS) world[id] = readMap(id, maps[id] ?? (() => { throw new Error(`scenes/${id}.tmj is missing (or was not compiled).`); })());
+  for (const def of Object.values(world)) {
+    for (const d of def.doors) {
+      if (!world[d.to.map].doors.some((there) => there.id === d.to.door)) throw new Error(`scenes/${def.id}.tmj: door '${d.id}' leads to '${d.to.map}/${d.to.door}', which is not a door.`);
+    }
+  }
+  return world;
+}
+
+export const MAPS: Readonly<Record<MapId, MapDef>> = readWorld(tilemaps);
 
 export function mapSize(map: MapId): { readonly cols: number; readonly rows: number } {
   const def = MAPS[map];

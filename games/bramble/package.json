@@ -21,7 +21,6 @@
     "dev": "rge dev",
     "check": "rge check",
     "package": "rge package",
-    "assets": "node tools/make-assets.ts",
-    "maps": "node tools/make-maps.ts"
+    "assets": "node tools/make-assets.ts"
   }
 }
