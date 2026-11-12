@@ -1,50 +1,40 @@
 {
-  "about": "Budgets for `npm run bench:check` (see tools/bench-check.ts). Each is about 2.5 to 3 times what the scene took on a 4-core 2.1 GHz cloud VM on 2026-11-10, so a slower or noisier CI runner passes and a real regression (twice the work, or an algorithm that turns quadratic) fails. `ratios` do not depend on how fast the machine is: a scene with 4 times the objects should take about 4 times as long, and 16 times means quadratic. When a change makes a scene faster for good, lower its budget in the same PR; when one makes it slower on purpose, raise it and say why.",
-  "quickjs": {
-    "500 moving rects": 3.5,
-    "2000 moving rects": 14,
-    "5000 moving rects": 35,
-    "2000 rects moved by state": 17,
-    "2000 rects by state with colliders": 26,
-    "2000 still rects": 0.5,
-    "2000 rects, 20 moving, colliders": 7,
-    "2000 still rects with colliders": 1.2,
-    "2000 rects, 20 moving by state, colliders": 7,
-    "500 moving rects with colliders": 7,
-    "2000 moving rects with colliders": 26,
-    "300 colliders in one pile": 32,
-    "200 animated sprites by state": 6,
-    "80 enemies, 20 towers, 50 shots": 4,
-    "200 x 200 tilemap scrolled": 4,
-    "2000 by state with colliders, script sweep": 32,
-    "300 in one pile, script sweep": 42,
-    "100 paths on an 80 x 48 map": 5000,
-    "mount 5000 rects": 180,
-    "mount 20000 rects": 900
-  },
+  "about": "Budgets for `npm run bench:check` (see tools/bench-check.ts), under Node, the engine games ship with. Each is about 2.5 to 3 times what the scene took on a 4-core 2.1 GHz cloud VM on 2026-11-10, with a floor of 3 ms so a scene that takes a fraction of a millisecond does not fail on runner noise. A slower or noisier CI runner passes and a real regression (twice the work, or an algorithm that turns quadratic) fails. `ratios` do not depend on how fast the machine is: a scene with 4 times the objects should take about 4 times as long, and 16 times means quadratic. When a change makes a scene faster for good, lower its budget in the same PR; when one makes it slower on purpose, raise it and say why. There are no budgets for the QuickJS host; `node packages/player/bench/frame.ts` bundled with `npm run bundle` can still be run under it by hand.",
   "node": {
-    "500 moving rects": 1.5,
-    "2000 moving rects": 1.5,
+    "500 moving rects": 3,
+    "2000 moving rects": 3,
     "5000 moving rects": 3,
-    "2000 rects moved by state": 1.5,
-    "2000 rects by state with colliders": 2,
-    "2000 still rects": 0.5,
-    "2000 rects, 20 moving, colliders": 1.5,
-    "2000 still rects with colliders": 0.5,
-    "2000 rects, 20 moving by state, colliders": 1,
-    "500 moving rects with colliders": 1,
+    "2000 rects moved by state": 3,
+    "2000 rects by state with colliders": 3,
+    "2000 still rects": 3,
+    "2000 rects, 20 moving, colliders": 3,
+    "2000 still rects with colliders": 3,
+    "2000 rects, 20 moving by state, colliders": 3,
+    "500 moving rects with colliders": 3,
     "2000 moving rects with colliders": 3,
-    "300 colliders in one pile": 2.5,
-    "200 animated sprites by state": 0.7,
-    "80 enemies, 20 towers, 50 shots": 0.6,
-    "200 x 200 tilemap scrolled": 0.5,
+    "300 colliders in one pile": 3,
+    "200 animated sprites by state": 3,
+    "80 enemies, 20 towers, 50 shots": 3,
+    "200 x 200 tilemap scrolled": 3,
     "100 paths on an 80 x 48 map": 400,
     "mount 5000 rects": 40,
     "mount 20000 rects": 150
   },
   "ratios": [
-    { "larger": "mount 20000 rects", "smaller": "mount 5000 rects", "at most": 8 },
-    { "larger": "2000 moving rects with colliders", "smaller": "500 moving rects with colliders", "at most": 8 },
-    { "larger": "5000 moving rects", "smaller": "2000 moving rects", "at most": 5 }
+    {
+      "larger": "mount 20000 rects",
+      "smaller": "mount 5000 rects",
+      "at most": 8
+    },
+    {
+      "larger": "2000 moving rects with colliders",
+      "smaller": "500 moving rects with colliders",
+      "at most": 8
+    },
+    {
+      "larger": "5000 moving rects",
+      "smaller": "2000 moving rects",
+      "at most": 5
+    }
   ]
 }

@@ -10,7 +10,7 @@
  *   node packages/player/bench/frame.ts
  *   npm run bundle -- packages/player/bench/frame.ts host/dist/bench.js && host/target/release/rge-host host/dist/bench.js
  *
- * `npm run bench:check` runs it under both and fails when a scene is over its budget in `budget.json` (CI does).
+ * `npm run bench:check` runs it under Node and fails when a scene is over its budget in `budget.json` (CI does).
  */
 import { findPath, AnimatedSprite, Camera, Collider, Entity, Shape, Sprite, Tilemap, World, registerTilemaps } from "@rge/runtime";
 import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerInput, RGE_IN_DT, RGE_IN_QUIT, Warner, type Backend } from "@rge/player";
