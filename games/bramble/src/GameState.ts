@@ -3,13 +3,14 @@ import "./tilemaps.ts";
 import { answer } from "./effects.ts";
 import { settings } from "./settings.ts";
 import { controls } from "./rules/controls.ts";
-import { stepVolume, titleRows, type SettingsView } from "./rules/menu.ts";
+import { stepVolume, titleRows } from "./rules/menu.ts";
 import { loadRun, newRun, saveOf, step, type GameEvent, type Input, type Run, type SaveData } from "./rules/run.ts";
 
 type Screen = "title" | "settings" | "play" | "end";
 
 /**
- * The game's shared state: which screen is showing, the run, and what the screens show of the save and the settings. What is drawn
+ * The game's shared state: which screen is showing, the run, and whether there is a save. The settings screen reads the settings
+ * itself (`settings.ts`), listening while it is shown. What is drawn
  * of the run is worked out by the components from `run` (`rules/view.ts`); which menu row is chosen is each screen's own state.
  */
 interface State {
@@ -23,9 +24,6 @@ interface State {
   hasSave: boolean;
   /** The row the title's cursor starts on (Settings, when coming back from them). */
   titleCursor: number;
-  /** The settings as they are now, kept equal to `settings` (see the subscription below), and the keys of each action. */
-  settings: SettingsView;
-  bindings: Readonly<Record<string, readonly string[]>>;
   /** Open or close the pause screen. */
   togglePause: () => void;
   /** Start a new run. */
@@ -60,11 +58,6 @@ export const save = createSave<SaveData>({
   },
 });
 
-const settingsView = (): SettingsView => {
-  const s = settings.get();
-  return { music: s.music, effects: s.effects, fullscreen: s.fullscreen };
-};
-
 export const useGame = createGameState<State>()((set, get) => ({
   screen: "title",
   run: newRun(),
@@ -72,8 +65,6 @@ export const useGame = createGameState<State>()((set, get) => ({
   paused: false,
   hasSave: false,
   titleCursor: 0,
-  settings: settingsView(),
-  bindings: controls.toJSON(),
   togglePause: () => {
     const { paused, screen } = get();
     if (screen === "play") set({ paused: !paused });
@@ -116,7 +107,3 @@ export const useGame = createGameState<State>()((set, get) => ({
     settings.reset();
   },
 }));
-
-// The settings change through `settings` (here, and when a player opens saved data and reads the file): mirror them into the state,
-// so the settings screen, which selects them, re-renders.
-settings.subscribe(() => useGame.setState({ settings: settingsView(), bindings: controls.toJSON() }));

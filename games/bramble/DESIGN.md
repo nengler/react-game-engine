@@ -147,9 +147,11 @@ answered, the components read like React:
   character is one `<Sprite>` in the camera (not a list of one); `Inventory` holds its `{slot.filled && …}` in the list item.
 - **A menu's cursor is the screen's own state** (`useState`), and the rows are computed from the game state (`titleRows(hasSave)`,
   `settingsRows(settings, bindings, capturing)`) and passed to `<Menu rows cursor>` as props. The game state keeps only what is shared:
-  the run, the screen, whether there is a save, and the settings.
-- **The settings are state components select**: `settings.subscribe` mirrors each change into `useGame` (`s.settings`, `s.bindings`),
-  so the settings screen re-renders when a volume or a key changes, without each action rebuilding the rows.
+  the run, the screen and whether there is a save.
+- **The settings screen listens to the settings itself**: it keeps the values and the keys as its own state and subscribes in
+  `useMount`, returning what `settings.subscribe` returns as the cleanup, so it re-renders when a volume or a key changes and stops
+  listening when it goes. (Until the engine had cleanups, a module-level `settings.subscribe` mirrored them into `useGame`, as
+  `s.settings` and `s.bindings`.)
 
 Every frame of three replays (the title and settings, the cave with the pause screen, and the whole game) draws exactly what it drew
 before the change.

@@ -1,12 +1,20 @@
-import { Entity, Text, useInput, useState } from "@rge/runtime/jsx";
+import { Entity, Text, useInput, useMount, useState } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { Menu } from "./Menu.tsx";
-import { settingsRows } from "./rules/menu.ts";
+import { settingsRows, type SettingsView } from "./rules/menu.ts";
+import { bindingsView, settings, settingsView, type Bindings } from "./settings.ts";
 
 /** The settings: volumes, full screen, and a row for each key. Press confirm on a key's row, then the key to give it. */
 export function Settings() {
-  const values = useGame((s) => s.settings);
-  const bindings = useGame((s) => s.bindings);
+  // The settings live in `settings`, outside the game state: the screen reads them, and listens while it is shown.
+  const [values, setValues] = useState<SettingsView>(() => settingsView());
+  const [bindings, setBindings] = useState<Bindings>(() => bindingsView());
+  useMount(() =>
+    settings.subscribe(() => {
+      setValues(settingsView());
+      setBindings(bindingsView());
+    }),
+  );
   const { adjust, bindKey, resetSettings, closeSettings } = useGame((s) => s);
   /** The action whose row waits for a key, if any. */
   const [capturing, setCapturing] = useState<string | null>(null);
