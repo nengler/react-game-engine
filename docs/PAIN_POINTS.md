@@ -30,9 +30,10 @@ TSX invites people to write React, and then they hit `RGE` codes.
 
 ## 3. Game-engine semantics on React concepts
 
-- **Input is polled, not event-driven.** Every `useInput` sees every key, so components guard themselves: Bramble's `Menu` takes a
-  `disabled` prop and `Play` writes `if (paused) return` so that two components do not both act on one press. Nothing lets a component
-  own or consume the keys.
+- **Input is polled, not event-driven.** Every `useInput` sees every key, so components guarded themselves: Bramble's `Menu` took a
+  `disabled` prop and `Play` wrote `if (paused) return` so that two components did not both act on one press. *Since:* `inert` and
+  `modal` on `<Entity>`, `<Flex>` and `<Hud>`, as in HTML, decide which subtrees hear input; Bramble's pause screen and its "press a
+  key" prompt are modals, and `Menu` has no `disabled` prop.
 - **Refs carry input from `useInput` to `useUpdate`.** `Play.tsx` keeps three (`dx`, `dy`, `action`) and keeps a press until the update
   takes it. A newcomer asks why there are two hooks.
 - **Frame timing.** State set in a handler shows next render; objects attached mid-frame get hooks next frame; collision callbacks run
@@ -87,7 +88,7 @@ no React equivalent.
 ## What to fix first
 
 1. **Diagnostics in the `.tsx` source**, with source maps for the generated files as custom hooks already have.
-2. **Input focus or consumption**, building on `focusable` / `autoFocus`, so a component owns the keys instead of every `useInput`
-   guarding itself; that also removes most of the input refs.
+2. ~~**Input focus or consumption**~~ *Done:* `inert` and `modal` (DESIGN.md, "Inert and modal"). The input refs in `Play.tsx` stay:
+   they carry a press from `useInput` to `useUpdate`, which a modal does not change.
 3. **A "coming from React" page** at the top of the guide: what is left out on purpose, what stands in for each, and the three zones
    of code. Most of the confusion above is expectation, not a missing feature.

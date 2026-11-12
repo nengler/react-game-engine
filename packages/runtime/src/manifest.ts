@@ -187,7 +187,7 @@ export const runtimeManifest: RuntimeManifest = {
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "markChanged", "markMoved", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
-    "onInput", "onUpdate", "onMount", "onUnmount", "keepCleanup",
+    "onInput", "onUpdate", "onMount", "onUnmount", "keepCleanup", "inert", "modal",
     "attachToWorld", "detachFromWorld", "$memo",
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",

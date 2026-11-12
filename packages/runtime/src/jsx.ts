@@ -11,6 +11,7 @@
 import type { InputState } from "./input.ts";
 import type { ShakeState, Vector2 } from "./math.ts";
 import type { EntityProps } from "./components/Entity.ts";
+import type { HudProps } from "./components/Hud.ts";
 import type { GameProps } from "./components/Game.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
@@ -295,7 +296,7 @@ export function freeze(_steps: number): void {
  * A layer that stays on the screen while the camera moves, drawn after the world: a score, a health bar, a button.
  * Its coordinates are screen pixels (game pixels under a `<Screen>`). `transform` moves the whole layer.
  */
-export function Hud(_props: { children?: Child }): JSX.Element {
+export function Hud(_props: HudProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Hud");
 }
 

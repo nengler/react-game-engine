@@ -1,4 +1,4 @@
-import { GameObject } from "../GameObject.ts";
+import { GameObject, type InputScopeProps } from "../GameObject.ts";
 import type { PressableProps } from "./Pointer.ts";
 
 /** The main axis of a `<Flex>`. The manifest's `intrinsicLiterals` reads these lists, so the compiler cannot drift from them. */
@@ -23,7 +23,7 @@ export type FlexAnchor = (typeof FLEX_ANCHORS)[number];
  */
 export type FlexSizing = number | "fit" | "grow" | `${number}%`;
 
-export interface FlexProps extends Omit<PressableProps, "onPress"> {
+export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopeProps {
   /** The main axis: children go left to right (`"row"`, the default) or top to bottom. */
   direction?: FlexDirection;
   /** Where children sit across the main axis. Default `"stretch"`. */
@@ -166,6 +166,8 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   constructor(hostProps: FlexProps = {}, props?: P, defaults?: Partial<P>) {
     super(props, defaults);
     this.direction = hostProps.direction ?? "row";
+    this.inert = hostProps.inert ?? false;
+    this.modal = hostProps.modal ?? false;
     this.alignItems = hostProps.alignItems ?? "stretch";
     this.justifyContent = hostProps.justifyContent ?? "start";
     this.gap = hostProps.gap ?? 0;

@@ -1822,6 +1822,23 @@ a laid-out box's middle; along the direction, plus twice the distance across, so
 without one) presses the focused one. A click on a focusable one focuses it before pressing it. `World.focus(p)` / `World.focused` for
 code. One focused or removed, inert or no longer focusable, loses it; the next tick an `autoFocus` one may take it.
 
+**Inert and modal** (2026-11-12, from PAIN_POINTS.md: "nothing lets a component own or consume the keys"). Input stays polled;
+what changed is who hears it, decided by subtree as in HTML. `inert` and `modal` are accessors on `GameObject` and props of
+`<Entity>`, `<Flex>` and `<Hud>` (`InputScopeProps`), so a component puts them on its root (`<Entity inert={disabled}>`) and they
+follow state like any prop. `inert` was already the router's mechanism (`World.setInert`, used on a screen being left); the prop
+calls it when set and when the object joins or leaves a world. `modal` calls `World.setModal`, which keeps a stack in mount order;
+the last modal still in the world is `World.modal`. `World.isInert(object)` is now: in an inert subtree, or a modal exists and the
+object is not inside it (ancestors included, as a dialog's page is). Everything that already asked `isInert` follows: `onInput` and
+`onUpdate` get `NO_INPUT`, presses and hover skip it, `pressKey` and the focus look only at pressables that are not inert, so the
+focus stays inside a modal and leaves what it made inert. A modal is pushed before its children attach, so an inner modal is above
+an outer one. `inert` and `modal` are reserved member names; they are not in `intrinsicMembers`, which lists what an intrinsic
+adds to `GameObject`.
+
+Bramble is the first user: the pause screen is a `modal` component that closes itself on Escape (the play screen behind it no
+longer hears the keys, so its `if (paused) return` in `useInput` went), and a settings row waiting for a key mounts `KeyPrompt`, a
+modal with no children, so `Menu` lost its `disabled` prop. Not done: a per-key "consume" (`input.consume("confirm")`) inside one
+subtree, which no game has needed beside these two.
+
 **Small things the same review found.** `<Pointer originX originY>` places the area's origin as a Sprite's does (a pad's 10 × 10 area
 centred on it). A bitmap-font `<Text>` without a `size` is drawn at the font's own cell height (`Text.sized`; setting `size` to
 `undefined` goes back to that). `controls.label(action)` names the first key for a label (`"Space"`, `"Esc"`, `"Left"`). The generated
