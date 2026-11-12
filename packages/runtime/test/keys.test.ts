@@ -54,7 +54,7 @@ describe("focus", () => {
     root.addChild(at(new Pointer({ width: 10, height: 10 }), 20, 0)); // not focusable: skipped
     world.mount(root);
     world.flush();
-    press(world);
+    world.focus(a);
     assert.equal(world.focused, a);
     press(world, "ArrowRight");
     assert.equal(world.focused, b, "the nearest to the right, not the farther one");
@@ -100,6 +100,71 @@ describe("focus", () => {
     world.tick(1 / 60, createInputState({ pressed: ["Enter"] }));
     assert.equal(world.focused, b);
     assert.equal(pressed, 1);
+  });
+});
+
+describe("disabled", () => {
+  it("swallows a click without pressing or focusing, so what is under it gets nothing, and answers neither pressKey nor confirm", () => {
+    const log: string[] = [];
+    const world = new World();
+    const root = new Entity();
+    const off = new Flex({ width: 10, height: 10, disabled: true, focusable: true, autoFocus: true, pressKey: "wave", onPress: () => log.push("off"), onFocus: () => log.push("focus off") });
+    root.addChild(off);
+    world.mount(root);
+    world.flush();
+    press(world, "Space");
+    press(world, "Z");
+    assert.equal(world.focused, null, "autoFocus does not take a disabled one");
+    off.box.size[0] = 10;
+    off.box.size[1] = 10;
+    assert.equal(world.reportPress(off, 5, 5), true, "a click on it is hit, which keeps it from reaching what is under it");
+    assert.equal(world.reportPress(off, 50, 5), false, "and a click off it is not");
+    assert.equal(world.pressed, null, "it is never pressed");
+    assert.equal(world.focused, null, "and a click does not focus it");
+    assert.deepEqual(log, []);
+    off.disabled = false;
+    press(world, "Space");
+    assert.deepEqual(log, ["focus off", "off"], "switched back on, it takes its autoFocus and answers its key");
+  });
+
+  it("is skipped by the arrow keys, and loses the focus it had when it is switched off", () => {
+    const world = new World();
+    const root = new Entity();
+    const a = at(new Pointer({ width: 10, height: 10, focusable: true }), 0, 0);
+    const b = at(new Pointer({ width: 10, height: 10, focusable: true, disabled: true }), 40, 0);
+    const c = at(new Pointer({ width: 10, height: 10, focusable: true }), 80, 0);
+    root.addChild(a);
+    root.addChild(b);
+    root.addChild(c);
+    world.mount(root);
+    world.flush();
+    world.focus(a);
+    assert.equal(world.focused, a);
+    press(world, "ArrowRight");
+    assert.equal(world.focused, c, "the focus goes past the disabled one");
+    c.disabled = true;
+    press(world);
+    assert.equal(world.focused, null, "a focused one that is switched off lets go of the focus");
+  });
+});
+
+describe("pressed", () => {
+  it("is the pressable a click landed on, until the button is let go", () => {
+    const world = new World();
+    const root = new Entity();
+    const button = new Pointer({ width: 10, height: 10, onPress: () => {} });
+    root.addChild(button);
+    world.mount(root);
+    world.flush();
+    assert.equal(world.pressed, null);
+    world.reportPress(button, 5, 5);
+    assert.equal(world.pressed, button);
+    world.reportRelease();
+    assert.equal(world.pressed, null);
+    world.reportPress(button, 5, 5);
+    root.removeChild(button);
+    world.flush();
+    assert.equal(world.pressed, null, "a removed one is not pressed any more");
   });
 });
 

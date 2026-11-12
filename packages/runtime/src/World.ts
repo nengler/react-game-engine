@@ -130,9 +130,24 @@ export class World {
   reportPress(pointer: Pressable, x: number, y: number): boolean {
     if (pointer.world !== this || !pointer.contains(x, y)) return false;
     if (this.#hasInert() && this.isInert(pointer as unknown as GameObject)) return false;
+    // A disabled one is hit, so what is under it does not get the press, but it hears nothing and takes no focus.
+    if (pointer.disabled === true) return true;
     if (pointer.focusable === true) this.focus(pointer);
+    this.#pressed = pointer;
     pointer.onPress?.();
     return true;
+  }
+
+  #pressed: Pressable | null = null;
+
+  /** The pressable a press began on, while the mouse button is still held (null for none): what a `<Flex>`'s `pressed*` props are drawn for. */
+  get pressed(): Pressable | null {
+    return this.#pressed;
+  }
+
+  /** The mouse button is up: nothing is pressed any more. The player calls it every step the button is not held. */
+  reportRelease(): void {
+    this.#pressed = null;
   }
 
   #hovered: Pressable | null = null;
@@ -210,7 +225,7 @@ export class World {
    * `onFocus`. A click on a focusable one focuses it, as in a browser; the arrow keys move it (`tick`).
    */
   focus(target: Pressable | null): void {
-    const next = target !== null && (target as GameObject & Pressable).world === this && target.focusable === true ? (target as GameObject & Pressable) : null;
+    const next = target !== null && (target as GameObject & Pressable).world === this && target.focusable === true && target.disabled !== true ? (target as GameObject & Pressable) : null;
     if (next === this.#focused) return;
     const previous = this.#focused;
     this.#focused = next;
@@ -231,6 +246,7 @@ export class World {
     focusables.length = 0;
     for (const p of this.#pressables) {
       if (p.world !== this || (anyInert && this.isInert(p))) continue;
+      if (p.disabled === true) continue;
       live.push(p);
       if (p.focusable === true) focusables.push(p);
     }
@@ -264,6 +280,7 @@ export class World {
   unregisterObject(object: GameObject): void {
     this.#pressables.delete(object as GameObject & Pressable);
     if (this.#focused === object) this.#focused = null;
+    if (this.#pressed === (object as unknown as Pressable)) this.#pressed = null;
     this.#onInput.delete(object);
     this.#onUpdate.delete(object);
   }

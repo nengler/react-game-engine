@@ -49,9 +49,9 @@ export interface LayoutHost {
   warn(key: string, message: string): void;
 }
 
-/** Whether a `<Flex>` has a border in any state (a colour for it plain, hovered or focused), so its room is kept whichever it is in and layout does not move when the mouse does. */
+/** Whether a `<Flex>` has a border in any state (a colour for it in any state), so its room is kept whichever it is in and layout does not move when the mouse does. */
 function hasBorder(f: Flex): boolean {
-  return f.borderColor !== undefined || f.hoverBorderColor !== undefined || f.focusBorderColor !== undefined;
+  return f.borderColor !== undefined || f.hoverBorderColor !== undefined || f.focusBorderColor !== undefined || f.pressedBorderColor !== undefined || f.disabledBorderColor !== undefined;
 }
 
 function finiteOr0(value: number): number {

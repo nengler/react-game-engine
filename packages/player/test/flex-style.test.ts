@@ -209,3 +209,132 @@ describe("<Flex> hover and focus props, in the loop", () => {
     assert.equal(RGE_OP_BOX_LEN, 12);
   });
 });
+
+describe("<Flex> pressed and disabled props, in the loop", () => {
+  afterEach(() => {
+    assert.equal(getSoundSink(), null, "every test closes its player");
+  });
+
+  const IN = { x: 10, y: 10 };
+  const OUT = { x: 150, y: 80 };
+  type Input = { mouse: { x: number; y: number }; pressed?: string[]; down?: string[] };
+
+  /** One 40 × 20 button; the fill of the Flex's own box after each step. */
+  function run(props: FlexProps, inputs: readonly Input[]): { fills: string[]; presses: number } {
+    const backend = new RecordingBackend();
+    const root = new Entity();
+    let presses = 0;
+    root.addChild(button({ onPress: () => presses++, ...props }));
+    const p = createPlayer(backend, { ...WINDOW, root: () => root, warn: () => {} });
+    const fills: string[] = [];
+    for (const input of inputs) {
+      backend.queueInput(input);
+      p.step();
+      const frame = backend.lastFrame.records;
+      const b = boxes(frame)[0];
+      fills.push(b !== undefined ? b.fill : rects(frame)[0]?.color ?? "none");
+    }
+    p.close();
+    return { fills, presses };
+  }
+
+  const STYLED: FlexProps = { background: "#111111", hoverBackground: "#222222", pressedBackground: "#333333", disabledBackground: "#444444" };
+
+  it("draws pressedBackground while the button is held on the box, and the hover colour again once it is let go", () => {
+    const { fills, presses } = run(STYLED, [
+      { mouse: OUT },
+      { mouse: IN },
+      { mouse: IN },
+      { mouse: IN, pressed: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+      { mouse: IN },
+      { mouse: IN },
+    ]);
+    assert.equal(fills[2], "#222222ff", "hovered");
+    assert.equal(fills[5], "#333333ff", "held: pressed, over hover");
+    assert.equal(fills[7], "#222222ff", "let go: hover again");
+    assert.equal(presses, 1);
+  });
+
+  it("drops the pressed look while the mouse is dragged off the box, and brings it back on return", () => {
+    const { fills } = run(STYLED, [
+      { mouse: IN },
+      { mouse: IN, pressed: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+      { mouse: OUT, down: ["MouseLeft"] },
+      { mouse: OUT, down: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+    ]);
+    assert.equal(fills[2], "#333333ff");
+    assert.equal(fills[4], "#111111ff", "off the box: plain");
+    assert.equal(fills[6], "#333333ff", "back on it, with the button still held: pressed again");
+  });
+
+  it("shows only the disabled colours, whatever else is going on, and swallows the click", () => {
+    const { fills, presses } = run({ ...STYLED, disabled: true }, [
+      { mouse: OUT },
+      { mouse: IN },
+      { mouse: IN },
+      { mouse: IN, pressed: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+      { mouse: IN },
+    ]);
+    assert.deepEqual(new Set(fills), new Set(["#444444ff"]));
+    assert.equal(presses, 0);
+  });
+
+  it("without a disabled colour, a disabled box looks plain, not hovered or pressed", () => {
+    const { fills } = run({ background: "#111111", hoverBackground: "#222222", pressedBackground: "#333333", disabled: true }, [{ mouse: IN }, { mouse: IN }, { mouse: IN, pressed: ["MouseLeft"] }, { mouse: IN, down: ["MouseLeft"] }]);
+    assert.deepEqual(new Set(fills), new Set(["#111111ff"]));
+  });
+
+  it("is pressable again the moment it is switched back on", () => {
+    const backend = new RecordingBackend();
+    const root = new Entity();
+    let presses = 0;
+    const f = button({ disabled: true, onPress: () => presses++ });
+    root.addChild(f);
+    const p = createPlayer(backend, { ...WINDOW, root: () => root, warn: () => {} });
+    const click = (): void => {
+      backend.queueInput({ mouse: IN, pressed: ["MouseLeft"] });
+      p.step();
+      backend.queueInput({ mouse: IN });
+      p.step();
+    };
+    click();
+    f.disabled = false;
+    click();
+    p.close();
+    assert.equal(presses, 1);
+  });
+
+  it("swallows a click so what is under a disabled box does not get it", () => {
+    const backend = new RecordingBackend();
+    const root = new Entity();
+    const log: string[] = [];
+    root.addChild(new Flex({ width: 40, height: 20, onPress: () => log.push("under") }));
+    const over = new Flex({ width: 40, height: 20, disabled: true, onPress: () => log.push("over") });
+    root.addChild(over);
+    const p = createPlayer(backend, { ...WINDOW, root: () => root, warn: () => {} });
+    for (const input of [{ mouse: IN }, { mouse: IN, pressed: ["MouseLeft"] }, { mouse: IN }]) {
+      backend.queueInput(input);
+      p.step();
+    }
+    p.close();
+    assert.deepEqual(log, []);
+  });
+
+  it("keeps the room of a border that only a pressed or disabled colour shows, so nothing moves", () => {
+    const size = (props: FlexProps): number => {
+      const f = new Flex(props);
+      f.addChild(new Shape({ kind: "rect", width: 10, height: 10 }));
+      draw(f);
+      return f.box.size[0] as number;
+    };
+    assert.equal(size({ borderWidth: 3 }), 10);
+    assert.equal(size({ borderWidth: 3, pressedBorderColor: "red" }), 16);
+    assert.equal(size({ borderWidth: 3, disabledBorderColor: "red" }), 16);
+  });
+});

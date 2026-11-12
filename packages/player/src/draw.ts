@@ -389,9 +389,15 @@ function hoverable(flex: Flex): boolean {
   return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined;
 }
 
-/** Whether a `<Flex>` draws anything of its own, in any state: a background or a border, or a colour for one while hovered or focused. */
+/** Whether a `<Flex>` draws anything of its own, in any state: a background or a border, or a colour for one in a state. */
 function paints(flex: Flex): boolean {
-  return flex.background !== undefined || flex.borderColor !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined || flex.focusBackground !== undefined || flex.focusBorderColor !== undefined;
+  return (
+    flex.background !== undefined || flex.borderColor !== undefined ||
+    flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined ||
+    flex.focusBackground !== undefined || flex.focusBorderColor !== undefined ||
+    flex.pressedBackground !== undefined || flex.pressedBorderColor !== undefined ||
+    flex.disabledBackground !== undefined || flex.disabledBorderColor !== undefined
+  );
 }
 
 export interface FrameBuilderOptions {
@@ -1364,14 +1370,18 @@ export class FrameBuilder {
 
   /**
    * A `<Flex>`'s own drawing: its background and border, in the colours of the state it is in. The focus colours replace the plain
-   * ones, and the hover colours replace those, so a hovered, focused box shows its hover colours. A box with no border and square
+   * ones, the hover colours replace those, and the pressed colours those; a disabled box shows only its disabled colours. A box with no border and square
    * corners is the plain `rect` record, as it always was; anything else is a `box`.
    */
   #paintFlex(flex: Flex, world: WorldTransform): void {
     let background = flex.background;
     let borderColor = flex.borderColor;
     const host = flex.world;
-    if (host !== null) {
+    if (flex.disabled) {
+      background = flex.disabledBackground ?? background;
+      borderColor = flex.disabledBorderColor ?? borderColor;
+    } else if (host !== null) {
+      // Each state replaces the one before it: focus over plain, hover over focus, pressed (the button held on it, and the mouse still over it) over hover.
       if (host.focused === flex) {
         background = flex.focusBackground ?? background;
         borderColor = flex.focusBorderColor ?? borderColor;
@@ -1379,6 +1389,10 @@ export class FrameBuilder {
       if (host.hovered === flex) {
         background = flex.hoverBackground ?? background;
         borderColor = flex.hoverBorderColor ?? borderColor;
+        if (host.pressed === flex) {
+          background = flex.pressedBackground ?? background;
+          borderColor = flex.pressedBorderColor ?? borderColor;
+        }
       }
     }
     const width = flex.box.size[0] as number;
