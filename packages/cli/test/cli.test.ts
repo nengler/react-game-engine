@@ -59,7 +59,8 @@ test("check passes on the template: compile, typecheck, tests, parity", { timeou
   const checked = rge(["check", game]);
   assert.equal(checked.status, 0, checked.stdout + checked.stderr);
   for (const step of ["compile", "typecheck", "tests", "parity"]) assert.match(checked.stdout, new RegExp(`ok   ${step}`));
-  assert.match(checked.stdout, /1 passed, 0 failed/);
+  // The template ships two tests: the rules (move.test.ts) and the components played on a recording backend (play.test.ts).
+  assert.match(checked.stdout, /2 passed, 0 failed/);
 });
 
 test("check fails, and says which step, when a test fails", { timeout: 120_000 }, () => {

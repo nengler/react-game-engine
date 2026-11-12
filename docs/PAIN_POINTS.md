@@ -34,8 +34,10 @@ TSX invites people to write React, and then they hit `RGE` codes.
   `disabled` prop and `Play` wrote `if (paused) return` so that two components did not both act on one press. *Since:* `inert` and
   `modal` on `<Entity>`, `<Flex>` and `<Hud>`, as in HTML, decide which subtrees hear input; Bramble's pause screen and its "press a
   key" prompt are modals, and `Menu` has no `disabled` prop.
-- **Refs carry input from `useInput` to `useUpdate`.** `Play.tsx` keeps three (`dx`, `dy`, `action`) and keeps a press until the update
-  takes it. A newcomer asks why there are two hooks.
+- **Refs carried input from `useInput` to `useUpdate`.** `Play.tsx` kept three (`dx`, `dy`, `action`) and kept a press until the
+  update took it, and the demo and the project template did the same. A newcomer asks why there are two hooks. *Since:* they were
+  never needed: `useUpdate((dt, input) => …)` gets the same input in the same step (Kite always read it there). The template, the demo
+  and Bramble do, and the guide says which hook is for what (a press goes in `useInput`, movement reads the keys in `useUpdate`).
 - **Frame timing.** State set in a handler shows next render; objects attached mid-frame get hooks next frame; collision callbacks run
   after `useUpdate`, which is why the guide says to read tiles, not colliders, for movement and deaths.
 - **`transform={{ x, y }}`** rather than style or position props. The origin is top-left except where `originX` / `originY` exist, and

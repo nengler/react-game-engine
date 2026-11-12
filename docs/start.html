@@ -141,12 +141,11 @@ npm run check</code></pre>
 
 <h2>2. A moving square</h2>
 <p><code>npm run dev</code> opens a window and hot reloads: save a file under <code>src/</code> and the window changes, keeping the state. The template's <code>src/Main.tsx</code> already moves a sprite with the arrow keys:</p>
-<pre class="code" data-lang="tsx"><code>useInput((input) =&gt; {
-  dirX.current = (input.down(&quot;ArrowRight&quot;) ? 1 : 0) - (input.down(&quot;ArrowLeft&quot;) ? 1 : 0);
-});
-useUpdate((dt) =&gt; {
-  setX((x) =&gt; moveBy(x, dirX.current, dt));   // rules/move.ts: plain TypeScript, tested without a window
+<pre class="code" data-lang="tsx"><code>useUpdate((dt, input) =&gt; {
+  const dirX = (input.down(&quot;ArrowRight&quot;) ? 1 : 0) - (input.down(&quot;ArrowLeft&quot;) ? 1 : 0);
+  setX((x) =&gt; moveBy(x, dirX, dt));   // rules/move.ts: plain TypeScript, tested without a window
 });</code></pre>
+<p>Movement is over time, so it reads the held keys in <code>useUpdate</code>, which gets the same <code>input</code> as <code>useInput</code>. Something that happens once, on a press (<code>if (input.pressed(&quot;Z&quot;)) step();</code>), goes in <code>useInput</code>. There is no need to copy keys into a <code>useRef</code> to carry them from one to the other.</p>
 <p>Replace the <code>&lt;Sprite&gt;</code> with <code>&lt;Shape kind="rect" width={16} height={16} color="gold" /&gt;</code> to see a square, and back to see the sprite from <code>assets/hero.png</code>.</p>
 
 <h2>3. A sprite</h2>
@@ -187,7 +186,7 @@ test(&quot;stepping counts&quot;, () =&gt; {
   useGame.getState().step();
   assert.equal(useGame.getState().steps, 2);
 });</code></pre>
-<p>Rules in <code>src/rules/</code> are plain functions, so most tests need no window. To play the components themselves, <code>runScript(gameConfig, parseInputScript("Enter, _*3, right*30", { bindings }), observe)</code> from <code>@rge/player</code> runs an input script on a recording backend.</p>
+<p>Rules in <code>src/rules/</code> are plain functions, so most tests need no window. To play the components themselves, <code>runScript(gameConfig, parseInputScript("Enter, _*3, right*30", { bindings }), observe)</code> from <code>@rge/player</code> runs an input script on a recording backend. The template's <code>test/play.test.ts</code> does exactly this: it holds the arrow keys and checks where the hero ends up.</p>
 
 <h2>7. Check it</h2>
 <pre class="code" data-lang="sh"><code>npm run check</code></pre>
