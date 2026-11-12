@@ -122,8 +122,9 @@ The settings screen's wait for a key is `KeyPrompt.tsx`, a modal with no childre
 17. **Narrowing does not reach a callback in the generated code.** In `{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`,
     TypeScript narrows `capturing` (a `const`) inside the arrow, but the generated callback reads `this.capturing`, which is not
     narrowed, so the type-check of the generated code fails (`string | null` is not `string`). Written `capturing!` for now. *Should
-    become:* the generator keeps the narrowing (a callback created under a condition could read a `const` taken there). Meanwhile
-    the error is at least reported at the `<KeyPrompt>` line of `Settings.tsx`, not in the generated file.
+    become:* the generator keeps the narrowing (a callback created under a condition could read a `const` taken there). *Since:* the
+    generated callback starts with `$assume(this.capturing !== null)`, which narrows it as the source does (engine DESIGN.md, "Narrowing
+    in the generated code"); the `!` is gone.
 
 ## Enemies (M5)
 

@@ -37,8 +37,7 @@ export function Settings() {
       {capturing !== null && (
         <KeyPrompt
           onKey={(key) => {
-            // `!`: the generated callback reads the state, not this narrowed `capturing` (see DESIGN.md, finding 17).
-            bindKey(capturing!, key);
+            bindKey(capturing, key);
             setCapturing(null);
           }}
           onCancel={() => setCapturing(null)}
