@@ -189,7 +189,7 @@ const Coin = ({ value }: CoinProps) => <Sprite image={value >= 5 ? "gold.png" : 
     <tr><td><code>useRef</code></td><td class="type">const r = useRef(0)</td><td>Never renders; plain read and write of <code>r.current</code></td></tr>
     <tr><td><code>useInput</code></td><td class="type">useInput((input) =&gt; …)</td><td>Every frame, first</td></tr>
     <tr><td><code>useUpdate</code></td><td class="type">useUpdate((dt) =&gt; …)</td><td>Every frame, after <code>useInput</code></td></tr>
-    <tr><td><code>useMount</code></td><td class="type">useMount(() =&gt; …)</td><td>Once, when joining the world (children first)</td></tr>
+    <tr><td><code>useMount</code></td><td class="type">useMount(() =&gt; …)</td><td>Once, when joining the world (children first); may return a cleanup</td></tr>
     <tr><td><code>useUnmount</code></td><td class="type">useUnmount(() =&gt; …)</td><td>Once, when leaving the world (parent first)</td></tr>
     <tr><td><code>useSound</code></td><td class="type">const play = useSound("hit.wav")</td><td>You call <code>play()</code> in a handler</td></tr>
     <tr><td><code>useSquash</code></td><td class="type">const [sq, setSq] = useSquash(1.75)</td><td>Shipped hook: a scale that springs back to 1</td></tr>
@@ -263,10 +263,42 @@ function Banner({ text, onDone }: BannerProps) {
 }
 </script></pre>
   <ul>
-    <li>No cleanup return and no <code>useEffect</code>.</li>
     <li>Mounts when attached to the world (a condition turns on, a list item is added); unmounts when detached.</li>
     <li>Takes one arrow function with <strong>no parameters</strong>.</li>
+    <li>No <code>useEffect</code> (see <a href="#no-useeffect">below</a>), but <code>useMount</code> may return a <strong>cleanup</strong>, as an effect does in React.</li>
   </ul>
+  <h3 id="mount-cleanup">A cleanup from <code>useMount</code></h3>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+// The call's result is the cleanup: settings.subscribe returns the function that stops it.
+useMount(() => settings.subscribe(() => setVolume(settings.get().music)));
+
+// Or return one: an arrow, or a local holding a function.
+useMount(() => {
+  const stop = controls.subscribe(() => setKeys(controls.toJSON()));
+  return () => {
+    stop();
+    waiting.current = false;
+  };
+});
+</script></pre>
+  <ul>
+    <li>A function returned from <code>useMount</code> runs <strong>once, when the component leaves</strong> the world, after its <code>useUnmount</code> handlers. Anything else returned is ignored. An expression body's call is returned, as in React (<code>() =&gt; listen(…)</code>).</li>
+    <li>In any handler, an arrow may be handed to a plain function, a method of an imported object, a callback prop or a local (<code>settings.subscribe(() =&gt; …)</code>). It is a handler of its own: it may set state and call actions. Not in a state updater, and not outside handlers.</li>
+    <li>A hot reload removes the old tree, so its cleanups run and the new tree subscribes again.</li>
+  </ul>
+
+  <h3 id="no-useeffect">No <code>useEffect</code>: what to write instead</h3>
+  <p>There is no <code>useEffect</code>, on purpose. Here an effect would run a frame after the change it answers (and a frame more for each effect it sets off), and it would pull game logic out of the rules, which are plain functions you can test and replay without a window. Each thing an effect is used for has its own answer:</p>
+  <div class="tablewrap"><table>
+    <tr><th>You want</th><th>Write</th></tr>
+    <tr><td>A sound, a burst or a shake when something happens</td><td>Do it where it happens: the rules return events, a game-state action answers them through effect stores (<code>sfx.play("hit")</code>, <code>fx.burst(…)</code>). See <a href="effects.html">Effects</a>.</td></tr>
+    <tr><td>A value computed from state or props</td><td>A derived <code>const</code>: worked out again when what it reads changes.</td></tr>
+    <tr><td>Music, an emitter or the camera to follow state</td><td>A built-in with props: <code>&lt;Music&gt;</code>, <code>&lt;Particles emitting&gt;</code>, <code>&lt;Camera bounds&gt;</code>.</td></tr>
+    <tr><td>Something when the component comes or goes</td><td><code>useMount</code> / <code>useUnmount</code>.</td></tr>
+    <tr><td>To subscribe to something outside the game state</td><td>Subscribe in <code>useMount</code> and return what stops it: <code>useMount(() =&gt; settings.subscribe(() =&gt; …))</code>. See <a href="#mount-cleanup">the cleanup</a>.</td></tr>
+    <tr><td>To start a component's state over when what it shows changes</td><td>A <code>key</code> on the element, as in React: <code>&lt;Dialogue key={talk.id} /&gt;</code>. See <a href="#keyed-elements">keyed elements</a>.</td></tr>
+  </table></div>
+  <p>Writing <code>useEffect</code> is <code>RGE1102</code>, and the message points here. The reasons in full are in <code>docs/DESIGN.md</code>, “Why there is no <code>useEffect</code>”.</p>
 
   <h3 id="hook-usesound"><code>useSound</code></h3>
 <pre class="code" data-lang="tsx"><script type="text/plain">
@@ -288,7 +320,9 @@ useInput((input) => { if (input.pressed("Space")) playHit(); });
       <li><code>switch</code> (falling through as in JS) and <code>{ … }</code> blocks</li>
       <li>Calling a sound function or a <code>useGame</code> action (<code>const events = step(input, dt)</code> may use its result)</li>
       <li>Calling a plain function, or a method of an imported object (<code>fx.burst(…)</code>)</li>
-      <li>Calling a callback prop: <code>onDone?.()</code></li>
+      <li>Calling a callback prop: <code>onDone?.()</code>, or a local holding a function: <code>stop()</code></li>
+      <li>Handing an arrow to any of those: <code>settings.subscribe(() =&gt; setView(read()))</code> (not in a state updater)</li>
+      <li>In <code>useMount</code> only, returning a cleanup: <code>return () =&gt; stop();</code></li>
     </ul></div>
     <div class="yes"><h5>Calls and members</h5><ul>
       <li><code>Math.abs floor ceil round sign sqrt sin cos min max</code></li>
@@ -475,10 +509,22 @@ export function Panel({ title, children }: PanelProps) {
     <tr><td>The items are any array the component can compute: state or a prop, a member of one (<code>world.enemies</code>), an array method's result (<code>.filter</code>, <code>.map</code>, <code>.slice</code>), an imported constant, or what a plain function returns (<code>spotsOf(run)</code>). The list follows the state and props the expression reads. Not through <code>?.</code>.</td></tr>
     <tr><td><code>map</code> takes one inline arrow (item, optionally index) returning <strong>one element</strong>, <code>cond &amp;&amp; &lt;El key … /&gt;</code> or <code>cond ? &lt;A key … /&gt; : &lt;B key … /&gt;</code>: an expression body, or a block with only <code>return</code>. No fragments.</td></tr>
     <tr><td>The element may have children, nested and conditional (<code>{slot.filled &amp;&amp; &lt;Text … /&gt;}</code>), that read the item. Not yet among them: a list, <code>{children}</code> or a <code>&lt;Route&gt;</code>; for those, make the item a component.</td></tr>
-    <tr><td>The element has a <code>key</code> that reads the item (<code>key={e.id}</code>). A key reading only the index compiles with a warning; one reading neither is an error. <code>key</code> anywhere else is <code>RGE1203</code>.</td></tr>
+    <tr><td>The element has a <code>key</code> that reads the item (<code>key={e.id}</code>). A key reading only the index compiles with a warning; one reading neither is an error.</td></tr>
     <tr><td>A callback on the item may read the item but not the index.</td></tr>
   </table></div>
   <p>Instances follow keys, so each keeps its own state as items move. A computed list is worked out once per render of the component, which happens when what it reads changes.</p>
+
+  <h3 id="keyed-elements">Keyed elements</h3>
+  <p>A <code>key</code> on an element outside a list starts it over when the key changes, as in React: the old instance unmounts and a new one mounts, with fresh state. While the key stays the same, a changed prop updates it in place, as usual.</p>
+<pre class="code" data-lang="tsx"><script type="text/plain">
+<Dialogue key={talk.id} lines={talk.lines} />        // a new conversation starts at its first page
+{open && <Menu key={screen} rows={rowsOf(screen)} />}  // a keyed branch of a condition works too
+</script></pre>
+  <ul>
+    <li>The key is any value that identifies what the element shows (a string or a number), and may read state and props.</li>
+    <li>The new instance is added before the old one is removed, as with list items, so its <code>useMount</code> runs before the old one's <code>useUnmount</code>.</li>
+    <li>Not on a component's root (<code>RGE1203</code>): put the key where the component is used. Not yet inside a list item's children (<code>RGE1209</code>), nor beside other children passed to a component (wrap it in an <code>&lt;Entity&gt;</code>).</li>
+  </ul>
 </section>
 <section id="gamestate" data-group="Language" data-title="Game state (useGame)">
   <h2>Game state: <code>createGameState</code></h2>
@@ -774,7 +820,7 @@ function Player() {
       ["RGE1005", "A hook, element or runtime function used without importing it."]]],
     ["Hooks and state", [
       ["RGE1101", "A hook, or a custom hook, not called as a statement of the component body."],
-      ["RGE1102", "An unknown <code>use*</code> call. Old names (<code>onUpdate</code>, <code>onInput</code>, <code>onCollisionEnter</code> as a hook) say where they went."],
+      ["RGE1102", "An unknown <code>use*</code> call. Old names (<code>onUpdate</code>, <code>onInput</code>, <code>onCollisionEnter</code> as a hook) say where they went; <code>useEffect</code> says what to write instead."],
       ["RGE1103", "<code>useState</code> not in the form <code>const [a, setA] = useState(...)</code>."],
       ["RGE1104", "State type the compiler cannot infer. Give arrays and records a type argument."],
       ["RGE1106", "<code>useRef</code> misuse. Refs hold values, never elements: a primitive inferred from its initial value, or any type given as an argument (<code>useRef&lt;Point[]&gt;([])</code>)."],
@@ -785,7 +831,7 @@ function Player() {
     ["JSX and props", [
       ["RGE1201", "An unknown component tag."],
       ["RGE1202", "An unsupported JSX child (text, fragment, arbitrary expression)."],
-      ["RGE1203", "An unsupported attribute, or <code>key</code> outside a list."],
+      ["RGE1203", "An unsupported attribute, or <code>key</code> on a component's root (it goes where the component is used)."],
       ["RGE1205", "A component that contains itself, directly or through other files."],
       ["RGE1206", "Two files export the same component name."],
       ["RGE1207", "A malformed <code>transform</code>, or on an element that has none."],

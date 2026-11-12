@@ -723,8 +723,9 @@ function C() {
     assert.deepEqual(listCodes(`items.map(($e) => <Sprite key={$e.id} image={$e.id} />)`), [DiagnosticCode.InvalidHandler]);
   });
 
-  it("still rejects key outside a list", () => {
-    assert.deepEqual(codes(`function A() { return <Entity name="A"><Sprite key="x" image="a" /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
+  it("rejects key on a component's root (it goes where the component is used); a key on a child is a keyed element", () => {
+    assert.deepEqual(codes(`function A() { return <Entity name="A" key="x"><Sprite image="a" /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
+    assert.doesNotThrow(() => compile(`function A() { const [k, setK] = useState(0); return <Entity name="A"><Sprite key={k} image="a" /></Entity>; }`));
   });
 });
 

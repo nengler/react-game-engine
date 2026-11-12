@@ -30,7 +30,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Global state | One nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
 | Refs | Refs hold values only (`const timer = useRef(0)`, or any type given as an argument, `useRef<Point[]>([])`, except one that names an element; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
-| Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08) |
+| Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
 | Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09) |
@@ -260,7 +260,7 @@ parameter of a runtime handle type, e.g. `input.pointerX`), `Call` and
 round/sign/sqrt/sin/cos/min/max`, `clamp`) and to methods of handle
 parameters (`input.pressed/down/released`); the tables live in
 `transform/handles.ts`. Everything else (`while` and C-style `for`, `try`,
-`var`, closures that escape, `this`, `await`, other calls) is a diagnostic
+`var`, closures that escape (but for an arrow handed to a function, see "A cleanup from `useMount`"), `this`, `await`, other calls) is a diagnostic
 (`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but `ref.current` or a
 `let` local is `RGE1402`, and `++` on anything else stays `RGE1301`.
 
@@ -330,8 +330,9 @@ not JSX event props. Element-level events are callback props on the element
 `useMount(() => …)` and `useUnmount(() => …)` (M9) are handler hooks like
 `useUpdate`, lowered to a `FunctionIR` with no parameters (`OnMountHookIR`,
 `OnUnmountHookIR`; the overrides are `onMount()` and `onUnmount()`). There is
-no `useEffect` and no cleanup function to return: reacting to a state change
-is done where the state changes.
+no `useEffect`: reacting to a state change is done where the state changes
+(see "Why there is no `useEffect`"). `useMount` may return a cleanup; see "A
+cleanup from `useMount`" below.
 
 ```tsx
 function Banner({ text, onDone }: BannerProps) {
@@ -365,6 +366,93 @@ there (see "Keyed lists").
 **Rules.** Top-level only, imported from the authoring module (`RGE1005`),
 one arrow function with no parameters (`RGE1401`), several of a kind allowed
 and run in source order.
+
+### A cleanup from `useMount` (2026-11-12)
+
+What a `useMount` handler returns is its cleanup, as with a React effect: a function, kept and called once when the component
+leaves its world, after its `useUnmount` handlers; anything else is ignored. With it, subscribing to something outside the
+game state (`settings`, `controls`) needs no mirror in a module:
+
+```tsx
+useMount(() => settings.subscribe(() => setVolume(settings.get().music)));   // the call's result is the cleanup
+useMount(() => {
+  const stop = controls.subscribe(() => setKeys(controls.toJSON()));
+  return () => { stop(); waiting.current = false; };                          // or return an arrow
+});
+```
+
+**Lowering.** `useMount`'s function is lowered with `returns: "cleanup"` (`FunctionOptions`): `return;` and `return value;` are
+both allowed, a returned arrow is a `Callback`, and an expression body that is a call (an `ExpressionStatement`) becomes
+`return call;`, as React's `() => store.subscribe(…)`. A setter, an action or a sound played in an expression body stays a
+statement. Every other handler keeps `returns: "void"`, so `return value;` in `useUpdate` or `useUnmount` is still `RGE1401`.
+
+**Callbacks as values.** The subscription needs an arrow handed to a function, which handlers could not do before ("closures
+that escape" were a diagnostic). Now, in a handler and outside a state updater, an arrow passed to a plain function, a method of
+an imported object, a callback prop or a local holding a function is a `CallbackIR` (`{ kind: "Callback", fn: FunctionIR }`):
+a handler of its own, lowered like a callback prop (contextual parameters, handler statements, state set through `this`). It
+may run later, after the component has left; a setter called then marks a detached object, which never renders, so nothing
+breaks, but the cleanup is how to stop it. Outside handlers an arrow is still only a callback prop, an updater or an array
+method's argument. A handler's own local may now be called (`stop()`, callee `Local`); the type-check checks it is a function.
+`walkExpr` walks a callback's statements, so whatever looks for reads and calls in a handler sees inside it.
+
+**Generated code.** A `useMount` whose statements return a value is a method of its own, typed `(() => void) | void`, and
+`onMount` passes its result to `keepCleanup`:
+
+```ts
+override onMount(): void {
+  this.keepCleanup(this.#onMount0());
+  this.#onMount1();
+}
+#onMount0(): (() => void) | void {
+  return settings.subscribe(() => { this.setVolume(settings.get().music); });
+}
+```
+
+A `useMount` that returns nothing is written as before (inlined when it is the only one).
+
+**Runtime.** `GameObject.keepCleanup(value)` keeps a function in a private list; `detachFromWorld` calls `onUnmount`, then each
+kept cleanup once in the order kept, and clears the list, before it detaches the children. So a component's cleanups run before
+its children's, and a second stay in a world keeps its own. A hot reload removes the old root, so its cleanups run and the new
+tree subscribes again. `keepCleanup` is a reserved member name.
+
+## Why there is no `useEffect` (2026-11-12)
+
+`useEffect` is the first hook a React author reaches for, and it stays out on purpose. This section says why, and what
+stands in for each thing it is used for. Asked again on 2026-11-12, after the review in [PAIN_POINTS.md](PAIN_POINTS.md):
+the worry is not that it cannot be built (the compiler knows what every expression reads, so it could even work out the
+dependencies itself) but that it would be used for everything, including what it should not be used for.
+
+**What it would give.** It is familiar, and a few needs have no good answer without something like it: subscribing to
+something outside the game state *with a cleanup* (Bramble mirrors `settings` into `useGame` at module level because
+`useMount` returns nothing), and a reusable component reacting to a prop changing (a `<HealthBar hp>` that flashes when `hp`
+drops, where the rules' events cannot help because the component does not know the game).
+
+**What it would cost, here more than in React.**
+
+- **A frame late, per link.** An effect runs after the render that saw the change; a setter it calls renders next frame,
+  and an effect that triggers another adds a frame each. Kite's first version, which compared counters with refs to play
+  sounds, was "one step late" for exactly this reason (NEXT_PRIORITIES.md, finding 3 of the first level).
+- **The patterns React's own docs warn against** become the easy path: state copied from other state (here a derived
+  `const` already does it), chains of effects that set state, and "when X changes, do Y" where Y belongs where X was changed.
+- **Game logic leaves the rules.** Both games found that the rules as plain functions returning events, answered by
+  effect stores, was the shape that worked: headless tests, replays, the same output under V8 and QuickJS. An effect is
+  game logic that runs only in the component tree, at a moment set by renders.
+- **It cannot be taken back.** Once games depend on it, removing it is a migration.
+
+**What to write instead.** Each answer covers one legitimate use and no more:
+
+| The need | Instead of `useEffect` | Status |
+| --- | --- | --- |
+| A sound, a burst or a shake when something happens | Do it where it happens: the rules return events and an action answers them through effect stores (`createSounds`, `createParticles`, `createShake`; see "Effects that happen at a moment"). This is React's own advice: do it in the handler that caused the change. | Built |
+| A value computed from state or props | A derived `const`, worked out again when what it reads changes. | Built |
+| Something on screen that follows state (music, an emitter, the camera) | A built-in driven by props: `<Music>`, `<Particles emitting>`, `<Camera bounds>`. A wish for an effect here means a built-in is missing. | Built; add built-ins as games ask |
+| Run something when the component comes or goes | `useMount` / `useUnmount`. | Built |
+| Subscribe to something outside the game state, and stop | A cleanup returned from `useMount` (`useMount(() => settings.subscribe(…))`), with a handler able to hand an arrow to a function. See "A cleanup from `useMount`". A hook that reads an outside store and re-renders when it changes (as React's `useSyncExternalStore`) waits for a game that wants it. | Built (2026-11-12) |
+| Start a component's state over when what it shows changes | `key` on any element, not only on a list's items (`<Dialogue key={talk.id} />`), React's own answer. See "Keyed elements". | Built (2026-11-12) |
+| A reusable component reacting to a prop changing | Only if a game hits it: `useChange(value, (prev) => …)`, run in the same step as the change (no frame of lag), with no cleanup, and allowed to call only effect stores, sounds, refs, `freeze` and the component's **own** setters. Calling a game-state action in it is a diagnostic, so effects cannot chain through the store. | Not built; waits for a game |
+
+**The diagnostic.** `useEffect` and `useLayoutEffect` are `RGE1102` with a message that names these answers (`REMOVED_HOOKS`
+in `analyzer/model.ts`), not a bare "Unknown hook".
 
 ## Arrays and records
 
@@ -634,6 +722,29 @@ order becomes its index in `children` and the children are re-sorted (stably,
 so only that slot's range moves). Static siblings before and after the list
 keep their places because they have their own slots. Generated code queues
 removals and adds before the reorder.
+
+### Keyed elements (2026-11-12)
+
+`key` on an element outside a list starts it over when the key changes, React's way to reset a component: the old instance
+unmounts and a new one mounts with fresh state. While the key stays the same, changed props update it in place.
+
+```tsx
+<Dialogue key={talk.id} lines={talk.lines} />
+{open && <Menu key={screen} rows={rowsOf(screen)} />}
+{left ? <Sprite key={page} image="left.png" /> : <Sprite key={page} image="right.png" />}
+```
+
+**Lowering.** A keyed element is a keyed list of one item, the key itself: `lowerKeyedElement` builds a `KeyedListChild` whose
+source is `[key]` (an `ArrayLiteral`), whose item is a parameter named `$keyed` (a name source code cannot write) and whose key
+reads it. A keyed branch of `cond && …` or `cond ? … : …` is the same list with the branch's condition. So nothing new was
+needed in the IR, the generator or the runtime: a new key is a new item, which the list mounts while it removes the old one.
+As with list items, the new instance is added before the old one is removed, so its `useMount` runs before the old one's
+`useUnmount`. The list's dependencies are the key's and the condition's; props that read state are applied as on any list item.
+
+**Limits.** `key` on a component's root is `RGE1203` (it goes where the component is used). A keyed element inside a list
+item's children, or beside other children passed to a component, is `RGE1209` with the same wording as a list there (wrap it
+in an `<Entity>`, or make the item a component), since it is one. A key that never changes (`key="x"`) compiles and does
+nothing.
 
 ## Children
 

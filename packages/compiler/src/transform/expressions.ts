@@ -5,7 +5,7 @@ import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import { assertNever, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
 import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
-import { lowerFunction } from "./statements.ts";
+import { lowerCallbackValue, lowerFunction } from "./statements.ts";
 import { BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
 
@@ -154,6 +154,21 @@ export class ExpressionLowering extends LoweringBase {
     return out;
   }
 
+  /**
+   * The arguments of a plain function, a method of an imported object, a callback prop or a handler's local. In a handler an argument may be an arrow, a
+   * handler of its own that the function may call later (`settings.subscribe(() => setView(read()))`).
+   */
+  protected lowerPlainArgs(nodes: readonly Expression[]): ExprIR[] | null {
+    const out: ExprIR[] = [];
+    for (const node of nodes) {
+      const fn = unwrapParens(node);
+      const lowered = isArrowFunction(fn) && this.mode.inHandler ? lowerCallbackValue(this, fn, "a state updater") : this.lowerNode(node);
+      if (!lowered) return null;
+      out.push(lowered);
+    }
+    return out;
+  }
+
   /** `{ id, speed: 2, ...e }`: plain, shorthand and spread properties. */
   protected lowerObjectLiteral(node: ObjectLiteralExpression): ExprIR | null {
     const properties: ObjectPropertyIR[] = [];
@@ -269,7 +284,7 @@ export class ExpressionLowering extends LoweringBase {
           this.report(DiagnosticCode.UnsupportedExpression, `Prop '${member.name}' is not a function, so it cannot be called.`, callee);
           return null;
         }
-        const args = this.lowerAll(node.arguments);
+        const args = this.lowerPlainArgs(node.arguments);
         if (!args) return null;
         return { kind: "Call", callee: { kind: "Prop", name: member.name, optional: node.questionDotToken !== undefined }, args };
       }
@@ -285,19 +300,25 @@ export class ExpressionLowering extends LoweringBase {
         this.report(DiagnosticCode.UnsupportedExpression, `'${callee.text}()' is a game-state action, so it is only valid as a statement in a handler: in JSX or a derived value it would run on every render.`, node);
         return null;
       }
+      // A handler's own local holding a function (`const stop = settings.subscribe(…)`, then `stop()` in the cleanup).
+      if (binding?.kind === "local" && this.mode.inHandler) {
+        const args = this.lowerPlainArgs(node.arguments);
+        if (!args) return null;
+        return { kind: "Call", callee: { kind: "Local", name: binding.name }, args };
+      }
       if (binding?.kind === "prop") {
         if (binding.role !== "callback") {
           this.report(DiagnosticCode.UnsupportedExpression, `Prop '${callee.text}' is not a function, so it cannot be called.`, callee);
           return null;
         }
-        const args = this.lowerAll(node.arguments);
+        const args = this.lowerPlainArgs(node.arguments);
         if (!args) return null;
         return { kind: "Call", callee: { kind: "Prop", name: binding.name, optional: node.questionDotToken !== undefined }, args };
       }
     }
     // A function imported from a relative .ts file: any arguments, opaque to the compiler and assumed pure.
     if (isIdentifier(callee) && this.plainImports.has(callee.text) && !this.scope.has(callee.text)) {
-      const args = this.lowerAll(node.arguments);
+      const args = this.lowerPlainArgs(node.arguments);
       if (!args) return null;
       return { kind: "Call", callee: { kind: "Plain", name: callee.text }, args };
     }
@@ -310,7 +331,7 @@ export class ExpressionLowering extends LoweringBase {
       !this.scope.has(callee.expression.text) &&
       !Object.hasOwn(ARRAY_METHODS, callee.name.text)
     ) {
-      const args = this.lowerAll(node.arguments);
+      const args = this.lowerPlainArgs(node.arguments);
       if (!args) return null;
       return { kind: "Call", callee: { kind: "Plain", name: `${callee.expression.text}.${callee.name.text}` }, args };
     }

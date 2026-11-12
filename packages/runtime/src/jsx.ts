@@ -126,10 +126,11 @@ export function useInput(_handler: (input: InputState) => void): void {
 
 /**
  * Runs once, when the component joins the world (after its children have).
- * Setting state here renders in the same frame. There is no cleanup to
- * return: that is `useUnmount`.
+ * Setting state here renders in the same frame. It may return a cleanup, a
+ * function called once when the component leaves the world, after its
+ * `useUnmount`: `useMount(() => settings.subscribe(() => setView(read())))`.
  */
-export function useMount(_handler: () => void): void {
+export function useMount(_handler: () => void | (() => void)): void {
   return compileTimeOnly("useMount");
 }
 

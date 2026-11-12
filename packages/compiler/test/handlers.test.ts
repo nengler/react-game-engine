@@ -441,4 +441,12 @@ function Fighter() {
     assert.equal(diagnostic!.code, DiagnosticCode.UnknownHook);
     assert.match(diagnostic!.message, /<Collider width=\{16\} height=\{24\} onCollisionEnter=/);
   });
+
+  it("reports useEffect with what to write instead", () => {
+    for (const hook of ["useEffect", "useLayoutEffect"]) {
+      const [diagnostic] = compileErrors(`function C() { ${hook}(() => {}, []); return <Entity name="C" />; }`);
+      assert.equal(diagnostic!.code, DiagnosticCode.UnknownHook);
+      assert.match(diagnostic!.message, new RegExp(`There is no '${hook}'.*effect store.*derived \`const\`.*useMount`));
+    }
+  });
 });

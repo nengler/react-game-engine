@@ -1,0 +1,93 @@
+# Pain points for a new author
+
+As of 2026-11-12. What still reads unlike React, or would confuse someone opening the engine for the first time, gathered by
+reading the authoring guide (`docs/*.html`), the findings in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md) and
+[`games/bramble/DESIGN.md`](../games/bramble/DESIGN.md), and Bramble's code. Findings that have already been fixed (computed lists,
+conditions in `.map`, spread props, `!== undefined`, component roots, objects in the game state) are left out.
+
+`useEffect` stays out; what replaces each of its uses is decided in [DESIGN.md](DESIGN.md), "Why there is no `useEffect`"
+(2026-11-12). Two of those answers are built since: a cleanup returned from `useMount`, and `key` on any element.
+
+## 1. It looks like React but compiles a subset
+
+TSX invites people to write React, and then they hit `RGE` codes.
+
+- **Three languages in one file.** The component body allows expressions only: no `let`, no loops. Handlers allow `let`, `for…of` and
+  `switch`, but not `while`, C-style `for` or `try`. Plain `.ts` files allow anything. A newcomer has to know which zone they are in.
+- **Method allowlists.** `push`, `sort` and "other methods of values" are rejected; the fix is "put it in a plain function". Defensible,
+  but not visible from the syntax.
+- **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.
+- **Custom hooks are inlined text, not functions.** They cannot return refs, destructured parameters do not work, nesting stops at six,
+  and a literal argument is pasted into the hook. They behave like macros; the guide says so only in passing.
+
+## 2. Refs on elements and context are missing on purpose
+
+- **No `ref={…}`**: there is no handle on a node.
+- **No context**: deep trees pass props by hand or use the global store.
+- **`useMount` / `useUnmount`** stand in for `useEffect(…, [])`, with an unusual order (mount runs children first, unmount runs
+  the parent first). *Since:* `useMount` may return a cleanup, and a handler may hand an arrow to a function
+  (`useMount(() => settings.subscribe(() => …))`).
+
+## 3. Game-engine semantics on React concepts
+
+- **Input is polled, not event-driven.** Every `useInput` sees every key, so components guard themselves: Bramble's `Menu` takes a
+  `disabled` prop and `Play` writes `if (paused) return` so that two components do not both act on one press. Nothing lets a component
+  own or consume the keys.
+- **Refs carry input from `useInput` to `useUpdate`.** `Play.tsx` keeps three (`dx`, `dy`, `action`) and keeps a press until the update
+  takes it. A newcomer asks why there are two hooks.
+- **Frame timing.** State set in a handler shows next render; objects attached mid-frame get hooks next frame; collision callbacks run
+  after `useUpdate`, which is why the guide says to read tiles, not colliders, for movement and deaths.
+- **`transform={{ x, y }}`** rather than style or position props. The origin is top-left except where `originX` / `originY` exist, and
+  `z` adds to the parent's.
+
+## 4. Game state: Zustand-shaped, with extra rules
+
+- A selector subscribes to the paths it reads, but `useGame((s) => s)` is allowed only to destructure actions; otherwise it is "Read a
+  path of the game state, not the whole state".
+- Actions are called as statements in handlers, never in JSX.
+- `GameState.ts` must return an object literal: no spreads or computed keys (`RGE1109`).
+- Settings and controls are stores of their own, so the game mirrors them by hand
+  (`settings.subscribe(() => useGame.setState(...))` in Bramble).
+- A selected object is trusted not to be changed in place; nothing enforces it.
+
+## 5. Names collide with the root built-in
+
+The component's class extends its root built-in, so state, refs and props cannot reuse the root's member names: no `width` prop on a
+`<Collider>` root, no `name` on an `<Entity>` root, and a `useState` called `name` is still refused. An invisible inheritance rule with
+no React equivalent.
+
+## 6. Smaller gotchas
+
+- **Text.** Text children are an error everywhere but inside `<Text>`, yet the games use `text={…}` almost always while the README
+  writes `<Text>{coins}</Text>`. Two ways to write one thing.
+- **Keys.** A key reading only the index warns; a callback on a list item cannot read the index. ~~`key` only inside a `.map`~~
+  *Since:* `key` works on any element but a component's root, and starts it over when it changes (`<Dialogue key={talk.id} />`).
+- **Props** need a named type declared in the same file (an inline `{ top: number }` is refused); the props object cannot be passed on
+  or spread except onto components.
+- **No list inside a list item**, nor `{children}` or a `<Route>` there; the workaround is "make the item a component".
+- **Side-effect imports** are refused in component files (`RGE1001`); registering tilemaps moved into a `.ts` file `GameState.ts`
+  imports.
+- **Docs disagree about refs.** The Language page and Bramble's notes say a ref holds a number, string or boolean only; `DESIGN.md`
+  says any type (`useRef<Point[]>([])`).
+- **The manifest gates the API.** A new runtime method compiles in plain TypeScript but fails in a component until
+  `runtime/src/manifest.ts` lists it (Bramble finding 8).
+- ~~**`useEffect` gave a bare `Unknown hook 'useEffect'.`**~~ *Since:* its message names what to write instead.
+
+## 7. Tooling and getting started
+
+- **Errors name generated files.** `generated/Play.ts:9:23 … './World.ts'` when the real cause is a `src/` file that failed to compile
+  earlier in the output (Bramble finding 6).
+- **The generated code shows through.** `game.ts` imports `./generated/Main.ts` and calls `new Main()`: a function became a class.
+- **Setup is heavy.** cmake, a C compiler and cargo are needed to make the tarballs before `rge create` works, since nothing is
+  published.
+- **Input scripts hold a key until it changes**: `right, right` is one press, `right, _, right` is two (Bramble finding 11).
+- **The guide is dense and terse** and mixes design reasons with usage; priority 8's "checked by following it from scratch" is not
+  ticked yet.
+
+## What to fix first
+
+1. **Diagnostics in the `.tsx` source**, with source maps for the generated files as custom hooks already have.
+2. **Input focus or consumption**, building on `focusable` / `autoFocus`, so a component owns the keys instead of every `useInput`
+   guarding itself; that also removes most of the input refs.
+3. **A "coming from React" page** at the top of the guide: what is left out on purpose, what stands in for each, and the three zones
+   of code. Most of the confusion above is expectation, not a missing feature.

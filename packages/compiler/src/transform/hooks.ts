@@ -132,7 +132,7 @@ export class HookLowering extends ExpressionLowering {
           const signature = HANDLER_SIGNATURES[kind];
           // In `useUnmount` the component is going away: it can no longer render, so there is nothing for a setter to do.
           const handler = this.within({ inHandler: true, inUnmount: hook.kind === "useUnmount" }, () =>
-            lowerFunction(this, hook.handler, { paramTypes: signature.params.map((p) => p.type), returns: "void", what: `${hook.kind} handler` }),
+            lowerFunction(this, hook.handler, { paramTypes: signature.params.map((p) => p.type), returns: hook.kind === "useMount" ? "cleanup" : "void", what: `${hook.kind} handler` }),
           );
           if (handler) hooks.push({ kind, handler, span: this.span(hook.statement) });
           break;

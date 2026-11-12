@@ -407,7 +407,7 @@ mark { background: var(--accent-soft); color: inherit; }
       ["RGE1005", "A hook, element or runtime function used without importing it."]]],
     ["Hooks and state", [
       ["RGE1101", "A hook, or a custom hook, not called as a statement of the component body."],
-      ["RGE1102", "An unknown <code>use*</code> call. Old names (<code>onUpdate</code>, <code>onInput</code>, <code>onCollisionEnter</code> as a hook) say where they went."],
+      ["RGE1102", "An unknown <code>use*</code> call. Old names (<code>onUpdate</code>, <code>onInput</code>, <code>onCollisionEnter</code> as a hook) say where they went; <code>useEffect</code> says what to write instead."],
       ["RGE1103", "<code>useState</code> not in the form <code>const [a, setA] = useState(...)</code>."],
       ["RGE1104", "State type the compiler cannot infer. Give arrays and records a type argument."],
       ["RGE1106", "<code>useRef</code> misuse. Refs hold values, never elements: a primitive inferred from its initial value, or any type given as an argument (<code>useRef&lt;Point[]&gt;([])</code>)."],
@@ -418,7 +418,7 @@ mark { background: var(--accent-soft); color: inherit; }
     ["JSX and props", [
       ["RGE1201", "An unknown component tag."],
       ["RGE1202", "An unsupported JSX child (text, fragment, arbitrary expression)."],
-      ["RGE1203", "An unsupported attribute, or <code>key</code> outside a list."],
+      ["RGE1203", "An unsupported attribute, or <code>key</code> on a component's root (it goes where the component is used)."],
       ["RGE1205", "A component that contains itself, directly or through other files."],
       ["RGE1206", "Two files export the same component name."],
       ["RGE1207", "A malformed <code>transform</code>, or on an element that has none."],
