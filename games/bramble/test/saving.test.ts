@@ -1,19 +1,36 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseInputScript, runScript } from "@rge/player";
-import { createMemoryStorage, setStorage, setVolume } from "@rge/runtime";
+import { parseInputScript, runScript, type Player } from "@rge/player";
+import { createMemoryStorage, setStorage, setVolume, Text, type GameObject } from "@rge/runtime";
 import { bindings, gameConfig } from "../game.ts";
 import { save, useGame } from "../src/GameState.ts";
 import { settings } from "../src/settings.ts";
 import { controls } from "../src/rules/controls.ts";
 import { settingsRows, titleRows } from "../src/rules/menu.ts";
 
+/** The rows of the menu on screen, as `label:value`: each menu row is an entity holding its label and value texts. */
+function menuRows(player: Player): string[] {
+  const rows: string[] = [];
+  const visit = (o: GameObject): void => {
+    if ((o as { name?: string }).name === "Menu") {
+      for (const row of o.children) {
+        const texts = row.children.filter((c): c is Text => c instanceof Text).map((t) => t.text);
+        if (texts.length === 2) rows.push(`${texts[0]}:${texts[1]}`);
+      }
+      return;
+    }
+    o.children.forEach(visit);
+  };
+  visit(player.world.root);
+  return rows;
+}
+
 /** Play a script from the title on a backend that starts with `storage`; `backend.stored` is what the run wrote. */
 function run(script: string, storage: Record<string, string> = {}) {
   const frames = parseInputScript(script, { bindings });
-  return runScript(gameConfig, frames, () => {
+  return runScript(gameConfig, frames, (player) => {
     const s = useGame.getState();
-    return { screen: s.screen, map: s.run.map, items: { ...s.run.items }, rows: s.menu.rows.map((r) => `${r.label}:${r.value}`), capturing: s.menu.capturing };
+    return { screen: s.screen, map: s.run.map, items: { ...s.run.items }, rows: menuRows(player) };
   }, { storage });
 }
 
@@ -69,8 +86,8 @@ test("rebinding: choose a key's row, press a key, and the action means that key 
   // Settings; down to the row of "Up" (after music, effects, full screen); confirm; press W.
   const r = run("_, down, Enter, _*2, down, _, down, _, down, _, Enter, _, W, _*2");
   const states = r.states;
-  assert.ok(states.some((s) => s.capturing === "up"), "the row waited for a key");
-  assert.equal(states.at(-1)!.capturing, null);
+  assert.ok(states.some((s) => s.rows.includes("Up:press a key...")), "the row waited for a key");
+  assert.ok(!states.at(-1)!.rows.some((row) => row.endsWith("press a key...")));
   assert.deepEqual(controls.keysOf("up"), ["W"], "the Controls were rebound");
   const stored = JSON.parse(r.backend.stored.get("settings") as string) as { data: { bindings: Record<string, string[]> } };
   assert.deepEqual(stored.data.bindings["up"], ["W"]);

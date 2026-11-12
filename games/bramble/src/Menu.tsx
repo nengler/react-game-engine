@@ -1,14 +1,16 @@
 import { Entity, Shape, Text } from "@rge/runtime/jsx";
-import { useGame } from "./GameState.ts";
+import { type Row } from "./rules/menu.ts";
 
 interface MenuProps {
   /** Where the first row sits, in screen pixels from the top. */
   top: number;
+  rows: readonly Row[];
+  /** The row the cursor is on. */
+  cursor: number;
 }
 
-/** The rows of the menu on screen, with a bar behind the one the cursor is on. */
-export function Menu({ top }: MenuProps) {
-  const { cursor, rows } = useGame((s) => s.menu);
+/** Rows of a menu, with a bar behind the one the cursor is on. The screen that shows it keeps the cursor and acts on the rows. */
+export function Menu({ top, rows, cursor }: MenuProps) {
   return (
     <Entity name="Menu">
       <Shape kind="rect" width={300} height={12} color="#2b3350" transform={{ x: 10, y: top + cursor * 13 }} />

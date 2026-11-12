@@ -28,7 +28,7 @@ three bells ──▶ gate
 | `maps.ts` | The four maps as text (`.` ground, `#` wall, `~` water, `b` bush), and the people, items, doors and shrines placed on them by tile |
 | `dialogue.ts` | What four people say: pages before and after the bell nearest them is found |
 | `run.ts` | `newRun()`, `step(run, input, dt)` returning the run and events, doors, talking, pickups, bushes, shrines, `hurt`, the gate, `saveOf` / `loadRun` |
-| `view.ts` | The lists the screen draws (see finding 2) |
+| `view.ts` | What the screen draws of a run (`spotsOf`, `heroOf`, `dialogueOf`), called by the components as they render |
 | `controls.ts` | The actions and their keys, and `readInput` |
 
 - **Movement** is eight-way at one speed (diagonals normalised) through the engine's `moveActorX` / `moveActorY`, against walls,
@@ -61,11 +61,11 @@ took 18 ms (a garbage collection or a JIT step, nowhere near a door).
 Written down as they were hit, as Kite and Hearth did; the engine is changed only when one is worth it.
 
 1. **Side-effect imports are not allowed in a component file** (`RGE1001`). Registering the Tiled maps (`registerTilemaps`) had
-   to move into a plain `.ts` file that `GameState.ts` imports. Fair, but the message does not say where such an import can go.
+   to move into a plain `.ts` file that `GameState.ts` imports. Fair, but the message does not say where such an import can go. *Since:* the message now says where such an import goes.
 2. **A component cannot compute a list** (`RGE1002`, `RGE1209`): the items of a `.map` come from state or props, optionally
    `.filter`ed, and the body allows only state, refs and derived `const`s. The rules therefore produce the lists (`viewOf`) and the
-   game state holds them. This is the main cost of the subset for a map with many kinds of thing on it.
-3. **`x !== undefined` is not a condition** (`RGE1302`): a map that may have a gate became a list of zero or one gates.
+   game state holds them. This is the main cost of the subset for a map with many kinds of thing on it. *Since:* a list's items are any array (`{spotsOf(run).map(…)}`), so `view` left the game state and the components compute what they draw.
+3. **`x !== undefined` is not a condition** (`RGE1302`): a map that may have a gate became a list of zero or one gates. *Since:* `undefined` is a value; the gate is one of the spots.
 4. **The built-in font is not readable under size 10** at 320 × 180 (it is drawn, but letters break up); Kite and Hearth use a
    bitmap font. Bramble uses multiples of 10 until it has one (M7).
 5. **`rge check` under `node --test`:** the child's test run printed `?` for its counts because `NODE_TEST_CONTEXT` made it
@@ -77,11 +77,11 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
    says exactly that. Fine.
 8. **A new engine API is not in the authoring types until the manifest says so.** `InputState.lastPressed()` compiled in plain
    TypeScript but not in a component (`RGE1301`, "no callable method"), because the compiler reads `handleTypes` in
-   `runtime/src/manifest.ts`. Added there. (Worth a test that every `InputState` method is in the manifest.)
+   `runtime/src/manifest.ts`. Added there. (Worth a test that every `InputState` method is in the manifest.) *Since:* a runtime test checks every `InputState` method and property is in the manifest.
 9. **`createSettings` takes its type from the defaults**, so `fullscreen: false` became the type `false` and `!s.fullscreen` did not
-   type-check. The game gives the type explicitly (`createSettings<Settings>`); the guide's example does too.
+   type-check. The game gives the type explicitly (`createSettings<Settings>`); the guide's example does too. *Since:* `createSettings` widens a boolean default (`SettingsOf`); the type is no longer given.
 10. **In a handler, `x !== undefined` is not a condition** (`RGE1302`, again). `capture(input.lastPressed())` hands the maybe-undefined
-    value to a game-state action, which tests it in plain TypeScript.
+    value to a game-state action, which tests it in plain TypeScript. *Since:* fixed with 3: `const key = input.lastPressed(); if (key !== undefined) bindKey(capturing, key);`.
 11. **A script holds a key until it changes**, so `right, right` is one press and `right, _, right` is two. It cost three wrong test
     scripts (menus move on a press). Not an engine fault; the replay format says it, but nobody reads that twice.
 
@@ -97,8 +97,8 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
 
 12. **A list item's children cannot hold a condition** (`RGE1209`), which the inventory grid needs (an empty slot shows nothing). The message
     gives the way out: make the item a component (`SlotBox`) that takes the fields as props and holds the `{filled && …}`. That is
-    enough, so no engine change was made (plan 4.3: not needed).
-13. **`name` is reserved as a `const`** inside a component (`RGE1103`): `const name = useGame(…)` fails. Renamed `speaker`.
+    enough, so no engine change was made (plan 4.3: not needed). *Since:* an item's children may be conditional and nested; `SlotBox` is gone.
+13. **`name` is reserved as a `const`** inside a component (`RGE1103`): `const name = useGame(…)` fails. Renamed `speaker`. *Since:* a game-state value keeps its name (its field is `$name`); a `useState` called `name` still is not allowed.
 14. **Text wrapping and revealing needed no workaround**: `<Text maxWidth lineGap reveal>` (engine, M4.1/4.2) draws the dialogue box; the rules
     count the typed characters (`talk.shown`, 40 a second *(guess)*; a press finishes the page, the next turns it).
 
@@ -129,3 +129,22 @@ npm run assets && npm run maps    # rewrite assets/tiles.png and scenes/*.tmj
 
 From the engine's repository: `npm run bramble:install` repacks the engine and installs it here; `npm run check:outside` checks
 a copy of this folder in a temporary directory.
+
+## After the review: React-like again
+
+The review of this milestone asked which of the workarounds above were the engine's to remove. With findings 1–3, 8–10, 12 and 13
+answered, the components read like React:
+
+- **What is drawn is computed where it is drawn.** `World` is one list, `{spotsOf(run).map((s) => <Sprite key={s.id} … />)}`; the
+  character is one `<Sprite>` in the camera (not a list of one); `Inventory` holds its `{slot.filled && …}` in the list item.
+- **A menu's cursor is the screen's own state** (`useState`), and the rows are computed from the game state (`titleRows(hasSave)`,
+  `settingsRows(settings, bindings, capturing)`) and passed to `<Menu rows cursor>` as props. The game state keeps only what is shared:
+  the run, the screen, whether there is a save, and the settings.
+- **The settings are state components select**: `settings.subscribe` mirrors each change into `useGame` (`s.settings`, `s.bindings`),
+  so the settings screen re-renders when a volume or a key changes, without each action rebuilding the rows.
+
+Every frame of three replays (the title and settings, the cave with the pause screen, and the whole game) draws exactly what it drew
+before the change.
+
+Still as it was: sounds and particles answer the step's events in the `advance` action (`answer(events)`), since the engine has no
+`useEffect` on purpose; and a list inside a list item is not built yet.

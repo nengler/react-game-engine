@@ -1,13 +1,14 @@
 /**
- * What the screen shows of a map, as plain lists: the compiler's lists come from state or props, not from a computation in a
- * component, so the rules make them and the game state holds them (`view`), updated when the run changes.
+ * What the screen shows of a run, worked out from it: the components call these while they render (`spotsOf(run).map(…)`), as a
+ * React component computes what it draws from its state. Nothing here is kept in the game state.
  */
 import { BODY, REACH, TILE } from "./constants.ts";
 import { DIALOGUE } from "./dialogue.ts";
 import { MAPS } from "./maps.ts";
-import { bushKey, pagesOf, slotsOf, type Run, type Slot } from "./run.ts";
+import { bushKey, pagesOf, type Run } from "./run.ts";
 
 export interface Spot {
+  /** Unique among everything on the map: the kind, then the thing's own id (`door:cave`, `bush:4,7`). */
   readonly id: string;
   /** Top left of the thing's sprite, in map pixels. */
   readonly x: number;
@@ -25,24 +26,6 @@ export interface DialogueView {
   readonly more: string;
 }
 
-export interface View {
-  readonly bushes: readonly Spot[];
-  /** The character, as a one-item list (the camera follows it). */
-  readonly hero: readonly Spot[];
-  readonly doors: readonly Spot[];
-  readonly gates: readonly Spot[];
-  readonly shrines: readonly Spot[];
-  readonly pickups: readonly Spot[];
-  readonly npcs: readonly Spot[];
-  /** The inventory's eight slots, empty ones too. */
-  readonly slots: readonly Slot[];
-  /** The enemies on this map, by kind, and the swing's box while it lasts (zero or one). */
-  readonly beetles: readonly Spot[];
-  readonly wisps: readonly Spot[];
-  readonly swings: readonly Spot[];
-  readonly dialogue: DialogueView;
-}
-
 /** Frames of `things.png` (see tools/make-assets.ts). */
 const FRAME = { heroDown: 0, heroUp: 1, heroLeft: 2, heroRight: 3, beetle: 4, wisp: 5, npc: 6, lantern: 7, key: 8, shears: 9, bell: 10, shrine: 11, door: 12, gate: 13, bush: 14, swing: 15 } as const;
 const ITEM_FRAME = { lantern: FRAME.lantern, key: FRAME.key, shears: FRAME.shears, bell: FRAME.bell } as const;
@@ -53,38 +36,50 @@ function heroFrame(run: Run): number {
   return run.fy < 0 ? FRAME.heroUp : FRAME.heroDown;
 }
 
-export function viewOf(run: Run): View {
+const at = (id: string, col: number, row: number, frame: number): Spot => ({ id, x: col * TILE, y: row * TILE, frame });
+// The sprites are 16 x 16 and the hitboxes 10 x 10, so a sprite sits 3 pixels up and left of its box.
+const onBox = (id: string, x: number, y: number, frame: number): Spot => ({ id, x: x - (TILE - BODY) / 2, y: y - (TILE - BODY) / 2, frame });
+
+/** The character's sprite. */
+export function heroOf(run: Run): Spot {
+  return onBox("hero", run.x, run.y, heroFrame(run));
+}
+
+/**
+ * Everything on the run's map but the character, in drawing order: doors, the gate, shrines, pickups, people, enemies, uncut bushes,
+ * and the swing while it lasts.
+ */
+export function spotsOf(run: Run): Spot[] {
   const def = MAPS[run.map];
   const bushes: Spot[] = [];
   def.rows.forEach((row, r) => {
     for (let c = 0; c < row.length; c++) {
-      if (row[c] === "b" && !run.cut.includes(bushKey(run.map, c, r))) bushes.push({ id: `${c},${r}`, x: c * TILE, y: r * TILE, frame: FRAME.bush });
+      if (row[c] === "b" && !run.cut.includes(bushKey(run.map, c, r))) bushes.push(at(`bush:${c},${r}`, c, r, FRAME.bush));
     }
   });
-  const at = (id: string, col: number, row: number, frame: number): Spot => ({ id, x: col * TILE, y: row * TILE, frame });
-  // The sprites are 16 x 16 and the hitboxes 10 x 10, so a sprite sits 3 pixels up and left of its box.
-  const onBox = (id: string, x: number, y: number, frame: number): Spot => ({ id, x: x - (TILE - BODY) / 2, y: y - (TILE - BODY) / 2, frame });
-  const ahead = (run.fx / (Math.hypot(run.fx, run.fy) || 1)) * REACH;
-  const aheadY = (run.fy / (Math.hypot(run.fx, run.fy) || 1)) * REACH;
-  return {
-    bushes,
-    hero: [onBox("hero", run.x, run.y, heroFrame(run))],
-    doors: def.doors.map((d) => at(d.id, d.col, d.row, FRAME.door)),
-    gates: def.gate === undefined ? [] : [at("gate", def.gate.col, def.gate.row, FRAME.gate)],
-    shrines: def.shrines.map((s) => at(s.id, s.col, s.row, FRAME.shrine)),
-    pickups: def.pickups.filter((p) => !run.taken.includes(p.id)).map((p) => at(p.id, p.col, p.row, ITEM_FRAME[p.item])),
-    npcs: def.npcs.map((n) => at(n.id, n.col, n.row, FRAME.npc)),
-    slots: slotsOf(run),
-    beetles: run.enemies.filter((e) => e.map === run.map && e.kind === "beetle").map((e) => onBox(e.id, e.x, e.y, FRAME.beetle)),
-    wisps: run.enemies.filter((e) => e.map === run.map && e.kind === "wisp").map((e) => onBox(e.id, e.x, e.y, FRAME.wisp)),
-    swings: run.swing > 0 ? [{ id: "swing", x: run.x + BODY / 2 + ahead - TILE / 2, y: run.y + BODY / 2 + aheadY - TILE / 2, frame: FRAME.swing }] : [],
-    dialogue: dialogueOf(run),
-  };
+  const here = run.enemies.filter((e) => e.map === run.map);
+  const length = Math.hypot(run.fx, run.fy) || 1;
+  const swing: Spot[] =
+    run.swing > 0
+      ? [{ id: "swing", x: run.x + BODY / 2 + (run.fx / length) * REACH - TILE / 2, y: run.y + BODY / 2 + (run.fy / length) * REACH - TILE / 2, frame: FRAME.swing }]
+      : [];
+  return [
+    ...def.doors.map((d) => at(`door:${d.id}`, d.col, d.row, FRAME.door)),
+    ...(def.gate === undefined ? [] : [at("gate", def.gate.col, def.gate.row, FRAME.gate)]),
+    ...def.shrines.map((s) => at(`shrine:${s.id}`, s.col, s.row, FRAME.shrine)),
+    ...def.pickups.filter((p) => !run.taken.includes(p.id)).map((p) => at(`pickup:${p.id}`, p.col, p.row, ITEM_FRAME[p.item])),
+    ...def.npcs.map((n) => at(`npc:${n.id}`, n.col, n.row, FRAME.npc)),
+    ...here.filter((e) => e.kind === "beetle").map((e) => onBox(`enemy:${e.id}`, e.x, e.y, FRAME.beetle)),
+    ...here.filter((e) => e.kind === "wisp").map((e) => onBox(`enemy:${e.id}`, e.x, e.y, FRAME.wisp)),
+    ...bushes,
+    ...swing,
+  ];
 }
 
 const NO_DIALOGUE: DialogueView = { name: "", page: "", shown: 0, more: "" };
 
-function dialogueOf(run: Run): DialogueView {
+/** The conversation on screen, if any. */
+export function dialogueOf(run: Run): DialogueView {
   if (run.talk === null) return NO_DIALOGUE;
   const pages = pagesOf(run, run.talk.npc);
   const page = pages[run.talk.page] ?? "";
