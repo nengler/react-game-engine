@@ -77,7 +77,8 @@ no React equivalent.
 ## 7. Tooling and getting started
 
 - **Errors name generated files.** `generated/Play.ts:9:23 … './World.ts'` when the real cause is a `src/` file that failed to compile
-  earlier in the output (Bramble finding 6).
+  earlier in the output (Bramble finding 6). *Since:* a type error in generated code is reported at the `.tsx` line it was written
+  for, and a file that fails to compile is not reported again as a missing module.
 - **The generated code shows through.** `game.ts` imports `./generated/Main.ts` and calls `new Main()`: a function became a class.
 - **Setup is heavy.** cmake, a C compiler and cargo are needed to make the tarballs before `rge create` works, since nothing is
   published.
@@ -87,7 +88,7 @@ no React equivalent.
 
 ## What to fix first
 
-1. **Diagnostics in the `.tsx` source**, with source maps for the generated files as custom hooks already have.
+1. ~~**Diagnostics in the `.tsx` source**~~ *Done:* `mapToSource` (DESIGN.md, "Errors in the source").
 2. ~~**Input focus or consumption**~~ *Done:* `inert` and `modal` (DESIGN.md, "Inert and modal"). The input refs in `Play.tsx` stay:
    they carry a press from `useInput` to `useUpdate`, which a modal does not change.
 3. ~~**A "coming from React" page**~~ *Done:* "Coming from React", the guide's second section (`docs/index.html#react`): what

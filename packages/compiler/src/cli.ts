@@ -32,6 +32,7 @@ import {
   checkProject,
   formatDiagnostic,
   generatedFileName,
+  mapToSource,
   checkAssets,
   importTiled,
   importTilemap,
@@ -41,6 +42,7 @@ import {
   prefabsJson,
   projectSchemas,
   type CompilerDiagnostic,
+  type GeneratedFile,
   type ProjectModule,
   type VirtualFile,
 } from "./index.ts";
@@ -94,6 +96,8 @@ function main(argv: readonly string[]): number {
   });
   const diagnostics: CompilerDiagnostic[] = [];
   const outputs: VirtualFile[] = [];
+  /** Where each generated component file's lines came from, so its type errors are reported in the source. */
+  const generated: GeneratedFile[] = [];
   const modules: ProjectModule[] = [];
   try {
     mkdirSync(outDir, { recursive: true });
@@ -151,7 +155,8 @@ function main(argv: readonly string[]): number {
       // Use a cwd-relative name so generated headers and IR spans are machine-independent.
       const outPath = resolve(outDir, generatedFileName(name));
       const map = sourceMaps ? { file: generatedFileName(name), source: relative(dirname(outPath), sourcePath).split(sep).join("/") } : undefined;
-      const result = compiler.compile(relative(process.cwd(), sourcePath), readFileSync(sourcePath, "utf8"), map);
+      const sourceText = readFileSync(sourcePath, "utf8");
+      const result = compiler.compile(relative(process.cwd(), sourcePath), sourceText, map);
       diagnostics.push(...result.diagnostics);
       if (!result.ok) continue;
       const code = result.code;
@@ -159,6 +164,7 @@ function main(argv: readonly string[]): number {
       if (result.sourceMap !== undefined) writeFileSync(`${outPath}.map`, result.sourceMap);
       writeFileSync(join(outDir, name.replace(/\.tsx$/, ".ir.json")), JSON.stringify(result.ir, null, 2) + "\n");
       outputs.push({ fileName: outPath, text: code });
+      generated.push({ fileName: outPath, sourceFile: relative(process.cwd(), sourcePath), sourceText, origins: result.origins });
       modules.push({ ir: result.ir, generatedName: generatedFileName(name) });
       console.log(`compiled ${name} -> ${outPath}`);
     }
@@ -186,7 +192,12 @@ function main(argv: readonly string[]): number {
       const count = projectSchemas(modules).size;
       console.log(`wrote prefabs.ts and prefabs.json (${count} prefab${count === 1 ? "" : "s"})`);
     }
-    if (check && outputs.length > 0) diagnostics.push(...compiler.typeCheck(outputs));
+    // A file that failed to compile has no generated module (or an old one): checking the others against it would report the
+    // import as missing, in a generated file, when the cause is the source above. So the check waits until every file compiles.
+    if (check && outputs.length > 0) {
+      if (!complete) console.error("skipped type-checking the generated code: fix the errors above first (a file that did not compile has no generated module)");
+      else diagnostics.push(...mapToSource(compiler.typeCheck(outputs), generated));
+    }
     if (scenesDir !== undefined) {
       if (diagnostics.some((d) => d.severity === "error")) console.error("skipped scene validation: fix the errors above first (scenes are checked against the compiled prefabs)");
       else diagnostics.push(...checkScenes(compiler, scenesDir, outDir, projectSchemas(modules)));

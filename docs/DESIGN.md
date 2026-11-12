@@ -67,6 +67,14 @@ generated file. Each generated line maps to the start of the construct it was wr
 the IR's spans), not to the exact expression, so a stack trace through `node --enable-source-maps` names the right line of
 the `.tsx`. Spans already point at the source as written, through the custom-hook inliner's `EditMap`.
 
+**Errors in the source** (2026-11-12, PAIN_POINTS.md and Bramble finding 6). Every `compile` now returns the same line origins
+(`origins`), with or without a map. The command line keeps them per generated file, and `mapToSource` moves each type error the
+check of the generated code finds (`RGE9001`) to the source line of the construct its generated line was written for, keeping
+where it was found: `src/Settings.tsx:9:28 - error RGE9001: TS2345: … (in the generated out/Settings.ts:44:59)`. A line written for
+no construct (an import, the class header) keeps its generated position. And when a file fails to compile, the generated code is
+not type-checked at all ("skipped type-checking the generated code"), as scenes are not validated: the other files would only
+report its module as missing, or check against an old one.
+
 ## TypeScript 7.1 integration
 
 TypeScript 7 is the native (Go) compiler. The npm package ships a JS client

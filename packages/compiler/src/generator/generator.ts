@@ -1,6 +1,6 @@
 import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type TypeIR, walkExpr, walkFunction } from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
-import { CodeWriter, sourceMap } from "./writer.ts";
+import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
 import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
 import { ElementEmitter } from "./elements.ts";
 
@@ -53,9 +53,15 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
  * `generateModule`, with a source map (version 3) from each generated line to the component, hook or element it was written
  * for. The code ends with a `//# sourceMappingURL=` comment naming `<file>.map`, where the caller writes `map`.
  */
-export function generateModuleWithMap(module: IRModule, options: GeneratorOptions, map: SourceMapOptions): { readonly code: string; readonly map: string } {
+export function generateModuleWithMap(module: IRModule, options: GeneratorOptions, map: SourceMapOptions): { readonly code: string; readonly map: string; readonly origins: readonly LineOrigin[] } {
   const w = writeModule(module, options);
-  return { code: `${w.toString()}//# sourceMappingURL=${map.file}.map\n`, map: sourceMap(w.origins, map.file, map.source, map.sourceContent) };
+  return { code: `${w.toString()}//# sourceMappingURL=${map.file}.map\n`, map: sourceMap(w.origins, map.file, map.source, map.sourceContent), origins: w.origins };
+}
+
+/** The generated code, and for each generated line written for a construct of the source, where that construct is. */
+export function generateModuleWithOrigins(module: IRModule, options: GeneratorOptions): { readonly code: string; readonly origins: readonly LineOrigin[] } {
+  const w = writeModule(module, options);
+  return { code: w.toString(), origins: w.origins };
 }
 
 function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
