@@ -1,9 +1,19 @@
 // Layer 1 of ComponentGenerator: the handler methods, state setters and updaters, and the statements and callbacks inside them.
-import { assertNever, type FunctionIR, type HandlerHookIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
+import { assertNever, type FunctionIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
-import { CodeWriter } from "./writer.ts";
-import { param, annotated, pendingRef } from "./helpers.ts";
+import { param, annotated, pendingRef, propertyKey } from "./helpers.ts";
 import { ExpressionEmitter } from "./expressions.ts";
+
+/** A `for…of` binding as written: `e`, `[i, e]`, `{ id, hp: health }`. */
+function loopBinding(binding: LoopBindingIR): string {
+  switch (binding.kind) {
+    case "Name": return binding.name;
+    case "Array": return `[${binding.elements.map((e) => (e === null ? "" : loopBinding(e))).join(", ")}]`;
+    case "Object":
+      return `{ ${binding.entries.map((e) => (e.value.kind === "Name" && e.value.name === e.key ? e.key : `${propertyKey(e.key)}: ${loopBinding(e.value)}`)).join(", ")} }`;
+    default: return assertNever(binding, "loop binding");
+  }
+}
 
 export class HandlerEmitter extends ExpressionEmitter {
   // -- handlers -------------------------------------------------------------
@@ -27,7 +37,7 @@ export class HandlerEmitter extends ExpressionEmitter {
       w.blank();
       if (hooks.length === 1 && !callsSuper) {
         const handler = hooks[0]!.handler;
-        w.block(`override ${signature.method}(${this.params(handler)}): void`, () => this.stmts(handler.body));
+        w.at(hooks[0]!.span, () => w.block(`override ${signature.method}(${this.params(handler)}): void`, () => this.stmts(handler.body)));
         continue;
       }
       // Every parameter the runtime passes when `super` is called with them; otherwise only as many as some handler declares (an unused one is a type error).
@@ -42,7 +52,7 @@ export class HandlerEmitter extends ExpressionEmitter {
       });
       hooks.forEach((hook, i) => {
         w.blank();
-        w.block(`#${signature.method}${i}(${this.params(hook.handler)}): void`, () => this.stmts(hook.handler.body));
+        w.at(hook.span, () => w.block(`#${signature.method}${i}(${this.params(hook.handler)}): void`, () => this.stmts(hook.handler.body)));
       });
     }
   }
@@ -66,12 +76,7 @@ export class HandlerEmitter extends ExpressionEmitter {
     const params = fn.params.map(param).join(", ");
     const only = fn.body.length === 1 ? fn.body[0]! : null;
     if (only?.kind === "Return" && only.value) return `(${params}) => ${this.arrowBody(only.value)}`;
-    const inner = new CodeWriter();
-    const outer = this.w;
-    this.w = inner;
-    this.stmts(fn.body);
-    this.w = outer;
-    return this.arrow(params, inner.toString().trimEnd().split("\n"), fn);
+    return this.arrow(params, this.capture(() => this.stmts(fn.body)), fn);
   }
 
   /**
@@ -92,7 +97,7 @@ export class HandlerEmitter extends ExpressionEmitter {
     const only = fn.body.length === 1 ? fn.body[0]! : null;
     const previous = fn.params.length === 1 ? fn.params[0]! : null;
     // Not in a callback handed to an element: those run on an event, not every frame, and read better as the call.
-    if (this.callbackDepth > 0 || previous === null || only?.kind !== "Return" || !only.value || !this.hasSetter(state)) return false;
+    if (this.mode.inCallback || previous === null || only?.kind !== "Return" || !only.value || !this.hasSetter(state)) return false;
     const w = this.w;
     const slot = pendingRef(this.state(state));
     w.open("{");
@@ -123,25 +128,39 @@ export class HandlerEmitter extends ExpressionEmitter {
           w.line(`${this.storeName}.getState().${stmt.action}(${stmt.args.map((a) => this.expr(a, true)).join(", ")});`);
           break;
         case "Assign": {
-          const target = `this.${this.refField(stmt.target.ref)}`;
+          const target = stmt.target.kind === "RefCurrent" ? `this.${this.refField(stmt.target.ref)}` : stmt.target.name;
           w.line(`${target} ${stmt.operator} ${this.expr(stmt.value, true)};`);
           break;
         }
         case "LocalConst":
-          w.line(`const ${stmt.name} = ${this.expr(stmt.value, true)};`);
+          w.line(`${stmt.mutable ? "let" : "const"} ${stmt.type ? annotated(stmt.name, stmt.type) : stmt.name} = ${this.expr(stmt.value, true)};`);
+          break;
+        case "ForOf":
+          w.block(`for (const ${loopBinding(stmt.binding)} of ${this.expr(stmt.iterable, true)})`, () => this.stmts(stmt.body));
+          break;
+        case "Block":
+          w.block("", () => this.stmts(stmt.body));
+          break;
+        case "Switch":
+          w.block(`switch (${this.expr(stmt.discriminant, true)})`, () => {
+            for (const c of stmt.cases) {
+              w.open(c.test === null ? "default:" : `case ${this.expr(c.test, true)}:`);
+              this.stmts(c.body);
+              w.close();
+            }
+          });
+          break;
+        case "Break":
+          w.line("break;");
+          break;
+        case "Continue":
+          w.line("continue;");
           break;
         case "Return":
           w.line(stmt.value ? `return ${this.expr(stmt.value, true)};` : "return;");
           break;
         case "If":
-          w.open(`if (${this.expr(stmt.test, true)}) {`);
-          this.stmts(stmt.then);
-          if (stmt.else.length > 0) {
-            w.close();
-            w.open("} else {");
-            this.stmts(stmt.else);
-          }
-          w.close("}");
+          this.emitIf(stmt);
           break;
         default:
           assertNever(stmt, "statement");
@@ -149,19 +168,30 @@ export class HandlerEmitter extends ExpressionEmitter {
     }
   }
 
+  /** `if … else if … else`: an `else` that holds only another `if` is written as `else if`, not nested a level deeper. */
+  protected emitIf(stmt: IfStmtIR): void {
+    const w = this.w;
+    w.open(`if (${this.expr(stmt.test, true)}) {`);
+    this.stmts(stmt.then);
+    let rest: readonly StatementIR[] = stmt.else;
+    while (rest.length === 1 && rest[0]!.kind === "If") {
+      const next: IfStmtIR = rest[0];
+      w.close();
+      w.open(`} else if (${this.expr(next.test, true)}) {`);
+      this.stmts(next.then);
+      rest = next.else;
+    }
+    if (rest.length > 0) {
+      w.close();
+      w.open("} else {");
+      this.stmts(rest);
+    }
+    w.close("}");
+  }
+
   /** A callback passed to a child: an arrow with unannotated parameters, typed by the child's props type. */
   protected callback(fn: FunctionIR): string {
     const params = fn.params.map(param).join(", ");
-    const inner = new CodeWriter();
-    const outer = this.w;
-    this.w = inner;
-    this.callbackDepth++;
-    try {
-      this.stmts(fn.body);
-    } finally {
-      this.callbackDepth--;
-      this.w = outer;
-    }
-    return this.arrow(params, inner.toString().trimEnd().split("\n"), fn);
+    return this.arrow(params, this.within({ inCallback: true }, () => this.capture(() => this.stmts(fn.body))), fn);
   }
 }

@@ -1,5 +1,5 @@
 // Shared declarations of the component generator: the mount helpers, names, and the small text helpers used by generator.ts and its layers.
-import { assertNever, type ChildIR, type ComponentRef, type ElementIR, type ParamIR, type TypeIR, type StateIR } from "../ir/types.ts";
+import { assertNever, type ChildIR, type ElementIR, type ParamIR, type TypeIR, type StateIR } from "../ir/types.ts";
 
 
 
@@ -86,10 +86,6 @@ export function transformTarget(el: ElementIR): "transform" | "placement" {
 
 export function escapeTemplate(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
-}
-
-export function typeName(ref: ComponentRef): string {
-  return ref.name;
 }
 
 /**

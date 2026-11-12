@@ -8,6 +8,7 @@ import { type RuntimeManifest } from "@rge/runtime";
 import { type LoweringContext } from "./statements.ts";
 import { SOUND_CLASS, type AuthoringImports, checkStaticCycles } from "./helpers.ts";
 import { ElementLowering } from "./elements.ts";
+import { type ModuleContext } from "./lowering.ts";
 
 
 
@@ -101,9 +102,10 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
   const typeDeclarations: TypeDeclarationIR[] = analysis.typeDeclarations.map((t) => ({ kind: "TypeDeclaration", name: t.name, text: t.text }));
 
+  const context: ModuleContext = { sourceFile, fileName: analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, gameState: options.gameState, storeImports, plainImports: plainNames };
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
-    const lowered = new ComponentLowering(c, sourceFile, analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, options.gameState, storeImports, plainNames).lower();
+    const lowered = new ComponentLowering(c, context).lower();
     if (lowered) components.push(lowered);
   }
 

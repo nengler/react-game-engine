@@ -1,15 +1,14 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type Node } from "typescript/ast";
-import { isArrowFunction, isBlock, isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
-import { unwrapParens, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
+import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
+import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR, type ValueType } from "../ir/types.ts";
+import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { lowerFunction } from "./statements.ts";
 import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
 import { ExpressionLowering } from "./expressions.ts";
-import { Scope } from "./scope.ts";
 
 export class HookLowering extends ExpressionLowering {
   /**
@@ -131,16 +130,10 @@ export class HookLowering extends ExpressionLowering {
         case "useUnmount": {
           const kind = HANDLER_KIND[hook.kind];
           const signature = HANDLER_SIGNATURES[kind];
-          this.functionDepth++;
-          // The component is going away: it can no longer render, so there is nothing for a setter to do.
-          if (hook.kind === "useUnmount") this.settersForbidden++;
-          const handler = lowerFunction(this, hook.handler, {
-            paramTypes: signature.params.map((p) => p.type),
-            returns: "void",
-            what: `${hook.kind} handler`,
-          });
-          if (hook.kind === "useUnmount") this.settersForbidden--;
-          this.functionDepth--;
+          // In `useUnmount` the component is going away: it can no longer render, so there is nothing for a setter to do.
+          const handler = this.within({ inHandler: true, inUnmount: hook.kind === "useUnmount" }, () =>
+            lowerFunction(this, hook.handler, { paramTypes: signature.params.map((p) => p.type), returns: "void", what: `${hook.kind} handler` }),
+          );
           if (handler) hooks.push({ kind, handler, span: this.span(hook.statement) });
           break;
         }
@@ -243,18 +236,11 @@ export class HookLowering extends ExpressionLowering {
         this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component (or reserved).`, hook.declaration);
         return;
       }
-      const outer = this.scope;
-      this.scope = new Scope(outer);
-      this.scope.declare(hook.parameter, { kind: "storeRoot", name: hook.parameter });
-      const previous = this.storeReads;
-      this.storeReads = { state, hooks, storeName: hook.storeName };
-      let value: ExprIR | null;
-      try {
-        value = this.lowerNode(hook.body);
-      } finally {
-        this.scope = outer;
-        this.storeReads = previous;
-      }
+      const body = hook.body;
+      const value = this.inScope((scope) => {
+        scope.declare(hook.parameter, { kind: "storeRoot", name: hook.parameter });
+        return this.within({ storeReads: { state, hooks, storeName: hook.storeName } }, () => this.lowerNode(body));
+      });
       if (value) this.componentScope.declare(hook.valueName, { kind: "derived", name: hook.valueName, value: memoized(hook.valueName, value) });
       return;
     }
@@ -333,7 +319,7 @@ export class HookLowering extends ExpressionLowering {
    * A trailing `.length` reads the array's snapshot, since the store tells readers about an array's items, not its length.
    */
   protected override lowerStoreRead(path: readonly string[], at: Node): ExprIR | null {
-    const reads = this.storeReads;
+    const reads = this.mode.storeReads;
     if (!reads || path.length === 0) {
       this.report(DiagnosticCode.UnsupportedExpression, "Read a path of the game state (`s.player.hp`), not the whole state.", at);
       return null;
@@ -374,7 +360,7 @@ export class HookLowering extends ExpressionLowering {
       this.report(code, "useRef's initial value must not read state; it is evaluated once (it may read props).", hook.arguments[0]!);
       return;
     }
-    const type = this.valueType(hook.typeArgument, initialValue, hook.call, "useRef", code);
+    const type = this.refType(hook.typeArgument, initialValue, hook.call);
     if (!type || !this.claimName(hook.name, hook.declaration, code)) return;
     const id = refId(this.component.name, hook.name);
     this.refs.push({ kind: "Ref", id, name: hook.name, type, initialValue, span: this.span(hook.declaration) });
@@ -442,23 +428,28 @@ export class HookLowering extends ExpressionLowering {
     return null;
   }
 
-  /** The type of a `useRef` value: its type argument, or inferred from a literal initial value. Refs hold primitives only. */
-  protected valueType(typeArgument: Node | null, initial: ExprIR, at: Node, hook: string, code: CompilerDiagnostic["code"]): ValueType | null {
+  /**
+   * The type of a `useRef` value: its type argument (any type: `useRef<Point[]>([])`, `useRef<Enemy | null>(null)`), or inferred
+   * from a primitive initial value. A type that names an element (`useRef<Sprite>(null)`) is rejected: refs hold values, and
+   * what is on screen is driven by state and props.
+   */
+  protected refType(typeArgument: Node | null, initial: ExprIR, at: Node): TypeIR | null {
+    const code = DiagnosticCode.InvalidUseRef;
     if (typeArgument) {
-      switch (typeArgument.kind) {
-        case SyntaxKind.NumberKeyword: return "number";
-        case SyntaxKind.StringKeyword: return "string";
-        case SyntaxKind.BooleanKeyword: return "boolean";
-        default:
-          this.report(code, `${hook} type argument must be number, string or boolean.`, typeArgument);
-          return null;
+      let element: string | null = null;
+      visit(typeArgument, (n) => {
+        if (element === null && isTypeReferenceNode(n) && isIdentifier(n.typeName) && (this.intrinsics.has(n.typeName.text) || this.locals.has(n.typeName.text) || this.imported.has(n.typeName.text))) element = n.typeName.text;
+      });
+      if (element !== null) {
+        this.report(code, `Refs hold values, not elements: <${element}> is driven by state and props. Keep what you need from it (a position, a count) in a ref or in state.`, typeArgument);
+        return null;
       }
+      return this.typeFromNode(typeArgument);
     }
     const inferred = this.inferType(initial);
-    if (!inferred) {
-      this.report(code, `Cannot infer the type; use a number/string/boolean literal, a prop, or \`${hook}<T>(...)\`.`, at);
-    }
-    return inferred;
+    if (inferred) return { kind: "Primitive", name: inferred };
+    this.report(code, "Cannot infer the type: use a number/string/boolean literal, or give it: `useRef<Point[]>([])`, `useRef<Enemy | null>(null)`.", at);
+    return null;
   }
 }
 

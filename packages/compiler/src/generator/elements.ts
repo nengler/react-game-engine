@@ -1,6 +1,6 @@
 // Layer 2 of ComponentGenerator: the element tree, keyed lists, mounts and transforms, and the code that builds and updates each element.
 import { assertNever, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam } from "../ir/types.ts";
-import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, transformTarget, typeName, propertyKey, access } from "./helpers.ts";
+import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, transformTarget, propertyKey, access } from "./helpers.ts";
 import { HandlerEmitter } from "./handlers.ts";
 
 export class ElementEmitter extends HandlerEmitter {
@@ -9,29 +9,33 @@ export class ElementEmitter extends HandlerEmitter {
   protected emitElementFields(children: readonly ChildIR[], presence: Presence): void {
     for (const child of children) {
       if (child.kind === "ChildrenSlot") continue;
-      const el = child.element;
-      const type = typeName(el.component);
-      if (child.kind === "KeyedListChild") {
-        // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
-        const itemType = child.alternate ? `${type} | ${typeName(child.alternate.component)}` : type;
-        this.w.line(`readonly ${el.fieldName}Items: Map<string | number, ${itemType}> = new Map();`);
-        if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
-        this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
-        if (this.listNeedsRecords(child)) this.w.line(`#${el.fieldName}Records: Map<string | number, ${this.recordType(child)}> = new Map();`);
-        if (!isNamedListSource(child.source)) {
-          // A computed source (`spotsOf(run)`, `world.enemies.map(…)`): worked out by a method, whose return type names the items' type.
-          this.w.line(`${listSourceMethod(child)}() { return ${this.expr(child.source, true)}; }`);
-        }
-        continue;
-      }
-      const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
-      if (childPresence === "persistent") {
-        this.w.line(`readonly ${el.fieldName}: ${type} = ${this.construct(el)};`);
-      } else {
-        this.w.line(`${el.fieldName}: ${type} | null = null;`);
-      }
-      this.emitElementFields(el.children, childPresence);
+      this.w.at(child.element.span, () => this.emitElementField(child, presence));
     }
+  }
+
+  protected emitElementField(child: Exclude<ChildIR, { kind: "ChildrenSlot" }>, presence: Presence): void {
+    const el = child.element;
+    const type = el.component.name;
+    if (child.kind === "KeyedListChild") {
+      // The instances by key, the key order of the last render, and (when a callback reads the item) each key's current item.
+      const itemType = child.alternate ? `${type} | ${child.alternate.component.name}` : type;
+      this.w.line(`readonly ${el.fieldName}Items: Map<string | number, ${itemType}> = new Map();`);
+      if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
+      this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
+      if (this.listNeedsRecords(child)) this.w.line(`#${el.fieldName}Records: Map<string | number, ${this.recordType(child)}> = new Map();`);
+      if (!isNamedListSource(child.source)) {
+        // A computed source (`spotsOf(run)`, `world.enemies.map(…)`): worked out by a method, whose return type names the items' type.
+        this.w.line(`${listSourceMethod(child)}() { return ${this.expr(child.source, true)}; }`);
+      }
+      return;
+    }
+    const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
+    if (childPresence === "persistent") {
+      this.w.line(`readonly ${el.fieldName}: ${type} = ${this.construct(el)};`);
+    } else {
+      this.w.line(`${el.fieldName}: ${type} | null = null;`);
+    }
+    this.emitElementFields(el.children, childPresence);
   }
 
   /** Attach persistent children to their parents (constructor only). */
@@ -39,8 +43,10 @@ export class ElementEmitter extends HandlerEmitter {
     for (const [index, child] of children.entries()) {
       if (child.kind !== "StaticChild") continue;
       const ref = `this.${child.element.fieldName}`;
-      this.emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
-      this.w.line(`${addChild(mount, ref, children, index)};`);
+      this.w.at(child.element.span, () => {
+        this.emitStaticTransform(child.element.transform, ref, transformTarget(child.element));
+        this.w.line(`${addChild(mount, ref, children, index)};`);
+      });
       this.emitStaticWiring(child.element.children, mountOf(child.element, ref));
     }
   }
@@ -48,47 +54,52 @@ export class ElementEmitter extends HandlerEmitter {
   // -- render ---------------------------------------------------------------
 
   protected emitChildUpdates(children: readonly ChildIR[], mount: Mount, presence: Presence): void {
-    const w = this.w;
     for (const [index, child] of children.entries()) {
-      switch (child.kind) {
-        case "StaticChild": {
-          const el = child.element;
-          if (!this.elementNeedsRender(el)) break;
-          const ref = this.fieldRef(el);
-          if (presence === "persistent") {
-            this.emitElementUpdates(el, ref, "persistent");
-          } else {
-            // Inside a conditional subtree the field may be null (e.g. the subtree is unmounted).
-            w.block(`if (${ref} !== null)`, () => this.emitElementUpdates(el, ref, "conditional"));
-          }
-          break;
+      if (child.kind === "ChildrenSlot") continue; // nothing renders here: the parent mounts its elements
+      this.w.at(child.element.span, () => this.emitChildUpdate(child, children, index, mount, presence));
+    }
+  }
+
+  protected emitChildUpdate(child: ChildIR, children: readonly ChildIR[], index: number, mount: Mount, presence: Presence): void {
+    const w = this.w;
+    switch (child.kind) {
+      case "StaticChild": {
+        const el = child.element;
+        if (!this.elementNeedsRender(el)) return;
+        const ref = this.fieldRef(el);
+        if (presence === "persistent") {
+          this.emitElementUpdates(el, ref, "persistent");
+        } else {
+          // Inside a conditional subtree the field may be null (e.g. the subtree is unmounted).
+          w.block(`if (${ref} !== null)`, () => this.emitElementUpdates(el, ref, "conditional"));
         }
-        case "ConditionalChild": {
-          const el = child.element;
-          const ref = this.fieldRef(el);
-          w.open(`if (${this.expr(child.condition, true)}) {`);
-          w.block(`if (${ref} === null)`, () => {
-            w.line(`${ref} = ${this.construct(el)};`);
-            this.emitStaticTransform(el.transform, ref, transformTarget(el));
-            this.emitMountStatics(el.children, mountOf(el, ref));
-            w.line(`${queueAddChild(mount, ref, children, index)};`);
-          });
-          this.emitElementUpdates(el, ref, "conditional");
-          w.close();
-          w.open(`} else if (${ref} !== null) {`);
-          w.line(`${queueRemoveChild(mount, ref)};`);
-          for (const line of this.subtreeResets(el)) w.line(line);
-          w.close("}");
-          break;
-        }
-        case "KeyedListChild":
-          this.emitList(child, mount, index);
-          break;
-        case "ChildrenSlot":
-          break; // nothing renders here: the parent mounts its elements
-        default:
-          assertNever(child, "child");
+        break;
       }
+      case "ConditionalChild": {
+        const el = child.element;
+        const ref = this.fieldRef(el);
+        w.open(`if (${this.expr(child.condition, true)}) {`);
+        w.block(`if (${ref} === null)`, () => {
+          w.line(`${ref} = ${this.construct(el)};`);
+          this.emitStaticTransform(el.transform, ref, transformTarget(el));
+          this.emitMountStatics(el.children, mountOf(el, ref));
+          w.line(`${queueAddChild(mount, ref, children, index)};`);
+        });
+        this.emitElementUpdates(el, ref, "conditional");
+        w.close();
+        w.open(`} else if (${ref} !== null) {`);
+        w.line(`${queueRemoveChild(mount, ref)};`);
+        for (const line of this.subtreeResets(el)) w.line(line);
+        w.close("}");
+        break;
+      }
+      case "KeyedListChild":
+        this.emitList(child, mount, index);
+        break;
+      case "ChildrenSlot":
+        break; // nothing renders here: the parent mounts its elements
+      default:
+        assertNever(child, "child");
     }
   }
 
@@ -154,7 +165,7 @@ export class ElementEmitter extends HandlerEmitter {
     // field each, made with the item and updated like a conditional subtree's on every render, from the item's current value.
     const kids = el.children;
     // An item may switch between two elements (`cond ? <A/> : <B/>`): its instance is cast to the one that is current.
-    const view = (e: ElementIR): string => (alt ? `($item as ${typeName(e.component)})` : "$item");
+    const view = (e: ElementIR): string => (alt ? `($item as ${e.component.name})` : "$item");
     // The branches test the condition itself (not `$branch`), so that TypeScript narrows what it reads (`p.tower ? … {...p.tower}`).
     const test = list.condition ? this.arrowBody(list.condition) : "true";
     const construct = (e: ElementIR): void => {
@@ -189,21 +200,18 @@ export class ElementEmitter extends HandlerEmitter {
       // A callback is created once, with the item's first value. It reads the item's current value through this
       // holder, which every render refreshes, and which it keeps after the item is removed (an unmount hook may call it).
       if (records) w.line(kids.length > 0 ? `const $rec: ${this.recordType(list)} = { current: ${item}, kids: ${this.emptyKids(list)} };` : `const $rec = { current: ${item} };`);
-      this.itemLookup = records ? { id: list.item.id, text: "$rec.current" } : null;
-      try {
+      this.within({ itemLookup: records ? { id: list.item.id, text: "$rec.current" } : null }, () => {
         if (alt) {
           w.block(`if (${test})`, () => construct(el));
           w.block("else", () => construct(alt));
         } else construct(el);
         if (kids.length > 0) {
-          this.withFieldBase("$rec.kids", () => {
+          this.within({ fieldBase: "$rec.kids" }, () => {
             this.emitMountStatics(kids, mountOf(el, "$item"));
             this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional");
           });
         }
-      } finally {
-        this.itemLookup = null;
-      }
+      });
       w.line(`${items}.set($key, $item);`);
       if (records) w.line(`${records}.set($key, $rec);`);
       w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, ${position})` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
@@ -214,12 +222,7 @@ export class ElementEmitter extends HandlerEmitter {
         if (records && kids.length > 0) {
           w.line(`$rec.current = ${item};`);
           // A child made now (its condition just turned on) may hold a callback: it reads the item through the record too.
-          this.itemLookup = { id: list.item.id, text: "$rec.current" };
-          try {
-            this.withFieldBase("$rec.kids", () => this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional"));
-          } finally {
-            this.itemLookup = null;
-          }
+          this.within({ itemLookup: { id: list.item.id, text: "$rec.current" }, fieldBase: "$rec.kids" }, () => this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional"));
         }
         if (alt) {
           w.block(`if (${test})`, () => this.emitPropUpdates(el, view(el)));
@@ -258,7 +261,7 @@ export class ElementEmitter extends HandlerEmitter {
   /** What a list keeps for each key: the item's current value and, for an item with children, those children (each `null` until made). */
   protected recordType(list: KeyedListChildIR): string {
     const kids = itemDescendants(list.element.children);
-    const fields = kids.map((k) => `${k.fieldName}: ${typeName(k.component)} | null`).join("; ");
+    const fields = kids.map((k) => `${k.fieldName}: ${k.component.name} | null`).join("; ");
     return `{ current: ${this.listItemType(list)}${kids.length > 0 ? `; kids: { ${fields} }` : ""} }`;
   }
 
@@ -278,21 +281,8 @@ export class ElementEmitter extends HandlerEmitter {
     throw new Error(`Unexpected list source in component ${this.c.name}`);
   }
 
-  /** Where element fields live: on the component (`this.sprite`), or, while a list item's children are written, in its record. */
-  protected fieldBase = "this";
-
   protected fieldRef(el: ElementIR): string {
-    return `${this.fieldBase}.${el.fieldName}`;
-  }
-
-  protected withFieldBase(base: string, emit: () => void): void {
-    const outer = this.fieldBase;
-    this.fieldBase = base;
-    try {
-      emit();
-    } finally {
-      this.fieldBase = outer;
-    }
+    return `${this.mode.fieldBase}.${el.fieldName}`;
   }
 
   /** What unmounting a conditional subtree resets: its element fields to null, its lists to empty. */
@@ -347,18 +337,9 @@ export class ElementEmitter extends HandlerEmitter {
 
   // -- expressions ----------------------------------------------------------
 
+  /** Every prop goes in at construction, callbacks too; on a component, the dynamic ones are re-sent through `updateProps` on render. */
   protected construct(el: ElementIR): string {
-    switch (el.component.kind) {
-      case "Local":
-      case "Imported":
-        // Every value prop (static or dynamic) goes in at construction, with the callbacks; dynamic ones are
-        // re-sent through `updateProps` on render.
-        return el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
-      case "Intrinsic":
-        return el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
-      default:
-        return assertNever(el.component, "component ref");
-    }
+    return el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
   }
 
   protected propsObject(props: readonly PropIR[]): string {

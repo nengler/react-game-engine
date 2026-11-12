@@ -20,7 +20,7 @@ export const generatedCodeCompilerOptions = {
   allowImportingTsExtensions: true,
   skipLibCheck: true,
   types: [],
-  target: ScriptTarget.ES2022,
+  target: ScriptTarget.ES2023,
   module: ModuleKind.ESNext,
   moduleResolution: ModuleResolutionKind.Bundler,
 } satisfies Parameters<API["createProgram"]>[1];

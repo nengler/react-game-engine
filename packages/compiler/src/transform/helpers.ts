@@ -4,7 +4,7 @@ import { SyntaxKind, type JsxElement, type JsxSelfClosingElement, type JsxAttrib
 import { isIdentifier, isJsxAttribute, isJsxElement, isNumericLiteral, isParenthesizedTypeNode, isLiteralTypeNode, isJsxFragment, isJsxSelfClosingElement, isStringLiteral } from "typescript/ast/is";
 import { type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { assertNever, type TypeIR, type PropTypeIR, type BinaryOperator, type ChildIR, type ComponentIR, type UnaryOperator } from "../ir/types.ts";
+import { assertNever, cycleThrough, type TypeIR, type PropTypeIR, type BinaryOperator, type ChildIR, type ComponentIR, type UnaryOperator } from "../ir/types.ts";
 
 
 
@@ -16,7 +16,7 @@ export const SOUND_CLASS = "Sound";
 
 export const BINARY_OPERATORS: ReadonlyMap<SyntaxKind, BinaryOperator> = new Map([
   [SyntaxKind.PlusToken, "+"], [SyntaxKind.MinusToken, "-"], [SyntaxKind.AsteriskToken, "*"],
-  [SyntaxKind.SlashToken, "/"], [SyntaxKind.PercentToken, "%"],
+  [SyntaxKind.SlashToken, "/"], [SyntaxKind.PercentToken, "%"], [SyntaxKind.AsteriskAsteriskToken, "**"],
   [SyntaxKind.LessThanToken, "<"], [SyntaxKind.LessThanEqualsToken, "<="],
   [SyntaxKind.GreaterThanToken, ">"], [SyntaxKind.GreaterThanEqualsToken, ">="],
   [SyntaxKind.EqualsEqualsEqualsToken, "==="], [SyntaxKind.ExclamationEqualsEqualsToken, "!=="],
@@ -159,19 +159,7 @@ export function checkStaticCycles(components: readonly ComponentIR[], diagnostic
     walk(c.root.children);
     edges.set(c.name, targets);
   }
-  const reported = new Set<string>();
   for (const c of components) {
-    const stack: string[] = [];
-    const dfs = (name: string): boolean => {
-      if (stack.includes(name)) return name === c.name;
-      stack.push(name);
-      const found = (edges.get(name) ?? []).some(dfs);
-      stack.pop();
-      return found;
-    };
-    if (!reported.has(c.name) && (edges.get(c.name) ?? []).some(dfs)) {
-      reported.add(c.name);
-      diagnostics.push(error(DiagnosticCode.ComponentCycle, `Component '${c.name}' statically contains itself.`, c.span));
-    }
+    if (cycleThrough(c.name, edges)) diagnostics.push(error(DiagnosticCode.ComponentCycle, `Component '${c.name}' statically contains itself.`, c.span));
   }
 }

@@ -185,8 +185,9 @@ function C() {
     assert.deepEqual(codes("useUpdate(() => { await setN(1); });").length > 0, true);
   });
 
-  it("rejects `let`, assignment and escaping closures", () => {
-    assert.deepEqual(codes("useUpdate(() => { let x = 1; });"), [DiagnosticCode.UnsupportedStatement]);
+  it("rejects `var`, `let` without a value, assignment to state and escaping closures", () => {
+    assert.deepEqual(codes("useUpdate(() => { var x = 1; });"), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(codes("useUpdate(() => { let x; });"), [DiagnosticCode.UnsupportedStatement]);
     assert.deepEqual(codes("useUpdate(() => { n = 1; });"), [DiagnosticCode.UnsupportedStatement]);
     assert.ok(codes("useUpdate(() => { const f = () => 1; });").length > 0);
   });

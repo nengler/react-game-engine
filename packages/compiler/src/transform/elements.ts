@@ -3,10 +3,9 @@ import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, ty
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isConditionalExpression, isIdentifier, isJsxAttribute, isJsxSpreadAttribute, isJsxElement, isJsxExpression, isJsxSelfClosingElement, isJsxText, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isJsxFragment, isStringLiteral, isBlock, isReturnStatement } from "typescript/ast/is";
 import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
-import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
-import { Scope } from "./scope.ts";
+import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type ValuePropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
 import { checkFreshName, lowerFunction } from "./statements.ts";
-import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute } from "./helpers.ts";
+import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute, nearest } from "./helpers.ts";
 import { HookLowering } from "./hooks.ts";
 
 export class ElementLowering extends HookLowering {
@@ -20,13 +19,13 @@ export class ElementLowering extends HookLowering {
     fn: Node & { kind: SyntaxKind.ArrowFunction },
     params?: readonly { readonly name: string; readonly type: string }[],
   ): CallbackPropIR | null {
-    this.functionDepth++;
-    const handler = lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
-      paramTypes: params ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
-      returns: "void",
-      what: `${name} callback`,
-    });
-    this.functionDepth--;
+    const handler = this.within({ inHandler: true }, () =>
+      lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
+        paramTypes: params ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
+        returns: "void",
+        what: `${name} callback`,
+      }),
+    );
     return handler && { kind: "CallbackProp", name, handler };
   }
 
@@ -167,8 +166,7 @@ export class ElementLowering extends HookLowering {
     const only = expressions.length === 1 && quasis.every((q) => q === "") ? expressions[0]! : null;
     const value: ExprIR =
       expressions.length === 0 ? { kind: "StringLiteral", value: quasis[0]! } : only && only.kind === "TemplateLiteral" ? only : { kind: "TemplateLiteral", quasis, expressions };
-    const dependencies = collectDependencies(value);
-    return [dependencies.length > 0 ? { kind: "DynamicProp", name: prop, value, dependencies } : { kind: "StaticProp", name: prop, value }];
+    return [valueProp(prop, value)];
   }
 
   /**
@@ -223,9 +221,7 @@ export class ElementLowering extends HookLowering {
     const source = this.lowerNode(callee.expression);
     if (!source) return null;
 
-    const outer = this.scope;
-    this.scope = new Scope(outer);
-    try {
+    return this.inScope((): KeyedListChildIR | null => {
       const params: ParamIR[] = [];
       for (const param of fn.parameters) {
         if (!isIdentifier(param.name) || param.initializer || param.dotDotDotToken || param.type) {
@@ -324,9 +320,7 @@ export class ElementLowering extends HookLowering {
       if (!element || (alternate && !alternateElement)) return null;
       const dependencies = [...collectDependencies(source), ...(condition ? collectDependencies(condition) : [])];
       return { kind: "KeyedListChild", source, item, index, key, element, condition, alternate: alternateElement, dependencies };
-    } finally {
-      this.scope = outer;
-    }
+    });
   }
 
   /** `slotOk`: a `{children}` slot may appear in this element's children (it is in a static chain from the root). */
@@ -348,7 +342,8 @@ export class ElementLowering extends HookLowering {
       component = { kind: "Imported", name: tag.text, module, isDefault };
     }
     else {
-      this.report(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`, tag);
+      const near = nearest(tag.text, [...this.intrinsics, ...this.locals, ...this.imported.keys()]);
+      this.report(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>${near ? ` (did you mean <${near}>?)` : ""}. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`, tag);
       return null;
     }
 
@@ -445,9 +440,7 @@ export class ElementLowering extends HookLowering {
       }
       const value = this.lowerNode(valueNode);
       if (!value) continue;
-      const name = field as TransformField;
-      const dependencies = collectDependencies(value);
-      out.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
+      out.push(valueProp(field as TransformField, value));
     }
     return out;
   }
@@ -543,20 +536,15 @@ export class ElementLowering extends HookLowering {
           }
         }
         // `onX={onX}` forwards a callback prop whole.
-        this.allowCallbackRead = toComponent && (isIdentifier(expression) || isPropertyAccessExpression(expression));
-        try {
-          value = this.lowerNode(init.expression);
-        } finally {
-          this.allowCallbackRead = false;
-        }
+        const forwarded = init.expression;
+        value = this.within({ allowCallbackRead: toComponent && (isIdentifier(expression) || isPropertyAccessExpression(expression)) }, () => this.lowerNode(forwarded));
       } else {
         this.report(DiagnosticCode.UnsupportedAttribute, `Unsupported value for attribute '${name}'.`, init);
         continue;
       }
       if (!value) continue;
       if (!toComponent && !this.checkLiteralChoice(tag, name, value, attribute)) continue;
-      const dependencies = collectDependencies(value);
-      props.push(dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value });
+      props.push(valueProp(name, value));
     }
     return props;
   }
@@ -714,6 +702,12 @@ export class ElementLowering extends HookLowering {
 }
 
 const ROUTE_TAG = "Route";
+
+/** A prop that reads nothing that changes is static (evaluated once); otherwise it is dynamic, re-applied when what it reads changes. */
+function valueProp<N extends string>(name: N, value: ExprIR): ValuePropIR & { readonly name: N } {
+  const dependencies = collectDependencies(value);
+  return dependencies.length > 0 ? { kind: "DynamicProp", name, value, dependencies } : { kind: "StaticProp", name, value };
+}
 
 /** Is the attribute written as `name` or `name={true}`? */
 function hasTrueAttribute(attributes: JsxAttributes, name: string): boolean {

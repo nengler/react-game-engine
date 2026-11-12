@@ -16,7 +16,8 @@ type Binding =
   | { readonly kind: "children"; readonly name: string }
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
-  | { readonly kind: "local"; readonly id: LocalId; readonly name: string }
+  /** A `const` (or, `mutable`, a `let`) declared in a handler body, or a `for…of` item. */
+  | { readonly kind: "local"; readonly id: LocalId; readonly name: string; readonly mutable: boolean }
   /** The parameter of a computed `useGame` selector (`s` in `(s) => s.cursor === id`): only read as a path, `s.cursor`. */
   | { readonly kind: "storeRoot"; readonly name: string }
   | { readonly kind: "param"; readonly id: LocalId; readonly name: string; readonly type: TypeIR };
@@ -32,6 +33,11 @@ export class Scope {
 
   get(name: string): Binding | undefined {
     return this.#bindings.get(name) ?? this.parent?.get(name);
+  }
+
+  /** Every name in scope, innermost first: the candidates for a "did you mean" suggestion. */
+  names(): string[] {
+    return [...this.#bindings.keys(), ...(this.parent?.names() ?? [])];
   }
 
   has(name: string): boolean {

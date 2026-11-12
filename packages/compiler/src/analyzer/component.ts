@@ -5,7 +5,7 @@ import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/d
 import { spanOf } from "../parser/parser.ts";
 import { type ImportAnalysis, type JsxRoot, type PropsAnalysis, type PropBindingAnalysis, type ComponentAnalysis, type HookCallAnalysis, HOOK_NAME, KNOWN_HOOKS } from "./model.ts";
 import { unwrapParens, visit } from "./util.ts";
-import { matchUseStateStatement, matchRenderConst, matchStoreStatement, matchHandleStatement, matchHandlerStatement } from "./matchers.ts";
+import { matchUseStateStatement, matchRenderConst, matchStoreStatement, matchHandleStatement, matchHandlerStatement, type StatementMatch } from "./matchers.ts";
 
 
 
@@ -149,6 +149,13 @@ export function analyzeComponent(
   let jsx: JsxRoot | null = null;
 
   const statements: readonly Statement[] = isBlock(body) ? body.statements : [];
+  // Tried in order; the first that recognises a statement owns it.
+  const matchers: readonly ((statement: Statement) => StatementMatch | null)[] = [
+    (statement) => matchStoreStatement(statement, storeNames),
+    matchUseStateStatement,
+    matchHandleStatement,
+    matchHandlerStatement,
+  ];
   if (expressionBody) {
     const returned = unwrapParens(expressionBody);
     if (isRoot(returned)) jsx = returned;
@@ -165,47 +172,14 @@ export function analyzeComponent(
       }
       return;
     }
-    const store = matchStoreStatement(statement, storeNames);
-    if (store) {
-      if (store.kind === "ok") {
-        hooks.push(...store.hooks);
-        for (const hook of store.hooks) acceptedHookCalls.add(hook.call);
+    const matched = matchers.reduce<StatementMatch | null>((found, match) => found ?? match(statement), null);
+    if (matched) {
+      if (matched.kind === "ok") {
+        hooks.push(...matched.hooks);
+        for (const hook of matched.hooks) if (hook.kind !== "const") acceptedHookCalls.add(hook.call);
       } else {
-        diagnostics.push(error(DiagnosticCode.InvalidUseState, store.message, span(statement)));
-        acceptedHookCalls.add(store.call);
-      }
-      return;
-    }
-    const hook = matchUseStateStatement(statement);
-    if (hook) {
-      if (hook.kind === "ok") {
-        hooks.push(hook.hook);
-        acceptedHookCalls.add(hook.hook.call);
-      } else {
-        diagnostics.push(error(DiagnosticCode.InvalidUseState, hook.message, span(statement)));
-        acceptedHookCalls.add(hook.call);
-      }
-      return;
-    }
-    const handle = matchHandleStatement(statement);
-    if (handle) {
-      if (handle.kind === "ok") {
-        hooks.push(handle.hook);
-        acceptedHookCalls.add(handle.hook.call);
-      } else {
-        diagnostics.push(error(handle.code, handle.message, span(statement)));
-        acceptedHookCalls.add(handle.call);
-      }
-      return;
-    }
-    const handler = matchHandlerStatement(statement);
-    if (handler) {
-      if (handler.kind === "ok") {
-        hooks.push(handler.hook);
-        acceptedHookCalls.add(handler.hook.call);
-      } else {
-        diagnostics.push(error(handler.code, handler.message, span(statement)));
-        if (handler.call) acceptedHookCalls.add(handler.call);
+        diagnostics.push(error(matched.code, matched.message, span(statement)));
+        if (matched.call) acceptedHookCalls.add(matched.call);
       }
       return;
     }

@@ -47,10 +47,6 @@ export interface MemoIR {
 }
 
 /**
- * A function imported from a relative `.ts` file, used as a value (`<Router transition={crossfade} />`): the generated code writes
- * the imported name. The compiler does not look inside it.
- */
-/**
  * A field of one of this component's own elements, by its field name: `this.route2.active`. Only the compiler writes it (a
  * `<Route>`'s children are shown while the route is active); it is read fresh on every render, so it has no dependencies.
  */
@@ -69,6 +65,11 @@ export interface ActionRefIR {
   readonly name: string;
 }
 
+/**
+ * A function imported from a relative `.ts` file, or a top-level constant of the file, used as a value (`<Router transition={crossfade} />`): the generated code writes
+ * the imported name. The compiler does not look inside it.
+ * Also `undefined` and `Math.PI`-style constants.
+ */
 export interface PlainRefIR {
   readonly kind: "PlainRef";
   readonly name: string;
@@ -214,6 +215,17 @@ export const ARRAY_METHODS = {
   at: { args: [1, 1], callback: false },
   lastIndexOf: { args: [1, 1], callback: false },
   flat: { args: [0, 1], callback: false },
+  // ES2023's copying forms of the in-place methods: a new array each time, so state stays immutable.
+  toSorted: { args: [0, 1], callback: true },
+  toReversed: { args: [0, 0], callback: false },
+  toSpliced: { args: [1, Infinity], callback: false },
+  with: { args: [2, 2], callback: false },
+  findLast: { args: [1, 1], callback: true },
+  findLastIndex: { args: [1, 1], callback: true },
+  // Iterators for a handler's `for (const [i, item] of items.entries())`.
+  entries: { args: [0, 0], callback: false },
+  keys: { args: [0, 0], callback: false },
+  values: { args: [0, 0], callback: false },
 } as const satisfies Record<string, { readonly args: readonly [number, number]; readonly callback: boolean }>;
 
 export type ArrayMethodName = keyof typeof ARRAY_METHODS;
@@ -238,12 +250,12 @@ export const MUTATING_ARRAY_METHODS: Readonly<Record<string, string>> = {
   unshift: "`setItems([item, ...items])`",
   pop: "`setItems(items.slice(0, -1))`",
   shift: "`setItems(items.slice(1))`",
-  splice: "`filter`, `slice` and spreads",
-  sort: "a sorted copy built from `slice()` (sorting is not supported yet)",
-  reverse: "a reversed copy (not supported yet)",
-  fill: "`map`",
+  splice: "`toSpliced`, `filter`, `slice` and spreads",
+  sort: "`toSorted`, which returns a sorted copy",
+  reverse: "`toReversed`, which returns a reversed copy",
+  fill: "`map`, or `with(index, value)` for one element",
   copyWithin: "`map`",
-  forEach: "`map`, `filter` or `some` (handler code builds new arrays rather than looping)",
+  forEach: "a `for (const item of items) { … }` loop in a handler, or `map`, `filter` or `some`",
 };
 
 /** A call to a fixed allowlist (`Math.*`, `clamp`) or a method of a runtime handle parameter. */
@@ -286,7 +298,7 @@ export interface UnaryExprIR {
 }
 
 export type BinaryOperator =
-  | "+" | "-" | "*" | "/" | "%"
+  | "+" | "-" | "*" | "/" | "%" | "**"
   | "<" | "<=" | ">" | ">="
   | "===" | "!==" | "==" | "!="
   | "&&" | "||" | "??";

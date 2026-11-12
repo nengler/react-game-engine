@@ -4,22 +4,29 @@ import { collectDependencies } from "../ir/walk.ts";
 import { CodeWriter } from "./writer.ts";
 import { param, escapeTemplate, propertyKey } from "./helpers.ts";
 
+/** How some IR is written where the emitter is. Each field is set for a stretch of emitting with `within`. */
+export interface EmitMode {
+  /**
+   * While emitting a keyed list: inside a callback prop, a read of the list's item is its current value, looked up by the
+   * item's key (`text`), because the callback was created with the item's first value.
+   */
+  readonly itemLookup: { readonly id: LocalId; readonly text: string } | null;
+  /** Emitting a callback prop's body. */
+  readonly inCallback: boolean;
+  /** Writing `super(…)`'s arguments, where `this` cannot be used: a memo is worked out in place (it reads nothing that changes there). */
+  readonly inlineMemos: boolean;
+  /** Where element fields live: on the component (`this.sprite`), or, while a list item's children are written, in its record. */
+  readonly fieldBase: string;
+}
+
 export class ExpressionEmitter {
   protected readonly c: ComponentIR;
   protected readonly requiredHostProps: Readonly<Record<string, readonly string[]>>;
   protected readonly intrinsicHooks: Readonly<Record<string, readonly string[]>>;
   protected w: CodeWriter;
   protected readonly stateById: ReadonlyMap<StateId, StateIR>;
-  /**
-   * While emitting a keyed list: inside a callback prop, a read of the list's
-   * item is its current value, looked up by the item's key (`text`), because
-   * the callback was created with the item's first value.
-   */
-  protected itemLookup: { readonly id: LocalId; readonly text: string } | null = null;
-  /** Greater than zero while emitting a callback prop's body. */
-  protected callbackDepth = 0;
-  /** While writing `super(…)`'s arguments, where `this` cannot be used: a memo is worked out in place (it reads nothing that changes there). */
-  protected inlineMemos = false;
+  /** Where the emitter is now, and so how some IR is written. Changed only through `within`. */
+  protected mode: EmitMode = { itemLookup: null, inCallback: false, inlineMemos: false, fieldBase: "this" };
   /** How many temporaries the `render()` being written has used (see `emitReportedWrites`). */
   protected renderTemps = 0;
   /** The imported game state (`useGame`), when the module uses one. */
@@ -38,6 +45,30 @@ export class ExpressionEmitter {
     this.c = component;
     this.w = writer;
     this.stateById = new Map(component.state.map((s) => [s.id, s]));
+  }
+
+  /** Emit something in a changed mode; the mode before is back afterwards, whatever happens. */
+  protected within<T>(patch: Partial<EmitMode>, emit: () => T): T {
+    const outer = this.mode;
+    this.mode = { ...outer, ...patch };
+    try {
+      return emit();
+    } finally {
+      this.mode = outer;
+    }
+  }
+
+  /** The lines `emit` writes, written to a writer of their own (relative to column 0) instead of the current one. */
+  protected capture(emit: () => void): string[] {
+    const outer = this.w;
+    const inner = new CodeWriter();
+    this.w = inner;
+    try {
+      emit();
+    } finally {
+      this.w = outer;
+    }
+    return inner.toString().trimEnd().split("\n");
   }
 
   /**
@@ -92,7 +123,7 @@ export class ExpressionEmitter {
       case "StateRead": return `this.${this.state(e.state).name}`;
       case "LocalRead": return e.name;
       case "ParamRead":
-        return this.itemLookup !== null && this.callbackDepth > 0 && e.param === this.itemLookup.id ? this.itemLookup.text : e.name;
+        return this.mode.itemLookup !== null && this.mode.inCallback && e.param === this.mode.itemLookup.id ? this.mode.itemLookup.text : e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
       case "PropRead": {
         // A prop with a default is never undefined (the runtime applies the default at construction and on update),
@@ -128,7 +159,7 @@ export class ExpressionEmitter {
       case "Binary": return wrap(`${this.expr(e.left)} ${e.operator} ${this.expr(e.right)}`);
       case "Conditional": return wrap(`${this.expr(e.test)} ? ${this.expr(e.whenTrue)} : ${this.expr(e.whenFalse)}`);
       case "Memo": {
-        if (this.inlineMemos) return this.expr(e.value, top);
+        if (this.mode.inlineMemos) return this.expr(e.value, top);
         // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
         const deps = collectDependencies(e.value).map((d) => (d.kind === "State" ? `this.${this.state(d.state).name}` : d.kind === "Prop" ? `this.props.${d.name}` : null));
         if (deps.includes(null)) throw new Error(`A memo of ${this.c.name} reads a list item`);

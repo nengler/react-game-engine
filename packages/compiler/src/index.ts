@@ -2,14 +2,14 @@ import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
 import { analyzeSourceFile, type SourceAnalysis } from "./analyzer/analyzer.ts";
 import { checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
 import { hasErrors, type CompilerDiagnostic } from "./diagnostics/diagnostics.ts";
-import { generateModule } from "./generator/generator.ts";
+import { generateModule, generateModuleWithMap, type GeneratorOptions } from "./generator/generator.ts";
 import type { IRModule } from "./ir/types.ts";
 import { TsxParser } from "./parser/parser.ts";
 import type { PrefabSchema } from "./prefabs/prefabs.ts";
 import { validateScene } from "./scenes/validate.ts";
 import { buildModuleIR } from "./transform/transform.ts";
 import { parseGameState, type GameStateDefinition, type GameStateSchemaResult } from "./gamestate/schema.ts";
-import { inlineCustomHooks, type HookResolver } from "./hooks/inline.ts";
+import { expandCustomHooks, type HookResolver } from "./hooks/inline.ts";
 import { typeCheckFiles, typeCheckSources, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export * from "./ir/types.ts";
@@ -17,7 +17,7 @@ export type { RuntimeManifest } from "@rge/runtime";
 export * from "./diagnostics/diagnostics.ts";
 export { analyzeSourceFile, AUTHORING_HOOKS, AUTHORING_TYPES, type PropsAnalysis, type TypeDeclarationAnalysis, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
-export { generateModule, type GeneratorOptions } from "./generator/generator.ts";
+export { generateModule, generateModuleWithMap, type GeneratorOptions, type SourceMapOptions } from "./generator/generator.ts";
 export { parseGameState, type GameStateDefinition, type GameStateEntry, type GameStateLeaf, type GameStateNode, type GameStateValue, type GameStateSchemaResult } from "./gamestate/schema.ts";
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
 export { constantValue, exportedComponents, moduleSchemas, prefabSchema, type JsonValue, type PrefabPropSchema, type PrefabSchema } from "./prefabs/prefabs.ts";
@@ -25,7 +25,8 @@ export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
 export { ASSET_PROPS, checkAssets, checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
 export { importTiled, type TiledImport } from "./scenes/tiled.ts";
 export { importTilemap, tilemapsSource, type TilemapImport, type TilemapImportOptions, type TilemapObjectOut, type TilemapOut } from "./scenes/tilemap.ts";
-export { inlineCustomHooks, type HookResolver, type HookSource } from "./hooks/inline.ts";
+export { inlineCustomHooks, expandCustomHooks, type ExpandedSource, type HookResolver, type HookSource } from "./hooks/inline.ts";
+export { EditMap } from "./hooks/edits.ts";
 export { checkProject, prefabsIndexSource, prefabsJson, projectSchemas, type ProjectModule } from "./project.ts";
 export { typeCheckFiles, typeCheckSources, generatedCodeCompilerOptions, sourceCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
 
@@ -48,6 +49,8 @@ export type CompileResult =
       readonly fileName: string;
       readonly ir: IRModule;
       readonly code: string;
+      /** The source map for `code`, when `compile` was asked for one. */
+      readonly sourceMap?: string;
       readonly diagnostics: readonly CompilerDiagnostic[];
     }
   | {
@@ -101,16 +104,28 @@ export class Compiler {
     this.#hookResolver = resolver;
   }
 
-  compile(fileName: string, original: string): CompileResult {
-    // Custom hooks are inlined first: from here on the file is a component with everything written out.
+  /**
+   * `sourceMap`: write a source map from the generated code to `original` (`file` is the generated file's name, `source` the
+   * source's path from it); the code then ends with a `//# sourceMappingURL=` comment.
+   */
+  compile(fileName: string, original: string, sourceMap?: { readonly file: string; readonly source: string }): CompileResult {
+    // Custom hooks are inlined first: from here on the file is a component with everything written out. Spans found in the
+    // expanded text are moved back to the text as written (`map`), so diagnostics and the IR point at the author's code.
     const hookDiagnostics: CompilerDiagnostic[] = [];
-    const text = inlineCustomHooks(this.#parser, fileName, original, this.#hookResolver, hookDiagnostics);
-    if (hasErrors(hookDiagnostics)) return { ok: false, fileName, ir: null, diagnostics: hookDiagnostics };
-    return this.analyze(fileName, text, (analysis) => {
+    const expanded = expandCustomHooks(this.#parser, fileName, original, this.#hookResolver, hookDiagnostics, this.#manifest.authoringModule);
+    if (hasErrors(hookDiagnostics)) {
+      expanded.parsed?.dispose();
+      return { ok: false, fileName, ir: null, diagnostics: hookDiagnostics };
+    }
+    const parsed = expanded.parsed ?? this.#parser.parse(fileName, expanded.text);
+    try {
+      const analysis = analyzeSourceFile(parsed.sourceFile, fileName, this.#manifest.authoringModule);
       const transformed = buildModuleIR(analysis, { manifest: this.#manifest, ...(this.#gameState ? { gameState: this.#gameState } : {}) });
-      const diagnostics = [...analysis.diagnostics, ...transformed.diagnostics];
-      if (hasErrors(diagnostics)) return { ok: false, fileName, ir: transformed.module, diagnostics };
-      const code = generateModule(transformed.module, {
+      // The inliner's own diagnostics are already in the original text.
+      const diagnostics = [...hookDiagnostics, ...expanded.map.spans([...analysis.diagnostics, ...transformed.diagnostics], fileName, original)];
+      const ir = expanded.map.spans(transformed.module, fileName, original);
+      if (hasErrors(diagnostics)) return { ok: false, fileName, ir, diagnostics };
+      const options: GeneratorOptions = {
         runtimeModule: this.#runtimeModule,
         runtimeFunctions: new Set(Object.keys(this.#manifest.functions)),
         sourceFromOutput: this.#sourceFromOutput,
@@ -118,9 +133,15 @@ export class Compiler {
         intrinsicHooks: this.#manifest.intrinsicHooks,
         ...(this.#gameState ? { gameState: { name: this.#gameState.name, importFrom: this.#gameState.importFrom } } : {}),
         ...(this.#tilemapsModule !== undefined ? { tilemapsModule: this.#tilemapsModule } : {}),
-      });
-      return { ok: true, fileName, ir: transformed.module, code, diagnostics };
-    });
+      };
+      if (sourceMap) {
+        const generated = generateModuleWithMap(ir, options, { ...sourceMap, sourceContent: original });
+        return { ok: true, fileName, ir, code: generated.code, sourceMap: generated.map, diagnostics };
+      }
+      return { ok: true, fileName, ir, code: generateModule(ir, options), diagnostics };
+    } finally {
+      parsed.dispose();
+    }
   }
 
   /** Type-check generated (or any) TypeScript files with the TypeScript 7.1 checker. */

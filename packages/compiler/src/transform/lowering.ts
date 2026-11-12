@@ -13,6 +13,44 @@ import { type AuthoringImports, rootTag, unwrapTypeParens, literalValue, nearest
 /** The CSS names of keyword values that the runtime spells differently. */
 const CSS_ALIASES: Readonly<Record<string, string>> = { "flex-start": "start", "flex-end": "end" };
 
+/**
+ * Where the lowering is, which decides what the code there may do. Each field is set for a stretch of lowering with `within`
+ * (never assigned directly), so leaving the stretch always restores it.
+ */
+export interface LoweringMode {
+  /** In a handler or callback body: the only place `ref.current` may be read. */
+  readonly inHandler: boolean;
+  /** In a `useUnmount` handler: the component is going away, so a setter could never render. */
+  readonly inUnmount: boolean;
+  /** In a state updater: it runs inside the setter and may run again, so no sounds or actions. */
+  readonly inUpdater: boolean;
+  /** Lowering the value of `onX={onX}`, where a callback prop may be forwarded whole. */
+  readonly allowCallbackRead: boolean;
+  /** In a computed selector: where the snapshots of the paths it reads go. */
+  readonly storeReads: { readonly state: StateIR[]; readonly hooks: HookIR[]; readonly storeName: string } | null;
+}
+
+const TOP_LEVEL: LoweringMode = { inHandler: false, inUnmount: false, inUpdater: false, allowCallbackRead: false, storeReads: null };
+
+/** What every component of a module is lowered against: built once per file in `buildModuleIR`, shared by its components. */
+export interface ModuleContext {
+  readonly sourceFile: SourceFile;
+  readonly fileName: string;
+  readonly manifest: RuntimeManifest;
+  /** Components declared in this file. */
+  readonly locals: ReadonlySet<string>;
+  /** Components imported from other `.tsx` files, by local name. */
+  readonly imported: ReadonlyMap<string, { module: string; isDefault: boolean }>;
+  readonly authoring: AuthoringImports;
+  readonly typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>;
+  /** Shared by every component: each pushes its diagnostics here. */
+  readonly diagnostics: CompilerDiagnostic[];
+  readonly gameState: GameStateDefinition | undefined;
+  readonly storeImports: ReadonlySet<string>;
+  /** Functions and constants from relative `.ts` files and the file's own top-level declarations. */
+  readonly plainImports: ReadonlySet<string>;
+}
+
 export class LoweringBase {
   readonly componentName: string;
   /** Component scope; function lowering nests scopes beneath it via `scope`. */
@@ -32,16 +70,10 @@ export class LoweringBase {
   protected readonly authoring: AuthoringImports;
   protected readonly typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>;
   protected propDecls: readonly PropDeclIR[] = [];
-  /** True while lowering the value of `onX={onX}`, where a callback prop may be forwarded whole. */
-  protected allowCallbackRead = false;
   protected readonly diagnostics: CompilerDiagnostic[];
   protected errorCount = 0;
-  /** Greater than zero while lowering a handler body: the only place `ref.current` is allowed. */
-  protected functionDepth = 0;
-  /** Greater than zero while lowering a `useUnmount` handler, where state cannot be set. */
-  protected settersForbidden = 0;
-  /** Greater than zero while lowering a state updater. */
-  protected updaterDepth = 0;
+  /** Where the lowering is now, and so what the code there may do. Changed only through `within`. */
+  protected mode: LoweringMode = TOP_LEVEL;
   /** The props type declares `children: Child`. */
   protected declaredChildren = false;
   /** A `{children}` slot has been lowered (there may be one). */
@@ -58,40 +90,25 @@ export class LoweringBase {
   protected readonly handleStates = new Set<string>();
   /** Every path of the game state this component reads, to the snapshot that holds it (see `storePathState`). */
   protected readonly storePaths = new Map<string, StateId>();
-  /** Set while a computed selector is lowered: where the snapshots of the paths it reads go. */
-  protected storeReads: { readonly state: StateIR[]; readonly hooks: HookIR[]; readonly storeName: string } | null = null;
 
-  constructor(
-    component: ComponentAnalysis,
-    sourceFile: SourceFile,
-    fileName: string,
-    manifest: RuntimeManifest,
-    locals: ReadonlySet<string>,
-    imported: ReadonlyMap<string, { module: string; isDefault: boolean }>,
-    authoring: AuthoringImports,
-    typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>,
-    diagnostics: CompilerDiagnostic[],
-    gameState: GameStateDefinition | undefined,
-    storeImports: ReadonlySet<string>,
-    plainImports: ReadonlySet<string> = new Set(),
-  ) {
-    this.gameState = gameState;
-    this.storeImports = storeImports;
-    this.plainImports = plainImports;
-    this.typeDecls = typeDecls;
-    this.authoring = authoring;
+  constructor(component: ComponentAnalysis, module: ModuleContext) {
+    this.gameState = module.gameState;
+    this.storeImports = module.storeImports;
+    this.plainImports = module.plainImports;
+    this.typeDecls = module.typeDecls;
+    this.authoring = module.authoring;
     this.component = component;
     this.componentName = component.name;
-    this.sourceFile = sourceFile;
-    this.fileName = fileName;
-    this.manifest = manifest;
-    this.intrinsics = new Set(manifest.intrinsics);
-    this.imported = imported;
+    this.sourceFile = module.sourceFile;
+    this.fileName = module.fileName;
+    this.manifest = module.manifest;
+    this.intrinsics = new Set(module.manifest.intrinsics);
+    this.imported = module.imported;
     // A component extends its root element's class, so it may not reuse that class's own field names.
-    this.usedNames = new Set([...manifest.reservedMembers, ...(manifest.intrinsicMembers[rootTag(component.jsx, manifest.hostIntrinsic)] ?? [])]);
-    this.locals = locals;
-    this.hostIntrinsic = manifest.hostIntrinsic;
-    this.diagnostics = diagnostics;
+    this.usedNames = new Set([...module.manifest.reservedMembers, ...(module.manifest.intrinsicMembers[rootTag(component.jsx, module.manifest.hostIntrinsic)] ?? [])]);
+    this.locals = module.locals;
+    this.hostIntrinsic = module.manifest.hostIntrinsic;
+    this.diagnostics = module.diagnostics;
   }
 
   /** A prop type as the compiler understands it; anything else is carried as source text. */
@@ -113,7 +130,7 @@ export class LoweringBase {
   }
 
   /** A type argument: primitives and arrays are understood; anything else is kept as source text for the type-check. */
-  protected typeFromNode(node: Node): TypeIR {
+  typeFromNode(node: Node): TypeIR {
     const t = unwrapTypeParens(node);
     switch (t.kind) {
       case SyntaxKind.NumberKeyword: return { kind: "Primitive", name: "number" };
@@ -148,7 +165,7 @@ export class LoweringBase {
       case "Binary": {
         switch (expr.operator) {
           case "<": case "<=": case ">": case ">=": case "===": case "!==": case "==": case "!=": return "boolean";
-          case "-": case "*": case "/": case "%": return this.inferType(expr.left) === "number" && this.inferType(expr.right) === "number" ? "number" : null;
+          case "-": case "*": case "/": case "%": case "**": return this.inferType(expr.left) === "number" && this.inferType(expr.right) === "number" ? "number" : null;
           case "+": {
             const [left, right] = [this.inferType(expr.left), this.inferType(expr.right)];
             if (left === "string" || right === "string") return left && right ? "string" : null;
@@ -372,21 +389,39 @@ export class LoweringBase {
     return name === "Math" || this.manifest.functions[name] !== undefined;
   }
 
-  canSetState(): boolean {
-    return this.settersForbidden === 0;
-  }
-
-  canPlaySound(): boolean {
-    return this.updaterDepth === 0;
-  }
-
-  inUpdater<T>(lower: () => T): T {
-    this.updaterDepth++;
+  /** Lower something in a changed mode (`{ inHandler: true }`); the mode before is back afterwards, whatever happens. */
+  within<T>(patch: Partial<LoweringMode>, lower: () => T): T {
+    const outer = this.mode;
+    this.mode = { ...outer, ...patch };
     try {
       return lower();
     } finally {
-      this.updaterDepth--;
+      this.mode = outer;
     }
+  }
+
+  /** Lower something in a new scope beneath the current one, which is back afterwards. */
+  inScope<T>(lower: (scope: Scope) => T): T {
+    const outer = this.scope;
+    const scope = new Scope(outer);
+    this.scope = scope;
+    try {
+      return lower(scope);
+    } finally {
+      this.scope = outer;
+    }
+  }
+
+  canSetState(): boolean {
+    return !this.mode.inUnmount;
+  }
+
+  canPlaySound(): boolean {
+    return !this.mode.inUpdater;
+  }
+
+  inUpdater<T>(lower: () => T): T {
+    return this.within({ inUpdater: true }, lower);
   }
 
   nextSerial(): number {

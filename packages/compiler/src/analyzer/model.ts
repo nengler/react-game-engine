@@ -191,12 +191,12 @@ export interface UseStateCallAnalysis {
 
 export const HOOK_NAME = /^use[A-Z0-9]/;
 
-export const KNOWN_HOOKS = new Set(["useState", "useRef", "useSound", "useUpdate", "useInput", "useMount", "useUnmount"]);
+export const HANDLER_HOOKS: ReadonlySet<string> = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 
-export const HANDLER_HOOKS = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
+export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useState", "useRef", "useSound", ...HANDLER_HOOKS]);
 
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
-export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS, ...HANDLER_HOOKS].filter((name, i, all) => all.indexOf(name) === i);
+export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS];
 
 /** Hooks that were renamed or replaced, reported with what to write instead. */
 export const REMOVED_HOOKS: Readonly<Record<string, string>> = {
