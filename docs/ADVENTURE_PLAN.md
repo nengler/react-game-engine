@@ -451,6 +451,8 @@ updated.
 
 ### M7. Content, replays and frame time (game; \~1 week)
 
+*(Built 2026-11-12: original sprites, sound effects and a looping theme written by `tools/make-assets.ts`; particles and sounds answer the rules' events (`src/effects.ts`); replays: to the cave through the game, the whole game from the title to the end screen (planned with `findPath`, in `test/fullrun.ts`), save and continue (`test/saving.test.ts`), and losing the last heart; frame time under Node in `NATIVE_PLAN.md`; the findings are in `NEXT_PRIORITIES.md`. Not done: a pixel font (the built-in one is used at sizes 10 and 20), shake and fades, a cave theme, and the QuickJS frame time.)*
+
 - **Art, sound and music** from `tools/make-assets.ts`: tiles, the character's eight-way walk and swing, the NPCs, both
   enemies, the bells, the UI frame, a pixel font with lower case if the dialogue needs it, overworld and cave music, and
   sound effects.

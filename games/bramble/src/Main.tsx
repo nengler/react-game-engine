@@ -1,4 +1,4 @@
-import { Game, Route, Router, Screen } from "@rge/runtime/jsx";
+import { Game, Music, Route, Router, Screen } from "@rge/runtime/jsx";
 import { End } from "./End.tsx";
 import { useGame } from "./GameState.ts";
 import { Play } from "./Play.tsx";
@@ -27,6 +27,8 @@ export default function Main() {
             <End />
           </Route>
         </Router>
+        {/* The theme keeps playing across screens: it belongs to the root. */}
+        <Music src="theme.wav" volume={0.5} fade={1} />
       </Screen>
     </Game>
   );

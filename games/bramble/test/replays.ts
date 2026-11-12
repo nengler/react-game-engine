@@ -6,7 +6,16 @@
  */
 import { bodyAt, newRun, step, type Run } from "../src/rules/run.ts";
 
-type Leg = { readonly x: number } | { readonly y: number } | { readonly raw: string };
+export type Leg =
+  | { readonly x: number }
+  | { readonly y: number }
+  | { readonly raw: string }
+  /** Hold a direction for some frames (each of -1, 0, 1): turning to face something. */
+  | { readonly hold: readonly [number, number]; readonly frames: number }
+  /** Hold a direction until the map changes or the game ends (through a door or the gate). */
+  | { readonly through: readonly [number, number] }
+  /** Press the action, then a frame of nothing. */
+  | { readonly action: true };
 
 export function route(legs: readonly Leg[], from: Run = newRun()): { readonly script: string; readonly run: Run } {
   let run = from;
@@ -29,7 +38,22 @@ export function route(legs: readonly Leg[], from: Run = newRun()): { readonly sc
   for (const leg of legs) {
     if ("x" in leg) walk("x", leg.x);
     else if ("y" in leg) walk("y", leg.y);
-    else parts.push(leg.raw);
+    else if ("hold" in leg) {
+      for (let i = 0; i < leg.frames; i++) run = step(run, { dx: leg.hold[0], dy: leg.hold[1], action: false }, 1 / 60).run;
+      parts.push(`${leg.hold[0] === 0 ? (leg.hold[1] > 0 ? "down" : "up") : leg.hold[0] > 0 ? "right" : "left"}*${leg.frames}`);
+    } else if ("through" in leg) {
+      const map = run.map;
+      let frames = 0;
+      while (run.map === map && !run.done && frames < 120) {
+        run = step(run, { dx: leg.through[0], dy: leg.through[1], action: false }, 1 / 60).run;
+        frames++;
+      }
+      if (run.map === map && !run.done) throw new Error(`holding ${leg.through} did not go through anything`);
+      parts.push(`${leg.through[0] === 0 ? (leg.through[1] > 0 ? "down" : "up") : leg.through[0] > 0 ? "right" : "left"}*${frames}`);
+    } else if ("action" in leg) {
+      run = step(step(run, { dx: 0, dy: 0, action: true }, 1 / 60).run, { dx: 0, dy: 0, action: false }, 1 / 60).run;
+      parts.push("Z, _");
+    } else parts.push(leg.raw);
   }
   return { script: parts.join(", "), run };
 }

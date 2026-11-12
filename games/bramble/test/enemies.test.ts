@@ -165,3 +165,16 @@ test("enemies do not walk through each other or through people", () => {
     assert.ok(!overlap, `step ${i}: the two overlap`);
   }
 });
+
+test("losing the last heart to an enemy sends the character back to the shrine with full hearts, nothing else lost", () => {
+  const beetle = { ...spawnEnemy("b", "beetle", "overworld", 40, 40), turn: 99, dx: 0, dy: 0 };
+  let run: Run = { ...arena("overworld", 40, 40, [beetle]), hearts: 1, items: { lantern: 1 }, taken: ["lantern"], shrine: { map: "overworld", col: 21, row: 29 } };
+  const r = step(run, NO_INPUT, DT);
+  assert.ok(r.events.some((e) => e.type === "died"));
+  run = r.run;
+  assert.equal(run.hearts, MAX_HEARTS);
+  assert.equal(Math.floor((run.x + BODY / 2) / TILE), 21);
+  assert.equal(Math.floor((run.y + BODY / 2) / TILE), 30, "one tile below the shrine");
+  assert.deepEqual(run.items, { lantern: 1 });
+  assert.equal(run.invuln, 0, "the respawn is not a moment of safety, but nothing is near it");
+});

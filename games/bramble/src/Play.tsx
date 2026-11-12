@@ -1,9 +1,10 @@
-import { Camera, Entity, Hud, Shape, Text, useInput, useRef, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Hud, ParticleLayer, Shape, Sprite, Text, useInput, useRef, useUpdate } from "@rge/runtime/jsx";
+import { fx } from "./effects.ts";
 import { Dialogue } from "./Dialogue.tsx";
 import { useGame } from "./GameState.ts";
 import { Inventory } from "./Inventory.tsx";
 import { Menu } from "./Menu.tsx";
-import { BELLS_NEEDED, BODY, MAX_HEARTS } from "./rules/constants.ts";
+import { BELLS_NEEDED, MAX_HEARTS } from "./rules/constants.ts";
 import { mapPixels } from "./rules/maps.ts";
 import { readInput } from "./rules/controls.ts";
 import { World } from "./World.tsx";
@@ -11,6 +12,7 @@ import { World } from "./World.tsx";
 /** The play screen: the map, the character in a camera that stays inside it, and the HUD. The one place the world is stepped. */
 export function Play() {
   const run = useGame((s) => s.run);
+  const hero = useGame((s) => s.view.hero);
   const paused = useGame((s) => s.paused);
   const talking = useGame((s) => s.run.talk !== null);
   const advance = useGame((s) => s.advance);
@@ -49,10 +51,11 @@ export function Play() {
     <Entity name="Play">
       <World />
       <Camera bounds={[0, 0, size.width, size.height]} deadzone={[24, 16]} smoothing={0.12}>
-        <Entity name="Hero" transform={{ x: run.x, y: run.y }}>
-          <Shape kind="rect" width={BODY} height={BODY} color={run.invuln > 0 ? "#fbd2a8" : "#f28b3c"} />
-        </Entity>
+        {hero.map((h) => (
+          <Sprite key={h.id} image="things.png" frameWidth={16} frameHeight={16} frame={h.frame} tint={run.invuln > 0 ? "#ffffff99" : "#ffffffff"} transform={{ x: h.x, y: h.y }} />
+        ))}
       </Camera>
+      <ParticleLayer particles={fx} />
       <Hud>
         <Text transform={{ x: 4, y: 3 }} size={10} color="#ff6b6b" text={`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`} />
         {run.notice !== null && (

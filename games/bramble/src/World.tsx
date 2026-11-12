@@ -1,40 +1,39 @@
-import { Entity, Shape, Tilemap } from "@rge/runtime/jsx";
+import { Entity, Sprite, Tilemap } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
-import { TILE } from "./rules/constants.ts";
 
-/** The map the character is on: its ground from the Tiled map, and over it the things the rules know about, drawn as plain shapes until the art exists. */
+/** The map the character is on: its ground from the Tiled map, and over it the things the rules know about, each a frame of `things.png`. */
 export function World() {
   const map = useGame((s) => s.run.map);
   const { bushes, doors, gates, shrines, pickups, npcs, beetles, wisps, swings } = useGame((s) => s.view);
   return (
     <Entity name="World">
       <Tilemap map={map} image="tiles.png" layer="Ground" />
-      {bushes.map((b) => (
-        <Shape key={b.id} kind="rect" width={TILE} height={TILE} color="#2f7a3a" transform={{ x: b.x, y: b.y }} />
-      ))}
       {doors.map((d) => (
-        <Shape key={d.id} kind="rect" width={TILE} height={TILE} color="#6b4a2b" transform={{ x: d.x, y: d.y }} />
+        <Sprite key={d.id} image="things.png" frameWidth={16} frameHeight={16} frame={d.frame} transform={{ x: d.x, y: d.y }} />
       ))}
       {gates.map((g) => (
-        <Shape key={g.id} kind="rect" width={TILE} height={TILE} color="#d9b64a" transform={{ x: g.x, y: g.y }} />
+        <Sprite key={g.id} image="things.png" frameWidth={16} frameHeight={16} frame={g.frame} transform={{ x: g.x, y: g.y }} />
       ))}
       {shrines.map((s) => (
-        <Shape key={s.id} kind="circle" width={12} height={12} color="#6fd6d0" transform={{ x: s.x, y: s.y }} />
+        <Sprite key={s.id} image="things.png" frameWidth={16} frameHeight={16} frame={s.frame} transform={{ x: s.x, y: s.y }} />
       ))}
       {pickups.map((p) => (
-        <Shape key={p.id} kind="circle" width={8} height={8} color="#f2e05a" transform={{ x: p.x, y: p.y }} />
+        <Sprite key={p.id} image="things.png" frameWidth={16} frameHeight={16} frame={p.frame} transform={{ x: p.x, y: p.y }} />
       ))}
       {npcs.map((n) => (
-        <Shape key={n.id} kind="rect" width={12} height={14} color="#6a8be0" transform={{ x: n.x, y: n.y }} />
+        <Sprite key={n.id} image="things.png" frameWidth={16} frameHeight={16} frame={n.frame} transform={{ x: n.x, y: n.y }} />
       ))}
       {beetles.map((b) => (
-        <Shape key={b.id} kind="rect" width={12} height={12} color="#7a3b2a" transform={{ x: b.x, y: b.y }} />
+        <Sprite key={b.id} image="things.png" frameWidth={16} frameHeight={16} frame={b.frame} transform={{ x: b.x, y: b.y }} />
       ))}
       {wisps.map((w) => (
-        <Shape key={w.id} kind="circle" width={12} height={12} color="#b58cff" transform={{ x: w.x, y: w.y }} />
+        <Sprite key={w.id} image="things.png" frameWidth={16} frameHeight={16} frame={w.frame} transform={{ x: w.x, y: w.y }} />
+      ))}
+      {bushes.map((b) => (
+        <Sprite key={b.id} image="things.png" frameWidth={16} frameHeight={16} frame={b.frame} transform={{ x: b.x, y: b.y }} />
       ))}
       {swings.map((w) => (
-        <Shape key={w.id} kind="rect" width={14} height={14} color="#ffffffaa" transform={{ x: w.x, y: w.y }} />
+        <Sprite key={w.id} image="things.png" frameWidth={16} frameHeight={16} frame={w.frame} transform={{ x: w.x, y: w.y }} />
       ))}
     </Entity>
   );

@@ -1,5 +1,6 @@
 import { createGameState, createSave } from "@rge/runtime";
 import "./tilemaps.ts";
+import { answer } from "./effects.ts";
 import { settings } from "./settings.ts";
 import { controls } from "./rules/controls.ts";
 import { pauseRows, settingsRows, stepVolume, titleRows, type Row } from "./rules/menu.ts";
@@ -88,6 +89,7 @@ export const useGame = createGameState<State>()((set, get) => ({
   advance: (input, dt) => {
     const result = step(get().run, input, dt);
     set({ run: result.run, view: viewOf(result.run), events: result.events, ...(result.run.done ? { screen: "end" as const } : {}) });
+    answer(result.events, { x: result.run.x + 5, y: result.run.y + 5 });
     if (result.events.some((e) => e.type === "shrine")) save.write();
   },
   moveCursor: (direction) => {

@@ -919,3 +919,7 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 - `<Camera deadzone smoothing>` follows a character across such a map; both are stepped in `onUpdate` so a replay repeats, and a
   change of `bounds` snaps the view.
 - Measured in Bramble (`games/bramble/tools/frame-time.ts`): the step that changes map costs 1.2 to 1.5 ms of script under Node.
+
+## Frame time of Bramble (2026-11-12)
+
+`games/bramble/tools/frame-time.ts`, the whole replay to the cave on a recording backend under Node: mean 0.9 ms, 99th percentile 5 ms, slowest 13 ms (a garbage collection or a JIT step, not a door); the step that changes map costs 1.2 to 1.5 ms. With 11 enemies and 4 people. Not measured under QuickJS (the tool prints one line under Node only).
