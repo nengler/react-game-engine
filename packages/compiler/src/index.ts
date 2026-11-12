@@ -9,7 +9,7 @@ import type { PrefabSchema } from "./prefabs/prefabs.ts";
 import { validateScene } from "./scenes/validate.ts";
 import { buildModuleIR } from "./transform/transform.ts";
 import { parseGameState, type GameStateDefinition, type GameStateSchemaResult } from "./gamestate/schema.ts";
-import { inlineCustomHooks, type HookResolver } from "./hooks/inline.ts";
+import { expandCustomHooks, type HookResolver } from "./hooks/inline.ts";
 import { typeCheckFiles, typeCheckSources, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export * from "./ir/types.ts";
@@ -25,7 +25,8 @@ export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
 export { ASSET_PROPS, checkAssets, checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
 export { importTiled, type TiledImport } from "./scenes/tiled.ts";
 export { importTilemap, tilemapsSource, type TilemapImport, type TilemapImportOptions, type TilemapObjectOut, type TilemapOut } from "./scenes/tilemap.ts";
-export { inlineCustomHooks, type HookResolver, type HookSource } from "./hooks/inline.ts";
+export { inlineCustomHooks, expandCustomHooks, type ExpandedSource, type HookResolver, type HookSource } from "./hooks/inline.ts";
+export { EditMap } from "./hooks/edits.ts";
 export { checkProject, prefabsIndexSource, prefabsJson, projectSchemas, type ProjectModule } from "./project.ts";
 export { typeCheckFiles, typeCheckSources, generatedCodeCompilerOptions, sourceCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
 
@@ -102,15 +103,23 @@ export class Compiler {
   }
 
   compile(fileName: string, original: string): CompileResult {
-    // Custom hooks are inlined first: from here on the file is a component with everything written out.
+    // Custom hooks are inlined first: from here on the file is a component with everything written out. Spans found in the
+    // expanded text are moved back to the text as written (`map`), so diagnostics and the IR point at the author's code.
     const hookDiagnostics: CompilerDiagnostic[] = [];
-    const text = inlineCustomHooks(this.#parser, fileName, original, this.#hookResolver, hookDiagnostics);
-    if (hasErrors(hookDiagnostics)) return { ok: false, fileName, ir: null, diagnostics: hookDiagnostics };
-    return this.analyze(fileName, text, (analysis) => {
+    const expanded = expandCustomHooks(this.#parser, fileName, original, this.#hookResolver, hookDiagnostics, this.#manifest.authoringModule);
+    if (hasErrors(hookDiagnostics)) {
+      expanded.parsed?.dispose();
+      return { ok: false, fileName, ir: null, diagnostics: hookDiagnostics };
+    }
+    const parsed = expanded.parsed ?? this.#parser.parse(fileName, expanded.text);
+    try {
+      const analysis = analyzeSourceFile(parsed.sourceFile, fileName, this.#manifest.authoringModule);
       const transformed = buildModuleIR(analysis, { manifest: this.#manifest, ...(this.#gameState ? { gameState: this.#gameState } : {}) });
-      const diagnostics = [...analysis.diagnostics, ...transformed.diagnostics];
-      if (hasErrors(diagnostics)) return { ok: false, fileName, ir: transformed.module, diagnostics };
-      const code = generateModule(transformed.module, {
+      // The inliner's own diagnostics are already in the original text.
+      const diagnostics = [...hookDiagnostics, ...expanded.map.spans([...analysis.diagnostics, ...transformed.diagnostics], fileName, original)];
+      const ir = expanded.map.spans(transformed.module, fileName, original);
+      if (hasErrors(diagnostics)) return { ok: false, fileName, ir, diagnostics };
+      const code = generateModule(ir, {
         runtimeModule: this.#runtimeModule,
         runtimeFunctions: new Set(Object.keys(this.#manifest.functions)),
         sourceFromOutput: this.#sourceFromOutput,
@@ -119,8 +128,10 @@ export class Compiler {
         ...(this.#gameState ? { gameState: { name: this.#gameState.name, importFrom: this.#gameState.importFrom } } : {}),
         ...(this.#tilemapsModule !== undefined ? { tilemapsModule: this.#tilemapsModule } : {}),
       });
-      return { ok: true, fileName, ir: transformed.module, code, diagnostics };
-    });
+      return { ok: true, fileName, ir, code, diagnostics };
+    } finally {
+      parsed.dispose();
+    }
   }
 
   /** Type-check generated (or any) TypeScript files with the TypeScript 7.1 checker. */

@@ -215,6 +215,17 @@ export const ARRAY_METHODS = {
   at: { args: [1, 1], callback: false },
   lastIndexOf: { args: [1, 1], callback: false },
   flat: { args: [0, 1], callback: false },
+  // ES2023's copying forms of the in-place methods: a new array each time, so state stays immutable.
+  toSorted: { args: [0, 1], callback: true },
+  toReversed: { args: [0, 0], callback: false },
+  toSpliced: { args: [1, Infinity], callback: false },
+  with: { args: [2, 2], callback: false },
+  findLast: { args: [1, 1], callback: true },
+  findLastIndex: { args: [1, 1], callback: true },
+  // Iterators for a handler's `for (const [i, item] of items.entries())`.
+  entries: { args: [0, 0], callback: false },
+  keys: { args: [0, 0], callback: false },
+  values: { args: [0, 0], callback: false },
 } as const satisfies Record<string, { readonly args: readonly [number, number]; readonly callback: boolean }>;
 
 export type ArrayMethodName = keyof typeof ARRAY_METHODS;
@@ -239,10 +250,10 @@ export const MUTATING_ARRAY_METHODS: Readonly<Record<string, string>> = {
   unshift: "`setItems([item, ...items])`",
   pop: "`setItems(items.slice(0, -1))`",
   shift: "`setItems(items.slice(1))`",
-  splice: "`filter`, `slice` and spreads",
-  sort: "a sorted copy built from `slice()` (sorting is not supported yet)",
-  reverse: "a reversed copy (not supported yet)",
-  fill: "`map`",
+  splice: "`toSpliced`, `filter`, `slice` and spreads",
+  sort: "`toSorted`, which returns a sorted copy",
+  reverse: "`toReversed`, which returns a reversed copy",
+  fill: "`map`, or `with(index, value)` for one element",
   copyWithin: "`map`",
   forEach: "a `for (const item of items) { … }` loop in a handler, or `map`, `filter` or `some`",
 };

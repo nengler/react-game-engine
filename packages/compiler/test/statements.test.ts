@@ -191,3 +191,35 @@ describe("diagnostics for the new statements", () => {
     assert.match(tag!.message, /did you mean <Sprite>\?/);
   });
 });
+
+describe("copying array methods (ES2023)", () => {
+  it("toSorted, toReversed, toSpliced, with, findLast and findLastIndex lower, type-check and leave state untouched", async () => {
+    const compiled = compile(`
+function C() {
+  const [xs, setXs] = useState<number[]>([3, 1, 2]);
+  const [sorted, setSorted] = useState<number[]>([]);
+  const [last, setLast] = useState(0);
+  const byDesc = xs.toSorted((a, b) => b - a);
+  useUpdate(() => {
+    setSorted(xs.toSorted());
+    setXs(xs.toReversed().with(0, 9).toSpliced(1, 1));
+    setLast((xs.findLast((x) => x > 1) ?? 0) + xs.findLastIndex((x) => x === 3) + byDesc[0]!);
+  });
+  return <Entity name="C" />;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { C } = await load<{ C: new () => Entity & { xs: number[]; sorted: number[]; last: number } }>(compiled);
+    const world = new World();
+    const c = new C();
+    world.mount(c);
+    world.tick(1);
+    assert.deepEqual(c.sorted, [1, 2, 3]);
+    assert.deepEqual(c.xs, [9, 3]); // [2, 1, 3] → with(0, 9) → [9, 1, 3] → toSpliced(1, 1) → [9, 3]
+    assert.equal(c.last, 2 + 0 + 3);
+  });
+
+  it("points the in-place methods at their copying forms", () => {
+    assert.match(compileErrors(handler("setN(0);", "const [xs, setXs] = useState<number[]>([]); const [n, setN] = useState(0); const s = xs.sort();"))[0]!.message, /toSorted/);
+    assert.match(compileErrors(handler("setN(0);", "const [xs, setXs] = useState<number[]>([]); const [n, setN] = useState(0); const s = xs.reverse();"))[0]!.message, /toReversed/);
+  });
+});

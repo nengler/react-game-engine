@@ -62,8 +62,7 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
     const from = options.sourceFromOutput ?? "..";
     w.line(`import { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};`);
   }
-  // Types from .ts files (a props type may name one) are imported as types once the rest is written, those it mentions only.
-  const typesAt = w.toString().length;
+  for (const line of typeImportLines(module, options.sourceFromOutput ?? "..")) w.line(line);
   for (const [specifier, { defaultName, names }] of collectComponentImports(module)) {
     const clause = [defaultName, names.length > 0 ? `{ ${names.join(", ")} }` : null].filter((part) => part !== null).join(", ");
     w.line(`import ${clause} from ${JSON.stringify(specifier)};`);
@@ -85,16 +84,67 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
     }
   }
   emitPrefabs(module, w);
-  const text = w.toString();
-  const body = text.slice(typesAt);
+  return w.toString();
+}
+
+/**
+ * `import type { Tower } from "../src/rules/battle.ts"` for each type imported from a `.ts` file that the generated module names:
+ * in a copied declaration, or a type the IR carries (state, refs, locals). Only names in type text count, not in strings or comments.
+ */
+function typeImportLines(module: IRModule, from: string): string[] {
+  const used = identifiersIn(typeTexts(module));
   const typesByModule = new Map<string, string[]>();
   for (const i of module.typeImports) {
-    if (!new RegExp(`\\b${i.name}\\b`).test(body)) continue;
+    if (!used.has(i.name)) continue;
     (typesByModule.get(i.module) ?? typesByModule.set(i.module, []).get(i.module)!).push(i.importedName !== undefined ? `${i.importedName} as ${i.name}` : i.name);
   }
-  const from = options.sourceFromOutput ?? "..";
-  const lines = [...typesByModule].map(([specifier, names]) => `import type { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};\n`).join("");
-  return text.slice(0, typesAt) + lines + body;
+  return [...typesByModule].map(([specifier, names]) => `import type { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};`);
+}
+
+/** Every piece of type text the generated module can contain: copied declarations, and the source types in the IR. */
+function typeTexts(module: IRModule): string[] {
+  const out = [...module.typeDeclarations.map((d) => d.text), ...module.moduleDeclarations.map((d) => d.text)];
+  const type = (t: TypeIR): void => {
+    if (t.kind === "SourceType") out.push(t.text);
+    else if (t.kind === "Array") type(t.element);
+  };
+  const fn = (f: FunctionIR): void => {
+    f.params.forEach((p) => type(p.type));
+    walkFunction(f, (e) => {
+      if (e.kind === "Arrow") e.params.forEach((p) => type(p.type));
+    }, (stmt) => {
+      if (stmt.kind === "LocalConst" && stmt.type) type(stmt.type);
+      if (stmt.kind === "SetState" && "updater" in stmt) stmt.updater.params.forEach((p) => type(p.type));
+    });
+  };
+  const children = (list: readonly ChildIR[]): void => {
+    for (const child of list) {
+      if (child.kind === "ChildrenSlot") continue;
+      for (const el of [child.element, ...(child.kind === "KeyedListChild" && child.alternate ? [child.alternate] : [])]) {
+        for (const p of el.props) if (p.kind === "CallbackProp") fn(p.handler);
+        children(el.children);
+      }
+    }
+  };
+  for (const c of module.components) {
+    c.state.forEach((s) => type(s.type));
+    c.refs.forEach((r) => type(r.type));
+    for (const p of c.props) if (p.type.kind === "SourceText") out.push(p.type.text);
+    for (const hook of c.hooks) if (isHandlerHook(hook)) fn(hook.handler);
+    for (const p of c.root.props) if (p.kind === "CallbackProp") fn(p.handler);
+    children(c.root.children);
+  }
+  return out;
+}
+
+/** The identifiers in some TypeScript text, outside string literals and comments. */
+function identifiersIn(texts: readonly string[]): Set<string> {
+  const names = new Set<string>();
+  for (const text of texts) {
+    const code = text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, " ");
+    for (const match of code.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/g)) names.add(match[0]);
+  }
+  return names;
 }
 
 /**
