@@ -605,8 +605,8 @@ function Inventory() {
           <Shape kind="rect" width={10} height={10} />
           {s.count > 0 && (
             <Entity name="filled">
-              <Text text={s.label} />
-              {s.count > 1 && <Text text={"x" + s.count} />}
+              <Text>{s.label}</Text>
+              {s.count > 1 && <Text>{"x" + s.count}</Text>}
               <Pointer width={4} height={4} onPress={() => setPicked(s.label)} />
             </Entity>
           )}

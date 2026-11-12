@@ -61,8 +61,8 @@ no React equivalent.
 
 ## 6. Smaller gotchas
 
-- **Text.** Text children are an error everywhere but inside `<Text>`, yet the games use `text={…}` almost always while the README
-  writes `<Text>{coins}</Text>`. Two ways to write one thing.
+- ~~**Text.** The words went in `text={…}` or as children, two ways to write one thing.~~ *Since:* `<Text>` takes its words as children
+  only; `text=` is an error that says where the words go, and the games, templates and guide use children.
 - **Keys.** A key reading only the index warns; a callback on a list item cannot read the index. ~~`key` only inside a `.map`~~
   *Since:* `key` works on any element but a component's root, and starts it over when it changes (`<Dialogue key={talk.id} />`).
 - **Props** need a named type declared in the same file (an inline `{ top: number }` is refused); the props object cannot be passed on

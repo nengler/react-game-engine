@@ -196,7 +196,7 @@ export function Badge() {
   const name = useGame((s) => s.player.name);
   const rename = useGame((s) => s.rename);
   useUpdate(() => { if (name === "Ada") rename("Bo"); });
-  return <Entity name="Badge"><Text text={name} /></Entity>;
+  return <Entity name="Badge"><Text>{name}</Text></Entity>;
 }`);
     assert.match(compiled.code, /\$name: string = useGame\.store\.get<string>\("player\.name"\);/);
     assert.deepEqual(typeErrors(compiled), []);
@@ -218,7 +218,7 @@ export function Badge() {
 export function Counter() {
   const coins = useGame((s) => s.coins);
   const [start, setStart] = useState(coins * 10);
-  return <Text size={12} text={\`\${start}\`} />;
+  return <Text size={12}>{\`\${start}\`}</Text>;
 }`);
     assert.deepEqual(typeErrors(compiled), []);
     const { Counter } = await load<{ Counter: new () => Text }>(generated(compiled));
