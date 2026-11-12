@@ -197,12 +197,14 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   /** The last step's walk, kept to be drawn when nothing has changed since; `stale` once a collision callback ran after it. */
   let lastBuilt: BuiltFrame | null = null;
   let stale = false;
+  /** Seconds of game time that have passed (each step's `dt`, capped as the ticks are): the clock a `<Flex transition>` fades by. */
+  let animationTime = 0;
   /**
    * The collisions of the step that just ran: walk the tree (which places the colliders), report the contacts that started and
    * ended, and render what the callbacks changed, so the next step, and this frame's drawing, see it.
    */
   const collide = (): void => {
-    lastBuilt = builder.build(world.root, input.width, input.height);
+    lastBuilt = builder.build(world.root, input.width, input.height, animationTime);
     collisions.update(world, lastBuilt.colliders);
     stale = collisions.reported > 0;
     if (stale) world.flush();
@@ -383,6 +385,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     dispatchPress();
     dispatchHover();
     const dt = input.values[RGE_IN_DT] as number;
+    animationTime += dt > 0 ? Math.min(dt, MAX_DT) : 0;
     if (driver === null) {
       world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
       collide();
@@ -401,7 +404,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       }
     }
     // The last walk is this frame's unless a collision callback has changed something since.
-    const built = lastBuilt !== null && !stale ? lastBuilt : builder.build(world.root, input.width, input.height);
+    const built = lastBuilt !== null && !stale ? lastBuilt : builder.build(world.root, input.width, input.height, animationTime);
     lastBuilt = null;
     pointers = built.pointers;
     hudPointersFrom = built.hudPointersFrom;

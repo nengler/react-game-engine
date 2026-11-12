@@ -30,7 +30,8 @@ import {
   type ViewTransform,
   type WorldTransform,
 } from "@rge/runtime";
-import { MAGENTA, parseColor, type PackedColor } from "./color.ts";
+import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
+import { stepTransition, type ShownColors } from "./transition.ts";
 import { Layouter, type MeasuredSize } from "./layout.ts";
 import {
   RGE_OP_BOX,
@@ -670,6 +671,10 @@ export class FrameBuilder {
   readonly #list = new DrawList();
   readonly #textures = new Map<string, number>();
   readonly #colors = new Map<string, PackedColor>();
+  /** The animation clock of the frame being built (see `build`). */
+  #time: number | undefined = undefined;
+  /** Scratch for the colours a transitioning `<Flex>` shows, so drawing allocates nothing. */
+  readonly #fadeColors: ShownColors = { fill: 0, edge: 0 };
   readonly #textureSizes = new Map<number, Size>();
   readonly #textSizes = new Map<string, Size>();
   readonly #loadTexture: (path: string) => number;
@@ -737,7 +742,10 @@ export class FrameBuilder {
    * not pixel-perfect, a last view in window pixels and the border bars. A pixel-perfect game is drawn in game pixels
    * and scaled by the canvas record; any other game is drawn through views that scale to the window themselves.
    */
-  build(root: GameObject, width: number, height: number): BuiltFrame {
+  build(root: GameObject, width: number, height: number, time?: number): BuiltFrame {
+    // The animation clock: where a `<Flex transition>` is in its fade is worked out from it, so building the frame twice at one
+    // time shows the same thing. Without one (a test, a screenshot) a transition has no time to run in, and colours snap.
+    this.#time = time;
     let built = this.#buildOnce(root, width, height);
     // A tilemap is culled by last frame's camera, because the walk meets it before it finds this frame's. When the camera is not
     // the same (the first frame, a screen change, a camera mounted or removed), the cells it wrote were chosen for another view.
@@ -1279,7 +1287,7 @@ export class FrameBuilder {
   /** `retain: "check"`: build the frame again without reusing anything, and throw if it is not the frame just built. */
   #check(root: GameObject, width: number, height: number, built: BuiltFrame): void {
     this.#reference ??= new FrameBuilder({ ...this.#options, retain: false, warn: () => {} });
-    const expected = this.#reference.build(root, width, height);
+    const expected = this.#reference.build(root, width, height, this.#time);
     const fail = (what: string): never => {
       throw new Error(`Reused draw records differ from a full rebuild (${what}): something changed an object without reporting it (see GameObject.markChanged).`);
     };
@@ -1397,6 +1405,18 @@ export class FrameBuilder {
     }
     const width = flex.box.size[0] as number;
     const height = flex.box.size[1] as number;
+    if (flex.transition > 0 && this.#time !== undefined) {
+      // Fading: the colours are numbers with an alpha, so a colour that is going away fades out instead of vanishing.
+      const shown = this.#fadeColors;
+      flex.transitionState = stepTransition(flex.transitionState, background === undefined ? 0 : this.#color(background), borderColor === undefined ? 0 : this.#color(borderColor), flex.transition, this.#time, shown);
+      const edgeWidth = flex.borderWidth > 0 && (shown.edge & 255) !== 0 ? flex.borderWidth : 0;
+      const round = flex.borderRadius > 0 ? flex.borderRadius : 0;
+      const filled = (shown.fill & 255) !== 0;
+      if (edgeWidth === 0 && round === 0) {
+        if (filled) this.#list.rect(world, width, height, shown.fill);
+      } else if (filled || edgeWidth > 0) this.#list.box(world, width, height, shown.fill, edgeWidth === 0 ? 0 : shown.edge, edgeWidth, round);
+      return;
+    }
     const borderWidth = flex.borderWidth > 0 && borderColor !== undefined ? flex.borderWidth : 0;
     const radius = flex.borderRadius > 0 ? flex.borderRadius : 0;
     if (borderWidth === 0 && radius === 0) {
@@ -1960,8 +1980,3 @@ export class FrameBuilder {
   }
 }
 
-/** The colour `t` of the way (0 to 1) from `a` to `b`, channel by channel. */
-function mixColors(a: PackedColor, b: PackedColor, t: number): PackedColor {
-  const mix = (shift: number): number => Math.round(((a >>> shift) & 255) * (1 - t) + ((b >>> shift) & 255) * t);
-  return (((mix(24) << 24) | (mix(16) << 16) | (mix(8) << 8) | mix(0)) >>> 0);
-}
