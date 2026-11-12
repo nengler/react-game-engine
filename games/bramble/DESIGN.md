@@ -71,7 +71,8 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
 5. **`rge check` under `node --test`:** the child's test run printed `?` for its counts because `NODE_TEST_CONTEXT` made it
    report to the outer run. `rge check` now clears it. (An engine-tooling finding, fixed.)
 6. **Compile errors name the generated file** (`generated/Play.ts:9:23 … './World.ts'`) when the real cause is in `src/` (the
-   source file had failed to compile, above in the output). Reading the whole output top-down is needed.
+   source file had failed to compile, above in the output). Reading the whole output top-down is needed. *Since:* the generated code
+   is not type-checked while a file fails to compile, and a type error in generated code is reported at its line in `src/`.
 
 7. **Props need a declared type** (`RGE1208`): `Menu({ top }: { top: number })` is refused; the type is declared in the file. The message
    says exactly that. Fine.
@@ -121,7 +122,8 @@ The settings screen's wait for a key is `KeyPrompt.tsx`, a modal with no childre
 17. **Narrowing does not reach a callback in the generated code.** In `{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`,
     TypeScript narrows `capturing` (a `const`) inside the arrow, but the generated callback reads `this.capturing`, which is not
     narrowed, so the type-check of the generated code fails (`string | null` is not `string`). Written `capturing!` for now. *Should
-    become:* the generator keeps the narrowing (a callback created under a condition could read a `const` taken there).
+    become:* the generator keeps the narrowing (a callback created under a condition could read a `const` taken there). Meanwhile
+    the error is at least reported at the `<KeyPrompt>` line of `Settings.tsx`, not in the generated file.
 
 ## Enemies (M5)
 
