@@ -13,6 +13,7 @@ export function devCommand(args: readonly string[]): number {
   const play = [join(dir, "play.ts"), join(dir, "play.js")].find((path) => existsSync(path));
   if (play === undefined) throw new Error("@rge/player-node has no play script");
   // The window's image and sound paths are relative to the game's folder.
-  const result = spawnSync(process.execPath, [play, game.entry, ...(args.includes("--no-watch") ? ["--no-watch"] : [])], { cwd: game.dir, stdio: "inherit" });
+  // With source maps an error in the window names the component's own line (`src/Play.tsx:20:3`), not the generated file's.
+  const result = spawnSync(process.execPath, ["--enable-source-maps", play, game.entry, ...(args.includes("--no-watch") ? ["--no-watch"] : [])], { cwd: game.dir, stdio: "inherit" });
   return result.status ?? 1;
 }

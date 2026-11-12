@@ -81,7 +81,11 @@ no React equivalent.
 - **Errors name generated files.** `generated/Play.ts:9:23 … './World.ts'` when the real cause is a `src/` file that failed to compile
   earlier in the output (Bramble finding 6). *Since:* a type error in generated code is reported at the `.tsx` line it was written
   for, and a file that fails to compile is not reported again as a missing module.
-- **The generated code shows through.** `game.ts` imports `./generated/Main.ts` and calls `new Main()`: a function became a class.
+- **The generated code shows through.** `game.ts` imports `./generated/Main.ts` and calls `new Main()`: a function became a class, and
+  an error thrown while the game ran read `at Main.onInput (generated/Main.ts:71:7)`. *Since:* `rge` compiles with source maps and runs
+  the window and the tests under `--enable-source-maps`, so it reads `at Main.onInput (src/Main.tsx:14:3)`; the template's `game.ts`
+  says why the root is made with `new`; and "Coming from React" has a "When something goes wrong" table. Not yet: a packaged game and
+  the Rust host report the bundled `game.js`.
 - **Setup is heavy.** cmake, a C compiler and cargo are needed to make the tarballs before `rge create` works, since nothing is
   published.
 - **Input scripts hold a key until it changes**: `right, right` is one press, `right, _, right` is two (Bramble finding 11).
