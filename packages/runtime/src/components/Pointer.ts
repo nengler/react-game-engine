@@ -20,6 +20,8 @@ export interface Pressable {
   focusable?: boolean;
   /** Take the focus when it is mounted, if nothing has it. */
   autoFocus?: boolean;
+  /** Switched off: a press on it is swallowed without calling `onPress`, and it takes no focus, key or confirm press (see `PressableProps.disabled`). */
+  disabled?: boolean;
   onFocus?: (() => void) | undefined;
   onBlur?: (() => void) | undefined;
   /** Its middle, in its layer's coordinates: where the arrow keys measure from. */
@@ -47,6 +49,12 @@ export interface PressableProps {
   focusable?: boolean;
   /** Take the focus when mounted, if nothing has it (React's `autoFocus`). */
   autoFocus?: boolean;
+  /**
+   * Switched off, as a DOM button's `disabled`: its `onPress` is not called by a click, its `pressKey` or the confirm key, and it cannot take
+   * the focus. A click on it is still swallowed, not passed on to what is under it. The pointer callbacks (`onPointerEnter` and `onPointerLeave`)
+   * still run, so a disabled button can explain itself. A `<Flex>` shows its `disabledBackground` and `disabledBorderColor` in place of every other state.
+   */
+  disabled?: boolean;
   /** Called when it takes the focus. */
   onFocus?: () => void;
   /** Called when it loses the focus to another. */
@@ -79,6 +87,7 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
   pressKey: string | undefined;
   focusable: boolean;
   autoFocus: boolean;
+  disabled: boolean;
   onFocus: (() => void) | undefined;
   onBlur: (() => void) | undefined;
 
@@ -95,6 +104,7 @@ export class Pointer<P extends object = {}> extends GameObject<P> {
     this.pressKey = hostProps.pressKey;
     this.focusable = hostProps.focusable ?? false;
     this.autoFocus = hostProps.autoFocus ?? false;
+    this.disabled = hostProps.disabled ?? false;
     this.onFocus = hostProps.onFocus;
     this.onBlur = hostProps.onBlur;
   }

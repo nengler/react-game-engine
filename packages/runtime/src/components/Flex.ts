@@ -84,6 +84,14 @@ export interface FlexProps extends Omit<PressableProps, "onPress"> {
   focusBackground?: string;
   /** `borderColor` while the box has the focus. */
   focusBorderColor?: string;
+  /** `background` while the mouse button is held down on the box (a press that began on it, and the mouse still over it). Over the hover and focus colours. */
+  pressedBackground?: string;
+  /** `borderColor` while the box is pressed. */
+  pressedBorderColor?: string;
+  /** `background` while the box is `disabled`. Over every other state. */
+  disabledBackground?: string;
+  /** `borderColor` while the box is `disabled`. */
+  disabledBorderColor?: string;
   /** Called when a press lands on the laid-out box (see `World.reportPress`), or as `PressableProps` says. The box is the size it was laid out at, last frame. */
   onPress?: () => void;
 }
@@ -170,6 +178,11 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   hoverBorderColor: string | undefined;
   focusBackground: string | undefined;
   focusBorderColor: string | undefined;
+  pressedBackground: string | undefined;
+  pressedBorderColor: string | undefined;
+  disabledBackground: string | undefined;
+  disabledBorderColor: string | undefined;
+  disabled: boolean;
   float: boolean;
   anchor: FlexAnchor;
   to: FlexAnchor;
@@ -214,6 +227,11 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.hoverBorderColor = hostProps.hoverBorderColor;
     this.focusBackground = hostProps.focusBackground;
     this.focusBorderColor = hostProps.focusBorderColor;
+    this.pressedBackground = hostProps.pressedBackground;
+    this.pressedBorderColor = hostProps.pressedBorderColor;
+    this.disabledBackground = hostProps.disabledBackground;
+    this.disabledBorderColor = hostProps.disabledBorderColor;
+    this.disabled = hostProps.disabled ?? false;
     this.float = hostProps.float ?? false;
     this.anchor = hostProps.anchor ?? "top-left";
     this.to = hostProps.to ?? "top-left";

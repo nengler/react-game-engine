@@ -285,6 +285,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   };
 
   const dispatchPress = (): void => {
+    // The button is up (or was let go since the last step): nothing is pressed any more. A press this step sets it again below.
+    if (((input.keys[LEFT_BUTTON] as number) & (RGE_KEY_DOWN | RGE_KEY_PRESSED)) === 0) world.reportRelease();
     if (((input.keys[LEFT_BUTTON] as number) & RGE_KEY_PRESSED) === 0) return;
     if (screen !== null && !onScreen(screen, input.screenX, input.screenY)) return;
     const at = input.worldPoint(input.screenX, input.screenY);
