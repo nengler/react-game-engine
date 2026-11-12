@@ -3,14 +3,24 @@
  * component, so the rules make them and the game state holds them (`view`), updated when the run changes.
  */
 import { TILE } from "./constants.ts";
+import { DIALOGUE } from "./dialogue.ts";
 import { MAPS } from "./maps.ts";
-import { bushKey, type Run } from "./run.ts";
+import { bushKey, pagesOf, slotsOf, type Run, type Slot } from "./run.ts";
 
 export interface Spot {
   readonly id: string;
   /** Top left of the thing's sprite, in map pixels. */
   readonly x: number;
   readonly y: number;
+}
+
+/** What the dialogue box shows: the speaker, the page, how many of its characters have typed out, and a mark when there is more. */
+export interface DialogueView {
+  readonly name: string;
+  readonly page: string;
+  readonly shown: number;
+  /** ">" when the page is all showing and another follows, "." when it is the last, "" while typing. */
+  readonly more: string;
 }
 
 export interface View {
@@ -20,6 +30,9 @@ export interface View {
   readonly shrines: readonly Spot[];
   readonly pickups: readonly Spot[];
   readonly npcs: readonly Spot[];
+  /** The inventory's eight slots, empty ones too. */
+  readonly slots: readonly Slot[];
+  readonly dialogue: DialogueView;
 }
 
 export function viewOf(run: Run): View {
@@ -38,5 +51,18 @@ export function viewOf(run: Run): View {
     shrines: def.shrines.map((s) => at(s.id, s.col, s.row, 2, 2)),
     pickups: def.pickups.filter((p) => !run.taken.includes(p.id)).map((p) => at(p.id, p.col, p.row, 4, 4)),
     npcs: def.npcs.map((n) => at(n.id, n.col, n.row, 2, 1)),
+    slots: slotsOf(run),
+    dialogue: dialogueOf(run),
   };
+}
+
+const NO_DIALOGUE: DialogueView = { name: "", page: "", shown: 0, more: "" };
+
+function dialogueOf(run: Run): DialogueView {
+  if (run.talk === null) return NO_DIALOGUE;
+  const pages = pagesOf(run, run.talk.npc);
+  const page = pages[run.talk.page] ?? "";
+  const length = [...page].length;
+  const shown = Math.floor(run.talk.shown);
+  return { name: DIALOGUE[run.talk.npc].name, page, shown, more: shown < length ? "" : run.talk.page + 1 < pages.length ? ">" : "." };
 }

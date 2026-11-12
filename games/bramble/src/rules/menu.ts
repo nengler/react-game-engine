@@ -58,3 +58,11 @@ export function settingsRows(values: SettingsView, bindings: Readonly<Record<str
 export function stepVolume(volume: number, direction: number): number {
   return Math.min(1, Math.max(0, Math.round((volume + direction * VOLUME_STEP) * 10) / 10));
 }
+
+/** The pause screen's choices. */
+export function pauseRows(): Row[] {
+  return [
+    { id: "resume", label: "Resume", value: "" },
+    { id: "quit", label: "Save and quit", value: "" },
+  ];
+}

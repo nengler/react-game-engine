@@ -6,13 +6,15 @@
  * talking, picking things up, cutting bushes, shrines, hearts and dying, the gate, and the save (`saveOf`, `loadRun`).
  */
 import { moveActorX, moveActorY, type PixelActor } from "@rge/runtime";
-import { BELLS_NEEDED, BODY, BODY_OFFSET, MAX_HEARTS, NOTICE_SECONDS, REACH, SAVE_VERSION, SPEED, TILE } from "./constants.ts";
+import { BELLS_NEEDED, BODY, BODY_OFFSET, INVENTORY_SLOTS, MAX_HEARTS, NOTICE_SECONDS, REACH, REVEAL_CPS, SAVE_VERSION, SPEED, TILE } from "./constants.ts";
 import { DIALOGUE, NEAREST_BELL, type NpcId } from "./dialogue.ts";
 import { cellAt, findDoor, MAPS, type Door, type ItemId, type MapId } from "./maps.ts";
 
 export interface Talk {
   readonly npc: NpcId;
   readonly page: number;
+  /** How many characters of the page have typed out so far (a fraction between steps); the page shows whole at its length. */
+  readonly shown: number;
 }
 
 export interface Run {
@@ -243,9 +245,12 @@ export function hurt(run: Run, amount: number): StepResult {
 function act(run: Run, events: GameEvent[]): Run {
   if (run.talk !== null) {
     const pages = pagesOf(run, run.talk.npc);
+    const length = [...(pages[run.talk.page] ?? "")].length;
+    // The first press finishes typing the page out; the next one turns it.
+    if (run.talk.shown < length) return { ...run, talk: { ...run.talk, shown: length } };
     if (run.talk.page + 1 < pages.length) {
       events.push({ type: "talk", npc: run.talk.npc, page: run.talk.page + 1 });
-      return { ...run, talk: { npc: run.talk.npc, page: run.talk.page + 1 } };
+      return { ...run, talk: { npc: run.talk.npc, page: run.talk.page + 1, shown: 0 } };
     }
     events.push({ type: "talk-end", npc: run.talk.npc });
     return { ...run, talk: null };
@@ -253,7 +258,7 @@ function act(run: Run, events: GameEvent[]): Run {
   const npc = facingNpc(run);
   if (npc !== null) {
     events.push({ type: "talk", npc, page: 0 });
-    return { ...run, talk: { npc, page: 0 } };
+    return { ...run, talk: { npc, page: 0, shown: 0 } };
   }
   const { col, row } = facingTile(run);
   if (cellAt(run.map, col, row) === "b" && !run.cut.includes(bushKey(run.map, col, row))) {
@@ -274,7 +279,11 @@ export function step(run: Run, input: Input, dt: number): StepResult {
   if (next.noticeLeft === 0 && next.notice !== null) next = { ...next, notice: null };
 
   if (input.action) next = act(next, events);
-  if (next.talk !== null) return { run: next, events }; // the world waits while someone is talking
+  if (next.talk !== null) {
+    // The world waits while someone is talking; the page types itself out.
+    const length = [...(pagesOf(next, next.talk.npc)[next.talk.page] ?? "")].length;
+    return { run: { ...next, talk: { ...next.talk, shown: Math.min(length, next.talk.shown + REVEAL_CPS * dt) } }, events };
+  }
 
   if (input.dx !== 0 || input.dy !== 0) {
     const len = Math.hypot(input.dx, input.dy);
@@ -309,4 +318,33 @@ export function loadRun(save: unknown): Run | null {
   if (s.version !== SAVE_VERSION || s.items === undefined || s.taken === undefined || s.cut === undefined || s.shrine === undefined || typeof s.time !== "number") return null;
   const at = bodyAt(s.shrine.col, s.shrine.row + 1);
   return { ...newRun(), map: s.shrine.map, x: at.x, y: at.y, items: { ...s.items }, taken: [...s.taken], cut: [...s.cut], shrine: { ...s.shrine }, time: s.time };
+}
+
+/** The inventory's slots, eight of them, in a fixed order; a slot the character has nothing for is empty (`item` is ""). */
+export interface Slot {
+  readonly id: string;
+  readonly item: ItemId | "";
+  /** False for an empty slot. */
+  readonly filled: boolean;
+  readonly name: string;
+  /** "x2" for more than one, else "". */
+  readonly label: string;
+  readonly count: number;
+  /** Where the slot sits on the pause screen, in screen pixels. */
+  readonly x: number;
+  readonly y: number;
+}
+
+const SLOT_ORDER: readonly ItemId[] = ["lantern", "key", "shears", "bell"];
+const SLOT_NAMES: Readonly<Record<ItemId, string>> = { lantern: "Lantern", key: "Old key", shears: "Shears", bell: "Bells" };
+
+export function slotsOf(run: Run): Slot[] {
+  const place = (n: number) => ({ id: `slot${n}`, x: 12 + (n % 4) * 46, y: 24 + Math.floor(n / 4) * 40 });
+  const slots: Slot[] = [];
+  for (const item of SLOT_ORDER) {
+    const count = run.items[item] ?? 0;
+    if (count > 0) slots.push({ ...place(slots.length), item, filled: true, name: SLOT_NAMES[item], label: count > 1 ? `x${count}` : "", count });
+  }
+  while (slots.length < INVENTORY_SLOTS) slots.push({ ...place(slots.length), item: "", filled: false, name: "", label: "", count: 0 });
+  return slots;
 }

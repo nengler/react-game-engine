@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BODY, MAX_HEARTS, TILE } from "../src/rules/constants.ts";
 import { MAPS, MAP_IDS, cellAt, findDoor, mapSize, type MapId } from "../src/rules/maps.ts";
-import { NO_INPUT, bellsFound, bodyAt, carries, facingNpc, hurt, loadRun, newRun, npcState, pagesOf, saveOf, step, type GameEvent, type Input, type Run } from "../src/rules/run.ts";
+import { NO_INPUT, bellsFound, bodyAt, carries, facingNpc, hurt, loadRun, newRun, npcState, pagesOf, saveOf, slotsOf, step, type GameEvent, type Input, type Run } from "../src/rules/run.ts";
 
 const DT = 1 / 60;
 
@@ -82,8 +82,10 @@ test("talking: the action starts a conversation, pages advance, and the world wa
   const moved = walk(run, 1, 0, 1).run;
   assert.deepEqual([moved.x, moved.y], [run.x, run.y], "no walking during a conversation");
   r = press(run);
-  assert.deepEqual(r.events, [{ type: "talk", npc: "guide", page: 1 }]);
+  assert.deepEqual(r.events, [], "the first press finishes typing the page out");
   r = press(r.run);
+  assert.deepEqual(r.events, [{ type: "talk", npc: "guide", page: 1 }]);
+  r = press(press(r.run).run);
   assert.deepEqual(r.events, [{ type: "talk-end", npc: "guide" }]);
   assert.equal(r.run.talk, null);
 });
@@ -241,4 +243,25 @@ test("a shrine saves when stepped onto, not every step the character stands on i
   const away = walk(shuffle.run, 0, 1, 0.6);
   const back = walk(away.run, 0, -1, 0.6);
   assert.equal(back.events.filter((e) => e.type === "shrine").length, 1, "stepping off and on does");
+});
+
+test("a page types itself out at a steady rate while the world waits, and a press shows the rest", () => {
+  const start = press(walk(at("overworld", 12, 43), 0, -1, 1).run).run;
+  assert.ok((start.talk?.shown ?? 9) < 1, "nothing has typed yet but this step's share");
+  const typed = walk(start, 0, 0, 0.25);
+  assert.ok(Math.abs((typed.run.talk?.shown ?? 0) - 10) < 1.5, "40 characters a second");
+  const page = [...pagesOf(start, "guide")[0]!].length;
+  const done = walk(start, 0, 0, 10);
+  assert.equal(done.run.talk?.shown, page, "it stops at the page's length");
+  const skipped = press(typed.run).run;
+  assert.equal(skipped.talk?.shown, page);
+  assert.equal(skipped.talk?.page, 0, "still the same page");
+});
+
+test("the inventory is eight slots, in a fixed order, with the empty ones last", () => {
+  assert.deepEqual(slotsOf(newRun()).map((s) => s.item), ["", "", "", "", "", "", "", ""]);
+  const run = { ...newRun(), items: { key: 1, bell: 2 } };
+  const slots = slotsOf(run);
+  assert.equal(slots.length, 8);
+  assert.deepEqual(slots.map((s) => [s.item, s.count]).slice(0, 3), [["key", 1], ["bell", 2], ["", 0]]);
 });

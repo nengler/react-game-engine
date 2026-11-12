@@ -44,7 +44,7 @@ export const TO_THE_CAVE: readonly Leg[] = [
   { x: tile(9, 43).x },
   { y: tile(9, 40).y },
   { x: tile(12, 40).x },
-  { raw: "down*6, Z, _, Z, _, Z, _" },
+  { raw: "down*6, Z, _, Z, _, Z, _, Z, _, Z, _" },
   { x: tile(73, 40).x },
   { y: tile(73, 45).y },
   { x: tile(68, 45).x },

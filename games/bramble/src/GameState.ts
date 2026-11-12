@@ -2,7 +2,7 @@ import { createGameState, createSave } from "@rge/runtime";
 import "./tilemaps.ts";
 import { settings } from "./settings.ts";
 import { controls } from "./rules/controls.ts";
-import { settingsRows, stepVolume, titleRows, type Row } from "./rules/menu.ts";
+import { pauseRows, settingsRows, stepVolume, titleRows, type Row } from "./rules/menu.ts";
 import { viewOf, type View } from "./rules/view.ts";
 import { loadRun, newRun, saveOf, step, type GameEvent, type Input, type Run, type SaveData } from "./rules/run.ts";
 
@@ -27,6 +27,10 @@ interface State {
   /** The events of the latest step, for the effects (sounds, particles) that answer them. */
   events: readonly GameEvent[];
   menu: Menu;
+  /** The pause screen is over the world: the inventory and a short menu. The world is not stepped meanwhile. */
+  paused: boolean;
+  /** Open or close the pause screen. */
+  togglePause: () => void;
   /** Start a new run. */
   begin: () => void;
   /** Start from the save, if there is a readable one. */
@@ -52,7 +56,7 @@ export const save = createSave<SaveData>({
   pick: () => saveOf(useGame.getState().run),
   apply: (data) => {
     const run = loadRun(data);
-    if (run !== null) useGame.setState({ run, view: viewOf(run), events: [], screen: "play" });
+    if (run !== null) useGame.setState({ run, view: viewOf(run), events: [], screen: "play", paused: false });
   },
 });
 
@@ -69,11 +73,17 @@ export const useGame = createGameState<State>()((set, get) => ({
   view: viewOf(newRun()),
   events: [],
   menu: titleMenu(0),
-  begin: () => set({ run: newRun(), view: viewOf(newRun()), screen: "play", events: [] }),
+  paused: false,
+  togglePause: () => {
+    const { paused, screen } = get();
+    if (screen !== "play") return;
+    set({ paused: !paused, menu: paused ? titleMenu(0) : { cursor: 0, capturing: null, rows: pauseRows() } });
+  },
+  begin: () => set({ run: newRun(), view: viewOf(newRun()), screen: "play", events: [], paused: false }),
   continueGame: () => {
     if (!save.load()) get().begin();
   },
-  toTitle: () => set({ screen: "title", menu: titleMenu(0) }),
+  toTitle: () => set({ screen: "title", menu: titleMenu(0), paused: false }),
   openTitle: () => set({ menu: titleMenu(0) }),
   advance: (input, dt) => {
     const result = step(get().run, input, dt);
@@ -97,8 +107,16 @@ export const useGame = createGameState<State>()((set, get) => ({
     set({ menu: settingsMenu(menu.cursor, null) });
   },
   activate: () => {
-    const { menu, screen } = get();
+    const { menu, screen, paused } = get();
     const id = menu.rows[menu.cursor]?.id ?? "";
+    if (screen === "play" && paused) {
+      if (id === "resume") get().togglePause();
+      else if (id === "quit") {
+        save.write();
+        get().toTitle();
+      }
+      return;
+    }
     if (screen === "title") {
       if (id === "continue") get().continueGame();
       else if (id === "new") get().begin();

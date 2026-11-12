@@ -21,3 +21,5 @@ export const NOTICE_SECONDS = 2.5;
 export const BELLS_NEEDED = 3;
 /** The save format's version: a save of another version is ignored. */
 export const SAVE_VERSION = 1;
+/** How fast a conversation's page types out, in characters a second. (guess) */
+export const REVEAL_CPS = 40;

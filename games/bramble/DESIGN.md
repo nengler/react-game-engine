@@ -95,6 +95,18 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
   "Reset to defaults" puts everything back. They are applied before the first frame and stored at each change.
 - Not yet: "Save and quit" and the pause screen (M4), and `Quit` on the title.
 
+12. **A list item's children cannot hold a condition** (`RGE1209`), which the inventory grid needs (an empty slot shows nothing). The message
+    gives the way out: make the item a component (`SlotBox`) that takes the fields as props and holds the `{filled && …}`. That is
+    enough, so no engine change was made (plan 4.3: not needed).
+13. **`name` is reserved as a `const`** inside a component (`RGE1103`): `const name = useGame(…)` fails. Renamed `speaker`.
+14. **Text wrapping and revealing needed no workaround**: `<Text maxWidth lineGap reveal>` (engine, M4.1/4.2) draws the dialogue box; the rules
+    count the typed characters (`talk.shown`, 40 a second *(guess)*; a press finishes the page, the next turns it).
+
+## The pause screen (M4)
+
+Escape opens it over the world (the world is not stepped): the inventory as eight slots, two rows, empty ones dark; then Resume and
+Save and quit (which writes the save and goes to the title). Picking up an item shows a card across the top.
+
 ## Run it
 
 ```
