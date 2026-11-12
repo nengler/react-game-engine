@@ -90,5 +90,5 @@ no React equivalent.
 1. **Diagnostics in the `.tsx` source**, with source maps for the generated files as custom hooks already have.
 2. ~~**Input focus or consumption**~~ *Done:* `inert` and `modal` (DESIGN.md, "Inert and modal"). The input refs in `Play.tsx` stay:
    they carry a press from `useInput` to `useUpdate`, which a modal does not change.
-3. **A "coming from React" page** at the top of the guide: what is left out on purpose, what stands in for each, and the three zones
-   of code. Most of the confusion above is expectation, not a missing feature.
+3. ~~**A "coming from React" page**~~ *Done:* "Coming from React", the guide's second section (`docs/index.html#react`): what
+   carries over, what is different and what to write instead, and the three places code can go.
