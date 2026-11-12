@@ -491,21 +491,27 @@ updated.
 
 ## Done when
 
+*Status, 2026-11-12 (after the React-style rounds): the boxes below are ticked only where a test or a recorded measurement shows
+it. Still open: a person playing Bramble in a window (with a gamepad), the save across a real quit under both hosts, `npm run
+bench:check` (not run since the compiler changes), the outside-repo CI job (not run yet), the Tiled-saved map, the guide followed
+by someone else, and the license.*
+
 - [ ] `rge create`, `rge dev`, `rge check`, `rge build` and `rge package` work for a game in a folder outside this repository,
       installed from packed packages, and Kite and Hearth use the same command line
 - [ ] Bramble is playable from the title to the end by keyboard or gamepad, under Node and as a packaged build, with music and
       sound; a scripted replay plays it through, and another saves, quits, continues and finishes
 - [ ] A save survives quitting and is read by "Continue"; a save from an older version is migrated by a test; settings
       (volumes, full screen, bindings) are kept
-- [ ] The overworld scrolls continuously; the frame time on its busiest view and on a door is recorded in `NATIVE_PLAN.md`,
-      and a door causes no step over 16.7 ms under Node
+- [x] The overworld scrolls continuously; the frame time on its busiest view and on a door is recorded in `NATIVE_PLAN.md`,
+      and a door causes no step over 16.7 ms under Node *(Node only: door steps 1.2 to 1.5 ms, 99th percentile 5 ms, recorded in
+      `NATIVE_PLAN.md` "Frame time of Bramble"; QuickJS not measured)*
 - [ ] At least one map was saved by Tiled itself and is imported without changes by hand
 - [ ] Each engine addition has its design notes, tests, and a guide entry; the parity test passes; `npm run bench:check` stays
       within budget
 - [ ] The getting-started guide takes a new reader from an empty folder to a packaged game, checked by following it
 - [ ] A license is chosen
-- [ ] A "Findings from the third game" section is added to `NEXT_PRIORITIES.md`, including which of Kite's and Hearth's findings
-      held a third time
+- [x] A "Findings from the third game" section is added to `NEXT_PRIORITIES.md`, including which of Kite's and Hearth's findings
+      held a third time *(refreshed 2026-11-12 with what the engine now answers)*
 - [ ] A person has played it in a window (priority 6), and what they found is filed or fixed
 
 ## Open decisions
