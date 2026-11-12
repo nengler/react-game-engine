@@ -177,5 +177,5 @@ one `useGame((s) => s)`, and the inventory's slot holds one condition over a fra
 before.
 
 Still as it was: sounds and particles answer the step's events in the `advance` action (`answer(events)`), since the engine has no
-`useEffect` on purpose; a list inside a list item is not built yet; and the play screen keeps three refs for the keys, since a ref
-holds a number, string or boolean only.
+`useEffect` on purpose; and a list inside a list item is not built yet. (The play screen kept three refs for the keys until it read them
+in `useUpdate((dt, input) => advance(readInput(input), dt))`, which gets the same input as `useInput`: the refs were never needed.)

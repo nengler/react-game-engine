@@ -1,4 +1,4 @@
-import { useInput, useRef, useState, useUpdate, Collider, Entity, Shape } from "@rge/runtime/jsx";
+import { useState, useUpdate, Collider, Entity, Shape } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 
 /**
@@ -12,18 +12,13 @@ export function Player() {
   const collect = useGame((s) => s.collect);
   const hit = useGame((s) => s.hit);
   const [hurt, setHurt] = useState(false);
-  // The direction held this frame: refs hold values that must not cause a render.
-  const moveX = useRef(0);
-  const moveY = useRef(0);
 
-  useInput((input) => {
-    moveX.current = (input.down("ArrowRight") || input.down("D") ? 1 : 0) - (input.down("ArrowLeft") || input.down("A") ? 1 : 0);
-    moveY.current = (input.down("ArrowDown") || input.down("S") ? 1 : 0) - (input.down("ArrowUp") || input.down("W") ? 1 : 0);
-  });
-
-  useUpdate((dt) => {
-    setX((x) => x + moveX.current * 140 * dt);
-    setY((y) => y + moveY.current * 140 * dt);
+  // The keys held this step: useUpdate gets the same input as useInput.
+  useUpdate((dt, input) => {
+    const moveX = (input.down("ArrowRight") || input.down("D") ? 1 : 0) - (input.down("ArrowLeft") || input.down("A") ? 1 : 0);
+    const moveY = (input.down("ArrowDown") || input.down("S") ? 1 : 0) - (input.down("ArrowUp") || input.down("W") ? 1 : 0);
+    setX((x) => x + moveX * 140 * dt);
+    setY((y) => y + moveY * 140 * dt);
   });
 
   return (
