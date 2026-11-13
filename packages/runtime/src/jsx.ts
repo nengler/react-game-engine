@@ -166,6 +166,8 @@ export interface BodyHandle {
   move(dx: number, dy: number): BodyHit;
   /** Whether a collider with this tag overlaps the body now (its own colliders do not count). */
   touching(tag: string): boolean;
+  /** Whether something solid is where a move by (dx, dy) would put the body, without moving it: `blocked(0, 1)` is on the ground. */
+  blocked(dx: number, dy: number): boolean;
   /** Every collider with this tag that overlaps the body now, as contacts with their `data` (a tower finding the enemies near it). */
   overlapping<Tag extends string>(tag: Tag): ContactOf<Tag>[];
   /** Put the body somewhere, with no collision (a respawn, a door). */

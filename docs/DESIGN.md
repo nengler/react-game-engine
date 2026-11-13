@@ -1805,6 +1805,20 @@ and without it neither exists.
 - **Cost** (Hearth, wave 10 at 2×, V8): a frame 1.46 → 1.83 ms mean while recording (p99 3.9 → 4.8); going back half a second
   46 ms, a whole second 67 ms.
 
+## Kite's movement with `useBody`, compared (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, A2's open item. `packages/kite/src/Runner.tsx`, `packages/kite/test/runner.test.ts`.
+
+- **Same pixels.** The component and `stepBody` use the same mover (`moveActorX` / `moveActorY`) and the same numbers; the body
+  finds solid tiles through `<Tilemap solid>` (`World.solidIn`) where the rules call `solidAt`. Six scripts, two rooms, walls and
+  ceilings: identical every step.
+- **`Body.blocked(dx, dy)`**, new: whether the box moved by (dx, dy) overlaps something solid, without moving. The rules' `hitsAt`.
+  A body standing on the floor has nothing to report from `move(0, 0)`, so without it the ground could not be known.
+- **What the hook's `x` and `y` are in a handler:** the step's snapshot, as all state is; after a `move`, read `blocked` (which asks
+  the body where it is now), or move relative to where it is (`move(side, -1)` for the corner slide), never `place(x + …)`.
+- **Cost** (Node): 6.7 µs a step in the rules, 11.3 µs as a component with its world's tick and render: the price of a world, not
+  of the body. A solver keeps the rules.
+
 ## Dependency-scoped `render()` (2026-11-13)
 
 `REACT_FEEL_PLAN.md`, D5. `generator/generator.ts` (the render method), `RenderGuard` in `generator/expressions.ts`, the guards in
