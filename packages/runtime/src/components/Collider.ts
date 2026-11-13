@@ -31,6 +31,8 @@ export interface ColliderProps {
    * bullets, and an enemy that left `hits` out still cannot touch a bullet that does not hit enemies.
    */
   hits?: readonly string[];
+  /** Bodies (`useBody`) cannot move into it: a wall, a crate, a closed door. Default false. */
+  solid?: boolean;
   /**
    * Called when this collider starts touching another (see
    * `World.reportCollision`), with the collider it touched. It is the
@@ -61,6 +63,7 @@ export class Collider<P extends object = {}> extends GameObject<P> implements Co
   tag: string;
   layer: string;
   hits: readonly string[] | undefined;
+  solid: boolean;
   onCollisionEnter: ((other: Contact) => void) | undefined;
   onCollisionExit: ((other: Contact) => void) | undefined;
 
@@ -72,6 +75,7 @@ export class Collider<P extends object = {}> extends GameObject<P> implements Co
     this.tag = hostProps.tag ?? "";
     this.layer = hostProps.layer ?? "";
     this.hits = hostProps.hits;
+    this.solid = hostProps.solid ?? false;
     this.onCollisionEnter = hostProps.onCollisionEnter;
     this.onCollisionExit = hostProps.onCollisionExit;
   }

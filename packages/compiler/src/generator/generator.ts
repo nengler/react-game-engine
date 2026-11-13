@@ -350,6 +350,9 @@ class ComponentGenerator extends ElementEmitter {
         w.line(`override readonly gameStateStore = ${this.storeName}.store;`);
         w.line(`override readonly gameStateKeys: readonly string[] = [${[...new Set(globals.map((s) => JSON.stringify(s.globalKey)))].join(", ")}];`);
       }
+      // Per-instance objects a factory made: told when the component joins and leaves a world (a body learns its world so).
+      const handles = c.state.filter((s) => s.handle);
+      if (handles.length > 0) w.line(`protected override ownedHandles(): readonly unknown[] { return [${handles.map((s) => `this.${s.name}`).join(", ")}]; }`);
       // Refs: plain fields. Reading or writing them never marks anything dirty.
       for (const r of c.refs) {
         w.line(`${r.name}: ${typeText(r.type)} = ${this.expr(r.initialValue, true)};`);

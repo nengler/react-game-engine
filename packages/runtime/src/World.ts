@@ -1,5 +1,8 @@
 import { GameObject } from "./GameObject.ts";
 import { Collider } from "./components/Collider.ts";
+import { Tilemap } from "./components/Tilemap.ts";
+import { boxesOverlap, type BodySpace, type Box } from "./body.ts";
+import { findTilemap } from "./tilemap.ts";
 import type { Pressable } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 
@@ -24,7 +27,7 @@ let passes = 0;
  * Owns the root of the object tree and drives dirty-driven updates:
  * render every dirty object, then apply queued structural changes.
  */
-export class World {
+export class World implements BodySpace {
   readonly root: GameObject = new GameObject();
   /**
    * A counter the player's frame builder advances once per frame it builds. A change to an object is stamped with
@@ -271,13 +274,51 @@ export class World {
   }
 
   /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */
+  /** The colliders and the solid tilemaps in this world, for bodies (`useBody`). */
+  readonly #colliders = new Set<Collider>();
+  readonly #tilemaps = new Set<Tilemap>();
+
+  /** `BodySpace`: the tag of something solid in `box` (`"tile"` for a solid tile), or null. */
+  solidIn(box: Box, ignore: GameObject): string | null {
+    for (const map of this.#tilemaps) {
+      if (!map.solid) continue;
+      const grid = findTilemap(map.map);
+      if (grid === undefined) continue;
+      const at = map.worldTransform();
+      const { tileWidth, tileHeight } = grid.data;
+      const left = Math.floor((box.x - at.x) / tileWidth);
+      const right = Math.floor((box.x + box.width - 1 - at.x) / tileWidth);
+      const top = Math.floor((box.y - at.y) / tileHeight);
+      const bottom = Math.floor((box.y + box.height - 1 - at.y) / tileHeight);
+      for (let row = top; row <= bottom; row++) for (let col = left; col <= right; col++) if (grid.solidAt(col, row)) return "tile";
+    }
+    for (const collider of this.#colliders) {
+      if (!collider.solid || isUnder(collider, ignore)) continue;
+      if (boxesOverlap(box, colliderBox(collider))) return collider.tag;
+    }
+    return null;
+  }
+
+  /** `BodySpace`: whether a collider with this tag overlaps `box`. */
+  tagIn(box: Box, tag: string, ignore: GameObject): boolean {
+    for (const collider of this.#colliders) {
+      if (collider.tag !== tag || isUnder(collider, ignore)) continue;
+      if (boxesOverlap(box, colliderBox(collider))) return true;
+    }
+    return false;
+  }
+
   registerObject(object: GameObject): void {
+    if (object instanceof Collider) this.#colliders.add(object);
+    else if (object instanceof Tilemap) this.#tilemaps.add(object);
     if ("pressKey" in object && "focusable" in object) this.#pressables.add(object as GameObject & Pressable);
     if (object.onInput !== GameObject.prototype.onInput) this.#onInput.add(object);
     if (object.onUpdate !== GameObject.prototype.onUpdate) this.#onUpdate.add(object);
   }
 
   unregisterObject(object: GameObject): void {
+    if (object instanceof Collider) this.#colliders.delete(object);
+    else if (object instanceof Tilemap) this.#tilemaps.delete(object);
     this.#pressables.delete(object as GameObject & Pressable);
     if (this.#focused === object) this.#focused = null;
     if (this.#pressed === (object as unknown as Pressable)) this.#pressed = null;
@@ -322,4 +363,16 @@ function nearestInDirection(from: Pressable, candidates: readonly (GameObject & 
     }
   }
   return best;
+}
+
+/** Is `object` `root` or inside it? */
+function isUnder(object: GameObject, root: GameObject): boolean {
+  for (let at: GameObject | null = object; at !== null; at = at.parent) if (at === root) return true;
+  return false;
+}
+
+/** A collider's box in world space: its top left at its world position, not scaled or turned (bodies are boxes on the grid). */
+function colliderBox(collider: Collider): Box {
+  const at = collider.worldTransform();
+  return { x: at.x, y: at.y, width: collider.width, height: collider.height };
 }

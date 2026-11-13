@@ -10,6 +10,8 @@ export interface TilemapProps {
   image?: string;
   /** Draw only this layer. Default: every layer Tiled shows. */
   layer?: string;
+  /** Bodies (`useBody`) cannot move into its solid tiles (the Tiled tile property `solid`, on any layer). Default false. */
+  solid?: boolean;
   /** Opacity, 0 to 1. Default 1. */
   opacity?: number;
 }
@@ -26,6 +28,7 @@ export class Tilemap<P extends object = {}> extends GameObject<P> {
   image: string;
   layer: string | undefined;
   opacity: number;
+  solid: boolean;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: TilemapProps, props?: P, defaults?: Partial<P>) {
@@ -34,5 +37,6 @@ export class Tilemap<P extends object = {}> extends GameObject<P> {
     this.image = hostProps.image ?? "";
     this.layer = hostProps.layer;
     this.opacity = hostProps.opacity ?? 1;
+    this.solid = hostProps.solid ?? false;
   }
 }

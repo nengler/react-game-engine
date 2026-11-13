@@ -199,4 +199,9 @@ export interface StateIR {
    * Absent for `useState`.
    */
   readonly globalKey?: string;
+  /**
+   * A per-instance object a factory made (`useState(() => createBody(…))`): its methods may be called, and it is told when the
+   * component joins and leaves a world (`ownedHandles`), if it wants to know.
+   */
+  readonly handle?: true;
 }
