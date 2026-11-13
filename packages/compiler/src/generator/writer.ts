@@ -69,6 +69,35 @@ export class CodeWriter {
     this.close("}");
   }
 
+  /** Where the next line goes, to `insert` lines there later (a prologue worked out from what follows it). */
+  mark(): { readonly at: number; readonly indent: number; readonly origin: SourceSpan | null } {
+    return { at: this.#lines.length, indent: this.#indent, origin: this.#origin };
+  }
+
+  /** Put lines at a `mark`, with the indentation and origin it had; what was written after it moves down. */
+  insert(mark: { readonly at: number; readonly indent: number; readonly origin: SourceSpan | null }, texts: readonly string[]): void {
+    if (texts.length === 0) return;
+    const pad = "  ".repeat(mark.indent);
+    this.#lines.splice(mark.at, 0, ...texts.map((t) => (t === "" ? "" : pad + t)));
+    let first = this.#origins.findIndex((o) => o.line >= mark.at);
+    if (first === -1) first = this.#origins.length;
+    for (let i = first; i < this.#origins.length; i++) {
+      const o = this.#origins[i]!;
+      this.#origins[i] = { ...o, line: o.line + texts.length };
+    }
+    if (mark.origin !== null) {
+      const added = texts.flatMap((t, i) => (t === "" ? [] : [{ line: mark.at + i, column: mark.indent * 2, source: { line: mark.origin!.line, column: mark.origin!.column } }]));
+      this.#origins.splice(first, 0, ...added);
+    }
+  }
+
+  /** Take back everything written since a `mark`, to write it again another way. */
+  truncate(mark: { readonly at: number; readonly indent: number }): void {
+    this.#lines.length = mark.at;
+    while (this.#origins.length > 0 && this.#origins[this.#origins.length - 1]!.line >= mark.at) this.#origins.pop();
+    this.#indent = mark.indent;
+  }
+
   toString(): string {
     return this.#lines.join("\n") + "\n";
   }
