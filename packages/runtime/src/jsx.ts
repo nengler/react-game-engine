@@ -414,6 +414,25 @@ export function Route(_props: RouteProps & { children?: Child }): JSX.Element {
 }
 
 /**
+ * Call `fn` once, `seconds` of game time from now: `after(0.15, () => setFlash(false))`, as a statement in a handler. The timer is
+ * this component's: it counts the fixed step's time in the update phase (so it stops during `freeze` and `<Game paused>`, and
+ * replays), and it is cancelled when the component unmounts, so it never sets state on a component that is gone.
+ */
+export function after(_seconds: number, _fn: () => void): void {
+  return compileTimeOnly("after");
+}
+
+/** Call `fn` every `seconds` of game time, the first time `seconds` from now, until `cancelTimers()` or the component unmounts. */
+export function every(_seconds: number, _fn: () => void): void {
+  return compileTimeOnly("every");
+}
+
+/** Cancel every timer this component has set. */
+export function cancelTimers(): void {
+  return compileTimeOnly("cancelTimers");
+}
+
+/**
  * Pause every `useUpdate` for the next `steps` fixed steps: the freeze frames of a hit or a dash. Call it as a statement in a
  * handler. `useInput` keeps running and a press during the freeze is kept for the first step after it.
  */

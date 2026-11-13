@@ -1,4 +1,4 @@
-import { AnimatedSprite, Collider, Entity, useState, useUpdate } from "@rge/runtime/jsx";
+import { AnimatedSprite, Collider, Entity, after, cancelTimers, useState, useUpdate } from "@rge/runtime/jsx";
 import { HealthBar } from "./HealthBar.tsx";
 import { FLASH } from "./rules/constants.ts";
 import { ENEMIES } from "./rules/enemies.ts";
@@ -30,7 +30,7 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
   const [dist, setDist] = useState(0);
   const [hp, setHp] = useState(maxHp);
   const [slow, setSlow] = useState(0);
-  const [flash, setFlash] = useState(0);
+  const [flash, setFlash] = useState(false);
   const at = pathAt(MAP.path, dist);
   const x = at.x - at.dy * lane;
   const y = at.y + at.dx * lane;
@@ -47,7 +47,6 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
     }
     setDist(next);
     if (slow > 0) setSlow(Math.max(0, slow - dt));
-    if (flash > 0) setFlash(Math.max(0, flash - dt));
   });
 
   return (
@@ -61,7 +60,7 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
         flipX={at.dx < 0}
         originX={7}
         originY={7}
-        tint={flash > 0 ? "#ffffff" : slow > 0 ? "#9ee7ff" : "#dcdcdc"}
+        tint={flash ? "#ffffff" : slow > 0 ? "#9ee7ff" : "#dcdcdc"}
       />
       {hp < maxHp && <HealthBar hp={hp} maxHp={maxHp} />}
       <Collider
@@ -78,7 +77,10 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
           // A bolt hits its target only; a shell or a frost pulse everything within its radius.
           if (blast.target >= 0 ? blast.target !== id : Math.hypot(blast.x - x, blast.y - y) > blast.radius) return;
           setHp((left) => left - blast.damage);
-          setFlash(FLASH);
+          // White for a moment: a timer, as the flash is only for the eye (a slow is gameplay, so it is state that counts down).
+          cancelTimers();
+          setFlash(true);
+          after(FLASH, () => setFlash(false));
           if (blast.slow > 0) setSlow((s) => Math.max(s, blast.slow));
         }}
       />

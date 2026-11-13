@@ -46,7 +46,9 @@ describe("an enemy", () => {
     const { t } = enemy();
     t.collide("enemy", blast());
     assert.equal(t.state().hp, 1000 - 18);
-    assert.ok((t.state().flash as number) > 0);
+    assert.equal(t.state().flash, true);
+    t.step(8);
+    assert.equal(t.state().flash, false, "for 0.12 s");
     t.collide("enemy", blast({ x: START.x + 30 }));
     assert.equal(t.state().hp, 1000 - 18, "a blast whose circle it is outside of does nothing");
   });

@@ -804,6 +804,10 @@ presentation; a body that moves by gameplay uses `useBody` (A2).
 
 ### C2. Timers and sequences
 
+**Built 2026-11-13**, the timers (DESIGN.md, "Timers"). One difference: hot reload drops pending timers with a note in the log rather
+than keeping them by call site, since a timer's function belongs to the instance the reload replaces. Hearth's enemies flash with
+`after`. Sequences wait, as planned.
+
 **Today.** There is no "do this in 0.3 seconds". Each delay is a countdown kept as state and counted down by hand: Hearth's
 `flash` and `slow`, Bramble's `invuln`, the dialogue's reveal. React code would write `setTimeout` in a handler: an enemy flashing
 for 0.1 s after a hit, a few seconds of safety after the player is hurt, a title that appears a beat after the music, a short
@@ -855,10 +859,10 @@ reload keeps a timer only if the callback still exists at the same place in the 
 
 **Done when**
 
-- [ ] `after`, `every` and `cancelTimers` compile, are cancelled on unmount, follow the fixed step and `freeze`, and replay
-- [ ] Hot reload keeps or drops timers as described, with a test
-- [ ] The guide says which delays are timers and which are state that is saved
-- [ ] Sequences: built when a game with a cutscene asks (recorded in NEXT_PRIORITIES.md's "Not now")
+- [x] `after`, `every` and `cancelTimers` compile, are cancelled on unmount, follow the fixed step and `freeze`, and replay
+- [x] Hot reload drops timers, with a note and a test (keeping them by call site is not possible: see above)
+- [x] The guide says which delays are timers and which are state that is saved
+- [x] Sequences: built when a game with a cutscene asks (recorded in NEXT_PRIORITIES.md's "Not now")
 
 ### C3. Context
 

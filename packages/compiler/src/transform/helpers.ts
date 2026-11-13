@@ -164,3 +164,10 @@ export function checkStaticCycles(components: readonly ComponentIR[], diagnostic
     if (cycleThrough(c.name, edges)) diagnostics.push(error(DiagnosticCode.ComponentCycle, `Component '${c.name}' statically contains itself.`, c.span));
   }
 }
+
+/**
+ * The timer functions a handler may call (`after(0.15, () => setFlash(false))`), and how many arguments each takes. They are the
+ * component's own (`GameObject.after`, `every`, `cancelTimers`), so a call is written `this.after(…)`: a timer belongs to the
+ * component that set it and goes when it does.
+ */
+export const TIMER_FUNCTIONS: Readonly<Record<string, number>> = { after: 2, every: 2, cancelTimers: 0 };
