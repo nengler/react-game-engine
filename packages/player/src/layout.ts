@@ -1,4 +1,4 @@
-import { Camera, FLEX_ANCHORS, Flex, type FlexAnchor, type GameObject } from "@rge/runtime";
+import { Camera, FLEX_ANCHORS, Flex, flexBorderRoom, type FlexAnchor, type GameObject } from "@rge/runtime";
 
 /**
  * `<Flex>` layout, after Clay (see docs/UI_PLAN.md, "The layout algorithm"). Everything below one layout root (a
@@ -49,15 +49,8 @@ export interface LayoutHost {
   warn(key: string, message: string): void;
 }
 
-/** Whether a `<Flex>` has a border in any state (a colour for it in any state), so its room is kept whichever it is in and layout does not move when the mouse does. */
-function hasBorder(f: Flex): boolean {
-  return f.borderColor !== undefined || f.hoverBorderColor !== undefined || f.focusBorderColor !== undefined || f.pressedBorderColor !== undefined || f.disabledBorderColor !== undefined;
-}
-
-/** The pixels of border a `<Flex>` keeps room for on each side: its `borderWidth` when it has a border colour in any state, else 0. A clip stops at the inside of it. */
-export function borderRoom(f: Flex): number {
-  return f.borderWidth > 0 && Number.isFinite(f.borderWidth) && hasBorder(f) ? f.borderWidth : 0;
-}
+/** The pixels of border a `<Flex>` keeps room for on each side (see `flexBorderRoom`): layout counts it as padding, and a clip stops at the inside of it. */
+export const borderRoom = flexBorderRoom;
 
 function finiteOr0(value: number): number {
   return Number.isFinite(value) ? value : 0;

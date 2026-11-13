@@ -12,6 +12,14 @@ import { HookLowering } from "./hooks.ts";
 /** `<Game>` props the player reads every frame, not only before the tree is built: these may be state (`timeScale={speed}`). */
 const LIVE_GAME_SETTINGS: ReadonlySet<string> = new Set(["timeScale", "paused"]);
 
+/**
+ * The type of a built-in callback prop's parameter, from the manifest: a plain value (a slider's `onChange(value: number)`) is a
+ * primitive, which a handler uses as any number, flag or string; anything else is a handle type, which it can only call methods on.
+ */
+function callbackParamType(type: string): { readonly kind: "Primitive"; readonly name: "number" | "boolean" | "string" } | { readonly kind: "Named"; readonly name: string } {
+  return type === "number" || type === "boolean" || type === "string" ? { kind: "Primitive", name: type } : { kind: "Named", name: type };
+}
+
 export class ElementLowering extends HookLowering {
   /**
    * `onDefeated={() => setScore(…)}`, passed to a child component. The
@@ -25,7 +33,7 @@ export class ElementLowering extends HookLowering {
   ): CallbackPropIR | null {
     const handler = this.within({ inHandler: true }, () =>
       lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
-        paramTypes: params ? params.map((p) => ({ kind: "Named" as const, name: p.type })) : "contextual",
+        paramTypes: params ? params.map((p) => callbackParamType(p.type)) : "contextual",
         returns: "void",
         what: `${name} callback`,
       }),
@@ -577,7 +585,7 @@ export class ElementLowering extends HookLowering {
               continue;
             }
             // Written as the arrow an author would write by hand: `onPress={() => resume()}`.
-            const handlerParams = params.map((p) => ({ id: localId(this.component.name, p.name, this.nextSerial()), name: p.name, type: { kind: "Named" as const, name: p.type } }));
+            const handlerParams = params.map((p) => ({ id: localId(this.component.name, p.name, this.nextSerial()), name: p.name, type: callbackParamType(p.type) }));
             const args: ExprIR[] = handlerParams.map((p) => ({ kind: "ParamRead", param: p.id, name: p.name }));
             const body: StatementIR[] =
               passed.kind === "action"

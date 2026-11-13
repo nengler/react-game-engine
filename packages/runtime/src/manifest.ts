@@ -87,9 +87,12 @@ export interface RuntimeManifest {
   readonly functions: Readonly<Record<string, number>>;
 }
 
+/** The plain values a callback prop may be given as a parameter, besides a handle type: a slider's `onChange(value: number)`. */
+export const CALLBACK_PRIMITIVES = ["number", "boolean", "string"] as const;
+
 export interface CallbackParamManifest {
   readonly name: string;
-  /** A key of `handleTypes`. */
+  /** A key of `handleTypes`, or one of `CALLBACK_PRIMITIVES`. */
   readonly type: string;
 }
 
@@ -99,9 +102,15 @@ export interface HandleTypeManifest {
   readonly properties: readonly string[];
 }
 
+/** What a `<Flex>` has as fields (its methods are listed after them), which `Slider` and `Toggle` have too. */
+const FLEX_FIELDS = [
+      "direction", "alignItems", "justifyContent", "gap", "wrap", "rowGap", "columnGap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "opacity", "drawnAlpha", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "overflow", "scrollX", "scrollY", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "transition", "transitionState", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "box", "widget",
+] as const;
+
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route", "Provider"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Slider", "Toggle", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route", "Provider"],
   hostIntrinsic: "Entity",
   containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route", "Provider"],
   textContent: { Text: "text" },
@@ -128,10 +137,10 @@ export const runtimeManifest: RuntimeManifest = {
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
     Route: ["name", "keepAlive", "visible", "active"],
     Provider: ["name", "context", "value", "addReader", "removeReader"],
-    Flex: [
-      "direction", "alignItems", "justifyContent", "gap", "wrap", "rowGap", "columnGap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "opacity", "drawnAlpha", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "overflow", "scrollX", "scrollY", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "transition", "transitionState", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint", "box",
-    ],
+    Flex: [...FLEX_FIELDS, "contains", "boxPoint", "focusPoint"],
+    // A widget is a Flex with more: its members are Flex's fields, and what it adds (the methods Flex has are its prototype's, not its own).
+    Slider: [...FLEX_FIELDS, "value", "min", "max", "step", "onChange", "fillColor", "thumbColor", "thumbWidth", "fraction", "thumbSize", "valueAt", "moveTo", "onPressAt", "onDrag", "onNavigate"],
+    Toggle: [...FLEX_FIELDS, "checked", "onChange", "onColor", "offColor", "thumbColor", "flip"],
   },
   intrinsicRequired: {
     Entity: [],
@@ -146,6 +155,8 @@ export const runtimeManifest: RuntimeManifest = {
     Screen: ["width", "height"],
     Hud: [],
     Flex: [],
+    Slider: [],
+    Toggle: [],
     Tilemap: ["map"],
     Particles: [],
     ParticleLayer: ["particles"],
@@ -171,8 +182,10 @@ export const runtimeManifest: RuntimeManifest = {
     Game: { upscale: ["nearest", "sharp"] },
     Particles: { space: PARTICLE_SPACES },
     Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS, overflow: FLEX_OVERFLOW },
+    Slider: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS, overflow: FLEX_OVERFLOW },
+    Toggle: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS, overflow: FLEX_OVERFLOW },
   },
-  intrinsicSizing: { Flex: ["width", "height"] },
+  intrinsicSizing: { Flex: ["width", "height"], Slider: ["width", "height"], Toggle: ["width", "height"] },
   intrinsicCallbacks: {
     Collider: {
       onCollisionEnter: [{ name: "other", type: "Contact" }],
@@ -180,6 +193,8 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Pointer: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [] },
     Flex: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [] },
+    Slider: { onPress: [], onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [], onChange: [{ name: "value", type: "number" }] },
+    Toggle: { onPointerEnter: [], onPointerLeave: [], onFocus: [], onBlur: [], onChange: [{ name: "checked", type: "boolean" }] },
   },
   reservedMembers: [
     // Entity / GameObject instance fields and methods. A test fails if one is missing here.
@@ -194,7 +209,7 @@ export const runtimeManifest: RuntimeManifest = {
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
-  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer"],
+  transformIntrinsics: ["Entity", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Hud", "Flex", "Slider", "Toggle", "Tilemap", "Particles", "ParticleLayer"],
   handleTypes: {
     InputState: {
       methods: { pressed: 1, down: 1, released: 1, lastPressed: 0 },

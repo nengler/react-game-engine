@@ -143,6 +143,14 @@ static float finite_or_zero(float value) {
   return isfinite(value) ? value : 0.0f;
 }
 
+/* The segments for one rounded corner of `radius` pixels. raylib works the number out itself when given none, from how far a
+ * chord may stray from the arc, and for a radius of a few pixels that is one segment: a 10 pixel circle is drawn as a diamond.
+ * About a segment a pixel of radius, from 4 (a corner of 4 segments is already round at that size) to 24, keeps small shapes round. */
+static int corner_segments(float radius) {
+  int segments = (int)ceilf(radius);
+  return segments < 4 ? 4 : segments > 24 ? 24 : segments;
+}
+
 /* RGE_OP_BOX at the local origin: the fill over the whole box, then the border inside its edge (as CSS paints a background
  * under its border). The border is built from exact pieces, so no pixel is painted twice (a translucent border stays even):
  * four edge rectangles between the corners, and in each corner block (c x c, c the larger of the radius and the border
@@ -158,7 +166,7 @@ static void draw_box(float width, float height, uint32_t fill, uint32_t border, 
   border_width = finite_or_zero(border_width);
   if (border_width > half) border_width = half;
   if (fill & 0xffu) {
-    if (radius > 0.0f) DrawRectangleRounded((Rectangle){ 0.0f, 0.0f, width, height }, radius / half, 0, unpack_color(fill));
+    if (radius > 0.0f) DrawRectangleRounded((Rectangle){ 0.0f, 0.0f, width, height }, radius / half, corner_segments(radius), unpack_color(fill));
     else DrawRectangleRec((Rectangle){ 0.0f, 0.0f, width, height }, unpack_color(fill));
   }
   if (!((border & 0xffu) != 0 && border_width > 0.0f)) return;
@@ -186,10 +194,10 @@ static void draw_box(float width, float height, uint32_t fill, uint32_t border, 
     Vector2 center = { right ? width - r : r, bottom ? height - r : r };
     float from = 180.0f + 90.0f * (float)corner;
     if (r >= bw) {
-      DrawRing(center, r - bw, r, from, from + 90.0f, 0, c);
+      DrawRing(center, r - bw, r, from, from + 90.0f, corner_segments(r), c);
     } else {
       /* The radius is smaller than the border: the outer corner's quarter disc, and the rest of the block, which is all border. */
-      DrawCircleSector(center, r, from, from + 90.0f, 0, c);
+      DrawCircleSector(center, r, from, from + 90.0f, corner_segments(r), c);
       float rest = k - r;
       /* The strip of the block beside the disc's square, across its full height, then the strip above or below that square. */
       DrawRectangleRec((Rectangle){ right ? block_x : block_x + r, block_y, rest, k }, c);
