@@ -31,6 +31,8 @@
     "packages/native/src",
     "packages/native/test",
     "packages/cli/src",
+    "packages/testing/src",
+    "packages/testing/test",
     "packages/cli/test",
     "packages/demo/generated",
     "packages/demo/game.ts",
