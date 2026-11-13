@@ -200,5 +200,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },
   },
-  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2 },
+  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2, keepIfEqual: 2 },
 };

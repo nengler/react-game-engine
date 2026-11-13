@@ -434,6 +434,23 @@ tree subscribes again. `keepCleanup` is a reserved member name.
 Bramble's settings screen is the first user: it subscribes to `settings` in `useMount` and keeps what it shows as its own state,
 which replaced the module-level `settings.subscribe` that mirrored the settings into `useGame`.
 
+### `useStore` (2026-11-13)
+
+`const values = useStore(settings, settingsView)` is React's `useSyncExternalStore`: a value read from a store outside the game
+state, read at mount and again on each notification, rendering only when the data read differs. Bramble's settings screen wrote it
+out by hand (two `useState`s, a `useMount` that subscribed and set both), which is what it replaces (`REACT_FEEL_PLAN.md`, B5).
+
+- It is a shipped hook (`hooks/library.ts`), written from `useState` with a lazy initial value and a `useMount` that returns the
+  subscription as its cleanup, so it costs nothing new in the compiler. Its type comes from the initial value:
+  `ReturnType<typeof settingsView>`.
+- The updater is `keepIfEqual(previous, read())` (`runtime/src/equal.ts`): the setter renders when it is given a different object,
+  and a read usually builds a new one, so data equal all the way down (`sameData`) keeps the old value.
+- For it to work as a function, the inliner now writes an argument that names an import of the calling file in place of its
+  parameter, as it did for literals: `store.subscribe(…)` becomes `settings.subscribe(…)`, a method of an imported object, and
+  `read()` becomes `settingsView()`, a plain function call, both of which a handler may make. Imports are module constants, so
+  nothing is evaluated a different number of times.
+- `read` takes no arguments; the store is anything with `subscribe(listener): () => void` (`Subscribable` in the authoring module).
+
 ## Why there is no `useEffect` (2026-11-12)
 
 `useEffect` is the first hook a React author reaches for, and it stays out on purpose. This section says why, and what
@@ -466,7 +483,7 @@ drops, where the rules' events cannot help because the component does not know t
 | A value computed from state or props | A derived `const`, worked out again when what it reads changes. | Built |
 | Something on screen that follows state (music, an emitter, the camera) | A built-in driven by props: `<Music>`, `<Particles emitting>`, `<Camera bounds>`. A wish for an effect here means a built-in is missing. | Built; add built-ins as games ask |
 | Run something when the component comes or goes | `useMount` / `useUnmount`. | Built |
-| Subscribe to something outside the game state, and stop | A cleanup returned from `useMount` (`useMount(() => settings.subscribe(…))`), with a handler able to hand an arrow to a function. See "A cleanup from `useMount`". A hook that reads an outside store and re-renders when it changes (as React's `useSyncExternalStore`) waits for a game that wants it. | Built (2026-11-12) |
+| Subscribe to something outside the game state, and stop | A cleanup returned from `useMount` (`useMount(() => settings.subscribe(…))`), with a handler able to hand an arrow to a function. See "A cleanup from `useMount`". `useStore(settings, read)` (as React's `useSyncExternalStore`) does both for a value to show; see "`useStore`". | Built (2026-11-12; `useStore` 2026-11-13) |
 | Start a component's state over when what it shows changes | `key` on any element, not only on a list's items (`<Dialogue key={talk.id} />`), React's own answer. See "Keyed elements". | Built (2026-11-12) |
 | A reusable component reacting to a prop changing | Only if a game hits it: `useChange(value, (prev) => …)`, run in the same step as the change (no frame of lag), with no cleanup, and allowed to call only effect stores, sounds, refs, `freeze` and the component's **own** setters. Calling a game-state action in it is a diagnostic, so effects cannot chain through the store. | Not built; waits for a game |
 

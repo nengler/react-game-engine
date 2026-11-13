@@ -48,6 +48,7 @@ export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { actionAware, Controls, createControls, createInputState, KEY_NAMES, NO_INPUT, type InputState, type InputSnapshot, type KeyName } from "./input.ts";
 export { clamp, NO_SHAKE, shakeOn, springBack, type ShakeState, type Vector2 } from "./math.ts";
+export { keepIfEqual, sameData } from "./equal.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
 export { findPath, lineOfSight, type Cell, type PathGrid, type PathOptions, type PathPoint } from "./path.ts";
