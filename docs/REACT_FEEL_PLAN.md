@@ -26,7 +26,7 @@ games worked around.
 | **B** | **Parts that do not read like React** | | | |
 | B1 | A component's root `<Entity>` is named after the component by default | Compiler | \~1 day | — |
 | B2 | Lay out lists with `<Flex>`, not arithmetic; `x` / `y` as shorthand props | Guide, compiler, runtime | \~3–4 days | — |
-| B3 | Text style that children inherit, and a theme | Runtime, compiler | \~3–4 days | C3 |
+| B3 | Text wrappers that take their words as children (`<Label>Coins: {coins}</Label>`), and game-wide text defaults | Compiler, runtime | \~3–4 days | — |
 | B4 | Actions without `useGame((s) => s)` | Runtime, compiler | \~1–2 days | — |
 | B5 | `useStore` for stores outside the game state (`useSyncExternalStore`) | Compiler, runtime | \~3–4 days | — |
 | B6 | Custom hooks that behave like functions | Compiler | \~1.5–2 weeks | — |
@@ -185,47 +185,70 @@ weighed against it. A component that already declares an `x` prop of its own (He
       duplicate key
 - [ ] The games use the shorthand where it reads better
 
-### B3. Text style that children inherit, and a theme
+### B3. Text wrappers that take their words as children
 
-**Today.** Every `<Text>` in Bramble writes its style: `size={10} color="#e8d9a8"` appears on nearly all of them. Hearth worked
-around the same thing by writing `Label.tsx` (a `<Text>` in the game's colour) and `theme.ts` (a `COLOR` object every component
-imports). `Label` takes its words as a `text` prop, which is exactly what #81 took out of `<Text>`: the workaround reintroduced
-the inconsistency the engine had just removed. `<Game font>` is already one inherited text setting, for the font only.
-
-In React on the web this is CSS inheritance (`color` and `font-size` on a parent apply to text below) or a theme context.
-
-**Proposal.** Text style inherits through the tree, as CSS does, by one built-in provider:
+**Today.** Every `<Text>` in Bramble writes its style: `size={10} color="#e8d9a8"` appears on nearly all of them. In React the
+answer is a component: write the style once in a `<Label>` and use `<Label>Coins: {coins}</Label>` everywhere. Hearth tried
+exactly that (`packages/hearth/src/Label.tsx`), but had to take the words as a `text` prop, which is what #81 took out of
+`<Text>`. The React way does not compile. Checked 2026-11-13 with this component and a use of it:
 
 ```tsx
-<TextStyle size={10} color="#e8d9a8" font="pixel.png">
-  <Menu … />          {/* every <Text> under it is 10 px, that colour, that font, unless it says otherwise */}
-</TextStyle>
+interface LabelProps {
+  color?: string;
+  children: TextChild | readonly TextChild[];
+}
+export function Label({ color = "#fff1d6", children }: LabelProps) {
+  return <Text size={10} color={color}>{children}</Text>;
+}
+// used as: <Label>Coins: {coins}</Label>
 ```
 
-- `<TextStyle>` is a container with no position of its own. It takes `size`, `color`, `font`, `lineGap` and `align`.
-- A `<Text>` takes each of those from its own prop if written, else from the nearest `<TextStyle>` above it, else from `<Game>`
-  (`font` today), else the built-in default. Nested `<TextStyle>`s merge, nearest first.
-- It is built on context (C3): `<TextStyle>` is a provider of a built-in context, and `<Text>` reads it. A change to a
-  `<TextStyle>` prop re-renders only the texts that read that key.
-- `<Game>` gains `textSize` and `textColor` beside `font`, for the whole game's default.
+It fails five ways:
 
-A **theme** for colours other than text (Hearth's `COLOR.panel`, `COLOR.button`) is an ordinary context once C3 exists:
-`createContext(THEME)` in `theme.ts`, a provider in the root, `useContext(Theme)` where it is needed. Most games will keep a
-constant object (as Hearth does), which is fine and needs nothing; the context is for themes that change at run time (a
-colour-blind setting, a dark and a light palette).
+- `RGE1004`: `TextChild` is not exported as a type.
+- `RGE1208`: `children` must be typed `Child`, which means elements.
+- `RGE1302`: `{children}` inside a `<Text>` is not understood.
+- `RGE1202`, twice at the use: a component cannot take text, or `{expressions}` other than conditions and lists, as children.
+
+**Decided 2026-11-13: no inherited text style.** A first draft proposed a `<TextStyle>` element whose style every `<Text>` below it
+would inherit, as CSS does. It is dropped. `<Text>` already takes its style as props, and a wrapper component is how React shares
+a style; a second, invisible way for a `<Text>` to get its colour would make a text's look depend on where it is in the tree. What
+is missing is not a new styling mechanism but the wrapper working.
+
+**Proposal.**
+
+1. **Text children on components.** A component whose props declare `children: TextChild | readonly TextChild[]` (the type
+   `<Text>` already uses, exported for use in props) accepts text and `{expressions}` of strings and numbers between its tags,
+   exactly as `<Text>` does.
+2. **Forwarding them into `<Text>`.** Inside such a component, `<Text>{children}</Text>` passes them on. The compiler lowers the
+   use site's children to one string expression (`` `Coins: ${coins}` ``, as it does for `<Text>` today) and passes it as the
+   component's `children` prop; the component's `<Text>` reads it like any other prop, so a change of `coins` re-renders only the
+   text.
+3. **Mixed children stay refused.** A component typed for text children takes only text; one typed `Child` takes only elements. The
+   message for a mix names both types.
+4. **Game-wide defaults.** `<Game>` already sets `font` for every `<Text>` that does not set its own. It gains `textSize` and
+   `textColor` beside it, the same kind of default: written once at the root, not inherited from containers. A game with one text
+   style then needs no wrapper at all.
+
+With these, Hearth's `Label` takes children, and Bramble either writes a `Label` of its own or sets `<Game textSize={10}
+textColor="#e8d9a8">` and drops the repeated props.
+
+A **theme** for other colours (Hearth's `COLOR.panel`, `COLOR.button`) stays what it is today: a constant object in `theme.ts`. A
+theme that changes at run time (a colour-blind setting, light and dark palettes) is an ordinary context once C3 exists.
 
 **Open questions.**
 
-1. A dedicated `<TextStyle>` element, or a `textStyle` prop on `<Entity>`, `<Flex>` and `<Hud>`? The element is easier to explain
-   and to find; the prop avoids a level of nesting. Suggested: the element, plus the props on `<Game>`.
-2. Whether `<Flex>` should also take `color` for the text inside it, as a button's colour on the web does. Suggested no: one way.
+1. Whether a text-children component may also forward to a component (a `<Label>` inside a `<Button>` that takes text). Suggested
+   yes, by the same lowering; it is one more hop of a string prop.
 
 **Done when**
 
-- [ ] `<TextStyle>` exists, with runtime and compiler tests for nesting and override order
+- [ ] The `Label` above compiles and works, with compiler tests for literal text, `{expressions}`, and forwarding through a second
+      component
+- [ ] `TextChild` is exported for use in props, and the diagnostics for a mix of text and elements name both types
 - [ ] `<Game textSize textColor>` exist
-- [ ] Bramble drops its repeated `size` and `color`; Hearth's `Label` takes children, or goes
-- [ ] The reference has an entry with an example
+- [ ] Hearth's `Label` takes children; Bramble drops its repeated `size` and `color`
+- [ ] The guide's "Passing children" section shows a text wrapper
 
 ### B4. Actions without `useGame((s) => s)`
 
@@ -402,13 +425,18 @@ most of what "juice" is.
    nothing in the compiler:
 
    ```tsx
-   const y = useSpring(open ? 0 : -40, { stiffness: 300, damping: 26 });   // follows its target
+   const y = useSpring(open ? 0 : -40, { duration: 0.4, bounce: 0.2 });    // follows its target
    const a = useTween(visible ? 1 : 0, { duration: 0.25, ease: "outCubic" });
    <Flex y={y} opacity={a}>…</Flex>
    ```
 
    - The target is any number (or `{ x, y }` object); when it changes, the value moves to it. `useSpring` keeps velocity across
      target changes; `useTween` restarts from where it is.
+   - **Decided 2026-11-13: a spring is set by `duration` and `bounce`**, as SwiftUI and Framer Motion's newer API do, not by
+     `stiffness` and `damping` (react-spring). `duration` is roughly the seconds it takes to settle; `bounce` is 0 for no
+     overshoot (critically damped) up to just under 1 for a lot of it. Both convert to stiffness and damping inside the hook
+     (`springFrom(duration, bounce)` in `math.ts`), so the physics is one standard spring. Defaults: `duration: 0.5`,
+     `bounce: 0`.
    - Easing functions are a fixed set by name (`linear`, `inQuad` … `outBack`, `outElastic`) in `math.ts`, plus a function from a
      `.ts` file.
    - They step in `useUpdate`, so they follow the fixed step, `freeze`, and replays, and they render each step while moving and not
@@ -434,9 +462,7 @@ still belong in rules (A1); motion here is presentation.
 
 **Open questions.**
 
-1. Spring parameters as `stiffness` / `damping` (react-spring) or as `duration` / `bounce` (SwiftUI, Framer Motion's newer API)?
-   The second is easier to tune by feel; suggested, with the first available.
-2. Whether `opacity` should apply to the whole subtree as a group (one layer, as CSS does) or per draw record (overlaps show
+1. Whether `opacity` should apply to the whole subtree as a group (one layer, as CSS does) or per draw record (overlaps show
    through). Per record is cheap and is what pixel-art games usually want; a group needs render targets.
 
 **Done when**
@@ -509,11 +535,12 @@ reload keeps a timer only if the callback still exists at the same place in the 
 passing the same props through"). Game data goes in the game state, which covers most of what context is used for in React apps.
 What it does not cover:
 
-- **Style and theme** (B3): Bramble's repeated text style and Hearth's `Label` and `theme.ts` are the trigger, in two games.
+- **A theme that changes at run time**: a colour-blind setting, or light and dark palettes. Today's constant `theme.ts` (Hearth)
+  covers a fixed theme, so this waits for a game that switches.
 - **A reusable component's configuration** that is not game data: a `<Menu>` inside a `<Panel>` that should take the panel's
   accent colour, a `<Slot>` that should know its inventory's size.
 - **The engine's own built-ins**, which already pass things down by hand: `<Game font>` reaches every `<Text>`, a `<Router>`'s
-  route reaches its `<Route>`s. A general mechanism is what B3 builds on.
+  route reaches its `<Route>`s.
 
 **Proposal.** React's API, compiled:
 
@@ -555,7 +582,6 @@ const { accent } = useContext(Theme);
 
 - [ ] `createContext`, `Provider` and `useContext` compile and run, with tests for nesting, default, field-level re-render and
       removal
-- [ ] B3's `<TextStyle>` is built on it
 - [ ] The guide has a "Context" section that says what it is for and what it is not for
 - [ ] NEXT_PRIORITIES.md's "Not now" row for context is moved to done
 
@@ -578,10 +604,11 @@ over the game. It is never in a packaged build.
 4. **Editing.** Changing a state value in the inspector calls the setter; changing a game state leaf calls `setState`. Both are
    development-only and are recorded as such so a replay does not include them (or does, marked; see D1).
 
-**Where it runs.** The overlay draws through the same backend as the game (records after the game's), so it works under Node and
-in the web backend (D3). The panels can be either in the window (simple, always available) or in a browser page served by `rge dev`
-on a local port (more room, real text input; it reuses D3's canvas work for nothing but still needs a UI). Suggested: overlay in the
-window first; panels in a local web page, since a browser is better at trees and text fields than raylib.
+**Where it runs. Decided 2026-11-13: the overlay in the game window, the panels in a browser page.** The overlay (outlines and
+hover labels) draws through the same backend as the game (records after the game's), so it works under Node and in the web backend
+(D3). The tree and game state panels are a local web page that `rge dev` serves on a port and prints the address of, talking to the
+running game over a WebSocket: a browser is far better than raylib at trees, scrolling and text fields, and it keeps the game
+window free of debugging UI. The page does not need D3; it is ordinary HTML that shows what the game sends.
 
 **Constraints.** The inspector reads; it does not change how the game runs. Reading `saveHotState` each frame for every object is
 too slow for large trees, so the inspector reads only the selected component each frame and the tree's shape when it changes
@@ -623,7 +650,8 @@ other tool.
    cloned), the component tree's hot state (`captureHotState`), and the effect stores' state (particles in flight, timers from C2,
    the music's position). Snapshots are what makes going back cheap: going to step S restores the nearest snapshot at or before S
    and re-runs the recorded input from there, with sound muted and nothing drawn until S.
-3. **Scrub.** A key pauses the game and shows a timeline (in the window's overlay, or in C4's panel). Left and right step one step;
+3. **Scrub.** A key pauses the game and shows a timeline. **Decided 2026-11-13:** a minimal bar in the game window (where
+   the paused moment is and how much is recorded), and the full timeline, with snapshots and actions marked, in C4's browser page. Left and right step one step;
    a drag scrubs. The screen shows the game at that step.
 4. **Edit and replay.** While paused at step S, saving a file hot-reloads (as today), then re-runs from the snapshot before S with
    the new code to S. The author sees the same moment with the fix. "Resume" plays on from there with live input, dropping the
@@ -646,9 +674,7 @@ other tool.
 
 **Open questions.**
 
-1. Where the timeline lives: in the window (always there) or in C4's browser panel (more room). Suggested: a minimal bar in the
-   window, the full timeline in the panel.
-2. Whether rewind is also for players (a game feature, as in some puzzle games). Not proposed; it would need all of the above in
+1. Whether rewind is also for players (a game feature, as in some puzzle games). Not proposed; it would need all of the above in
    the packaged build.
 
 **Done when**
@@ -827,8 +853,8 @@ Grouped so that each step is useful on its own and later steps build on earlier 
 
 1. **The cheap, visible wins first** (about 1.5 weeks): A1 (say what the model is), B1 (root names), B4 (`useGame.actions()`),
    B5 (`useStore`). Each removes a line that confuses a newcomer, and none depends on another.
-2. **Context and style** (about 2.5 weeks): C3 (context), then B3 (`<TextStyle>` on it). Bramble and Hearth are rewritten to use
-   them, which tests both.
+2. **Text wrappers and context** (about 2.5 weeks): B3 (text children on components, game-wide text defaults), then C3 (context).
+   Hearth's `Label` and Bramble's text are rewritten with B3, which tests it.
 3. **Motion and timers** (about 2.5 weeks): C1's hooks and `opacity`, then C2's `after` / `every`. These are the most visible
    things a player sees.
 4. **Tools** (about 5 weeks): C4 (overlay and inspector), then D1 (rewind), which shares its panel and needs C2's timers to be
