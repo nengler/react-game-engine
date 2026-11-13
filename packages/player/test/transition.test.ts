@@ -32,52 +32,77 @@ describe("transition colours", () => {
     assert.equal(mixThrough(0, 0x00000000, 0.5), 0, "nothing to nothing");
   });
 
-  const out = (): ShownColors => ({ fill: -1, edge: -1 });
+  const out = (): ShownColors => ({ fill: -1, edge: -1, alpha: -1 });
 
   it("shows the first colours at once, then fades to a new target by the clock, and stays there", () => {
     const shown = out();
-    let state: FlexTransition | null = stepTransition(null, RED, 0, 1, 10, shown);
-    assert.deepEqual(shown, { fill: RED, edge: 0 }, "the first frame is not a fade");
-    state = stepTransition(state, BLUE, 0, 1, 10, shown);
+    let state: FlexTransition | null = stepTransition(null, RED, 0, 1, 1, 10, shown);
+    assert.deepEqual(shown, { fill: RED, edge: 0, alpha: 1 }, "the first frame is not a fade");
+    state = stepTransition(state, BLUE, 0, 1, 1, 10, shown);
     assert.equal(shown.fill, RED, "a new target starts from what was shown");
-    state = stepTransition(state, BLUE, 0, 1, 10.5, shown);
+    state = stepTransition(state, BLUE, 0, 1, 1, 10.5, shown);
     assert.equal(shown.fill, 0x800080ff, "half way at half the time");
-    state = stepTransition(state, BLUE, 0, 1, 11, shown);
+    state = stepTransition(state, BLUE, 0, 1, 1, 11, shown);
     assert.equal(shown.fill, BLUE, "there at the end");
-    stepTransition(state, BLUE, 0, 1, 50, shown);
+    stepTransition(state, BLUE, 0, 1, 1, 50, shown);
     assert.equal(shown.fill, BLUE, "and it stays");
   });
 
   it("shows the same thing when asked twice at one time, which the player does when it builds a frame twice", () => {
     const a = out();
     const b = out();
-    let state: FlexTransition | null = stepTransition(null, RED, RED, 1, 0, a);
-    state = stepTransition(state, BLUE, BLUE, 1, 0.3, a);
+    let state: FlexTransition | null = stepTransition(null, RED, RED, 1, 1, 0, a);
+    state = stepTransition(state, BLUE, BLUE, 1, 1, 0.3, a);
     const first = { ...a };
-    stepTransition(state, BLUE, BLUE, 1, 0.3, b);
+    stepTransition(state, BLUE, BLUE, 1, 1, 0.3, b);
     assert.deepEqual(b, first);
-    stepTransition(state, BLUE, BLUE, 1, 0.3, b);
+    stepTransition(state, BLUE, BLUE, 1, 1, 0.3, b);
     assert.deepEqual(b, first);
   });
 
   it("turns round from where it had got to, not from where it began", () => {
     const shown = out();
-    let state: FlexTransition | null = stepTransition(null, RED, 0, 1, 0, shown);
-    state = stepTransition(state, BLUE, 0, 1, 0, shown);
-    state = stepTransition(state, BLUE, 0, 1, 0.5, shown);
+    let state: FlexTransition | null = stepTransition(null, RED, 0, 1, 1, 0, shown);
+    state = stepTransition(state, BLUE, 0, 1, 1, 0, shown);
+    state = stepTransition(state, BLUE, 0, 1, 1, 0.5, shown);
     const half = shown.fill;
     assert.equal(half, 0x800080ff);
-    state = stepTransition(state, RED, 0, 1, 0.5, shown);
+    state = stepTransition(state, RED, 0, 1, 1, 0.5, shown);
     assert.equal(shown.fill, half, "turning round: still where it was");
-    stepTransition(state, RED, 0, 1, 1, shown);
+    stepTransition(state, RED, 0, 1, 1, 1, shown);
     assert.equal(shown.fill, mixThrough(half, RED, ease(0.5)), "half way back from there");
+  });
+
+  it("fades the opacity with the colours, from what is shown, by the same ease", () => {
+    const shown = out();
+    let state: FlexTransition | null = stepTransition(null, RED, 0, 1, 2, 0, shown);
+    assert.equal(shown.alpha, 1, "the first frame is not a fade");
+    state = stepTransition(state, RED, 0, 0, 2, 0, shown);
+    assert.equal(shown.alpha, 1, "a new target starts from what was shown");
+    state = stepTransition(state, RED, 0, 0, 2, 1, shown);
+    assert.equal(shown.alpha, 0.5, "half way at half the time");
+    state = stepTransition(state, RED, 0, 1, 2, 1, shown);
+    assert.equal(shown.alpha, 0.5, "turning round: still where it was");
+    stepTransition(state, RED, 0, 1, 2, 2, shown);
+    assert.equal(shown.alpha, 0.75, "and half way back from there, a second later");
+    stepTransition(state, RED, 0, 1, 2, 9, shown);
+    assert.equal(shown.alpha, 1, "arrived");
+  });
+
+  it("starts a fade for a change of opacity alone, and not for no change", () => {
+    const shown = out();
+    let state: FlexTransition | null = stepTransition(null, RED, 0, 1, 1, 0, shown);
+    state = stepTransition(state, RED, 0, 1, 1, 5, shown);
+    assert.equal(state.since, 0, "nothing changed, so nothing restarted");
+    state = stepTransition(state, RED, 0, 0.5, 1, 5, shown);
+    assert.equal(state.since, 5, "an opacity that changed did");
   });
 
   it("fades the border colour the same way, and a colour that goes away fades out", () => {
     const shown = out();
-    let state: FlexTransition | null = stepTransition(null, RED, BLUE, 2, 0, shown);
-    state = stepTransition(state, RED, 0, 2, 0, shown);
-    stepTransition(state, RED, 0, 2, 1, shown);
+    let state: FlexTransition | null = stepTransition(null, RED, BLUE, 1, 2, 0, shown);
+    state = stepTransition(state, RED, 0, 1, 2, 0, shown);
+    stepTransition(state, RED, 0, 1, 2, 1, shown);
     assert.equal(shown.edge, 0x0000ff80, "the border fades out to half its alpha");
     assert.equal(shown.fill, RED, "the fill, which did not change, does not");
   });

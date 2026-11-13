@@ -40,6 +40,9 @@ export interface FlexTransition {
   fromEdge: number;
   toFill: number;
   toEdge: number;
+  /** The box's opacity, 0 to 1, from and to (a number, not packed in a colour). */
+  fromAlpha: number;
+  toAlpha: number;
   since: number;
 }
 
@@ -98,6 +101,13 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
    */
   scrollX?: number;
   scrollY?: number;
+  /**
+   * How opaque the box and everything in it is drawn, 0 (gone) to 1 (the default): a panel that fades in and out. It multiplies into
+   * every colour under the box, so a box inside a box at 0.5 is at 0.25. Each part is drawn at that opacity on its own, so where
+   * parts overlap one shows through the other a little while the box is part way (a whole-box layer would not; see `UI_PLAN.md`).
+   * With a `transition` a change of opacity fades. A box at 0 draws nothing, but is still laid out and still takes the mouse.
+   */
+  opacity?: number;
   /** A CSS colour: draw a filled rectangle behind the children, the size of the box. Default none. */
   background?: string;
   /**
@@ -140,7 +150,7 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   /** `borderColor` while the box is pressed. */
   pressedBorderColor?: string;
   /**
-   * Seconds to fade the background and border colour when the state changes (hover, press, focus, disabled), instead of snapping.
+   * Seconds to fade the background and border colour when the state changes (hover, press, focus, disabled), and `opacity` when it changes, instead of snapping.
    * A fade cut short turns round from the colour it had reached. Default 0: snap. Only colours fade, so nothing moves.
    */
   transition?: number;
@@ -230,6 +240,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   minHeight: number | undefined;
   maxHeight: number | undefined;
   background: string | undefined;
+  opacity: number;
+  /** The opacity the draw pass last pushed for this box's children (1: none), so it pops what it pushed. Written by the draw pass and nothing else. */
+  drawnAlpha = 1;
   backgroundImage: string | undefined;
   slice: number | undefined;
   sliceTop: number | undefined;
@@ -297,6 +310,7 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.minHeight = hostProps.minHeight;
     this.maxHeight = hostProps.maxHeight;
     this.background = hostProps.background;
+    this.opacity = hostProps.opacity ?? 1;
     this.backgroundImage = hostProps.backgroundImage;
     this.slice = hostProps.slice;
     this.sliceTop = hostProps.sliceTop;

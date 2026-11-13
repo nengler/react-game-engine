@@ -342,6 +342,7 @@ function Tile() {
       transition={0.15}
       overflow={round > 100 ? "scroll" : "hidden"}
       scrollY={round}
+      opacity={round > 100 ? 0.5 : 1}
       backgroundImage="skin.png"
       slice={8}
       sliceBottom={round}
@@ -366,13 +367,14 @@ function Tile() {
     assert.deepEqual([tile.pressedBackground, tile.pressedBorderColor, tile.disabled, tile.disabledBackground, tile.disabledBorderColor], ["#112", "orange", false, "gray", "silver"]);
     assert.equal(tile.transition, 0.15);
     assert.deepEqual([tile.overflow, tile.scrollX, tile.scrollY], ["hidden", 0, 4]);
+    assert.equal(tile.opacity, 1);
     assert.deepEqual([tile.backgroundImage, tile.slice, tile.sliceBottom, tile.sliceTop], ["skin.png", 8, 4, undefined]);
     assert.deepEqual([tile.hoverBackgroundImage, tile.focusBackgroundImage, tile.pressedBackgroundImage, tile.disabledBackgroundImage], ["skin-hover.png", "skin-focus.png", "skin-down.png", "skin-off.png"]);
     tile.setAccent("red");
     tile.setRound(800);
     world.flush();
     assert.deepEqual([tile.borderColor, tile.borderRadius, tile.disabled], ["red", 800, true], "disabled follows state");
-    assert.deepEqual([tile.overflow, tile.scrollY], ["scroll", 800], "and overflow and the scroll offset");
+    assert.deepEqual([tile.overflow, tile.scrollY, tile.opacity], ["scroll", 800, 0.5], "and overflow, the scroll offset and the opacity");
   });
 
   it("type-checks the generated code, and rejects a prop of the wrong type, in the source", () => {
@@ -389,6 +391,8 @@ function Tile() {
     assert.deepEqual(check(`<Flex backgroundImage="a.png" slice={wide ? 8 : 4} sliceTop={2} hoverBackgroundImage="b.png" />`), []);
     assert.ok(check(`<Flex slice="8" />`).length > 0, "a slice is a number of pixels");
     assert.ok(check(`<Flex backgroundImage={3} />`).length > 0, "an image is a name");
+    assert.deepEqual(check(`<Flex opacity={wide ? 0.5 : 1} />`), []);
+    assert.ok(check(`<Flex opacity="half" />`).length > 0, "an opacity is a number");
     assert.ok(check(`<Flex disabled="yes" />`).length > 0, "disabled is a boolean");
     assert.ok(check(`<Flex borderWidth="thick" />`).length > 0, "a width is a number");
     assert.ok(check(`<Flex hoverBackground={4} />`).length > 0, "a colour is a string");
@@ -396,7 +400,7 @@ function Tile() {
   });
 
   it("reserves the new names for a component rooted at a Flex", () => {
-    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "transition", "transitionState", "overflow", "scrollX", "scrollY", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage"]) {
+    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "transition", "transitionState", "overflow", "scrollX", "scrollY", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "opacity", "drawnAlpha"]) {
       const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
       assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
     }

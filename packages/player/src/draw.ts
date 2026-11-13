@@ -175,6 +175,11 @@ function orderByZ(zs: readonly number[]): number[] | null {
   return order;
 }
 
+/** The colour with its alpha multiplied by `alpha` (0 to 1), its red, green and blue as they were. */
+function fadeColor(color: PackedColor, alpha: number): PackedColor {
+  return ((color & 0xffffff00) | Math.round((color & 255) * alpha)) >>> 0;
+}
+
 /** The thickest outline a `<Text>` draws, in pixels: each is a ring of more copies of the text. */
 const MAX_OUTLINE = 3;
 
@@ -217,8 +222,27 @@ export class DrawList {
   #clip = 0;
   /** Whether any clipping box was pushed since `reset`, which `sortByZ` clears for each layer: what the player checks to see if it needs to look. */
   anyClips = false;
+  /**
+   * How opaque what is written now is, 0 to 1 (see `pushAlpha`): the alpha of every colour a record is given is multiplied by it, and
+   * at 0 nothing is written. 1 for nearly everything, and then the records are exactly what they were given.
+   */
+  alpha = 1;
+  readonly #alphas: number[] = [];
+
+  /** Draw what is written from now on, until the matching `popAlpha`, at `alpha` times the opacity it is at: a faded box and all that is in it. */
+  pushAlpha(alpha: number): void {
+    this.#alphas.push(this.alpha);
+    this.alpha *= alpha;
+  }
+
+  /** Back to the opacity before the last `pushAlpha`. */
+  popAlpha(): void {
+    this.alpha = this.#alphas.pop() as number;
+  }
 
   reset(): void {
+    this.alpha = 1;
+    this.#alphas.length = 0;
     this.length = 0;
     this.texts.length = 0;
     this.#zRuns.length = 0;
@@ -521,6 +545,10 @@ export class DrawList {
 
   /** `spriteRegion` with the transform as numbers, for a tilemap's many records (no object per tile). */
   spriteRegionAt(x: number, y: number, rotation: number, scaleX: number, scaleY: number, texture: number, srcX: number, srcY: number, srcW: number, srcH: number, originX: number, originY: number, flags: number, tint: PackedColor): void {
+    if (this.alpha !== 1) {
+      if (this.alpha === 0) return;
+      tint = fadeColor(tint, this.alpha);
+    }
     const base = this.#reserve(RGE_OP_SPRITE_REGION_LEN);
     const r = this.records;
     r[base] = RGE_OP_SPRITE_REGION;
@@ -542,6 +570,10 @@ export class DrawList {
   }
 
   rect(world: WorldTransform, width: number, height: number, color: PackedColor): void {
+    if (this.alpha !== 1) {
+      if (this.alpha === 0) return;
+      color = fadeColor(color, this.alpha);
+    }
     const at = this.#header(RGE_OP_RECT, RGE_OP_RECT_LEN, world);
     this.records[at] = width;
     this.records[at + 1] = height;
@@ -549,6 +581,10 @@ export class DrawList {
   }
 
   ellipse(world: WorldTransform, width: number, height: number, color: PackedColor): void {
+    if (this.alpha !== 1) {
+      if (this.alpha === 0) return;
+      color = fadeColor(color, this.alpha);
+    }
     const at = this.#header(RGE_OP_ELLIPSE, RGE_OP_ELLIPSE_LEN, world);
     this.records[at] = width;
     this.records[at + 1] = height;
@@ -557,6 +593,11 @@ export class DrawList {
 
   /** A box with a border inside its edge and rounded corners: the record `RGE_OP_BOX`. A fill or border colour of 0 (no alpha) draws nothing. */
   box(world: WorldTransform, width: number, height: number, fill: PackedColor, border: PackedColor, borderWidth: number, radius: number): void {
+    if (this.alpha !== 1) {
+      if (this.alpha === 0) return;
+      fill = fadeColor(fill, this.alpha);
+      border = fadeColor(border, this.alpha);
+    }
     const at = this.#header(RGE_OP_BOX, RGE_OP_BOX_LEN, world);
     const r = this.records;
     r[at] = width;
@@ -568,6 +609,10 @@ export class DrawList {
   }
 
   text(world: WorldTransform, text: string, size: number, color: PackedColor): void {
+    if (this.alpha !== 1) {
+      if (this.alpha === 0) return;
+      color = fadeColor(color, this.alpha);
+    }
     const at = this.#header(RGE_OP_TEXT, RGE_OP_TEXT_LEN, world);
     this.records[at] = this.texts.length;
     this.records[at + 1] = size;
@@ -590,8 +635,15 @@ function paints(flex: Flex): boolean {
     flex.pressedBackground !== undefined || flex.pressedBorderColor !== undefined ||
     flex.disabledBackground !== undefined || flex.disabledBorderColor !== undefined ||
     flex.backgroundImage !== undefined || flex.hoverBackgroundImage !== undefined || flex.focusBackgroundImage !== undefined ||
-    flex.pressedBackgroundImage !== undefined || flex.disabledBackgroundImage !== undefined
+    flex.pressedBackgroundImage !== undefined || flex.disabledBackgroundImage !== undefined ||
+    flex.opacity !== 1 || (flex.transitionState !== null && (flex.transitionState.fromAlpha !== 1 || flex.transitionState.toAlpha !== 1))
   );
+}
+
+/** A `<Flex>`'s opacity as it is used: 0 to 1, and 1 for anything that is not a number. */
+function opacityOf(flex: Flex): number {
+  const a = flex.opacity;
+  return a >= 1 ? 1 : a > 0 ? a : a === a ? 0 : 1;
 }
 
 export interface FrameBuilderOptions {
@@ -872,7 +924,7 @@ export class FrameBuilder {
   /** The animation clock of the frame being built (see `build`). */
   #time: number | undefined = undefined;
   /** Scratch for the colours a transitioning `<Flex>` shows, so drawing allocates nothing. */
-  readonly #fadeColors: ShownColors = { fill: 0, edge: 0 };
+  readonly #fadeColors: ShownColors = { fill: 0, edge: 0, alpha: 1 };
   /** The colour a text's shadow or outline copy is drawn in, while one is; undefined for the text itself. */
   #ink: PackedColor | undefined = undefined;
   /** Scratch for where a shadow or outline copy of a text is, so drawing the effects makes no object per copy. */
@@ -1197,7 +1249,8 @@ export class FrameBuilder {
         let result = -1;
         // A leaf that draws or collides where its parent put it (the `<Shape>`, `<Sprite>` and `<Collider>` of a component that
         // moves) is most of what is here, so it is dealt with in place: what `walk` would do for it, without the call.
-        if (childZ === 0 && child.children.length === 0 && child.layoutX === 0 && child.layoutY === 0) {
+        // (Not under a faded box: the records below are written as they are, with no opacity in them.)
+        if (childZ === 0 && list.alpha === 1 && child.children.length === 0 && child.layoutX === 0 && child.layoutY === 0) {
           const leaf = child.drawKind >= 0 ? child.drawKind : kindCode(child);
           if (leaf === KIND_SHAPE || leaf === KIND_COLLIDER || (leaf === KIND_SPRITE && !styledSprite(child as Sprite | AnimatedSprite))) {
             const own = child.transform;
@@ -1260,7 +1313,10 @@ export class FrameBuilder {
         }
       }
       flatWalk = flat;
-      if (kind === KIND_FLEX && (node as Flex).overflow !== "visible") list.popClip();
+      if (kind === KIND_FLEX) {
+        if ((node as Flex).overflow !== "visible") list.popClip();
+        if ((node as Flex).drawnAlpha !== 1) list.popAlpha();
+      }
       return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
     };
 
@@ -1475,7 +1531,10 @@ export class FrameBuilder {
             0,
             true,
             (object, kind) => {
-              if (kind === KIND_FLEX && (object as Flex).overflow !== "visible") list.popClip();
+              if (kind === KIND_FLEX) {
+                if ((object as Flex).overflow !== "visible") list.popClip();
+                if ((object as Flex).drawnAlpha !== 1) list.popAlpha();
+              }
             },
           );
         }
@@ -1596,6 +1655,7 @@ export class FrameBuilder {
       // The world was worked out before layout; a floating root's own offset is only known now.
       if (flex.float) world = placed = flex.worldTransform();
     }
+    flex.drawnAlpha = 1; // what was pushed last frame is not what this frame pops
     if (paints(flex)) this.#paintFlex(flex, world);
     return placed;
   }
@@ -1632,19 +1692,33 @@ export class FrameBuilder {
         }
       }
     }
-    this.#paintColors(flex, world, background, borderColor);
+    let alpha = opacityOf(flex);
+    const fading = flex.transition > 0 && this.#time !== undefined;
+    if (fading) {
+      // Fading: the colours are numbers with an alpha, so a colour that is going away fades out instead of vanishing, and the opacity goes with them.
+      const shown = this.#fadeColors;
+      flex.transitionState = stepTransition(flex.transitionState, background === undefined ? 0 : this.#color(background), borderColor === undefined ? 0 : this.#color(borderColor), alpha, flex.transition, this.#time as number, shown);
+      alpha = shown.alpha;
+    }
+    // The box's own drawing is at its opacity, and so is everything under it: pushed here, popped when the walk has left the box
+    // (`drawnAlpha` says it was pushed). A box with nothing under it has nothing to keep it pushed for.
+    const list = this.#list;
+    if (alpha !== 1) {
+      list.pushAlpha(alpha);
+      if (flex.children.length > 0) flex.drawnAlpha = alpha;
+    }
+    this.#paintColors(flex, world, background, borderColor, fading);
     // The image goes over the colours (a colour shows through where the image is transparent) and under the children.
     if (image !== undefined && image !== "") this.#paintImage(flex, world, image);
+    if (alpha !== 1 && flex.drawnAlpha === 1) list.popAlpha();
   }
 
-  /** A `<Flex>`'s background colour and border, in the colours its state chose. */
-  #paintColors(flex: Flex, world: WorldTransform, background: string | undefined, borderColor: string | undefined): void {
+  /** A `<Flex>`'s background colour and border, in the colours its state chose (`fading`: the ones `#paintFlex` has just worked out for a transition). */
+  #paintColors(flex: Flex, world: WorldTransform, background: string | undefined, borderColor: string | undefined, fading: boolean): void {
     const width = flex.box.size[0] as number;
     const height = flex.box.size[1] as number;
-    if (flex.transition > 0 && this.#time !== undefined) {
-      // Fading: the colours are numbers with an alpha, so a colour that is going away fades out instead of vanishing.
+    if (fading) {
       const shown = this.#fadeColors;
-      flex.transitionState = stepTransition(flex.transitionState, background === undefined ? 0 : this.#color(background), borderColor === undefined ? 0 : this.#color(borderColor), flex.transition, this.#time, shown);
       const edgeWidth = flex.borderWidth > 0 && (shown.edge & 255) !== 0 ? flex.borderWidth : 0;
       const round = flex.borderRadius > 0 ? flex.borderRadius : 0;
       const filled = (shown.fill & 255) !== 0;
@@ -2358,8 +2432,20 @@ export class FrameBuilder {
   #sprite(image: string, world: WorldTransform): void {
     if (image === "") return;
     const handle = this.#texture(image);
-    if (handle < 0) this.#list.rect(world, MISSING_TEXTURE_SIZE, MISSING_TEXTURE_SIZE, MAGENTA);
-    else this.#list.sprite(world, handle);
+    if (handle < 0) {
+      this.#list.rect(world, MISSING_TEXTURE_SIZE, MISSING_TEXTURE_SIZE, MAGENTA);
+      return;
+    }
+    // A plain sprite record has no colour to fade, so under a faded box the picture is a region of itself, with a tint that has the alpha.
+    if (this.#list.alpha !== 1) {
+      if (this.#list.alpha === 0) return;
+      const size = this.#imageSize(image);
+      if (size.width > 0 && size.height > 0) {
+        this.#list.spriteRegion(world, handle, 0, 0, size.width, size.height, 0, 0, 0, 0xffffffff);
+        return;
+      }
+    }
+    this.#list.sprite(world, handle);
   }
 
   #color(css: string): PackedColor {
