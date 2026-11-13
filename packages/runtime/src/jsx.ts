@@ -225,6 +225,7 @@ export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
  * give it a border (which takes room like padding) and rounded corners; `hoverBackground`, `hoverBorderColor`, `focusBackground` and `focusBorderColor`
  * are the colours it is drawn in while the mouse is over it or it has the focus; `pressedBackground` / `pressedBorderColor` while the button is held on it;
  * `disabled` switches it off (and shows `disabledBackground` / `disabledBorderColor` over every other state). `transition` fades between the colours of those states over that many seconds instead of snapping.
+ * `wrap` breaks a row into lines (with `rowGap` and `columnGap`).
  * `opacity` fades the box and everything in it (with a `transition`, over time).
  * `backgroundImage` and `slice` skin it with a nine-slice picture (and `hoverBackgroundImage` and the like swap it by state).
  * `overflow` clips children that stick out of the box (`"hidden"`) and lets the mouse wheel scroll them (`"scroll"`, with `scrollX` / `scrollY`).

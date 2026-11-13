@@ -343,6 +343,9 @@ function Tile() {
       overflow={round > 100 ? "scroll" : "hidden"}
       scrollY={round}
       opacity={round > 100 ? 0.5 : 1}
+      wrap={round < 100}
+      rowGap={round}
+      columnGap={2}
       backgroundImage="skin.png"
       slice={8}
       sliceBottom={round}
@@ -368,6 +371,7 @@ function Tile() {
     assert.equal(tile.transition, 0.15);
     assert.deepEqual([tile.overflow, tile.scrollX, tile.scrollY], ["hidden", 0, 4]);
     assert.equal(tile.opacity, 1);
+    assert.deepEqual([tile.wrap, tile.rowGap, tile.columnGap], [true, 4, 2]);
     assert.deepEqual([tile.backgroundImage, tile.slice, tile.sliceBottom, tile.sliceTop], ["skin.png", 8, 4, undefined]);
     assert.deepEqual([tile.hoverBackgroundImage, tile.focusBackgroundImage, tile.pressedBackgroundImage, tile.disabledBackgroundImage], ["skin-hover.png", "skin-focus.png", "skin-down.png", "skin-off.png"]);
     tile.setAccent("red");
@@ -393,6 +397,9 @@ function Tile() {
     assert.ok(check(`<Flex backgroundImage={3} />`).length > 0, "an image is a name");
     assert.deepEqual(check(`<Flex opacity={wide ? 0.5 : 1} />`), []);
     assert.ok(check(`<Flex opacity="half" />`).length > 0, "an opacity is a number");
+    assert.deepEqual(check(`<Flex wrap rowGap={wide ? 4 : 2} columnGap={1} gap={2} />`), []);
+    assert.ok(check(`<Flex wrap="yes" />`).length > 0, "wrap is a boolean");
+    assert.ok(check(`<Flex rowGap="wide" />`).length > 0, "a gap is a number of pixels");
     assert.ok(check(`<Flex disabled="yes" />`).length > 0, "disabled is a boolean");
     assert.ok(check(`<Flex borderWidth="thick" />`).length > 0, "a width is a number");
     assert.ok(check(`<Flex hoverBackground={4} />`).length > 0, "a colour is a string");
@@ -400,7 +407,7 @@ function Tile() {
   });
 
   it("reserves the new names for a component rooted at a Flex", () => {
-    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "transition", "transitionState", "overflow", "scrollX", "scrollY", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "opacity", "drawnAlpha"]) {
+    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "transition", "transitionState", "overflow", "scrollX", "scrollY", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "opacity", "drawnAlpha", "wrap", "rowGap", "columnGap"]) {
       const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
       assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
     }

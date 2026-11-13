@@ -167,8 +167,21 @@ export class Layouter {
     return padding + borderRoom(f);
   }
 
+  /** Pixels between neighbouring children along the main axis: `columnGap` for a row, `rowGap` for a column, else `gap`. */
   #gap(f: Flex): number {
-    return f.gap > 0 && Number.isFinite(f.gap) ? f.gap : 0;
+    const g = (f.direction === "column" ? f.rowGap : f.columnGap) ?? f.gap;
+    return g > 0 && Number.isFinite(g) ? g : 0;
+  }
+
+  /** Pixels between the lines of a wrapping row: `rowGap`, else `gap`. */
+  #lineGap(f: Flex): number {
+    const g = f.rowGap ?? f.gap;
+    return g > 0 && Number.isFinite(g) ? g : 0;
+  }
+
+  /** Whether `f` wraps: a row with `wrap` (a column that asks to is warned of, and does not). */
+  #wraps(f: Flex): boolean {
+    return f.wrap === true && f.direction !== "column";
   }
 
   #direction(f: Flex): number {
@@ -180,6 +193,7 @@ export class Layouter {
   /** Fill in each child's kind, and for a leaf its size and where its own drawing starts, on both axes. */
   #measureChildren(f: Flex): void {
     const box = f.box;
+    if (f.wrap === true && f.direction === "column") this.#host.warn("flex-wrap-column", `A <Flex wrap> must be a row: a column does not wrap, and lays its children out in one line.`);
     let see = false;
     for (let i = 0; i < f.children.length; i++) if ((f.children[i] as GameObject).layoutContents) see = true;
     if (see) {
@@ -295,9 +309,13 @@ export class Layouter {
     }
     const edges = this.#pad(f, axis, false) + this.#pad(f, axis, true);
     const gaps = along && flow > 1 ? this.#gap(f) * (flow - 1) : 0;
-    const content = edges + gaps + (along ? sum : largest);
+    const wraps = this.#wraps(f);
+    // A wrapping row is as tall as its lines one under another (the widths are settled by now), as wide as one line when it can be.
+    const stacked = wraps && axis === Y ? this.#stackLines(f, sizes) : largest;
+    const content = edges + gaps + (along ? sum : stacked);
     // A box that scrolls can be made as small as its edges: what does not fit is scrolled to, so it asks its parent for no more.
-    const contentMinimum = f.overflow === "scroll" ? edges : edges + gaps + (along ? sumMinimum : largestMinimum);
+    // A wrapping row can be as narrow as its widest child.
+    const contentMinimum = f.overflow === "scroll" ? edges : wraps ? edges + (axis === Y ? stacked : largestMinimum) : edges + gaps + (along ? sumMinimum : largestMinimum);
     const mode = box.sizingMode[axis] as number;
     if (mode === FIXED) {
       box.preferred[axis] = box.sizingValue[axis] as number;
@@ -335,7 +353,9 @@ export class Layouter {
     const inner = Math.max((box.size[axis] as number) - this.#pad(f, axis, false) - this.#pad(f, axis, true), 0);
     let flow = 0;
     for (let i = 0; i < n; i++) if (box.childKind[i] !== FLOATING) flow++;
-    const gaps = along && flow > 1 ? this.#gap(f) * (flow - 1) : 0;
+    const wraps = this.#wraps(f);
+    // (A wrapping row's gaps are between the children of a line, not of all of them.)
+    const gaps = along && flow > 1 && !wraps ? this.#gap(f) * (flow - 1) : 0;
 
     // Each child's starting size: its own, unless it is a fixed or percentage `Flex`.
     let total = 0;
@@ -354,9 +374,14 @@ export class Layouter {
     }
 
     if (along) {
+      // A wrapping row's children keep their size: what does not fit goes to the next line.
       const free = inner - gaps - total;
-      if (free > EPSILON) this.#grow(f, axis, free);
+      if (wraps) {
+        // (nothing to share out)
+      } else if (free > EPSILON) this.#grow(f, axis, free);
       else if (free < -EPSILON && f.overflow !== "scroll") this.#shrink(f, axis, -free); // a scroll box's children keep their size, and overflow
+    } else if (wraps) {
+      this.#sizeLines(f, axis);
     } else {
       for (let i = 0; i < n; i++) {
         if (box.childKind[i] !== IN_FLOW) continue;
@@ -485,6 +510,10 @@ export class Layouter {
 
   /** Step 4: where each child goes inside this box, written to its `layoutX` / `layoutY`; then the same inside each child `Flex`. */
   #position(f: Flex): void {
+    if (this.#wraps(f)) {
+      this.#positionWrapped(f);
+      return;
+    }
     const box = f.box;
     const kids = f.box.kids;
     const n = kids.length;
@@ -551,6 +580,144 @@ export class Layouter {
     }
     ends[main] = (ends[main] as number) + padMainEnd;
     ends[cross] = (ends[cross] as number) + padCrossEnd;
+    for (let axis = 0; axis < 2; axis++) {
+      const room = (box.contentEnd[axis] as number) - (box.size[axis] as number);
+      box.scrollMax[axis] = f.overflow === "scroll" && room > 0 ? room : 0;
+    }
+    if (f.overflow === "scroll") this.#scroll(f);
+  }
+
+  /**
+   * Break a wrapping row's children into lines: a child starts a new line when it (and the gap before it) would not fit in what is
+   * left of the inner width, except as the first of its line, however wide. Writes `lineEnd` and `lineCount`; a floating child is
+   * out of the flow and in no line's way. It depends only on the children's widths and the box's own, so any pass may ask again.
+   */
+  #breakLines(f: Flex): void {
+    const box = f.box;
+    const n = box.kids.length;
+    const mains = box.childSize[X] as Float64Array;
+    const inner = Math.max((box.size[X] as number) - this.#pad(f, X, false) - this.#pad(f, X, true), 0);
+    const gap = this.#gap(f);
+    let lines = 0;
+    let used = 0;
+    let count = 0;
+    for (let i = 0; i < n; i++) {
+      if (box.childKind[i] === FLOATING) continue;
+      const width = mains[i] as number;
+      if (count > 0 && used + gap + width > inner + EPSILON) {
+        box.lineEnd[lines++] = i;
+        used = 0;
+        count = 0;
+      }
+      used += (count > 0 ? gap : 0) + width;
+      count++;
+    }
+    if (count > 0) box.lineEnd[lines++] = n;
+    box.lineCount = lines;
+  }
+
+  /** Break `f` into lines and give each the height of its tallest child (`heights` is the children's, in order); returns their total with the gaps between. */
+  #stackLines(f: Flex, heights: Float64Array): number {
+    const box = f.box;
+    this.#breakLines(f);
+    let total = 0;
+    let start = 0;
+    for (let line = 0; line < box.lineCount; line++) {
+      const end = box.lineEnd[line] as number;
+      let tallest = 0;
+      for (let i = start; i < end; i++) if (box.childKind[i] !== FLOATING && (heights[i] as number) > tallest) tallest = heights[i] as number;
+      box.lineCross[line] = tallest;
+      total += tallest;
+      start = end;
+    }
+    return box.lineCount > 1 ? total + this.#lineGap(f) * (box.lineCount - 1) : total;
+  }
+
+  /** The cross sizes of a wrapping row's children: one that stretches or grows fills its line, within its own limits. */
+  #sizeLines(f: Flex, axis: number): void {
+    const box = f.box;
+    const kids = box.kids;
+    const sizes = box.childSize[axis] as Float64Array;
+    const minimums = box.childMinimum[axis] as Float64Array;
+    this.#stackLines(f, sizes);
+    let start = 0;
+    for (let line = 0; line < box.lineCount; line++) {
+      const end = box.lineEnd[line] as number;
+      const height = box.lineCross[line] as number;
+      for (let i = start; i < end; i++) {
+        if (box.childKind[i] !== IN_FLOW) continue;
+        const kid = kids[i] as Flex;
+        const mode = kid.box.sizingMode[axis] as number;
+        if (mode === GROW || (mode === FIT && f.alignItems === "stretch")) sizes[i] = Math.max(Math.min(height, this.#maxProp(kid, axis)), minimums[i] as number);
+        else if (mode === FIT) sizes[i] = Math.max(Math.min(sizes[i] as number, height), minimums[i] as number);
+      }
+      start = end;
+    }
+  }
+
+  /** `#position` for a wrapping row: each line on its own, one under another, its children placed along it by `justifyContent` and across it by `alignItems`. */
+  #positionWrapped(f: Flex): void {
+    const box = f.box;
+    const kids = box.kids;
+    const mains = box.childSize[X] as Float64Array;
+    const crosses = box.childSize[Y] as Float64Array;
+    const padStart = this.#pad(f, X, false);
+    const padTop = this.#pad(f, Y, false);
+    const innerMain = Math.max((box.size[X] as number) - padStart - this.#pad(f, X, true), 0);
+    const gap = this.#gap(f);
+    const lineGap = this.#lineGap(f);
+    this.#stackLines(f, crosses); // the lines, now at the children's final heights
+    const ends = box.contentEnd;
+    ends[X] = padStart;
+    ends[Y] = padTop;
+    let top = padTop;
+    let start = 0;
+    for (let line = 0; line < box.lineCount; line++) {
+      const end = box.lineEnd[line] as number;
+      const height = box.lineCross[line] as number;
+      let flow = 0;
+      let used = 0;
+      for (let i = start; i < end; i++) {
+        if (box.childKind[i] === FLOATING) continue;
+        flow++;
+        used += mains[i] as number;
+      }
+      if (flow > 1) used += gap * (flow - 1);
+      const free = innerMain - used;
+      let lead = 0;
+      let between = 0;
+      switch (f.justifyContent) {
+        case "center": lead = free / 2; break;
+        case "end": lead = free; break;
+        case "space-between": if (free > 0 && flow > 1) between = free / (flow - 1); break;
+        case "space-around": if (free > 0 && flow > 0) { between = free / flow; lead = between / 2; } break;
+        case "space-evenly": if (free > 0 && flow > 0) { between = free / (flow + 1); lead = between; } break;
+        default: break;
+      }
+      let cursor = padStart + lead;
+      for (let i = start; i < end; i++) {
+        const kid = kids[i] as GameObject;
+        if (box.childKind[i] === FLOATING) {
+          this.#attach(kid as Flex, box.size[X] as number, box.size[Y] as number);
+          this.#position(kid as Flex);
+          continue;
+        }
+        const crossSize = crosses[i] as number;
+        let across = 0;
+        if (f.alignItems === "center") across = (height - crossSize) / 2;
+        else if (f.alignItems === "end") across = height - crossSize;
+        kid.layoutX = Math.round(cursor - ((box.childOrigin[X] as Float64Array)[i] as number));
+        kid.layoutY = Math.round(top + across - ((box.childOrigin[Y] as Float64Array)[i] as number));
+        if (cursor + (mains[i] as number) > (ends[X] as number)) ends[X] = cursor + (mains[i] as number);
+        if (top + across + crossSize > (ends[Y] as number)) ends[Y] = top + across + crossSize;
+        cursor += (mains[i] as number) + gap + between;
+        if (box.childKind[i] === IN_FLOW) this.#position(kid as Flex);
+      }
+      top += height + lineGap;
+      start = end;
+    }
+    ends[X] = (ends[X] as number) + this.#pad(f, X, true);
+    ends[Y] = (ends[Y] as number) + this.#pad(f, Y, true);
     for (let axis = 0; axis < 2; axis++) {
       const room = (box.contentEnd[axis] as number) - (box.size[axis] as number);
       box.scrollMax[axis] = f.overflow === "scroll" && room > 0 ? room : 0;
