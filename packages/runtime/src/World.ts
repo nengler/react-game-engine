@@ -122,6 +122,11 @@ export class World implements BodySpace {
     return this.#frozen;
   }
 
+  /** Put back a freeze a snapshot had (development rewind). */
+  set frozenSteps(steps: number) {
+    this.#frozen = Math.max(0, Math.floor(steps));
+  }
+
   /**
    * Report that two colliders began touching (the mock has no physics; a
    * collision system calls this). Each collider's own `onCollisionEnter`
@@ -186,11 +191,13 @@ export class World implements BodySpace {
    * before, the one before hears `onPointerLeave` (if it is still in this world) and the new one `onPointerEnter`, as the DOM's
    * `pointerenter` / `pointerleave`. One in an inert subtree counts as none. Dispatch only: renders happen in the next `tick`.
    */
-  reportHover(pointer: Pressable | null): void {
+  reportHover(pointer: Pressable | null, silent = false): void {
     if (pointer !== null && (pointer.world !== this || (this.#hasInert() && this.isInert(pointer as unknown as GameObject)))) pointer = null;
     if (pointer === this.#hovered) return;
     const previous = this.#hovered;
     this.#hovered = pointer;
+    // `silent`: the mouse was already over it (development rewind puts back a tree the mouse was over), so nobody is told.
+    if (silent) return;
     if (previous !== null && previous.world === this) previous.onPointerLeave?.();
     pointer?.onPointerEnter?.();
   }

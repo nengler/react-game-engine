@@ -1774,6 +1774,37 @@ and without it neither exists.
 - **Editing** sets a state through `loadHotState` (`editState`), as hot reload does, or a game-state leaf through `setState`; each
   is logged as an edit from the inspector that a replay does not repeat (rewind, D1, will record them).
 
+## Rewind in `rge dev` (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, D1. `player/src/rewind.ts`; `rge dev` turns it on.
+
+- **Recording.** `Rewind` wraps the backend the player is given (a `Proxy`): live, `frame()` draws and polls as usual and keeps a copy
+  of the input it wrote, which is the next frame's. Each frame's state is hashed (`hashState`: the game states' values and the
+  tree's hot state, walked in order); every `snapshotEvery` frames (60) a snapshot keeps the game states (`GameStore.values`,
+  cloned), a deep copy of the tree's hot state, and the player's clock (`Player.snapshotClock`: the fixed step's driver, a freeze,
+  the animation clock, the next frame's input, and the hovered pointer by its path). Five minutes are kept; older frames and
+  snapshots are dropped.
+- **Going back.** `seek(frame)` restores the snapshot before it (`GameStore.restore`, then `Player.restoreTo`, which builds the
+  root again and gives it the hot state, puts the clock back, starts a collision tracker from what touches now so no enter is
+  reported twice, and makes the pointer the mouse was over the hovered one without telling it), then plays the recorded input to
+  the frame with the backend fed (no drawing but the last frame, no sound). Each replayed frame's hash is compared with the
+  recording's; the first that differs is the divergence.
+- **What makes a replay exact.** Three things had to change for Hearth's wave 10 to replay frame for frame: `restoreHotState`
+  flushes before its first pass (a root with no state of its own restored nothing, as the router builds the active route on a flush;
+  this was a hot reload bug too); a state that holds a class instance (a `useBody` body) is never replaced on restore, its fields are
+  put into the new component's own instance, which keeps its owner (the saved one belonged to the component that left: towers
+  restored with it saw no enemies, and a body after a hot reload stopped colliding); and snapshots copy the tree's state, since a
+  body changes in place.
+- **Paused**, the last frame is drawn again with a bar over it; F2, the arrows, PgUp and PgDn and F4 are rewind's. After a hot
+  reload while paused, `reloaded()` seeks to the same frame with the new code. Resuming drops the recorded future.
+- **Moments.** F4 writes the snapshot before the paused frame and the input after it as JSON (`Moment`; the driver as data,
+  `FixedDriver.toJSON`), and `replayMoment(config, moment, { stores, observe })` plays it on a recording backend.
+- **Not put back:** a built-in's own state (an animation's frame, a camera's smoothing), particles in flight, the music's position,
+  and timers. A replay rebuilds the tree, so a `useMount` runs again; one that changes state can make it differ, which the hash
+  check reports.
+- **Cost** (Hearth, wave 10 at 2×, V8): a frame 1.46 → 1.83 ms mean while recording (p99 3.9 → 4.8); going back half a second
+  46 ms, a whole second 67 ms.
+
 ## Effects that happen at a moment (priority 7, 2026-11-11)
 
 Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each

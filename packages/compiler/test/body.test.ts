@@ -4,7 +4,7 @@
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, World, registerTilemaps, type TilemapData } from "@rge/runtime";
+import { Entity, World, captureHotState, registerTilemaps, restoreHotState, type TilemapData } from "@rge/runtime";
 import { dirname, join } from "node:path";
 import { cleanOutput, closeCompiler, compile, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -115,5 +115,37 @@ describe("useBody's overlapping", () => {
     world.flush();
     world.tick(1 / 60);
     assert.deepEqual(seen, ["near"], "the far enemy is outside its box, and the wall is not an enemy");
+  });
+});
+
+describe("useBody across a hot reload", () => {
+  it("keeps the body's place in the new component's own body, which still knows its owner and stops at walls", async () => {
+    registerTilemaps({ "body-room": ROOM });
+    const compiled = compile(HERO);
+    type P = { onLanded: (y: number) => void; onSpikes: () => void };
+    const { Room } = await load<{ Room: new (p: P) => Entity }>(compiled);
+    const world = new World();
+    const props: P = { onLanded: () => {}, onSpikes: () => {} };
+    const first = new Room(props);
+    world.mount(first);
+    world.flush();
+    for (let i = 0; i < 10; i++) {
+      world.tick(1 / 30);
+      world.flush();
+    }
+    const saved = captureHotState(first);
+    world.root.removeChild(first);
+    const second = new Room(props);
+    world.mount(second);
+    restoreHotState(world, second, saved);
+    const hero = second.children[3] as Entity;
+    const before = { x: hero.transform.x, y: hero.transform.y };
+    assert.ok(before.x > 0, "it kept where it was");
+    for (let i = 0; i < 60; i++) {
+      world.tick(1 / 30);
+      world.flush();
+    }
+    assert.equal(hero.transform.y, 20, "and still lands on the floor: its body is attached to it, not to the component that left");
+    assert.equal(hero.transform.x, 12, "and still stops at the crate");
   });
 });

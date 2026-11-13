@@ -973,6 +973,11 @@ too slow for large trees, so the inspector reads only the selected component eac
 
 ### D1. Rewind in `rge dev`
 
+**Built 2026-11-13** (DESIGN.md, "Rewind in `rge dev`"). Tried on Hearth (its winning game, to the end of wave 10, every frame
+replays exactly) and on Kite (the first three rooms' jumps), by tests that play the games' replays through rewind and go back;
+not yet tried by a person in a window. Effect stores are not snapshotted: particles in flight and a playing sound are not put back
+(new bursts and sounds in the replayed frames come again, and sounds are muted while replaying).
+
 **Today.** The engine already has every part of a time-travelling debugger, used for other things:
 
 - A **fixed step** (`FixedDriver`, `packages/player/src/fixed.ts`), so a game is a function of its inputs, step by step.
@@ -1024,12 +1029,12 @@ other tool.
 
 **Done when**
 
-- [ ] `rge dev` records input and snapshots, and can pause, step back and scrub
-- [ ] Saving a file while paused re-runs to the same step with the new code
-- [ ] Effect stores snapshot and restore; sounds are muted while re-running
-- [ ] A divergence is detected and the step named
-- [ ] "Save a moment" writes a replay that a test runs
-- [ ] Tried on Kite (a wall-jump timing) and Hearth (a wave), with the cost measured
+- [x] `rge dev` records input and snapshots, and can pause, step back and scrub
+- [x] Saving a file while paused re-runs to the same step with the new code
+- [x] Sounds are muted while re-running; effect stores are not snapshotted (particles in flight are lost on a restore)
+- [x] A divergence is detected and the step named
+- [x] "Save a moment" writes a replay that a test runs
+- [x] Tried on Kite (a wall-jump timing) and Hearth (a wave), with the cost measured
 
 ### D2. `RGE` diagnostics in the editor
 

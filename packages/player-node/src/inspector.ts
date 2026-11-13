@@ -9,6 +9,7 @@
  * from those edits; it reads the tree's shape and the selected component a few times a second, not every object every frame.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { Rewind } from "@rge/player";
 import { asData, editState, inspectObject, inspectTree, inspectedObject, type GameObject, type GameStore } from "@rge/runtime";
 
 export interface InspectorOptions {
@@ -19,6 +20,8 @@ export interface InspectorOptions {
   /** The port to serve on: 0 (the default) takes a free one. */
   readonly port?: number;
   readonly log?: (message: string) => void;
+  /** The dev loop's rewind, whose timeline the page shows and drives. */
+  readonly rewind?: Rewind | null;
 }
 
 export interface Inspector {
@@ -37,7 +40,7 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
   const clients = new Set<ServerResponse>();
   let selected: number | null = null;
   let frame = 0;
-  const last = { tree: "", object: "", stores: "" };
+  const last = { tree: "", object: "", stores: "", rewind: "" };
 
   const send = (res: ServerResponse, event: string, data: string): void => {
     res.write(`event: ${event}\ndata: ${data}\n\n`);
@@ -54,7 +57,9 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
   };
 
   const snapshot = (force = false): void => {
-    if (force) last.tree = last.object = last.stores = "";
+    if (force) last.tree = last.object = last.stores = last.rewind = "";
+    const rewind = options.rewind;
+    if (rewind) broadcast("rewind", JSON.stringify({ paused: rewind.paused, ...rewind.range, snapshots: rewind.snapshotFrames, divergence: rewind.divergence }), "rewind");
     const root = options.root();
     broadcast("tree", JSON.stringify(root === null ? null : inspectTree(root)), "tree");
     const object = selected === null ? null : inspectedObject(selected);
@@ -107,6 +112,21 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
     return "not an edit the inspector knows";
   };
 
+  /** Pause, step, scrub or play on, from the page's timeline. */
+  const applyRewind = (data: Record<string, unknown>): string => {
+    const rewind = options.rewind;
+    if (!rewind) return "rewind is off";
+    const action = data["action"];
+    if (action === "pause") {
+      if (rewind.paused === null) rewind.pause();
+    } else if (action === "resume") rewind.resume();
+    else if (action === "seek" && typeof data["frame"] === "number") {
+      if (rewind.paused === null) rewind.pause();
+      rewind.seek(data["frame"]);
+    } else return "not a rewind action";
+    return "ok";
+  };
+
   const server = createServer((req, res) => {
     const url = req.url ?? "/";
     if (req.method === "GET" && url === "/") {
@@ -118,10 +138,11 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
       for (const store of options.stores().values()) store.recording = true;
       req.on("close", () => clients.delete(res));
       snapshot(true);
-    } else if (req.method === "POST" && (url === "/select" || url === "/edit")) {
+    } else if (req.method === "POST" && (url === "/select" || url === "/edit" || url === "/rewind")) {
       void body(req).then((data) => {
         let answer = "ok";
         if (url === "/select") selected = typeof data["id"] === "number" ? data["id"] : null;
+        else if (url === "/rewind") answer = applyRewind(data);
         else answer = applyEdit(data);
         res.writeHead(answer === "ok" ? 200 : 400, { "content-type": "text/plain" });
         res.end(answer);
@@ -170,7 +191,10 @@ const PAGE = `<!doctype html>
   body { margin: 0; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); color: var(--fg); }
   header { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: baseline; }
   header b { font-size: 14px; } header span { color: var(--dim); }
-  main { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(260px, 1.2fr); gap: 1px; background: var(--line); height: calc(100vh - 37px); }
+  header { flex-wrap: wrap; } #rewind { display: inline-flex; gap: 6px; align-items: center; } #rewind[hidden] { display: none; }
+  #rewind input { width: 260px; } button { font: inherit; background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 4px; padding: 1px 8px; cursor: pointer; }
+  .diverged { color: #e5534b; }
+  main { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(260px, 1.2fr); gap: 1px; background: var(--line); height: calc(100vh - 44px); }
   @media (max-width: 800px) { main { grid-template-columns: 1fr; height: auto; } }
   section { background: var(--panel); overflow: auto; padding: 8px 12px; min-width: 0; }
   h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); margin: 6px 0; }
@@ -188,7 +212,16 @@ const PAGE = `<!doctype html>
 </style>
 </head>
 <body>
-<header><b>rge inspector</b><span id="status">connecting…</span><span>edits here are development-only</span></header>
+<header><b>rge inspector</b><span id="status">connecting…</span><span>edits here are development-only</span>
+  <span id="rewind" hidden>
+    <button id="rw-pause" title="Pause (F2 in the window)">pause</button>
+    <button id="rw-back" title="One frame back">◀</button>
+    <input id="rw-at" type="range" min="0" max="0" value="0" aria-label="Frame">
+    <button id="rw-next" title="One frame on">▶</button>
+    <button id="rw-play" title="Play on from here (the recorded future is dropped)">play</button>
+    <span id="rw-label"></span>
+  </span>
+</header>
 <main>
   <section><h2>Tree</h2><ul id="tree"><li class="empty">waiting for the game</li></ul></section>
   <section><h2>Selected</h2><div id="object"><p class="empty">Select a component in the tree.</p></div></section>
@@ -272,6 +305,24 @@ events.onerror = () => (document.getElementById("status").textContent = "disconn
 events.addEventListener("tree", (e) => renderTree(JSON.parse(e.data)));
 events.addEventListener("object", (e) => renderObject(JSON.parse(e.data)));
 events.addEventListener("stores", (e) => renderStores(JSON.parse(e.data)));
+let rewindAt = 0;
+events.addEventListener("rewind", (e) => {
+  const r = JSON.parse(e.data);
+  const bar = document.getElementById("rewind");
+  bar.hidden = false;
+  const at = r.paused ?? r.to;
+  rewindAt = at;
+  const range = document.getElementById("rw-at");
+  range.min = String(r.from); range.max = String(r.to); range.value = String(at);
+  const label = document.getElementById("rw-label");
+  label.textContent = (r.paused === null ? "playing, frame " : "paused at frame ") + at + " of " + r.from + "–" + r.to + (r.divergence !== null ? "  (plays differently from frame " + r.divergence + ")" : "");
+  label.className = r.divergence !== null ? "diverged" : "";
+});
+document.getElementById("rw-pause").onclick = () => post("/rewind", { action: "pause" });
+document.getElementById("rw-play").onclick = () => post("/rewind", { action: "resume" });
+document.getElementById("rw-back").onclick = () => post("/rewind", { action: "seek", frame: rewindAt - 1 });
+document.getElementById("rw-next").onclick = () => post("/rewind", { action: "seek", frame: rewindAt + 1 });
+document.getElementById("rw-at").onchange = (e) => post("/rewind", { action: "seek", frame: Number(e.target.value) });
 </script>
 </body>
 </html>

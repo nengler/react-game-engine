@@ -153,6 +153,22 @@ export class GameStore<S = object> {
     for (const path of paths) this.#subscribers.get(path)?.delete(object);
   }
 
+  /**
+   * Put back a state taken earlier (development rewind): every value of `snapshot`, keeping this store's actions, telling every
+   * reader of a leaf that changed.
+   */
+  restore(snapshot: Record<string, unknown>): void {
+    const before = this.#state;
+    const actions = Object.fromEntries(Object.entries(before as Record<string, unknown>).filter(([, v]) => typeof v === "function"));
+    this.#state = { ...snapshot, ...actions } as S;
+    this.#notify(changedPaths(before as Tree, this.#state as Tree, "", []));
+  }
+
+  /** The values of the state, without its actions: what rewind keeps (the state is replaced, never changed in place, so this is a snapshot). */
+  values(): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(this.#state as Record<string, unknown>).filter(([, v]) => typeof v !== "function"));
+  }
+
   /** Back to the state the creator returned, telling every reader. The player does this at start. */
   reset(): void {
     const before = this.#state;

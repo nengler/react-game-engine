@@ -27,6 +27,9 @@ export function captureHotState(root: GameObject): HotState {
 export function restoreHotState(world: World, root: GameObject, saved: HotState): number {
   if (saved.size === 0) return 0;
   const done = new Set<string>();
+  // Build the tree first: a component's children (a router's active route, a list's items) exist only once it has rendered,
+  // so a root with no state of its own would otherwise restore nothing on the first pass and stop there.
+  world.flush();
   // Each pass restores at least one object, so this ends; the bound only guards against a tree that never settles.
   for (let pass = 0; pass < 1000; pass++) {
     let restored = 0;
@@ -62,4 +65,22 @@ function walk(object: GameObject, path: string, visit: (object: GameObject, path
     seen.set(name, index + 1);
     walk(child, `${path}/${name}:${index}`, visit);
   }
+}
+
+/** An object's path in the tree under `root`, as hot state names it (`Main/Play:0/Pad[7]`), or null when it is not under it. */
+export function pathIn(root: GameObject, target: GameObject): string | null {
+  let found: string | null = null;
+  walk(root, rootPath(root), (object, path) => {
+    if (object === target) found = path;
+  });
+  return found;
+}
+
+/** The object at a path in the tree under `root` (see `pathIn`), or null. */
+export function objectAt(root: GameObject, wanted: string): GameObject | null {
+  let found: GameObject | null = null;
+  walk(root, rootPath(root), (object, path) => {
+    if (path === wanted) found = object;
+  });
+  return found;
 }

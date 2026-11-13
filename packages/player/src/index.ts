@@ -5,7 +5,8 @@ export { DrawList, estimateTextWidth, FrameBuilder, walkTree, type BuiltFrame, t
 export { FixedDriver, type StepRunner } from "./fixed.ts";
 export { HOST_BACKEND_KEY, HOST_RUN_KEY, hostBackend } from "./host.ts";
 export { PlayerInput } from "./input.ts";
-export { createPlayer, DEFAULT_WINDOW, describeError, layoutError, MAX_DT, MAX_STEPS_PER_FRAME, run, type ErrorLine, type Player, type PlayerConfig } from "./loop.ts";
+export { createPlayer, DEFAULT_WINDOW, describeError, layoutError, MAX_DT, MAX_STEPS_PER_FRAME, run, type ErrorLine, type Player, type PlayerClock, type PlayerConfig } from "./loop.ts";
+export { hashState, replayMoment, Rewind, type Moment, type RewindOptions } from "./rewind.ts";
 export * from "./protocol.ts";
 export { applyInputFrame, RecordingBackend, type DecodedRecord, type InputFrame, type RecordedFrame, type RecordingOptions } from "./recording.ts";
 export { borderRects, fitScreen, onScreen, viewToWindow, type ScreenPlacement, type WindowRect } from "./screen.ts";

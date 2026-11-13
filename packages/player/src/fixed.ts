@@ -49,6 +49,26 @@ export class FixedDriver {
     this.#update = new Uint8Array(keys);
   }
 
+  /** The driver's state as plain data (a saved rewind moment), and back. */
+  toJSON(): { readonly hz: number; readonly accumulator: number; readonly edges: readonly number[]; readonly carried: readonly number[] } {
+    return { hz: 1 / this.dt, accumulator: this.#accumulator, edges: [...this.#edges], carried: [...this.#carried] };
+  }
+
+  static fromJSON(state: { readonly hz: number; readonly accumulator: number; readonly edges: readonly number[]; readonly carried: readonly number[] }): FixedDriver {
+    const driver = new FixedDriver(state.hz, state.edges.length);
+    driver.#accumulator = state.accumulator;
+    driver.#edges.set(state.edges);
+    driver.#carried.set(state.carried);
+    return driver;
+  }
+
+  /** Take another driver's state (one `clone` made earlier): what development rewind puts back. */
+  copyFrom(other: FixedDriver): void {
+    this.#accumulator = other.#accumulator;
+    this.#edges.set(other.#edges);
+    this.#carried.set(other.#carried);
+  }
+
   /** A driver in the same state, for a replay that branches. */
   clone(): FixedDriver {
     const copy = new FixedDriver(1 / this.dt, this.#keys);

@@ -1,4 +1,4 @@
-import { Flex, Game, WIDGET_NONE, World, captureHotState, setTextDefaults, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, setGameTree, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
+import { Flex, Game, WIDGET_NONE, World, captureHotState, objectAt, pathIn, setTextDefaults, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, setGameTree, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -72,6 +72,17 @@ export interface Player {
    * world is left as the error found it and is not stepped, so a `reload` can still take its state.
    */
   readonly failure: { readonly error: unknown } | null;
+  /**
+   * Development rewind: what drives the steps besides the tree and the game state (the fixed step's carried time and key edges,
+   * a freeze, the animation clock, the input for the next frame), to put back with `restoreTo`.
+   */
+  snapshotClock(): PlayerClock;
+  /**
+   * Development rewind: build `config.root` again in place of the current root, give it `hot` (a `captureHotState`) and put
+   * `clock` back, so the next `step` runs as the frame after the snapshot did. The colliders that touch now are taken as already
+   * touching (no enter is reported for them again). Returns false (and shows the error) if the build throws.
+   */
+  restoreTo(config: PlayerConfig, hot: HotState, clock: PlayerClock): boolean;
   /** Stop the game and show `error` in the window instead (a host's compile error, say), with `note` as the last line. */
   showError(error: unknown, note?: string): void;
   /**
@@ -83,6 +94,17 @@ export interface Player {
   reload(config: PlayerConfig): boolean;
   /** Close the window and detach from the runtime. Safe to call twice. */
   close(): void;
+}
+
+/** What `Player.snapshotClock` captures. */
+export interface PlayerClock {
+  readonly driver: FixedDriver | null;
+  readonly animationTime: number;
+  readonly frozen: number;
+  readonly values: Float64Array;
+  readonly keys: Uint8Array;
+  /** Which pointer the mouse was over, by its path in the tree, or null. */
+  readonly hovered: string | null;
 }
 
 /** The longest step a frame may simulate: a stall (a breakpoint, a dragged window) must not teleport things. */
@@ -202,7 +224,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const sink = createSoundSink(backend, assets, warner);
   const world = new World();
   // The host's broad phase when it has one; the tracker sweeps in script otherwise.
-  const collisions = new CollisionTracker(undefined, true, true, backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined);
+  let collisions = new CollisionTracker(undefined, true, true, backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined);
   /** The last step's walk, kept to be drawn when nothing has changed since; `stale` once a collision callback ran after it. */
   let lastBuilt: BuiltFrame | null = null;
   let stale = false;
@@ -396,6 +418,50 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     },
     showError(error: unknown, note?: string): void {
       fail(error, note);
+    },
+    snapshotClock(): PlayerClock {
+      const hovered = world.hovered as unknown as GameObject | null;
+      return { driver: driver?.clone() ?? null, animationTime, frozen: world.frozenSteps, values: input.values.slice(), keys: input.keys.slice(), hovered: hovered !== null && current !== null ? pathIn(current, hovered) : null };
+    },
+    restoreTo(next: PlayerConfig, hot: HotState, clock: PlayerClock): boolean {
+      if (closed) throw new Error("The player is closed.");
+      let fresh: GameObject;
+      try {
+        fresh = next.root();
+        if (current !== null) {
+          const old = current;
+          current = null;
+          world.root.removeChild(old);
+        }
+        world.mount(fresh);
+        current = fresh;
+        setGameTree(world, fresh);
+        restoreHotState(world, fresh, hot);
+      } catch (error) {
+        fail(error);
+        return false;
+      }
+      if (driver !== null && clock.driver !== null) driver.copyFrom(clock.driver);
+      animationTime = clock.animationTime;
+      world.frozenSteps = clock.frozen;
+      input.values.set(clock.values);
+      input.keys.set(clock.keys);
+      // What touches now was touching when the snapshot was taken: a tracker that starts from it reports no enter for it.
+      collisions = new CollisionTracker(undefined, true, true, backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined);
+      const settled = builder.build(world.root, input.width, input.height, animationTime);
+      collisions.update({ reportCollision() {}, reportCollisionExit() {} } as unknown as World, settled.colliders);
+      // The pointer the mouse was over when the snapshot was taken is the hovered one again, and nobody hears it enter.
+      pointers = settled.pointers;
+      hudPointersFrom = settled.hudPointersFrom;
+      hudView = settled.hudView;
+      screen = settled.screen;
+      input.view = settled.view;
+      const hovered = clock.hovered === null ? null : objectAt(fresh, clock.hovered);
+      world.reportHover(hovered as unknown as Pressable | null, true);
+      lastBuilt = null;
+      stale = false;
+      failure = null;
+      return true;
     },
     reload(next: PlayerConfig): boolean {
       if (closed) throw new Error("The player is closed.");

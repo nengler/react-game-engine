@@ -463,6 +463,14 @@ export class GameObject<P extends object = {}> {
     if (typeof value !== typeof current || typeof value === "function") return false;
     if (value instanceof GameObject) return false;
     if (typeof value === "object" && value !== null && current !== null && Array.isArray(value) !== Array.isArray(current)) return false;
+    // A state that holds an instance of a class (a `useBody` body) is kept, never replaced: the saved one's fields (from the
+    // component this one replaces, or a plain copy of them in a rewind snapshot) are put into the instance this object already has,
+    // which keeps its own links (its owner, its world). The saved instance belonged to a component that has left, and is detached.
+    if (typeof value === "object" && value !== null && typeof current === "object" && current !== null && Object.getPrototypeOf(current) !== Object.prototype && !Array.isArray(current)) {
+      const proto = Object.getPrototypeOf(value);
+      if (value !== current && (proto === Object.getPrototypeOf(current) || proto === Object.prototype)) Object.assign(current, value);
+      return false;
+    }
     return true;
   }
 
