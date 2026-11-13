@@ -231,14 +231,9 @@ export class HookLowering extends ExpressionLowering {
           }
           const initialValue = this.lowerNode(initializer);
           if (!initialValue) continue;
-          // It may read props and the game state (`useState(start)` with `const start = useGame((s) => s.titleCursor)`): both are
-          // there when the component is made, which is when the initial value is taken, as in a React first render. Not this
-          // component's own state, which is being made alongside it.
-          const ownReads = stateReads(initialValue).filter((read) => state.find((s) => s.id === read)?.globalKey === undefined);
-          if (ownReads.length > 0) {
-            this.report(DiagnosticCode.NonConstantInitialState, "useState initial value must not read other state of this component (it may read props and the game state).", hook.initializer);
-            continue;
-          }
+          // It may read props, the game state (`useState(start)` with `const start = useGame((s) => s.titleCursor)`) and the
+          // component's state declared above it (`useState(() => startSpring(target))`): all are there when the component is made,
+          // which is when the initial value is taken, as in a React first render. (The scope holds only what is declared above.)
           const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
           if (!type) continue;
           const handle = type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain");

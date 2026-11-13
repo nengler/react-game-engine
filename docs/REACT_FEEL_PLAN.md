@@ -733,6 +733,11 @@ sees. B2's shorthand props would widen the list.
 
 ### C1. Motion: springs and tweens
 
+**Built 2026-11-13** (DESIGN.md, "Motion: springs, tweens and opacity"), the hooks layer. Two differences from the proposal: the hooks
+take numbers only (a point is two springs; the math functions take points), and an initial value may now read state declared above
+it, so a spring starts at a target that comes from state. Found: `<Game paused>` stops a pause menu's motion too, so Hearth animates
+its side panel rather than its pause modal. Not built: the `transition` layer.
+
 **Today.** What moves smoothly, the games write by hand from `dt`:
 
 - `<Flex transition>` fades *colours* between states. `useSquash` and `useShake` spring one kind of value each. Nothing eases a
@@ -792,10 +797,10 @@ presentation; a body that moves by gameplay uses `useBody` (A2).
 
 **Done when**
 
-- [ ] `useSpring` and `useTween` ship, with easing by name, and tests for settle, retarget and freeze
-- [ ] `opacity` on transforms, inherited, drawn in both backends, with a parity test
-- [ ] One game uses each (Bramble's notice card, Hearth's panels)
-- [ ] The guide's effects page has a "Motion" section
+- [x] `useSpring` and `useTween` ship, with easing by name, and tests for settle, retarget and freeze
+- [x] `opacity` on transforms, inherited, drawn in both backends, with a parity test
+- [x] One game uses each (Bramble's notice card, Hearth's panels)
+- [x] The guide's effects page has a "Motion" section
 
 ### C2. Timers and sequences
 

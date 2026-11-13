@@ -50,7 +50,7 @@ export { Route, Router, type RouteProps, type RouterProps, type Transition, type
 export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { actionAware, Controls, createControls, createInputState, KEY_NAMES, NO_INPUT, type InputState, type InputSnapshot, type KeyName } from "./input.ts";
-export { clamp, NO_SHAKE, shakeOn, springBack, type ShakeState, type Vector2 } from "./math.ts";
+export { clamp, EASINGS, NO_SHAKE, shakeOn, springBack, springFrom, startSpring, startTween, stepSpring, stepTween, type Animatable, type Easing, type EasingName, type ShakeState, type SpringOptions, type SpringState, type TweenOptions, type TweenState, type Vector2 } from "./math.ts";
 export { keepIfEqual, sameData } from "./equal.ts";
 export { captureGameTree, getGameTree, setGameTree } from "./gameTree.ts";
 export { ContextReader, createContext, Provider, readContext, type Context, type ProviderProps } from "./context.ts";

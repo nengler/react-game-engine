@@ -647,7 +647,11 @@ function paints(flex: Flex): boolean {
 
 /** A `<Flex>`'s opacity as it is used: 0 to 1, and 1 for anything that is not a number. */
 function opacityOf(flex: Flex): number {
-  const a = flex.opacity;
+  return usableOpacity(flex.opacity);
+}
+
+/** An opacity as it is used: 0 to 1, and 1 for anything that is not a number. */
+function usableOpacity(a: number): number {
   return a >= 1 ? 1 : a > 0 ? a : a === a ? 0 : 1;
 }
 
@@ -1150,6 +1154,10 @@ export class FrameBuilder {
       const kind = code & 15;
       const children = node.children;
       const count = children.length;
+      // `transform={{ opacity }}`: this object and all under it are drawn at it, pushed here and popped where the walk leaves it.
+      // Its records have the alpha in them, so neither they nor any under them are copied to another frame (as a <Flex>'s are not).
+      const faded = transform.opacity !== 1;
+      if (faded) list.pushAlpha(usableOpacity(transform.opacity));
       // Where this object's records start, for its children's offsets (a leaf has none).
       const startRel = count > 0 ? list.length - region : 0;
       const colStart = count > 0 ? colliders.length : 0;
@@ -1187,7 +1195,10 @@ export class FrameBuilder {
           break;
         case KIND_ROUTE:
           // A screen a transition has hidden is not drawn, pressed or collided with: its children are not walked at all.
-          if (!(node as Route).visible) return WALK_VOLATILE;
+          if (!(node as Route).visible) {
+            if (faded) list.popAlpha();
+            return WALK_VOLATILE;
+          }
           break;
         case KIND_ROUTER:
           if ((node as Router).cover > 0) covers.push(node as Router);
@@ -1211,6 +1222,7 @@ export class FrameBuilder {
           break;
         case KIND_HUD:
           huds.push({ world: at, object: node });
+          if (faded) list.popAlpha();
           return WALK_VOLATILE; // drawn in a layer of its own, and not entered here
         case KIND_FLEX: {
           if (drawZ !== listZ && paints(node as Flex)) list.setZ((listZ = drawZ));
@@ -1233,10 +1245,14 @@ export class FrameBuilder {
       // An entity, sprite, shape or collider writes what it writes at `at`; a text may shift it, and the rest are not plain drawing.
       const plainKind = (kind < KIND_TEXT && !(kind === KIND_SPRITE && styledSprite(node as Sprite | AnimatedSprite))) || kind === KIND_COLLIDER;
       if (count === 0) {
-        flatWalk = plainKind;
+        flatWalk = plainKind && !faded;
+        if (faded) {
+          list.popAlpha();
+          return WALK_OPAQUE;
+        }
         return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : z !== 0 || code >= FLAG_VOLATILE ? WALK_VOLATILE : WALK_CLEAN;
       }
-      const childAnc = (code & FLAG_OPAQUE) !== 0 ? Infinity : node.selfChangedAt > anc ? node.selfChangedAt : anc;
+      const childAnc = (code & FLAG_OPAQUE) !== 0 || faded ? Infinity : node.selfChangedAt > anc ? node.selfChangedAt : anc;
       // Nothing above changed this frame: what is under is worth copying from last frame, and worth writing down for the next.
       if (reuse && childAnc < lastSerial) {
         const result = walkChildren(children, count, kind, code, at, z, parentSpace, parentZ, childAnc, oldStart, oldCol, oldText, startRel, colStart, textStart);
@@ -1257,7 +1273,7 @@ export class FrameBuilder {
         // A leaf that draws or collides where its parent put it (the `<Shape>`, `<Sprite>` and `<Collider>` of a component that
         // moves) is most of what is here, so it is dealt with in place: what `walk` would do for it, without the call.
         // (Not under a faded box: the records below are written as they are, with no opacity in them.)
-        if (childZ === 0 && list.alpha === 1 && child.children.length === 0 && child.layoutX === 0 && child.layoutY === 0) {
+        if (childZ === 0 && list.alpha === 1 && child.children.length === 0 && child.layoutX === 0 && child.layoutY === 0 && child.transform.opacity === 1) {
           const leaf = child.drawKind >= 0 ? child.drawKind : kindCode(child);
           if (leaf === KIND_SHAPE || leaf === KIND_COLLIDER || (leaf === KIND_SPRITE && !styledSprite(child as Sprite | AnimatedSprite))) {
             const own = child.transform;
@@ -1319,10 +1335,14 @@ export class FrameBuilder {
           if (info !== null) info.ok = false;
         }
       }
-      flatWalk = flat;
+      flatWalk = flat && !faded;
       if (kind === KIND_FLEX) {
         if ((node as Flex).overflow !== "visible") list.popClip();
         if ((node as Flex).drawnAlpha !== 1) list.popAlpha();
+      }
+      if (faded) {
+        list.popAlpha();
+        return WALK_OPAQUE;
       }
       return (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
     };
@@ -1355,7 +1375,8 @@ export class FrameBuilder {
             }
             // It only moved since (nothing else of it, and nothing under it, changed), and everything it wrote is at its own
             // world transform: last frame's records with the new transform in each, and its colliders at the new transform.
-            if (info.flat && child.contentChangedAt < info.built && childZ === 0 && child.transform.z === 0 && child.placement.z === 0) {
+            // (Not when it is faded now: its records were made at full opacity, and an opacity change is reported as a move.)
+            if (info.flat && child.contentChangedAt < info.built && childZ === 0 && child.transform.z === 0 && child.placement.z === 0 && child.transform.opacity === 1) {
               const world = worldIn(childSpace, child);
               const destRel = list.length - region - startRel;
               const destColRel = colliders.length - colStart;
@@ -1483,6 +1504,7 @@ export class FrameBuilder {
                 if (z !== z) z = 0;
                 else hudAnyZ = true;
               }
+              if (object.transform.opacity !== 1) list.pushAlpha(usableOpacity(object.transform.opacity));
               switch (kind) {
                 case KIND_SPRITE:
                   if (z !== listZ) list.setZ((listZ = z));
@@ -1542,6 +1564,7 @@ export class FrameBuilder {
                 if ((object as Flex).overflow !== "visible") list.popClip();
                 if ((object as Flex).drawnAlpha !== 1) list.popAlpha();
               }
+              if (object.transform.opacity !== 1) list.popAlpha();
             },
           );
         }

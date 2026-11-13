@@ -231,8 +231,10 @@ export function Counter() {
     act("collect", 1);
     world.flush();
     assert.equal(counter.text, "30", "only the first value: it is the component's own state from then on");
-    const own = errors(`export function A() { const [a, setA] = useState(1); const [b, setB] = useState(a); return <Entity name="A" />; }`);
-    assert.equal(own[0]?.code, DiagnosticCode.NonConstantInitialState);
+    // As in React, the component's own state declared above may give the first value too (its value when the component is made).
+    const own = build(`export function A() { const [a] = useState(7); const [b] = useState(a * 2); return <Text>{b}</Text>; }`);
+    const { A } = await load<{ A: new () => Text }>(generated(own));
+    assert.equal(new A().text, "14");
   });
 
   it("binds an action: called as a statement in a handler, with arguments, reading nothing", () => {

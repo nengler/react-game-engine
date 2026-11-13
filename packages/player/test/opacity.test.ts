@@ -191,3 +191,81 @@ describe("<Flex opacity> with a transition, in the loop", () => {
     assert.equal(run({}, [0.5, 0.5])[0], 128);
   });
 });
+
+describe("transform={{ opacity }}", () => {
+  const faded = <T extends GameObject>(object: T, opacity: number): T => {
+    object.transform.opacity = opacity;
+    return object;
+  };
+
+  it("fades an object and everything under it, multiplying down the tree; a sibling is as it was", () => {
+    const root = new Entity();
+    const group = faded(new Entity(), 0.5);
+    group.addChild(shape("white"));
+    group.addChild(faded(shape("#ff0000"), 0.5));
+    root.addChild(group);
+    root.addChild(shape("blue"));
+    assert.deepEqual(colors(draw(root)), ["#ffffff80", "#ff000040", "#0000ffff"]);
+  });
+
+  it("fades a leaf on its own, and multiplies with a <Flex opacity> above it", () => {
+    const root = new Entity();
+    root.addChild(faded(shape("white"), 0.5));
+    root.addChild(flex({ opacity: 0.5 }, faded(shape("#00ff00"), 0.5)));
+    assert.deepEqual(colors(draw(root)), ["#ffffff80", "#00ff0040"]);
+  });
+
+  it("fades what is in a <Hud>", () => {
+    const root = new Entity();
+    const hud = new Hud();
+    hud.addChild(faded(shape("white"), 0.5));
+    hud.addChild(shape("blue"));
+    root.addChild(hud);
+    assert.deepEqual(colors(draw(root)), ["#ffffff80", "#0000ffff"]);
+  });
+
+  it("is the same frame when built again from scratch (retain check)", () => {
+    const root = new Entity();
+    const group = faded(new Entity(), 0.25);
+    group.addChild(shape("white"));
+    root.addChild(group);
+    assert.deepEqual(colors(draw(root, true)), ["#ffffff40"]);
+  });
+
+  it("follows a change from frame to frame, as a move is reported: no record keeps last frame's alpha", () => {
+    const backend = new RecordingBackend();
+    const root = new Entity();
+    const group = new Entity();
+    const leaf = shape("white");
+    group.addChild(leaf);
+    root.addChild(group);
+    root.addChild(shape("blue"));
+    const p = createPlayer(backend, { width: 200, height: 100, title: "t", root: () => root, warn: () => {} });
+    const seen: string[][] = [];
+    const frame = (change: () => void): void => {
+      change();
+      backend.queueInput({ dt: 1 / 60 });
+      p.step();
+      seen.push(colors(backend.lastFrame.records));
+    };
+    frame(() => {});
+    frame(() => {});
+    frame(() => ((group.transform.opacity = 0.5), group.markMoved()));
+    frame(() => {});
+    frame(() => ((leaf.transform.opacity = 0.5), leaf.markMoved()));
+    frame(() => ((group.transform.opacity = 1), group.markMoved()));
+    frame(() => ((leaf.transform.opacity = 1), leaf.markMoved()));
+    frame(() => {});
+    p.close();
+    assert.deepEqual(seen, [
+      ["#ffffffff", "#0000ffff"],
+      ["#ffffffff", "#0000ffff"],
+      ["#ffffff80", "#0000ffff"],
+      ["#ffffff80", "#0000ffff"],
+      ["#ffffff40", "#0000ffff"],
+      ["#ffffff80", "#0000ffff"],
+      ["#ffffffff", "#0000ffff"],
+      ["#ffffffff", "#0000ffff"],
+    ]);
+  });
+});

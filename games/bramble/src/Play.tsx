@@ -1,6 +1,7 @@
-import { Camera, Entity, Hud, ParticleLayer, Shape, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Hud, ParticleLayer, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
 import { fx } from "./effects.ts";
 import { Dialogue } from "./Dialogue.tsx";
+import { Notice } from "./Notice.tsx";
 import { useGame } from "./GameState.ts";
 import { Pause } from "./Pause.tsx";
 import { BELLS_NEEDED, MAX_HEARTS } from "./rules/constants.ts";
@@ -36,12 +37,7 @@ export function Play() {
       <ParticleLayer particles={fx} />
       <Hud>
         <Text transform={{ x: 4, y: 3 }} color="#ff6b6b">{`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`}</Text>
-        {run.notice !== null && (
-          <Entity name="Card" transform={{ x: 0, y: 18 }}>
-            <Shape kind="rect" width={320} height={14} color="#10131ccc" />
-            <Text transform={{ x: 0, y: 2 }} width={320} align="center" color="#fff1d6">{run.notice}</Text>
-          </Entity>
-        )}
+        {run.notice !== null && <Notice text={run.notice} />}
         {run.talk !== null && !paused && <Dialogue />}
         {paused && <Pause />}
       </Hud>

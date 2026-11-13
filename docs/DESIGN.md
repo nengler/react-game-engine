@@ -1705,6 +1705,34 @@ without a `<Game>`. `createInputState(snapshot, controls)` gives tests the same 
 an input script's `bindings` takes, so a script's `jump` can hold the game's own keys. An unknown name warns once and lists
 the actions. Not built: rebinding at run time, and axes (a stick's value rather than four directions).
 
+## Motion: springs, tweens and opacity (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, C1, the first layer (hooks).
+
+- **`useSpring(target, { duration, bounce })`** and **`useTween(target, { duration, ease })`** are shipped hooks
+  (`hooks/library.ts`): a `useState` made by `startSpring` / `startTween` and a `useUpdate` that steps it with `stepSpring` /
+  `stepTween` (`runtime/src/math.ts`). Each step returns the same object once settled, so the state stops changing and the component
+  stops rendering. They follow the fixed step, `freeze`, replays and hot reload because they are state stepped in an update. They
+  stop under `<Game paused>` too, which is right for the world and wrong for a pause menu: a clock for presentation that a pause
+  does not stop is not built (Hearth's pause modal does not animate for that reason).
+- **The spring** is set by `duration` and `bounce`, as SwiftUI and Framer Motion set one, and turned into stiffness (2π / d)² and
+  damping 4π (1 − bounce) / d (unit mass; bounce 0 is critically damped) by `springFrom`. It is integrated with semi-implicit Euler
+  in slices of at most 1/240 s, so a stiff spring is stable at any step, and snaps to its target once within 0.001 of it and slower
+  than 0.001. A new target keeps the velocity.
+- **The tween** starts again from its current value when the target changes, over `duration`, along one of `EASINGS` by name or a
+  function.
+- **Numbers only, in the hooks.** A hook's state made by a call is typed `ReturnType<typeof f>`, which cannot depend on the
+  argument, so the hooks take a number (a point is two). The math functions take points in plain code.
+- **An initial value may read state declared above it** (`useState(() => startSpring(target))` with `target` from state), as in
+  React's first render: state fields are made in declaration order. `RGE1303` is no longer reported.
+- **`transform.opacity`** (0 to 1, default 1) is pushed on the draw list's alpha stack (`pushAlpha`, as a `<Flex opacity>` is) where
+  the walk enters the object and popped where it leaves, in the world walk and the HUD walk, so it multiplies down the tree and
+  every record's colour alpha is scaled by it, in both backends (no ABI change). Records with an alpha in them are never copied to
+  another frame: a faded object reports itself `WALK_OPAQUE`, takes no leaf fast path, and is kept out of the "it only moved" copy,
+  since an opacity change is reported as a move.
+- Not built: the plan's second layer (`transition` on a built-in's transform, eased by the runtime without renders), which waits for
+  a game that measures the hooks as too costly.
+
 ## Effects that happen at a moment (priority 7, 2026-11-11)
 
 Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each

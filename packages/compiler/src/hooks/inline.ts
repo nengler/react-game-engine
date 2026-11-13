@@ -467,7 +467,8 @@ function removeHookDeclarations(sf: SourceFile, stores: ReadonlySet<string>, aut
       const keep = bindings.elements.filter((e) => (library ? !LIBRARY_HOOKS.includes(e.name.text) : !isCustomName(e.name.text, stores)));
       if (keep.length === bindings.elements.length) continue;
       if (keep.length === 0 && !statement.importClause?.name) edits.push({ start: statement.getFullStart(), end: statement.getEnd(), text: "" });
-      else edits.push({ start: bindings.getStart(sf), end: bindings.getEnd(), text: `{ ${keep.map((e) => e.name.text).join(", ")} }` });
+      // Each kept name as it was written: `type Child` stays a type import, `a as b` stays renamed.
+      else edits.push({ start: bindings.getStart(sf), end: bindings.getEnd(), text: `{ ${keep.map((e) => e.getText(sf)).join(", ")} }` });
     }
   }
   return edits;
