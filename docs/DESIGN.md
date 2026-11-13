@@ -1022,11 +1022,13 @@ transform, children).
 ## Text
 
 `<Text>` (M10) is a leaf built-in for HUDs, labels and menus. Its content is
-the text between its tags or its `text` prop, which are the same thing:
+its children, and only them (2026-11-12: the `text` attribute is refused, with
+where the words go, and `TextAttributes` leaves it out of the props; before, the
+attribute and the children were two ways to write one thing, PAIN_POINTS.md):
 
 ```tsx
 <Text size={12} color="gold" transform={{ x: 8, y: 8 }}>Score: {score}</Text>
-<Text text={`Score: ${score}`} size={12} />
+<Text size={12}>{`Score: ${score}`}</Text>
 ```
 
 **Runtime.** `Text extends GameObject` with `text`, `size` (default 16) and

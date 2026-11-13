@@ -181,12 +181,11 @@ export function Pointer(_props: PointerProps): JSX.Element {
 export type TextChild = string | number;
 
 /**
- * The content is either the `text` prop or the element's text, never both:
- * `<Text size={12}>Score: {score}</Text>` and `<Text text="Score" />` are the
- * same thing. Elements cannot be children of a `<Text>`.
+ * The content is the element's children, and only them: `<Text size={12}>Score: {score}</Text>`. There is no `text` prop in JSX
+ * (`Omit` takes it out of the props, so the type-check says it does not exist, and the compiler says where the words go).
+ * Elements cannot be children of a `<Text>`.
  */
-export type TextAttributes = Omit<TextProps, "text"> &
-  ({ text: string; children?: never } | { text?: never; children: TextChild | readonly TextChild[] });
+export type TextAttributes = Omit<TextProps, "text"> & { children: TextChild | readonly TextChild[] };
 
 /** A line of text (a label, a HUD readout). */
 export function Text(_props: TextAttributes): JSX.Element {

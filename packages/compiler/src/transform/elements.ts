@@ -106,9 +106,8 @@ export class ElementLowering extends HookLowering {
   /**
    * The text content of a built-in like `<Text>`: its JSX text and `{expressions}`
    * become one string prop (`text`), a template literal when they mix, so
-   * `<Text>Score: {score}</Text>` and `<Text text={`Score: ${score}`} />` are the
-   * same thing and update the same way. The element may use one form or the other.
-   * Returns the prop to add (none when the content is the attribute or is empty).
+   * `<Text>Score: {score}</Text>` is the one way to write it (a `text` attribute is an
+   * error, see `lowerProps`). Returns the prop to add (none when the content is empty).
    */
   protected lowerTextContent(children: readonly JsxChild[], prop: string, props: readonly PropIR[], tag: string, at: Node): PropIR[] {
     const code = DiagnosticCode.UnsupportedJsxChild;
@@ -159,7 +158,7 @@ export class ElementLowering extends HookLowering {
     }
     if (given) return [];
     if (!any) {
-      this.report(DiagnosticCode.UnsupportedJsxChild, `<${tag}> needs content: text between its tags (\`<${tag}>Score: {score}</${tag}>\`) or a \`${prop}\` prop.`, at);
+      this.report(DiagnosticCode.UnsupportedJsxChild, `<${tag}> needs content: the text between its tags (\`<${tag}>Score: {score}</${tag}>\`).`, at);
       return [];
     }
     // `{`Score: ${score}`}` alone is already a template: use it as it is.
@@ -509,6 +508,15 @@ export class ElementLowering extends HookLowering {
       }
       seen.add(name);
       if (SPECIAL_ATTRIBUTES.has(name) || (name === "key" && listItem)) continue;
+      // A built-in whose text is its children (`<Text>Score: {score}</Text>`) takes no `text` attribute: one way to write it.
+      if (!toComponent && this.manifest.textContent[tag] === name) {
+        this.report(
+          DiagnosticCode.UnsupportedAttribute,
+          `Write the text as the children of <${tag}>, not as a \`${name}\` attribute: \`<${tag}>Score: {score}</${tag}>\`, or \`<${tag}>{label}</${tag}>\`.`,
+          attribute,
+        );
+        continue;
+      }
       if (name === "key" || name === "children") {
         this.report(
           DiagnosticCode.UnsupportedAttribute,

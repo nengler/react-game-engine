@@ -27,7 +27,7 @@ export default function Main() {
         <Entity name="Hero" transform={{ x, y }}>
           <Sprite image="hero.png" originX={8} originY={8} />
         </Entity>
-        <Text transform={{ x: 8, y: 8 }} size={12} color="white" text={`steps: ${steps}`} />
+        <Text transform={{ x: 8, y: 8 }} size={12} color="white">{`steps: ${steps}`}</Text>
       </Screen>
     </Game>
   );

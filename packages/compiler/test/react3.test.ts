@@ -105,8 +105,8 @@ export function Clock({ seconds, label, ids }: ClockProps) {
   });
   return (
     <Entity name={picked}>
-      <Text text={\`\${Math.floor(seconds / 60)}:\${String(seconds % 60).padStart(2, "0")} \${label.trim().toUpperCase()} \${(seconds / 7).toFixed(1)}\`} />
-      <Text text={ids.flatMap((id) => [id, id.length]).join(" / ")} />
+      <Text>{\`\${Math.floor(seconds / 60)}:\${String(seconds % 60).padStart(2, "0")} \${label.trim().toUpperCase()} \${(seconds / 7).toFixed(1)}\`}</Text>
+      <Text>{ids.flatMap((id) => [id, id.length]).join(" / ")}</Text>
     </Entity>
   );
 }`;
@@ -149,7 +149,7 @@ export function Walker() {
   return (
     <Entity name={blink ? "on" : "off"}>
       <Sprite image="hero.png" frame={f} transform={{ x, y }} />
-      <Text text={\`\${first} \${third}\`} />
+      <Text>{\`\${first} \${third}\`}</Text>
     </Entity>
   );
 }`;

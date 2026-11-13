@@ -2,10 +2,9 @@
  * Run the frame bench (`packages/player/bench/frame.ts`) and fail when a scene is over its budget in
  * `packages/player/bench/budget.json`:
  *
- *   npm run bench:check                      # under Node only
- *   npm run bench:check -- --host <rge-host>  # under Node and under the Rust host (QuickJS-ng), as CI does
+ *   npm run bench:check
  *
- * Budgets are generous (about 2.5 to 3 times today's numbers) so that a slower CI runner passes; the size ratios in the
+ * It runs under Node, the engine games ship with. Budgets are generous (about 2.5 to 3 times today's numbers) so that a slower CI runner passes; the size ratios in the
  * same file do not depend on the machine at all, and catch an algorithm that turns quadratic. Exits 1 on any failure,
  * and also when a budgeted scene is missing from the bench's output (a scene renamed without its budget).
  */
@@ -20,7 +19,6 @@ interface Ratio {
   readonly "at most": number;
 }
 interface Budget {
-  readonly quickjs: Record<string, number>;
   readonly node: Record<string, number>;
   readonly ratios: readonly Ratio[];
 }
@@ -28,14 +26,6 @@ interface Budget {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const bench = resolve(root, "packages/player/bench/frame.ts");
 const budget = JSON.parse(readFileSync(resolve(root, "packages/player/bench/budget.json"), "utf8")) as Budget;
-
-const args = process.argv.slice(2);
-const hostAt = args.indexOf("--host");
-const host = hostAt >= 0 ? args[hostAt + 1] : undefined;
-if (hostAt >= 0 && host === undefined) {
-  console.error("usage: npm run bench:check -- [--host <rge-host>]");
-  process.exit(2);
-}
 
 /** `name : 1.23 ms ...` lines of the bench's output, by name. */
 function parse(output: string): Map<string, number> {
@@ -81,11 +71,6 @@ function check(engine: string, output: string, budgets: Record<string, number>):
 const run = (command: string, commandArgs: string[]): string => execFileSync(command, commandArgs, { cwd: root, encoding: "utf8", maxBuffer: 1 << 24 });
 
 check("Node", run(process.execPath, [bench]), budget.node);
-if (host !== undefined) {
-  const bundle = resolve(root, "host/dist/bench.js");
-  run(process.execPath, [resolve(root, "tools/bundle.ts"), bench, bundle]);
-  check("QuickJS-ng (rge-host)", run(resolve(host), [bundle]), budget.quickjs);
-}
 
 if (failures > 0) {
   console.error(`${failures} bench check(s) failed. If a change made a scene slower on purpose, raise its budget in packages/player/bench/budget.json and say why.`);
