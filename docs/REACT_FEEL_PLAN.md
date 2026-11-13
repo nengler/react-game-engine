@@ -1212,9 +1212,20 @@ scene is the measure.
 
 **Done when**
 
-- [ ] Generated `render()`s run only the blocks whose dependencies changed, and derived `const`s are cached
-- [ ] Parity passes byte for byte; the bench's state-driven scenes are faster
-- [ ] The guide says that there is no `useMemo` because none is needed, and why
+- [x] Generated `render()`s run only the blocks whose dependencies changed, and derived `const`s are cached
+- [x] Parity passes byte for byte; ~~the bench's state-driven scenes are faster~~ Hearth's wave 10 is faster (see below)
+- [x] The guide says that there is no `useMemo` because none is needed, and why
+
+**Done (2026-11-13), differently from the proposal.** No setter or store notification sets bits: `render()` starts by comparing each
+input its guarded parts read (state fields, props, game-state fields) with its value at the last render, kept in `$in`, which
+builds the dirty mask; each element's values and each child's `updateProps` run only when their mask overlaps it. That needs
+nothing outside the render, so hot reload, rewind, context and the game state work as they did. Derived `const`s were already cached
+(`$memo`, A1); a memo the render always reads is now worked out once at its top instead of at each place it is read (Hearth's
+enemy read one six times a render). Conditions, lists, a route's children and a part that reads something the compiler does not
+follow (a component's own function, a callback prop, an action, an element's own field) always run, and a render whose parts all
+read the same inputs is written as before, unguarded. The bench's state scenes are hand-written classes that mirror generated code
+with one part each, so they do not change; Hearth's wave 10 is the measure: 1.40 → 1.18 ms a frame under Node, 13.5 → 12.2 ms under
+the Rust host (QuickJS). Open question 1: no way to mark a function impure; none was needed.
 
 ---
 

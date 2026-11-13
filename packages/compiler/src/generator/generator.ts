@@ -3,6 +3,7 @@ import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
 import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
 import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
 import { ElementEmitter } from "./elements.ts";
+import { RenderGuard } from "./expressions.ts";
 
 /** Built-ins whose `name` a component root takes from the component when it does not write one (`Game` extends `Entity`). */
 const NAMED_ROOTS: ReadonlySet<string> = new Set(["Entity", "Game"]);
@@ -495,13 +496,45 @@ class ComponentGenerator extends ElementEmitter {
 
       if (hasRender) {
         w.blank();
+        const fields = w.mark();
+        let inputs: readonly string[] = [];
         w.block("override render(): void", () => w.at(c.root.span, () => {
           this.renderTemps = 0;
-          const dynamic = c.root.props.filter((p) => p.kind === "DynamicProp");
-          this.emitReportedWrites(dynamic.map((prop) => ({ target: access("this", prop.name), value: prop.value })), "this.markChanged()");
-          this.emitDynamicTransform(c.root.transform, "this", "transform");
-          this.emitChildUpdates(c.root.children, ROOT, "persistent");
+          const prologue = w.mark();
+          // A memo read where the render always writes is worked out once, at the top, rather than at each place it is read.
+          const renderMemos = new Map<string, string>();
+          const memoLines: string[] = [];
+          for (const memo of this.alwaysReadMemos()) {
+            const local = `$r${renderMemos.size}`;
+            memoLines.push(`const ${local} = ${this.within({ renderMemos }, () => this.expr(memo, true))};`);
+            renderMemos.set(memo.key, local);
+          }
+          const body = (guard: RenderGuard | null): void => {
+            this.renderTemps = 0;
+            this.within({ renderMemos, guard }, () => {
+              const dynamic = c.root.props.filter((p) => p.kind === "DynamicProp");
+              this.emitReportedWrites(dynamic.map((prop) => ({ target: access("this", prop.name), value: prop.value })), "this.markChanged()");
+              this.emitDynamicTransform(c.root.transform, "this", "transform");
+              this.emitChildUpdates(c.root.children, ROOT, "persistent");
+            });
+          };
+          const guard = new RenderGuard();
+          body(guard);
+          if (guard.useful) inputs = guard.inputs;
+          else {
+            // Nothing would be skipped: write the render again without guards.
+            w.truncate(prologue);
+            body(null);
+          }
+          // The dirty mask: a bit for each input a guarded part reads that is not what it was at the last render (all of them the first time).
+          const maskLines =
+            inputs.length === 0
+              ? []
+              : ["const $i = this.$in;", "let $d = 0;", ...inputs.map((input, bit) => `if ($i[${bit}] !== ${input}) { $i[${bit}] = ${input}; $d |= ${1 << bit}; }`)];
+          w.insert(prologue, [...memoLines, ...maskLines]);
         }));
+        // What each input was at the last render; a fresh object at first, which no input can be.
+        if (inputs.length > 0) w.insert(fields, [`readonly $in: unknown[] = new Array(${inputs.length}).fill({});`, ""]);
       }
     });
   }

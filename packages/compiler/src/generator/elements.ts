@@ -1,5 +1,5 @@
 // Layer 2 of ComponentGenerator: the element tree, keyed lists, mounts and transforms, and the code that builds and updates each element.
-import { assertNever, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam, readsParam } from "../ir/types.ts";
+import { assertNever, childExpressions, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam, readsParam, walkStatements } from "../ir/types.ts";
 import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, transformTarget, propertyKey, access } from "./helpers.ts";
 import { HandlerEmitter } from "./handlers.ts";
 
@@ -71,7 +71,7 @@ export class ElementEmitter extends HandlerEmitter {
           this.emitElementUpdates(el, ref, "persistent");
         } else {
           // Inside a conditional subtree the field may be null (e.g. the subtree is unmounted).
-          w.block(`if (${ref} !== null)`, () => this.emitElementUpdates(el, ref, "conditional"));
+          w.block(`if (${ref} !== null)`, () => this.within({ guard: null }, () => this.emitElementUpdates(el, ref, "conditional")));
         }
         break;
       }
@@ -79,7 +79,8 @@ export class ElementEmitter extends HandlerEmitter {
         const el = child.element;
         const ref = this.fieldRef(el);
         w.open(`if (${this.expr(child.condition, true)}) {`);
-        this.within({ conditions: [...this.mode.conditions, child.condition] }, () => {
+        // Not guarded: an element made in this render must have every value written, whatever changed.
+        this.within({ conditions: [...this.mode.conditions, child.condition], guard: null }, () => {
           w.block(`if (${ref} === null)`, () => {
             w.line(`${ref} = ${this.construct(el)};`);
             this.emitStaticTransform(el.transform, ref, transformTarget(el));
@@ -99,7 +100,7 @@ export class ElementEmitter extends HandlerEmitter {
         // A condition that does not read the item (a keyed element's, `{open && <Menu key={screen} …/>}`) holds for every item's callbacks.
         const condition = child.condition;
         const itemFree = condition !== null && !readsParam(condition, child.item.id) && (child.index === null || !readsParam(condition, child.index.id));
-        this.within({ conditions: itemFree ? [...this.mode.conditions, condition] : this.mode.conditions }, () => this.emitList(child, mount, index));
+        this.within({ conditions: itemFree ? [...this.mode.conditions, condition] : this.mode.conditions, guard: null }, () => this.emitList(child, mount, index));
         break;
       }
       case "ChildrenSlot":
@@ -124,15 +125,21 @@ export class ElementEmitter extends HandlerEmitter {
   protected emitReportedWrites(writes: readonly { readonly target: string; readonly value: ExprIR }[], report: string): void {
     if (writes.length === 0) return;
     const w = this.w;
-    const names = writes.map((write) => {
-      const name = `$${++this.renderTemps}`;
-      w.line(`const ${name} = ${this.expr(write.value, true)};`);
-      return name;
-    });
-    w.block(`if (${writes.map((write, i) => `${write.target} !== ${names[i]}`).join(" || ")})`, () => {
-      writes.forEach((write, i) => w.line(`${write.target} = ${names[i]};`));
-      w.line(`${report};`);
-    });
+    const emit = (): void => {
+      const names = writes.map((write) => {
+        const name = `$${++this.renderTemps}`;
+        w.line(`const ${name} = ${this.expr(write.value, true)};`);
+        return name;
+      });
+      w.block(`if (${writes.map((write, i) => `${write.target} !== ${names[i]}`).join(" || ")})`, () => {
+        writes.forEach((write, i) => w.line(`${write.target} = ${names[i]};`));
+        w.line(`${report};`);
+      });
+    };
+    // Where `render()` is guarded, these are worked out only when something they read changed.
+    const test = this.guardTest(writes.map((write) => write.value));
+    if (test === null) emit();
+    else w.block(`if (${test})`, emit);
   }
 
   protected emitPropUpdates(el: ElementIR, ref: string): void {
@@ -143,7 +150,10 @@ export class ElementEmitter extends HandlerEmitter {
       // A component takes all its changed props in one call, which marks it dirty once. With a spread among them the call
       // carries every value prop, in order, so that a named prop after the spread still wins over it.
       const sent = el.props.some((p) => p.kind === "SpreadProp") ? el.props.filter((p) => p.kind !== "CallbackProp") : dynamic;
-      this.w.line(`${ref}.updateProps(${this.propsObject(sent)});`);
+      const line = `${ref}.updateProps(${this.propsObject(sent)});`;
+      const test = this.guardTest(sent.flatMap((p) => ("value" in p ? [p.value] : [])));
+      if (test === null) this.w.line(line);
+      else this.w.block(`if (${test})`, () => this.w.line(line));
     }
   }
 
@@ -335,6 +345,32 @@ export class ElementEmitter extends HandlerEmitter {
   protected emitDynamicTransform(transform: readonly PropIR[], ref: string, target: "transform" | "placement"): void {
     const dynamic = transform.filter((p) => p.kind === "DynamicProp");
     this.emitReportedWrites(dynamic.map((p) => ({ target: `${ref}.${target}.${p.name}`, value: p.value })), `${ref}.markMoved()`);
+  }
+
+  /**
+   * The memos read by what `render()` always writes (the root's values, and every element not under a condition or in a list),
+   * each once, the ones they read before them. `render()` works each out once into a local.
+   */
+  protected alwaysReadMemos(): Extract<ExprIR, { kind: "Memo" }>[] {
+    const found: Extract<ExprIR, { kind: "Memo" }>[] = [];
+    const visit = (e: ExprIR): void => {
+      if (e.kind === "Memo") {
+        if (found.some((m) => m.key === e.key)) return;
+        visit(e.value);
+        found.push(e);
+        return;
+      }
+      if (e.kind === "Callback") return; // runs later, with its own reads
+      for (const child of childExpressions(e)) visit(child);
+      if (e.kind === "Block") walkStatements(e.fn.body, (inner) => inner.kind === "Memo" && visit(inner));
+    };
+    const element = (el: Pick<ElementIR, "props" | "transform" | "children">): void => {
+      for (const p of el.props) if (p.kind === "DynamicProp" || p.kind === "SpreadProp") visit(p.value);
+      for (const p of el.transform) if (p.kind === "DynamicProp") visit(p.value);
+      for (const child of el.children) if (child.kind === "StaticChild") element(child.element);
+    };
+    element(this.c.root);
+    return found;
   }
 
   protected hostHasDynamicProps(): boolean {

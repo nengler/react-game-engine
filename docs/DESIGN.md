@@ -1805,6 +1805,40 @@ and without it neither exists.
 - **Cost** (Hearth, wave 10 at 2×, V8): a frame 1.46 → 1.83 ms mean while recording (p99 3.9 → 4.8); going back half a second
   46 ms, a whole second 67 ms.
 
+## Dependency-scoped `render()` (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, D5. `generator/generator.ts` (the render method), `RenderGuard` in `generator/expressions.ts`, the guards in
+`generator/elements.ts`.
+
+```ts
+override render(): void {
+  const $r0 = this.$memo("at", [this.dist], () => pathAt(MAP.path, this.dist));   // once, not at each read
+  const $i = this.$in;
+  let $d = 0;
+  if ($i[0] !== this.dist) { $i[0] = this.dist; $d |= 1; }
+  if ($i[1] !== this.props.lane) { $i[1] = this.props.lane; $d |= 2; }
+  …
+  if (($d & 3) !== 0) { /* the transform, from dist and lane */ }
+  if (($d & 29) !== 0) { /* the sprite: kind, dist, flash, slow */ }
+```
+
+- **The mask is built in `render()`**, by comparing each input with its value at the last render (`$in`, a fresh object in each slot
+  at first, so the first render runs everything). Nothing else changes: setters, `updateProps`, the game state's notifications,
+  context and hot reload are as they were, and a new instance (hot reload, rewind) starts unguarded.
+- **Inputs** are what `inputsOf` finds: state fields (game-state and context fields are state fields), and props. A part that reads
+  an element's own field (`route.active`), a ref, a handle, or calls the component's own function, a callback prop, an action or a
+  local function is not guarded: its reads are not followed. Imported functions are pure, as everywhere in the compiler.
+- **What is guarded:** the root's values, and each element that is always there: an intrinsic's values (one test per element, as
+  `emitReportedWrites` groups them) and a component's `updateProps`. Under a condition or in a list nothing is: an element made in
+  this render needs every value written.
+- **Only when it saves something.** When every guarded part reads every input, any change runs them all, and the render is written
+  again without the mask (`CodeWriter.truncate`). More than 30 inputs: the parts past the 30th run always.
+- **Memos** the render always reads are worked out once at its top (`alwaysReadMemos`, the ones they read first), and read as locals
+  where the render reads them; callbacks keep reading `$memo` (they run later). Hearth's enemy worked out its position six times a
+  render through `$memo`, each with a new array and closure.
+- **Measured** on Hearth's wave 10 (`tools/frame-time.ts`): 1.40 → 1.18 ms a frame under Node, 13.5 → 12.2 ms under QuickJS (two runs each). The
+  memos alone took Node to 1.28.
+
 ## Placing things: `<Flex>` anywhere, and `x` / `y` as props (2026-11-13)
 
 `REACT_FEEL_PLAN.md`, B2.

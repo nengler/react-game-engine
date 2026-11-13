@@ -1,6 +1,6 @@
 // Base of the component generator: the fields, the expression and field-reference emitters. Layer 0 of ComponentGenerator (see generator.ts).
 import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type RefId, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
-import { collectDependencies } from "../ir/walk.ts";
+import { collectDependencies, walkExpr } from "../ir/walk.ts";
 import { CodeWriter } from "./writer.ts";
 import { param, escapeTemplate, propertyKey } from "./helpers.ts";
 
@@ -24,6 +24,52 @@ export interface EmitMode {
   readonly conditions: readonly ExprIR[];
   /** Memos a callback read once into a local (`const $m0 = this.$memo(…)`), by key: read as that local, which TypeScript can narrow. */
   readonly memoLocals: ReadonlyMap<string, string>;
+  /** Memos `render()` works out once at its top (`const $r0 = this.$memo(…)`), by key; never read from a callback, which runs later. */
+  readonly renderMemos: ReadonlyMap<string, string>;
+  /**
+   * While writing the parts of `render()` that are always there (not under a condition, not a list item): the inputs they read, each
+   * a bit of the render's dirty mask `$d`. Null elsewhere, where nothing is guarded.
+   */
+  readonly guard: RenderGuard | null;
+}
+
+/**
+ * The inputs of one `render()`: each state field, prop and game-state field a guarded part reads, with its bit in the dirty mask.
+ * The render starts by comparing each with its value at the last render (`===`); a part runs only when one of its inputs changed.
+ */
+export class RenderGuard {
+  /** The expression of each input, by bit: `this.dist`, `this.props.lane`. */
+  readonly inputs: string[] = [];
+  /** At most 30, so a mask is a small integer; a part that would need more is not guarded. */
+  static readonly MAX = 30;
+
+  /** The mask of each part guarded so far. */
+  readonly masks: number[] = [];
+
+  /**
+   * Whether guarding saves anything: some input's change leaves some part out. When every part reads every input (one part, or
+   * parts that all read the same things), each would run on any change anyway, and the comparisons would only cost.
+   */
+  get useful(): boolean {
+    const all = this.masks.reduce((a, m) => a | m, 0);
+    return this.masks.some((m) => m !== all);
+  }
+
+  /** The mask of these inputs, adding bits for new ones; null when there are too many. */
+  maskOf(inputs: readonly string[]): number | null {
+    let mask = 0;
+    for (const input of inputs) {
+      let bit = this.inputs.indexOf(input);
+      if (bit === -1) {
+        if (this.inputs.length >= RenderGuard.MAX) return null;
+        bit = this.inputs.length;
+        this.inputs.push(input);
+      }
+      mask |= 1 << bit;
+    }
+    this.masks.push(mask);
+    return mask;
+  }
 }
 
 export class ExpressionEmitter {
@@ -33,7 +79,7 @@ export class ExpressionEmitter {
   protected w: CodeWriter;
   protected readonly stateById: ReadonlyMap<StateId, StateIR>;
   /** Where the emitter is now, and so how some IR is written. Changed only through `within`. */
-  protected mode: EmitMode = { itemLookup: null, inCallback: false, inlineMemos: false, fieldBase: "this", conditions: [], memoLocals: new Map() };
+  protected mode: EmitMode = { itemLookup: null, inCallback: false, inlineMemos: false, fieldBase: "this", conditions: [], memoLocals: new Map(), renderMemos: new Map(), guard: null };
   /** Whether a callback was written with `$assume`, so the module declares it. */
   usesAssume = false;
   /** How many temporaries the `render()` being written has used (see `emitReportedWrites`). */
@@ -54,6 +100,54 @@ export class ExpressionEmitter {
     this.c = component;
     this.w = writer;
     this.stateById = new Map(component.state.map((s) => [s.id, s]));
+  }
+
+  /**
+   * What a value written by `render()` depends on, as the expressions to compare: each state field and prop it reads (through memos,
+   * blocks and nested functions too). Null when it reads something whose changes are not seen that way: an element's own field (a
+   * route being active), a ref, a handle, or a call that may read anything (one of the component's own functions, a callback prop,
+   * a game-state action, a local function). Functions imported from `.ts` files are pure, as the compiler assumes everywhere.
+   */
+  protected inputsOf(values: readonly ExprIR[]): string[] | null {
+    const out: string[] = [];
+    let unknown = false;
+    for (const value of values) {
+      walkExpr(value, (e) => {
+        switch (e.kind) {
+          case "StateRead": {
+            const input = `this.${this.state(e.state).name}`;
+            if (!out.includes(input)) out.push(input);
+            break;
+          }
+          case "PropRead": {
+            const input = `this.props.${e.name}`;
+            if (!out.includes(input)) out.push(input);
+            break;
+          }
+          case "ElementRead":
+          case "RefRead":
+          case "PropertyRead":
+            unknown = true;
+            break;
+          case "Call":
+            if (e.callee.kind === "Own" || e.callee.kind === "Prop" || e.callee.kind === "Local" || e.callee.kind === "Action" || e.callee.kind === "Method") unknown = true;
+            break;
+          default:
+            break;
+        }
+      });
+    }
+    return unknown ? null : out;
+  }
+
+  /** The dirty-mask test for a part of `render()` that writes these values, or null when it is not guarded (it always runs). */
+  protected guardTest(values: readonly ExprIR[]): string | null {
+    const guard = this.mode.guard;
+    if (guard === null) return null;
+    const inputs = this.inputsOf(values);
+    if (inputs === null || inputs.length === 0) return null;
+    const mask = guard.maskOf(inputs);
+    return mask === null ? null : `($d & ${mask}) !== 0`;
   }
 
   /** Emit something in a changed mode; the mode before is back afterwards, whatever happens. */
@@ -180,7 +274,7 @@ export class ExpressionEmitter {
       case "Conditional": return wrap(`${this.expr(e.test)} ? ${this.expr(e.whenTrue)} : ${this.expr(e.whenFalse)}`);
       case "Memo": {
         if (this.mode.inlineMemos) return this.expr(e.value, top);
-        const local = this.mode.memoLocals.get(e.key);
+        const local = this.mode.memoLocals.get(e.key) ?? (this.mode.inCallback ? undefined : this.mode.renderMemos.get(e.key));
         if (local !== undefined) return local;
         // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
         const deps = collectDependencies(e.value).map((d) => (d.kind === "State" ? `this.${this.state(d.state).name}` : d.kind === "Prop" ? `this.props.${d.name}` : null));
