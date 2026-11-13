@@ -23,17 +23,25 @@ export type GameStateCreator<S> = (set: SetGameState<S>, get: GetGameState<S>) =
  *       collect: () => set((s) => ({ coins: s.coins + 1 })),
  *     }));
  *
- * A component reads with a selector, which returns the value: `const hp = useGame((s) => s.player.hp)`, and an action
- * is selected the same way and called in a handler: `const collect = useGame((s) => s.collect)`. Calling `useGame`
+ * A component reads with a selector, which returns the value: `const hp = useGame((s) => s.player.hp)`, and takes the
+ * actions it calls in handlers with `const { collect } = useGame.actions()`. Calling `useGame`
  * is compile-time only (the compiler turns the selector into that one path); `getState` and `setState` work
  * as in Zustand, for code that is not a compiled component.
  */
 export interface GameState<S> {
   <T>(selector: (state: S) => T): T;
   readonly store: GameStore<S>;
+  /**
+   * The store's actions, and nothing else: `const { collect, hurt } = useGame.actions()` in a component (actions never change,
+   * so this subscribes to nothing and never renders it), or `useGame.actions().collect()` in plain code.
+   */
+  actions(): ActionsOf<S>;
   getState(): S;
   setState(partial: Partial<S> | ((state: S) => Partial<S>)): void;
 }
+
+/** The functions of a state: its actions. */
+export type ActionsOf<S> = { readonly [K in keyof S as S[K] extends (...args: never[]) => unknown ? K : never]: S[K] };
 
 /** Create the game's state. Both the curried form (`createGameState<State>()(creator)`) and `createGameState(creator)` work. */
 export function createGameState<S extends object>(): (creator: GameStateCreator<S>) => GameState<S>;
@@ -44,7 +52,11 @@ export function createGameState<S extends object>(creator?: GameStateCreator<S>)
     const use = (): never => {
       throw new Error("useGame(selector) is a compile-time declaration: components are compiled by @rge/compiler, not executed.");
     };
-    return Object.assign(use, { store, getState: () => store.getState(), setState: (partial: Partial<S> | ((state: S) => Partial<S>)) => store.setState(partial) }) as unknown as GameState<S>;
+    const actions = (): ActionsOf<S> => {
+      const state = store.getState() as Record<string, unknown>;
+      return Object.fromEntries(Object.entries(state).filter(([, value]) => typeof value === "function")) as ActionsOf<S>;
+    };
+    return Object.assign(use, { store, actions, getState: () => store.getState(), setState: (partial: Partial<S> | ((state: S) => Partial<S>)) => store.setState(partial) }) as unknown as GameState<S>;
   };
   return creator ? make(creator) : make;
 }

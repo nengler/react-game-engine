@@ -125,6 +125,13 @@ export interface UseStoreCallAnalysis {
   readonly selector: Node;
   readonly call: CallExpression;
   readonly declaration: VariableDeclaration;
+  /**
+   * How it was written: a selector (`useGame((s) => …)`), a name from `useGame.actions()` (it must be an action), or a name
+   * destructured from the whole state (`useGame((s) => s)`; an action picked so is pointed at `useGame.actions()`).
+   */
+  readonly via: "select" | "actions" | "whole";
+  /** For `via: "whole"`: which destructuring statement the name came from, so its actions share one warning. */
+  readonly group: number | null;
 }
 
 /** Future hooks become additional variants. */

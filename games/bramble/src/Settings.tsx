@@ -16,7 +16,7 @@ export function Settings() {
       setBindings(bindingsView());
     }),
   );
-  const { adjust, bindKey, resetSettings, closeSettings } = useGame((s) => s);
+  const { adjust, bindKey, resetSettings, closeSettings } = useGame.actions();
   /** The action whose row waits for a key, if any. */
   const [capturing, setCapturing] = useState<string | null>(null);
   return (

@@ -17,7 +17,7 @@ interface PadProps {
  */
 export function Pad({ id, x, y, tower }: PadProps) {
   const selected = useGame((s) => s.cursor === id);
-  const { point, select } = useGame((s) => s);
+  const { point, select } = useGame.actions();
   const [hovered, setHovered] = useState(false);
 
   return (

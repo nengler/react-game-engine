@@ -48,8 +48,8 @@ TSX invites people to write React, and then they hit `RGE` codes.
 
 ## 4. Game state: Zustand-shaped, with extra rules
 
-- A selector subscribes to the paths it reads, but `useGame((s) => s)` is allowed only to destructure actions; otherwise it is "Read a
-  path of the game state, not the whole state".
+- ~~A selector subscribes to the paths it reads, but `useGame((s) => s)` is allowed only to destructure actions~~ *Since
+  2026-11-13:* actions come from `const { collect } = useGame.actions()`; taking them from `useGame((s) => s)` warns.
 - Actions are called as statements in handlers, never in JSX.
 - `GameState.ts` must return an object literal: no spreads or computed keys (`RGE1109`).
 - Settings and controls are stores of their own, so the game mirrors them by hand

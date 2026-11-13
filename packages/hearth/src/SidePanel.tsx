@@ -12,7 +12,9 @@ import { COLOR, ICON } from "./theme.ts";
 /** The right 80 pixels: the numbers, what the cursor is on, and the buttons that start a wave and change the speed. */
 export function SidePanel() {
   const { gold, lives, wave, active } = useGame((s) => s.battle);
-  const { open, speed, startWave, toggleSpeed, togglePause } = useGame((s) => s);
+  const open = useGame((s) => s.open);
+  const speed = useGame((s) => s.speed);
+  const { startWave, toggleSpeed, togglePause } = useGame.actions();
   const occupied = useGame((s) => s.battle.pads[s.cursor]?.tower != null);
 
   return (

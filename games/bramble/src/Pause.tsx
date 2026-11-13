@@ -9,7 +9,7 @@ import { pauseRows } from "./rules/menu.ts";
  * the keys and the world hears none; Escape closes it here, since the play screen no longer hears it.
  */
 export function Pause() {
-  const { togglePause, choosePaused } = useGame((s) => s);
+  const { togglePause, choosePaused } = useGame.actions();
   useInput((input) => {
     if (input.pressed("back")) togglePause();
   });

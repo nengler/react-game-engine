@@ -530,6 +530,8 @@ theme that changes at run time (a colour-blind setting, light and dark palettes)
 
 ### B4. Actions without `useGame((s) => s)`
 
+**Built 2026-11-13.** See DESIGN.md, "Actions: `useGame.actions()`".
+
 **Today.** To get actions, a component writes `const { advance, togglePause } = useGame((s) => s)`: nine times across the games.
 Selecting the whole state is otherwise refused ("Read a path of the game state, not the whole state"), so this is a special case
 the author has to learn, and it looks like the Zustand anti-pattern it is an exception to. The alternative, one
@@ -555,9 +557,9 @@ const { advance, togglePause } = useGame.actions();
 
 **Done when**
 
-- [ ] `useGame.actions()` compiles, subscribes to nothing, and is typed by the store
-- [ ] `useGame((s) => s)` warns with the new spelling; the games and the template use the new one
-- [ ] The guide's game state section shows it
+- [x] `useGame.actions()` compiles, subscribes to nothing, and is typed by the store
+- [x] `useGame((s) => s)` warns with the new spelling; the games and the template use the new one
+- [x] The guide's game state section shows it
 
 ### B5. `useStore` for stores outside the game state
 
