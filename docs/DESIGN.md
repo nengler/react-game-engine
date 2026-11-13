@@ -1824,7 +1824,8 @@ window, the screenshots, the comparison), `cli/src/commands/preview.ts`, and a `
   the inspector are off.
 - **Screenshots** go through `renderRun` (the headless build), one hidden window per story at its size times its scale, after the
   story's input and one more step for the layout. `rge check` runs `rge preview --compare` in a process of its own; any pixel that
-  differs fails (`--tolerance` allows a difference per channel).
+  differs fails (`--tolerance` allows a difference per channel). The pictures are the software renderer's, and only the headless
+  build is used for them: the OpenGL build blends a translucent colour (Hearth's end screen's shade) a little differently.
 - **Keys.** Rewind's "a second" keys were PageUp and PageDown, which are not in `KEY_NAMES`: `KEY_INDEX.get` gave `undefined` and
   the keys never worked. They are ↑ and ↓ now, and F5 and F6 were free for stories.
 

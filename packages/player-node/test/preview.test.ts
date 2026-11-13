@@ -4,13 +4,13 @@
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RecordingBackend, type Player } from "@rge/player";
 import { Text, type GameObject } from "@rge/runtime";
-import { findNativeLibrary } from "../src/ffi.ts";
+import { libraryFileName, nativeLibrary } from "@rge/native";
 import { compareScreenshots, loadPreviews, pixelDifference, previewWithReload } from "../src/preview.ts";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -113,11 +113,14 @@ describe("rge preview", () => {
     assert.equal(pixelDifference(a, { width: 1, height: 2, rgba: a.rgba }), "2 × 1 now, 1 × 2 stored");
   });
 
-  const library = findNativeLibrary("headless");
-  it("renders Hearth's stories as their stored screenshots", { skip: library === null ? "the headless librge is not built" : false }, async () => {
+  // The stored pictures are the software renderer's: the OpenGL build blends translucent colours a little differently, so only
+  // the headless build is compared (as `rge check` does).
+  const headless = nativeLibrary("headless") ?? [join(repo, "native/build-headless", libraryFileName())].find((path) => existsSync(path)) ?? null;
+  it("renders Hearth's stories as their stored screenshots", { skip: headless === null ? "the headless librge is not built" : false }, async () => {
     const hearth = join(repo, "packages/hearth");
     const cwd = process.cwd();
-    process.env["RGE_NATIVE_LIB"] ??= library!;
+    const before = process.env["RGE_NATIVE_LIB"];
+    process.env["RGE_NATIVE_LIB"] = headless!;
     process.chdir(hearth);
     const out = mkdtempSync(join(tmpdir(), "rge-previews-"));
     try {
@@ -127,6 +130,8 @@ describe("rge preview", () => {
       rmSync(out, { recursive: true, force: true });
     } finally {
       process.chdir(cwd);
+      if (before === undefined) delete process.env["RGE_NATIVE_LIB"];
+      else process.env["RGE_NATIVE_LIB"] = before;
     }
   });
 });
