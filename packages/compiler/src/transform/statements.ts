@@ -13,6 +13,11 @@ import {
   isContinueStatement,
   isExpressionStatement,
   isForOfStatement,
+  isForStatement,
+  isDoStatement,
+  isWhileStatement,
+  isTryStatement,
+  isThrowStatement,
   isIdentifier,
   isIfStatement,
   isPostfixUnaryExpression,
@@ -27,7 +32,9 @@ import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import {
   localId,
   type AssignOperator,
+  type AssignStmtIR,
   type AssignTargetIR,
+  type LocalConstStmtIR,
   type LoopBindingIR,
   type ExprIR,
   type FunctionIR,
@@ -141,6 +148,8 @@ interface Jumps {
 }
 
 const NO_JUMPS: Jumps = { break: false, continue: false };
+/** Inside a loop's body: both. */
+const LOOP_JUMPS: Jumps = { break: true, continue: true };
 
 /** Where statements are lowered: in a block scope of their own (`const`s declared inside do not leak out), and what they may jump out of. */
 interface BlockOptions {
@@ -175,6 +184,50 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
 
   if (isForOfStatement(statement)) return lowerForOf(ctx, statement, options);
 
+  if (isWhileStatement(statement) || isDoStatement(statement)) {
+    const test = ctx.lowerExpression(statement.expression);
+    const body = lowerStatements(ctx, isBlock(statement.statement) ? statement.statement.statements : [statement.statement], options, { newScope: true, jumps: LOOP_JUMPS });
+    return test && body && { kind: "While", test, body, doWhile: isDoStatement(statement) };
+  }
+
+  if (isForStatement(statement)) return lowerFor(ctx, statement, options);
+
+  if (isTryStatement(statement)) {
+    const block = lowerStatements(ctx, statement.tryBlock.statements, options, { newScope: true, jumps });
+    if (!block) return null;
+    let handler: { binding: { local: ReturnType<typeof localId>; name: string } | null; body: StatementIR[] } | null = null;
+    if (statement.catchClause) {
+      const clause = statement.catchClause;
+      const declared = clause.variableDeclaration;
+      if (declared && !isIdentifier(declared.name)) {
+        ctx.error(DiagnosticCode.UnsupportedStatement, "A `catch` binds one name (`catch (e)`), or none (`catch`).", declared);
+        return null;
+      }
+      const caught = ctx.inScope((scope) => {
+        let binding: { local: ReturnType<typeof localId>; name: string } | null = null;
+        if (declared && isIdentifier(declared.name)) {
+          const name = declared.name.text;
+          if (!checkFreshName(ctx, name, declared.name)) return null;
+          const local = localId(ctx.componentName, name, ctx.nextSerial());
+          scope.declare(name, { kind: "local", id: local, name, mutable: false });
+          binding = { local, name };
+        }
+        const body = lowerStatements(ctx, clause.block.statements, options, { newScope: false, jumps });
+        return body && { binding, body };
+      });
+      if (!caught) return null;
+      handler = caught;
+    }
+    const finalizer = statement.finallyBlock ? lowerStatements(ctx, statement.finallyBlock.statements, options, { newScope: true, jumps }) : null;
+    if (statement.finallyBlock && !finalizer) return null;
+    return { kind: "Try", block, handler, finalizer };
+  }
+
+  if (isThrowStatement(statement)) {
+    const value = ctx.lowerExpression(statement.expression);
+    return value && { kind: "Throw", value };
+  }
+
   if (isBlock(statement)) {
     const body = lowerStatements(ctx, statement.statements, options, { newScope: true, jumps });
     return body && { kind: "Block", body };
@@ -186,11 +239,11 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const isBreak = isBreakStatement(statement);
     const word = isBreak ? "break" : "continue";
     if (statement.label) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, `Labelled \`${word}\` is not supported: it leaves the innermost ${isBreak ? "`for…of` or `switch`" : "`for…of`"}.`, statement);
+      ctx.error(DiagnosticCode.UnsupportedStatement, `Labelled \`${word}\` is not supported: it leaves the innermost ${isBreak ? "loop or `switch`" : "loop"}.`, statement);
       return null;
     }
     if (!(isBreak ? jumps.break : jumps.continue)) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, `\`${word}\` is only valid inside a ${isBreak ? "`for…of` loop or a `switch`" : "`for…of` loop"} of the same function.`, statement);
+      ctx.error(DiagnosticCode.UnsupportedStatement, `\`${word}\` is only valid inside a ${isBreak ? "loop or a `switch`" : "loop"} of the same function.`, statement);
       return null;
     }
     return { kind: isBreak ? "Break" : "Continue" };
@@ -251,10 +304,72 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
 
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
-    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, \`for…of\` (with \`break\` and \`continue\`), \`const\`, \`let\` and \`return\`.`,
+    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
     statement,
   );
   return null;
+}
+
+/** The parts of `a, b, c` (a comma list in a `for` loop's head), in order. */
+function commaParts(expression: Expression): Expression[] {
+  const e = unwrapParens(expression);
+  if (isBinaryExpression(e) && e.operatorToken.kind === SyntaxKind.CommaToken) return [...commaParts(e.left), ...commaParts(e.right)];
+  return [e];
+}
+
+/**
+ * `for (let i = 0; i < n; i++) { … }`: the `let`s are the loop's own (declared in a scope around the test, the update and the
+ * body); an initializer that is not a declaration, and the update, are assignments (`i++` is `i += 1`), as comma lists.
+ */
+function lowerFor(ctx: LoweringContext, statement: Statement & { kind: SyntaxKind.ForStatement }, options: FunctionOptions): StatementIR | null {
+  const loop = statement as unknown as { initializer?: Node; condition?: Expression; incrementor?: Expression; statement: Statement };
+  const shape = "A `for` loop's head is `let` locals or assignments, a test, and assignments: `for (let i = 0; i < n; i++)`";
+  const assignments = (expression: Expression): AssignStmtIR[] | null => {
+    const out: AssignStmtIR[] = [];
+    for (const part of commaParts(expression)) {
+      const lowered = lowerExpressionStatement(ctx, part, part);
+      if (!lowered) return null;
+      if (lowered.kind !== "Assign") {
+        ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}.`, part);
+        return null;
+      }
+      out.push(lowered);
+    }
+    return out;
+  };
+  return ctx.inScope(() => {
+    const init: (LocalConstStmtIR | AssignStmtIR)[] = [];
+    const list = loop.initializer;
+    if (list !== undefined && isVariableDeclarationList(list)) {
+      if ((list.flags & NodeFlags.Let) === 0) {
+        ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: its locals are \`let\`.`, list);
+        return null;
+      }
+      for (const decl of list.declarations) {
+        if (!isIdentifier(decl.name) || !decl.initializer) {
+          ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: each \`let\` is one name with a value.`, decl);
+          return null;
+        }
+        const value = ctx.lowerExpression(decl.initializer);
+        const name = decl.name.text;
+        if (!value || !checkFreshName(ctx, name, decl.name)) return null;
+        const id = localId(ctx.componentName, name, ctx.nextSerial());
+        ctx.scope.declare(name, { kind: "local", id, name, mutable: true });
+        const type = decl.type ? ctx.typeFromNode(decl.type) : undefined;
+        init.push({ kind: "LocalConst", id, name, value, mutable: true, ...(type ? { type } : {}) });
+      }
+    } else if (list !== undefined) {
+      const assigned = assignments(list as Expression);
+      if (!assigned) return null;
+      init.push(...assigned);
+    }
+    const test = loop.condition ? ctx.lowerExpression(loop.condition) : null;
+    if (loop.condition && !test) return null;
+    const update = loop.incrementor ? assignments(loop.incrementor) : [];
+    if (!update) return null;
+    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: LOOP_JUMPS });
+    return body && { kind: "For", init, test, update, body };
+  });
 }
 
 /**
@@ -314,7 +429,7 @@ function lowerForOf(ctx: LoweringContext, statement: Statement & { kind: SyntaxK
     };
     const binding = bind(pattern);
     if (!binding) return null;
-    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: { break: true, continue: true } });
+    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: LOOP_JUMPS });
     return body && { kind: "ForOf", binding, iterable, body };
   });
 }

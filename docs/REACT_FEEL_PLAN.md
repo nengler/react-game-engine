@@ -84,6 +84,10 @@ chooses to put some logic in a reducer; it is not the engine's default.
 
 ### A1. Handlers are plain TypeScript, and the body may compute
 
+**In progress.** Built in steps, one PR each: (a) every loop, `try` and `throw` in handlers (2026-11-13; DESIGN.md, "Every loop,
+and `try`, in handlers"); (b) any expression in a handler: `new`, `typeof`, `instanceof`, methods of local values; (c) statements in
+the component body.
+
 **Today.** Three languages in one file (PAIN_POINTS.md section 1): the component body allows expressions only; handlers allow `let`,
 `for…of` and `switch` but not `while`, C-style `for`, `try`, or methods outside an allowlist (`push` and `sort` are rejected);
 plain `.ts` files allow anything. Handlers are lowered statement by statement into the IR (DESIGN.md, "Handlers"), which is why
