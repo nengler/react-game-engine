@@ -58,7 +58,10 @@ TSX invites people to write React, and then they hit `RGE` codes.
   `useStore(settings, settingsView)` shows a store outside the game state and follows it.
 - A selected object is trusted not to be changed in place; nothing enforces it.
 
-## 5. Names collide with the root built-in
+## 5. ~~Names collide with the root built-in~~ (fixed 2026-11-13)
+
+*Since:* a state, ref or sound named like a member of the root built-in is kept in a `$name` field, so the name is the author's to
+use (`REACT_FEEL_PLAN.md`, B7). What follows is how it was.
 
 The component's class extends its root built-in, so state, refs and props cannot reuse the root's member names: no `width` prop on a
 `<Collider>` root, no `name` on an `<Entity>` root, and a `useState` called `name` is still refused. An invisible inheritance rule with

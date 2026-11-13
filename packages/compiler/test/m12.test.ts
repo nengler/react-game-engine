@@ -330,10 +330,9 @@ function Stage() {
 });
 
 describe("M12: diagnostics", () => {
-  it("keeps the camera's own names reserved for a component rooted at one", () => {
+  it("lets state take the camera's own names, kept in `$name` fields", () => {
     for (const name of ["zoom", "viewTransform", "worldToView", "viewToWorld", "childSpace"]) {
-      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Camera />; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Camera />; }`).code.includes(`$${name}: `), name);
     }
   });
 

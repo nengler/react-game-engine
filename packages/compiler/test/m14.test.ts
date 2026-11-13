@@ -131,11 +131,12 @@ describe("M14: diagnostics", () => {
     assert.deepEqual(codes, [DiagnosticCode.InvalidHandler]);
   });
 
-  it("must be imported, and reserves its fields for a component rooted at it", () => {
+  it("must be imported, and keeps its fields apart from the state of a component rooted at it", () => {
     const result = getCompiler().compile("C.tsx", `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Pointer width={1} height={1} /></Entity>; }`);
     assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
-    assert.ok(compileErrors(`function C() { const [width, setWidth] = useState(1); return <Pointer width={width} height={1} />; }`).some((d) => d.code === DiagnosticCode.InvalidUseState));
-    assert.ok(compileErrors(`function C() { const [contains, setContains] = useState(1); return <Pointer width={1} height={1} />; }`).some((d) => d.code === DiagnosticCode.InvalidUseState));
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    assert.ok(compile(`function C() { const [width, setWidth] = useState(1); return <Pointer width={width} height={1} />; }`).code.includes("$width: number"));
+    assert.ok(compile(`function C() { const [contains, setContains] = useState(1); return <Pointer width={1} height={1} />; }`).code.includes("$contains: number"));
   });
 
   it("is placed with transform and is a leaf", () => {

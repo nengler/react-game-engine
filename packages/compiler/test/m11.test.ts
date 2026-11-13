@@ -182,10 +182,11 @@ describe("M11: diagnostics", () => {
     assert.ok(typeCheck(compiled).some((d) => d.code === DiagnosticCode.GeneratedTypeError), "caught in the generated code");
   });
 
-  it("must be imported, and reserves its fields for a component rooted at it", () => {
+  it("must be imported, and keeps its fields apart from the state of a component rooted at it", () => {
     const result = getCompiler().compile("C.tsx", `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Shape kind="rect" width={1} height={1} /></Entity>; }`);
     assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
-    assert.ok(compileErrors(`function C() { const [width, setWidth] = useState(1); return <Shape kind="rect" width={width} height={1} />; }`).some((d) => d.code === DiagnosticCode.InvalidUseState));
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    assert.ok(compile(`function C() { const [width, setWidth] = useState(1); return <Shape kind="rect" width={width} height={1} />; }`).code.includes("$width: number"));
   });
 
   it("is driven by the manifest, not by Shape: any intrinsic prop can be restricted", () => {
