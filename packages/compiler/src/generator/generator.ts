@@ -446,18 +446,21 @@ class ComponentGenerator extends ElementEmitter {
 
       const settable = c.state.filter((s) => s.globalKey === undefined && this.hasSetter(s.id));
       const shared = c.state.filter((s) => s.globalKey !== undefined);
-      if (settable.length > 0 || shared.length > 0) {
+      const refreshed = c.state.filter((s) => s.refresh !== undefined);
+      if (settable.length > 0 || shared.length > 0 || refreshed.length > 0) {
         w.blank();
         w.block("override commitState(): void", () => {
           for (const s of settable) w.line(`this.${s.name} = ${pendingRef(s)};`);
           // Every component that reads a leaf refreshes its snapshot when the game changes it, whoever acted.
           for (const s of shared) w.line(`this.${s.name} = ${this.storeName}.store.get<${typeText(s.type)}>(${JSON.stringify(s.globalKey)});`);
+          // A context's value, read again from its reader (the provider marked this component dirty when it changed).
+          for (const s of refreshed) w.line(`this.${s.name} = ${this.expr(s.refresh!, true)};`);
         });
       }
 
       // Hot reload: the component's own state and refs, by their stable ids, so a rebuilt tree can take them back
       // (see `captureHotState` in the runtime). A value whose type no longer matches is skipped.
-      const local = c.state.filter((s) => s.globalKey === undefined);
+      const local = c.state.filter((s) => s.globalKey === undefined && !s.transient);
       if (local.length > 0 || c.refs.length > 0) {
         w.blank();
         w.block("override saveHotState(): Record<string, unknown>", () => {

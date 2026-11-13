@@ -29,7 +29,7 @@ TSX invites people to write React, and then they hit `RGE` codes.
 ## 2. Refs on elements and context are missing on purpose
 
 - **No `ref={…}`**: there is no handle on a node.
-- **No context**: deep trees pass props by hand or use the global store.
+- ~~**No context**~~ *Since 2026-11-13:* `createContext`, `<Theme.Provider value>` and `useContext`, as in React.
 - **`useMount` / `useUnmount`** stand in for `useEffect(…, [])`, with an unusual order (mount runs children first, unmount runs
   the parent first). *Since:* `useMount` may return a cleanup, and a handler may hand an arrow to a function
   (`useMount(() => settings.subscribe(() => …))`).

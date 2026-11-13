@@ -1,7 +1,7 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type ArrowFunction, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
-import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
+import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis, type UseContextCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
@@ -13,6 +13,8 @@ import { ExpressionLowering } from "./expressions.ts";
 export class HookLowering extends ExpressionLowering {
   /** Render blocks lowered so far, to name their memos (`$block1`). */
   private renderBlocks = 0;
+  /** `useContext` calls lowered so far, to name their readers (`$context1`). */
+  private contexts = 0;
   /** Actions taken from the whole state, by the statement they were written in: one warning each (see `lowerStoreHook`). */
   private readonly wholeStateActions = new Map<string, { index: number; names: string[] }>();
   /**
@@ -143,6 +145,9 @@ export class HookLowering extends ExpressionLowering {
         }
         case "useRef":
           this.lowerUseRef(hook);
+          break;
+        case "useContext":
+          this.lowerUseContext(hook, state, hooks);
           break;
         case "useSound":
           this.lowerUseSound(hook);
@@ -460,6 +465,55 @@ export class HookLowering extends ExpressionLowering {
     this.componentScope.declare(name, { kind: "function", name, field });
     const fn = this.within({ inHandler: true }, () => lowerFunction(this, arrow, { paramTypes: "declared", returns: "any", what: `The function '${name}'` }));
     if (fn) this.functions.push({ kind: "OwnFunction", name: field, fn });
+  }
+
+  /**
+   * `const theme = useContext(Theme)`: two states the component does not own. A reader (`readContext(Theme)`, told its owner
+   * when the component joins a world, so it finds the nearest provider) and the value, read from it in `commitState` each render.
+   * The provider marks the component dirty when its value changes. A destructuring reads members of the value.
+   */
+  protected lowerUseContext(hook: UseContextCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
+    const code = DiagnosticCode.InvalidUseState;
+    const context = this.lowerNode(hook.context);
+    if (!context) return;
+    if (context.kind !== "PlainRef") {
+      this.report(code, "useContext takes a context made with `createContext` in a `.ts` file and imported: `useContext(Theme)`.", hook.context);
+      return;
+    }
+    const n = ++this.contexts;
+    const readerField = this.claimField(`$context${n}`, hook.declaration, code);
+    if (readerField === null) return;
+    const readerId = stateId(this.component.name, readerField);
+    const valueType: TypeIR = { kind: "SourceType", text: `(typeof ${context.name})["default"]` };
+    state.push({
+      kind: "State", id: readerId, name: readerField,
+      type: { kind: "SourceType", text: `{ readonly value: (typeof ${context.name})["default"] }` },
+      initialValue: { kind: "Call", callee: { kind: "Function", name: "readContext" }, args: [context] },
+      handle: true, transient: true,
+    });
+    const read: ExprIR = { kind: "MemberRead", object: { kind: "StateRead", state: readerId }, name: "value", optional: false };
+    const valueName = hook.name ?? `$contextValue${n}`;
+    if (hook.name !== null && (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name))) {
+      this.report(code, `'${hook.name}' is already declared in this component.`, hook.declaration);
+      return;
+    }
+    const valueField = this.claimField(valueName, hook.declaration, code);
+    if (valueField === null) return;
+    const valueId = stateId(this.component.name, valueName);
+    state.push({ kind: "State", id: valueId, name: valueField, type: valueType, initialValue: read, transient: true, refresh: read });
+    this.stateTypes.set(valueId, valueType);
+    hooks.push({ kind: "UseState", state: valueId, setterName: null, span: this.span(hook.declaration) });
+    if (hook.name !== null) {
+      this.componentScope.declare(hook.name, { kind: "state", id: valueId });
+      return;
+    }
+    for (const entry of hook.entries ?? []) {
+      if (this.componentScope.hasOwn(entry.name) || this.isCallableName(entry.name)) {
+        this.report(code, `'${entry.name}' is already declared in this component.`, hook.declaration);
+        continue;
+      }
+      this.componentScope.declare(entry.name, { kind: "derived", name: entry.name, value: { kind: "MemberRead", object: { kind: "StateRead", state: valueId }, name: entry.key, optional: false } });
+    }
   }
 
   protected checkHandleName(name: string, code: CompilerDiagnostic["code"], at: Node): boolean {

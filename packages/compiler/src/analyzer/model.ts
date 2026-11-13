@@ -135,7 +135,20 @@ export interface UseStoreCallAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis;
+export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis | UseContextCallAnalysis;
+
+/** `const theme = useContext(Theme)` or `const { accent, text: ink } = useContext(Theme)`. */
+export interface UseContextCallAnalysis {
+  readonly kind: "useContext";
+  /** The plain name it is bound to, or null for a destructuring. */
+  readonly name: string | null;
+  /** `{ accent, text: ink }`: each name and the member it reads. Null for a plain name. */
+  readonly entries: readonly { readonly name: string; readonly key: string }[] | null;
+  /** The context, as written: an imported `createContext` value. */
+  readonly context: Expression;
+  readonly call: CallExpression;
+  readonly declaration: VariableDeclaration;
+}
 
 /**
  * Statements in the component body that compute together (`const rows = []; for (const item of items) rows.push(…);`): a run that
@@ -212,7 +225,7 @@ export const HOOK_NAME = /^use[A-Z0-9]/;
 
 export const HANDLER_HOOKS: ReadonlySet<string> = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 
-export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useState", "useRef", "useSound", ...HANDLER_HOOKS]);
+export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useState", "useRef", "useSound", "useContext", ...HANDLER_HOOKS]);
 
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS];
