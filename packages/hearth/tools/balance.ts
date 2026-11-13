@@ -1,6 +1,7 @@
 /**
- * Runs the ten waves through the rules only (no engine) against a few fixed build orders and prints the lives left after each
- * wave. `test/balance.test.ts` checks the table against `test/balance.expected.json`, so a change to a number in the rules shows
+ * Plays the ten waves against a few fixed build orders and prints the lives left after each wave. The battle is the game's own
+ * `Play` component, mounted alone in a headless world (`@rge/testing`, collisions on), and the orders are played by pressing what
+ * a player presses: a pad is selected, then the build menu's key, the upgrade key, the wave key. `test/balance.test.ts` checks the table against `test/balance.expected.json`, so a change to a number in the rules shows
  * up as a change in difficulty. `--write` updates the expected table after a change you meant to make.
  *
  *   node packages/hearth/tools/balance.ts [--write]
@@ -8,9 +9,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { newBattle, stepBattle, type Battle, type Command } from "../src/rules/battle.ts";
-import { STEP } from "../src/rules/constants.ts";
-import { MAP } from "../src/rules/map.ts";
+import { render } from "@rge/testing";
+import { Play } from "../generated/Play.ts";
+import { useGame } from "../src/GameState.ts";
+import { controls } from "../src/rules/controls.ts";
 import { BEST } from "../src/rules/coverage.ts";
 import { TOWERS, upgradeCost, type TowerKind } from "../src/rules/towers.ts";
 import { WAVES } from "../src/rules/waves.ts";
@@ -37,65 +39,70 @@ export const ORDERS: readonly Order[] = [
   { name: "too few", steps: bolts(3) },
 ];
 
+const KEY = { bolt: "one", mortar: "two", frost: "three" } as const;
+
 /** The lives left after each wave is cleared; a wave that ends the battle shows as 0 and later waves as null. */
-export function runOrder(order: Order): (number | null)[] {
-  let b: Battle = newBattle(MAP);
+export function runOrder(order: Order, seed = 1): (number | null)[] {
+  const t = render(Play, { seed }, { controls, collisions: true });
+  useGame.getState().begin();
+  const play = t.root;
+  const press = (pad: number, key: string): void => {
+    useGame.getState().select(pad);
+    t.world.flush();
+    t.input(key);
+  };
   let next = 0;
   let upgradeAt = 0;
   const placed: number[] = [];
   const out: (number | null)[] = [];
-  const buyAhead = (): Command[] => {
-    const commands: Command[] = [];
-    let gold = b.gold;
+  /** The next purchase of the order, when the gold is there: one a step, as a player presses one key at a time. */
+  const buyNext = (): boolean => {
     while (next < order.steps.length) {
       const s = order.steps[next] as Step;
       if (s === "upgrade") {
         // Upgrade the towers in the order they were built, round and round.
         const pad = placed[upgradeAt % Math.max(1, placed.length)];
-        if (pad === undefined) break;
-        const t = b.pads[pad]?.tower;
-        const cost = t === null || t === undefined ? null : upgradeCost(t.kind, t.level);
+        if (pad === undefined) return false;
+        const tower = play.towers[pad] ?? null;
+        const cost = tower === null ? null : upgradeCost(tower.kind, tower.level);
         if (cost === null) {
           next += 1;
           upgradeAt += 1;
           continue;
         }
-        if (gold < cost) break;
-        gold -= cost;
-        commands.push({ type: "upgrade", pad });
+        if (play.gold < cost) return false;
+        press(pad, "upgrade");
         upgradeAt += 1;
         next += 1;
-      } else {
-        const cost = TOWERS[s.build].cost;
-        const pad = BEST.find((id) => b.pads[id]?.tower === null && !placed.includes(id));
-        if (pad === undefined) {
-          next += 1;
-          continue;
-        }
-        if (gold < cost) break;
-        gold -= cost;
-        placed.push(pad);
-        commands.push({ type: "build", pad, kind: s.build });
-        next += 1;
-        if (commands.length > 0) break; // one purchase a step keeps `b.pads` honest for the next choice
+        return true;
       }
-      if (commands.length > 0) break;
+      const pad = BEST.find((id) => play.towers[id] === null && !placed.includes(id));
+      if (pad === undefined) {
+        next += 1;
+        continue;
+      }
+      if (play.gold < TOWERS[s.build].cost) return false;
+      placed.push(pad);
+      press(pad, KEY[s.build]);
+      next += 1;
+      return true;
     }
-    return commands;
+    return false;
   };
   let wave = 0;
-  for (let i = 0; i < 60 * 60 * 30 && b.status === "playing"; i++) {
-    const commands = buyAhead();
-    if (!b.active) commands.push({ type: "startWave" });
-    const before = b.wave;
-    const wasActive = b.active;
-    b = stepBattle(b, STEP, commands, MAP).battle;
-    if (wasActive && !b.active && b.status === "playing") out[wave++] = b.lives;
-    if (before !== b.wave && b.status !== "playing") break;
+  for (let i = 0; i < 60 * 60 * 30 && useGame.getState().screen === "play"; i++) {
+    const wasActive = play.active;
+    if (buyNext()) {
+      // pressed: that was this step
+    } else if (!play.active) t.input("wave");
+    else t.step();
+    if (wasActive && !play.active && useGame.getState().screen === "play") out[wave++] = play.lives;
   }
-  if (b.status === "lost") out[Math.max(0, b.wave - 1)] = 0;
-  if (b.status === "won") out[WAVES.length - 1] = b.lives;
+  const end = useGame.getState();
+  if (end.screen === "lost") out[Math.max(0, end.endWave - 1)] = 0;
+  if (end.screen === "won") out[WAVES.length - 1] = end.endLives;
   while (out.length < WAVES.length) out.push(null);
+  t.unmount();
   return out;
 }
 

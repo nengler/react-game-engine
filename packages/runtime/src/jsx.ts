@@ -14,7 +14,7 @@ import type { EntityProps } from "./components/Entity.ts";
 import type { HudProps } from "./components/Hud.ts";
 import type { GameProps } from "./components/Game.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
-import type { ColliderProps } from "./components/Collider.ts";
+import type { ColliderProps, ContactOf } from "./components/Collider.ts";
 import type { PointerProps } from "./components/Pointer.ts";
 import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
@@ -135,6 +135,8 @@ export interface BodyHandle {
   move(dx: number, dy: number): BodyHit;
   /** Whether a collider with this tag overlaps the body now (its own colliders do not count). */
   touching(tag: string): boolean;
+  /** Every collider with this tag that overlaps the body now, as contacts with their `data` (a tower finding the enemies near it). */
+  overlapping<Tag extends string>(tag: Tag): ContactOf<Tag>[];
   /** Put the body somewhere, with no collision (a respawn, a door). */
   place(x: number, y: number): void;
 }

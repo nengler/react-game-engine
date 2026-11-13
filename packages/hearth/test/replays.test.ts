@@ -4,13 +4,17 @@ import { parseInputScript, runScript } from "@rge/player";
 import { bindings, gameConfig, screen } from "../game.ts";
 import { useGame } from "../src/GameState.ts";
 import { MAP } from "../src/rules/map.ts";
+import { battleOf, findPlay } from "./battle-state.ts";
 import { REPLAYS } from "./replays.ts";
 
 function play(script: string) {
   const frames = parseInputScript(script, { bindings, screen });
   return runScript(gameConfig, frames, () => {
     const s = useGame.getState();
-    return { screen: s.screen, lives: s.battle.lives, wave: s.battle.wave, gold: s.battle.gold, towers: s.battle.pads.filter((p) => p.tower !== null).length, cursor: s.cursor, open: s.open, paused: s.paused, speed: s.speed, enemies: s.battle.enemies.length };
+    // The battle is `Play`'s own state; on the end screen, what it reported when it ended.
+    const p = findPlay();
+    const battle = p !== null ? battleOf(p) : { lives: s.endLives, wave: s.endWave, gold: 0, towers: 0, enemies: 0 };
+    return { screen: s.screen, lives: battle.lives, wave: battle.wave, gold: battle.gold, towers: battle.towers, cursor: s.cursor, open: s.open, paused: s.paused, speed: s.speed, enemies: battle.enemies };
   }, { keepFrames: 2 });
 }
 
@@ -18,12 +22,13 @@ describe("wave replays (the game itself, played by clicks and keys)", () => {
   it("a good build, clicked in pad by pad, wins with lives left", () => {
     const { states, warnings } = play(REPLAYS.good);
     // The script goes on clicking after the win, and a click on the end screen's button goes back to the title: look at the first end state.
-    const last = states.find((s) => s.screen === "won" || s.screen === "lost")!;
+    const end = states.findIndex((s) => s.screen === "won" || s.screen === "lost");
+    const last = states[end]!;
     assert.deepEqual(warnings, []);
     assert.equal(last.screen, "won");
     assert.equal(last.wave, 10);
     assert.ok(last.lives > 0, `lives ${last.lives}`);
-    assert.ok(last.towers >= 10, `towers ${last.towers}`);
+    assert.ok(states[end - 1]!.towers >= 10, `towers ${states[end - 1]!.towers} in the battle's last step`);
   });
 
   it("a thin build is lost", () => {

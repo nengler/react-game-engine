@@ -8,6 +8,10 @@ import { checkFreshName, lowerFunction } from "./statements.ts";
 import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute, nearest } from "./helpers.ts";
 import { HookLowering } from "./hooks.ts";
 
+
+/** `<Game>` props the player reads every frame, not only before the tree is built: these may be state (`timeScale={speed}`). */
+const LIVE_GAME_SETTINGS: ReadonlySet<string> = new Set(["timeScale", "paused"]);
+
 export class ElementLowering extends HookLowering {
   /**
    * `onDefeated={() => setScore(…)}`, passed to a child component. The
@@ -532,7 +536,8 @@ export class ElementLowering extends HookLowering {
         continue;
       }
       const init = attribute.initializer;
-      if (!toComponent && tag === GAME_TAG) {
+      // `timeScale` and `paused` are read every frame, so they may be state, as any prop: they fall through.
+      if (!toComponent && tag === GAME_TAG && !LIVE_GAME_SETTINGS.has(name)) {
         const setting = this.lowerGameSetting(name, init, attribute);
         if (setting) props.push({ kind: "StaticProp", name, value: setting });
         continue;

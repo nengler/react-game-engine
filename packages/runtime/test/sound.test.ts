@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Sound, getSoundSink, setSoundSink, type SoundSink } from "../src/index.ts";
+import { Sound, World, createSounds, getSoundSink, setSoundSink, type SoundSink } from "../src/index.ts";
 
 function recorder(): SoundSink & { log: string[] } {
   const log: string[] = [];
@@ -45,5 +45,21 @@ describe("Sound", () => {
     sound.play();
     assert.deepEqual(sink.log, ["load a.wav"]);
     assert.equal(sound.plays, 1);
+  });
+});
+
+describe("a sound store's once sounds", () => {
+  it("play at most once a step, however often they are asked for; others play every time", () => {
+    const sfx = createSounds({ shot: { src: "shot.wav", once: true }, click: "click.wav" });
+    const world = new World();
+    world.tick(1 / 60);
+    for (let i = 0; i < 5; i++) {
+      sfx.play("shot");
+      sfx.play("click");
+    }
+    assert.deepEqual([sfx.plays("shot"), sfx.plays("click")], [1, 5]);
+    world.tick(1 / 60);
+    sfx.play("shot");
+    assert.equal(sfx.plays("shot"), 2, "the next step plays it again");
   });
 });

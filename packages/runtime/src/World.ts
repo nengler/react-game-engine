@@ -7,6 +7,7 @@ import { takeTreeRestore } from "./gameTree.ts";
 import { restoreHotState } from "./hot.ts";
 import type { Pressable } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
+import { countStep } from "./Sound.ts";
 
 /** Steps the world is asked to freeze for by `freeze`: taken up by the next tick that is not already frozen. */
 let freezeRequest = 0;
@@ -55,6 +56,8 @@ export class World implements BodySpace {
   readonly #live: (GameObject & Pressable)[] = [];
   readonly #focusables: (GameObject & Pressable)[] = [];
   #frozen = 0;
+  /** While true no `onUpdate` runs (the player sets it from `<Game paused>`); `onInput` and presses still do. */
+  paused = false;
 
   constructor() {
     this.root.attachToWorld(this);
@@ -83,12 +86,14 @@ export class World implements BodySpace {
    * player uses it to show `onUpdate` the key edges a freeze kept (see `freeze`), which `onInput` has already seen.
    */
   tick(dt: number, input: InputState = NO_INPUT, beforeUpdate?: () => void): number {
+    countStep();
+    this.#boxes = null;
     const anyInert = this.#hasInert();
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
     const inputs = [...this.#onInput];
     for (const object of inputs) if (object.world === this) object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
     if (this.#frozen > 0) this.#frozen--;
-    else {
+    else if (!this.paused) {
       beforeUpdate?.();
       const updates = [...this.#onUpdate];
       for (const object of updates) if (object.world === this) object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
@@ -278,6 +283,13 @@ export class World implements BodySpace {
   /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */
   /** The colliders and the solid tilemaps in this world, for bodies (`useBody`). */
   readonly #colliders = new Set<Collider>();
+  /**
+   * The colliders' world boxes, worked out once per update phase: a body's queries (twenty towers each asking which of a hundred
+   * enemies are near) would otherwise compose each collider's transform up the tree every time. Transforms change when the tree
+   * renders, so the cache is dropped as a tick starts and after every flush: a query sees the colliders where they were when the
+   * step's updates began, as the step's state is a snapshot.
+   */
+  #boxes: Map<Collider, Box> | null = null;
   readonly #tilemaps = new Set<Tilemap>();
 
   /** `BodySpace`: the tag of something solid in `box` (`"tile"` for a solid tile), or null. */
@@ -296,7 +308,7 @@ export class World implements BodySpace {
     }
     for (const collider of this.#colliders) {
       if (!collider.solid || isUnder(collider, ignore)) continue;
-      if (boxesOverlap(box, colliderBox(collider))) return collider.tag;
+      if (boxesOverlap(box, this.#boxOf(collider))) return collider.tag;
     }
     return null;
   }
@@ -305,9 +317,29 @@ export class World implements BodySpace {
   tagIn(box: Box, tag: string, ignore: GameObject): boolean {
     for (const collider of this.#colliders) {
       if (collider.tag !== tag || isUnder(collider, ignore)) continue;
-      if (boxesOverlap(box, colliderBox(collider))) return true;
+      if (boxesOverlap(box, this.#boxOf(collider))) return true;
     }
     return false;
+  }
+
+  /** `BodySpace`: every collider with this tag that overlaps `box`. */
+  collidersIn(box: Box, tag: string, ignore: GameObject): Contact[] {
+    const out: Contact[] = [];
+    for (const collider of this.#colliders) {
+      if (collider.tag !== tag || isUnder(collider, ignore)) continue;
+      if (boxesOverlap(box, this.#boxOf(collider))) out.push(collider as unknown as Contact);
+    }
+    return out;
+  }
+
+  #boxOf(collider: Collider): Box {
+    const boxes = (this.#boxes ??= new Map());
+    let box = boxes.get(collider);
+    if (box === undefined) {
+      box = colliderBox(collider);
+      boxes.set(collider, box);
+    }
+    return box;
   }
 
   registerObject(object: GameObject): void {
@@ -344,6 +376,7 @@ export class World implements BodySpace {
     // components take their saved state back. `restoreHotState` flushes again; the restore was taken, so it runs once.
     const restore = takeTreeRestore(this);
     if (restore !== null) restoreHotState(this, restore.root, restore.state);
+    this.#boxes = null;
     return renders;
   }
 }

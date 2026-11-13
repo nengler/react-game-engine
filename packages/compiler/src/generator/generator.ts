@@ -174,6 +174,7 @@ function typeTexts(module: IRModule): string[] {
     c.refs.forEach((r) => type(r.type));
     for (const p of c.props) if (p.type.kind === "SourceText") out.push(p.type.text);
     for (const hook of c.hooks) if (isHandlerHook(hook)) fn(hook.handler);
+    for (const own of c.functions) fn(own.fn);
     for (const p of c.root.props) if (p.kind === "CallbackProp") fn(p.handler);
     children(c.root.children);
   }
@@ -280,6 +281,7 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
     c.refs.forEach((r) => visitExpr(r.initialValue));
     if (c.sounds.length > 0) values.add("Sound");
     for (const hook of c.hooks) if (isHandlerHook(hook)) visitFunction(hook.handler);
+    for (const own of c.functions) visitFunction(own.fn);
     // The `onUpdate` override that calls `super` or several handlers is written with every parameter the runtime passes, `input` too.
     const updates = c.hooks.filter((h) => isHandlerHook(h) && h.kind === "OnUpdate").length;
     if ((intrinsicHooks?.[c.root.component.name] ?? []).includes("onUpdate") && updates > 0) types.add("InputState");

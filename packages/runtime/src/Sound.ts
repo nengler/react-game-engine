@@ -74,3 +74,13 @@ export class Sound {
     sink?.play(this.path, volume * volumes.effects);
   }
 }
+
+let steps = 0;
+/** A world began a step (`World.tick`): what "once a step" counts by. */
+export function countStep(): void {
+  steps++;
+}
+/** How many steps have begun. */
+export function stepCount(): number {
+  return steps;
+}

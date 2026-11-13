@@ -4,6 +4,9 @@ Planned 2026-11-11. **Built the same day, in part**: see "Status" at the end. Th
 second, small game in a different genre, done **before priority 8**, so the guide and template describe a shape that has
 worked twice.
 
+**Since 2026-11-13 the battle is in components**, not in `rules/battle.ts` ([REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md), A7); this plan
+describes the first version. Hearth's [DESIGN.md](../packages/hearth/DESIGN.md) describes it as it is.
+
 ## Why this game
 
 Kite (`packages/kite`) is one character in one-screen rooms. It had no lists of things that come and go, no menus and

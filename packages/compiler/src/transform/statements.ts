@@ -134,7 +134,9 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
       // `useMount(() => settings.subscribe(…))`: what a call returns is the cleanup (kept only if it is a function, as in React).
       body = stmt && [options.returns === "cleanup" && stmt.kind === "ExpressionStatement" ? { kind: "Return", value: stmt.expression } : stmt];
     }
-    return body && { kind: "Function", params, body };
+    // A function of the component's own keeps its type parameters: its parameter types may name them.
+    const typeParams = options.paramTypes === "declared" && fn.typeParameters !== undefined ? `<${fn.typeParameters.map((t) => t.getText()).join(", ")}>` : undefined;
+    return body && { kind: "Function", params, body, ...(typeParams !== undefined ? { typeParams } : {}) };
   });
 }
 

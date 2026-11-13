@@ -244,7 +244,7 @@ onCollisionEnter={(other) => {
 **Done when**
 
 - [x] `<Collider data>` reaches `other.data` in both callbacks, typed by tag (not yet through `useBody`)
-- [ ] A coin's value and an enemy's damage travel by collision in one game, not through the game state
+- [x] A coin's value and an enemy's damage travel by collision in one game, not through the game state (Hearth's blasts, A7)
 
 ### A4. Testing one component without a window
 
@@ -292,7 +292,7 @@ test("the player walks right", () => {
 
 - [x] `@rge/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
 - [ ] The template's tests show it next to a rules test
-- [ ] A7's Hearth has component tests for its enemies and towers
+- [x] A7's Hearth has component tests for its enemies and towers
 
 ### A5. Component state in saves
 
@@ -360,6 +360,10 @@ game state, which means the player's position lives there and not in the player.
 
 ### A7. Prove it: Hearth with its game in components
 
+**Built 2026-11-13**, in place (the old version is the commit before it, `stepBattle` in `rules/battle.ts`). Findings, the costs and
+what still did not read like React: NEXT_PRIORITIES.md, "Findings from Hearth in components". It took four engine additions:
+`overlapping(tag)` on `useBody`, `<Game timeScale paused>`, `once` sounds, and `collisions` / `place` in `@rge/testing`.
+
 **Why Hearth.** Its world is a list of things that each have their own state and behaviour: enemies walk a path and take damage,
 towers aim and fire, shots fly and hit. Today all of it is `stepBattle` in `rules/` and the components are views (`Enemy.tsx` takes
 eight props). It has 27 rule tests and replays to compare against.
@@ -376,10 +380,10 @@ eight props). It has 27 rule tests and replays to compare against.
 
 **Done when**
 
-- [ ] Hearth plays the same waves with its game in components, its replays and parity passing
-- [ ] Its tests are component tests, and none needed a plain function to be testable
-- [ ] Wave 10's cost is recorded beside today's
-- [ ] The findings are in NEXT_PRIORITIES.md
+- [x] Hearth plays the same waves with its game in components, its replays and parity passing
+- [x] Its tests are component tests, and none needed a plain function to be testable
+- [x] Wave 10's cost is recorded beside today's
+- [x] The findings are in NEXT_PRIORITIES.md
 
 ### A8. The guide, the template and the README teach components first
 

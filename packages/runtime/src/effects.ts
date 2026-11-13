@@ -1,5 +1,5 @@
 import type { ParticlesProps } from "./components/Particles.ts";
-import { addSoundPreload, Sound } from "./Sound.ts";
+import { addSoundPreload, Sound, stepCount } from "./Sound.ts";
 
 /**
  * Effects that happen at a moment rather than last as state: a burst of dust where the character landed, a sound, a shake of
@@ -59,28 +59,36 @@ export function createParticles<const Presets extends Record<string, ParticlePre
   return new ParticleStore<keyof Presets & string>(presets);
 }
 
-/** One sound of a sound store: a file, or a file and the volume it plays at. */
-export type SoundEntry = string | { readonly src: string; readonly volume?: number };
+/**
+ * One sound of a sound store: a file, or a file and the volume it plays at. `once: true` plays it at most once a step, however
+ * many times it is asked for: twenty towers firing together make one sound, not a roar.
+ */
+export type SoundEntry = string | { readonly src: string; readonly volume?: number; readonly once?: boolean };
 
 /**
  * The game's sounds, by name (`createSounds({ jump: "jump.wav", land: { src: "land.wav", volume: 0.5 } })`), played from
  * anywhere with `sfx.play("land")`. Each file is loaded when the player starts, so the first play does not hitch.
  */
 export class SoundStore<Name extends string = string> {
-  readonly #sounds: Record<string, { sound: Sound | null; src: string; volume: number }> = {};
+  readonly #sounds: Record<string, { sound: Sound | null; src: string; volume: number; once: boolean; last: number }> = {};
 
   constructor(entries: Readonly<Record<Name, SoundEntry>>) {
     for (const [name, entry] of Object.entries<SoundEntry>(entries)) {
       const src = typeof entry === "string" ? entry : entry.src;
-      this.#sounds[name] = { sound: null, src, volume: typeof entry === "string" ? 1 : (entry.volume ?? 1) };
+      this.#sounds[name] = { sound: null, src, volume: typeof entry === "string" ? 1 : (entry.volume ?? 1), once: typeof entry !== "string" && entry.once === true, last: -1 };
       addSoundPreload(src);
     }
   }
 
-  /** Play `name` at its volume, times `volume` (default 1). */
+  /** Play `name` at its volume, times `volume` (default 1); a `once` sound already played this step is not played again. */
   play(name: Name, volume = 1): void {
     const entry = this.#sounds[name];
     if (entry === undefined) throw new Error(`There is no sound named '${name}' (there are: ${Object.keys(this.#sounds).join(", ")}).`);
+    if (entry.once) {
+      const step = stepCount();
+      if (entry.last === step) return;
+      entry.last = step;
+    }
     entry.sound ??= new Sound(entry.src);
     entry.sound.play(entry.volume * volume);
   }

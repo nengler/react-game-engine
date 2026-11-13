@@ -37,6 +37,9 @@ type DeclaredContact = { [K in keyof ColliderData & string]: { readonly tag: K; 
  */
 export type Contact = [keyof ColliderData] extends [never] ? BaseContact : DeclaredContact;
 
+/** A contact with this tag: typed by `ColliderData` when the game declares it (`overlapping("enemy")`'s `data` is an enemy's), else any contact. */
+export type ContactOf<Tag extends string> = [Extract<Contact, { readonly tag: Tag }>] extends [never] ? Contact : Extract<Contact, { readonly tag: Tag }>;
+
 export interface ColliderProps {
   width: number;
   height: number;

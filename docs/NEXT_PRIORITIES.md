@@ -276,6 +276,53 @@ Bramble (`games/bramble`, made from the template, checked from a copy outside th
 7. **Outside the repository:** packing, installing and checking from a temporary folder found nothing that a relative import into `packages/` would have hidden, but only because the template and `games/bramble` were written to it from the start; the CI job `outside` has not yet run.
 8. **A map is both a tilemap and a scene, and the scene importer took the rules' objects for prefabs** (M6.2): moving Bramble's doors and people into an object layer failed `rge check` with `RGE1503` for each one. An object layer with the bool property `data` is now the rules' alone. Bramble's world is read from its Tiled files and checked by one function; nothing in the rules changed.
 
+### Findings from Hearth in components
+
+[REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md), A7, 2026-11-13. Hearth was rewritten in place so that its game lives in components:
+`Play` keeps the gold, the lives, the wave and the lists; each `Enemy`, `Tower` and `Shot` keeps its own state and steps itself;
+they report up by callbacks and reach each other by collisions that carry data. The 292-line `stepBattle`, `economy.ts` and
+`view.ts` are gone; the source went from 1,436 lines to 1,370, and the game state from the whole battle to the screens' shared
+state (screen, cursor, speed, pause, how the battle ended).
+
+1. **It reads like React.** An enemy is `useState` for where it is and how hurt, a `useUpdate` that walks, and a collider whose
+   `onCollisionEnter` takes a blast's damage from `other.data`; a tower is a cooldown and an aim; `Play` maps its lists to
+   components and its callbacks update them with updaters. Its tests are component tests (`render(Enemy, …)`,
+   `render(Tower, …)` with enemies `place`d near it, `render(Play, …, { collisions: true })` pressed like a player): 18 of
+   them, plus plain tests for the data and helpers (map, path, waves, numbers, `pickTarget`). The balance tool plays `Play`
+   headless by pressing keys; the replays and parity read `Play`'s state from the tree.
+2. **Four things the engine lacked, added for it.** A tower has to ask what is near it now: `overlapping(tag)` on `useBody`,
+   contacts with their data, typed by tag. 2× speed and the pause had been the rules' (run them twice; skip them):
+   `<Game timeScale paused>`, read every frame. Twenty towers firing in one step each played a sound: `once` sound entries.
+   A test of a subtree whose parts collide needs the collision pass: `@rge/testing`'s `collisions` and `place`.
+3. **Two compiler bugs, fixed.** An import used only inside a component's own function (`const build = (kind) => …
+   TOWERS[kind] …`) was left out of the generated file; and a component's own function lost its type parameters.
+4. **What still did not read like React** (open):
+   - `useState(START_GOLD)` and `useState(-Math.PI / 2)` cannot infer their type (`RGE1104`): an imported constant or an
+     expression needs `useState<number>(…)`.
+   - Renaming in prop destructuring (`{ seed: firstSeed }`) is refused (`RGE1208`), so a prop and the state it seeds need
+     different names.
+   - `nextId.current++` is refused (a postfix increment); `+= 1` works.
+   - A derived value is read again where it is used, so `cost !== null && gold >= cost` does not narrow `cost` in the second
+     half; Hearth writes `?? -1`.
+   - Reading a running game's component state from outside (a replay, parity, the balance bot) means walking the tree for
+     `Play` and reading its generated fields (`test/battle-state.ts`). `@rge/testing`'s `state()` reads one component; there is
+     no "the state of `Play`" query on a running game.
+5. **Timing is a step longer, and the same every run.** An enemy hit at the end of a step reports its death in the next step's
+   update, and `Play` sees the wave cleared a step after that (A6's snapshot rule). Nothing in the game minds.
+6. **The balance had luck in it.** The old table's "a mixed build wins" held for seed 1: the old rules lose with it on two of
+   eight seeds, in wave 5 or 6, because an early mortar's scatter decides whether the build catches up. The components roll the
+   same dice differently and win on seven of eight; the table was re-recorded at seed 1 (mixed wins with 8 lives, not 15; the
+   other two rows moved by a wave's worth of lives or not at all). Worth a look when someone plays it.
+7. **Cost: a step costs what a frame did, and 2× costs two steps.** Wave 10 at 2× (109 enemies, 13 towers), script time per
+   frame: V8 0.96 → 1.58 ms mean (p99 2.2 → 4.9), QuickJS-ng 7.6 → 13.2 ms (p99 17.1 → 32.3). Per step QuickJS is 6.6 ms, under
+   the old frame's 7.6; 2× now steps the whole world twice (renders, collisions and the tree walk) where the old game ran its
+   rules twice and its tree once. At 1× it fits a frame; at 2× the mean does and the 99th percentile does not. The towers'
+   queries composed every enemy collider's transform up the tree each time, a third of the step under QuickJS, until the
+   colliders' world boxes were cached per update phase (19.2 → 13.2 ms). The next lever is D5 (dependency-scoped render):
+   most of an enemy's render recomputes what did not change. The replays test takes 25 s instead of 20.
+8. **Not done:** Hearth does not save mid-wave (A5 would now keep each enemy's state), and it uses no context (the side panel
+   is two levels below `Play`; props were enough).
+
 ## 1. Verify on real hardware, and cache CI builds
 
 Every Phase 3 milestone was built and tested only in a Linux cloud container, against a virtual display. Two things have never happened: a person playing in a real window, and a sound actually playing (hidden test windows have no audio device).

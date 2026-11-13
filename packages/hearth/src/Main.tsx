@@ -5,12 +5,17 @@ import { Play } from "./Play.tsx";
 import { Title } from "./Title.tsx";
 import { controls } from "./rules/controls.ts";
 
-/** The game's root (its bitmap font is every text's): a 320 × 180 screen showing the title, the play screen, or the end, with the music playing under all of it. */
+/**
+ * The game's root (its bitmap font is every text's): a 320 × 180 screen showing the title, the play screen, or the end, with the
+ * music playing under all of it. 2× speed runs two fixed steps a frame (`timeScale`), and the pause stops every `useUpdate`.
+ */
 export default function Main() {
   const screen = useGame((s) => s.screen);
+  const speed = useGame((s) => s.speed);
+  const paused = useGame((s) => s.paused);
 
   return (
-    <Game vsync={false} controls={controls} upscale="sharp" title="Hearth" width={960} height={540} background="#12151f" assets="assets" font="font.png" fixedStep={60}>
+    <Game vsync={false} controls={controls} upscale="sharp" title="Hearth" width={960} height={540} background="#12151f" assets="assets" font="font.png" fixedStep={60} timeScale={speed} paused={paused}>
       <Screen width={320} height={180} fit="contain">
         <Router route={screen}>
           <Route name="title">

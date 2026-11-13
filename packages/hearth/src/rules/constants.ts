@@ -3,7 +3,7 @@ export const TILE = 10;
 export const FIELD_COLS = 24;
 export const FIELD_ROWS = 18;
 
-/** The rules run in fixed steps of this many seconds (2× speed is two of them per engine step). */
+/** The game runs in fixed steps of this many seconds (`<Game fixedStep={60}>`; 2× speed runs two of them a frame). */
 export const STEP = 1 / 60;
 
 export const START_GOLD = 120;
