@@ -1,5 +1,5 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
-import { SyntaxKind, type Node } from "typescript/ast";
+import { SyntaxKind, type ArrowFunction, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
 import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
@@ -163,6 +163,11 @@ export class HookLowering extends ExpressionLowering {
           break;
         }
         case "const": {
+          // `const handleHit = (id: string) => { … }`: a handler of the component's own, kept in a field.
+          if (hook.pattern === null && isArrowFunction(unwrapParens(hook.initializer))) {
+            this.lowerOwnFunction(hook.name, unwrapParens(hook.initializer) as ArrowFunction, hook.declaration);
+            break;
+          }
           // Lowered now, against what is declared above it (state, refs, earlier consts), outside any handler.
           const lowered = this.lowerNode(hook.initializer);
           if (!lowered) break;
@@ -439,6 +444,23 @@ export class HookLowering extends ExpressionLowering {
   }
 
   /** A `useRef` binding must not collide with state, setters or the reserved call names. */
+  /**
+   * A function declared in the component body, as React code declares its handlers: lowered as a handler (it may set state, play
+   * sounds and call actions), with the parameter types written on it, and kept in a field of the component. It is declared before
+   * it is lowered, so it may call itself; it may read only what is declared above it, as a derived value may.
+   */
+  protected lowerOwnFunction(name: string, arrow: ArrowFunction, at: Node): void {
+    if (this.componentScope.hasOwn(name) || this.isCallableName(name)) {
+      this.report(DiagnosticCode.InvalidComponentBody, `'${name}' is already declared in this component (or reserved).`, at);
+      return;
+    }
+    const field = this.claimField(name, at, DiagnosticCode.InvalidComponentBody);
+    if (field === null) return;
+    this.componentScope.declare(name, { kind: "function", name, field });
+    const fn = this.within({ inHandler: true }, () => lowerFunction(this, arrow, { paramTypes: "declared", returns: "any", what: `The function '${name}'` }));
+    if (fn) this.functions.push({ kind: "OwnFunction", name: field, fn });
+  }
+
   protected checkHandleName(name: string, code: CompilerDiagnostic["code"], at: Node): boolean {
     if (this.componentScope.has(name) || this.isCallableName(name)) {
       this.report(code, `'${name}' is already declared in this component (or reserved).`, at);

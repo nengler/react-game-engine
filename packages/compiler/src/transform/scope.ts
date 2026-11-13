@@ -14,6 +14,8 @@ type Binding =
   | { readonly kind: "propsObject"; readonly name: string }
   /** The `children` prop of a component that renders `{children}`: only valid as that child, never read as a value. */
   | { readonly kind: "children"; readonly name: string }
+  /** A function declared in the component body, kept in the field `field`: called in handlers, or passed as a value. */
+  | { readonly kind: "function"; readonly name: string; readonly field: string }
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
   /** A `const` (or, `mutable`, a `let`) declared in a handler body, or a `for…of` item. */

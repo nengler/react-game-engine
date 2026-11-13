@@ -312,6 +312,8 @@ export type CalleeIR =
   | { readonly kind: "Action"; readonly name: string }
   /** `squash.start(0.6, 1.4)`: a method of a per-instance object, state made by a factory (`useState(() => createSquash())`). Opaque. */
   | { readonly kind: "ValueMethod"; readonly receiver: ExprIR; readonly name: string; readonly optional?: boolean }
+  /** A function declared in the component body, by its field: `this.handleHit(id)`. */
+  | { readonly kind: "Own"; readonly name: string }
   /** A callback prop: `onDefeated()` or `onDefeated?.()`. Argument counts and types are left to the type-check. */
   | { readonly kind: "Prop"; readonly name: string; readonly optional: boolean }
   /** A handler's own `const` or `let` holding a function: `const stop = settings.subscribe(…); … stop();`. The type-check checks it is one. */

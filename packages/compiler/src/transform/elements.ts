@@ -561,6 +561,10 @@ export class ElementLowering extends HookLowering {
               props.push({ kind: "StaticProp", name, value: { kind: "ActionRef", name: passed.action } });
               continue;
             }
+            if (passed.kind === "function") {
+              props.push({ kind: "StaticProp", name, value: { kind: "PlainRef", name: `this.${passed.field}` } });
+              continue;
+            }
           } else {
             const params = this.manifest.intrinsicCallbacks[tag]?.[name];
             if (!params) {
@@ -573,7 +577,9 @@ export class ElementLowering extends HookLowering {
             const body: StatementIR[] =
               passed.kind === "action"
                 ? [{ kind: "CallAction", action: passed.action, args }]
-                : [{ kind: "ExpressionStatement", expression: { kind: "Call", callee: { kind: "Prop", name: passed.name, optional: true }, args } }];
+                : passed.kind === "function"
+                  ? [{ kind: "ExpressionStatement", expression: { kind: "Call", callee: { kind: "Own", name: passed.field }, args } }]
+                  : [{ kind: "ExpressionStatement", expression: { kind: "Call", callee: { kind: "Prop", name: passed.name, optional: true }, args } }];
             props.push({ kind: "CallbackProp", name, handler: { kind: "Function", params: handlerParams, body } });
             continue;
           }
@@ -596,10 +602,11 @@ export class ElementLowering extends HookLowering {
    * A function passed whole as an attribute: a game-state action (`resume`) or a callback prop (`onPress`, `props.onPress`).
    * Undefined when the expression is neither; null when it is a callback prop that cannot be read (reported).
    */
-  protected functionValue(expression: Expression): { kind: "action"; action: string } | { kind: "prop"; name: string } | null | undefined {
+  protected functionValue(expression: Expression): { kind: "action"; action: string } | { kind: "prop"; name: string } | { kind: "function"; field: string } | null | undefined {
     if (isIdentifier(expression)) {
       const binding = this.scope.get(expression.text);
       if (binding?.kind === "action") return { kind: "action", action: binding.action };
+      if (binding?.kind === "function") return { kind: "function", field: binding.field };
       if (binding?.kind === "prop" && binding.role === "callback") return { kind: "prop", name: binding.name };
       return undefined;
     }

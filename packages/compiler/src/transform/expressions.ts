@@ -74,6 +74,8 @@ export class ExpressionLowering extends LoweringBase {
           return null;
         case "storeRoot":
           return this.lowerStoreRead([], node);
+        // A function of the component's own, passed as a value (`settings.subscribe(refresh)`, `useEvery(1, tick)`).
+        case "function": return { kind: "PlainRef", name: `this.${binding.field}` };
         default: return assertNever(binding, "binding");
       }
     }
@@ -368,6 +370,16 @@ export class ExpressionLowering extends LoweringBase {
       if (binding?.kind === "action") {
         this.report(DiagnosticCode.UnsupportedExpression, `'${callee.text}()' is a game-state action, so it is only valid as a statement in a handler: in JSX or a derived value it would run on every render.`, node);
         return null;
+      }
+      // A function declared in the component body: a handler, so it is called in handlers, not while rendering.
+      if (binding?.kind === "function") {
+        if (!this.mode.inHandler) {
+          this.report(DiagnosticCode.UnsupportedExpression, `'${callee.text}' is a function of this component, which may set state: call it in a handler or a callback, not while rendering. A value to show goes in a derived \`const\` or a function in a \`.ts\` file.`, node);
+          return null;
+        }
+        const args = this.lowerPlainArgs(node.arguments);
+        if (!args) return null;
+        return { kind: "Call", callee: { kind: "Own", name: binding.field }, args };
       }
       // A handler's own local holding a function (`const stop = settings.subscribe(…)`, then `stop()` in the cleanup).
       if (binding?.kind === "local" && this.mode.inHandler) {

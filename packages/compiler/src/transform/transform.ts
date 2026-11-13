@@ -134,6 +134,7 @@ class ComponentLowering extends ElementLowering implements LoweringContext {
       state,
       refs: this.refs,
       sounds: this.sounds,
+      functions: this.functions,
       props,
       propsType: this.component.props?.typeName ?? null,
       isDefaultExport: this.component.isDefault,

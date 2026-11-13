@@ -167,6 +167,7 @@ export class ExpressionEmitter {
           case "ArrayMethod": return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;
           case "ValueMethod": return `${this.expr(e.callee.receiver)}${e.callee.optional ? "?." : "."}${e.callee.name}(${args})`;
           case "Action": return `${this.storeName}.getState().${e.callee.name}(${args})`;
+          case "Own": return `this.${e.callee.name}(${args})`;
           default: return assertNever(e.callee, "callee");
         }
       }

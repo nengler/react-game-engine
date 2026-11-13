@@ -142,7 +142,8 @@ function Two() {
       "Both.tsx",
     );
     assert.deepEqual(typeCheck(compiled), []);
-    assert.match(compiled.code, /_useThing1_x: number = 1;/);
+    // The name the hook returns takes the caller's name (`const y = useThing()`), so its own `x` never meets the component's.
+    assert.match(compiled.code, /\by: number = 1;/);
     assert.match(compiled.code, /\bx: number = 100;/);
   });
 
@@ -175,7 +176,7 @@ function Two() {
       const repo = resolve(import.meta.dirname, "../../..");
       execFileSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out"), "--no-check"], { cwd: repo, stdio: "pipe" });
       const clock = readFileSync(join(dir, "out/Clock.ts"), "utf8");
-      assert.match(clock, /_useClock1_t/);
+      assert.match(clock, /\bt: number = 0;/, "the returned state takes the caller's name");
       assert.doesNotMatch(clock, /useClock\(/);
       assert.doesNotMatch(clock, /hooks\.ts/, "the hook's file is not imported at run time");
     } finally {

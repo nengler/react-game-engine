@@ -22,8 +22,9 @@ TSX invites people to write React, and then they hit `RGE` codes.
   but not visible from the syntax. *Since 2026-11-13:* in a handler, any method of a value the handler made itself, `new`, and the
   standard library work; only state and props stay immutable.
 - **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.
-- **Custom hooks are inlined text, not functions.** They cannot return refs, destructured parameters do not work, nesting stops at six,
-  and a literal argument is pasted into the hook. They behave like macros; the guide says so only in passing.
+- ~~**Custom hooks are inlined text, not functions.**~~ *Since 2026-11-13:* a hook takes destructured parameters and callbacks,
+  returns refs, names the chain when hooks recurse, and the guide says how inlining works. A function declared in the component
+  body (`const add = (n: number) => …`) is a handler of the component's own.
 
 ## 2. Refs on elements and context are missing on purpose
 

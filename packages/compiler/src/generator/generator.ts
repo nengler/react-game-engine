@@ -358,6 +358,8 @@ class ComponentGenerator extends ElementEmitter {
       for (const s of c.sounds) {
         w.line(`readonly ${s.name}: Sound = new Sound(${JSON.stringify(s.path)});`);
       }
+      // Functions declared in the body: arrows in fields, before the children that may be handed them (`onPress={handleHit}`).
+      for (const f of c.functions) w.line(`readonly ${f.name} = ${this.callback(f.fn)};`);
       // Persistent children (field initialisers run after state initialisers, so they can read state).
       this.emitElementFields(c.root.children, "persistent");
 
