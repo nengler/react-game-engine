@@ -101,6 +101,24 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   /** A CSS colour: draw a filled rectangle behind the children, the size of the box. Default none. */
   background?: string;
   /**
+   * An image from the assets folder to draw as the box's background, over `background`, under the children, cut into nine parts
+   * by `slice` so that its corners keep their size and its edges and middle stretch to fill the box: a bordered panel or button
+   * skin from one small picture. Without `slice` the whole image is stretched. Drawn with no smoothing unless the game has it.
+   */
+  backgroundImage?: string;
+  /** `slice`: how many pixels of the image, in from each edge, are the corners and edges that do not stretch. Default 0. */
+  slice?: number;
+  /** One side's slice; overrides `slice`. The four sides can differ: a panel with a deep bottom edge. */
+  sliceTop?: number;
+  sliceRight?: number;
+  sliceBottom?: number;
+  sliceLeft?: number;
+  /** `backgroundImage` in a state, as `hoverBackground` is for `background`: the image changes, the slices stay. Images change at once (a `transition` fades colours only). */
+  hoverBackgroundImage?: string;
+  focusBackgroundImage?: string;
+  pressedBackgroundImage?: string;
+  disabledBackgroundImage?: string;
+  /**
    * Pixels of border, drawn inside the edge of the box in `borderColor`. The border takes room: it counts as padding on every
    * side, so the children never sit on it. Default 0: none.
    */
@@ -212,6 +230,16 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   minHeight: number | undefined;
   maxHeight: number | undefined;
   background: string | undefined;
+  backgroundImage: string | undefined;
+  slice: number | undefined;
+  sliceTop: number | undefined;
+  sliceRight: number | undefined;
+  sliceBottom: number | undefined;
+  sliceLeft: number | undefined;
+  hoverBackgroundImage: string | undefined;
+  focusBackgroundImage: string | undefined;
+  pressedBackgroundImage: string | undefined;
+  disabledBackgroundImage: string | undefined;
   overflow: FlexOverflow;
   scrollX: number;
   scrollY: number;
@@ -269,6 +297,16 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.minHeight = hostProps.minHeight;
     this.maxHeight = hostProps.maxHeight;
     this.background = hostProps.background;
+    this.backgroundImage = hostProps.backgroundImage;
+    this.slice = hostProps.slice;
+    this.sliceTop = hostProps.sliceTop;
+    this.sliceRight = hostProps.sliceRight;
+    this.sliceBottom = hostProps.sliceBottom;
+    this.sliceLeft = hostProps.sliceLeft;
+    this.hoverBackgroundImage = hostProps.hoverBackgroundImage;
+    this.focusBackgroundImage = hostProps.focusBackgroundImage;
+    this.pressedBackgroundImage = hostProps.pressedBackgroundImage;
+    this.disabledBackgroundImage = hostProps.disabledBackgroundImage;
     this.overflow = hostProps.overflow ?? "visible";
     this.scrollX = hostProps.scrollX ?? 0;
     this.scrollY = hostProps.scrollY ?? 0;

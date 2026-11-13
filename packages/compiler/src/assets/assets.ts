@@ -1,6 +1,6 @@
 /**
  * Build-time check of asset paths: every image and sound a component names with a literal (`<Sprite image="a.png">`,
- * `useSound("jump.wav")`, `<AnimatedSprite frames sheet>`, `<Tilemap image>`, `<Text font>`) must be a file in the assets folder,
+ * `useSound("jump.wav")`, `<AnimatedSprite frames sheet>`, `<Tilemap image>`, `<Flex backgroundImage>`, `<Text font>`) must be a file in the assets folder,
  * so a typo is a compile error with the nearest file name, not a magenta square or a silent sound at run time. Paths that are
  * computed (a prop passed in, a string built from state) cannot be checked, and are not.
  */
@@ -18,6 +18,7 @@ export const ASSET_PROPS: Readonly<Record<string, readonly string[]>> = {
   Sprite: ["image"],
   AnimatedSprite: ["frames", "sheet"],
   Tilemap: ["image"],
+  Flex: ["backgroundImage", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage"],
   Text: ["font"],
   Game: ["font"],
   Music: ["src"],
