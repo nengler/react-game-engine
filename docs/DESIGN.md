@@ -1805,6 +1805,31 @@ and without it neither exists.
 - **Cost** (Hearth, wave 10 at 2×, V8): a frame 1.46 → 1.83 ms mean while recording (p99 3.9 → 4.8); going back half a second
   46 ms, a whole second 67 ms.
 
+## Diagnostics in the editor: `rge lsp` (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, D2. `packages/language-server` (the server and the quick fixes), `rge lsp` (the command line starts it),
+`editors/vscode` (the extension, `npm run vscode:pack`).
+
+- **A server beside TypeScript's.** TypeScript's own server keeps the types, hovers and completions; this one adds the `RGE`
+  diagnostics only the engine's compiler knows. It speaks the few messages of the Language Server Protocol it needs (whole-text
+  sync, diagnostics, code actions, shutdown) directly, with no dependency.
+- **One compiler per game.** A file belongs to the nearest folder above it whose package.json has an `"rge"` field or depends on
+  `@rge/runtime`; only a `.tsx` under its source folder is analysed. `GameProject.diagnose` runs `Compiler.compile` (custom hooks,
+  analysis, the IR and generation, without type checking) on the text as the editor has it: 1 to 8 ms for a small component and
+  about 20 ms for Hearth's `Play.tsx` once the TypeScript process is warm, so a document is analysed 150 ms after the last change.
+  `GameState.ts` and hook files are read as the editor has them too, and a change to any file of a game analyses its other open
+  components again. A diagnostic the compiler found in another file is shown at the start of this one, naming where it is.
+- **Quick fixes are text edits** found from the diagnostic's span with a small scanner (brackets, strings, comments): a missing
+  import, an import from `"react"`, `useEffect(…, [])` to `useMount`, `useMemo` and `useCallback` to the value and the function,
+  `<Text text>` to children (a self-closing `<Text>` only), a whole-state selector to `.actions()`, and a name the authoring module
+  does not export. A fix that cannot be made with confidence (an effect with dependencies) is not offered; the message says what
+  to do.
+- **The extension** runs the game's own `rge lsp` (the `@rge/cli` its folder resolves), so the messages match the engine the game
+  is built with, and one server serves every game under one install. It has no dependencies either: no `vscode-languageclient`,
+  and the `.vsix` is a zip written by `tools/pack-vscode.ts`.
+- **Packs.** `@rge/language-server` is packed (the command line depends on it) and installed as a dev dependency;
+  `check:outside` asks the packed `rge lsp` for a component's diagnostics.
+
 ## Previews: stories and `rge preview` (2026-11-13)
 
 `REACT_FEEL_PLAN.md`, D4. `player/src/stories.ts` (the format, and building a story's root), `player-node/src/preview.ts` (the

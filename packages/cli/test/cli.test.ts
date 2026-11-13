@@ -41,13 +41,14 @@ test("create refuses a folder that is not empty, and a bad name", () => {
 test("create --packs writes file: dependencies on the tarballs", () => {
   const packs = join(root, "packs");
   execFileSync("mkdir", [packs]);
-  for (const name of ["runtime", "player", "native", "player-node", "compiler", "testing", "cli"]) writeFileSync(join(packs, `rge-${name}-0.0.0.tgz`), "");
+  for (const name of ["runtime", "player", "native", "player-node", "compiler", "testing", "language-server", "cli"]) writeFileSync(join(packs, `rge-${name}-0.0.0.tgz`), "");
   const made = rge(["create", join(root, "packed"), "--packs", packs]);
   assert.equal(made.status, 0, made.stderr);
   const pkg = JSON.parse(readFileSync(join(root, "packed/package.json"), "utf8")) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
   assert.equal(pkg.dependencies["@rge/runtime"], `file:${join(packs, "rge-runtime-0.0.0.tgz")}`);
   assert.equal(pkg.devDependencies["@rge/cli"], `file:${join(packs, "rge-cli-0.0.0.tgz")}`);
   assert.equal(pkg.devDependencies["@rge/testing"], `file:${join(packs, "rge-testing-0.0.0.tgz")}`, "the tests' library is for development");
+  assert.equal(pkg.devDependencies["@rge/language-server"], `file:${join(packs, "rge-language-server-0.0.0.tgz")}`, "the editor's server too");
 });
 
 test("build compiles src to generated", () => {

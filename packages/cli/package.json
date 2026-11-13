@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@rge/compiler": "0.0.0",
+    "@rge/language-server": "0.0.0",
     "@rge/native": "0.0.0",
     "@rge/player": "0.0.0",
     "@rge/player-node": "0.0.0",

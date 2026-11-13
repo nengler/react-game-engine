@@ -31,6 +31,8 @@
     "packages/native/src",
     "packages/native/test",
     "packages/cli/src",
+    "packages/language-server/src",
+    "packages/language-server/test",
     "packages/testing/src",
     "packages/testing/test",
     "packages/cli/test",

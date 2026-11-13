@@ -46,7 +46,8 @@
     "check:hearth": "rge check packages/hearth && tsc -p tsconfig.json",
     "native:build:pack": "node tools/pack.ts --build",
     "bramble:install": "node tools/bramble-install.ts",
-    "check:outside": "node tools/check-outside.ts"
+    "check:outside": "node tools/check-outside.ts",
+    "vscode:pack": "node tools/pack-vscode.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

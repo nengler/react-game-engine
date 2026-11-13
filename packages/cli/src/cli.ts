@@ -9,6 +9,7 @@
  *   rge screenshot <folder> [options]  PNGs of a scripted run, through the headless build
  *   rge preview [folder] [options]     the game's stories: one component with given props, in a window or as PNGs
  *   rge create <folder> [options]      a new game from the template
+ *   rge lsp                            the language server, on stdin and stdout, for an editor (the VS Code extension starts it)
  *
  * A game's settings live in the "rge" field of its package.json: name, entry, src, generated, scenes, assets, checkAssets.
  */
@@ -29,7 +30,8 @@ const USAGE = `usage: rge <command> [folder] [options]
   package      a folder to hand to someone                [--engine node|quickjs] [--headless] [--entry file] [--name name]
   screenshot   PNGs of a scripted run                     rge screenshot <folder> --script "right*30" --at 0,29
   preview      one component at a time, from its stories  [--story HealthBar] [--screenshot | --compare]
-  create       a new game from the template               rge create <folder> [--name name] [--packs dir]`;
+  create       a new game from the template               rge create <folder> [--name name] [--packs dir]
+  lsp          the language server for an editor, on stdin and stdout (RGE diagnostics and quick fixes as you type)`;
 
 export async function main(argv: readonly string[]): Promise<number> {
   const [command, ...rest] = argv;
@@ -49,6 +51,12 @@ export async function main(argv: readonly string[]): Promise<number> {
         return await screenshotCommand(rest);
       case "create":
         return createCommand(rest);
+      case "lsp": {
+        // Serves until the editor sends `exit`, which ends the process; an editor that just goes away closes stdin.
+        const { startServer } = await import("@rge/language-server");
+        startServer(process.stdin, process.stdout);
+        return await new Promise<number>((done) => process.stdin.on("end", () => done(1)));
+      }
       case "--help":
       case "-h":
       case undefined:

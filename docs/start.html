@@ -139,6 +139,7 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 <tr><td>+ Rust (<a href="https://rustup.rs">rustup.rs</a>)</td><td><code>rge package --engine quickjs</code> (a few MB, no JIT), and <code>rge check</code> also plays the game under the Rust host and requires the same output</td></tr>
 </table></div>
 <p>Run <code>npm run dist</code> again after installing something; the builds are incremental.</p>
+<p><strong>In VS Code</strong>, install the engine's extension once from the same checkout: <code>npm run vscode:pack</code>, then <code>code --install-extension dist/rge-vscode-0.0.1.vsix</code>. It shows the compiler's <code>RGE</code> errors in your components as you type, beside TypeScript's own, with quick fixes for the common ones (a missing import, <code>useEffect(…, [])</code> to <code>useMount</code>, <code>useMemo</code> to the value, <code>&lt;Text text=…&gt;</code> to children). It runs your game's own <code>rge lsp</code>, so other editors can use that as a language server for <code>.tsx</code> files.</p>
 
 <h2>1. Make a game</h2>
 <pre class="code" data-lang="sh"><code>cd /path/to/engine &amp;&amp; node packages/cli/src/cli.ts create ~/my-game --packs dist/packs
