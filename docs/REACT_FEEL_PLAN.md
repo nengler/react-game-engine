@@ -335,6 +335,9 @@ export const save = createSave<SaveData>({
 
 ### A6. What a component knows about others
 
+**Built 2026-11-13**: the guide and the timing test (DESIGN.md, "Sharing state between components"); C3 dropped its "not for game
+data" rule when it was built.
+
 **Today.** There are no refs on elements and no context, so an enemy that chases the player reads the player's position from the
 game state, which means the player's position lives there and not in the player.
 
@@ -352,8 +355,8 @@ game state, which means the player's position lives there and not in the player.
 
 **Done when**
 
-- [ ] The guide has a "Sharing state between components" section with the chase example, both by props and by context
-- [ ] The step timing is in "How a frame works", with a test that pins it
+- [x] The guide has a "Sharing state between components" section with the chase example, both by props and by context
+- [x] The step timing is in "How a frame works", with a test that pins it
 
 ### A7. Prove it: Hearth with its game in components
 

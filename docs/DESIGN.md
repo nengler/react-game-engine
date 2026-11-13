@@ -1483,6 +1483,15 @@ audio of its own: `play()` counts calls in `plays`, so game logic can be tested,
 `SoundSink` a player installs with `setSoundSink` (see "Player").
 Options such as `volume` come later.
 
+## Sharing state between components (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, A6. With game code in components, an enemy that chases the player needs the player's position. React's
+answer holds here: the common parent keeps it (`useState`), the player reports it up through a callback prop, and the parent
+passes it down as a prop or through context. The timing, pinned by `sharing.test.ts`: every update in a step sees the state as
+the step began (the snapshot rule), and a setter called in a step renders after it, so a value reported up in step N reaches the
+siblings, by props and through context alike, in step N + 1. One step of lag between independent things is deterministic and is
+what most engines do; a built-in that must not lag reads its child's transform directly (`<Camera>`).
+
 ## Context (2026-11-13)
 
 `REACT_FEEL_PLAN.md`, C3, React's API compiled. Context was left out while props covered every tree (NEXT_PRIORITIES.md, "Not
