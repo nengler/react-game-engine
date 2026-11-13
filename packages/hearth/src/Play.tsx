@@ -174,10 +174,10 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
         {paused && (
           <Modal title="PAUSED">
             <MenuButton onPress={resume}>
-              <Label text="RESUME" />
+              <Label>RESUME</Label>
             </MenuButton>
             <MenuButton onPress={toTitle}>
-              <Label text="QUIT TO TITLE" />
+              <Label>QUIT TO TITLE</Label>
             </MenuButton>
           </Modal>
         )}

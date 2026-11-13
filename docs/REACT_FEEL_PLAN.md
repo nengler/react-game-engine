@@ -497,6 +497,9 @@ weighed against it. A component that already declares an `x` prop of its own (He
 
 ### B3. Text wrappers that take their words as children
 
+**Built 2026-11-13** (DESIGN.md, "Text", "Text wrappers"). Hearth's `Label` and `StatRow` take their words as children; Bramble sets
+`<Game textSize={10} textColor="#e8d9a8">` and its texts dropped 15 repeated props.
+
 **Today.** Every `<Text>` in Bramble writes its style: `size={10} color="#e8d9a8"` appears on nearly all of them. In React the
 answer is a component: write the style once in a `<Label>` and use `<Label>Coins: {coins}</Label>` everywhere. Hearth tried
 exactly that (`packages/hearth/src/Label.tsx`), but had to take the words as a `text` prop, which is what #81 took out of
@@ -553,12 +556,12 @@ theme that changes at run time (a colour-blind setting, light and dark palettes)
 
 **Done when**
 
-- [ ] The `Label` above compiles and works, with compiler tests for literal text, `{expressions}`, and forwarding through a second
+- [x] The `Label` above compiles and works, with compiler tests for literal text, `{expressions}`, and forwarding through a second
       component
-- [ ] `TextChild` is exported for use in props, and the diagnostics for a mix of text and elements name both types
-- [ ] `<Game textSize textColor>` exist
-- [ ] Hearth's `Label` takes children; Bramble drops its repeated `size` and `color`
-- [ ] The guide's "Passing children" section shows a text wrapper
+- [x] `TextChild` is exported for use in props, and the diagnostics for a mix of text and elements name both types
+- [x] `<Game textSize textColor>` exist
+- [x] Hearth's `Label` takes children; Bramble drops its repeated `size` and `color`
+- [x] The guide's "Passing children" section shows a text wrapper
 
 ### B4. Actions without `useGame((s) => s)`
 

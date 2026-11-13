@@ -66,6 +66,10 @@ export interface GameProps extends EntityProps {
    * `1`, only faster: a fast-forward button). Read every frame, so it may be state (`timeScale={speed}`). Default 1.
    */
   timeScale?: number;
+  /** The size of every `<Text>` that does not set its own (`<Text size>`), as `font` is its font. Default: 16. */
+  textSize?: number;
+  /** The colour of every `<Text>` that does not set its own (`<Text color>`). Default: white. */
+  textColor?: string;
   /**
    * While true, no `useUpdate` runs: the game stands still. `useInput`, presses and the focus still work, so a pause menu can
    * unpause it. Read every frame, so it may be state (`paused={paused}`). Default false.
@@ -107,6 +111,8 @@ export class Game<P extends object = {}> extends Entity<P> {
   controls: Controls | undefined;
   timeScale: number | undefined;
   paused: boolean | undefined;
+  textSize: number | undefined;
+  textColor: string | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: GameProps = {}, props?: P, defaults?: Partial<P>) {
@@ -130,5 +136,7 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.controls = hostProps.controls;
     this.timeScale = hostProps.timeScale;
     this.paused = hostProps.paused;
+    this.textSize = hostProps.textSize;
+    this.textColor = hostProps.textColor;
   }
 }

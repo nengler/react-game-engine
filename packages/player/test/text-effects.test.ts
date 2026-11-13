@@ -141,3 +141,31 @@ describe("<Text> effects are drawn with the text", () => {
     assert.equal(texts(draw(root, [], true)).length, 9 + 8 + 1);
   });
 });
+
+describe("<Game textSize textColor>", () => {
+  it("are the size and colour of every <Text> that sets none, set by the player from the root", async () => {
+    const { createPlayer } = await import("../src/loop.ts");
+    const { Game } = await import("@rge/runtime");
+    const backend = new RecordingBackend();
+    const game = new Game({ textSize: 10, textColor: "#ff0000" });
+    game.addChild(new Text({ text: "plain" }));
+    game.addChild(new Text({ text: "own", size: 20, color: "#00ff00" }));
+    const player = createPlayer(backend, { root: () => game });
+    player.step();
+    const drawn = texts(backend.lastFrame.records);
+    player.close();
+    assert.deepEqual(drawn.map((r) => [r.text, r.size, r.color]), [["plain", 10, "#ff0000ff"], ["own", 20, "#00ff00ff"]]);
+  });
+
+  it("are not inherited: a player without them leaves the engine's (16, white)", async () => {
+    const { createPlayer } = await import("../src/loop.ts");
+    const backend = new RecordingBackend();
+    const root = new Entity({});
+    root.addChild(new Text({ text: "plain" }));
+    const player = createPlayer(backend, { root: () => root });
+    player.step();
+    const drawn = texts(backend.lastFrame.records);
+    player.close();
+    assert.deepEqual(drawn.map((r) => [r.size, r.color]), [[16, "#ffffffff"]]);
+  });
+});

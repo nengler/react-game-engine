@@ -44,11 +44,14 @@ export class HookLowering extends ExpressionLowering {
 
     const out: PropDeclIR[] = [];
     for (const [name, member] of members) {
-      if (name === "children") {
+      // `children: TextChild | readonly TextChild[]`: the words between the component's tags, passed as one string (a text
+      // wrapper: `<Label>Coins: {coins}</Label>`). An ordinary value prop, which its `<Text>{children}</Text>` reads.
+      const textChildren = name === "children" && member.role === "value" && member.type.kind === "SourceText" && isTextChildrenType(member.type.text);
+      if (name === "children" && !textChildren) {
         // Not a value prop: the elements a parent passes mount at `{children}`. Typed `Child` so the TSX type-checks.
         const binding = bindings.get(name);
         if (member.role !== "value" || member.type.kind !== "SourceText" || member.type.text !== "Child") {
-          this.report(code, `\`children\` must be typed \`Child\`: \`children: Child;\`, with \`import { type Child } from "${this.manifest.authoringModule}"\`.`, member.node);
+          this.report(code, `\`children\` must be typed \`Child\` (elements: \`children: Child;\`) or \`TextChild | readonly TextChild[]\` (text, as \`<Text>\` takes it), with \`import { type Child, type TextChild } from "${this.manifest.authoringModule}"\`.`, member.node);
         } else if (binding?.defaultValue) {
           this.report(code, "`children` cannot have a default value.", binding.node);
         } else {
@@ -57,7 +60,7 @@ export class HookLowering extends ExpressionLowering {
         }
         continue;
       }
-      if (RESERVED_PROP_NAMES.has(name)) {
+      if (RESERVED_PROP_NAMES.has(name) && !textChildren) {
         this.report(code, `'${name}' is reserved by the framework and cannot be a prop name.`, member.node);
         continue;
       }
@@ -593,4 +596,10 @@ function memoized(key: string, value: ExprIR): ExprIR {
   const calls = (e: ExprIR): boolean =>
     e.kind !== "Memo" && ((e.kind === "Call" && (e.callee.kind === "Plain" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod")) || childExpressions(e).some(calls));
   return calls(value) ? { kind: "Memo", key, value } : value;
+}
+
+/** `TextChild | readonly TextChild[]` (either order, either alone, `string` too): a props type's text children. */
+export function isTextChildrenType(text: string): boolean {
+  const parts = text.split("|").map((part) => part.replace(/\s+/g, " ").trim());
+  return parts.length > 0 && parts.every((part) => ["TextChild", "readonly TextChild[]", "TextChild[]", "string", "readonly string[]", "string[]"].includes(part));
 }

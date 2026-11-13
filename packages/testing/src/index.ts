@@ -25,6 +25,7 @@ import {
   createInputState,
   registerTilemaps,
   resetGameState,
+  setTextDefaults,
   setGameTree,
   type TilemapData,
 } from "@rge/runtime";
@@ -252,6 +253,8 @@ export function render<P extends object, R extends GameObject = GameObject>(
   options: RenderOptions = {},
 ): Rendered<R> {
   if (!options.keepGameState) resetGameState();
+  setTextDefaults({}); // no <Game> root here: a <Text> without its own size or colour uses the engine's
+
   if (options.tilemaps) registerTilemaps(options.tilemaps);
   const root: R = new Component(props ?? ({} as P));
   return new Rendered<R>(root, options);

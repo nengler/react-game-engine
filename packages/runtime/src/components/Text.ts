@@ -6,9 +6,9 @@ export type TextAlign = (typeof TEXT_ALIGNS)[number];
 
 export interface TextProps {
   text: string;
-  /** Pixels. Default 16. */
+  /** Pixels. Default: the game's `<Game textSize>`, else 16. */
   size?: number;
-  /** A CSS color. Default white. */
+  /** A CSS color. Default: the game's `<Game textColor>`, else white. */
   color?: string;
   /**
    * The width in pixels of the box the text sits in, for layout and for `align`. Without it the box is the text's own
@@ -58,6 +58,17 @@ export interface TextProps {
 const DEFAULT_TEXT_SIZE = 16;
 const DEFAULT_TEXT_COLOR = "white";
 
+/** The game's text defaults (`<Game textSize textColor>`): what a `<Text>` without its own `size` or `color` uses. */
+let defaults: { size: number | undefined; color: string | undefined } = { size: undefined, color: undefined };
+
+/**
+ * Set the game's text defaults: the player does, from its root `<Game textSize textColor>`, before the tree is built and on each
+ * reload. Written once at the root, as `font` is: not inherited from containers.
+ */
+export function setTextDefaults(next: { readonly size?: number | undefined; readonly color?: string | undefined }): void {
+  defaults = { size: next.size, color: next.color };
+}
+
 /**
  * A line of text for HUDs, labels and menus. The mock draws nothing: a
  * renderer reads `text`, `size`, `color` and `worldTransform()`. In JSX the
@@ -68,7 +79,6 @@ export class Text<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 
   text: string;
-  color: string;
   width: number | undefined;
   align: TextAlign;
   font: string | undefined;
@@ -81,23 +91,38 @@ export class Text<P extends object = {}> extends GameObject<P> {
   lineGap: number;
   reveal: number | undefined;
 
-  #size = DEFAULT_TEXT_SIZE;
-  #sized = false;
+  #size: number | undefined = undefined;
+  #color: string | undefined = undefined;
 
-  /** The height of a line in pixels. Without one given: 16, or for a bitmap font its cell's height (see `sized`). */
+  /**
+   * The height of a line in pixels. Without one given: the game's `textSize`, else 16, or for a bitmap font its cell's height
+   * (see `sized`).
+   */
   get size(): number {
-    return this.#size;
+    return this.#size ?? defaults.size ?? DEFAULT_TEXT_SIZE;
   }
 
   /** `undefined` (an optional prop passed on unset) goes back to no size given. */
   set size(value: number | undefined) {
-    this.#sized = value !== undefined;
-    this.#size = value ?? DEFAULT_TEXT_SIZE;
+    this.#size = value;
   }
 
-  /** Whether a size was given. Text in a bitmap font without one is drawn at the font's own cell height, one pixel per pixel. */
+  /**
+   * Whether a size was given, by the text or by the game's `textSize`. Text in a bitmap font without one is drawn at the font's
+   * own cell height, one pixel per pixel.
+   */
   get sized(): boolean {
-    return this.#sized;
+    return this.#size !== undefined || defaults.size !== undefined;
+  }
+
+  /** A CSS colour. Without one given: the game's `textColor`, else white. */
+  get color(): string {
+    return this.#color ?? defaults.color ?? DEFAULT_TEXT_COLOR;
+  }
+
+  /** `undefined` (an optional prop passed on unset) goes back to no colour given. */
+  set color(value: string | undefined) {
+    this.#color = value;
   }
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
@@ -105,7 +130,7 @@ export class Text<P extends object = {}> extends GameObject<P> {
     super(props, defaults);
     this.text = hostProps.text;
     if (hostProps.size !== undefined) this.size = hostProps.size;
-    this.color = hostProps.color ?? DEFAULT_TEXT_COLOR;
+    this.color = hostProps.color;
     this.width = hostProps.width;
     this.align = hostProps.align ?? "left";
     this.font = hostProps.font;

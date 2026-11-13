@@ -19,9 +19,9 @@ export function End({ won }: EndProps) {
   return (
     <Hud>
       <Modal title={won ? "THE HEARTH HOLDS" : "THE HEARTH FELL"}>
-        <Label text={won ? `LIVES LEFT ${lives}` : `REACHED WAVE ${wave}`} color={won ? COLOR.good : COLOR.lives} />
+        <Label color={won ? COLOR.good : COLOR.lives}>{won ? `LIVES LEFT ${lives}` : `REACHED WAVE ${wave}`}</Label>
         <MenuButton pressKey="confirm" onPress={toTitle}>
-          <Label text={`${keyLabel("confirm")} TITLE`} />
+          <Label>{keyLabel("confirm")} TITLE</Label>
         </MenuButton>
       </Modal>
     </Hud>

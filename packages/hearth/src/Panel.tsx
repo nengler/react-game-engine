@@ -11,7 +11,7 @@ interface PanelProps {
 export function Panel({ title, children }: PanelProps) {
   return (
     <Flex direction="column" gap={3} padding={4} width="grow" background={COLOR.panel}>
-      <Label text={title} color={COLOR.title} />
+      <Label color={COLOR.title}>{title}</Label>
       <Flex direction="column" gap={3} width="grow">
         {children}
       </Flex>

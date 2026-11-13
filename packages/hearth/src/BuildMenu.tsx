@@ -18,7 +18,7 @@ export function BuildMenu({ gold, onBuild }: BuildMenuProps) {
       {TOWER_LIST.map((d) => (
         <MenuButton key={d.kind} enabled={gold >= d.cost} pressKey={d.action} onPress={() => onBuild(d.kind)}>
           <Icon frame={ICON[d.kind]} />
-          <Label text={`${keyLabel(d.action)} ${d.name} ${d.cost}`} color={gold >= d.cost ? COLOR.text : COLOR.dim} />
+          <Label color={gold >= d.cost ? COLOR.text : COLOR.dim}>{keyLabel(d.action)} {d.name} {d.cost}</Label>
         </MenuButton>
       ))}
     </Panel>

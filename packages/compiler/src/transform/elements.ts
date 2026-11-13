@@ -116,6 +116,35 @@ export class ElementLowering extends HookLowering {
   }
 
   /**
+   * What a component is given between its tags: "text" (words, and `{expressions}` that are values, as `<Text>` takes), "elements"
+   * (elements, `{cond && <X />}`, lists, a forwarded `{children}` slot), both ("mixed"), or "none".
+   */
+  protected childrenKind(children: readonly JsxChild[]): "none" | "text" | "elements" | "mixed" {
+    let text = false;
+    let elements = false;
+    const holdsJsx = (node: Node): boolean => {
+      if (isJsxElement(node) || isJsxSelfClosingElement(node) || isJsxFragment(node)) return true;
+      // `items.map((item) => …)`: a list.
+      if (isCallExpression(node) && isPropertyAccessExpression(node.expression) && node.expression.name.text === "map") return true;
+      return node.forEachChild((child) => (holdsJsx(child) ? true : undefined)) === true;
+    };
+    for (const child of children) {
+      if (isJsxText(child)) {
+        if (!child.containsOnlyTriviaWhiteSpaces) text = true;
+      } else if (isJsxExpression(child)) {
+        const expression = child.expression;
+        if (expression === undefined) continue; // `{/* comment */}`
+        const inner = unwrapParens(expression);
+        // `{children}` where the component's own `children` are elements: forwarded elements.
+        const slot = isIdentifier(inner) && this.scope.get(inner.text)?.kind === "children";
+        if (slot || holdsJsx(inner)) elements = true;
+        else text = true;
+      } else elements = true;
+    }
+    return text && elements ? "mixed" : text ? "text" : elements ? "elements" : "none";
+  }
+
+  /**
    * The text content of a built-in like `<Text>`: its JSX text and `{expressions}`
    * become one string prop (`text`), a template literal when they mix, so
    * `<Text>Score: {score}</Text>` is the one way to write it (a `text` attribute is an
@@ -401,8 +430,19 @@ export class ElementLowering extends HookLowering {
     // at the receiver's slot. A built-in keeps them.
     const textProp = isComponent ? undefined : this.manifest.textContent[tag.text];
     let children: ChildIR[] = [];
+    const given = isComponent && isJsxElement(jsx) ? this.childrenKind(jsx.children) : "none";
     if (textProp !== undefined) props.push(...this.lowerTextContent(isJsxElement(jsx) ? jsx.children : [], textProp, props, tag.text, jsx));
-    else if (isJsxElement(jsx)) children = this.lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent, forward: slotOk && isComponent });
+    else if (given === "mixed") {
+      this.report(
+        DiagnosticCode.UnsupportedJsxChild,
+        `<${tag.text}> was given text and elements together. A component takes text between its tags when its props say \`children: TextChild | readonly TextChild[]\` (\`<Label>Coins: {coins}</Label>\`), or elements when they say \`children: Child\`: not both. Put the text in a <Text> or a text component of its own.`,
+        jsx,
+      );
+    } else if (given === "text") {
+      // A text wrapper (`<Label>Coins: {coins}</Label>`): the words become one string, passed as its `children` prop, as
+      // <Text> takes its own. Type-checking says whether the component takes text.
+      props.push(...this.lowerTextContent(isJsxElement(jsx) ? jsx.children : [], "children", props, tag.text, jsx));
+    } else if (isJsxElement(jsx)) children = this.lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent, forward: slotOk && isComponent });
     if (isComponent && children.some((c) => c.kind === "KeyedListChild") && children.length > 1) {
       const what = children.some((c) => c.kind === "KeyedListChild" && !isKeyedElement(c)) ? "A list" : "A keyed element";
       this.report(
