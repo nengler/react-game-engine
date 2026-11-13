@@ -89,6 +89,13 @@ describe("rewind", () => {
     backend.queueInput({ dt: 1 / 60, pressed: ["ArrowLeft"] });
     rewind.step();
     assert.equal(rewind.paused, paused - 1, "one frame back");
+    backend.queueInput({ dt: 1 / 60, pressed: ["ArrowUp"] });
+    rewind.step();
+    const second = rewind.paused!;
+    assert.ok(second < paused - 1, `↑ goes back a second (to ${second})`);
+    backend.queueInput({ dt: 1 / 60, pressed: ["ArrowDown"] });
+    rewind.step();
+    assert.ok(rewind.paused! > second, "↓ goes on again");
     rewind.seek(15);
     assert.equal(game.getState().count, 0, "before the press");
     rewind.resume();

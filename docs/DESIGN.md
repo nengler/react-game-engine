@@ -1795,7 +1795,7 @@ and without it neither exists.
   put into the new component's own instance, which keeps its owner (the saved one belonged to the component that left: towers
   restored with it saw no enemies, and a body after a hot reload stopped colliding); and snapshots copy the tree's state, since a
   body changes in place.
-- **Paused**, the last frame is drawn again with a bar over it; F2, the arrows, PgUp and PgDn and F4 are rewind's. After a hot
+- **Paused**, the last frame is drawn again with a bar over it; F2, the four arrows and F4 are rewind's. After a hot
   reload while paused, `reloaded()` seeks to the same frame with the new code. Resuming drops the recorded future.
 - **Moments.** F4 writes the snapshot before the paused frame and the input after it as JSON (`Moment`; the driver as data,
   `FixedDriver.toJSON`), and `replayMoment(config, moment, { stores, observe })` plays it on a recording backend.
@@ -1804,6 +1804,29 @@ and without it neither exists.
   check reports.
 - **Cost** (Hearth, wave 10 at 2×, V8): a frame 1.46 → 1.83 ms mean while recording (p99 3.9 → 4.8); going back half a second
   46 ms, a whole second 67 ms.
+
+## Previews: stories and `rge preview` (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, D4. `player/src/stories.ts` (the format, and building a story's root), `player-node/src/preview.ts` (the
+window, the screenshots, the comparison), `cli/src/commands/preview.ts`, and a `previews` step in `rge check`.
+
+- **Where stories live.** A `stories/` folder beside `test/`, not beside the component in `src/`: a stories file imports the
+  generated class as a test does, and the compiler leaves plain `.ts` files in `src/` where they are, so `./HealthBar.tsx` there
+  would not run. Stories are listed by export name, since a module namespace lists its exports alphabetically.
+- **A story's root.** `storyRoot` resets every game state, runs the story's `setup`, and builds a `<Game>` with the game's look
+  (`gameLook` reads the background, assets, font, text, controls and fixed step from the game's own root, built once from
+  `game.ts`; never its window, id or speed), a `<Screen>` of the story's size with `fit="contain"`, and the component in an entity
+  at the story's origin. That entity's `hotKey` is the story's id, so a hot reload keeps the component's state (same path) and
+  switching to another story does not (another path).
+- **The window** is `playWithReload` with a `load` that builds the chosen story instead of importing the entry, also watching
+  `stories/`. F5 and F6 ask for a reload without compiling (`onReady`'s `reload`); a file saved meanwhile is still compiled.
+  The label is drawn over the frame through a backend proxy, as rewind's bar is, so it is not part of the screenshot. Rewind and
+  the inspector are off.
+- **Screenshots** go through `renderRun` (the headless build), one hidden window per story at its size times its scale, after the
+  story's input and one more step for the layout. `rge check` runs `rge preview --compare` in a process of its own; any pixel that
+  differs fails (`--tolerance` allows a difference per channel).
+- **Keys.** Rewind's "a second" keys were PageUp and PageDown, which are not in `KEY_NAMES`: `KEY_INDEX.get` gave `undefined` and
+  the keys never worked. They are ↑ and ↓ now, and F5 and F6 were free for stories.
 
 ## Effects that happen at a moment (priority 7, 2026-11-11)
 

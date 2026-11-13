@@ -5,17 +5,20 @@
  * 1. compile    `src` to `generated`, with scenes and assets where the game has them
  * 2. typecheck  `tsc -p tsconfig.json` in the game's folder
  * 3. tests      `node --test test/**` (the output's counts are printed)
- * 4. parity     `parity.ts` twice under Node (identical, so a run is deterministic); and, when rge-host is found, bundled and
+ * 4. previews   the game's stories rendered and compared with their stored screenshots (`rge preview --compare`), when it
+ *               has stored any and the headless librge is found
+ * 5. parity     `parity.ts` twice under Node (identical, so a run is deterministic); and, when rge-host is found, bundled and
  *               run under it too, which must print the same
  */
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { compileArgs } from "@rge/player-node";
+import { fileURLToPath } from "node:url";
+import { compileArgs, SCREENSHOTS_FOLDER, storyFiles } from "@rge/player-node";
 import { bundleForHost } from "../bundle.ts";
 import { loadGame, type Game } from "../config.ts";
-import { findHost } from "../native.ts";
+import { findHost, findLibrary } from "../native.ts";
 import { node, run } from "../run.ts";
 
 interface Outcome {
@@ -33,6 +36,23 @@ function tscPath(): string {
 function hasTests(game: Game): boolean {
   const dir = join(game.dir, "test");
   return existsSync(dir) && readdirSync(dir, { recursive: true }).some((file) => String(file).endsWith(".test.ts"));
+}
+
+/** This command line's own script, to run `rge preview --compare` in a process of its own. */
+function cliScript(): string {
+  const dir = dirname(dirname(fileURLToPath(import.meta.url)));
+  return [join(dir, "cli.ts"), join(dir, "cli.js")].find((path) => existsSync(path)) ?? join(dir, "cli.js");
+}
+
+function previews(game: Game): Outcome {
+  const files = storyFiles(game.dir);
+  if (files.length === 0) return { ok: true, detail: "no stories", output: "" };
+  if (!existsSync(join(game.dir, SCREENSHOTS_FOLDER))) return { ok: true, detail: `${files.length} stories files, no stored screenshots (rge preview --screenshot stores them)`, output: "" };
+  const library = findLibrary("headless");
+  if (library === null) return { ok: true, detail: "not compared: the headless librge was not found", output: "" };
+  const r = node([cliScript(), "preview", game.dir, "--compare"], game.dir, { ...process.env, RGE_NATIVE_LIB: library });
+  const last = r.output.trim().split("\n").find((line) => /stories match/.test(line));
+  return { ok: r.ok, detail: r.ok ? (last ?? "") : "stories differ from their stored screenshots", output: r.output };
 }
 
 async function parity(game: Game): Promise<Outcome> {
@@ -89,6 +109,7 @@ export async function checkCommand(args: readonly string[]): Promise<number> {
         return { ok: r.ok, detail: `${count("pass")} passed, ${count("fail")} failed, ${count("skipped")} skipped`, output: r.output };
       },
     },
+    { name: "previews", run: () => previews(game) },
     { name: "parity", run: () => parity(game) },
   ];
 

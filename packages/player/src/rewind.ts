@@ -62,8 +62,8 @@ const PAUSE_KEY = KEY_INDEX.get("F2") as number;
 const SAVE_KEY = KEY_INDEX.get("F4") as number;
 const LEFT = KEY_INDEX.get("ArrowLeft") as number;
 const RIGHT = KEY_INDEX.get("ArrowRight") as number;
-const PAGE_UP = KEY_INDEX.get("PageUp") as number;
-const PAGE_DOWN = KEY_INDEX.get("PageDown") as number;
+const UP = KEY_INDEX.get("ArrowUp") as number;
+const DOWN = KEY_INDEX.get("ArrowDown") as number;
 
 /** A number for a frame's state: the game states' values and the tree's state, walked in order. Equal states hash equal. */
 export function hashState(stores: ReadonlyMap<string, GameStore<unknown>>, hot: HotState): number {
@@ -217,7 +217,7 @@ export class Rewind {
   /** Stop at the frame just played. */
   pause(): void {
     this.#paused = this.#live;
-    this.#options.log?.(`rewind: paused at frame ${this.#live} (← → a frame, PgUp PgDn a second, F4 saves the moment, F2 plays on)`);
+    this.#options.log?.(`rewind: paused at frame ${this.#live} (← → a frame, ↑ ↓ a second, F4 saves the moment, F2 plays on)`);
   }
 
   /** Go to a recorded frame: restore the snapshot before it and play the recorded input to it. Pauses there. */
@@ -352,7 +352,7 @@ export class Rewind {
     const span = Math.max(1, to - from);
     for (const frame of this.snapshotFrames) list.rect({ ...W, x: 8 + ((width - 16) * (frame - from)) / span, y: 6 }, 1, 6, 0xffffff55);
     list.rect({ ...W, x: 8 + ((width - 16) * (at - from)) / span - 1, y: 4 }, 3, 10, 0xffd54fff);
-    const label = `REWIND  frame ${at} of ${from}–${to}${this.divergence !== null ? `   differs from frame ${this.divergence}` : ""}   ← → frame  PgUp PgDn second  F4 save  F2 play`;
+    const label = `REWIND  frame ${at} of ${from}–${to}${this.divergence !== null ? `   differs from frame ${this.divergence}` : ""}   ← → frame  ↑ ↓ second  F4 save  F2 play`;
     list.rect({ ...W, x: 8, y: 16 }, label.length * 6 + 6, 12, 0x000000cc);
     list.text({ ...W, x: 11, y: 17 }, label, 10, this.divergence !== null ? 0xff8a65ff : 0xffffffff);
     this.#real.frame(last?.clear ?? 0, list.records, list.length, list.texts, this.#pausedValues, this.#pausedKeys);
@@ -361,8 +361,8 @@ export class Rewind {
     if (pressed(PAUSE_KEY)) this.resume();
     else if (pressed(LEFT)) this.seek(at - 1);
     else if (pressed(RIGHT)) this.seek(at + 1);
-    else if (pressed(PAGE_UP)) this.seek(at - this.#every);
-    else if (pressed(PAGE_DOWN)) this.seek(at + this.#every);
+    else if (pressed(UP)) this.seek(at - this.#every);
+    else if (pressed(DOWN)) this.seek(at + this.#every);
     else if (pressed(SAVE_KEY)) {
       const moment = this.moment();
       this.#options.saveMoment?.(moment);
