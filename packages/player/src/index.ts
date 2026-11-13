@@ -13,3 +13,4 @@ export { borderRects, fitScreen, onScreen, viewToWindow, type ScreenPlacement, t
 export { Warner } from "./warn.ts";
 export { runScript, ScriptedInputBackend, type RunOptions, type RunResult } from "./harness.ts";
 export { parseInputScript, scriptLength, type InputBindings, type ScriptFrame, type ScriptOptions } from "./script.ts";
+export { gameLook, stories, storiesIn, story, storyRoot, type LoadedStory, type StoriesOf, type StoriesOptions, type Story, type StoryOptions, type StoryWindow } from "./stories.ts";

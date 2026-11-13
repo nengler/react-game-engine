@@ -7,6 +7,7 @@
  *   rge check [folder]                 compile, type-check, test, and check parity under Node and rge-host
  *   rge package [folder] [options]     a folder you can hand to someone (see `rge package --help`)
  *   rge screenshot <folder> [options]  PNGs of a scripted run, through the headless build
+ *   rge preview [folder] [options]     the game's stories: one component with given props, in a window or as PNGs
  *   rge create <folder> [options]      a new game from the template
  *
  * A game's settings live in the "rge" field of its package.json: name, entry, src, generated, scenes, assets, checkAssets.
@@ -17,6 +18,7 @@ import { checkCommand } from "./commands/check.ts";
 import { createCommand } from "./commands/create.ts";
 import { devCommand } from "./commands/dev.ts";
 import { packageCommand } from "./commands/package.ts";
+import { previewCommand } from "./commands/preview.ts";
 import { screenshotCommand } from "./commands/screenshot.ts";
 
 const USAGE = `usage: rge <command> [folder] [options]
@@ -26,6 +28,7 @@ const USAGE = `usage: rge <command> [folder] [options]
   check        compile, type-check, test, parity
   package      a folder to hand to someone                [--engine node|quickjs] [--headless] [--entry file] [--name name]
   screenshot   PNGs of a scripted run                     rge screenshot <folder> --script "right*30" --at 0,29
+  preview      one component at a time, from its stories  [--story HealthBar] [--screenshot | --compare]
   create       a new game from the template               rge create <folder> [--name name] [--packs dir]`;
 
 export async function main(argv: readonly string[]): Promise<number> {
@@ -40,6 +43,8 @@ export async function main(argv: readonly string[]): Promise<number> {
         return await checkCommand(rest);
       case "package":
         return await packageCommand(rest);
+      case "preview":
+        return await previewCommand(rest);
       case "screenshot":
         return await screenshotCommand(rest);
       case "create":

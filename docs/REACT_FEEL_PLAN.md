@@ -1153,10 +1153,15 @@ need a provider (C3) get it from the story (`wrap`). The compiler compiles stori
 
 **Done when**
 
-- [ ] `rge preview` shows a component's stories with hot reload
-- [ ] `--screenshot` writes PNGs, and `rge check` compares them with a baseline
-- [ ] Hearth and Bramble have stories for their UI components
-- [ ] The guide's testing section shows it
+- [x] `rge preview` shows a component's stories with hot reload
+- [x] `--screenshot` writes PNGs, and `rge check` compares them with a baseline
+- [x] Hearth and Bramble have stories for their UI components
+- [x] The guide's testing section shows it
+
+**Done (2026-11-13).** As built, stories live in a `stories/` folder beside `test/` and import the generated class, as tests do
+(the compiler leaves `src/`'s plain `.ts` files in place, so an import of `./HealthBar.tsx` would not run). F5 and F6 switch stories,
+since the arrow keys are the component's own. The window is a desktop window only; a browser page waits for D3. Hearth's stories
+found the build menu wider than the side panel; its icons came out of the buttons. See DESIGN.md, "Previews".
 
 ### D5. Dependency-scoped `render()`
 

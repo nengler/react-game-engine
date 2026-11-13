@@ -30,6 +30,15 @@ import { startInspector, type Inspector } from "./inspector.ts";
 export interface DevOptions {
   /** The game's entry file, which calls `run(hostBackend(), config)`. */
   readonly entry: string;
+  /**
+   * Make the config another way than by importing `entry` (`rge preview` builds a story): called on start and after each
+   * compile, with the game's files given a new version, as an import of the entry would be.
+   */
+  readonly load?: () => Promise<PlayerConfig>;
+  /** Called once the game runs, with a way to load the game again without compiling (`rge preview` switching stories). */
+  readonly onReady?: (handle: { readonly reload: () => void }) => void;
+  /** The folders whose changes reload the game, in the game's folder. Default `src` and `scenes`. */
+  readonly watch?: readonly string[];
   /** The game's folder: `src/`, `generated/`, and optionally `scenes/` and `assets/`. Default: the entry's folder. */
   readonly gameDir?: string;
   /** Recompile before the first load too, so the game never starts from stale generated code. Default true. */
@@ -156,7 +165,8 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
     version++;
     loaded.clear();
     handed = null;
-    await import(`${pathToFileURL(entry).href}?v=${version}`);
+    if (options.load !== undefined) handed = await options.load();
+    else await import(`${pathToFileURL(entry).href}?v=${version}`);
     const config = handed as PlayerConfig | null;
     if (config === null) throw new Error(`${options.entry} did not call run(hostBackend(), config).`);
     const stores = new Map<string, GameStore<unknown>>();
@@ -210,6 +220,8 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
   let closed = false;
   let changed = false;
   let busy = false;
+  /** Set by `onReady`'s `reload`: load again without compiling first. */
+  let skipCompile = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const watchers: FSWatcher[] = [];
   const onChange = (): void => {
@@ -217,10 +229,11 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
     timer = setTimeout(() => {
       timer = null;
       changed = true;
+      skipCompile = false; // a saved file is compiled, even when a reload without compiling was asked for too
       void reloadIfChanged();
     }, 80);
   };
-  for (const folder of ["src", "scenes"]) {
+  for (const folder of options.watch ?? ["src", "scenes"]) {
     const path = join(gameDir, folder);
     if (existsSync(path)) watchers.push(watch(path, { recursive: true }, onChange));
   }
@@ -229,9 +242,11 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
     if (busy || !changed || closed) return;
     busy = true;
     changed = false;
+    const compile = !skipCompile;
+    skipCompile = false;
     try {
       const started = Date.now();
-      const compiled = await compileGame(gameDir);
+      const compiled = compile ? await compileGame(gameDir) : { ok: true, output: "" };
       if (closed) return;
       if (!compiled.ok) {
         const errors = compileErrors(compiled.output);
@@ -274,6 +289,13 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
   // The frame loop: one frame per turn of the event loop, so file events and the compiler's output are heard between frames.
   let printed: unknown = null;
   options.observe?.("start", player);
+  options.onReady?.({
+    reload: () => {
+      skipCompile = true;
+      changed = true;
+      void reloadIfChanged();
+    },
+  });
   try {
     for (;;) {
       const open = rewind !== null ? rewind.step() : player.step();
