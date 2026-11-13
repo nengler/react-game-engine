@@ -18,7 +18,7 @@ Sizes are rough, for one engineer, in the style of the Phase 3 plan. Each priori
 
 **What comes after these** is Phase 4, decided 2026-11-10: play the engine on a real machine, build a real small game and let it drive the backlog, then make it usable outside this repository by making a third game outside it (decided 2026-11-11; [ADVENTURE_PLAN.md](ADVENTURE_PLAN.md)). See "Phase 4: driven by a real game" below.
 
-**Making it feel like React** (2026-11-13): a review of the engine as a whole asked how close writing a game is to writing React, what is missing and what big wins are cheap. Its plan, ordered, is [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md); it includes context, the web backend and a dependency-scoped `render()`, which are rows of "Not now" and priority 4 below. `useChange` is held for a separate discussion.
+**Making it feel like React** (2026-11-13): a review of the engine as a whole asked how close writing a game is to writing React, what is missing and what big wins are cheap. Its plan, ordered, is [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md). Decided with it: the goal is that game code lives in components, written like React, and the limits that pushed the three games' logic into `rules/` are to be fixed (its section A), not recommended; it includes context, the web backend and a dependency-scoped `render()`, which are rows of "Not now" and priority 4 below. `useChange` is held for a separate discussion.
 
 ## Phase 4: driven by a real game
 

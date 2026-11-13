@@ -15,14 +15,25 @@ there is no `useEffect`"). It is kept for a separate discussion and is not plann
 
 The engine is strong where it counts for a code-first game engine: the compiler, its diagnostics, deterministic replays, headless
 tests, hot reload that keeps state, and native packaging. The React feel, though, holds mostly at the view layer. In all three games
-the components are thin views over one store, and the game is plain TypeScript in `rules/`. That is a good architecture; the guide
-should say it is *the* architecture (A1), and the rest of this plan makes that view layer read like React and fills the gaps the
-games worked around.
+the components are thin views over one store, and the game itself is plain TypeScript in `rules/`.
+
+**Decided 2026-11-13: the goal is that game code lives in components, written like React.** The README's first example (a `Player`
+that keeps its own `health` in `useState`) is the target, not a simplification. The games moved their logic into `rules/` because of
+specific limits, and each is a problem to fix, not a shape to recommend. Section A plans those fixes; B to D make the rest read like
+React and add what the games worked around. Plain functions in `.ts` files stay available, the way a React app extracts a reducer
+or a helper, but they stop being the only way to write a game that can be tested, saved and replayed.
 
 | # | Item | Kind | Size (estimate) | Depends on |
 | --- | --- | --- | --- | --- |
-| **A** | **Say what the model is** | | | |
-| A1 | Rules are pure, components are views: the guide's first page says so | Guide | \~1–2 days | — |
+| **A** | **Game code in components** | | | |
+| A1 | Handlers are plain TypeScript, and a component body may compute with statements | Compiler | \~2.5–3.5 weeks | — |
+| A2 | Movement and collisions answered in the same step: `useBody` | Runtime, compiler | \~2–3 weeks | — |
+| A3 | Contacts carry data: `<Collider data>`, typed by tag | Runtime, compiler | \~3–4 days | — |
+| A4 | Testing one component without a window (`@rge/testing`) | New package, runtime | \~1–1.5 weeks | B7 |
+| A5 | Component state in saves | Runtime | \~1 week | — |
+| A6 | What a component knows about others: lifting state up, and its timing | Guide, runtime | \~3–4 days | C3 |
+| A7 | Prove it: Hearth rewritten with its game in components | Game | \~2 weeks | A1–A5 |
+| A8 | The guide, the template and the README teach components first | Guide, template | \~3–4 days | A7 |
 | **B** | **Parts that do not read like React** | | | |
 | B1 | A component's root `<Entity>` is named after the component by default | Compiler | \~1 day | — |
 | B2 | Lay out lists with `<Flex>`, not arithmetic; `x` / `y` as shorthand props | Guide, compiler, runtime | \~3–4 days | — |
@@ -47,56 +58,321 @@ Sizes are rough, for one engineer, in the style of NEXT_PRIORITIES.md. "Order of
 
 ---
 
-## A. Say what the model is
+## A. Game code in components
 
-### A1. Rules are pure, components are views
+**Why the games left components.** NEXT_PRIORITIES.md records it, game by game:
 
-**Today.** Every game the engine has made is built the same way, and it is not the way a React developer would guess:
+| What pushed logic out of components | Where it was found | Fixed by |
+| --- | --- | --- |
+| "A compiled component can hold almost no logic": no loops, `let` or most method calls in handlers; the escape was a plain function in `rules/` | Kite finding 1; Bramble finding 1 ("the subset is still the main cost, a third time") | A1, and B6 for hooks |
+| Collision callbacks run after the step's update, so movement and deaths read tiles in the rules instead | Kite finding 5; PAIN_POINTS.md section 3 | A2 |
+| A contact says only `tag` and `owner`, so a handler cannot learn what it touched (a coin's value, an enemy's damage) without the game state | `Contact` in `runtime/src/components/Collider.ts` | A3 |
+| The rules could be tested with no engine (Kite 40+ tests, Hearth 27, Bramble 40); a component could be tested only by running the whole game from an input script | Kite and Hearth "rules apart from drawing" | A4 |
+| Saves pick from the game state (`createSave({ pick })`), so state kept in a component is lost on save | Bramble's `GameState.ts` | A5 |
+| An enemy that chases the player needs the player's position; with no refs and no context, the game state was the only shared place | Hearth, Bramble | A6, C3 |
+| Kite's character "stepped itself" in one big component, and Hearth's single `act` in `Play` "worked better" | Hearth findings, "which of Kite's findings held" | A1 and A2 make the first shape workable |
 
-- Bramble's rules are about 1,080 lines of plain TypeScript (`games/bramble/src/rules/*.ts`); its components are about 380 lines
-  of TSX, and `rules/view.ts` works out what each one draws (`heroOf`, `spotsOf`, `dialogueOf`).
-- Hearth's `Enemy.tsx` takes eight props from a list in the game state (`kind`, `x`, `y`, `left`, `hp`, `maxHp`, `slow`,
-  `flash`) and has no state or update of its own.
-- Only Kite's `Player.tsx` and Bramble's `Menu.tsx` hold real local state with behaviour, and even `Player` hands its step to
-  `rules/player.ts`.
+What already works for component state, and needs no change: replays of a whole game from an input script (they drive the
+components, so they replay component state too), hot reload (it keeps every `useState` and ref), the fixed step and `freeze`,
+keyed lists of components that each own their state, callbacks up to a parent (`onDie`, `onDefeated`) and effect stores called
+from handlers (`sfx.play`, `fx.burst`).
 
-A React developer arriving from the README expects "an enemy is a component with its own `useState` and `useUpdate`, and it
-collides with things". The engine allows that, but frame timing (state set in a handler shows next render), collisions arriving
-after `useUpdate`, and the subset all push against it, and the guide's "Three places code can go" says so only in passing. The
-author finds out by hitting it.
+What stays a reason to write some code as plain functions: a **search over the game** (Kite's solver, Bramble's "can be finished"
+proof) steps the game thousands of times from copied states, which pure functions make cheap. With D1's snapshots a search can run
+over a headless world instead, at a higher cost per step. That is a trade the author makes for a given system, as a React app
+chooses to put some logic in a reducer; it is not the engine's default.
 
-**Why it matters.** The shape that works is what gives the engine its best properties: headless tests, the solver that proves Kite
-and Bramble can be finished, whole-game replays, and byte-identical output under V8 and QuickJS. Said up front, the missing pieces
-(no `useEffect`, no refs on elements, a store instead of context for game data) read as choices that serve it, rather than gaps.
+### A1. Handlers are plain TypeScript, and the body may compute
 
-**Proposal.** Name the model on the guide's first page (`docs/index.html`, "The mental model in five lines") and in the README:
+**Today.** Three languages in one file (PAIN_POINTS.md section 1): the component body allows expressions only; handlers allow `let`,
+`for…of` and `switch` but not `while`, C-style `for`, `try`, or methods outside an allowlist (`push` and `sort` are rejected);
+plain `.ts` files allow anything. Handlers are lowered statement by statement into the IR (DESIGN.md, "Handlers"), which is why
+each construct has to be added by hand. A React developer writes a `useUpdate` like any function and is refused.
 
-> The game is plain TypeScript: rules that take the state and the input and return the next state and what happened. Components
-> are the view of that state, written in TSX like React: they draw it, lay it out, play its music, and turn presses into actions.
-> Local state is for the view (a menu's cursor, a squash), not for the game.
+**Proposal.**
 
-Then, in "Coming from React":
+1. **Handlers are copied, not lowered.** A handler's body (in `useUpdate`, `useInput`, `useMount`, an `on…` prop, a callback) is
+   emitted as the TypeScript it was written as, with only the names that mean something to the component rewritten: a state read
+   becomes the snapshot field, a setter call becomes the generated setter, a ref becomes its field, a prop becomes the props field,
+   a game-state action becomes the store call. This is what the hook inliner already does for hooks (`hooks/inline.ts`: rewrite
+   names, keep the text). Everything else in TypeScript works because nothing else is touched: loops of every kind, `try`, local
+   arrays with `push` and `sort`, closures, early `return`.
+2. **What the compiler still checks in a handler**: that a setter is not called during render, that state is not assigned
+   directly (`health = 3` is an error naming `setHealth`), and that a state array or object is not mutated in place
+   (`items.push(x)` on state; a local array is fine). The last is checked by type (state arrays are `readonly`) rather than by an
+   allowlist, so the TypeScript error appears in the editor with no `RGE` code needed.
+3. **The component body may hold statements.** Everything before `return` that is not a hook call is a *derived block*: the
+   compiler finds what state, props and game-state paths it reads, and runs the block again when any of them change, as it does for
+   a derived `const` today. So this compiles:
 
-- A short "Redux / Elm, with React for the view" paragraph: `useGame` is the store, actions are reducers that may call effect
-  stores, `rules/view.ts` is selectors, and components are connected views.
-- One worked example of the same feature written both ways (an enemy with `useState` and `useUpdate` in the component, and the
-  same enemy in rules with a view component), with what each costs: the first cannot be tested headless or replayed, and its
-  collisions are a step late.
-- When a component's own state *is* right: presentation that the rules do not care about (cursor, hover, squash, a dialogue's
-  reveal if the rules do not need it), and prototypes.
-- The template (`packages/cli/template`) already has `src/rules/move.ts`; its comments point to this section.
+   ```tsx
+   function Inventory({ items }: InventoryProps) {
+     const rows: Row[] = [];
+     let total = 0;
+     for (const item of items) {
+       if (item.count === 0) continue;
+       rows.push({ id: item.id, label: `${item.name} ×${item.count}` });
+       total += item.count;
+     }
+     return …;
+   }
+   ```
+
+   The block's results (`rows`, `total`) are cached fields; JSX reads them. Combined with D5, only the blocks whose inputs changed
+   run.
+4. **The rule that stays**: hooks at the top level only, never in a condition or a loop. React has the same rule, and the message
+   can say so.
+
+**Constraints.** Source maps (DESIGN.md, "Errors in the source") already map generated lines to the `.tsx`; copied handlers map
+one to one, which is simpler than lowered ones. Hot reload, replays and parity are unaffected: the generated code is still a class
+with the same fields. The IR loses its statement kinds for handlers; the compiler's tests for each handler construct become tests
+of the rewrite.
 
 **Open questions.**
 
-1. Whether the README example (`Player` with `useState(100)` health) should change to the rules shape, since it is the first thing
-   anyone reads and it shows the shape the games moved away from.
+1. Whether the derived block may call setters (React forbids it during render). Suggested no, with an error that says to move it
+   into a handler.
 
 **Done when**
 
-- [ ] The guide's first page and the README say what the model is, in a few lines
-- [ ] "Coming from React" has the Redux / Elm paragraph and the worked example both ways
-- [ ] The template's comments point to it
-- [ ] The README's first example is decided (kept with a note, or changed)
+- [ ] Any TypeScript compiles in a handler, with tests for `while`, C-style `for`, `try`, local arrays and closures
+- [ ] Direct assignment to state and in-place mutation of state are errors at the right line
+- [ ] A component body may hold statements, re-run only when what they read changes
+- [ ] PAIN_POINTS.md section 1's first two bullets are closed
+
+### A2. Movement and collisions answered in the same step: `useBody`
+
+**Today.** Collisions are found after every step and reported to `onCollisionEnter` after the step's `useUpdate` (DESIGN.md, "Why
+collisions are per step"). So a component that moves in its update learns it hit a wall one step later, after it is already inside
+it. Kite read tiles in its rules instead, with `moveActorX` / `moveActorY` (`runtime/src/move.ts`), which take a `blocked(x, y)`
+function the rules write. That works for tiles only, and only in a `.ts` file.
+
+**Proposal.** A hook that owns a box's position and moves it against what is solid, answering at once:
+
+```tsx
+function Player() {
+  const [vy, setVy] = useState(0);
+  const [dead, setDead] = useState(false);
+  const body = useBody({ x: 16, y: 32, width: 8, height: 11, layer: "player" });
+
+  useUpdate((dt, input) => {
+    const dx = (input.held("right") ? 1 : 0) - (input.held("left") ? 1 : 0);
+    const hit = body.move(dx * 90 * dt, vy * dt);      // pixel by pixel, stops at solids, now
+    if (hit.down) setVy(input.pressed("jump") ? -220 : 0);
+    else setVy(vy + 600 * dt);
+    if (body.touching("spikes")) setDead(true);        // overlaps right now, not next step
+  });
+
+  return (
+    <Entity transform={{ x: body.x, y: body.y }}>
+      <Sprite image={dead ? "hero-dead.png" : "hero.png"} />
+    </Entity>
+  );
+}
+```
+
+- `useBody(initial)` returns a handle with `x`, `y` (state: reading them renders), `move(dx, dy)` and `touching(tag)`.
+- `move` uses `moveActorX` / `moveActorY` with a `blocked` built by the engine from what is solid: `<Tilemap solid>` (or a tile
+  property, as Bramble's maps already carry) and `<Collider solid>`. It returns `{ left, right, up, down }` for the sides it was
+  stopped on, and the tags of the solids it met.
+- `touching(tag)` asks the collision tracker for this body's overlaps *now*, against the positions after this move.
+  `onCollisionEnter` keeps working, after the update as today, for things that do not need an answer in the same step.
+- The body is a collider with the given `layer` and `hits`, so others collide with it as with any `<Collider>`.
+- Order: bodies move in tree order within a step, each against the others' positions as moved so far. Deterministic, and what the
+  pixel movers in the games already assume.
+
+**Constraints.** `useBody` is a hook that returns an object with methods, which B6 must allow (custom hooks returning functions) or
+which the compiler knows as a built-in hook (as `useGame` is). The tracker needs a query by box (`rge_overlaps` already finds the
+boxes that overlap, NATIVE_PLAN.md); in script, the sweep it replaces is the fallback. Parity holds because movement is whole pixels
+and order is fixed.
+
+**Open questions.**
+
+1. Slopes and one-way platforms: `solid="top"` on a collider or a tile for one-way; slopes wait for a game.
+2. Whether `useBody` should also carry velocity and gravity (a small physics body). Suggested no: velocity is the game's own state,
+   as above; a `usePlatformer` built from `useBody` can ship later as an ordinary hook.
+
+**Done when**
+
+- [ ] `useBody` moves against solid tiles and solid colliders and returns the sides it hit, in the same step
+- [ ] `touching(tag)` answers in the same step; parity and replays pass
+- [ ] Kite's movement is written once with `useBody` in a component as a test (beside its rules, to compare feel and cost)
+- [ ] The guide's "Tilemaps and movement" section leads with it
+
+### A3. Contacts carry data
+
+**Today.** `Contact` has `tag` and `owner`. A player touching a coin knows it is `"coin"` but not that it is worth 5; an enemy
+touching the player cannot say how much it hurts. The games put this in the game state, keyed by id, and looked it up.
+
+**Proposal.**
+
+```tsx
+<Collider width={8} height={8} tag="coin" data={{ value }} />
+
+onCollisionEnter={(other) => {
+  if (other.tag === "coin") setCoins(coins + other.data.value);
+}}
+```
+
+- `data` is any value (compared like a prop: a new object only when what is in it changed).
+- `other` is typed as a union by tag from one declaration in a `.ts` file, so `other.data.value` is a `number` after the
+  `other.tag === "coin"` check:
+
+  ```ts
+  // colliders.ts
+  declare module "@rge/runtime" {
+    interface ColliderData { coin: { value: number }; enemy: { damage: number }; spikes: undefined }
+  }
+  ```
+
+  With no declaration, `data` is `unknown`, as today's code would expect.
+- `useBody`'s `move` and `touching` (A2) return contacts with `data` too.
+
+**Done when**
+
+- [ ] `<Collider data>` reaches `other.data` in both callbacks and in `useBody`, typed by tag
+- [ ] A coin's value and an enemy's damage travel by collision in one game, not through the game state
+
+### A4. Testing one component without a window
+
+**Today.** A rule is a function, so a test calls it. A component can be tested only by running the whole game from an input
+script (`runScript`, `packages/player/src/harness.ts`) and reading the game state or the draw records. There is nothing like React
+Testing Library for one component, so a component that owns its logic is harder to test than the same logic in `rules/`. That
+alone is a reason authors would keep logic out of components.
+
+**Proposal.** A small package, `@rge/testing`, over the headless `World` the runtime already has (`tick`, `reportCollision`,
+`reportPress`):
+
+```ts
+import { render } from "@rge/testing";
+import { Enemy } from "../generated/Enemy.ts";
+
+test("an enemy dies after three hits", () => {
+  const onDefeated = mock.fn();
+  const t = render(Enemy, { x: 0, y: 0, hp: 3, onDefeated }, { tilemaps: ["field"] });
+  t.collide("enemy", { tag: "shot", data: { damage: 1 } }, 3);   // three contacts on its collider tagged "enemy"
+  t.step(1);
+  assert.equal(onDefeated.mock.callCount(), 1);
+});
+
+test("the player walks right", () => {
+  const t = render(Player, {}, { tilemaps: ["room1"] });
+  t.input("right*30");                     // the input script language the games already use
+  assert.ok(t.state(Player).x > 40);       // the component's own state, through B7's accessor
+  assert.deepEqual(t.find("Sprite").image, "hero.png");
+});
+```
+
+- `render(Component, props, options)` mounts the component as a root in a headless world, with the game state reset (or a given
+  state), assets and tilemaps registered, and no backend.
+- `step(n)`, `input(script)` (the script syntax of `parseInputScript`), `press(x, y)`, `collide(tag, contact, times)`,
+  `setProps(props)`.
+- Queries: `find(nameOrClass)`, `findAll`, `state(Component)` (its `useState` values and refs, read through the accessor B7 adds),
+  and `records()` for what would be drawn.
+- Tests import the generated class, as `game.ts` does today; the testing package runs the compiler first if the generated code is
+  older than the source (as `rge check` does).
+
+**Done when**
+
+- [ ] `@rge/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
+- [ ] The template's tests show it next to a rules test
+- [ ] A7's Hearth has component tests for its enemies and towers
+
+### A5. Component state in saves
+
+**Today.** `createSave({ pick, apply })` saves what `pick` returns from the game state. A component's own state is not saved, so a
+game that keeps an enemy's health in the enemy loses it.
+
+**Proposal.** A save can include the tree, as hot reload already does:
+
+```ts
+export const save = createSave<SaveData>({
+  name: "save",
+  version: 1,
+  pick: () => ({ screen: useGame.getState().screen }),   // the game state part, as today
+  tree: true,                                          // and every component's own state
+});
+```
+
+- With `tree: true`, `write()` stores `captureHotState(root)` beside `pick()`'s data, and `load()` rebuilds the tree from the
+  game state, then restores component state with `restoreHotState`, as a hot reload does.
+- Paths name objects by `key` where one is given, not only by class and index (`Main/Play:0/Enemy[beetle-3]`), so a list item
+  keeps its own state when an earlier one was removed. Hot reload gains the same improvement.
+- Saved values are what `saveHotState` returns: state and refs, which are plain data. A component whose state holds something that
+  is not (a function, an effect handle) is skipped with a warning naming the field.
+- `version` works as today: a save from an older version is passed to `migrate` (or refused), the tree part included.
+
+**Open questions.**
+
+1. Whole tree, or only components that opt in (`useState(3, { save: true })`)? The whole tree is simplest and matches hot reload;
+   opt-in keeps saves small and stable across code changes. Suggested: the whole tree, with `save: false` on a state to leave it out
+   (a cursor, a hover).
+
+**Done when**
+
+- [ ] `createSave({ tree: true })` saves and restores component state, with tests for keyed lists and a removed item
+- [ ] Hot reload paths use keys
+- [ ] A7's Hearth saves mid-wave and loads back to the same enemies
+
+### A6. What a component knows about others
+
+**Today.** There are no refs on elements and no context, so an enemy that chases the player reads the player's position from the
+game state, which means the player's position lives there and not in the player.
+
+**Proposal.** React's answer, said plainly in the guide, with the engine's timing spelled out:
+
+- **Lift state up.** What two components need lives in their nearest common parent, as in React: the level holds the player's
+  position if enemies need it, and passes it down as a prop or through context (C3); the player reports it up through a callback
+  (`onMove`). The game state is the top of that ladder, for what the whole game shares (the screen, the score, the run).
+- **Timing.** A child's update sees its parent's state as of the start of the step (the snapshot rule every component already has),
+  and a value reported up through a callback in this step is seen by others next step. One step of lag between independent things
+  is deterministic and is what most engines do; where it matters (a camera following the player), the built-in reads the child's
+  transform directly, as `<Camera>` already does.
+- **Context for game data is fine.** C3 drops its "not for game data" rule: a `<Level>` providing the player's position to every
+  enemy is what context is for.
+
+**Done when**
+
+- [ ] The guide has a "Sharing state between components" section with the chase example, both by props and by context
+- [ ] The step timing is in "How a frame works", with a test that pins it
+
+### A7. Prove it: Hearth with its game in components
+
+**Why Hearth.** Its world is a list of things that each have their own state and behaviour: enemies walk a path and take damage,
+towers aim and fire, shots fly and hit. Today all of it is `stepBattle` in `rules/` and the components are views (`Enemy.tsx` takes
+eight props). It has 27 rule tests and replays to compare against.
+
+**Work.**
+
+- Rewrite Hearth so that `Enemy`, `Tower` and `Shot` own their state and step themselves in `useUpdate`, collide with `A2`/`A3`, and
+  report up by callbacks; `Play` keeps the wave, the gold and the lives.
+- Keep the old version on a branch or in a folder for the comparison; do not ship both.
+- Port the rule tests to `@rge/testing` (A4), and keep the whole-game replays.
+- Measure: lines of code, the step cost at wave 10 under V8 and QuickJS (each enemy renders each step either way), and how the
+  tests read.
+- Write what still did not read like React, as each game has.
+
+**Done when**
+
+- [ ] Hearth plays the same waves with its game in components, its replays and parity passing
+- [ ] Its tests are component tests, and none needed a plain function to be testable
+- [ ] Wave 10's cost is recorded beside today's
+- [ ] The findings are in NEXT_PRIORITIES.md
+
+### A8. The guide, the template and the README teach components first
+
+**Work.**
+
+- The README's first example stays as it is: it is the target.
+- The guide's "mental model" and "Coming from React" say that game code goes in components, as in React, and that a plain function
+  in a `.ts` file is for what you would extract in React too (a pure calculation, a table, something a search runs many times).
+  The "Three places code can go" table changes to match.
+- The template's `src/rules/move.ts` becomes a component with `useBody`, and its tests use `@rge/testing`.
+- "When something goes wrong" gets the new questions: "my enemy does not see the player" (A6), "my collision is a step late" (A2).
+
+**Done when**
+
+- [ ] The guide, the template and the README all start from component state, checked by following the guide from scratch
 
 ---
 
@@ -387,7 +663,7 @@ sees. B2's shorthand props would widen the list.
 
 - **Hot reload** saves state by name (`"Player.health"` in `saveHotState`); the saved keys are strings and do not change.
 - **Tests and the harness** sometimes read a component's state from outside (`player.find(...).health`). Those reads move to an
-  explicit accessor (`debugState()`, which C4's inspector needs anyway) or to the game state, which is where game data belongs (A1).
+  explicit accessor (`debugState()`, which C4's inspector and A4's `@rge/testing` need anyway).
   A search of the games' tests sizes this before starting.
 - **Benchmarks.** `npm run bench:check` guards against private fields costing anything under QuickJS.
 
@@ -457,8 +733,8 @@ most of what "juice" is.
    a colour for every kind (sprites have `tint`; text and shapes have `color`).
 
 **Constraints.** Determinism: every easing is a function of fixed-step time, so parity between V8 and QuickJS holds; the parity
-test covers a moving spring. Hot reload: a spring's value and velocity are state, so they survive a reload. Gameplay positions
-still belong in rules (A1); motion here is presentation.
+test covers a moving spring. Hot reload: a spring's value and velocity are state, so they survive a reload. Motion here is
+presentation; a body that moves by gameplay uses `useBody` (A2).
 
 **Open questions.**
 
@@ -475,9 +751,9 @@ still belong in rules (A1); motion here is presentation.
 ### C2. Timers and sequences
 
 **Today.** There is no "do this in 0.3 seconds". Each delay is a countdown kept as state and counted down by hand: Hearth's
-`flash` and `slow`, Bramble's `invuln`, the dialogue's reveal. That is the right shape for *game* time that must be saved and
-replayed (it lives in the rules). It is clumsy for *presentation* time (a button flashing after a press, a title that appears a
-beat after the music, a short cutscene), where React code would write `setTimeout` in a handler.
+`flash` and `slow`, Bramble's `invuln`, the dialogue's reveal. React code would write `setTimeout` in a handler: an enemy flashing
+for 0.1 s after a hit, a few seconds of safety after the player is hurt, a title that appears a beat after the music, a short
+cutscene.
 
 **Proposal.**
 
@@ -519,25 +795,29 @@ reload keeps a timer only if the callback still exists at the same place in the 
 
 1. Whether `after` should also exist as a hook (`useTimeout(seconds, fn, [deps])`). Suggested no: it would be `useEffect` by
    another name, and the handler form covers presentation.
-2. Whether timers belong in components at all, given A1. Suggested yes for presentation only; the guide says that game delays stay
-   countdowns in the rules, and why (saves and replays).
+2. Saves: a pending timer is code and cannot be saved (A5). A game delay that must survive a save (invulnerability) is state, or a
+   timer whose end time is state; the guide says which. Suggested: `after` returns nothing to keep, and the guide shows the
+   end-time-in-state form for delays that are saved.
 
 **Done when**
 
 - [ ] `after`, `every` and `cancelTimers` compile, are cancelled on unmount, follow the fixed step and `freeze`, and replay
 - [ ] Hot reload keeps or drops timers as described, with a test
-- [ ] The guide says which delays are timers and which are countdowns in rules
+- [ ] The guide says which delays are timers and which are state that is saved
 - [ ] Sequences: built when a game with a cutscene asks (recorded in NEXT_PRIORITIES.md's "Not now")
 
 ### C3. Context
 
 **Today.** There is none, on purpose (PAIN_POINTS.md section 2; NEXT_PRIORITIES.md "Not now": "a tree three or more levels deep
-passing the same props through"). Game data goes in the game state, which covers most of what context is used for in React apps.
-What it does not cover:
+passing the same props through"). Once game code lives in components (section A), context is how a parent shares its state with a
+deep subtree, as in React. What it is for:
+
+- **State a parent owns that its descendants read**: a level's player position for every enemy (A6), a battle's gold for every
+  tower's button.
 
 - **A theme that changes at run time**: a colour-blind setting, or light and dark palettes. Today's constant `theme.ts` (Hearth)
   covers a fixed theme, so this waits for a game that switches.
-- **A reusable component's configuration** that is not game data: a `<Menu>` inside a `<Panel>` that should take the panel's
+- **A reusable component's configuration**: a `<Menu>` inside a `<Panel>` that should take the panel's
   accent colour, a `<Slot>` that should know its inventory's size.
 - **The engine's own built-ins**, which already pass things down by hand: `<Game font>` reaches every `<Text>`, a `<Router>`'s
   route reaches its `<Route>`s.
@@ -567,10 +847,11 @@ const { accent } = useContext(Theme);
 
 **Constraints.**
 
-- Context is not for game data. The guide says so, and a diagnostic could warn when a provider's `value` reads `useGame`
-  (the data is already global; pass the selector instead). Suggested as a warning, not an error.
+- What the whole game shares stays in the game state (it is global already); context is for what one subtree shares. The guide
+  says so; nothing enforces it.
 - Values follow the same rules as game state values (no class instances that mutate in place; objects compared leaf by leaf).
-- Hot reload: providers hold props, not state, so nothing new is saved.
+- Hot reload and saves (A5): providers hold props, not state, so nothing new is saved; the state they pass down is saved where it
+  is owned.
 
 **Open questions.**
 
@@ -849,23 +1130,27 @@ scene is the measure.
 
 ## Order of work
 
-Grouped so that each step is useful on its own and later steps build on earlier ones.
+Section A is the main track: it is the goal. The rest is grouped around it so each step is useful on its own.
 
-1. **The cheap, visible wins first** (about 1.5 weeks): A1 (say what the model is), B1 (root names), B4 (`useGame.actions()`),
-   B5 (`useStore`). Each removes a line that confuses a newcomer, and none depends on another.
-2. **Text wrappers and context** (about 2.5 weeks): B3 (text children on components, game-wide text defaults), then C3 (context).
-   Hearth's `Label` and Bramble's text are rewritten with B3, which tests it.
-3. **Motion and timers** (about 2.5 weeks): C1's hooks and `opacity`, then C2's `after` / `every`. These are the most visible
-   things a player sees.
-4. **Tools** (about 5 weeks): C4 (overlay and inspector), then D1 (rewind), which shares its panel and needs C2's timers to be
-   snapshot. D4 (preview) can run alongside.
-5. **The editor** (about 2.5 weeks): D2. Independent of the rest; can move earlier if the subset is the next complaint.
-6. **The compiler's deeper work** (about 3–4 weeks): B6 (hooks like functions), B7 (no root name clashes), B2's shorthand (after B7),
-   D5 (dependency-scoped render).
-7. **The web** (about 3–4 weeks): D3. Last because it is the largest and because the inspector and rewind benefit from it but do
-   not need it; first if sharing a build becomes urgent.
+1. **Cheap, visible wins** (about 1 week): B1 (root names), B4 (`useGame.actions()`), B5 (`useStore`). Each removes a line that
+   confuses a newcomer, and none depends on another.
+2. **The compiler's foundations for section A** (about 5–6 weeks): A1 (handlers as plain TypeScript, statements in the body), then
+   B7 (no root name clashes, which gives `@rge/testing` its state accessor) and B6 (hooks that may return functions, which
+   `useBody` needs unless it is a built-in hook). D5 (dependency-scoped render) fits here if A1's derived blocks are built with it.
+3. **The runtime for section A** (about 5–6 weeks): A2 (`useBody`), A3 (contact data), A4 (`@rge/testing`), A5 (component state in
+   saves), C3 (context) and A6 (sharing state, which leans on C3).
+4. **The proof** (about 2.5 weeks): A7 (Hearth with its game in components), then A8 (the guide, the template and the README).
+   What A7 finds may reorder what follows.
+5. **Text, motion and timers** (about 3.5 weeks): B3, C1, C2. C2's timers are useful to A7 for flashes and safety windows, so they
+   can move into step 3 if Hearth asks.
+6. **Tools** (about 5 weeks): C4 (overlay and inspector), then D1 (rewind), which shares its panel and snapshots component state
+   and timers. D4 (preview) can run alongside.
+7. **The editor** (about 2.5 weeks): D2. Independent of the rest; worth moving earlier if the subset is still the main complaint
+   after A1.
+8. **The web** (about 3–4 weeks): D3. Last because it is the largest and nothing else needs it; first if sharing a build becomes
+   urgent.
 
-B2's guide and Bramble's `Menu` rewrite can be done at any point; they need no engine change.
+B2's guide change and Bramble's `Menu` rewrite can be done at any point; its shorthand props come after B7.
 
 ## Not in this plan
 
@@ -873,6 +1158,7 @@ B2's guide and Bramble's `Menu` rewrite can be done at any point; they need no e
 | --- | --- | --- |
 | `useChange(value, (prev) => …)` | Held for a separate discussion (2026-11-13). Its design is in DESIGN.md, "Why there is no `useEffect`" | That discussion |
 | `useEffect` | Stays out (DESIGN.md, 2026-11-12) | — |
+| Recommending rules in `.ts` files as the shape of a game | Dropped 2026-11-13: the goal is game code in components (section A). Plain functions stay available for what React would extract too | — |
 | Refs on elements (`ref={…}`) | Stays out; C4's inspector and B7's accessor cover the debugging uses | A built-in that needs an imperative handle no prop can express |
 | A live editing playground in the guide | Needs the compiler in the browser (D3, constraints) | A JavaScript build of the compiler's front half, or a hosted compile step |
 | Rewind for players | Needs snapshots in packaged builds | A game designed around it |
