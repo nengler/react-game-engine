@@ -13,6 +13,14 @@ export type FlexAlignItems = (typeof FLEX_ALIGN_ITEMS)[number];
 export const FLEX_JUSTIFY_CONTENT = ["start", "center", "end", "space-between", "space-around", "space-evenly"] as const;
 export type FlexJustifyContent = (typeof FLEX_JUSTIFY_CONTENT)[number];
 
+/**
+ * What happens to children that stick out of a `<Flex>`'s box: `"visible"` (they draw outside it, as ever), `"hidden"` (they are
+ * clipped to it) or `"scroll"` (clipped, and the mouse wheel moves them: see `scrollX` and `scrollY`). The manifest's
+ * `intrinsicLiterals` reads this list.
+ */
+export const FLEX_OVERFLOW = ["visible", "hidden", "scroll"] as const;
+export type FlexOverflow = (typeof FLEX_OVERFLOW)[number];
+
 /** The nine points of a box that a floating `<Flex>` is attached by (`anchor`) and to (`to`). */
 export const FLEX_ANCHORS = ["top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right"] as const;
 export type FlexAnchor = (typeof FLEX_ANCHORS)[number];
@@ -77,6 +85,19 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   /** Pixels to move it right / down from where the two points meet (negative moves it left / up). Default 0. */
   offsetX?: number;
   offsetY?: number;
+  /**
+   * What happens to children outside the box (see `FlexOverflow`). `"hidden"` clips to the inside of the box's border (so content never paints over it);
+   * `"scroll"` also lets the mouse wheel move the content, and stops the children shrinking to fit, so there is something to scroll.
+   * A clipped child cannot be pressed where it is cut off. Give a `"scroll"` box a size (or a `maxHeight`) smaller than its content.
+   * Default `"visible"`.
+   */
+  overflow?: FlexOverflow;
+  /**
+   * How far a `"scroll"` box's content is moved left and up, in pixels. The wheel changes it; setting the prop moves it there
+   * (clamped to the content): `scrollY={9999}` keeps a log at its end. Default 0.
+   */
+  scrollX?: number;
+  scrollY?: number;
   /** A CSS colour: draw a filled rectangle behind the children, the size of the box. Default none. */
   background?: string;
   /**
@@ -120,6 +141,9 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
 export class FlexBox {
   /** The size the box ended up with. */
   readonly size = new Float64Array(2);
+  /** Where the children's far edges end, with the padding after them, before any scrolling, and how far the content can scroll (0 when it fits). Written by layout. */
+  readonly contentEnd = new Float64Array(2);
+  readonly scrollMax = new Float64Array(2);
   /** Its preferred size from its content (fit), and the smallest it can be. */
   readonly preferred = new Float64Array(2);
   readonly minimum = new Float64Array(2);
@@ -188,6 +212,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   minHeight: number | undefined;
   maxHeight: number | undefined;
   background: string | undefined;
+  overflow: FlexOverflow;
+  scrollX: number;
+  scrollY: number;
   borderWidth: number;
   borderColor: string | undefined;
   borderRadius: number;
@@ -242,6 +269,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.minHeight = hostProps.minHeight;
     this.maxHeight = hostProps.maxHeight;
     this.background = hostProps.background;
+    this.overflow = hostProps.overflow ?? "visible";
+    this.scrollX = hostProps.scrollX ?? 0;
+    this.scrollY = hostProps.scrollY ?? 0;
     this.borderWidth = hostProps.borderWidth ?? 0;
     this.borderColor = hostProps.borderColor;
     this.borderRadius = hostProps.borderRadius ?? 0;
@@ -272,9 +302,10 @@ export class Flex<P extends object = {}> extends GameObject<P> {
 
   /**
    * Whether the world-space point is on the box as it was laid out and drawn: taken back through the box's position,
-   * rotation and scale, like `Pointer.contains`. A box with no size, or a zero scale, is never hit.
+   * rotation and scale, like `Pointer.contains`. A box with no size, or a zero scale, is never hit. With an `inset`, only the
+   * part that many pixels in from every edge counts (what a clipping box shows: inside its border).
    */
-  contains(x: number, y: number): boolean {
+  contains(x: number, y: number, inset = 0): boolean {
     const width = this.box.size[0] as number;
     const height = this.box.size[1] as number;
     const t = this.worldTransform();
@@ -285,7 +316,7 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     const sin = Math.sin(t.rotation);
     const localX = (dx * cos + dy * sin) / t.scaleX;
     const localY = (dy * cos - dx * sin) / t.scaleY;
-    return localX >= 0 && localX <= width && localY >= 0 && localY <= height;
+    return localX >= inset && localX <= width - inset && localY >= inset && localY <= height - inset;
   }
 
   /** The middle of the laid-out box, in its layer's coordinates (scale and rotation ignored). */

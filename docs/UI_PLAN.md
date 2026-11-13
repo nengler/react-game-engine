@@ -77,6 +77,8 @@ It keeps the CSS vocabulary already decided (`direction`, `alignItems`, `justify
 | `pressedBackground`, `pressedBorderColor` | a CSS colour | none | Drawn while the mouse button is held on the box (`World.pressed`: a press began on it, and the mouse is still over it). Over hover and focus |
 | `disabled`, `disabledBackground`, `disabledBorderColor` | boolean, CSS colours | `false`, none | A switched-off box: no `onPress` from a click, `pressKey` or confirm, no focus; a click on it is swallowed rather than passed on. Its disabled colours replace every other state. Also a prop of `Pointer` |
 | `transition` | seconds | `0` | Fade `background` and `borderColor` between states (hover, press, focus, disabled) instead of snapping. The fade is worked out from the player's animation clock (the sum of each step's capped `dt`) and the colours kept on the box, so a frame built twice at one time shows the same thing; a fade cut short turns round from where it had got to. A colour that comes or goes fades its alpha, keeping its own red, green and blue. Layout never changes, and without `transition` the draw output is unchanged |
+| `overflow` | `"visible"`, `"hidden"`, `"scroll"` | `"visible"` | What happens to children outside the box. `hidden` clips to it; `scroll` also scrolls with the wheel and does not shrink the children, so there is content to scroll (see "Clipping and scrolling") |
+| `scrollX`, `scrollY` | pixels | `0` | A scroll box's offset: the wheel changes it, setting the prop jumps to it (clamped to the content) |
 | `onPress` | a callback | none | Pressable over the laid-out box (U4) |
 
 Every one is a plain string, number or boolean, so each is a field on the object, set in place by `render()` like `Shape.width` is. There are no object-valued props (`padding={{ x: 8 }}`): an object would be allocated on every render, which the performance work in priority 4 is trying to remove, and the compiler today only special-cases `transform` as an object. That is why padding is spelled out as separate props.
@@ -389,6 +391,15 @@ Also decided on 2026-11-09, each as recommended:
 8. ~~**Scissor in ABI v2.**~~ Yes: `RGE_OP_SCISSOR` and `RGE_OP_SCISSOR_END` go into ABI v2 with U0, so clipping needs no ABI v3 later.
 9. ~~**Floating props (U5).**~~ Props on `Flex` (`float`, `anchor`, `to`, `offsetX`, `offsetY`), so a floating box is still a `Flex` with all its sizing; no separate `<Float>` built-in.
 
+## Clipping and scrolling
+
+`overflow` on a `<Flex>` (built after U5; PR 3 of the UI follow-ups) uses the scissor record U0 put in ABI v2, which needed no native change. The record is in target pixels, ignores the view, and does not nest, so the player does the rest:
+
+- **A clip is a property of a draw record, like its z.** The walk tags each record with the innermost clipping box (`DrawList.pushClip` / `popClip`, which keep the box's world transform and size). After the z sort, `sortByZ` takes each box's corners through the layer's final view (the camera's, the HUD's, the screen's placement, whichever the layer's view record carries) to a rectangle of pixels, cuts it down to the box it is inside, and writes a `SCISSOR` record wherever the records' boxes change, and a `SCISSOR_END` where they stop and at the end of the layer. A child's own z cannot lift it out of its clip, and a clip never runs on into the next layer. A box that is turned is clipped to the rectangle around it, and a box with a border (in any state: its room is kept) clips to the inside of the border, as CSS clips to the padding box.
+- **Layout:** a scroll box's children do not shrink along the main axis, and it asks its parent for no more than its edges, so it can be squeezed. `#position` records where the children end (`box.contentEnd`, floating children out of the flow not counted), and so how far the box can scroll (`box.scrollMax`), clamps `scrollX` / `scrollY` to it and moves the children by it.
+- **The mouse:** a press or hover on something inside a clipping box must also be inside every box that clips it (checked up the parents only when something clips). The wheel goes to the topmost scroll box under the mouse that can still move that way, up and down first, then left and right; a box at its end passes it to the one around it. A notch is 32 pixels.
+- **Not here:** scroll bars, dragging to scroll, the wheel with Shift for the other axis, and keeping the focused child in view.
+
 ## Not in this plan, and what would pull it in
 
 | Item | Why it waits | What would pull it in |
@@ -396,7 +407,6 @@ Also decided on 2026-11-09, each as recommended:
 | Text wrapping inside a box | One-line text covers a HUD; the steps already leave its slot (step 2), and `rge_measure_text` already measures words | A dialogue box, or any text longer than its box |
 | Wrapping rows (`flex-wrap`) | A HUD row rarely wraps | An inventory grid; or a separate `Grid` built-in |
 | Aspect-ratio boxes | Nothing in a HUD needs one | A portrait or a minimap frame that must keep its shape while growing |
-| Scrolling containers | Needs scroll state, on top of the scissor record U0 adds | A long settings menu or a chat log |
 | Layout transitions (animating size and position changes) | Clay has them; a game can animate `transform` today | A menu that should slide or resize smoothly |
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |
 | Focus and keyboard or gamepad navigation between buttons | Needs gamepads first (a "Not now" item in NEXT_PRIORITIES) | A console-style menu |

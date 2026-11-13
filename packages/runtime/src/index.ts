@@ -26,7 +26,7 @@ export { Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
 export { AnimatedSprite, parseAnimations, type AnimatedSpriteProps, type AnimationEntry, type AnimationTable, type SheetAnimation } from "./components/AnimatedSprite.ts";
-export { Flex, FlexBox, FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, type FlexAlignItems, type FlexAnchor, type FlexDirection, type FlexJustifyContent, type FlexProps, type FlexSizing, type FlexTransition } from "./components/Flex.ts";
+export { Flex, FlexBox, FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, FLEX_OVERFLOW, type FlexAlignItems, type FlexAnchor, type FlexDirection, type FlexJustifyContent, type FlexOverflow, type FlexProps, type FlexSizing, type FlexTransition } from "./components/Flex.ts";
 export { Tilemap, type TilemapProps } from "./components/Tilemap.ts";
 export { findTilemap, getTilemap, registerTilemaps, TileGrid, TILE_FLIP_D, TILE_FLIP_H, TILE_FLIP_V, type TilemapData, type TilemapLayerData, type TilemapObject, type TilesetData } from "./tilemap.ts";
 export { Music, type MusicProps } from "./components/Music.ts";

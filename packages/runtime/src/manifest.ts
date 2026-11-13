@@ -1,4 +1,4 @@
-import { FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT } from "./components/Flex.ts";
+import { FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, FLEX_OVERFLOW } from "./components/Flex.ts";
 import { TEXT_ALIGNS } from "./components/Text.ts";
 import { PARTICLE_SPACES } from "./components/Particles.ts";
 import { SCREEN_FITS } from "./components/Screen.ts";
@@ -129,7 +129,7 @@ export const runtimeManifest: RuntimeManifest = {
     Route: ["name", "keepAlive", "visible", "active"],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "transition", "transitionState", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint", "box",
+      "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "overflow", "scrollX", "scrollY", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "transition", "transitionState", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint", "box",
     ],
   },
   intrinsicRequired: {
@@ -168,7 +168,7 @@ export const runtimeManifest: RuntimeManifest = {
     Text: { align: TEXT_ALIGNS },
     Game: { upscale: ["nearest", "sharp"] },
     Particles: { space: PARTICLE_SPACES },
-    Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS },
+    Flex: { direction: FLEX_DIRECTIONS, alignItems: FLEX_ALIGN_ITEMS, justifyContent: FLEX_JUSTIFY_CONTENT, anchor: FLEX_ANCHORS, to: FLEX_ANCHORS, overflow: FLEX_OVERFLOW },
   },
   intrinsicSizing: { Flex: ["width", "height"] },
   intrinsicCallbacks: {
