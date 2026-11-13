@@ -1,0 +1,33 @@
+{
+  "name": "rge",
+  "displayName": "react-game-engine",
+  "description": "RGE diagnostics and quick fixes for react-game-engine components, as you type.",
+  "version": "0.0.1",
+  "publisher": "rge",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Linters"],
+  "main": "./extension.js",
+  "activationEvents": ["onLanguage:typescriptreact", "onLanguage:typescript"],
+  "contributes": {
+    "configuration": {
+      "title": "react-game-engine",
+      "properties": {
+        "rge.node": {
+          "type": "string",
+          "default": "node",
+          "description": "The Node.js (22.6 or later) that runs the game's `rge lsp`."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "rge.restart",
+        "title": "react-game-engine: Restart the language server"
+      }
+    ]
+  }
+}

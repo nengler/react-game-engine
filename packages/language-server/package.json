@@ -1,0 +1,12 @@
+{
+  "name": "@rge/language-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rge/compiler": "0.0.0"
+  }
+}

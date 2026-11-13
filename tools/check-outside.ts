@@ -1,7 +1,7 @@
 /**
  * Is the engine usable from outside this repository? Packs it, copies `games/bramble` to a temporary folder away from the
- * repository, points its dependencies at the tarballs, installs, and runs `rge check` and `rge package --headless` there, then
- * runs the packaged build for a few seconds. A relative import into `packages/`, an export a package is missing, or a file left
+ * repository, points its dependencies at the tarballs, installs, and runs `rge check`, `rge lsp` (a component's diagnostics) and
+ * `rge package --headless` there, then runs the packaged build for a few seconds. A relative import into `packages/`, an export a package is missing, or a file left
  * out of a pack fails here.
  *
  *   npm run check:outside
@@ -44,7 +44,7 @@ try {
   for (const file of readdirSync(join(work, "packs"))) {
     const pack = /^rge-(.+?)-\d/.exec(file)?.[1];
     if (pack === undefined) continue;
-    const section = pack === "cli" || pack === "testing" ? "devDependencies" : "dependencies";
+    const section = pack === "cli" || pack === "testing" || pack === "language-server" ? "devDependencies" : "dependencies";
     (pkg[section] ??= {})[`@rge/${pack}`] = `file:${join(work, "packs", file)}`;
   }
   writeFileSync(manifest, `${JSON.stringify(pkg, null, 2)}\n`);
@@ -52,6 +52,7 @@ try {
   step("npm install", "npm", ["install", "--no-audit", "--no-fund"], game);
   const rge = join(game, "node_modules/.bin/rge");
   step("rge check", rge, ["check"], game);
+  step("rge lsp", process.execPath, [join(root, "tools/lsp-smoke.ts"), rge, game], game);
   step("rge package --headless", rge, ["package", "--headless"], game);
   // The packaged game runs until its window closes: stopping it after a few seconds (status 124) is the pass.
   const exe = join(game, "dist/bramble/bramble");

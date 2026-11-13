@@ -1075,11 +1075,20 @@ feels like the engine refusing your code. This is the cheapest way to make the s
 
 **Done when**
 
-- [ ] The language server publishes `RGE` diagnostics for a game's `.tsx` as it is edited, at the right ranges
-- [ ] Quick fixes for at least the four messages above
-- [ ] A VS Code extension, installable from a local `.vsix` (nothing published, as with the packages)
-- [ ] The guide's setup step mentions it
+- [x] The language server publishes `RGE` diagnostics for a game's `.tsx` as it is edited, at the right ranges
+- [x] Quick fixes for at least the four messages above
+- [x] A VS Code extension, installable from a local `.vsix` (nothing published, as with the packages)
+- [x] The guide's setup step mentions it
 - [ ] Checked by writing a component from scratch in the editor and never running `rge check` to find a subset error
+
+**Done (2026-11-13), but for the check in a real editor.** `@rge/language-server`, run as `rge lsp`; `editors/vscode` (`npm run
+vscode:pack`). Since A1 a loop or `let` in a component body is allowed, so that fix is not needed; the fixes are a missing import, an
+import from `"react"`, `useEffect(…, [])` to `useMount`, `useMemo` and `useCallback` to the value and the function, `<Text text>`
+to children, a whole-state selector to `useGame.actions()`, and a name the authoring module does not export. Hover help is left
+to TypeScript's own server, which already shows each built-in's and hook's documentation from `@rge/runtime/jsx`. The last box
+needs a person in VS Code: a test takes a component written as for React to one that compiles with the quick fixes alone, and a
+test drives the extension through a stand-in `vscode` module, but no editor was opened. TypeScript 7.1's beta was not checked
+for plugin support: a separate server works whatever it supports. See DESIGN.md, "Diagnostics in the editor".
 
 ### D3. A web backend, and examples that run in the guide
 
@@ -1221,10 +1230,10 @@ Section A is the main track: it is the goal. The rest is grouped around it so ea
    and timers. D4 (preview) can run alongside.
 7. **The editor** (about 2.5 weeks): D2. Independent of the rest; worth moving earlier if the subset is still the main complaint
    after A1.
-8. **The web** (about 3–4 weeks): D3. Last because it is the largest and nothing else needs it; first if sharing a build becomes
-   urgent.
-
-B2's guide change and Bramble's `Menu` rewrite can be done at any point; its shorthand props come after B7.
+8. **After the editor** (decided 2026-11-13): B2 (lists laid out with `<Flex>`, `x` / `y` shorthand, Bramble's `Menu`), then D5
+   (dependency-scoped `render()`), then A2's open item (Kite's movement written once with `useBody`, to compare).
+9. **The web** (about 3–4 weeks): D3. On the back burner (2026-11-13): the largest item, and nothing else needs it; first if
+   sharing a build becomes urgent.
 
 ## Not in this plan
 
