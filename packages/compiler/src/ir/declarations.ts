@@ -204,4 +204,11 @@ export interface StateIR {
    * component joins and leaves a world (`ownedHandles`), if it wants to know.
    */
   readonly handle?: true;
+  /**
+   * Not the component's own state, so not kept by hot reload or saves: a context's reader, and the value it reads
+   * (`useContext`), which is found again from the tree.
+   */
+  readonly transient?: true;
+  /** Worked out again in `commitState` each time the component renders: a context's value, read from its reader. */
+  readonly refresh?: ExprIR;
 }

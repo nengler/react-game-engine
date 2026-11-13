@@ -1483,6 +1483,24 @@ audio of its own: `play()` counts calls in `plays`, so game logic can be tested,
 `SoundSink` a player installs with `setSoundSink` (see "Player").
 Options such as `volume` come later.
 
+## Context (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, C3, React's API compiled. Context was left out while props covered every tree (NEXT_PRIORITIES.md, "Not
+now"); with game code moving into components (section A), a parent sharing its state with a deep subtree is the React answer.
+
+- **`createContext(default)`** (`runtime/src/context.ts`), in a `.ts` file, returns `{ default, Provider }`; `Provider` is only for
+  the type-checker (a method, so a context of any value type fits `Context<unknown>`).
+- **`<Theme.Provider value>`** is rewritten, in the inliner's first pass (`providerEdits`), into the built-in
+  `<Provider context={Theme} value>`, and `Provider` is added to the file's import from the authoring module. `Provider` extends
+  `Entity`, is a container with `layoutContents` (layout sees through it), and keeps the components that read it; setting a
+  different `value` marks each of them dirty.
+- **`useContext(Theme)`** lowers to two states the component does not own (`transient`: hot reload and saves leave them out): a
+  reader, `readContext(Theme)`, a handle state, so `ownedHandles` tells it its owner when the component joins a world, and it
+  finds the nearest `Provider` of that context above and registers the component with it; and the value, whose `refresh`
+  (`this.$context1.value`) the generated `commitState` reads every render. Because the value is state, derived values and memos
+  that read it depend on it as on any state. `const { accent } = useContext(Theme)` reads members of the value.
+- Objects are never re-parented, so a reader keeps its provider; a provider that goes takes its subtree with it.
+
 ## Global state (`createGameState`)
 
 `useState` is one component's own state. The **game state** belongs to the game: a score, hit points, a mute switch,

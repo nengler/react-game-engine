@@ -39,6 +39,9 @@ import {
   isIdentifier,
   isImportDeclaration,
   isJsxAttribute,
+  isJsxClosingElement,
+  isJsxOpeningElement,
+  isJsxSelfClosingElement,
   isNamedImports,
   isObjectBindingPattern,
   isObjectLiteralExpression,
@@ -134,7 +137,7 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
         // First, once: a destructured selection on the game state becomes one selector per name (it may hold no hook at all).
         if (!split) {
           split = true;
-          const edits = storeSelectionEdits(sf, fileName, current, stores, diagnostics);
+          const edits = [...storeSelectionEdits(sf, fileName, current, stores, diagnostics), ...providerEdits(sf, current, authoringModule)];
           if (edits.length > 0) {
             current = map.apply(current, edits);
             continue;
@@ -323,6 +326,39 @@ function storeSelectionEdits(sf: SourceFile, fileName: string, text: string, sto
     }
   }
   return edits;
+}
+
+/**
+ * `<Theme.Provider value={v}>…</Theme.Provider>`, React's way to provide a context, is the built-in `<Provider context={Theme}
+ * value={v}>…</Provider>`: the tag is rewritten, and `Provider` is added to the file's import from the authoring module.
+ */
+function providerEdits(sf: SourceFile, text: string, authoringModule: string): Edit[] {
+  const edits: Edit[] = [];
+  const visit = (node: Node): void => {
+    if (isJsxOpeningElement(node) || isJsxSelfClosingElement(node) || isJsxClosingElement(node)) {
+      const tag = node.tagName;
+      if (isPropertyAccessExpression(tag) && tag.name.text === "Provider" && isIdentifier(tag.expression)) {
+        const replacement = isJsxClosingElement(node) ? "Provider" : `Provider context={${tag.expression.text}}`;
+        edits.push({ start: tag.getStart(sf), end: tag.getEnd(), text: replacement });
+      }
+    }
+    node.forEachChild(visit);
+  };
+  sf.forEachChild(visit);
+  if (edits.length === 0) return edits;
+  const authoring = sf.statements.find((st) => isImportDeclaration(st) && isStringLiteral(st.moduleSpecifier) && st.moduleSpecifier.text === authoringModule);
+  const named = authoring !== undefined && isImportDeclaration(authoring) ? authoring.importClause?.namedBindings : undefined;
+  if (named !== undefined && isNamedImports(named)) {
+    if (!named.elements.some((e) => e.name.text === "Provider")) {
+      const last = named.elements[named.elements.length - 1];
+      const at = last !== undefined ? last.getEnd() : named.getStart(sf) + 1;
+      edits.push({ start: at, end: at, text: last !== undefined ? ", Provider" : " Provider " });
+    }
+  } else {
+    edits.push({ start: 0, end: 0, text: `import { Provider } from ${JSON.stringify(authoringModule)}; ` });
+  }
+  void text;
+  return edits.sort((a, b) => a.start - b.start);
 }
 
 /** Parentheses (and `as`) around an expression do not change it. */

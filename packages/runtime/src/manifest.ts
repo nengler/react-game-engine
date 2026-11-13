@@ -101,9 +101,9 @@ export interface HandleTypeManifest {
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route", "Provider"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route", "Provider"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -127,6 +127,7 @@ export const runtimeManifest: RuntimeManifest = {
     Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
     Route: ["name", "keepAlive", "visible", "active"],
+    Provider: ["name", "context", "value", "addReader", "removeReader"],
     Flex: [
       "direction", "alignItems", "justifyContent", "gap", "wrap", "rowGap", "columnGap", "padding", "paddingX", "paddingY", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
       "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight", "background", "opacity", "drawnAlpha", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "overflow", "scrollX", "scrollY", "borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "transition", "transitionState", "disabledBackground", "disabledBorderColor", "disabled", "float", "anchor", "to", "offsetX", "offsetY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "onFocus", "onBlur", "contains", "focusPoint", "box",
@@ -152,6 +153,7 @@ export const runtimeManifest: RuntimeManifest = {
     Music: ["src"],
     Router: ["route"],
     Route: ["name"],
+    Provider: ["context", "value"],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
@@ -200,5 +202,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner", "data"] },
   },
-  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2, keepIfEqual: 2, createBody: 1 },
+  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2, keepIfEqual: 2, createBody: 1, readContext: 1 },
 };
