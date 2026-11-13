@@ -404,6 +404,16 @@ Also decided on 2026-11-09, each as recommended:
 - **Not here:** tiling the edges and middle instead of stretching them, a scale for the corners, and a tint.
 - The draw pass keeps the nine parts' numbers in one scratch array, so a skin allocates nothing per frame.
 
+## Text outline and shadow
+
+`shadow` and `outline` on a `<Text>` (PR 5 of the UI follow-ups) need nothing of the native side either: they are the text drawn again, before itself, in another colour. `FrameBuilder.#text` draws each copy through the ordinary path (a record for each line of the built-in font, a region for each glyph of a bitmap font), shifted along the text's own axes by the box's scale and rotation, with the colour overridden by a private `#ink` that both paths read.
+
+- **Order:** the shadow's copies, then the outline's, then the text. The shadow falls from the *outlined* shape, so with both it is a copy at every offset of the outline's disc (the centre included) moved by `shadowX`, `shadowY`; with only a shadow it is one copy.
+- **The outline** is a copy at every whole pixel offset within `outlineWidth` (`dx² + dy² ≤ r² + r`, so width 1 is the 8 neighbours and a width is a rounded ring). That is 8, 20 and 36 extra records a line for widths 1, 2 and 3, which is why the width stops at 3. An outline can be made opaque cheaply; a see-through colour shows through where the copies overlap, which is documented.
+- **No room:** layout measured the text alone and the effects do not change that, so a label with an outline can touch its box's edge. Leave padding.
+- **Not here:** a blurred shadow (it would need a filter the draw records do not have), a gradient, and a stroke that follows the glyphs' curves at sub-pixel widths.
+- The copies are drawn through a scratch position, so drawing effects makes no object per copy.
+
 ## Clipping and scrolling
 
 `overflow` on a `<Flex>` (built after U5; PR 3 of the UI follow-ups) uses the scissor record U0 put in ABI v2, which needed no native change. The record is in target pixels, ignores the view, and does not nest, so the player does the rest:
