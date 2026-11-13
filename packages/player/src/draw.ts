@@ -175,6 +175,16 @@ function orderByZ(zs: readonly number[]): number[] | null {
   return order;
 }
 
+/** Where each thing about a nine-slice's three columns and three rows starts in `FrameBuilder.#parts`. */
+const SRC_X = 0;
+const SRC_W = 3;
+const DST_X = 6;
+const DST_W = 9;
+const SRC_Y = 12;
+const SRC_H = 15;
+const DST_Y = 18;
+const DST_H = 21;
+
 /** Numbers kept per clipping box (see `DrawList.pushClip`), and where its parent's id is among them. */
 const CLIP_STRIDE = 9;
 const CLIP_PARENT = 7;
@@ -565,7 +575,7 @@ export class DrawList {
 
 /** A `<Flex>` takes the mouse when it has a press or a hover callback, or a prop that is drawn while the mouse is over it. */
 function hoverable(flex: Flex): boolean {
-  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined;
+  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined || flex.hoverBackgroundImage !== undefined;
 }
 
 /** Whether a `<Flex>` draws anything of its own, in any state: a background or a border, or a colour for one in a state. */
@@ -575,7 +585,9 @@ function paints(flex: Flex): boolean {
     flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined ||
     flex.focusBackground !== undefined || flex.focusBorderColor !== undefined ||
     flex.pressedBackground !== undefined || flex.pressedBorderColor !== undefined ||
-    flex.disabledBackground !== undefined || flex.disabledBorderColor !== undefined
+    flex.disabledBackground !== undefined || flex.disabledBorderColor !== undefined ||
+    flex.backgroundImage !== undefined || flex.hoverBackgroundImage !== undefined || flex.focusBackgroundImage !== undefined ||
+    flex.pressedBackgroundImage !== undefined || flex.disabledBackgroundImage !== undefined
   );
 }
 
@@ -858,6 +870,8 @@ export class FrameBuilder {
   #time: number | undefined = undefined;
   /** Scratch for the colours a transitioning `<Flex>` shows, so drawing allocates nothing. */
   readonly #fadeColors: ShownColors = { fill: 0, edge: 0 };
+  /** Scratch for the nine parts of a background image (see `#paintImage`): 24 numbers, three columns or rows each of eight things. */
+  readonly #parts = new Float64Array(24);
   readonly #textureSizes = new Map<number, Size>();
   readonly #textSizes = new Map<string, Size>();
   readonly #loadTexture: (path: string) => number;
@@ -1587,25 +1601,37 @@ export class FrameBuilder {
   #paintFlex(flex: Flex, world: WorldTransform): void {
     let background = flex.background;
     let borderColor = flex.borderColor;
+    let image = flex.backgroundImage;
     const host = flex.world;
     if (flex.disabled) {
       background = flex.disabledBackground ?? background;
       borderColor = flex.disabledBorderColor ?? borderColor;
+      image = flex.disabledBackgroundImage ?? image;
     } else if (host !== null) {
       // Each state replaces the one before it: focus over plain, hover over focus, pressed (the button held on it, and the mouse still over it) over hover.
       if (host.focused === flex) {
         background = flex.focusBackground ?? background;
         borderColor = flex.focusBorderColor ?? borderColor;
+        image = flex.focusBackgroundImage ?? image;
       }
       if (host.hovered === flex) {
         background = flex.hoverBackground ?? background;
         borderColor = flex.hoverBorderColor ?? borderColor;
+        image = flex.hoverBackgroundImage ?? image;
         if (host.pressed === flex) {
           background = flex.pressedBackground ?? background;
           borderColor = flex.pressedBorderColor ?? borderColor;
+          image = flex.pressedBackgroundImage ?? image;
         }
       }
     }
+    this.#paintColors(flex, world, background, borderColor);
+    // The image goes over the colours (a colour shows through where the image is transparent) and under the children.
+    if (image !== undefined && image !== "") this.#paintImage(flex, world, image);
+  }
+
+  /** A `<Flex>`'s background colour and border, in the colours its state chose. */
+  #paintColors(flex: Flex, world: WorldTransform, background: string | undefined, borderColor: string | undefined): void {
     const width = flex.box.size[0] as number;
     const height = flex.box.size[1] as number;
     if (flex.transition > 0 && this.#time !== undefined) {
@@ -1628,6 +1654,112 @@ export class FrameBuilder {
     }
     if (background === undefined && borderWidth === 0) return;
     this.#list.box(world, width, height, background === undefined ? 0 : this.#color(background), borderWidth === 0 || borderColor === undefined ? 0 : this.#color(borderColor), borderWidth, radius);
+  }
+
+  /** The pixels of one side's slice (0 when it is not given, or not a number of at least 0). */
+  #slice(side: number | undefined, all: number | undefined): number {
+    const v = side ?? all;
+    return v !== undefined && v > 0 && Number.isFinite(v) ? v : 0;
+  }
+
+  /**
+   * A `<Flex>`'s background image, cut into nine by its slices: the four corners keep their size, the four edges stretch along
+   * one axis and the middle stretches along both. Each part is a `RGE_OP_SPRITE_REGION` of the image, scaled to fill its place
+   * (a record's own scale does the stretching, so this needs nothing of the native side), under the box's own transform. A slice
+   * past the image's size is cut down to fit it. A box smaller than its corners shrinks them all in proportion, as CSS does.
+   * A part with nothing in it (a middle of no width) is not drawn. An image that is missing is a magenta box, once warned of.
+   */
+  #paintImage(flex: Flex, world: WorldTransform, image: string): void {
+    const width = flex.box.size[0] as number;
+    const height = flex.box.size[1] as number;
+    if (!(width > 0 && height > 0)) return;
+    const handle = this.#texture(image);
+    if (handle < 0) {
+      this.#list.rect(world, width, height, MAGENTA);
+      return;
+    }
+    const size = this.#imageSize(image);
+    const iw = size.width;
+    const ih = size.height;
+    if (!(iw > 0 && ih > 0)) return; // a backend that cannot say how big the picture is cannot cut it
+    let left = this.#slice(flex.sliceLeft, flex.slice);
+    let right = this.#slice(flex.sliceRight, flex.slice);
+    let top = this.#slice(flex.sliceTop, flex.slice);
+    let bottom = this.#slice(flex.sliceBottom, flex.slice);
+    if (left + right > iw) {
+      const k = iw / (left + right);
+      left *= k;
+      right *= k;
+    }
+    if (top + bottom > ih) {
+      const k = ih / (top + bottom);
+      top *= k;
+      bottom *= k;
+    }
+    // On the box the corners are as big as the slices, unless the box is too small for both, and then they shrink together.
+    const fit = Math.min(1, left + right > 0 ? width / (left + right) : 1, top + bottom > 0 ? height / (top + bottom) : 1);
+    const dl = left * fit;
+    const dr = right * fit;
+    const dt = top * fit;
+    const db = bottom * fit;
+    // Columns and rows: where each starts in the image, how wide it is there, and where and how wide it is drawn. Kept in one
+    // scratch array (three of each, in this order), so that drawing a skin allocates nothing.
+    const p = this.#parts;
+    p[SRC_X] = 0;
+    p[SRC_X + 1] = left;
+    p[SRC_X + 2] = iw - right;
+    p[SRC_W] = left;
+    p[SRC_W + 1] = iw - left - right;
+    p[SRC_W + 2] = right;
+    p[DST_X] = 0;
+    p[DST_X + 1] = dl;
+    p[DST_X + 2] = width - dr;
+    p[DST_W] = dl;
+    p[DST_W + 1] = width - dl - dr;
+    p[DST_W + 2] = dr;
+    p[SRC_Y] = 0;
+    p[SRC_Y + 1] = top;
+    p[SRC_Y + 2] = ih - bottom;
+    p[SRC_H] = top;
+    p[SRC_H + 1] = ih - top - bottom;
+    p[SRC_H + 2] = bottom;
+    p[DST_Y] = 0;
+    p[DST_Y + 1] = dt;
+    p[DST_Y + 2] = height - db;
+    p[DST_H] = dt;
+    p[DST_H + 1] = height - dt - db;
+    p[DST_H + 2] = db;
+    const cos = world.rotation === 0 ? 1 : Math.cos(world.rotation);
+    const sin = world.rotation === 0 ? 0 : Math.sin(world.rotation);
+    for (let row = 0; row < 3; row++) {
+      const sh = p[SRC_H + row] as number;
+      const dh = p[DST_H + row] as number;
+      if (!(sh > 0 && dh > 0)) continue;
+      for (let col = 0; col < 3; col++) {
+        const sw = p[SRC_W + col] as number;
+        const dw = p[DST_W + col] as number;
+        if (!(sw > 0 && dw > 0)) continue;
+        // The part's corner in the box, taken through the box's own scale and rotation to where it is in the world.
+        const ox = (p[DST_X + col] as number) * world.scaleX;
+        const oy = (p[DST_Y + row] as number) * world.scaleY;
+        this.#list.spriteRegionAt(
+          world.x + ox * cos - oy * sin,
+          world.y + ox * sin + oy * cos,
+          world.rotation,
+          world.scaleX * (dw / sw),
+          world.scaleY * (dh / sh),
+          handle,
+          p[SRC_X + col] as number,
+          p[SRC_Y + row] as number,
+          sw,
+          sh,
+          0,
+          0,
+          0,
+          0xffffffff,
+        );
+      }
+    }
   }
 
   /** The size of one line of `object` in `font` (undefined: the built-in font). An empty line has the height of a line. */

@@ -157,6 +157,22 @@ export function A() {
     assert.match(r.stderr, /The font 'font\.png' is not in/);
     assert.doesNotMatch(r.stderr, /hero\.png|tiles\.png|sheet\.png/);
   });
+
+  it("checks a Flex's background images like a sprite's: a missing one is named, with the nearest file for a typo", () => {
+    const source = `import { Flex, useState } from "@rge/runtime/jsx";
+export function Panel() {
+  const [on] = useState(false);
+  return <Flex backgroundImage="panel.png" hoverBackgroundImage={on ? "panel-hover.png" : "panel-hoer.png"} disabledBackgroundImage="gone.png" slice={8} />;
+}
+`;
+    const files = ["panel.png", "panel-hover.png", "panel-hoer.png", "gone.png"];
+    assert.equal(compileProject(source, files).status, 0);
+    const r = compileProject(source, ["panel.png", "panel-hover.png", "panels-gone.png"]);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /The image 'panel-hoer\.png' is not in .*assets\/ \(did you mean 'panel-hover\.png'\?\)/);
+    assert.match(r.stderr, /The image 'gone\.png' is not in/);
+    assert.doesNotMatch(r.stderr, /'panel\.png'/);
+  });
 });
 
 describe("useUpdate takes the input, and an action can take it", () => {

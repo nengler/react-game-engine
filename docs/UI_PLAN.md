@@ -77,6 +77,8 @@ It keeps the CSS vocabulary already decided (`direction`, `alignItems`, `justify
 | `pressedBackground`, `pressedBorderColor` | a CSS colour | none | Drawn while the mouse button is held on the box (`World.pressed`: a press began on it, and the mouse is still over it). Over hover and focus |
 | `disabled`, `disabledBackground`, `disabledBorderColor` | boolean, CSS colours | `false`, none | A switched-off box: no `onPress` from a click, `pressKey` or confirm, no focus; a click on it is swallowed rather than passed on. Its disabled colours replace every other state. Also a prop of `Pointer` |
 | `transition` | seconds | `0` | Fade `background` and `borderColor` between states (hover, press, focus, disabled) instead of snapping. The fade is worked out from the player's animation clock (the sum of each step's capped `dt`) and the colours kept on the box, so a frame built twice at one time shows the same thing; a fade cut short turns round from where it had got to. A colour that comes or goes fades its alpha, keeping its own red, green and blue. Layout never changes, and without `transition` the draw output is unchanged |
+| `backgroundImage`, `slice`, `sliceTop`, `sliceRight`, `sliceBottom`, `sliceLeft` | an image name, pixels | none, `0` | A nine-slice skin: the image over `background`, under the children. Corners keep their size, edges and middle stretch (see "Nine-slice backgrounds") |
+| `hoverBackgroundImage`, `focusBackgroundImage`, `pressedBackgroundImage`, `disabledBackgroundImage` | an image name | none | The image in a state, in the colours' order. Images change at once; `transition` fades colours only |
 | `overflow` | `"visible"`, `"hidden"`, `"scroll"` | `"visible"` | What happens to children outside the box. `hidden` clips to it; `scroll` also scrolls with the wheel and does not shrink the children, so there is content to scroll (see "Clipping and scrolling") |
 | `scrollX`, `scrollY` | pixels | `0` | A scroll box's offset: the wheel changes it, setting the prop jumps to it (clamped to the content) |
 | `onPress` | a callback | none | Pressable over the laid-out box (U4) |
@@ -390,6 +392,17 @@ Also decided on 2026-11-09, each as recommended:
 7. ~~**Grow weights.**~~ Clay's way only: growing siblings share free space equally, smallest first. A `growWeight` prop can come if a game asks for one.
 8. ~~**Scissor in ABI v2.**~~ Yes: `RGE_OP_SCISSOR` and `RGE_OP_SCISSOR_END` go into ABI v2 with U0, so clipping needs no ABI v3 later.
 9. ~~**Floating props (U5).**~~ Props on `Flex` (`float`, `anchor`, `to`, `offsetX`, `offsetY`), so a floating box is still a `Flex` with all its sizing; no separate `<Float>` built-in.
+
+## Nine-slice backgrounds
+
+`backgroundImage` with `slice` (PR 4 of the UI follow-ups) needs nothing of the native side. A nine-slice is nine `RGE_OP_SPRITE_REGION` records of the one texture, and a record's own scale does the stretching: each part is the region of the image it is cut from, placed at its corner of the box (taken through the box's own rotation and scale, so a turned or scaled box carries its skin with it) and scaled by dest size ÷ source size. Corners are 1:1 (times the box's scale), edges stretch along one axis, the middle along both.
+
+- **Slices** come from `sliceTop` / `sliceRight` / `sliceBottom` / `sliceLeft`, else `slice`, else 0, as padding does. A pair that adds up to more than the image is cut down in proportion; a box smaller than its corners shrinks all of them by one factor (CSS's `border-image` rule), so the picture keeps its proportions. A part with nothing in it (a middle of no width) is not drawn.
+- **Order:** colour and border (`BOX` or `RECT`), then the image, then the children. A transparent pixel shows the colour.
+- **States:** the image is picked with the same precedence as the colours (disabled over pressed over hover over focus over plain), so a button skin is four pictures. They change at once; fading one into another would need opacity, which is a later step.
+- **Missing or unsized:** a missing file is a magenta box (and a compile error when the name is a literal, through the same asset check as `<Sprite image>`). A backend that cannot report texture sizes cannot cut the picture, and draws nothing with one warning.
+- **Not here:** tiling the edges and middle instead of stretching them, a scale for the corners, and a tint.
+- The draw pass keeps the nine parts' numbers in one scratch array, so a skin allocates nothing per frame.
 
 ## Clipping and scrolling
 
