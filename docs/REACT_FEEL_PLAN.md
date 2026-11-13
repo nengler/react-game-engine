@@ -248,6 +248,9 @@ onCollisionEnter={(other) => {
 
 ### A4. Testing one component without a window
 
+**Built 2026-11-13** (`packages/testing`; DESIGN.md, "Testing one component"), with `separate` and `unmount` besides the planned
+methods. Not done: the template's tests, which wait for A8 since the package must then be packed for games outside the repository.
+
 **Today.** A rule is a function, so a test calls it. A component can be tested only by running the whole game from an input
 script (`runScript`, `packages/player/src/harness.ts`) and reading the game state or the draw records. There is nothing like React
 Testing Library for one component, so a component that owns its logic is harder to test than the same logic in `rules/`. That
@@ -287,7 +290,7 @@ test("the player walks right", () => {
 
 **Done when**
 
-- [ ] `@rge/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
+- [x] `@rge/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
 - [ ] The template's tests show it next to a rules test
 - [ ] A7's Hearth has component tests for its enemies and towers
 

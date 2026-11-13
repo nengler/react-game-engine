@@ -1768,6 +1768,27 @@ sound, action or own-function call, an assignment, `++`) is a statement; any oth
 Not done: diagnostics inside a hook still point at the expanded text's mapping, not "the hook's line, called from the component's".
 
 
+## Testing one component: `@rge/testing` (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, A4. A rule is a function, so a test calls it; a component could be tested only by running the whole game
+from an input script and reading the game state or the draw records, which alone was a reason to keep logic out of components.
+`packages/testing` is a small package over the headless `World`:
+
+- `render(Component, props, options)` resets the game state (`resetGameState`, unless `keepGameState`), registers
+  `options.tilemaps`, makes the component and mounts it under a holder entity in a new `World`.
+- `step(n)` ticks with no input; `input(script)` parses the script with `@rge/player`'s `parseInputScript` (the games' replay
+  format), using `options.controls.toJSON()` as its bindings, and ticks once per frame with `createInputState(frame, controls)`,
+  so action names mean what they mean in the game.
+- `collide` / `separate` report contacts between one of the component's colliders (by tag) and a collider made for the test
+  from `{ tag, data, width, height }` (made once per spec, under the holder); `press` calls `World.reportPress` at a pressable's
+  middle; `setProps` calls the generated `updateProps`.
+- `state(component)` reads `saveHotState()` back by source name (`"Enemy.health"` becomes `health`): the accessor B7 planned,
+  which hot reload already had. `texts`, `find` and `findAll` read the tree.
+
+Every method flushes the world after it, so what a test reads is what would be drawn. Not done: compiling the component from
+its `.tsx` on demand (tests import the generated class, as `game.ts` does), and the template's tests (with A8, which also packs
+the package for games outside the repository).
+
 ## Bodies: `useBody` (2026-11-13)
 
 `REACT_FEEL_PLAN.md`, A2. Collisions are found after every step and reported to `onCollisionEnter` after the step's update
