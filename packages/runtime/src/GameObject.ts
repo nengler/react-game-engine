@@ -485,9 +485,18 @@ export class GameObject<P extends object = {}> {
     this.world?.setModal(this, this.#modal);
   }
 
+  /**
+   * The per-instance objects this component keeps in state (`useState(() => createBody(…))`) that want to know their owner and
+   * world: each is told when the component joins a world and leaves it (`attachOwner` / `detachOwner`). Generated code lists them.
+   */
+  protected ownedHandles(): readonly unknown[] {
+    return NO_HANDLES;
+  }
+
   attachToWorld(world: World): void {
     this.world = world;
     world.registerObject(this);
+    for (const handle of this.ownedHandles()) (handle as OwnedHandle | null)?.attachOwner?.(this, world);
     // Before the children attach, so an outer modal is below an inner one.
     if (this.#inert) world.setInert(this, true);
     if (this.#modal) world.setModal(this, true);
@@ -516,6 +525,7 @@ export class GameObject<P extends object = {}> {
       this.#cleanups = [];
       for (const cleanup of cleanups) cleanup();
     }
+    for (const handle of this.ownedHandles()) (handle as OwnedHandle | null)?.detachOwner?.();
     this.world?.unregisterObject(this);
     this.world = null;
     for (const child of this.children) child.detachFromWorld();
@@ -523,6 +533,13 @@ export class GameObject<P extends object = {}> {
 }
 
 const NO_KEYS: readonly string[] = [];
+const NO_HANDLES: readonly unknown[] = [];
+
+/** A per-instance object that wants to know the component that owns it (see `GameObject.ownedHandles`). */
+interface OwnedHandle {
+  attachOwner?(owner: GameObject, world: World): void;
+  detachOwner?(): void;
+}
 
 function definedOnly<T extends object>(value: T | undefined): Partial<T> {
   const out: Partial<T> = {};

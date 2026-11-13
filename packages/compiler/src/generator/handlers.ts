@@ -1,5 +1,5 @@
 // Layer 1 of ComponentGenerator: the handler methods, state setters and updaters, and the statements and callbacks inside them.
-import { assertNever, type FunctionIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
+import { assertNever, type FunctionIR, type AssignStmtIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { walkExpr } from "../ir/walk.ts";
 import { param, annotated, pendingRef, propertyKey } from "./helpers.ts";
@@ -22,7 +22,8 @@ function returnsValue(body: readonly StatementIR[]): boolean {
     switch (stmt.kind) {
       case "Return": return stmt.value !== null;
       case "If": return returnsValue(stmt.then) || returnsValue(stmt.else);
-      case "ForOf": case "Block": return returnsValue(stmt.body);
+      case "ForOf": case "Block": case "While": case "For": return returnsValue(stmt.body);
+      case "Try": return returnsValue(stmt.block) || returnsValue(stmt.handler?.body ?? []) || returnsValue(stmt.finalizer ?? []);
       case "Switch": return stmt.cases.some((c) => returnsValue(c.body));
       default: return false;
     }
@@ -127,6 +128,12 @@ export class HandlerEmitter extends ExpressionEmitter {
 
   // -- handler statements --------------------------------------------------
 
+  /** `target op value`, with no semicolon: a statement, or a part of a `for` loop's head. */
+  protected assignText(stmt: AssignStmtIR): string {
+    const target = stmt.target.kind === "RefCurrent" ? `this.${this.refField(stmt.target.ref)}` : stmt.target.kind === "Path" ? this.expr(stmt.target.target) : stmt.target.name;
+    return `${target} ${stmt.operator} ${this.expr(stmt.value, true)}`;
+  }
+
   protected stmts(body: readonly StatementIR[]): void {
     const w = this.w;
     for (const stmt of body) {
@@ -144,16 +151,36 @@ export class HandlerEmitter extends ExpressionEmitter {
         case "CallAction":
           w.line(`${this.storeName}.getState().${stmt.action}(${stmt.args.map((a) => this.expr(a, true)).join(", ")});`);
           break;
-        case "Assign": {
-          const target = stmt.target.kind === "RefCurrent" ? `this.${this.refField(stmt.target.ref)}` : stmt.target.name;
-          w.line(`${target} ${stmt.operator} ${this.expr(stmt.value, true)};`);
+        case "Assign":
+          w.line(`${this.assignText(stmt)};`);
           break;
-        }
         case "LocalConst":
           w.line(`${stmt.mutable ? "let" : "const"} ${stmt.type ? annotated(stmt.name, stmt.type) : stmt.name} = ${this.expr(stmt.value, true)};`);
           break;
         case "ForOf":
           w.block(`for (const ${loopBinding(stmt.binding)} of ${this.expr(stmt.iterable, true)})`, () => this.stmts(stmt.body));
+          break;
+        case "While":
+          if (stmt.doWhile) {
+            w.open("do {");
+            this.stmts(stmt.body);
+            w.close(`} while (${this.expr(stmt.test, true)});`);
+          } else w.block(`while (${this.expr(stmt.test, true)})`, () => this.stmts(stmt.body));
+          break;
+        case "For": {
+          const init = stmt.init.map((s) => (s.kind === "LocalConst" ? `${s.type ? annotated(s.name, s.type) : s.name} = ${this.expr(s.value, true)}` : this.assignText(s)));
+          const declares = stmt.init.length > 0 && stmt.init[0]!.kind === "LocalConst";
+          const head = `${declares ? "let " : ""}${init.join(", ")}; ${stmt.test ? this.expr(stmt.test, true) : ""}; ${stmt.update.map((u) => this.assignText(u)).join(", ")}`;
+          w.block(`for (${head})`, () => this.stmts(stmt.body));
+          break;
+        }
+        case "Try":
+          w.block("try", () => this.stmts(stmt.block));
+          if (stmt.handler) w.block(stmt.handler.binding ? `catch (${stmt.handler.binding.name})` : "catch", () => this.stmts(stmt.handler!.body));
+          if (stmt.finalizer) w.block("finally", () => this.stmts(stmt.finalizer!));
+          break;
+        case "Throw":
+          w.line(`throw ${this.expr(stmt.value, true)};`);
           break;
         case "Block":
           w.block("", () => this.stmts(stmt.body));

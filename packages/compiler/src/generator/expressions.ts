@@ -155,6 +155,7 @@ export class ExpressionEmitter {
         return `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
       case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.arrowBody(e.body)}`);
       case "Callback": return this.callback(e.fn);
+      case "Block": return `(${this.callback(e.fn)})()`;
       case "Call": {
         const args = e.args.map((a) => this.expr(a, true)).join(", ");
         switch (e.callee.kind) {
@@ -164,14 +165,16 @@ export class ExpressionEmitter {
           case "Method": return `${e.callee.receiver.name}.${e.callee.name}(${args})`;
           case "Prop": return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
           case "ArrayMethod": return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;
-          case "ValueMethod": return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;
+          case "ValueMethod": return `${this.expr(e.callee.receiver)}${e.callee.optional ? "?." : "."}${e.callee.name}(${args})`;
           case "Action": return `${this.storeName}.getState().${e.callee.name}(${args})`;
+          case "Own": return `this.${e.callee.name}(${args})`;
           default: return assertNever(e.callee, "callee");
         }
       }
       case "TemplateLiteral":
         return "`" + e.quasis.map((q, i) => escapeTemplate(q) + (i < e.expressions.length ? `\${${this.expr(e.expressions[i]!, true)}}` : "")).join("") + "`";
-      case "Unary": return wrap(`${e.operator}${this.expr(e.operand)}`);
+      case "Unary": return wrap(e.operator === "typeof" ? `typeof ${this.expr(e.operand)}` : `${e.operator}${this.expr(e.operand)}`);
+      case "New": return `new ${e.callee}${e.typeArguments ?? ""}(${e.args.map((a) => this.expr(a, true)).join(", ")})`;
       case "Binary": return wrap(`${this.expr(e.left)} ${e.operator} ${this.expr(e.right)}`);
       case "Conditional": return wrap(`${this.expr(e.test)} ? ${this.expr(e.whenTrue)} : ${this.expr(e.whenFalse)}`);
       case "Memo": {

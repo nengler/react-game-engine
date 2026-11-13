@@ -35,6 +35,9 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 export type { TransformProps, Child } from "./jsx-runtime.ts";
 
 export { clamp, shakeOn, springBack } from "./math.ts";
+export { keepIfEqual } from "./equal.ts";
+export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
+import type { BodyHit, BodyOptions } from "./body.ts";
 
 // -- state and refs -----------------------------------------------------------
 
@@ -105,6 +108,54 @@ export function useTime(): number {
  */
 export function useSound(_path: string): (volume?: number) => void {
   return compileTimeOnly("useSound");
+}
+
+/** Anything that says when it changed: `subscribe` takes a listener and returns the function that stops it (`createSettings` stores do). */
+export interface Subscribable {
+  subscribe(listener: () => void): () => void;
+}
+
+/**
+ * A value read from a store outside the game state, kept up to date, as React's \`useSyncExternalStore\`:
+ * `const values = useStore(settings, settingsView);`. `read` is a function of no arguments (imported from a \`.ts\` file) that
+ * returns what to show; it runs when the component mounts and each time the store notifies, and the component renders only when
+ * what it returns holds different data. The subscription ends when the component leaves.
+ *
+ * An ordinary hook the engine ships (\`useState\` and \`useMount\`, inlined like any custom hook).
+ */
+export function useStore<T>(_store: Subscribable, _read: () => T): T {
+  return compileTimeOnly("useStore");
+}
+
+/** What `useBody` returns: the body's position, as state, and what it can do, as functions of the component. */
+export interface BodyHandle {
+  readonly x: number;
+  readonly y: number;
+  /** Move by (dx, dy) pixels, a pixel at a time, stopped by what is solid; returns the sides it was stopped on, now. */
+  move(dx: number, dy: number): BodyHit;
+  /** Whether a collider with this tag overlaps the body now (its own colliders do not count). */
+  touching(tag: string): boolean;
+  /** Put the body somewhere, with no collision (a respawn, a door). */
+  place(x: number, y: number): void;
+}
+
+/**
+ * A box that moves through the world and is stopped by what is solid, answering in the same step: the solid tiles of a
+ * `<Tilemap solid>` (the Tiled tile property `solid`) and every `<Collider solid>`, in the world this component is in.
+ *
+ *     const { x, y, move, touching } = useBody({ x: 16, y: 32, width: 8, height: 11 });
+ *     useUpdate((dt, input) => {
+ *       const hit = move(dx * 90 * dt, vy * dt);   // stopped at walls and floors, this step
+ *       if (hit.down) setVy(0);
+ *       if (touching("spikes")) die();
+ *     });
+ *     return <Entity transform={{ x, y }}>…</Entity>;
+ *
+ * Position is in the component's parent's space, as `transform` is. `x` and `y` are state: they render where the body is.
+ * An ordinary hook the engine ships (\`useState\` and functions of the component, inlined like any custom hook).
+ */
+export function useBody(_options: BodyOptions): BodyHandle {
+  return compileTimeOnly("useBody");
 }
 
 /** A value that persists across frames but never renders. Read and write `.current` in handlers only. */

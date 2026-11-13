@@ -86,6 +86,7 @@ packages/
   demo/       (Phase 3) a small playable game in TSX with its generated output and assets; `npm run play:demo`
   kite/       a one-screen-rooms precision platformer: `npm run play:kite`, `npm run check:kite`
   hearth/     a small tower defense, the second game: `npm run play:hearth`, `npm run check:hearth`; see its DESIGN.md
+  testing/    `@rge/testing`: mount one compiled component in a headless world and test it, as React Testing Library does
   example/    example components (their generated output is not committed: `npm run generate`)
 ```
 

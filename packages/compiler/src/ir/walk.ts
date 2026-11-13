@@ -47,6 +47,7 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "Arrow":
       return [e.body];
     case "Callback":
+    case "Block":
       return []; // its body is statements, which `walkExpr` walks
     case "Call":
       return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod" ? [e.callee.receiver, ...e.args] : e.args;
@@ -58,6 +59,8 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
       return [e.left, e.right];
     case "Conditional":
       return [e.test, e.whenTrue, e.whenFalse];
+    case "New":
+      return e.args;
     default:
       return assertNever(e, "expression");
   }
@@ -66,7 +69,7 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
 /** Pre-order walk over an expression tree. */
 export function walkExpr(expr: ExprIR, visit: (e: ExprIR) => void): void {
   visit(expr);
-  if (expr.kind === "Callback") walkStatements(expr.fn.body, visit);
+  if (expr.kind === "Callback" || expr.kind === "Block") walkStatements(expr.fn.body, visit);
   for (const child of childExpressions(expr)) walkExpr(child, visit);
 }
 
@@ -109,6 +112,19 @@ export function walkStatements(body: readonly StatementIR[], visit: (e: ExprIR) 
       case "LocalConst": walkExpr(stmt.value, visit); break;
       case "If": walkExpr(stmt.test, visit); walkStatements(stmt.then, visit, visitStatement); walkStatements(stmt.else, visit, visitStatement); break;
       case "ForOf": walkExpr(stmt.iterable, visit); walkStatements(stmt.body, visit, visitStatement); break;
+      case "While": walkExpr(stmt.test, visit); walkStatements(stmt.body, visit, visitStatement); break;
+      case "For":
+        walkStatements(stmt.init, visit, visitStatement);
+        if (stmt.test) walkExpr(stmt.test, visit);
+        walkStatements(stmt.update, visit, visitStatement);
+        walkStatements(stmt.body, visit, visitStatement);
+        break;
+      case "Try":
+        walkStatements(stmt.block, visit, visitStatement);
+        if (stmt.handler) walkStatements(stmt.handler.body, visit, visitStatement);
+        if (stmt.finalizer) walkStatements(stmt.finalizer, visit, visitStatement);
+        break;
+      case "Throw": walkExpr(stmt.value, visit); break;
       case "Block": walkStatements(stmt.body, visit, visitStatement); break;
       case "Switch":
         walkExpr(stmt.discriminant, visit);
@@ -120,7 +136,7 @@ export function walkStatements(body: readonly StatementIR[], visit: (e: ExprIR) 
       case "Break": case "Continue": break;
       case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
       case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit, visitStatement); else walkExpr(stmt.value, visit); break;
-      case "Assign": walkExpr(stmt.value, visit); break;
+      case "Assign": if (stmt.target.kind === "Path") walkExpr(stmt.target.target, visit); walkExpr(stmt.value, visit); break;
       case "PlaySound": if (stmt.volume) walkExpr(stmt.volume, visit); break;
       case "CallAction": for (const arg of stmt.args) walkExpr(arg, visit); break;
       default: assertNever(stmt, "statement");

@@ -84,6 +84,12 @@ chooses to put some logic in a reducer; it is not the engine's default.
 
 ### A1. Handlers are plain TypeScript, and the body may compute
 
+**Built 2026-11-13**, in three steps, one PR each: (a) every loop, `try` and `throw` in handlers (2026-11-13; DESIGN.md, "Every loop,
+and `try`, in handlers"); (b) any expression in a handler: `new`, `typeof`, `instanceof`, methods of local values (2026-11-13; DESIGN.md, "Any expression in
+handlers"); (c) statements in the component body (2026-11-13; DESIGN.md, "Statements in the component body"). Left for
+later: destructuring declarations in a block. Point 2's check is by the compiler (an owned value, see DESIGN.md), not by
+`readonly` types.
+
 **Today.** Three languages in one file (PAIN_POINTS.md section 1): the component body allows expressions only; handlers allow `let`,
 `for…of` and `switch` but not `while`, C-style `for`, `try`, or methods outside an allowlist (`push` and `sort` are rejected);
 plain `.ts` files allow anything. Handlers are lowered statement by statement into the IR (DESIGN.md, "Handlers"), which is why
@@ -135,12 +141,16 @@ of the rewrite.
 
 **Done when**
 
-- [ ] Any TypeScript compiles in a handler, with tests for `while`, C-style `for`, `try`, local arrays and closures
-- [ ] Direct assignment to state and in-place mutation of state are errors at the right line
-- [ ] A component body may hold statements, re-run only when what they read changes
-- [ ] PAIN_POINTS.md section 1's first two bullets are closed
+- [x] Any TypeScript compiles in a handler, with tests for `while`, C-style `for`, `try`, local arrays and closures
+- [x] Direct assignment to state and in-place mutation of state are errors at the right line
+- [x] A component body may hold statements, re-run only when what they read changes
+- [x] PAIN_POINTS.md section 1's first two bullets are closed
 
 ### A2. Movement and collisions answered in the same step: `useBody`
+
+**Built 2026-11-13** as `const { x, y, move, touching, place } = useBody({ … })` (DESIGN.md, "Bodies: `useBody`"): the hook
+returns functions, which B6 made possible, rather than a handle with methods. Not done: the body as a collider others hit, one-way
+platforms, and Kite's movement rewritten with it (left to A7).
 
 **Today.** Collisions are found after every step and reported to `onCollisionEnter` after the step's `useUpdate` (DESIGN.md, "Why
 collisions are per step"). So a component that moves in its update learns it hit a wall one step later, after it is already inside
@@ -194,12 +204,15 @@ and order is fixed.
 
 **Done when**
 
-- [ ] `useBody` moves against solid tiles and solid colliders and returns the sides it hit, in the same step
-- [ ] `touching(tag)` answers in the same step; parity and replays pass
+- [x] `useBody` moves against solid tiles and solid colliders and returns the sides it hit, in the same step
+- [x] `touching(tag)` answers in the same step; parity and replays pass
 - [ ] Kite's movement is written once with `useBody` in a component as a test (beside its rules, to compare feel and cost)
-- [ ] The guide's "Tilemaps and movement" section leads with it
+- [x] The guide's "Tilemaps and movement" section leads with it
 
 ### A3. Contacts carry data
+
+**Built 2026-11-13**, typed through a global `ColliderData` interface rather than `declare module "@rge/runtime"` (DESIGN.md, "What
+`other` exposes"). Not done: the games still pass values through the game state (the A7 rewrite moves Hearth to `data`).
 
 **Today.** `Contact` has `tag` and `owner`. A player touching a coin knows it is `"coin"` but not that it is worth 5; an enemy
 touching the player cannot say how much it hurts. The games put this in the game state, keyed by id, and looked it up.
@@ -220,7 +233,7 @@ onCollisionEnter={(other) => {
 
   ```ts
   // colliders.ts
-  declare module "@rge/runtime" {
+  declare global {
     interface ColliderData { coin: { value: number }; enemy: { damage: number }; spikes: undefined }
   }
   ```
@@ -230,10 +243,13 @@ onCollisionEnter={(other) => {
 
 **Done when**
 
-- [ ] `<Collider data>` reaches `other.data` in both callbacks and in `useBody`, typed by tag
+- [x] `<Collider data>` reaches `other.data` in both callbacks, typed by tag (not yet through `useBody`)
 - [ ] A coin's value and an enemy's damage travel by collision in one game, not through the game state
 
 ### A4. Testing one component without a window
+
+**Built 2026-11-13** (`packages/testing`; DESIGN.md, "Testing one component"), with `separate` and `unmount` besides the planned
+methods. Not done: the template's tests, which wait for A8 since the package must then be packed for games outside the repository.
 
 **Today.** A rule is a function, so a test calls it. A component can be tested only by running the whole game from an input
 script (`runScript`, `packages/player/src/harness.ts`) and reading the game state or the draw records. There is nothing like React
@@ -274,7 +290,7 @@ test("the player walks right", () => {
 
 **Done when**
 
-- [ ] `@rge/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
+- [x] `@rge/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
 - [ ] The template's tests show it next to a rules test
 - [ ] A7's Hearth has component tests for its enemies and towers
 
@@ -563,6 +579,9 @@ const { advance, togglePause } = useGame.actions();
 
 ### B5. `useStore` for stores outside the game state
 
+**Built 2026-11-13.** See DESIGN.md, "`useStore`". As built, `read` takes no arguments and is required; the form with no `read`
+(the store's whole value) waits for a store that wants it.
+
 **Today.** Bramble's settings screen copies an outside store into local state by hand (`games/bramble/src/Settings.tsx`):
 
 ```tsx
@@ -600,11 +619,15 @@ already treats it as opaque and pure.
 
 **Done when**
 
-- [ ] `useStore` exists, with tests for render-on-change, no render on an equal value, and unsubscribe at unmount
-- [ ] Bramble's `Settings.tsx` uses it, and the mirror into `useGame` is gone wherever it was only for display
-- [ ] The guide's "Saved data and settings" section shows it
+- [x] `useStore` exists, with tests for render-on-change, no render on an equal value, and unsubscribe at unmount
+- [x] Bramble's `Settings.tsx` uses it, and the mirror into `useGame` is gone wherever it was only for display
+- [x] The guide's "Saved data and settings" section shows it
 
 ### B6. Custom hooks that behave like functions
+
+**Built 2026-11-13** (DESIGN.md, "Hooks that behave like functions, and functions in the body"), with one addition the plan did
+not list: functions declared in the component body, which callback arguments need and which are common React on their own.
+Not done: point 5 (diagnostics inside a hook name the hook's line and the call).
 
 **Today.** A custom hook is inlined text (`packages/compiler/src/hooks/inline.ts`): its statements are pasted into the component
 with a per-call prefix (`_useName3_x`). PAIN_POINTS.md, section 1, lists what follows: a hook cannot return a ref, destructured
@@ -641,12 +664,15 @@ so. Hooks still cannot be recursive.
 
 **Done when**
 
-- [ ] Destructured parameters, returned refs and evaluate-once arguments work, each with compiler tests
-- [ ] Nesting errors name the chain; diagnostics inside a hook point at the hook's line and the call
-- [ ] PAIN_POINTS.md section 1's hook bullet is closed or narrowed to what is left
-- [ ] The guide explains the model in a few lines
+- [x] Destructured parameters, returned refs and evaluate-once arguments work, each with compiler tests
+- [ ] Nesting errors name the chain (done); diagnostics inside a hook point at the hook's line and the call (not yet)
+- [x] PAIN_POINTS.md section 1's hook bullet is closed or narrowed to what is left
+- [x] The guide explains the model in a few lines
 
 ### B7. A component's names stop clashing with its root built-in
+
+**Built 2026-11-13**, differently from the proposal below: only a name that clashes is renamed (`$name`), rather than every
+state becoming a private field, so tests and tools that read a component's state keep working. See DESIGN.md, "Roots".
 
 **Today.** The generated class extends its root built-in (DESIGN.md, "Roots and component forms"), so state, refs and props cannot
 reuse the root's member names (`RGE1103`): no `width` prop on a component whose root is a `<Collider>`, no `image` on a `<Sprite>`
@@ -678,9 +704,9 @@ sees. B2's shorthand props would widen the list.
 
 **Done when**
 
-- [ ] A component rooted in a `<Collider>` can take a `width` prop, and one rooted in an `<Entity>` can have state called `name`
-- [ ] `RGE1103` is gone except for the runtime's own method names
-- [ ] Hot reload, parity and the bench pass unchanged
+- [x] A component rooted in a `<Collider>` can take a `width` prop, and one rooted in an `<Entity>` can have state called `name`
+- [x] `RGE1103` is gone for these names, the runtime's method names included (they are renamed too)
+- [x] Hot reload, parity and the bench pass unchanged
 
 ---
 

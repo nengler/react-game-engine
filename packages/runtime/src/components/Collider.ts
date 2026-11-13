@@ -1,10 +1,20 @@
 import { GameObject } from "../GameObject.ts";
 
-/**
- * What a collision callback can read about the collider it touched (the `other` of `onCollisionEnter(other)`).
- * Handler code may read exactly these two members; the compiler checks it (see the manifest's `handleTypes`).
- */
-export interface Contact {
+declare global {
+  /**
+   * The data each collider tag carries, so `other.data` is typed by `other.tag`. A game declares it once, in any `.ts` file:
+   *
+   *     declare global {
+   *       interface ColliderData { coin: { value: number }; enemy: { damage: number }; spikes: undefined }
+   *     }
+   *
+   * Then `if (other.tag === "coin") collect(other.data.value)` type-checks. With nothing declared, `data` is `unknown`.
+   */
+  interface ColliderData {}
+}
+
+/** A contact whose tag the game did not declare in `ColliderData`: its data is `unknown`. */
+export interface BaseContact {
   /** The other collider's `tag` (`""` when it has none): `if (other.tag === "coin") …`. */
   readonly tag: string;
   /**
@@ -13,7 +23,19 @@ export interface Contact {
    * colliders on one prefab.
    */
   readonly owner: string;
+  /** What the other collider's `data` prop holds (`<Collider tag="coin" data={{ value }} />`), or undefined. */
+  readonly data: unknown;
 }
+
+/** One contact per tag the game declared in `ColliderData`, so comparing `other.tag` narrows `other.data`. */
+type DeclaredContact = { [K in keyof ColliderData & string]: { readonly tag: K; readonly owner: string; readonly data: ColliderData[K] } }[keyof ColliderData & string];
+
+/**
+ * What a collision callback can read about the collider it touched (the `other` of `onCollisionEnter(other)`): its `tag`, its
+ * `owner` and its `data`. Typed by tag once the game declares `ColliderData`; the compiler checks the members (the manifest's
+ * `handleTypes`).
+ */
+export type Contact = [keyof ColliderData] extends [never] ? BaseContact : DeclaredContact;
 
 export interface ColliderProps {
   width: number;
@@ -31,6 +53,13 @@ export interface ColliderProps {
    * bullets, and an enemy that left `hits` out still cannot touch a bullet that does not hit enemies.
    */
   hits?: readonly string[];
+  /** Bodies (`useBody`) cannot move into it: a wall, a crate, a closed door. Default false. */
+  solid?: boolean;
+  /**
+   * What the collider tells whatever touches it, as `other.data`: a coin's value, an enemy's damage. Any value; typed by tag
+   * through `ColliderData`.
+   */
+  data?: unknown;
   /**
    * Called when this collider starts touching another (see
    * `World.reportCollision`), with the collider it touched. It is the
@@ -53,7 +82,7 @@ export interface ColliderProps {
  * (`CollisionTracker` in `@rge/player`), which calls `World.reportCollision` and `World.reportCollisionExit`, and
  * those call `onCollisionEnter` and `onCollisionExit`.
  */
-export class Collider<P extends object = {}> extends GameObject<P> implements Contact {
+export class Collider<P extends object = {}> extends GameObject<P> implements BaseContact {
   static override readonly intrinsic = true;
 
   width: number;
@@ -61,6 +90,8 @@ export class Collider<P extends object = {}> extends GameObject<P> implements Co
   tag: string;
   layer: string;
   hits: readonly string[] | undefined;
+  solid: boolean;
+  data: unknown;
   onCollisionEnter: ((other: Contact) => void) | undefined;
   onCollisionExit: ((other: Contact) => void) | undefined;
 
@@ -72,6 +103,8 @@ export class Collider<P extends object = {}> extends GameObject<P> implements Co
     this.tag = hostProps.tag ?? "";
     this.layer = hostProps.layer ?? "";
     this.hits = hostProps.hits;
+    this.solid = hostProps.solid ?? false;
+    this.data = hostProps.data;
     this.onCollisionEnter = hostProps.onCollisionEnter;
     this.onCollisionExit = hostProps.onCollisionExit;
   }

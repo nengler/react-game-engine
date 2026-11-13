@@ -461,7 +461,7 @@ export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Cap
   });
 
   it("keeps the generated updateProps name free", () => {
-    assert.ok(compileErrors(`function A() { const [updateProps, setU] = useState(0); return <Entity name="A" />; }`).some((d) => d.code === DiagnosticCode.InvalidUseState));
+    assert.ok(compile(`function A() { const [updateProps, setU] = useState(0); return <Entity name="A" />; }`).code.includes("$updateProps: number"));
   });
 
   it("rejects a prop that clashes with state", () => {
@@ -680,9 +680,9 @@ function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }}
   });
 
   it("keeps the root's own fields free of state, refs and props", () => {
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     for (const [root, field] of [["Sprite image=\"a\"", "image"], ["Collider width={1} height={1}", "width"], ["Entity", "name"]] as const) {
-      const codes = compileErrors(`function A() { const [${field}, setX] = useState(0); return <${root} />; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), `${root}: ${field}`);
+      assert.ok(compile(`function A() { const [${field}, setX] = useState(0); return <${root} />; }`).code.includes(`$${field}: number`), `${root}: ${field}`);
     }
     // A field of a different built-in is free.
     assert.doesNotThrow(() => compile(`function A() { const [image, setImage] = useState(0); return <Collider width={1} height={1} />; }`));

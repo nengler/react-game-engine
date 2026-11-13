@@ -15,13 +15,16 @@ repeated text style) are planned in [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md) (20
 
 TSX invites people to write React, and then they hit `RGE` codes.
 
-- **Three languages in one file.** The component body allows expressions only: no `let`, no loops. Handlers allow `let`, `for…of` and
-  `switch`, but not `while`, C-style `for` or `try`. Plain `.ts` files allow anything. A newcomer has to know which zone they are in.
+- ~~**Three languages in one file.**~~ *Since 2026-11-13:* the component body takes `let`, loops and a list built up, worked out
+  together and again only when what they read changes; handlers take every loop, `try`, `new`, the standard library and in-place
+  changes to their own values. What remains is that a component body runs during render, so it cannot set state, as in React. Plain `.ts` files allow anything. A newcomer has to know which zone they are in.
 - **Method allowlists.** `push`, `sort` and "other methods of values" are rejected; the fix is "put it in a plain function". Defensible,
-  but not visible from the syntax.
+  but not visible from the syntax. *Since 2026-11-13:* in a handler, any method of a value the handler made itself, `new`, and the
+  standard library work; only state and props stay immutable.
 - **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.
-- **Custom hooks are inlined text, not functions.** They cannot return refs, destructured parameters do not work, nesting stops at six,
-  and a literal argument is pasted into the hook. They behave like macros; the guide says so only in passing.
+- ~~**Custom hooks are inlined text, not functions.**~~ *Since 2026-11-13:* a hook takes destructured parameters and callbacks,
+  returns refs, names the chain when hooks recurse, and the guide says how inlining works. A function declared in the component
+  body (`const add = (n: number) => …`) is a handler of the component's own.
 
 ## 2. Refs on elements and context are missing on purpose
 
@@ -52,11 +55,14 @@ TSX invites people to write React, and then they hit `RGE` codes.
   2026-11-13:* actions come from `const { collect } = useGame.actions()`; taking them from `useGame((s) => s)` warns.
 - Actions are called as statements in handlers, never in JSX.
 - `GameState.ts` must return an object literal: no spreads or computed keys (`RGE1109`).
-- Settings and controls are stores of their own, so the game mirrors them by hand
-  (`settings.subscribe(() => useGame.setState(...))` in Bramble).
+- ~~Settings and controls are stores of their own, so the game mirrors them by hand~~ *Since 2026-11-13:*
+  `useStore(settings, settingsView)` shows a store outside the game state and follows it.
 - A selected object is trusted not to be changed in place; nothing enforces it.
 
-## 5. Names collide with the root built-in
+## 5. ~~Names collide with the root built-in~~ (fixed 2026-11-13)
+
+*Since:* a state, ref or sound named like a member of the root built-in is kept in a `$name` field, so the name is the author's to
+use (`REACT_FEEL_PLAN.md`, B7). What follows is how it was.
 
 The component's class extends its root built-in, so state, refs and props cannot reuse the root's member names: no `width` prop on a
 `<Collider>` root, no `name` on an `<Entity>` root, and a `useState` called `name` is still refused. An invisible inheritance rule with

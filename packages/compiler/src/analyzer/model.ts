@@ -135,7 +135,19 @@ export interface UseStoreCallAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis;
+export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis;
+
+/**
+ * Statements in the component body that compute together (`const rows = []; for (const item of items) rows.push(…);`): a run that
+ * is not hooks and not only `const name = …`. Worked out as one block, again when what it reads changes; the names it declares at
+ * its top level are derived values after it.
+ */
+export interface RenderBlockAnalysis {
+  readonly kind: "block";
+  readonly statements: readonly Statement[];
+  readonly names: readonly string[];
+  readonly first: Statement;
+}
 
 /**
  * `const hurt = health < 25;` in the component body: a value derived from

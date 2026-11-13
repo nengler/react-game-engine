@@ -6,7 +6,7 @@
  */
 export const LIBRARY_FILE = "rge:hooks.tsx";
 
-export const LIBRARY_SOURCE = `import { shakeOn, springBack, useState, useUpdate } from "@rge/runtime/jsx";
+export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, springBack, useMount, useState, useUpdate } from "@rge/runtime/jsx";
 
 /**
  * Squash and stretch: a scale that is set at a moment and springs back to 1 at \\\`recover\\\` a second.
@@ -49,7 +49,43 @@ export function useTime() {
   });
   return time;
 }
+
+/**
+ * A box that moves and is stopped by what is solid, in the same step: the solid tiles of a \\\`<Tilemap solid>\\\` and every
+ * \\\`<Collider solid>\\\`. Its position is state; \\\`move\\\` returns the sides it was stopped on, \\\`touching(tag)\\\` says whether a
+ * collider with that tag overlaps it now, and \\\`place\\\` puts it somewhere with no collision.
+ *   const { x, y, move, touching } = useBody({ x: 16, y: 32, width: 8, height: 11 });
+ */
+export function useBody(options) {
+  const [body] = useState(() => createBody(options));
+  const [x, setX] = useState<number>(options.x);
+  const [y, setY] = useState<number>(options.y);
+  const move = (dx: number, dy: number) => {
+    const hit = body.move(dx, dy);
+    setX(body.x);
+    setY(body.y);
+    return hit;
+  };
+  const touching = (tag: string) => body.touching(tag);
+  const place = (toX: number, toY: number) => {
+    body.place(toX, toY);
+    setX(body.x);
+    setY(body.y);
+  };
+  return { x, y, move, touching, place };
+}
+
+/**
+ * A value read from a store outside the game state (the settings, the controls, a store of the game's own), kept up to date: it
+ * is read when the component mounts and again each time the store says it changed, and renders only when what is read differs.
+ *   const values = useStore(settings, settingsView);
+ */
+export function useStore(store, read) {
+  const [value, setValue] = useState(() => read());
+  useMount(() => store.subscribe(() => setValue((previous) => keepIfEqual(previous, read()))));
+  return value;
+}
 `;
 
 /** The names of the library's hooks. */
-export const LIBRARY_HOOKS: readonly string[] = ["useSquash", "useShake", "useTime"];
+export const LIBRARY_HOOKS: readonly string[] = ["useSquash", "useShake", "useTime", "useStore", "useBody"];

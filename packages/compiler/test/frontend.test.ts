@@ -124,6 +124,7 @@ describe("IR construction", () => {
           hooks: [{ kind: "UseState", state: "Player.health", setterName: "setHealth" }],
           refs: [],
           sounds: [],
+          functions: [],
           props: [],
           propsType: null,
           isDefaultExport: false,
@@ -183,6 +184,7 @@ describe("IR construction", () => {
           name: "WarningIcon",
           refs: [],
           sounds: [],
+          functions: [],
           props: [],
           propsType: null,
           isDefaultExport: false,
@@ -309,7 +311,8 @@ describe("diagnostics", () => {
     ],
     ["static self-reference", DiagnosticCode.ComponentCycle, `function A() { return <Entity><A /></Entity>; }`],
     ["non-literal state type", DiagnosticCode.UnsupportedStateType, `function A() { const [a, setA] = useState(null); return <Entity />; }`],
-    ["state shadows runtime member", DiagnosticCode.InvalidUseState, `function A() { const [name, setName] = useState("x"); return <Entity />; }`],
+    // A state named like a runtime member is fine since REACT_FEEL_PLAN.md B7 (root-name.test.ts); one declared twice is not.
+    ["state declared twice", DiagnosticCode.InvalidUseState, `function A() { const [a, setA] = useState(1); const [a, setB] = useState(2); return <Entity />; }`],
     ["non-component top level code", DiagnosticCode.UnsupportedSyntax, `let speed = 4; function A() { return <Entity />; }`],
   ];
   for (const [name, code, source] of cases) {

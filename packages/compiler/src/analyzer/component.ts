@@ -1,9 +1,9 @@
 // Analysis of one component and of the props it declares, and of its named imports.
 import { SyntaxKind, type CallExpression, type Block, type Expression, type NodeArray, type ParameterDeclaration, type ImportDeclaration, type JsxSelfClosingElement, type Node, type Statement } from "typescript/ast";
-import { isBinaryExpression, isConditionalExpression, isBlock, isJsxFragment, isCallExpression, isIdentifier, isNamedImports, isObjectBindingPattern, isTypeReferenceNode, isJsxElement, isJsxSelfClosingElement, isReturnStatement } from "typescript/ast/is";
+import { isBinaryExpression, isConditionalExpression, isBlock, isJsxFragment, isCallExpression, isIdentifier, isNamedImports, isObjectBindingPattern, isArrayBindingPattern, isOmittedExpression, isVariableStatement, isTypeReferenceNode, isJsxElement, isJsxSelfClosingElement, isReturnStatement } from "typescript/ast/is";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { spanOf } from "../parser/parser.ts";
-import { type ImportAnalysis, type JsxRoot, type PropsAnalysis, type PropBindingAnalysis, type ComponentAnalysis, type HookCallAnalysis, HOOK_NAME, KNOWN_HOOKS } from "./model.ts";
+import { type ImportAnalysis, type JsxRoot, type PropsAnalysis, type PropBindingAnalysis, type ComponentAnalysis, type HookCallAnalysis, type RenderConstAnalysis, HOOK_NAME, KNOWN_HOOKS } from "./model.ts";
 import { unwrapParens, visit } from "./util.ts";
 import { matchUseStateStatement, matchRenderConst, matchStoreStatement, matchHandleStatement, matchHandlerStatement, type StatementMatch } from "./matchers.ts";
 
@@ -117,6 +117,17 @@ function analyzeProps(
   return { typeName: type.typeName.text, typeNode: type, bindings, objectName: null };
 }
 
+/** The names a run of statements declares at its top level (`const` and `let`, plain names and destructured ones). */
+function topLevelNames(statements: readonly Statement[]): string[] {
+  const names: string[] = [];
+  const bind = (name: Node): void => {
+    if (isIdentifier(name)) names.push(name.text);
+    else if (isObjectBindingPattern(name) || isArrayBindingPattern(name)) for (const element of name.elements) if (!isOmittedExpression(element) && element.name) bind(element.name);
+  };
+  for (const statement of statements) if (isVariableStatement(statement)) for (const d of statement.declarationList.declarations) bind(d.name);
+  return names;
+}
+
 /** What a component may return: an element or fragment, `null`, or `cond ? <A /> : <B />` / `cond && <A />` (a branch may be `null`). */
 function isRoot(node: Expression): node is JsxRoot {
   const jsx = (n: Node): boolean => isJsxElement(n) || isJsxSelfClosingElement(n) || isJsxFragment(n);
@@ -161,9 +172,30 @@ export function analyzeComponent(
     if (isRoot(returned)) jsx = returned;
     else diagnostics.push(error(DiagnosticCode.InvalidComponentBody, mustReturn, span(expressionBody)));
   }
+  // A run of statements that are not hooks and not all `const name = …` (a loop, a `let`, an `if` among them) is one render block,
+  // worked out together (`RenderBlockAnalysis`); a run of only derived consts keeps each as its own derived value.
+  let run: { statement: Statement; derived: RenderConstAnalysis | null }[] = [];
+  const endRun = (): void => {
+    if (run.length === 0) return;
+    // A hook inside the run (`if (open) { useUpdate(…) }`) is reported below as not at the top level, and nothing more.
+    let hasHook = false;
+    for (const r of run) {
+      visit(r.statement, (node) => {
+        if (isCallExpression(node) && isIdentifier(node.expression) && (HOOK_NAME.test(node.expression.text) || storeNames.has(node.expression.text))) hasHook = true;
+      });
+    }
+    if (hasHook) {
+      run = [];
+      return;
+    }
+    if (run.every((r) => r.derived !== null)) hooks.push(...run.map((r) => r.derived!));
+    else hooks.push({ kind: "block", statements: run.map((r) => r.statement), names: topLevelNames(run.map((r) => r.statement)), first: run[0]!.statement });
+    run = [];
+  };
   statements.forEach((statement, index) => {
     const isLast = index === statements.length - 1;
     if (isLast && isReturnStatement(statement)) {
+      endRun();
       const returned = statement.expression ? unwrapParens(statement.expression) : undefined;
       if (returned && isRoot(returned)) {
         jsx = returned;
@@ -173,29 +205,20 @@ export function analyzeComponent(
       return;
     }
     const matched = matchers.reduce<StatementMatch | null>((found, match) => found ?? match(statement), null);
+    if (matched) endRun();
     if (matched) {
       if (matched.kind === "ok") {
         hooks.push(...matched.hooks);
-        for (const hook of matched.hooks) if (hook.kind !== "const") acceptedHookCalls.add(hook.call);
+        for (const hook of matched.hooks) if (hook.kind !== "const" && hook.kind !== "block") acceptedHookCalls.add(hook.call);
       } else {
         diagnostics.push(error(matched.code, matched.message, span(statement)));
         if (matched.call) acceptedHookCalls.add(matched.call);
       }
       return;
     }
-    const derived = matchRenderConst(statement);
-    if (derived) {
-      hooks.push(derived);
-      return;
-    }
-    diagnostics.push(
-      error(
-        DiagnosticCode.InvalidComponentBody,
-        `Component '${name}': only \`const [value, setValue] = useState(...)\`, \`const r = useRef<T>()\`, \`const play = useSound("a.wav")\`, \`const name = expression\` (derived values), handler statements (\`useUpdate(...)\`, \`useInput(...)\`, \`useMount(...)\`, \`useUnmount(...)\`) and a final \`return\` are supported.`,
-        span(statement),
-      ),
-    );
+    run.push({ statement, derived: matchRenderConst(statement) });
   });
+  endRun();
 
   // Any other hook-shaped call anywhere in the body is misplaced or unknown.
   visit(body, (node) => {

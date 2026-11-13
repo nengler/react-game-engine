@@ -124,8 +124,10 @@ function Pickup() {
     assert.deepEqual(codes("const n = 1;"), [DiagnosticCode.InvalidComponentBody]);
     assert.deepEqual(codes("const a = 1; const [a, setA] = useState(0);"), [DiagnosticCode.InvalidUseState]);
     assert.deepEqual(codes("const a = b; const b = 1;"), [DiagnosticCode.UnknownIdentifier]);
-    assert.deepEqual(codes("const f = () => 1;"), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes("let a = 1;"), [DiagnosticCode.InvalidComponentBody]);
+    // An arrow in the body is a function of the component since REACT_FEEL_PLAN.md B6 (hooks-as-functions.test.ts).
+    assert.ok(compile(`function C() { const f = () => 1; return <Entity />; }`).code.includes("readonly f = () =>"));
+    // `let` and loops in the body are a render block since REACT_FEEL_PLAN.md A1 (render-blocks.test.ts); `var` is not.
+    assert.deepEqual(codes("var a = 1;"), [DiagnosticCode.InvalidComponentBody]);
     assert.ok(codes("const r = useRef(0); const s = r.current;").includes(DiagnosticCode.HandleReadOutsideHandler));
   });
 

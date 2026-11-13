@@ -230,10 +230,13 @@ describe("diagnostics for the new statements", () => {
     assert.ok(codes(handler("outer: for (const x of [1]) { break outer; }")).length > 0);
   });
 
-  it("rejects loops other than `for (const x of …)`", () => {
-    for (const loop of ["for (let x of [1]) { }", "for (const [a, ...rest] of [[1, 2]]) { }", "for (const { a = 1 } of [{ a: 2 }]) { }", "for (const x: number of [1]) { }", "for (const k in { a: 1 }) { }", "while (dt > 0) { }", "for (let i = 0; i < 3; i++) { }"]) {
+  it("rejects a `for…of` that is not `for (const x of …)`, and `for…in`", () => {
+    // `while` and C-style `for` are handler code since REACT_FEEL_PLAN.md A1 (loops.test.ts).
+    for (const loop of ["for (let x of [1]) { }", "for (const [a, ...rest] of [[1, 2]]) { }", "for (const { a = 1 } of [{ a: 2 }]) { }", "for (const x: number of [1]) { }", "for (const k in { a: 1 }) { }"]) {
       assert.ok(codes(handler(loop)).includes(DiagnosticCode.UnsupportedStatement), loop);
     }
+    assert.ok(compile(handler("while (dt > 0) { break; }")).code.includes("while (dt > 0)"));
+    assert.ok(compile(handler("for (let i = 0; i < 3; i++) { }")).code.includes("for (let i = 0; i < 3; i += 1)"));
   });
 
   it("rejects assignment to a `const`, a loop item, a parameter or state, and keeps `++` on state an expression error", () => {

@@ -55,6 +55,14 @@ export interface TypeDeclarationIR {
   readonly text: string;
 }
 
+/** `const handleHit = (id: string) => { … }` in a component body: a handler kept in the field `name`, called or passed as a value. */
+export interface OwnFunctionIR {
+  readonly kind: "OwnFunction";
+  /** The field it is kept in (the author's name, or `$name` where the root built-in has that member). */
+  readonly name: string;
+  readonly fn: FunctionIR;
+}
+
 export interface ComponentIR {
   readonly kind: "Component";
   readonly name: string;
@@ -67,6 +75,8 @@ export interface ComponentIR {
   readonly refs: readonly RefIR[];
   /** `useSound` bindings: a sound each, played by calling its function in a handler. */
   readonly sounds: readonly SoundIR[];
+  /** Functions declared in the body (`const handleHit = (id: string) => { … }`): handlers of the component's own, kept in fields. */
+  readonly functions: readonly OwnFunctionIR[];
   /** Declared props, from the destructured parameter. Empty for a component without props. */
   readonly props: readonly PropDeclIR[];
   /** The name of the props type (`EnemyProps`), or null for a component without props. */
@@ -189,4 +199,9 @@ export interface StateIR {
    * Absent for `useState`.
    */
   readonly globalKey?: string;
+  /**
+   * A per-instance object a factory made (`useState(() => createBody(…))`): its methods may be called, and it is told when the
+   * component joins and leaves a world (`ownedHandles`), if it wants to know.
+   */
+  readonly handle?: true;
 }

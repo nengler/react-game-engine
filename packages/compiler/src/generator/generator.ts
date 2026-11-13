@@ -350,6 +350,9 @@ class ComponentGenerator extends ElementEmitter {
         w.line(`override readonly gameStateStore = ${this.storeName}.store;`);
         w.line(`override readonly gameStateKeys: readonly string[] = [${[...new Set(globals.map((s) => JSON.stringify(s.globalKey)))].join(", ")}];`);
       }
+      // Per-instance objects a factory made: told when the component joins and leaves a world (a body learns its world so).
+      const handles = c.state.filter((s) => s.handle);
+      if (handles.length > 0) w.line(`protected override ownedHandles(): readonly unknown[] { return [${handles.map((s) => `this.${s.name}`).join(", ")}]; }`);
       // Refs: plain fields. Reading or writing them never marks anything dirty.
       for (const r of c.refs) {
         w.line(`${r.name}: ${typeText(r.type)} = ${this.expr(r.initialValue, true)};`);
@@ -358,6 +361,8 @@ class ComponentGenerator extends ElementEmitter {
       for (const s of c.sounds) {
         w.line(`readonly ${s.name}: Sound = new Sound(${JSON.stringify(s.path)});`);
       }
+      // Functions declared in the body: arrows in fields, before the children that may be handed them (`onPress={handleHit}`).
+      for (const f of c.functions) w.line(`readonly ${f.name} = ${this.callback(f.fn)};`);
       // Persistent children (field initialisers run after state initialisers, so they can read state).
       this.emitElementFields(c.root.children, "persistent");
 

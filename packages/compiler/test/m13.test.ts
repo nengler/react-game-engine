@@ -7,7 +7,6 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { AnimatedSprite, Entity, World, runtimeManifest } from "@rge/runtime";
-import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -289,12 +288,11 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
     assert.match(withSuper({ ...runtimeManifest, intrinsicHooks: { Shape: ["onUpdate"] } }), /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/);
   });
 
-  it("reserves the sprite's own names for a component rooted at it", () => {
+  it("keeps the sprite's own names apart from the state of a component rooted at it", () => {
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     for (const name of ["frames", "fps", "playing", "frame", "elapsed", "image"]) {
-      const codes = getCompiler()
-        .compile("C.tsx", `import { AnimatedSprite, useState } from "@rge/runtime/jsx";\nfunction C() { const [${name}, set] = useState(1); return <AnimatedSprite frames={["a.png"]} />; }`)
-        .diagnostics.map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+      const result = getCompiler().compile("C.tsx", `import { AnimatedSprite, useState } from "@rge/runtime/jsx";\nfunction C() { const [${name}, set] = useState(1); return <AnimatedSprite frames={["a.png"]} />; }`);
+      assert.ok(result.ok && result.code.includes(`$${name}: number`), name);
     }
   });
 });

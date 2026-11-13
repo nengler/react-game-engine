@@ -14,6 +14,10 @@ export type StatementIR =
   | LocalConstStmtIR
   | IfStmtIR
   | ForOfStmtIR
+  | WhileStmtIR
+  | ForStmtIR
+  | TryStmtIR
+  | ThrowStmtIR
   | SwitchStmtIR
   | BlockStmtIR
   | LoopJumpStmtIR
@@ -25,14 +29,47 @@ export type StatementIR =
 
 /**
  * `for (const enemy of enemies) { … }`: the body once per item of an array (or of `entries()`, `keys()`, `values()`), in order.
- * The item is bound by `const`, as a name or destructured, in the body's scope. Bounded by the array, so a handler cannot loop
- * forever (there is no `while`).
+ * The item is bound by `const`, as a name or destructured, in the body's scope.
  */
 export interface ForOfStmtIR {
   readonly kind: "ForOf";
   readonly binding: LoopBindingIR;
   readonly iterable: ExprIR;
   readonly body: readonly StatementIR[];
+}
+
+/** `while (test) { … }`, or with `doWhile`, `do { … } while (test);`. */
+export interface WhileStmtIR {
+  readonly kind: "While";
+  readonly test: ExprIR;
+  readonly body: readonly StatementIR[];
+  readonly doWhile: boolean;
+}
+
+/**
+ * `for (let i = 0; i < n; i++) { … }`: `init` is `let` locals (or assignments to locals and refs) in the loop's own scope, `test`
+ * may be left out, and `update` is assignments (`i++` is `i += 1`), written as a comma list.
+ */
+export interface ForStmtIR {
+  readonly kind: "For";
+  readonly init: readonly (LocalConstStmtIR | AssignStmtIR)[];
+  readonly test: ExprIR | null;
+  readonly update: readonly AssignStmtIR[];
+  readonly body: readonly StatementIR[];
+}
+
+/** `try { … } catch (e) { … } finally { … }`: `e` is a `const` local of the catch block (it may be left out: `catch { … }`). */
+export interface TryStmtIR {
+  readonly kind: "Try";
+  readonly block: readonly StatementIR[];
+  readonly handler: { readonly binding: { readonly local: LocalId; readonly name: string } | null; readonly body: readonly StatementIR[] } | null;
+  readonly finalizer: readonly StatementIR[] | null;
+}
+
+/** `throw new Error("…");` */
+export interface ThrowStmtIR {
+  readonly kind: "Throw";
+  readonly value: ExprIR;
 }
 
 /**
@@ -61,7 +98,7 @@ export interface SwitchStmtIR {
   readonly cases: readonly { readonly test: ExprIR | null; readonly body: readonly StatementIR[] }[];
 }
 
-/** `break;` (in a `for…of` or a `switch`) or `continue;` (in a `for…of`), of the same function. */
+/** `break;` (in a loop or a `switch`) or `continue;` (in a loop), of the same function. */
 export interface LoopJumpStmtIR {
   readonly kind: "Break" | "Continue";
 }
@@ -87,7 +124,13 @@ export interface PlaySoundStmtIR {
 export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | "||=" | "&&=" | "??=";
 
 /** Where an assignment writes. Not reactive: no write marks anything dirty. */
-export type AssignTargetIR = RefCurrentTargetIR | LocalTargetIR;
+export type AssignTargetIR = RefCurrentTargetIR | LocalTargetIR | PathTargetIR;
+
+/** `best.hits = 0`, `grid[y]![x] = 1`: a member or element of a value the handler made (its own local). */
+export interface PathTargetIR {
+  readonly kind: "Path";
+  readonly target: ExprIR;
+}
 
 /** A `let` local of the enclosing function: `best = enemy`, `total += e.hp`. */
 export interface LocalTargetIR {

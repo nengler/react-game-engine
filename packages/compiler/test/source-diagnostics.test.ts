@@ -44,7 +44,7 @@ export function A() {
     const r = compileProject({
       "Child.tsx": `import { Entity } from "@rge/runtime/jsx";
 export function Child() {
-  while (true) {}
+  var broken = 1;
   return <Entity name="Child" />;
 }
 `,

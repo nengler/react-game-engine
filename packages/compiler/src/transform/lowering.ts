@@ -3,7 +3,7 @@ import { SyntaxKind, type Expression, type PropertyAccessExpression, type Node, 
 import { isPropertyAccessExpression, isIdentifier, isArrayTypeNode, isUnionTypeNode } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType, type StateIR, type HookIR } from "../ir/types.ts";
+import { type OwnFunctionIR, type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType, type StateIR, type HookIR } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
 import { type GameStateDefinition } from "../gamestate/schema.ts";
 import { type RuntimeManifest } from "@rge/runtime";
@@ -24,13 +24,18 @@ export interface LoweringMode {
   readonly inUnmount: boolean;
   /** In a state updater: it runs inside the setter and may run again, so no sounds or actions. */
   readonly inUpdater: boolean;
+  /**
+   * In a render block (statements in the component body): it computes like a handler (loops, its own values, the standard
+   * library) but runs during render, so it may not set state, play sounds, call actions or read refs.
+   */
+  readonly inRenderBlock: boolean;
   /** Lowering the value of `onX={onX}`, where a callback prop may be forwarded whole. */
   readonly allowCallbackRead: boolean;
   /** In a computed selector: where the snapshots of the paths it reads go. */
   readonly storeReads: { readonly state: StateIR[]; readonly hooks: HookIR[]; readonly storeName: string } | null;
 }
 
-const TOP_LEVEL: LoweringMode = { inHandler: false, inUnmount: false, inUpdater: false, allowCallbackRead: false, storeReads: null };
+const TOP_LEVEL: LoweringMode = { inHandler: false, inUnmount: false, inUpdater: false, inRenderBlock: false, allowCallbackRead: false, storeReads: null };
 
 /** What every component of a module is lowered against: built once per file in `buildModuleIR`, shared by its components. */
 export interface ModuleContext {
@@ -82,6 +87,8 @@ export class LoweringBase {
   protected slotRejected = false;
   protected readonly refs: RefIR[] = [];
   protected readonly sounds: SoundIR[] = [];
+  /** Functions declared in the body (`const handleHit = (id: string) => { … }`). */
+  protected readonly functions: OwnFunctionIR[] = [];
   protected readonly gameState: GameStateDefinition | undefined;
   protected readonly storeImports: ReadonlySet<string>;
   /** Names of functions imported from relative `.ts` files, which a component may call and pass. */
@@ -161,10 +168,10 @@ export class LoweringBase {
         const decl = this.propDecls.find((p) => p.name === expr.name);
         return decl?.role === "value" && decl.type.kind === "Primitive" ? decl.type.name : null;
       }
-      case "Unary": return expr.operator === "!" ? "boolean" : this.inferType(expr.operand) === "number" ? "number" : null;
+      case "Unary": return expr.operator === "!" ? "boolean" : expr.operator === "typeof" ? "string" : this.inferType(expr.operand) === "number" ? "number" : null;
       case "Binary": {
         switch (expr.operator) {
-          case "<": case "<=": case ">": case ">=": case "===": case "!==": case "==": case "!=": return "boolean";
+          case "<": case "<=": case ">": case ">=": case "===": case "!==": case "==": case "!=": case "instanceof": case "in": return "boolean";
           case "-": case "*": case "/": case "%": case "**": return this.inferType(expr.left) === "number" && this.inferType(expr.right) === "number" ? "number" : null;
           case "+": {
             const [left, right] = [this.inferType(expr.left), this.inferType(expr.right)];
@@ -363,6 +370,23 @@ export class LoweringBase {
     return true;
   }
 
+  /**
+   * The field a state, ref or sound named `name` is kept in: `name` itself, or, when that is a member the runtime's object
+   * already has (`name` of an `<Entity>` root, `image` of a `<Sprite>`, `parent`), `$name`, so the author's name never clashes
+   * with the root built-in. `$` names are the compiler's own. Null (after reporting) when this component already declared it.
+   */
+  protected claimField(name: string, at: Node, code: CompilerDiagnostic["code"] = DiagnosticCode.InvalidUseState): string | null {
+    if (!this.usedNames.has(name)) return this.claimName(name, at, code) ? name : null;
+    if (!this.isRuntimeMember(name)) {
+      this.report(code, `'${name}' is already declared in this component.`, at);
+      return null;
+    }
+    let field = `$${name}`;
+    for (let n = 2; this.usedNames.has(field); n++) field = `$${name}${n}`;
+    this.usedNames.add(field);
+    return field;
+  }
+
   /** A member of the runtime's object (`name` of an `<Entity>` root, `render`), as opposed to a name this component declared. */
   protected isRuntimeMember(name: string): boolean {
     return this.manifest.reservedMembers.includes(name) || (this.manifest.intrinsicMembers[rootTag(this.component.jsx, this.manifest.hostIntrinsic)] ?? []).includes(name);
@@ -414,6 +438,10 @@ export class LoweringBase {
 
   canSetState(): boolean {
     return !this.mode.inUnmount;
+  }
+
+  inRenderBlock(): boolean {
+    return this.mode.inRenderBlock;
   }
 
   canPassCallback(): boolean {

@@ -23,6 +23,7 @@ export const BINARY_OPERATORS: ReadonlyMap<SyntaxKind, BinaryOperator> = new Map
   [SyntaxKind.EqualsEqualsToken, "=="], [SyntaxKind.ExclamationEqualsToken, "!="],
   [SyntaxKind.AmpersandAmpersandToken, "&&"], [SyntaxKind.BarBarToken, "||"],
   [SyntaxKind.QuestionQuestionToken, "??"],
+  [SyntaxKind.InstanceOfKeyword, "instanceof"], [SyntaxKind.InKeyword, "in"],
 ] as const);
 
 export const UNARY_OPERATORS: ReadonlyMap<SyntaxKind, UnaryOperator> = new Map([

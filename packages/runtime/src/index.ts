@@ -18,7 +18,7 @@ export {
 export { Entity, type EntityProps } from "./components/Entity.ts";
 export { Game, type GameProps } from "./components/Game.ts";
 export { isStyled, Sprite, type SpriteLook, type SpriteOptions, type SpriteProps } from "./components/Sprite.ts";
-export { Collider, type ColliderProps, type Contact } from "./components/Collider.ts";
+export { Collider, type BaseContact, type ColliderProps, type Contact } from "./components/Collider.ts";
 export { Sound, addSoundPreload, getSoundSink, getVolume, setSoundSink, setVolume, type SoundSink, type VolumeGroup } from "./Sound.ts";
 export { createMemoryStorage, createSave, createSettings, getStorage, Save, setStorage, Settings, type EngineSettings, type SaveOptions, type SettingsOf, type SettingsOptions, type StorageSink } from "./storage.ts";
 export { Pointer, type PointerProps, type Pressable } from "./components/Pointer.ts";
@@ -50,6 +50,8 @@ export { Hud } from "./components/Hud.ts";
 export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./components/Screen.ts";
 export { actionAware, Controls, createControls, createInputState, KEY_NAMES, NO_INPUT, type InputState, type InputSnapshot, type KeyName } from "./input.ts";
 export { clamp, NO_SHAKE, shakeOn, springBack, type ShakeState, type Vector2 } from "./math.ts";
+export { keepIfEqual, sameData } from "./equal.ts";
+export { Body, createBody, boxesOverlap, type BodyHit, type BodyOptions, type BodySpace, type Box } from "./body.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { CALLBACK_PRIMITIVES, runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
 export { findPath, lineOfSight, type Cell, type PathGrid, type PathOptions, type PathPoint } from "./path.ts";

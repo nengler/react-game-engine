@@ -13,11 +13,18 @@ import {
   isContinueStatement,
   isExpressionStatement,
   isForOfStatement,
+  isForStatement,
+  isDoStatement,
+  isWhileStatement,
+  isTryStatement,
+  isThrowStatement,
   isIdentifier,
   isIfStatement,
   isPostfixUnaryExpression,
   isPrefixUnaryExpression,
   isPropertyAccessExpression,
+  isElementAccessExpression,
+  isNonNullExpression,
   isReturnStatement,
   isVariableDeclarationList,
   isVariableStatement,
@@ -27,8 +34,12 @@ import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import {
   localId,
   type AssignOperator,
+  type AssignStmtIR,
   type AssignTargetIR,
+  type LocalConstStmtIR,
   type LoopBindingIR,
+  type ObjectPropertyIR,
+  walkStatements,
   type ExprIR,
   type FunctionIR,
   type ParamIR,
@@ -51,6 +62,8 @@ export interface LoweringContext {
   stateType(state: StateId): TypeIR;
   /** False in a `useUnmount` handler: the component is going away, so a state update could never render. */
   canSetState(): boolean;
+  /** In statements of the component body, which run during render (see `LoweringMode.inRenderBlock`). */
+  inRenderBlock(): boolean;
   /** False in a state updater: it runs inside the setter, whether or not the update changes anything. */
   canPlaySound(): boolean;
   /** True in a handler, outside a state updater: where a handler may hand a callback to a function (`settings.subscribe(() => …)`). */
@@ -73,12 +86,14 @@ interface FunctionOptions {
    * prefix of them. `"contextual"`: any number of parameters, none annotated
    * (a callback passed to a child, typed by the child's props type).
    */
-  readonly paramTypes: readonly TypeIR[] | "contextual";
+  /** `declared`: each parameter's own annotation, as written (`(id: string) => …` in a component body). */
+  readonly paramTypes: readonly TypeIR[] | "contextual" | "declared";
   /**
    * `void`: handlers (`return;` only). `value`: updaters (`return expr;` required). `cleanup`: `useMount`, which may return
-   * a cleanup (`return () => …;`, `return settings.subscribe(…);`, or an expression body that calls a function).
+   * a cleanup (`return () => …;`, `return settings.subscribe(…);`, or an expression body that calls a function). `any`: a function
+   * a handler hands to a method or the standard library (`list.sort((a, b) => …)`), which may return a value or nothing.
    */
-  readonly returns: "void" | "value" | "cleanup";
+  readonly returns: "void" | "value" | "cleanup" | "any";
   /** What to call the function in diagnostics. */
   readonly what: string;
 }
@@ -87,7 +102,7 @@ interface FunctionOptions {
 export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: FunctionOptions): FunctionIR | null {
   return ctx.inScope((scope) => {
     const params: ParamIR[] = [];
-    if (options.paramTypes !== "contextual" && fn.parameters.length > options.paramTypes.length) {
+    if (options.paramTypes !== "contextual" && options.paramTypes !== "declared" && fn.parameters.length > options.paramTypes.length) {
       ctx.error(DiagnosticCode.InvalidHandler, `${options.what} takes at most ${options.paramTypes.length} parameter(s).`, fn.parameters[options.paramTypes.length]!);
       return null;
     }
@@ -99,7 +114,10 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
       const name = param.name.text;
       if (!checkFreshName(ctx, name, param)) return null;
       const id = localId(ctx.componentName, name, ctx.nextSerial());
-      const type: TypeIR = options.paramTypes === "contextual" ? { kind: "Contextual" } : options.paramTypes[index]!;
+      const type: TypeIR =
+        options.paramTypes === "contextual" ? { kind: "Contextual" }
+        : options.paramTypes === "declared" ? (param.type ? ctx.typeFromNode(param.type) ?? { kind: "Contextual" } : { kind: "Contextual" })
+        : options.paramTypes[index]!;
       scope.declare(name, { kind: "param", id, name, type });
       params.push({ id, name, type });
     }
@@ -108,7 +126,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
     if (isBlock(fn.body)) {
       // The body's top-level block shares the parameters' scope, as in JS: `(n) => { const n = 1; }` is a redeclaration.
       body = lowerStatements(ctx, fn.body.statements, options, { newScope: false, jumps: NO_JUMPS });
-    } else if (options.returns === "value") {
+    } else if (options.returns === "value" || (options.returns === "any" && !isEffect(ctx, fn.body))) {
       const value = ctx.lowerExpression(fn.body);
       body = value && [{ kind: "Return", value }];
     } else {
@@ -118,6 +136,43 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
     }
     return body && { kind: "Function", params, body };
   });
+}
+
+/**
+ * Statements of the component body that compute together (a render block): lowered like a handler's, in a scope of their own,
+ * then a `return { a, b }` of the names declared at the top is added, so what reads them after the block reads them from it. A
+ * `return` of the author's is refused: a component returns once, at its end.
+ */
+export function lowerRenderBlock(ctx: LoweringContext, statements: readonly Statement[], names: readonly string[], at: Node): FunctionIR | null {
+  return ctx.inScope(() => {
+    const body = lowerStatements(ctx, statements, { paramTypes: [], returns: "void", what: "The component body" }, { newScope: false, jumps: NO_JUMPS });
+    if (!body) return null;
+    let returns = false;
+    walkStatements(body, () => {}, (s) => {
+      if (s.kind === "Return") returns = true;
+    });
+    if (returns) {
+      ctx.error(DiagnosticCode.InvalidComponentBody, "A component returns once, at its end: compute a value here and test it in the `return` (`return open ? <Menu /> : null`).", at);
+      return null;
+    }
+    const properties: ObjectPropertyIR[] = [];
+    for (const name of names) {
+      const binding = ctx.scope.get(name);
+      if (binding?.kind !== "local") {
+        ctx.error(DiagnosticCode.InvalidComponentBody, `'${name}' must be declared with \`const\` or \`let\` and one name, in statements of the component body.`, at);
+        return null;
+      }
+      properties.push({ kind: "Property", name, value: { kind: "LocalRead", local: binding.id, name } });
+    }
+    body.push({ kind: "Return", value: { kind: "ObjectLiteral", properties } });
+    return { kind: "Function", params: [], body };
+  });
+}
+
+/** A function a handler hands to a method of its own value or to the standard library: it may return a value, or nothing. */
+export function lowerFunctionValue(ctx: LoweringContext, fn: ArrowFunction): ExprIR | null {
+  const lowered = lowerFunction(ctx, fn, { paramTypes: "contextual", returns: "any", what: "A function" });
+  return lowered && { kind: "Callback", fn: lowered };
 }
 
 /**
@@ -141,6 +196,8 @@ interface Jumps {
 }
 
 const NO_JUMPS: Jumps = { break: false, continue: false };
+/** Inside a loop's body: both. */
+const LOOP_JUMPS: Jumps = { break: true, continue: true };
 
 /** Where statements are lowered: in a block scope of their own (`const`s declared inside do not leak out), and what they may jump out of. */
 interface BlockOptions {
@@ -175,6 +232,50 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
 
   if (isForOfStatement(statement)) return lowerForOf(ctx, statement, options);
 
+  if (isWhileStatement(statement) || isDoStatement(statement)) {
+    const test = ctx.lowerExpression(statement.expression);
+    const body = lowerStatements(ctx, isBlock(statement.statement) ? statement.statement.statements : [statement.statement], options, { newScope: true, jumps: LOOP_JUMPS });
+    return test && body && { kind: "While", test, body, doWhile: isDoStatement(statement) };
+  }
+
+  if (isForStatement(statement)) return lowerFor(ctx, statement, options);
+
+  if (isTryStatement(statement)) {
+    const block = lowerStatements(ctx, statement.tryBlock.statements, options, { newScope: true, jumps });
+    if (!block) return null;
+    let handler: { binding: { local: ReturnType<typeof localId>; name: string } | null; body: StatementIR[] } | null = null;
+    if (statement.catchClause) {
+      const clause = statement.catchClause;
+      const declared = clause.variableDeclaration;
+      if (declared && !isIdentifier(declared.name)) {
+        ctx.error(DiagnosticCode.UnsupportedStatement, "A `catch` binds one name (`catch (e)`), or none (`catch`).", declared);
+        return null;
+      }
+      const caught = ctx.inScope((scope) => {
+        let binding: { local: ReturnType<typeof localId>; name: string } | null = null;
+        if (declared && isIdentifier(declared.name)) {
+          const name = declared.name.text;
+          if (!checkFreshName(ctx, name, declared.name)) return null;
+          const local = localId(ctx.componentName, name, ctx.nextSerial());
+          scope.declare(name, { kind: "local", id: local, name, mutable: false });
+          binding = { local, name };
+        }
+        const body = lowerStatements(ctx, clause.block.statements, options, { newScope: false, jumps });
+        return body && { binding, body };
+      });
+      if (!caught) return null;
+      handler = caught;
+    }
+    const finalizer = statement.finallyBlock ? lowerStatements(ctx, statement.finallyBlock.statements, options, { newScope: true, jumps }) : null;
+    if (statement.finallyBlock && !finalizer) return null;
+    return { kind: "Try", block, handler, finalizer };
+  }
+
+  if (isThrowStatement(statement)) {
+    const value = ctx.lowerExpression(statement.expression);
+    return value && { kind: "Throw", value };
+  }
+
   if (isBlock(statement)) {
     const body = lowerStatements(ctx, statement.statements, options, { newScope: true, jumps });
     return body && { kind: "Block", body };
@@ -186,18 +287,18 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const isBreak = isBreakStatement(statement);
     const word = isBreak ? "break" : "continue";
     if (statement.label) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, `Labelled \`${word}\` is not supported: it leaves the innermost ${isBreak ? "`for…of` or `switch`" : "`for…of`"}.`, statement);
+      ctx.error(DiagnosticCode.UnsupportedStatement, `Labelled \`${word}\` is not supported: it leaves the innermost ${isBreak ? "loop or `switch`" : "loop"}.`, statement);
       return null;
     }
     if (!(isBreak ? jumps.break : jumps.continue)) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, `\`${word}\` is only valid inside a ${isBreak ? "`for…of` loop or a `switch`" : "`for…of` loop"} of the same function.`, statement);
+      ctx.error(DiagnosticCode.UnsupportedStatement, `\`${word}\` is only valid inside a ${isBreak ? "loop or a `switch`" : "loop"} of the same function.`, statement);
       return null;
     }
     return { kind: isBreak ? "Break" : "Continue" };
   }
 
   if (isReturnStatement(statement)) {
-    if (options.returns === "cleanup") {
+    if (options.returns === "cleanup" || options.returns === "any") {
       if (!statement.expression) return { kind: "Return", value: null };
       const returned = unwrapParens(statement.expression);
       const value = isArrowFunction(returned) ? lowerCallbackValue(ctx, returned, "this place") : ctx.lowerExpression(statement.expression);
@@ -224,7 +325,8 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const mutable = (list.flags & NodeFlags.Let) !== 0;
     const isConst = (list.flags & NodeFlags.Const) !== 0;
     if ((!isConst && !mutable) || list.declarations.length !== 1 || !isIdentifier(decl.name) || !decl.initializer) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, "Only `const name = expression;` and `let name = expression;` declarations (one name, with a value) are supported in handlers.", statement);
+      const where = ctx.inRenderBlock() ? "in statements of the component body" : "in handlers";
+      ctx.error(ctx.inRenderBlock() ? DiagnosticCode.InvalidComponentBody : DiagnosticCode.UnsupportedStatement, `Only \`const name = expression;\` and \`let name = expression;\` declarations (one name, with a value) are supported ${where}.`, statement);
       return null;
     }
     // `const events = step(input, dt);`: a game-state action whose result the handler uses (only here, in a handler, where it
@@ -233,6 +335,10 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const action = isCallExpression(init) && isIdentifier(init.expression) ? ctx.scope.get(init.expression.text) : undefined;
     let value: ExprIR | null;
     if (action?.kind === "action" && isCallExpression(init)) {
+      if (ctx.inRenderBlock()) {
+        ctx.error(DiagnosticCode.InvalidComponentBody, `An action cannot be called in the component body: it runs on every render. Call \`${action.name}()\` in a handler.`, init);
+        return null;
+      }
       if (!ctx.canPlaySound()) {
         ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${action.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler.`, init);
         return null;
@@ -244,17 +350,102 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const name = decl.name.text;
     if (!value || !checkFreshName(ctx, name, decl.name)) return null;
     const id = localId(ctx.componentName, name, ctx.nextSerial());
-    ctx.scope.declare(name, { kind: "local", id, name, mutable });
+    ctx.scope.declare(name, { kind: "local", id, name, mutable, owned: isFresh(value) });
     const type = decl.type ? ctx.typeFromNode(decl.type) : undefined;
     return { kind: "LocalConst", id, name, value, ...(mutable ? { mutable: true as const } : {}), ...(type ? { type } : {}) };
   }
 
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
-    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, \`for…of\` (with \`break\` and \`continue\`), \`const\`, \`let\` and \`return\`.`,
+    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
     statement,
   );
   return null;
+}
+
+/**
+ * Whether an arrow's expression body does something rather than computes a value: a setter, sound or action call, or an
+ * assignment (`() => setN(1)`, `() => count.current++`). Such a body is a statement, not a returned value.
+ */
+function isEffect(ctx: LoweringContext, body: Node): boolean {
+  const e = unwrapParens(body as Expression);
+  if (isBinaryExpression(e) && ASSIGNMENT_TOKENS.has(e.operatorToken.kind)) return true;
+  if (isPrefixUnaryExpression(e) || isPostfixUnaryExpression(e)) return e.operator === SyntaxKind.PlusPlusToken || e.operator === SyntaxKind.MinusMinusToken;
+  if (!isCallExpression(e) || !isIdentifier(e.expression)) return false;
+  const kind = ctx.scope.get(e.expression.text)?.kind;
+  return kind === "setter" || kind === "sound" || kind === "action" || kind === "function";
+}
+
+/** Whether a value is new, made where it is written (a literal, `new`, a call's result), rather than a read of something that exists. */
+function isFresh(value: ExprIR): boolean {
+  // An array method that hands back one of the array's own items (`enemies.find(…)`) is a read, not a new value.
+  if (value.kind === "Call") return !(value.callee.kind === "ArrayMethod" && ITEM_METHODS.has(value.callee.name));
+  return value.kind === "ArrayLiteral" || value.kind === "ObjectLiteral" || value.kind === "New" || value.kind === "TemplateLiteral";
+}
+
+/** Array methods whose result is one of the array's items. */
+const ITEM_METHODS: ReadonlySet<string> = new Set(["find", "findLast", "at"]);
+
+/** The parts of `a, b, c` (a comma list in a `for` loop's head), in order. */
+function commaParts(expression: Expression): Expression[] {
+  const e = unwrapParens(expression);
+  if (isBinaryExpression(e) && e.operatorToken.kind === SyntaxKind.CommaToken) return [...commaParts(e.left), ...commaParts(e.right)];
+  return [e];
+}
+
+/**
+ * `for (let i = 0; i < n; i++) { … }`: the `let`s are the loop's own (declared in a scope around the test, the update and the
+ * body); an initializer that is not a declaration, and the update, are assignments (`i++` is `i += 1`), as comma lists.
+ */
+function lowerFor(ctx: LoweringContext, statement: Statement & { kind: SyntaxKind.ForStatement }, options: FunctionOptions): StatementIR | null {
+  const loop = statement as unknown as { initializer?: Node; condition?: Expression; incrementor?: Expression; statement: Statement };
+  const shape = "A `for` loop's head is `let` locals or assignments, a test, and assignments: `for (let i = 0; i < n; i++)`";
+  const assignments = (expression: Expression): AssignStmtIR[] | null => {
+    const out: AssignStmtIR[] = [];
+    for (const part of commaParts(expression)) {
+      const lowered = lowerExpressionStatement(ctx, part, part);
+      if (!lowered) return null;
+      if (lowered.kind !== "Assign") {
+        ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}.`, part);
+        return null;
+      }
+      out.push(lowered);
+    }
+    return out;
+  };
+  return ctx.inScope(() => {
+    const init: (LocalConstStmtIR | AssignStmtIR)[] = [];
+    const list = loop.initializer;
+    if (list !== undefined && isVariableDeclarationList(list)) {
+      if ((list.flags & NodeFlags.Let) === 0) {
+        ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: its locals are \`let\`.`, list);
+        return null;
+      }
+      for (const decl of list.declarations) {
+        if (!isIdentifier(decl.name) || !decl.initializer) {
+          ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: each \`let\` is one name with a value.`, decl);
+          return null;
+        }
+        const value = ctx.lowerExpression(decl.initializer);
+        const name = decl.name.text;
+        if (!value || !checkFreshName(ctx, name, decl.name)) return null;
+        const id = localId(ctx.componentName, name, ctx.nextSerial());
+        ctx.scope.declare(name, { kind: "local", id, name, mutable: true, owned: isFresh(value) });
+        const type = decl.type ? ctx.typeFromNode(decl.type) : undefined;
+        init.push({ kind: "LocalConst", id, name, value, mutable: true, ...(type ? { type } : {}) });
+      }
+    } else if (list !== undefined) {
+      const assigned = assignments(list as Expression);
+      if (!assigned) return null;
+      init.push(...assigned);
+    }
+    const test = loop.condition ? ctx.lowerExpression(loop.condition) : null;
+    if (loop.condition && !test) return null;
+    const update = loop.incrementor ? assignments(loop.incrementor) : [];
+    if (!update) return null;
+    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: LOOP_JUMPS });
+    return body && { kind: "For", init, test, update, body };
+  });
 }
 
 /**
@@ -314,7 +505,7 @@ function lowerForOf(ctx: LoweringContext, statement: Statement & { kind: SyntaxK
     };
     const binding = bind(pattern);
     if (!binding) return null;
-    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: { break: true, continue: true } });
+    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: LOOP_JUMPS });
     return body && { kind: "ForOf", binding, iterable, body };
   });
 }
@@ -401,6 +592,11 @@ function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): St
   }
   const target = ctx.lowerAssignTarget(unwrapParens(expression.left));
   const value = ctx.lowerExpression(expression.right);
+  // `best = enemy`: from here on `best` may be state's own object, so it is no longer the handler's to change in place.
+  if (target?.kind === "Local" && value && !isFresh(value)) {
+    const binding = ctx.scope.get(target.name);
+    if (binding?.kind === "local") binding.owned = false;
+  }
   return target && value && { kind: "Assign", target, operator, value };
 }
 
@@ -413,10 +609,15 @@ function lowerIncrement(ctx: LoweringContext, expression: Expression): Statement
   const operator = expression.operator === SyntaxKind.PlusPlusToken ? "+=" : expression.operator === SyntaxKind.MinusMinusToken ? "-=" : null;
   if (operator === null) return undefined;
   const operand = unwrapParens(expression.operand);
-  // Only a local or `ref.current`; anything else (`count++` on state) is left to the expression's own diagnostic.
+  // Only a local, `ref.current` or a member of a handler's own value (`best.hits++`); anything else (`count++` on state) is left to
+  // the expression's own diagnostic.
   const object = isPropertyAccessExpression(operand) ? unwrapParens(operand.expression) : null;
   const kind = isIdentifier(operand) ? ctx.scope.get(operand.text)?.kind : object && isIdentifier(object) ? ctx.scope.get(object.text)?.kind : undefined;
-  if (kind !== (isIdentifier(operand) ? "local" : "ref")) return undefined;
+  let root: Expression = operand;
+  while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root)) root = unwrapParens(root.expression);
+  const rootBinding = root !== operand && isIdentifier(root) ? ctx.scope.get(root.text) : undefined;
+  const owned = rootBinding?.kind === "local" && rootBinding.owned === true;
+  if (!owned && kind !== (isIdentifier(operand) ? "local" : "ref")) return undefined;
   const target = ctx.lowerAssignTarget(operand);
   return target && { kind: "Assign", target, operator, value: { kind: "NumberLiteral", value: 1 } };
 }
@@ -429,6 +630,15 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (increment !== undefined) return increment;
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
+    if (ctx.inRenderBlock() && (callee?.kind === "sound" || callee?.kind === "action" || callee?.kind === "setter")) {
+      const what = callee.kind === "setter" ? "A setter" : callee.kind === "sound" ? "A sound" : "An action";
+      ctx.error(
+        DiagnosticCode.InvalidComponentBody,
+        `${what} cannot be called in the component body: it runs on every render. Call \`${call.expression.text}()\` in a handler (\`useUpdate\`, \`useMount\`, a callback prop), or compute the value here and use it.`,
+        call,
+      );
+      return null;
+    }
     if (callee?.kind === "sound") {
       if (call.arguments.length > 1) {
         ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes at most one argument, the volume from 0 to 1: the sound and its path are fixed where it is declared.`, call);

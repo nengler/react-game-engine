@@ -1,16 +1,18 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
-import { SyntaxKind, type Node } from "typescript/ast";
+import { SyntaxKind, type ArrowFunction, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
 import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
-import { lowerFunction } from "./statements.ts";
+import { lowerFunction, lowerRenderBlock } from "./statements.ts";
 import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
 import { ExpressionLowering } from "./expressions.ts";
 
 export class HookLowering extends ExpressionLowering {
+  /** Render blocks lowered so far, to name their memos (`$block1`). */
+  private renderBlocks = 0;
   /** Actions taken from the whole state, by the statement they were written in: one warning each (see `lowerStoreHook`). */
   private readonly wholeStateActions = new Map<string, { index: number; names: string[] }>();
   /**
@@ -121,7 +123,7 @@ export class HookLowering extends ExpressionLowering {
     const hooks: HookIR[] = [];
     const state: StateIR[] = [];
     for (const hook of this.component.hooks) {
-      if (hook.kind !== "const" && hook.kind !== "useStore") this.requireImport(hook.kind, hook.call);
+      if (hook.kind !== "const" && hook.kind !== "block" && hook.kind !== "useStore") this.requireImport(hook.kind, hook.call);
       switch (hook.kind) {
         case "useStore":
           this.lowerStore(hook, state, hooks);
@@ -145,7 +147,27 @@ export class HookLowering extends ExpressionLowering {
         case "useSound":
           this.lowerUseSound(hook);
           break;
+        case "block": {
+          // Statements that compute together: one memo, worked out again when what the block reads changes; each name it declares
+          // is a derived value that reads its member.
+          const fn = this.within({ inRenderBlock: true }, () => lowerRenderBlock(this, hook.statements, hook.names, hook.first));
+          if (!fn) break;
+          const value: ExprIR = { kind: "Memo", key: `$block${++this.renderBlocks}`, value: { kind: "Block", fn } };
+          for (const name of hook.names) {
+            if (this.componentScope.hasOwn(name) || this.isCallableName(name)) {
+              this.report(DiagnosticCode.InvalidComponentBody, `'${name}' is already declared in this component (or reserved).`, hook.first);
+              continue;
+            }
+            this.componentScope.declare(name, { kind: "derived", name, value: { kind: "MemberRead", object: value, name, optional: false } });
+          }
+          break;
+        }
         case "const": {
+          // `const handleHit = (id: string) => { … }`: a handler of the component's own, kept in a field.
+          if (hook.pattern === null && isArrowFunction(unwrapParens(hook.initializer))) {
+            this.lowerOwnFunction(hook.name, unwrapParens(hook.initializer) as ArrowFunction, hook.declaration);
+            break;
+          }
           // Lowered now, against what is declared above it (state, refs, earlier consts), outside any handler.
           const lowered = this.lowerNode(hook.initializer);
           if (!lowered) break;
@@ -177,8 +199,11 @@ export class HookLowering extends ExpressionLowering {
             this.report(DiagnosticCode.InvalidUseState, `'${taken}' is already declared in this component.`, hook.declaration);
             continue;
           }
-          if (!this.claimName(hook.valueName, hook.declaration)) continue;
-          if (hook.setterName !== null && !this.claimName(hook.setterName, hook.declaration)) continue;
+          // The fields and the setter take the author's names, or `$name` where the root built-in already has that member.
+          const field = this.claimField(hook.valueName, hook.declaration);
+          if (field === null) continue;
+          const setterMethod = hook.setterName === null ? null : this.claimField(hook.setterName, hook.declaration);
+          if (hook.setterName !== null && setterMethod === null) continue;
           const id = stateId(this.component.name, hook.valueName);
           if (!hook.initializer) {
             this.report(DiagnosticCode.InvalidUseState, "useState requires an initial value.", hook.call);
@@ -208,10 +233,11 @@ export class HookLowering extends ExpressionLowering {
           }
           const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
           if (!type) continue;
-          if (type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain")) this.handleStates.add(id);
-          state.push({ kind: "State", id, name: hook.valueName, type, initialValue });
+          const handle = type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain");
+          if (handle) this.handleStates.add(id);
+          state.push({ kind: "State", id, name: field, type, initialValue, ...(handle ? { handle: true as const } : {}) });
           this.stateTypes.set(id, type);
-          hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.span(hook.declaration) });
+          hooks.push({ kind: "UseState", state: id, setterName: setterMethod, span: this.span(hook.declaration) });
           this.componentScope.declare(hook.valueName, { kind: "state", id });
           if (hook.setterName !== null) this.componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
           break;
@@ -391,9 +417,10 @@ export class HookLowering extends ExpressionLowering {
       return;
     }
     const type = this.refType(hook.typeArgument, initialValue, hook.call);
-    if (!type || !this.claimName(hook.name, hook.declaration, code)) return;
+    const field = type ? this.claimField(hook.name, hook.declaration, code) : null;
+    if (!type || field === null) return;
     const id = refId(this.component.name, hook.name);
-    this.refs.push({ kind: "Ref", id, name: hook.name, type, initialValue, span: this.span(hook.declaration) });
+    this.refs.push({ kind: "Ref", id, name: field, type, initialValue, span: this.span(hook.declaration) });
     this.componentScope.declare(hook.name, { kind: "ref", id, name: hook.name });
   }
 
@@ -410,13 +437,31 @@ export class HookLowering extends ExpressionLowering {
       return;
     }
     if (!this.checkHandleName(hook.name, code, hook.declaration.name)) return;
-    if (!this.claimName(hook.name, hook.declaration, code)) return;
+    const field = this.claimField(hook.name, hook.declaration, code);
+    if (field === null) return;
     const id = soundId(this.component.name, hook.name);
-    this.sounds.push({ kind: "Sound", id, name: hook.name, path: argument.text, span: this.span(hook.declaration) });
+    this.sounds.push({ kind: "Sound", id, name: field, path: argument.text, span: this.span(hook.declaration) });
     this.componentScope.declare(hook.name, { kind: "sound", id, name: hook.name });
   }
 
   /** A `useRef` binding must not collide with state, setters or the reserved call names. */
+  /**
+   * A function declared in the component body, as React code declares its handlers: lowered as a handler (it may set state, play
+   * sounds and call actions), with the parameter types written on it, and kept in a field of the component. It is declared before
+   * it is lowered, so it may call itself; it may read only what is declared above it, as a derived value may.
+   */
+  protected lowerOwnFunction(name: string, arrow: ArrowFunction, at: Node): void {
+    if (this.componentScope.hasOwn(name) || this.isCallableName(name)) {
+      this.report(DiagnosticCode.InvalidComponentBody, `'${name}' is already declared in this component (or reserved).`, at);
+      return;
+    }
+    const field = this.claimField(name, at, DiagnosticCode.InvalidComponentBody);
+    if (field === null) return;
+    this.componentScope.declare(name, { kind: "function", name, field });
+    const fn = this.within({ inHandler: true }, () => lowerFunction(this, arrow, { paramTypes: "declared", returns: "any", what: `The function '${name}'` }));
+    if (fn) this.functions.push({ kind: "OwnFunction", name: field, fn });
+  }
+
   protected checkHandleName(name: string, code: CompilerDiagnostic["code"], at: Node): boolean {
     if (this.componentScope.has(name) || this.isCallableName(name)) {
       this.report(code, `'${name}' is already declared in this component (or reserved).`, at);
