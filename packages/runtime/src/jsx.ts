@@ -37,6 +37,8 @@ export type { TransformProps, Child } from "./jsx-runtime.ts";
 export { clamp, shakeOn, springBack } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
+export { readContext, type Context } from "./context.ts";
+import type { Context } from "./context.ts";
 import type { BodyHit, BodyOptions } from "./body.ts";
 
 // -- state and refs -----------------------------------------------------------
@@ -156,6 +158,23 @@ export interface BodyHandle {
  */
 export function useBody(_options: BodyOptions): BodyHandle {
   return compileTimeOnly("useBody");
+}
+
+/**
+ * The value of a context (`createContext` in a `.ts` file) from the nearest `<Theme.Provider value>` above this component, or the
+ * context's default: `const theme = useContext(Theme)`, or `const { accent } = useContext(Theme)`. The component renders again
+ * when that provider's value changes.
+ */
+export function useContext<T>(_context: Context<T>): T {
+  return compileTimeOnly("useContext");
+}
+
+/**
+ * Provide a context's value to everything below: written `<Theme.Provider value={palette}>…</Theme.Provider>`, as in React, and
+ * compiled into this built-in. A container that layout sees through and that draws nothing.
+ */
+export function Provider<T>(_props: { context: Context<T>; value: T; children?: Child }): JSX.Element {
+  return compileTimeOnly("Provider");
 }
 
 /** A value that persists across frames but never renders. Read and write `.current` in handlers only. */

@@ -296,6 +296,9 @@ test("the player walks right", () => {
 
 ### A5. Component state in saves
 
+**Built 2026-11-13** (DESIGN.md, "Component state in saves"). Not done: `useState(…, { save: false })` to leave a state out (a
+cursor, a hover), which waits for a game that wants it; and Hearth saving mid-wave (A7).
+
 **Today.** `createSave({ pick, apply })` saves what `pick` returns from the game state. A component's own state is not saved, so a
 game that keeps an enemy's health in the enemy loses it.
 
@@ -326,11 +329,14 @@ export const save = createSave<SaveData>({
 
 **Done when**
 
-- [ ] `createSave({ tree: true })` saves and restores component state, with tests for keyed lists and a removed item
-- [ ] Hot reload paths use keys
+- [x] `createSave({ tree: true })` saves and restores component state, with tests for keyed lists and a removed item
+- [x] Hot reload paths use keys
 - [ ] A7's Hearth saves mid-wave and loads back to the same enemies
 
 ### A6. What a component knows about others
+
+**Built 2026-11-13**: the guide and the timing test (DESIGN.md, "Sharing state between components"); C3 dropped its "not for game
+data" rule when it was built.
 
 **Today.** There are no refs on elements and no context, so an enemy that chases the player reads the player's position from the
 game state, which means the player's position lives there and not in the player.
@@ -349,8 +355,8 @@ game state, which means the player's position lives there and not in the player.
 
 **Done when**
 
-- [ ] The guide has a "Sharing state between components" section with the chase example, both by props and by context
-- [ ] The step timing is in "How a frame works", with a test that pins it
+- [x] The guide has a "Sharing state between components" section with the chase example, both by props and by context
+- [x] The step timing is in "How a frame works", with a test that pins it
 
 ### A7. Prove it: Hearth with its game in components
 
@@ -838,6 +844,9 @@ reload keeps a timer only if the callback still exists at the same place in the 
 
 ### C3. Context
 
+**Built 2026-11-13** (DESIGN.md, "Context"). A consumer renders again when its provider's value changes, as a whole (not field by
+field: the value is one state). Not done: Hearth and Bramble do not use it yet.
+
 **Today.** There is none, on purpose (PAIN_POINTS.md section 2; NEXT_PRIORITIES.md "Not now": "a tree three or more levels deep
 passing the same props through"). Once game code lives in components (section A), context is how a parent shares its state with a
 deep subtree, as in React. What it is for:
@@ -891,10 +900,10 @@ const { accent } = useContext(Theme);
 
 **Done when**
 
-- [ ] `createContext`, `Provider` and `useContext` compile and run, with tests for nesting, default, field-level re-render and
-      removal
-- [ ] The guide has a "Context" section that says what it is for and what it is not for
-- [ ] NEXT_PRIORITIES.md's "Not now" row for context is moved to done
+- [x] `createContext`, `Provider` and `useContext` compile and run, with tests for a nested reader, the default and re-render
+      (not field-level re-render or a provider's removal)
+- [x] The guide has a "Context" section that says what it is for and what it is not for
+- [x] NEXT_PRIORITIES.md's "Not now" row for context is moved to done
 
 ### C4. A layout overlay and an inspector
 

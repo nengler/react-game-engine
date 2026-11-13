@@ -1483,6 +1483,33 @@ audio of its own: `play()` counts calls in `plays`, so game logic can be tested,
 `SoundSink` a player installs with `setSoundSink` (see "Player").
 Options such as `volume` come later.
 
+## Sharing state between components (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, A6. With game code in components, an enemy that chases the player needs the player's position. React's
+answer holds here: the common parent keeps it (`useState`), the player reports it up through a callback prop, and the parent
+passes it down as a prop or through context. The timing, pinned by `sharing.test.ts`: every update in a step sees the state as
+the step began (the snapshot rule), and a setter called in a step renders after it, so a value reported up in step N reaches the
+siblings, by props and through context alike, in step N + 1. One step of lag between independent things is deterministic and is
+what most engines do; a built-in that must not lag reads its child's transform directly (`<Camera>`).
+
+## Context (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, C3, React's API compiled. Context was left out while props covered every tree (NEXT_PRIORITIES.md, "Not
+now"); with game code moving into components (section A), a parent sharing its state with a deep subtree is the React answer.
+
+- **`createContext(default)`** (`runtime/src/context.ts`), in a `.ts` file, returns `{ default, Provider }`; `Provider` is only for
+  the type-checker (a method, so a context of any value type fits `Context<unknown>`).
+- **`<Theme.Provider value>`** is rewritten, in the inliner's first pass (`providerEdits`), into the built-in
+  `<Provider context={Theme} value>`, and `Provider` is added to the file's import from the authoring module. `Provider` extends
+  `Entity`, is a container with `layoutContents` (layout sees through it), and keeps the components that read it; setting a
+  different `value` marks each of them dirty.
+- **`useContext(Theme)`** lowers to two states the component does not own (`transient`: hot reload and saves leave them out): a
+  reader, `readContext(Theme)`, a handle state, so `ownedHandles` tells it its owner when the component joins a world, and it
+  finds the nearest `Provider` of that context above and registers the component with it; and the value, whose `refresh`
+  (`this.$context1.value`) the generated `commitState` reads every render. Because the value is state, derived values and memos
+  that read it depend on it as on any state. `const { accent } = useContext(Theme)` reads members of the value.
+- Objects are never re-parented, so a reader keeps its provider; a provider that goes takes its subtree with it.
+
 ## Global state (`createGameState`)
 
 `useState` is one component's own state. The **game state** belongs to the game: a score, hit points, a mute switch,
@@ -1767,6 +1794,25 @@ sound, action or own-function call, an assignment, `++`) is a statement; any oth
 
 Not done: diagnostics inside a hook still point at the expanded text's mapping, not "the hook's line, called from the component's".
 
+
+## Component state in saves (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, A5. A save picked from the game state, so state a component kept itself was lost on save, one more reason
+the games kept everything in the store. `createSave({ …, tree: true })` keeps the tree too:
+
+- **The game's tree.** `gameTree.ts` holds the world and root the game runs: the player sets it when it mounts the root (and
+  again on a hot reload), and `@rge/testing` when it renders.
+- **Writing.** The entry is `{ version, data, tree }`, `tree` being `captureHotState(root)` (each component's `saveHotState`
+  by path) as JSON, without the values that are not plain data (said once, naming each path and field). `pick` and `apply` are
+  optional with `tree`.
+- **Loading.** `apply` runs first, in the handler that called `load`, then the tree is queued (`queueTreeRestore`); the next
+  `World.flush`, once the tree the applied state builds has settled, takes it and runs `restoreHotState`, as a hot reload does.
+- **Keys.** A keyed list sets `hotKey` on each item it makes, and a path names such an item by its key (`Pack:0/Enemy[b]`)
+  rather than by its place among siblings, so removing an earlier item does not move state between the others. Hot reload
+  gains the same.
+
+`version` and `migrate` apply to `data`; the tree is restored as it was saved, field by field where a value still fits
+(`hotFits`), as a hot reload restores across code changes.
 
 ## Testing one component: `@rge/testing` (2026-11-13)
 

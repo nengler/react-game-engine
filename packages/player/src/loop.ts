@@ -1,4 +1,4 @@
-import { Flex, Game, WIDGET_NONE, World, captureHotState, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
+import { Flex, Game, WIDGET_NONE, World, captureHotState, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, setGameTree, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -262,6 +262,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     try {
       world.mount(root);
       current = root;
+      setGameTree(world, root);
     } catch (error) {
       if (!showErrors) {
         close();
@@ -406,6 +407,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
         }
         world.mount(fresh);
         current = fresh;
+        setGameTree(world, fresh);
         restoreHotState(world, fresh, lastState);
       } catch (error) {
         fail(error);

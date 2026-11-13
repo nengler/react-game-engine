@@ -184,6 +184,35 @@ export function matchHandleStatement(statement: Statement): StatementMatch | nul
   return { kind: "ok", hooks: [analysis] };
 }
 
+/** Recognises `const theme = useContext(Theme)` and `const { accent } = useContext(Theme)`; null if the statement is not one. */
+export function matchContextStatement(statement: Statement): StatementMatch | null {
+  if (!isVariableStatement(statement)) return null;
+  const list = statement.declarationList;
+  if (list.declarations.length !== 1) return null;
+  const declaration = list.declarations[0]!;
+  const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
+  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useContext") return null;
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
+  if ((list.flags & NodeFlags.Const) === 0) return invalid("useContext must be bound with `const`: `const theme = useContext(Theme)`.");
+  if (init.arguments.length !== 1) return invalid("useContext takes one context, made with `createContext` in a `.ts` file: `useContext(Theme)`.");
+  const context = init.arguments[0]!;
+  if (isIdentifier(declaration.name)) {
+    return { kind: "ok", hooks: [{ kind: "useContext", name: declaration.name.text, entries: null, context, call: init, declaration }] };
+  }
+  if (isObjectBindingPattern(declaration.name)) {
+    const entries: { name: string; key: string }[] = [];
+    for (const element of declaration.name.elements) {
+      const key = element.propertyName === undefined ? (element.name && isIdentifier(element.name) ? element.name.text : null) : isIdentifier(element.propertyName) ? element.propertyName.text : null;
+      if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name) || key === null) {
+        return invalid("Each value picked from useContext is a plain name: `const { accent, text: ink } = useContext(Theme)`.");
+      }
+      entries.push({ name: element.name.text, key });
+    }
+    return { kind: "ok", hooks: [{ kind: "useContext", name: null, entries, context, call: init, declaration }] };
+  }
+  return invalid("useContext is bound to a name or `{ a, b }`: `const theme = useContext(Theme)`.");
+}
+
 /** Recognises `useUpdate(arrow)`, `useInput(arrow)`, `useMount(arrow)` and `useUnmount(arrow)`; null if the statement is not a call to one of them. */
 export function matchHandlerStatement(statement: Statement): StatementMatch | null {
   if (!isExpressionStatement(statement)) return null;

@@ -51,6 +51,8 @@ export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./compone
 export { actionAware, Controls, createControls, createInputState, KEY_NAMES, NO_INPUT, type InputState, type InputSnapshot, type KeyName } from "./input.ts";
 export { clamp, NO_SHAKE, shakeOn, springBack, type ShakeState, type Vector2 } from "./math.ts";
 export { keepIfEqual, sameData } from "./equal.ts";
+export { captureGameTree, getGameTree, setGameTree } from "./gameTree.ts";
+export { ContextReader, createContext, Provider, readContext, type Context, type ProviderProps } from "./context.ts";
 export { Body, createBody, boxesOverlap, type BodyHit, type BodyOptions, type BodySpace, type Box } from "./body.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { CALLBACK_PRIMITIVES, runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";

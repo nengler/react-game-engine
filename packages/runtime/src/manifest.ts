@@ -110,9 +110,9 @@ const FLEX_FIELDS = [
 
 export const runtimeManifest: RuntimeManifest = {
   authoringModule: "@rge/runtime/jsx",
-  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Slider", "Toggle", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route"],
+  intrinsics: ["Entity", "Game", "Sprite", "Collider", "Text", "Shape", "Camera", "AnimatedSprite", "Pointer", "Screen", "Hud", "Flex", "Slider", "Toggle", "Tilemap", "Particles", "ParticleLayer", "Fade", "Music", "Router", "Route", "Provider"],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route"],
+  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Router", "Route", "Provider"],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -136,6 +136,7 @@ export const runtimeManifest: RuntimeManifest = {
     Music: ["src", "playing", "volume", "loop", "fade", "level", "started"],
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
     Route: ["name", "keepAlive", "visible", "active"],
+    Provider: ["name", "context", "value", "addReader", "removeReader"],
     Flex: [...FLEX_FIELDS, "contains", "boxPoint", "focusPoint"],
     // A widget is a Flex with more: its members are Flex's fields, and what it adds (the methods Flex has are its prototype's, not its own).
     Slider: [...FLEX_FIELDS, "value", "min", "max", "step", "onChange", "fillColor", "thumbColor", "thumbWidth", "fraction", "thumbSize", "valueAt", "moveTo", "onPressAt", "onDrag", "onNavigate"],
@@ -163,6 +164,7 @@ export const runtimeManifest: RuntimeManifest = {
     Music: ["src"],
     Router: ["route"],
     Route: ["name"],
+    Provider: ["context", "value"],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
@@ -203,7 +205,7 @@ export const runtimeManifest: RuntimeManifest = {
     "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "markChanged", "markMoved", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
     "onInput", "onUpdate", "onMount", "onUnmount", "keepCleanup", "inert", "modal",
-    "attachToWorld", "detachFromWorld", "ownedHandles", "$memo",
+    "attachToWorld", "detachFromWorld", "ownedHandles", "hotKey", "$memo",
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
@@ -215,5 +217,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner", "data"] },
   },
-  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2, keepIfEqual: 2, createBody: 1 },
+  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2, keepIfEqual: 2, createBody: 1, readContext: 1 },
 };
