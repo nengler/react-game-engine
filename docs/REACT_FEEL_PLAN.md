@@ -657,6 +657,9 @@ so. Hooks still cannot be recursive.
 
 ### B7. A component's names stop clashing with its root built-in
 
+**Built 2026-11-13**, differently from the proposal below: only a name that clashes is renamed (`$name`), rather than every
+state becoming a private field, so tests and tools that read a component's state keep working. See DESIGN.md, "Roots".
+
 **Today.** The generated class extends its root built-in (DESIGN.md, "Roots and component forms"), so state, refs and props cannot
 reuse the root's member names (`RGE1103`): no `width` prop on a component whose root is a `<Collider>`, no `image` on a `<Sprite>`
 root, no state called `name` on an `<Entity>` root. There is no React equivalent, and the rule follows from code the author never
@@ -687,9 +690,9 @@ sees. B2's shorthand props would widen the list.
 
 **Done when**
 
-- [ ] A component rooted in a `<Collider>` can take a `width` prop, and one rooted in an `<Entity>` can have state called `name`
-- [ ] `RGE1103` is gone except for the runtime's own method names
-- [ ] Hot reload, parity and the bench pass unchanged
+- [x] A component rooted in a `<Collider>` can take a `width` prop, and one rooted in an `<Entity>` can have state called `name`
+- [x] `RGE1103` is gone for these names, the runtime's method names included (they are renamed too)
+- [x] Hot reload, parity and the bench pass unchanged
 
 ---
 

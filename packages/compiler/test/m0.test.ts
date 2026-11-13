@@ -91,7 +91,8 @@ function Lamp() {
     }
   });
 
-  it("reserves the manifest's member names for generated state", () => {
+  it("keeps generated state apart from the manifest's member names", () => {
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     const compiler = new Compiler();
     try {
       const result = compiler.compile("Bad.tsx", withAuthoringImports(`
@@ -99,7 +100,8 @@ function Bad() {
   const [render, setRender] = useState(0);
   return <Entity name="Bad" />;
 }`));
-      assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.InvalidUseState]);
+      assert.ok(result.ok);
+      assert.match(result.code, /\$render: number = 0;/);
     } finally {
       compiler.close();
     }
@@ -114,7 +116,7 @@ function R() {
   const [score, setScore] = useState(0);
   return <Entity name="R" />;
 }`, manifest));
-      assert.deepEqual(reserved.diagnostics.map((d) => d.code), [DiagnosticCode.InvalidUseState]);
+      assert.ok(reserved.ok && reserved.code.includes("$score: number = 0;"), "a reserved name from the manifest is kept apart, as `$score`");
       const calls = compiler.compile("W.tsx", withAuthoringImports(`
 function W() {
   const [n, setN] = useState(0);

@@ -194,8 +194,11 @@ export class HookLowering extends ExpressionLowering {
             this.report(DiagnosticCode.InvalidUseState, `'${taken}' is already declared in this component.`, hook.declaration);
             continue;
           }
-          if (!this.claimName(hook.valueName, hook.declaration)) continue;
-          if (hook.setterName !== null && !this.claimName(hook.setterName, hook.declaration)) continue;
+          // The fields and the setter take the author's names, or `$name` where the root built-in already has that member.
+          const field = this.claimField(hook.valueName, hook.declaration);
+          if (field === null) continue;
+          const setterMethod = hook.setterName === null ? null : this.claimField(hook.setterName, hook.declaration);
+          if (hook.setterName !== null && setterMethod === null) continue;
           const id = stateId(this.component.name, hook.valueName);
           if (!hook.initializer) {
             this.report(DiagnosticCode.InvalidUseState, "useState requires an initial value.", hook.call);
@@ -226,9 +229,9 @@ export class HookLowering extends ExpressionLowering {
           const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
           if (!type) continue;
           if (type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain")) this.handleStates.add(id);
-          state.push({ kind: "State", id, name: hook.valueName, type, initialValue });
+          state.push({ kind: "State", id, name: field, type, initialValue });
           this.stateTypes.set(id, type);
-          hooks.push({ kind: "UseState", state: id, setterName: hook.setterName, span: this.span(hook.declaration) });
+          hooks.push({ kind: "UseState", state: id, setterName: setterMethod, span: this.span(hook.declaration) });
           this.componentScope.declare(hook.valueName, { kind: "state", id });
           if (hook.setterName !== null) this.componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
           break;
@@ -408,9 +411,10 @@ export class HookLowering extends ExpressionLowering {
       return;
     }
     const type = this.refType(hook.typeArgument, initialValue, hook.call);
-    if (!type || !this.claimName(hook.name, hook.declaration, code)) return;
+    const field = type ? this.claimField(hook.name, hook.declaration, code) : null;
+    if (!type || field === null) return;
     const id = refId(this.component.name, hook.name);
-    this.refs.push({ kind: "Ref", id, name: hook.name, type, initialValue, span: this.span(hook.declaration) });
+    this.refs.push({ kind: "Ref", id, name: field, type, initialValue, span: this.span(hook.declaration) });
     this.componentScope.declare(hook.name, { kind: "ref", id, name: hook.name });
   }
 
@@ -427,9 +431,10 @@ export class HookLowering extends ExpressionLowering {
       return;
     }
     if (!this.checkHandleName(hook.name, code, hook.declaration.name)) return;
-    if (!this.claimName(hook.name, hook.declaration, code)) return;
+    const field = this.claimField(hook.name, hook.declaration, code);
+    if (field === null) return;
     const id = soundId(this.component.name, hook.name);
-    this.sounds.push({ kind: "Sound", id, name: hook.name, path: argument.text, span: this.span(hook.declaration) });
+    this.sounds.push({ kind: "Sound", id, name: field, path: argument.text, span: this.span(hook.declaration) });
     this.componentScope.declare(hook.name, { kind: "sound", id, name: hook.name });
   }
 

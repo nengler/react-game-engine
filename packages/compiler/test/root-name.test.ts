@@ -4,8 +4,8 @@
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Collider, Entity, Game, World } from "@rge/runtime";
-import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
+import { Collider, Entity, Game, Sprite, Text, World } from "@rge/runtime";
+import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -55,5 +55,56 @@ describe("a root's name", () => {
   it("leaves nested entities unnamed", async () => {
     const level = await mount(`export function Level() { return <Entity><Entity /></Entity>; }`, "Level");
     assert.equal((level.children[0] as Entity).name, "");
+  });
+});
+
+describe("names that the root built-in also has (REACT_FEEL_PLAN.md, B7)", () => {
+  it("lets state be called `name` on an <Entity> root, apart from the entity's own name", async () => {
+    const compiled = compile(`export function Badge() {
+  const [name, setName] = useState("Ada");
+  useUpdate(() => setName("Bo"));
+  return <Entity><Text>{name}</Text></Entity>;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Badge } = await load<{ Badge: new () => Entity }>(compiled);
+    const world = new World();
+    const badge = new Badge();
+    world.mount(badge);
+    world.flush();
+    assert.equal(badge.name, "Badge", "the entity keeps the component's name");
+    assert.equal((badge.children[0] as Text).text, "Ada");
+    world.tick(1 / 60);
+    world.flush();
+    assert.equal((badge.children[0] as Text).text, "Bo");
+    assert.equal(badge.name, "Badge");
+  });
+
+  it("lets a ref be called `image` on a <Sprite> root, and state `parent` anywhere", async () => {
+    const compiled = compile(`export function Coin() {
+  const image = useRef(0);
+  const [parent, setParent] = useState(1);
+  useUpdate(() => {
+    image.current += 1;
+    setParent(image.current + 1);
+  });
+  return <Sprite image={parent > 1 ? "b.png" : "a.png"} />;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Coin } = await load<{ Coin: new () => Sprite }>(compiled);
+    const world = new World();
+    const root = new Entity({});
+    world.mount(root);
+    const coin = new Coin();
+    root.addChild(coin);
+    world.flush();
+    assert.equal(coin.image, "a.png");
+    assert.equal(coin.parent, root, "the runtime's parent is untouched");
+    world.tick(1 / 60);
+    world.flush();
+    assert.equal(coin.image, "b.png");
+  });
+
+  it("still refuses a name declared twice in the component", () => {
+    assert.ok(compileErrors(`export function A() { const [n, setN] = useState(0); const n = 2; return <Entity />; }`).length > 0);
   });
 });

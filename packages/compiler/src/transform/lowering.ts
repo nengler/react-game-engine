@@ -368,6 +368,23 @@ export class LoweringBase {
     return true;
   }
 
+  /**
+   * The field a state, ref or sound named `name` is kept in: `name` itself, or, when that is a member the runtime's object
+   * already has (`name` of an `<Entity>` root, `image` of a `<Sprite>`, `parent`), `$name`, so the author's name never clashes
+   * with the root built-in. `$` names are the compiler's own. Null (after reporting) when this component already declared it.
+   */
+  protected claimField(name: string, at: Node, code: CompilerDiagnostic["code"] = DiagnosticCode.InvalidUseState): string | null {
+    if (!this.usedNames.has(name)) return this.claimName(name, at, code) ? name : null;
+    if (!this.isRuntimeMember(name)) {
+      this.report(code, `'${name}' is already declared in this component.`, at);
+      return null;
+    }
+    let field = `$${name}`;
+    for (let n = 2; this.usedNames.has(field); n++) field = `$${name}${n}`;
+    this.usedNames.add(field);
+    return field;
+  }
+
   /** A member of the runtime's object (`name` of an `<Entity>` root, `render`), as opposed to a name this component declared. */
   protected isRuntimeMember(name: string): boolean {
     return this.manifest.reservedMembers.includes(name) || (this.manifest.intrinsicMembers[rootTag(this.component.jsx, this.manifest.hostIntrinsic)] ?? []).includes(name);

@@ -96,10 +96,9 @@ describe("Screen: diagnostics", () => {
     assert.deepEqual(typeCheck(compile(GAME, "Game.tsx")), []);
   });
 
-  it("keeps its own names reserved for a component rooted at one", () => {
+  it("lets state take its own names, kept in `$name` fields", () => {
     for (const name of ["fit", "pixelPerfect", "border"]) {
-      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Screen width={1} height={1} />; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Screen width={1} height={1} />; }`).code.includes(`$${name}: `), name);
     }
   });
 });
@@ -149,10 +148,9 @@ function Level() {
 });
 
 describe("the layout offset", () => {
-  it("cannot be taken as a state name, since layout writes it into every object", () => {
+  it("can be a state name, kept apart from the field layout writes into every object", () => {
     for (const name of ["layoutX", "layoutY"]) {
-      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Entity name="C" />; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Entity name="C" />; }`).code.includes(`$${name}: `), name);
     }
   });
 });

@@ -1918,10 +1918,13 @@ like any component. Details:
   `width`/`height`; the manifest's `intrinsicRequired`). `super()` runs before
   state exists, so when such a root prop is dynamic it gets `undefined as never`
   there and its real value in the first `render()`, which the constructor runs.
-* The class gains the root's own fields, so a state, ref or prop may not take
-  those names (`image` for a Sprite root, `width`/`height`/`tag`/`layer`/`hits`/`onCollisionEnter`/`onCollisionExit`/`owner`/`hitsLayer`
-  for a Collider root, `width`/`height`/`onPress`/`contains` for a Pointer root, `name` for an Entity root; the other
-  built-ins' sections list theirs): the manifest's `intrinsicMembers`, `RGE1103`.
+* The class gains the root's own fields (the manifest's `intrinsicMembers`) and every object's (`reservedMembers`). A
+  state, ref or sound whose name is one of them is kept in a field named `$name` instead, and its setter in `$setName` when
+  that is one (`claimField`, 2026-11-13, `REACT_FEEL_PLAN.md` B7): the author writes `name`, the generated code reads
+  `this.$name`, and the entity's own `name` is untouched. Props never clashed: they live in `this.props`. Before, such a name
+  was `RGE1103`, a rule that followed from code the author never sees. `$` names are the compiler's own. Private fields
+  (`#name`) were the plan's first idea; they would have hidden state from the tests and tools that read a component's state
+  from outside, so only the names that clash are renamed.
 * Only containers (the manifest's `containerIntrinsics`, today `Entity` and `Camera`) may
   have JSX children; a child under a leaf such as a `Sprite`, `Collider` or `Pointer`, at the root or
   anywhere, is `RGE1202`. A fragment nested as a child is an implicit `<Entity>`. A component, a condition or `null` as the

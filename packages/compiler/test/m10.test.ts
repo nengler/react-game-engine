@@ -248,7 +248,7 @@ describe("M10: diagnostics", () => {
     assert.ok(!runtimeManifest.containerIntrinsics.includes("Text"));
   });
 
-  it("reserves its fields, since a component rooted at a Text extends it", () => {
-    assert.ok(compileErrors(`function C() { const [text, setText] = useState("a"); return <Text>x</Text>; }`).some((d) => d.code === DiagnosticCode.InvalidUseState));
+  it("keeps state apart from its fields, since a component rooted at a Text extends it", () => {
+    assert.ok(compile(`function C() { const [text, setText] = useState("a"); return <Text>x</Text>; }`).code.includes("$text: string"));
   });
 });

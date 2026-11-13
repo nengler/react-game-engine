@@ -239,14 +239,13 @@ describe("Flex onPress and Text align", () => {
     assert.doesNotThrow(() => compile(`function C() { return <Text align="right" width={30}>x</Text>; }`));
   });
 
-  it("reserves the new names", () => {
+  it("lets state take the new names, kept in `$name` fields", () => {
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     for (const name of ["onPress", "contains"]) {
-      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), `Flex ${name}`);
+      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).code.includes(`$${name}: `), `Flex ${name}`);
     }
     for (const name of ["align", "width"]) {
-      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Text>x</Text>; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), `Text ${name}`);
+      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Text>x</Text>; }`).code.includes(`$${name}: `), `Text ${name}`);
     }
   });
 });
@@ -296,10 +295,9 @@ describe("Flex: diagnostics", () => {
     assert.deepEqual(typeCheck(compile(SOURCE, "FlexGame.tsx")), []);
   });
 
-  it("reserves its names for a component rooted at one", () => {
+  it("lets state take its names, kept in `$name` fields", () => {
     for (const name of ["direction", "gap", "padding", "width", "minWidth", "background", "box"]) {
-      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).code.includes(`$${name}: `), name);
     }
   });
 
@@ -406,10 +404,9 @@ function Tile() {
     assert.ok(check(`<Flex hoverWidth={4} />`).length > 0, "and a made-up prop is not accepted");
   });
 
-  it("reserves the new names for a component rooted at a Flex", () => {
+  it("lets state take the new names too, kept in `$name` fields", () => {
     for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "transition", "transitionState", "overflow", "scrollX", "scrollY", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "opacity", "drawnAlpha", "wrap", "rowGap", "columnGap"]) {
-      const codes = compileErrors(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).map((d) => d.code);
-      assert.ok(codes.includes(DiagnosticCode.InvalidUseState), name);
+      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).code.includes(`$${name}: `), name);
     }
   });
 });
