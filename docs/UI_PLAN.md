@@ -65,6 +65,8 @@ It keeps the CSS vocabulary already decided (`direction`, `alignItems`, `justify
 | `alignItems` | `"start"`, `"center"`, `"end"`, `"stretch"` | `"stretch"` | Where children sit on the cross axis. `stretch` makes a child `Flex` whose cross size is `"fit"` take the whole cross size, as in CSS; anything else keeps its size and sits at the start |
 | `justifyContent` | `"start"`, `"center"`, `"end"`, `"space-between"`, `"space-around"`, `"space-evenly"` | `"start"` | How children and free space share the main axis |
 | `gap` | pixels | `0` | Space between neighbouring children |
+| `wrap` | boolean | `false` | A row breaks into lines when the next child will not fit (see "Wrapping rows"). Rows only |
+| `rowGap`, `columnGap` | pixels | `gap` | Between the lines of a wrapping row, and between the children of a line; each overrides `gap` |
 | `padding` | pixels | `0` | Space inside the edge, on all four sides |
 | `paddingX`, `paddingY` | pixels | `padding` | Left and right, or top and bottom; override `padding` |
 | `paddingTop`, `paddingRight`, `paddingBottom`, `paddingLeft` | pixels | the axis value | One side; overrides the two above |
@@ -405,6 +407,17 @@ Also decided on 2026-11-09, each as recommended:
 - **Not here:** tiling the edges and middle instead of stretching them, a scale for the corners, and a tint.
 - The draw pass keeps the nine parts' numbers in one scratch array, so a skin allocates nothing per frame.
 
+## Wrapping rows
+
+`wrap` on a row `<Flex>` (PR 7 of the UI follow-ups) is the inventory grid: a box with a width whose children keep their size and fall into lines. It is a CSS `flex-wrap: wrap`, less the parts that need a second sizing pass.
+
+- **Lines are found from the widths, once they are settled.** The passes already run widths before heights (a wrapped text needs it), so by the time heights are worked out every child's width and the box's own are final. `#breakLines` walks the children: one starts a new line when it and the gap before it would not fit in what is left of the inner width, except as the first of its line, however wide. It depends only on those widths, so any pass may ask again (it is called from `#fit` for Y, `#distribute` for Y and `#position`, and `#extentOf` can call `#fit` early); the result is in `FlexBox.lineEnd` and `lineCount`, with each line's height in `lineCross`.
+- **Sizes:** along the row a wrapping box's `preferred` width is one line, as without wrap, and its `minimum` is its widest child, so a parent short of room can narrow it and it wraps more. Down the column its height is the lines one under another, plus `rowGap` between. Percentage children are a share of the inner width, not of what a line has left.
+- **Children do not grow or shrink along a wrapping row.** Sharing out a line's free space (CSS's per-line `flex-grow`) is not here: a `"grow"` child is its content. Across, a child that stretches or grows fills its line's height and no more.
+- **Placement** is `#positionWrapped`: each line on its own gets `justifyContent` over its own free space, so a short last line is not spread like a full one, and `alignItems` inside the line's height. The box's content extent is kept, so a wrapping box in a scroll box scrolls by its real height. The ordinary `#position` is untouched, and layout still allocates nothing per box (the allocation test covers it).
+- **Gaps:** `columnGap` is between the children of a row's line, `rowGap` between its lines (for a column, `rowGap` is between its children), each falling back to `gap`.
+- **Not here:** a wrapping column (it is warned of and laid out as one line: it would need the height before the widths), `align-content` (lines always start at the top), per-line growing, and a `Grid` with equal columns (a wrapping row of fixed-size children is one).
+
 ## Opacity
 
 `opacity` on a `<Flex>` (PR 6 of the UI follow-ups) needs nothing of the native side. It is a multiplier the draw list applies to every colour it is given: `DrawList.alpha`, set by `pushAlpha` and `popAlpha` the way a clip is (the Flex pushes it before its own drawing, so its background and border fade too, and the walks pop it once the subtree has been left; `Flex.drawnAlpha` says it was pushed). Every emitter (`rect`, `ellipse`, `box`, `text`, `spriteRegionAt`) multiplies the alpha of the colour or tint it writes, and at an alpha of 0 writes nothing, so a faded-out menu costs no records. A colour's red, green and blue are untouched.
@@ -439,7 +452,6 @@ Also decided on 2026-11-09, each as recommended:
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
 | Text wrapping inside a box | One-line text covers a HUD; the steps already leave its slot (step 2), and `rge_measure_text` already measures words | A dialogue box, or any text longer than its box |
-| Wrapping rows (`flex-wrap`) | A HUD row rarely wraps | An inventory grid; or a separate `Grid` built-in |
 | Aspect-ratio boxes | Nothing in a HUD needs one | A portrait or a minimap frame that must keep its shape while growing |
 | Layout transitions (animating size and position changes) | Clay has them; a game can animate `transform` today | A menu that should slide or resize smoothly |
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |
