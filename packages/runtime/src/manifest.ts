@@ -109,7 +109,7 @@ export const runtimeManifest: RuntimeManifest = {
     Entity: ["name"],
     Game: ["name", "id", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "font", "controls"],
     Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
-    Collider: ["width", "height", "tag", "layer", "hits", "solid", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
+    Collider: ["width", "height", "tag", "layer", "hits", "solid", "data", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "originX", "originY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "disabled", "onFocus", "onBlur", "contains", "focusPoint"],
     Text: ["text", "size", "sized", "color", "width", "align", "font", "shadow", "shadowX", "shadowY", "outline", "outlineWidth", "maxWidth", "lineGap", "reveal"],
     Shape: ["kind", "width", "height", "color"],
@@ -198,7 +198,7 @@ export const runtimeManifest: RuntimeManifest = {
       methods: { pressed: 1, down: 1, released: 1, lastPressed: 0 },
       properties: ["pointerX", "pointerY"],
     },
-    Contact: { methods: {}, properties: ["tag", "owner"] },
+    Contact: { methods: {}, properties: ["tag", "owner", "data"] },
   },
   functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2, keepIfEqual: 2, createBody: 1 },
 };

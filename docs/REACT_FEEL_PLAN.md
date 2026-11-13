@@ -211,6 +211,9 @@ and order is fixed.
 
 ### A3. Contacts carry data
 
+**Built 2026-11-13**, typed through a global `ColliderData` interface rather than `declare module "@rge/runtime"` (DESIGN.md, "What
+`other` exposes"). Not done: the games still pass values through the game state (the A7 rewrite moves Hearth to `data`).
+
 **Today.** `Contact` has `tag` and `owner`. A player touching a coin knows it is `"coin"` but not that it is worth 5; an enemy
 touching the player cannot say how much it hurts. The games put this in the game state, keyed by id, and looked it up.
 
@@ -230,7 +233,7 @@ onCollisionEnter={(other) => {
 
   ```ts
   // colliders.ts
-  declare module "@rge/runtime" {
+  declare global {
     interface ColliderData { coin: { value: number }; enemy: { damage: number }; spikes: undefined }
   }
   ```
@@ -240,7 +243,7 @@ onCollisionEnter={(other) => {
 
 **Done when**
 
-- [ ] `<Collider data>` reaches `other.data` in both callbacks and in `useBody`, typed by tag
+- [x] `<Collider data>` reaches `other.data` in both callbacks, typed by tag (not yet through `useBody`)
 - [ ] A coin's value and an enemy's damage travel by collision in one game, not through the game state
 
 ### A4. Testing one component without a window
