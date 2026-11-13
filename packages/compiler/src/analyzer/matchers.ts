@@ -126,8 +126,17 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   if (list.declarations.length !== 1) return null;
   const declaration = list.declarations[0]!;
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
-  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || !storeNames.has(init.expression.text)) return null;
-  const storeName = init.expression.text;
+  if (!init || !isCallExpression(init)) return null;
+  // `useGame(…)`, or one of the spellings the destructuring split writes: `useGame.$actions(…)` (from `useGame.actions()`) and
+  // `useGame.$whole(…)` (a name picked from `(s) => s`).
+  const callee = init.expression;
+  const marked = isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && /^\$(actions|whole\d+)$/.test(callee.name.text);
+  const storeIdentifier = marked ? (callee as { expression: Node }).expression : callee;
+  if (!isIdentifier(storeIdentifier) || !storeNames.has(storeIdentifier.text)) return null;
+  const storeName = storeIdentifier.text;
+  const mark = marked ? (callee as { name: { text: string } }).name.text : "";
+  const via: UseStoreCallAnalysis["via"] = !marked ? "select" : mark === "$actions" ? "actions" : "whole";
+  const group = via === "whole" ? Number(mark.slice("$whole".length)) : null;
   const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
   const example = `const hp = ${storeName}((s) => s.player.hp);`;
   if ((list.flags & NodeFlags.Const) === 0) return invalid(`${storeName}(…) must be bound with \`const\`: \`${example}\``);
@@ -142,8 +151,8 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
     let path = plainPath(expression, parameter);
     // The store tells readers of an array about its items, not its `length`: `s.enemies.length` is worked out from `s.enemies`.
     if (path !== null && path.length > 1 && path[path.length - 1] === "length") path = null;
-    if (path !== null && path.length === 0) return `'${valueName}' selects the whole state: select a path (\`(${parameter}) => ${parameter}.player\`) or destructure names from it (\`const { coins, collect } = ${storeName}((${parameter}) => ${parameter})\`).`;
-    return { kind: "useStore", storeName, valueName, path: path ?? [], body: path === null ? expression : null, parameter, selector: at, call: init, declaration };
+    if (path !== null && path.length === 0) return `'${valueName}' selects the whole state: select a path (\`(${parameter}) => ${parameter}.player\`), destructure values from one, or take actions with \`const { collect } = ${storeName}.actions()\`.`;
+    return { kind: "useStore", storeName, valueName, path: path ?? [], body: path === null ? expression : null, parameter, selector: at, call: init, declaration, via, group };
   };
 
   // Destructuring (`const { gold, lives } = useGame((s) => s.battle)`) was split into one selector per name before this (hooks/inline.ts).

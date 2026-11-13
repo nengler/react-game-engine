@@ -7,7 +7,7 @@ export default function Main() {
   const [x, setX] = useState(160);
   const [y, setY] = useState(90);
   const steps = useGame((s) => s.steps);
-  const step = useGame((s) => s.step);
+  const { step } = useGame.actions();
 
   // A press is something that happens once: it goes in useInput.
   useInput((input) => {

@@ -216,6 +216,9 @@ class HookFiles {
  *     const { originX, room } = useGame((s) => s.run);              → const originX = useGame((s) => s.run.originX); …
  *     const { a, b: c } = useGame((s) => ({ a: s.x, b: s.y.z }));   → const a = useGame((s) => s.x); const c = useGame((s) => s.y.z);
  *     const [a, b] = useGame((s) => [s.x, s.y]);                    → const a = useGame((s) => s.x); const b = …
+ *     const { collect } = useGame.actions();                        → const collect = useGame.$actions((s) => s.collect);
+ *
+ * `$actions` and `$wholeN` (names picked from `(s) => s`) are the compiler's own spellings, read by `matchStoreStatement`.
  */
 function storeSelectionEdits(sf: SourceFile, fileName: string, text: string, stores: ReadonlySet<string>, diagnostics: CompilerDiagnostic[]): Edit[] {
   const edits: Edit[] = [];
@@ -226,6 +229,34 @@ function storeSelectionEdits(sf: SourceFile, fileName: string, text: string, sto
         if (!isVariableStatement(stmt) || stmt.declarationList.declarations.length !== 1) continue;
         const d = stmt.declarationList.declarations[0]!;
         const init = d.initializer;
+        const fail = (message: string): void => {
+          diagnostics.push(error(DiagnosticCode.InvalidGameState, message, spanOf(stmt, sf, fileName)));
+        };
+        // `const { collect, hurt } = useGame.actions()`: each name is an action, selected on its own (`$actions` checks it is one).
+        if (init && isCallExpression(init) && isPropertyAccessExpression(init.expression) && init.expression.name.text === "actions") {
+          const target = init.expression.expression;
+          if (!isIdentifier(target) || !stores.has(target.text) || !HOOK.test(target.text)) continue;
+          const store = target.text;
+          if (init.arguments.length !== 0) {
+            fail(`${store}.actions() takes no arguments: \`const { collect, hurt } = ${store}.actions()\`.`);
+            continue;
+          }
+          if (!isObjectBindingPattern(d.name)) {
+            fail(`Destructure the actions you call from ${store}.actions(): \`const { collect, hurt } = ${store}.actions()\`.`);
+            continue;
+          }
+          const lines: string[] = [];
+          for (const element of d.name.elements) {
+            if (element.name === undefined || !isIdentifier(element.name) || element.dotDotDotToken) {
+              fail(`Each action picked from ${store}.actions() is a plain name: \`const { a, b: c } = ${store}.actions()\`.`);
+              continue;
+            }
+            const key = element.propertyName !== undefined ? (element.propertyName as unknown as { text: string }).text : element.name.text;
+            lines.push(`const ${element.name.text} = ${store}.$actions((s) => s.${key});`);
+          }
+          edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: lines.join("\n  ") });
+          continue;
+        }
         if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || !stores.has(init.expression.text) || !HOOK.test(init.expression.text)) continue;
         if (!isObjectBindingPattern(d.name) && !isArrayBindingPattern(d.name)) continue;
         const store = init.expression.text;
@@ -238,9 +269,9 @@ function storeSelectionEdits(sf: SourceFile, fileName: string, text: string, sto
         const p = param.name.text;
         const body = unwrap(arrow.body);
         const lines: string[] = [];
-        const fail = (message: string): void => {
-          diagnostics.push(error(DiagnosticCode.InvalidGameState, message, spanOf(stmt, sf, fileName)));
-        };
+        // `const { advance } = useGame((s) => s)`: names from the whole state, which `$wholeN` marks (N tells statements apart) so the
+        // actions picked this way can be pointed at `useGame.actions()`, in one warning per statement.
+        const whole = isIdentifier(body) && body.text === p;
         if (isObjectBindingPattern(d.name)) {
           const picked = isObjectLiteralExpression(body) ? new Map<string, string>() : null;
           if (picked !== null && isObjectLiteralExpression(body)) {
@@ -263,7 +294,7 @@ function storeSelectionEdits(sf: SourceFile, fileName: string, text: string, sto
               fail(`The selector does not pick '${key}'.`);
               continue;
             }
-            lines.push(`const ${element.name.text} = ${store}((${p}) => ${path});`);
+            lines.push(`const ${element.name.text} = ${store}${whole ? `.$whole${edits.length}` : ""}((${p}) => ${path});`);
           }
         } else {
           const items = body.kind === SyntaxKind.ArrayLiteralExpression ? (body as unknown as { elements: readonly Node[] }).elements : null;

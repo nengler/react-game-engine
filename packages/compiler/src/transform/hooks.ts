@@ -2,7 +2,7 @@
 import { SyntaxKind, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
 import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis } from "../analyzer/analyzer.ts";
-import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
+import { DiagnosticCode, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
@@ -11,6 +11,8 @@ import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeT
 import { ExpressionLowering } from "./expressions.ts";
 
 export class HookLowering extends ExpressionLowering {
+  /** Actions taken from the whole state, by the statement they were written in: one warning each (see `lowerStoreHook`). */
+  private readonly wholeStateActions = new Map<string, { index: number; names: string[] }>();
   /**
    * Resolve the props parameter against the props type declared in this file,
    * declare each destructured prop in scope, and describe every member of the
@@ -249,7 +251,35 @@ export class HookLowering extends ExpressionLowering {
       return;
     }
     const first = hook.path[0] as string;
-    if (hook.path.length === 1 && definition.actions.includes(first)) {
+    const isAction = hook.path.length === 1 && definition.actions.includes(first);
+    if (hook.via === "actions" && !isAction) {
+      const near = nearest(first, definition.actions);
+      const known = Object.hasOwn(definition.tree.children, first);
+      this.report(
+        DiagnosticCode.InvalidGameState,
+        known
+          ? `'${first}' is a value of the game state, not an action: read it with \`const ${hook.valueName} = ${hook.storeName}((s) => s.${first})\`.`
+          : `'${first}' is not an action of the game state${near ? ` (did you mean "${near}"?)` : ""}. Actions: ${definition.actions.length > 0 ? definition.actions.join(", ") : "none"}.`,
+        hook.declaration,
+      );
+      return;
+    }
+    if (hook.via === "whole" && isAction) {
+      // One warning for the statement, naming every action it took (each name reaches here as its own selector).
+      const span = this.span(hook.declaration);
+      const statement = `${hook.storeName}:${hook.group}`;
+      const earlier = this.wholeStateActions.get(statement);
+      const names = [...(earlier?.names ?? []), hook.valueName];
+      const diagnostic = warning(
+        DiagnosticCode.InvalidGameState,
+        `Take actions with \`const { ${names.join(", ")} } = ${hook.storeName}.actions()\` rather than from the whole state (\`${hook.storeName}((s) => s)\`).`,
+        span,
+      );
+      if (earlier) this.diagnostics[earlier.index] = diagnostic;
+      else this.diagnostics.push(diagnostic);
+      this.wholeStateActions.set(statement, { index: earlier?.index ?? this.diagnostics.length - 1, names });
+    }
+    if (isAction) {
       if (!this.claimName(hook.valueName, hook.declaration)) return;
       this.componentScope.declare(hook.valueName, { kind: "action", name: hook.valueName, action: first });
       return;
