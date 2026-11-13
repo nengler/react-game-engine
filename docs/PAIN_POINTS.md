@@ -18,7 +18,8 @@ TSX invites people to write React, and then they hit `RGE` codes.
 - **Three languages in one file.** The component body allows expressions only: no `let`, no loops. Handlers allow `let`, every loop,
   `switch` and `try` (*since 2026-11-13*; before, `for…of` only). Plain `.ts` files allow anything. A newcomer has to know which zone they are in.
 - **Method allowlists.** `push`, `sort` and "other methods of values" are rejected; the fix is "put it in a plain function". Defensible,
-  but not visible from the syntax.
+  but not visible from the syntax. *Since 2026-11-13:* in a handler, any method of a value the handler made itself, `new`, and the
+  standard library work; only state and props stay immutable.
 - **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.
 - **Custom hooks are inlined text, not functions.** They cannot return refs, destructured parameters do not work, nesting stops at six,
   and a literal argument is pasted into the hook. They behave like macros; the guide says so only in passing.

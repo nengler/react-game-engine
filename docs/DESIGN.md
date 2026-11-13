@@ -352,8 +352,28 @@ JavaScript. So a handler takes `while`, `do…while`, C-style `for` (with severa
 kind of its own (`While`, `For`, `Try`, `Throw`), lowered like the rest and written out as it was written. A `for` loop's `let`s
 are scoped to the loop, as in JavaScript; its head may not call a setter. Labelled jumps stay out.
 
-This is the first step of A1. What an expression may be inside a handler (`new`, `typeof`, any method of a local value) is
-the next.
+### Any expression in handlers (2026-11-13)
+
+The second step of A1. A handler's expressions were an allowlist (a few `Math` functions, the array, string and number methods
+that change nothing, handle methods), so a local list could not be pushed to, a `Map` could not be made, and `console.log` was an
+error. Now, in a handler:
+
+- **A value the handler made itself may be changed in place.** A `const` or `let` local whose value is fresh (an array or object
+  literal, `new`, a template literal, or what a call returns, except `find`, `findLast` and `at`, which hand back an item of their
+  array) is *owned* (`owned` on its scope binding). Any method of it, or of a member or element of it, is called as written
+  (`ValueMethod`), and assignments and `++` into it are `Assign` with a `Path` target. A `let` assigned a value that is not fresh
+  (`best = enemy`) stops being owned from that statement on. A local that reads state or a prop (`const list = enemies`) was
+  never owned, so state is still changed only by its setter: the mutating array methods on it keep their message.
+- **`new`** (`New` in the IR, with its type arguments as written) of `Map`, `Set`, `WeakMap`, `WeakSet`, `Array`, the `Error` types,
+  or a class imported from a `.ts` file. Not in a component body (it would run on every render) and not `Date` (the clock).
+- **The standard library** as written: `Object`, `JSON`, `Number`, `Array`, `String`, `Math` and `console` functions, and
+  `parseInt`, `parseFloat`, `isNaN`, `isFinite`. The constructors and namespaces can be named as values (`e instanceof Error`).
+  `Math.random()` compiles with a warning: replays, tests and the parity between hosts depend on a run repeating.
+- **`typeof`, `instanceof` and `in`**, anywhere.
+- An arrow handed to one of these calls is a function that may return a value (`returns: "any"`): `list.sort((a, b) => a.hp - b.hp)`,
+  `Array.from({ length: 2 }, () => [0, 0])`. With an expression body it is written as an arrow; with a block, as a callback.
+
+What stays out: `this`, `await`, `var`, labelled jumps, and calls of unknown globals.
 
 ## Mount and unmount
 

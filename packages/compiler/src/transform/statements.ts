@@ -23,6 +23,8 @@ import {
   isPostfixUnaryExpression,
   isPrefixUnaryExpression,
   isPropertyAccessExpression,
+  isElementAccessExpression,
+  isNonNullExpression,
   isReturnStatement,
   isVariableDeclarationList,
   isVariableStatement,
@@ -83,9 +85,10 @@ interface FunctionOptions {
   readonly paramTypes: readonly TypeIR[] | "contextual";
   /**
    * `void`: handlers (`return;` only). `value`: updaters (`return expr;` required). `cleanup`: `useMount`, which may return
-   * a cleanup (`return () => …;`, `return settings.subscribe(…);`, or an expression body that calls a function).
+   * a cleanup (`return () => …;`, `return settings.subscribe(…);`, or an expression body that calls a function). `any`: a function
+   * a handler hands to a method or the standard library (`list.sort((a, b) => …)`), which may return a value or nothing.
    */
-  readonly returns: "void" | "value" | "cleanup";
+  readonly returns: "void" | "value" | "cleanup" | "any";
   /** What to call the function in diagnostics. */
   readonly what: string;
 }
@@ -115,7 +118,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
     if (isBlock(fn.body)) {
       // The body's top-level block shares the parameters' scope, as in JS: `(n) => { const n = 1; }` is a redeclaration.
       body = lowerStatements(ctx, fn.body.statements, options, { newScope: false, jumps: NO_JUMPS });
-    } else if (options.returns === "value") {
+    } else if (options.returns === "value" || options.returns === "any") {
       const value = ctx.lowerExpression(fn.body);
       body = value && [{ kind: "Return", value }];
     } else {
@@ -125,6 +128,12 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
     }
     return body && { kind: "Function", params, body };
   });
+}
+
+/** A function a handler hands to a method of its own value or to the standard library: it may return a value, or nothing. */
+export function lowerFunctionValue(ctx: LoweringContext, fn: ArrowFunction): ExprIR | null {
+  const lowered = lowerFunction(ctx, fn, { paramTypes: "contextual", returns: "any", what: "A function" });
+  return lowered && { kind: "Callback", fn: lowered };
 }
 
 /**
@@ -250,7 +259,7 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
   }
 
   if (isReturnStatement(statement)) {
-    if (options.returns === "cleanup") {
+    if (options.returns === "cleanup" || options.returns === "any") {
       if (!statement.expression) return { kind: "Return", value: null };
       const returned = unwrapParens(statement.expression);
       const value = isArrowFunction(returned) ? lowerCallbackValue(ctx, returned, "this place") : ctx.lowerExpression(statement.expression);
@@ -297,7 +306,7 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const name = decl.name.text;
     if (!value || !checkFreshName(ctx, name, decl.name)) return null;
     const id = localId(ctx.componentName, name, ctx.nextSerial());
-    ctx.scope.declare(name, { kind: "local", id, name, mutable });
+    ctx.scope.declare(name, { kind: "local", id, name, mutable, owned: isFresh(value) });
     const type = decl.type ? ctx.typeFromNode(decl.type) : undefined;
     return { kind: "LocalConst", id, name, value, ...(mutable ? { mutable: true as const } : {}), ...(type ? { type } : {}) };
   }
@@ -309,6 +318,16 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
   );
   return null;
 }
+
+/** Whether a value is new, made where it is written (a literal, `new`, a call's result), rather than a read of something that exists. */
+function isFresh(value: ExprIR): boolean {
+  // An array method that hands back one of the array's own items (`enemies.find(…)`) is a read, not a new value.
+  if (value.kind === "Call") return !(value.callee.kind === "ArrayMethod" && ITEM_METHODS.has(value.callee.name));
+  return value.kind === "ArrayLiteral" || value.kind === "ObjectLiteral" || value.kind === "New" || value.kind === "TemplateLiteral";
+}
+
+/** Array methods whose result is one of the array's items. */
+const ITEM_METHODS: ReadonlySet<string> = new Set(["find", "findLast", "at"]);
 
 /** The parts of `a, b, c` (a comma list in a `for` loop's head), in order. */
 function commaParts(expression: Expression): Expression[] {
@@ -354,7 +373,7 @@ function lowerFor(ctx: LoweringContext, statement: Statement & { kind: SyntaxKin
         const name = decl.name.text;
         if (!value || !checkFreshName(ctx, name, decl.name)) return null;
         const id = localId(ctx.componentName, name, ctx.nextSerial());
-        ctx.scope.declare(name, { kind: "local", id, name, mutable: true });
+        ctx.scope.declare(name, { kind: "local", id, name, mutable: true, owned: isFresh(value) });
         const type = decl.type ? ctx.typeFromNode(decl.type) : undefined;
         init.push({ kind: "LocalConst", id, name, value, mutable: true, ...(type ? { type } : {}) });
       }
@@ -516,6 +535,11 @@ function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): St
   }
   const target = ctx.lowerAssignTarget(unwrapParens(expression.left));
   const value = ctx.lowerExpression(expression.right);
+  // `best = enemy`: from here on `best` may be state's own object, so it is no longer the handler's to change in place.
+  if (target?.kind === "Local" && value && !isFresh(value)) {
+    const binding = ctx.scope.get(target.name);
+    if (binding?.kind === "local") binding.owned = false;
+  }
   return target && value && { kind: "Assign", target, operator, value };
 }
 
@@ -528,10 +552,15 @@ function lowerIncrement(ctx: LoweringContext, expression: Expression): Statement
   const operator = expression.operator === SyntaxKind.PlusPlusToken ? "+=" : expression.operator === SyntaxKind.MinusMinusToken ? "-=" : null;
   if (operator === null) return undefined;
   const operand = unwrapParens(expression.operand);
-  // Only a local or `ref.current`; anything else (`count++` on state) is left to the expression's own diagnostic.
+  // Only a local, `ref.current` or a member of a handler's own value (`best.hits++`); anything else (`count++` on state) is left to
+  // the expression's own diagnostic.
   const object = isPropertyAccessExpression(operand) ? unwrapParens(operand.expression) : null;
   const kind = isIdentifier(operand) ? ctx.scope.get(operand.text)?.kind : object && isIdentifier(object) ? ctx.scope.get(object.text)?.kind : undefined;
-  if (kind !== (isIdentifier(operand) ? "local" : "ref")) return undefined;
+  let root: Expression = operand;
+  while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root)) root = unwrapParens(root.expression);
+  const rootBinding = root !== operand && isIdentifier(root) ? ctx.scope.get(root.text) : undefined;
+  const owned = rootBinding?.kind === "local" && rootBinding.owned === true;
+  if (!owned && kind !== (isIdentifier(operand) ? "local" : "ref")) return undefined;
   const target = ctx.lowerAssignTarget(operand);
   return target && { kind: "Assign", target, operator, value: { kind: "NumberLiteral", value: 1 } };
 }

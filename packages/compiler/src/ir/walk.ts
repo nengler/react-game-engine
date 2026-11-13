@@ -58,6 +58,8 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
       return [e.left, e.right];
     case "Conditional":
       return [e.test, e.whenTrue, e.whenFalse];
+    case "New":
+      return e.args;
     default:
       return assertNever(e, "expression");
   }
@@ -133,7 +135,7 @@ export function walkStatements(body: readonly StatementIR[], visit: (e: ExprIR) 
       case "Break": case "Continue": break;
       case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
       case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit, visitStatement); else walkExpr(stmt.value, visit); break;
-      case "Assign": walkExpr(stmt.value, visit); break;
+      case "Assign": if (stmt.target.kind === "Path") walkExpr(stmt.target.target, visit); walkExpr(stmt.value, visit); break;
       case "PlaySound": if (stmt.volume) walkExpr(stmt.volume, visit); break;
       case "CallAction": for (const arg of stmt.args) walkExpr(arg, visit); break;
       default: assertNever(stmt, "statement");

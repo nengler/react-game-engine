@@ -101,6 +101,7 @@ export function constantValue(expr: ExprIR): { readonly value: JsonValue } | nul
         const v = evaluate(e.operand);
         if (v === none) return none;
         if (e.operator === "!") return !v;
+        if (e.operator === "typeof") return none;
         return typeof v === "number" ? (e.operator === "-" ? -v : v) : none;
       }
       case "Binary": {

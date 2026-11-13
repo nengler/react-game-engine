@@ -34,7 +34,19 @@ export type ExprIR =
   | UnaryExprIR
   | BinaryExprIR
   | ConditionalExprIR
+  | NewExprIR
   | MemoIR;
+
+/**
+ * `new Map<string, number>()`, `new Error("…")`, `new Enemy(…)` in a handler: a global constructor or a class imported from a `.ts`
+ * file, by name, with its type arguments as written.
+ */
+export interface NewExprIR {
+  readonly kind: "New";
+  readonly callee: string;
+  readonly typeArguments: string | null;
+  readonly args: readonly ExprIR[];
+}
 
 /**
  * A derived value that calls something (`const hero = heroOf(run)`, `const alive = enemies.filter(…)`), worked out once and again
@@ -289,7 +301,7 @@ export type CalleeIR =
   /** `const events = step(input, dt)` in a handler: a game-state action whose result the handler uses. */
   | { readonly kind: "Action"; readonly name: string }
   /** `squash.start(0.6, 1.4)`: a method of a per-instance object, state made by a factory (`useState(() => createSquash())`). Opaque. */
-  | { readonly kind: "ValueMethod"; readonly receiver: ExprIR; readonly name: string }
+  | { readonly kind: "ValueMethod"; readonly receiver: ExprIR; readonly name: string; readonly optional?: boolean }
   /** A callback prop: `onDefeated()` or `onDefeated?.()`. Argument counts and types are left to the type-check. */
   | { readonly kind: "Prop"; readonly name: string; readonly optional: boolean }
   /** A handler's own `const` or `let` holding a function: `const stop = settings.subscribe(…); … stop();`. The type-check checks it is one. */
@@ -302,7 +314,8 @@ export interface TemplateLiteralIR {
   readonly expressions: readonly ExprIR[];
 }
 
-export type UnaryOperator = "!" | "-" | "+";
+/** `typeof` is written with a space after it. */
+export type UnaryOperator = "!" | "-" | "+" | "typeof";
 
 export interface UnaryExprIR {
   readonly kind: "Unary";
@@ -314,7 +327,8 @@ export type BinaryOperator =
   | "+" | "-" | "*" | "/" | "%" | "**"
   | "<" | "<=" | ">" | ">="
   | "===" | "!==" | "==" | "!="
-  | "&&" | "||" | "??";
+  | "&&" | "||" | "??"
+  | "instanceof" | "in";
 
 export interface BinaryExprIR {
   readonly kind: "Binary";

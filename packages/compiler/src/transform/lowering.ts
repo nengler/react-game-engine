@@ -161,10 +161,10 @@ export class LoweringBase {
         const decl = this.propDecls.find((p) => p.name === expr.name);
         return decl?.role === "value" && decl.type.kind === "Primitive" ? decl.type.name : null;
       }
-      case "Unary": return expr.operator === "!" ? "boolean" : this.inferType(expr.operand) === "number" ? "number" : null;
+      case "Unary": return expr.operator === "!" ? "boolean" : expr.operator === "typeof" ? "string" : this.inferType(expr.operand) === "number" ? "number" : null;
       case "Binary": {
         switch (expr.operator) {
-          case "<": case "<=": case ">": case ">=": case "===": case "!==": case "==": case "!=": return "boolean";
+          case "<": case "<=": case ">": case ">=": case "===": case "!==": case "==": case "!=": case "instanceof": case "in": return "boolean";
           case "-": case "*": case "/": case "%": case "**": return this.inferType(expr.left) === "number" && this.inferType(expr.right) === "number" ? "number" : null;
           case "+": {
             const [left, right] = [this.inferType(expr.left), this.inferType(expr.right)];
