@@ -55,6 +55,18 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   justifyContent?: FlexJustifyContent;
   /** Pixels between neighbouring children. Default 0. */
   gap?: number;
+  /**
+   * Start a new line when the next child will not fit in the rest of this one (`direction="row"` only): a row of things that wraps
+   * into rows, such as an inventory or a palette. Give the box a width (a number, a percentage, or `"grow"`; a box that fits its
+   * children is one line). Lines stack downward, each as tall as its tallest child; `justifyContent` places the children of each line,
+   * and `alignItems` places each in its line's height. The children keep their own size: a `"grow"` one is its content, and none shrink.
+   * A child wider than the box is alone on a line and sticks out. Default false.
+   */
+  wrap?: boolean;
+  /** Pixels between neighbouring lines of a wrapping row (and between the children of a column); overrides `gap`. */
+  rowGap?: number;
+  /** Pixels between the children of a row (and between the lines of a wrapping column); overrides `gap`. */
+  columnGap?: number;
   /** Pixels inside the edge, on all four sides. Default 0. */
   padding?: number;
   /** Left and right padding; overrides `padding`. */
@@ -169,6 +181,14 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
 export class FlexBox {
   /** The size the box ended up with. */
   readonly size = new Float64Array(2);
+  /**
+   * The lines of a wrapping row (see `FlexProps.wrap`), found by layout: how many there are, where each one ends (the index in `kids`
+   * of the first child of the next line, or the number of children for the last), and how tall each is. Valid for the layout pass
+   * that wrote them.
+   */
+  lineCount = 0;
+  lineEnd = new Int32Array(8);
+  lineCross = new Float64Array(8);
   /** Where the children's far edges end, with the padding after them, before any scrolling, and how far the content can scroll (0 when it fits). Written by layout. */
   readonly contentEnd = new Float64Array(2);
   readonly scrollMax = new Float64Array(2);
@@ -209,6 +229,8 @@ export class FlexBox {
     const kinds = new Uint8Array(capacity);
     kinds.set(this.childKind);
     this.childKind = kinds;
+    this.lineEnd = new Int32Array(capacity);
+    this.lineCross = new Float64Array(capacity);
     this.active = new Int32Array(capacity);
   }
 }
@@ -226,6 +248,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   alignItems: FlexAlignItems;
   justifyContent: FlexJustifyContent;
   gap: number;
+  wrap: boolean;
+  rowGap: number | undefined;
+  columnGap: number | undefined;
   padding: number | undefined;
   paddingX: number | undefined;
   paddingY: number | undefined;
@@ -296,6 +321,9 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.alignItems = hostProps.alignItems ?? "stretch";
     this.justifyContent = hostProps.justifyContent ?? "start";
     this.gap = hostProps.gap ?? 0;
+    this.wrap = hostProps.wrap ?? false;
+    this.rowGap = hostProps.rowGap;
+    this.columnGap = hostProps.columnGap;
     this.padding = hostProps.padding;
     this.paddingX = hostProps.paddingX;
     this.paddingY = hostProps.paddingY;
