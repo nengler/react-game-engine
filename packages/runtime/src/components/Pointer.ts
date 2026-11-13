@@ -22,6 +22,12 @@ export interface Pressable {
   autoFocus?: boolean;
   /** Switched off: a press on it is swallowed without calling `onPress`, and it takes no focus, key or confirm press (see `PressableProps.disabled`). */
   disabled?: boolean;
+  /** A press landed on it at this point (the layer's coordinates, as `contains` takes), just before `onPress`: for what needs to know where, such as a slider. */
+  onPressAt?(x: number, y: number): void;
+  /** The button that pressed it is still held and the mouse is at this point, each step, wherever the mouse has gone: a drag. */
+  onDrag?(x: number, y: number): void;
+  /** A direction (`dx`, `dy` each -1, 0 or 1) was pressed while it has the focus: true if it used it, and the focus then stays where it is. */
+  onNavigate?(dx: number, dy: number): boolean;
   onFocus?: (() => void) | undefined;
   onBlur?: (() => void) | undefined;
   /** Its middle, in its layer's coordinates: where the arrow keys measure from. */

@@ -5,7 +5,7 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Flex, Shape, Text, World, type GameObject } from "@rge/runtime";
+import { Flex, Shape, Slider, Text, Toggle, World, type GameObject } from "@rge/runtime";
 import { FrameBuilder } from "@rge/player";
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -230,6 +230,64 @@ describe("Flex onPress and Text align", () => {
     label.setOn(true);
     label.world!.flush();
     assert.deepEqual([label.shadowX, label.outline], [3, "red"]);
+  });
+
+  it("compiles a Slider and a Toggle whose onChange takes a number and a flag, and runs them against the component's state", async () => {
+    const source = `
+function Settings() {
+  const [volume, setVolume] = useState(3);
+  const [sound, setSound] = useState(true);
+  const [label, setLabel] = useState("");
+  return (
+    <Flex direction="column" gap={4}>
+      <Slider width={100} min={0} max={10} step={1} value={volume} onChange={(v) => { setVolume(Math.round(v)); setLabel(v > 5 ? "loud" : "quiet"); }} />
+      <Toggle checked={sound} onChange={(on) => setSound(on)} />
+      <Text>{label}{sound ? " on" : " off"}</Text>
+    </Flex>
+  );
+}`;
+    const { Settings } = await load<{ Settings: new () => Flex }>(compile(source, "Settings.tsx"));
+    const settings = new Settings();
+    const world = new World();
+    world.mount(settings);
+    const [slider, toggle, text] = settings.children as [Slider, Toggle, Text];
+    assert.ok(slider instanceof Slider && toggle instanceof Toggle);
+    assert.deepEqual([slider.value, slider.min, slider.max, slider.step, toggle.checked], [3, 0, 10, 1, true]);
+    slider.box.size[0] = 100;
+    slider.box.size[1] = 14;
+    assert.equal(world.reportPress(slider, 100, 5), true);
+    world.flush();
+    assert.equal(slider.value, 10, "the slider moved to the end and told the handler a number");
+    assert.equal(text.text, "loud on");
+    toggle.box.size[0] = 36;
+    toggle.box.size[1] = 18;
+    world.reportPress(toggle, 5, 5);
+    world.flush();
+    assert.equal(toggle.checked, false);
+    assert.equal(text.text, "loud off", "and the toggle told its handler a flag");
+  });
+
+  it("type-checks a Slider's and a Toggle's props and the parameter of onChange, in the source and the generated module", () => {
+    assert.deepEqual(typeCheck(compile(`function C() { const [v, setV] = useState(1); return <Slider value={v} onChange={(x) => setV(x)} />; }`, "SliderOk.tsx")), []);
+    const check = (element: string) =>
+      getCompiler().typeCheckSources([
+        { fileName: `${process.cwd()}/.test-output/Widget${Math.random()}.tsx`, text: `import { Slider, Toggle } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }` },
+      ]);
+    assert.deepEqual(check(`<Slider value={n} min={0} max={10} step={2} thumbWidth={6} fillColor="red" onChange={(v) => v.toFixed(1)} />`), []);
+    assert.deepEqual(check(`<Toggle checked={n > 1} onColor="green" onChange={(on) => !on} />`), []);
+    assert.ok(check(`<Slider value="loud" />`).length > 0, "a value is a number");
+    assert.ok(check(`<Slider onChange={(v: string) => v} />`).length > 0, "onChange is given a number");
+    assert.ok(check(`<Toggle checked="yes" />`).length > 0, "checked is a boolean");
+    assert.ok(check(`<Toggle onChange={(on: number) => on} />`).length > 0, "onChange is given a flag");
+  });
+
+  it("lets state take a widget's names, kept in `$name` fields", () => {
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    for (const [tag, names] of [["Slider", ["value", "min", "max", "step", "fillColor", "thumbColor", "thumbWidth", "moveTo", "fraction"]], ["Toggle", ["checked", "onColor", "offColor", "thumbColor", "flip"]]] as const) {
+      for (const name of names) {
+        assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <${tag} />; }`).code.includes(`$${name}: `), `${tag} ${name}`);
+      }
+    }
   });
 
   it("checks a Text's align literal with a suggestion", () => {

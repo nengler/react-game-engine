@@ -241,6 +241,21 @@ export class FlexBox {
  * is written, so a child's own `transform` still moves it within its slot. A `Shape`, `Sprite` or `Text` keeps its
  * own size; only a `<Flex>` is resized by layout.
  */
+/**
+ * The pixels of border a `<Flex>` keeps room for on each side: its `borderWidth` when it has a border colour in any state (so the
+ * room is kept whichever state it is in and nothing moves when the mouse does), else 0. Layout counts it as padding, a clip stops
+ * inside it, and a widget's parts sit inside it.
+ */
+export function flexBorderRoom(f: Flex): number {
+  const coloured = f.borderColor !== undefined || f.hoverBorderColor !== undefined || f.focusBorderColor !== undefined || f.pressedBorderColor !== undefined || f.disabledBorderColor !== undefined;
+  return f.borderWidth > 0 && Number.isFinite(f.borderWidth) && coloured ? f.borderWidth : 0;
+}
+
+/** What a `<Flex>` is besides a box, in `Flex.widget`: the draw pass paints the parts of a widget (a slider's fill and thumb) over its background. */
+export const WIDGET_NONE = 0;
+export const WIDGET_SLIDER = 1;
+export const WIDGET_TOGGLE = 2;
+
 export class Flex<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;
 
@@ -265,6 +280,8 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   minHeight: number | undefined;
   maxHeight: number | undefined;
   background: string | undefined;
+  /** `WIDGET_NONE` for a plain box; a widget subclass sets its own, so the draw pass knows to paint its parts and to let it take the mouse. */
+  widget = WIDGET_NONE;
   opacity: number;
   /** The opacity the draw pass last pushed for this box's children (1: none), so it pops what it pushed. Written by the draw pass and nothing else. */
   drawnAlpha = 1;
@@ -397,6 +414,25 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     const localX = (dx * cos + dy * sin) / t.scaleX;
     const localY = (dy * cos - dx * sin) / t.scaleY;
     return localX >= inset && localX <= width - inset && localY >= inset && localY <= height - inset;
+  }
+
+  /**
+   * Where the world-space point is in the box's own pixels, from its top-left corner (taken back through its position, rotation and
+   * scale, as `contains` does), written into `out` as x then y. For a box with a zero scale, 0 and 0.
+   */
+  boxPoint(x: number, y: number, out: Float64Array): void {
+    const t = this.worldTransform();
+    if (t.scaleX === 0 || t.scaleY === 0) {
+      out[0] = 0;
+      out[1] = 0;
+      return;
+    }
+    const dx = x - t.x;
+    const dy = y - t.y;
+    const cos = Math.cos(t.rotation);
+    const sin = Math.sin(t.rotation);
+    out[0] = (dx * cos + dy * sin) / t.scaleX;
+    out[1] = (dy * cos - dx * sin) / t.scaleY;
   }
 
   /** The middle of the laid-out box, in its layer's coordinates (scale and rotation ignored). */
