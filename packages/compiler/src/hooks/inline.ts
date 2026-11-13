@@ -68,7 +68,7 @@ export interface HookSource {
 export type HookResolver = (specifier: string, fromFile: string) => HookSource | null;
 
 const HOOK = HOOK_NAME;
-const MAX_DEPTH = 6;
+const MAX_DEPTH = 12;
 
 interface Hook {
   readonly name: string;
@@ -120,6 +120,8 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
       if (d.span) diagnostics[i] = { ...d, span: map.span(d.span, fileName, text, passes) };
     }
   };
+  // The hooks expanded at each depth, for the message when the expansion does not end (`useA → useB → useA`).
+  const chain: string[][] = [];
   try {
     for (let depth = 0; depth <= MAX_DEPTH; ) {
       const parsed = parser.parse(fileName, current);
@@ -141,6 +143,7 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
         depth++;
         const hooks = collectHooks(files, sf, fileName, current, resolve, stores, authoringModule, library);
         const edits: Edit[] = [];
+        const expandedHere: string[] = [];
         let found = false;
         for (const statement of sf.statements) {
           for (const body of componentBodies(statement)) {
@@ -154,6 +157,7 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
               // A name that is no hook of this file is left for the compiler's own report (it knows the retired hooks and suggests the nearest).
               if (hook === undefined) continue;
               found = true;
+              if (!expandedHere.includes(call.name)) expandedHere.push(call.name);
               const expanded = expandCall(files, stmt, call, hook, sf, fileName, `_${call.name}${++counter}_`, diagnostics);
               if (hook.fileName !== fileName) collectImports(files, hook, needed);
               if (expanded !== null) edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: expanded });
@@ -171,6 +175,7 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
           keep = true; // every call failed; the diagnostics say why
           return { text: current, map, parsed };
         }
+        chain.push(expandedHere);
         current = map.apply(current, edits);
       } finally {
         remap(reported, passes);
@@ -180,7 +185,12 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
   } finally {
     files.dispose();
   }
-  diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `Custom hooks call each other more than ${MAX_DEPTH} levels deep, or a hook calls itself: hooks are inlined, so they cannot recurse.`, null));
+  // Name the chain: each depth's hooks, from the first the component calls. A name seen twice is a hook that calls itself.
+  const steps = chain.map((names) => names.join(" / "));
+  const firstRepeat = steps.findIndex((step, i) => steps.indexOf(step) !== i);
+  const shown = firstRepeat >= 0 ? steps.slice(0, firstRepeat + 1) : steps;
+  const how = firstRepeat >= 0 ? `'${steps[firstRepeat]}' calls itself through ${shown.join(" → ")}` : `they call each other more than ${MAX_DEPTH} levels deep: ${shown.join(" → ")} → …`;
+  diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `Custom hooks are inlined, so they cannot recurse: ${how}.`, null));
   return { text, map: new EditMap(), parsed: null };
 }
 
@@ -439,12 +449,27 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
   // What the hook declares at its top level, which is renamed so two calls (or the component's own names) cannot meet.
   const declared = new Set<string>();
   const params = declaration.parameters;
-  for (const p of params) {
-    if (!isIdentifier(p.name)) {
-      diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}': a parameter must be a plain name (not destructured), since the call's argument is bound to it.`, spanOf(p, sf, hook.fileName)));
+  // A parameter is a plain name, or `{ speed, range: r }` of plain names (each bound to that member of the argument).
+  const destructured = new Map<number, { local: string; key: string }[]>();
+  for (const [index, p] of params.entries()) {
+    if (isIdentifier(p.name)) {
+      declared.add(p.name.text);
+      continue;
+    }
+    const entries: { local: string; key: string }[] = [];
+    const ok = isObjectBindingPattern(p.name) && p.name.elements.every((element) => {
+      if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) return false;
+      const key = element.propertyName === undefined ? element.name.text : isIdentifier(element.propertyName) ? element.propertyName.text : null;
+      if (key === null) return false;
+      entries.push({ local: element.name.text, key });
+      return true;
+    });
+    if (!ok) {
+      diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}': a parameter is a plain name or \`{ a, b: c }\` of plain names (no defaults, rests or nesting).`, spanOf(p, sf, hook.fileName)));
       return null;
     }
-    declared.add(p.name.text);
+    for (const entry of entries) declared.add(entry.local);
+    destructured.set(index, entries);
   }
   const bodyStatements = declaration.body.statements;
   let returnStatement: Statement | null = null;
@@ -470,6 +495,20 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
     const imported = relativeTsImportNames(callSf);
     for (let i = 0; i < params.length && i < given.length; i++) {
       const arg = given[i] as Node;
+      const members = destructured.get(i);
+      if (members !== undefined) {
+        // `useMover({ speed: 2, range: SIZE })`: a member that is a literal or an import is written in place, as a plain argument is.
+        if (isObjectLiteralExpression(arg)) {
+          for (const property of arg.properties) {
+            if (!isPropertyAssignment(property) || !isIdentifier(property.name)) continue;
+            const entry = members.find((m) => m.key === (property.name as { text: string }).text);
+            const value = property.initializer;
+            const inPlace = (isIdentifier(value) && imported.has(value.text) && !declared.has(value.text)) || isStringLiteral(value) || value.kind === SyntaxKind.NumericLiteral || value.kind === SyntaxKind.TrueKeyword || value.kind === SyntaxKind.FalseKeyword;
+            if (entry !== undefined && inPlace) literals.set(entry.local, callSf.text.slice(value.getStart(callSf), value.getEnd()));
+          }
+        }
+        continue;
+      }
       const importedName = isIdentifier(arg) && imported.has(arg.text) && !declared.has(arg.text);
       if (importedName || isStringLiteral(arg) || arg.kind === SyntaxKind.NumericLiteral || arg.kind === SyntaxKind.TrueKeyword || arg.kind === SyntaxKind.FalseKeyword) {
         literals.set((params[i]!.name as { text: string }).text, callSf.text.slice(arg.getStart(callSf), arg.getEnd()));
@@ -480,7 +519,9 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
   // return a setter, as in React, and its value is the caller's own state.
   const aliases = new Map<string, string>();
   const returned = returnStatement !== null && isReturnStatement(returnStatement) ? returnStatement.expression : undefined;
-  if (returned !== undefined && call.binding.kind === "array" && isArrayLiteralExpression(returned)) {
+  if (returned !== undefined && call.binding.kind === "name" && isIdentifier(returned) && declared.has(returned.text) && params.every((p) => !isIdentifier(p.name) || p.name.text !== returned.text) && ![...destructured.values()].some((entries) => entries.some((e) => e.local === returned.text))) {
+    aliases.set(returned.text, call.binding.name);
+  } else if (returned !== undefined && call.binding.kind === "array" && isArrayLiteralExpression(returned)) {
     const targets = (call.binding.node as unknown as { elements: readonly Node[] }).elements;
     returned.elements.forEach((value, i) => {
       const target = targets[i] as unknown as { name?: Node } | undefined;
@@ -514,6 +555,34 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
   for (let i = 0; i < params.length; i++) {
     const p = params[i]!;
     const arg = args[i];
+    const members = destructured.get(i);
+    if (members !== undefined) {
+      if (arg === undefined) {
+        diagnostics.push(error(DiagnosticCode.InvalidProps, `The hook '${hook.name}' needs an argument for its parameter ${i + 1}.`, at));
+        return null;
+      }
+      // An object literal's members are read where they are written; any other argument is bound once, then read member by member.
+      const object = isObjectLiteralExpression(arg) ? null : `${prefix}$arg${i}`;
+      if (object !== null) lines.push(`const ${object} = (${callSf.text.slice(arg.getStart(callSf), arg.getEnd())});`);
+      for (const member of members) {
+        if (literals.has(member.local)) continue;
+        let value: string;
+        if (object !== null) value = `${object}.${member.key}`;
+        else {
+          const property = (arg as unknown as { properties: readonly Node[] }).properties.find(
+            (q) => (isPropertyAssignment(q) && isIdentifier(q.name) && q.name.text === member.key) || (isShorthandPropertyAssignment(q) && (q.name as unknown as { text: string }).text === member.key),
+          );
+          if (property === undefined) {
+            diagnostics.push(error(DiagnosticCode.InvalidProps, `The hook '${hook.name}' reads '${member.key}', which the object passed to it does not have.`, at));
+            return null;
+          }
+          const valueNode = isPropertyAssignment(property) ? property.initializer : (property as unknown as { name: Node }).name;
+          value = `(${callSf.text.slice(valueNode.getStart(callSf), valueNode.getEnd())})`;
+        }
+        lines.push(`const ${rename(member.local)} = ${value};`);
+      }
+      continue;
+    }
     const valueText = arg !== undefined ? `(${callSf.text.slice(arg.getStart(callSf), arg.getEnd())})` : p.initializer ? renameIn(p.initializer, sf, hook.text, declared, rename) : null;
     if (valueText === null) {
       diagnostics.push(error(DiagnosticCode.InvalidProps, `The hook '${hook.name}' needs an argument for '${(p.name as { text: string }).text}'.`, at));
@@ -530,7 +599,9 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
       return null;
     }
     const renamed = (n: Node): string => renameIn(n, sf, hook.text, declared, rename);
-    if (call.binding.kind === "name") lines.push(`${call.binding.keyword} ${call.binding.name} = ${renamed(expr)};`);
+    if (call.binding.kind === "name") {
+      if (!(isIdentifier(expr) && aliases.get(expr.text) === call.binding.name)) lines.push(`${call.binding.keyword} ${call.binding.name} = ${renamed(expr)};`);
+    }
     else if (call.binding.kind === "object") {
       if (!isObjectLiteralExpression(expr)) {
         diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}' must return an object literal (\`return { a, b };\`) to be used as \`const { a, b } = ${hook.name}()\`.`, at));

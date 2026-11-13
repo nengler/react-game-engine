@@ -1743,6 +1743,31 @@ export function Player() { usePlatformerBody(); … }
 
 The author's editor still sees ordinary typed functions: the file type-checks as written (the hook calls `useState` and friends, which throw only if actually run).
 
+### Hooks that behave like functions, and functions in the body (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, B6. Inlining stays (it is what makes a hook free at run time and lets the compiler see every state it
+declares); what a function can do and a hook could not is closed:
+
+- **A destructured parameter** (`function useMover({ speed, limit: max }: Options)`) binds each name to that member of the
+  argument. From an object literal, each member is read where it is written (a literal or an import in place, as a plain
+  argument is); from any other value, the value is bound once (`_useMover1_$arg0`) and read member by member.
+- **A returned name takes the caller's name** for `const r = useX()` as it already did for `[a, b]` and `{ a, b }`, so a hook
+  returns a ref (`return count;`) or a state as itself, not a copy.
+- **A callback argument.** An argument is bound to a `const` of the component body, and an arrow there is now a **function of
+  the component** (below), so `useEvery(1, () => setTicks(…))` works and the hook calls `fn()` in its handler.
+- **The recursion message names the chain** (`'useA' calls itself through useA → useB → useA`), and the depth limit is 12.
+
+**Functions in the component body.** `const add = (n: number) => { … }` was `RGE1301` ("an arrow function can only be…"). It is
+now an `OwnFunctionIR`: lowered as a handler (setters, sounds, actions allowed) with the parameter types written on it
+(`paramTypes: "declared"`), and kept in a field, `readonly add = (n: number) => { … };`, written before the element fields so a
+child can be given it. A call in a handler or callback is `this.add(…)` (callee `Own`); passed to an element's callback prop it
+becomes the arrow an author would write (`onPress: () => { this.press(); }`); passed to a component or a function it is
+`this.add`. Calling one while rendering is an error: it may set state. An arrow's expression body that does something (a setter,
+sound, action or own-function call, an assignment, `++`) is a statement; any other is the value it returns (`returns: "any"`).
+
+Not done: diagnostics inside a hook still point at the expanded text's mapping, not "the hook's line, called from the component's".
+
+
 ## Tilemap, assets and the other built-ins (priority 7)
 
 `<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [NATIVE_PLAN.md](NATIVE_PLAN.md) ("Priority 7 additions"). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.

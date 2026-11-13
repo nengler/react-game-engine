@@ -615,6 +615,10 @@ already treats it as opaque and pure.
 
 ### B6. Custom hooks that behave like functions
 
+**Built 2026-11-13** (DESIGN.md, "Hooks that behave like functions, and functions in the body"), with one addition the plan did
+not list: functions declared in the component body, which callback arguments need and which are common React on their own.
+Not done: point 5 (diagnostics inside a hook name the hook's line and the call).
+
 **Today.** A custom hook is inlined text (`packages/compiler/src/hooks/inline.ts`): its statements are pasted into the component
 with a per-call prefix (`_useName3_x`). PAIN_POINTS.md, section 1, lists what follows: a hook cannot return a ref, destructured
 parameters do not work, nesting stops at six levels, and a literal argument is pasted into the body. The guide says it in passing.
@@ -650,10 +654,10 @@ so. Hooks still cannot be recursive.
 
 **Done when**
 
-- [ ] Destructured parameters, returned refs and evaluate-once arguments work, each with compiler tests
-- [ ] Nesting errors name the chain; diagnostics inside a hook point at the hook's line and the call
-- [ ] PAIN_POINTS.md section 1's hook bullet is closed or narrowed to what is left
-- [ ] The guide explains the model in a few lines
+- [x] Destructured parameters, returned refs and evaluate-once arguments work, each with compiler tests
+- [ ] Nesting errors name the chain (done); diagnostics inside a hook point at the hook's line and the call (not yet)
+- [x] PAIN_POINTS.md section 1's hook bullet is closed or narrowed to what is left
+- [x] The guide explains the model in a few lines
 
 ### B7. A component's names stop clashing with its root built-in
 

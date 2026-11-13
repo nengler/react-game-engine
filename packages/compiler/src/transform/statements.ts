@@ -86,7 +86,8 @@ interface FunctionOptions {
    * prefix of them. `"contextual"`: any number of parameters, none annotated
    * (a callback passed to a child, typed by the child's props type).
    */
-  readonly paramTypes: readonly TypeIR[] | "contextual";
+  /** `declared`: each parameter's own annotation, as written (`(id: string) => …` in a component body). */
+  readonly paramTypes: readonly TypeIR[] | "contextual" | "declared";
   /**
    * `void`: handlers (`return;` only). `value`: updaters (`return expr;` required). `cleanup`: `useMount`, which may return
    * a cleanup (`return () => …;`, `return settings.subscribe(…);`, or an expression body that calls a function). `any`: a function
@@ -101,7 +102,7 @@ interface FunctionOptions {
 export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: FunctionOptions): FunctionIR | null {
   return ctx.inScope((scope) => {
     const params: ParamIR[] = [];
-    if (options.paramTypes !== "contextual" && fn.parameters.length > options.paramTypes.length) {
+    if (options.paramTypes !== "contextual" && options.paramTypes !== "declared" && fn.parameters.length > options.paramTypes.length) {
       ctx.error(DiagnosticCode.InvalidHandler, `${options.what} takes at most ${options.paramTypes.length} parameter(s).`, fn.parameters[options.paramTypes.length]!);
       return null;
     }
@@ -113,7 +114,10 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
       const name = param.name.text;
       if (!checkFreshName(ctx, name, param)) return null;
       const id = localId(ctx.componentName, name, ctx.nextSerial());
-      const type: TypeIR = options.paramTypes === "contextual" ? { kind: "Contextual" } : options.paramTypes[index]!;
+      const type: TypeIR =
+        options.paramTypes === "contextual" ? { kind: "Contextual" }
+        : options.paramTypes === "declared" ? (param.type ? ctx.typeFromNode(param.type) ?? { kind: "Contextual" } : { kind: "Contextual" })
+        : options.paramTypes[index]!;
       scope.declare(name, { kind: "param", id, name, type });
       params.push({ id, name, type });
     }
@@ -122,7 +126,7 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
     if (isBlock(fn.body)) {
       // The body's top-level block shares the parameters' scope, as in JS: `(n) => { const n = 1; }` is a redeclaration.
       body = lowerStatements(ctx, fn.body.statements, options, { newScope: false, jumps: NO_JUMPS });
-    } else if (options.returns === "value" || options.returns === "any") {
+    } else if (options.returns === "value" || (options.returns === "any" && !isEffect(ctx, fn.body))) {
       const value = ctx.lowerExpression(fn.body);
       body = value && [{ kind: "Return", value }];
     } else {
@@ -357,6 +361,19 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     statement,
   );
   return null;
+}
+
+/**
+ * Whether an arrow's expression body does something rather than computes a value: a setter, sound or action call, or an
+ * assignment (`() => setN(1)`, `() => count.current++`). Such a body is a statement, not a returned value.
+ */
+function isEffect(ctx: LoweringContext, body: Node): boolean {
+  const e = unwrapParens(body as Expression);
+  if (isBinaryExpression(e) && ASSIGNMENT_TOKENS.has(e.operatorToken.kind)) return true;
+  if (isPrefixUnaryExpression(e) || isPostfixUnaryExpression(e)) return e.operator === SyntaxKind.PlusPlusToken || e.operator === SyntaxKind.MinusMinusToken;
+  if (!isCallExpression(e) || !isIdentifier(e.expression)) return false;
+  const kind = ctx.scope.get(e.expression.text)?.kind;
+  return kind === "setter" || kind === "sound" || kind === "action" || kind === "function";
 }
 
 /** Whether a value is new, made where it is written (a literal, `new`, a call's result), rather than a read of something that exists. */
