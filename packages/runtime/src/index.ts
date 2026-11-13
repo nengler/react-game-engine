@@ -53,6 +53,7 @@ export { actionAware, Controls, createControls, createInputState, KEY_NAMES, NO_
 export { clamp, EASINGS, NO_SHAKE, shakeOn, springBack, springFrom, startSpring, startTween, stepSpring, stepTween, type Animatable, type Easing, type EasingName, type ShakeState, type SpringOptions, type SpringState, type TweenOptions, type TweenState, type Vector2 } from "./math.ts";
 export { keepIfEqual, sameData } from "./equal.ts";
 export { captureGameTree, getGameTree, setGameTree } from "./gameTree.ts";
+export { asData, editState, inspectId, inspectObject, inspectTree, inspectedObject, isComponent, type InspectedNode, type InspectedObject } from "./inspect.ts";
 export { ContextReader, createContext, Provider, readContext, type Context, type ProviderProps } from "./context.ts";
 export { Body, createBody, boxesOverlap, type BodyHit, type BodyOptions, type BodySpace, type Box } from "./body.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";

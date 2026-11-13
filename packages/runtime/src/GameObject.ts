@@ -378,7 +378,11 @@ export class GameObject<P extends object = {}> {
    * updates queued since the last render, then renders. This is the only
    * place state changes, so every handler in a frame sees the same snapshot.
    */
+  /** How many times this object has rendered: what the development inspector shows. */
+  renderCount = 0;
+
   runRender(): void {
+    this.renderCount++;
     this.#dirty = false;
     // A render may write this object's draw state and that of the elements it owns. Unless it says which itself, all of them changed.
     if (!this.reportsChanges) this.markChanged();

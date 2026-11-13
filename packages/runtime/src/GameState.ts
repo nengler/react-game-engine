@@ -74,10 +74,38 @@ export class GameStore<S = object> {
 
   constructor(creator: GameStateCreator<S>) {
     const set: SetGameState<S> = (partial) => this.setState(partial);
-    this.#initial = creator(set, () => this.#state);
+    const made = creator(set, () => this.#state) as Record<string, unknown>;
+    // Each action says its name while it runs, so the development inspector can show what it changed (only when recording).
+    for (const [name, value] of Object.entries(made)) {
+      if (typeof value !== "function") continue;
+      const action = value as (...args: unknown[]) => unknown;
+      const named = (...args: unknown[]): unknown => {
+        const outer = this.#acting;
+        this.#acting = name;
+        try {
+          return action(...args);
+        } finally {
+          this.#acting = outer;
+        }
+      };
+      Object.defineProperty(named, "name", { value: name });
+      made[name] = named;
+    }
+    this.#initial = made as S;
     this.#state = this.#initial;
     stores.add(this);
   }
+
+  /** The action running now, if any. */
+  #acting: string | null = null;
+
+  /**
+   * The last changes, newest last, while `recording` is on (the development inspector turns it on): which action made each (or
+   * `"setState"`), and each leaf it changed, before and after.
+   */
+  readonly history: { readonly action: string; readonly changes: readonly { readonly path: string; readonly before: unknown; readonly after: unknown }[] }[] = [];
+  /** Keep `history`. Off by default: a game pays nothing for it. */
+  recording = false;
 
   /** The whole state, with its actions. */
   getState(): S {
@@ -90,7 +118,12 @@ export class GameStore<S = object> {
     if (next === null || next === undefined) return;
     const before = this.#state;
     this.#state = { ...before, ...next };
-    this.#notify(changedPaths(before as Tree, this.#state as Tree, "", []));
+    const changed = changedPaths(before as Tree, this.#state as Tree, "", []);
+    if (this.recording && changed.length > 0) {
+      this.history.push({ action: this.#acting ?? "setState", changes: changed.map((path) => ({ path, before: leafAt(before, path), after: leafAt(this.#state, path) })) });
+      if (this.history.length > 50) this.history.splice(0, this.history.length - 50);
+    }
+    this.#notify(changed);
   }
 
   /**
@@ -189,6 +222,16 @@ export function resetGameState(): void {
  * counts). Arrays are walked like objects, by index, so an equal copy changes nothing. An object that is the same object
  * on both sides is not walked. One that turns into a leaf (or back) changes every leaf it had, so their readers hear of it.
  */
+/** The value at a dotted path, or undefined. */
+function leafAt(state: unknown, path: string): unknown {
+  let at: unknown = state;
+  for (const key of path.split(".")) {
+    if (typeof at !== "object" || at === null) return undefined;
+    at = (at as Tree)[key];
+  }
+  return at;
+}
+
 function changedPaths(before: Tree, after: Tree, prefix: string, out: string[]): string[] {
   if (before === after) return out;
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);

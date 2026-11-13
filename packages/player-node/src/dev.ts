@@ -25,6 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createPlayer, HOST_BACKEND_KEY, HOST_RUN_KEY, type Backend, type Player, type PlayerConfig } from "@rge/player";
 import { GameStore } from "@rge/runtime";
+import { startInspector, type Inspector } from "./inspector.ts";
 
 export interface DevOptions {
   /** The game's entry file, which calls `run(hostBackend(), config)`. */
@@ -35,6 +36,11 @@ export interface DevOptions {
   readonly compileFirst?: boolean;
   /** Where messages go. Default the console. */
   readonly log?: (message: string) => void;
+  /**
+   * The development inspector's page (the tree, the selected component's state, the game state): the port to serve it on
+   * (0, the default, takes a free one), or false for none. Its address is printed when the game starts.
+   */
+  readonly inspector?: number | false;
   /** Told when the game has started, after each reload that worked, and when a reload failed. For tests. */
   readonly observe?: (event: "start" | "reload" | "error", player: Player) => void;
 }
@@ -169,7 +175,17 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
 
   const start = await importGame();
   let stores = start.stores;
-  const player: Player = createPlayer(backend, { ...start.config, showErrors: true, errorNote: NOTE });
+  // Development tools: the layout overlay (F1) in the window, and the inspector's page in a browser.
+  const player: Player = createPlayer(backend, { ...start.config, showErrors: true, errorNote: NOTE, devtools: true });
+  let inspector: Inspector | null = null;
+  if (options.inspector !== false) {
+    try {
+      inspector = await startInspector({ root: () => player.world.root.children[0] ?? null, stores: () => stores, port: options.inspector ?? 0, log });
+      log(`inspector: ${inspector.url}  (F1 in the window outlines the layout)`);
+    } catch (error) {
+      log(`The inspector could not start: ${String(error)}`);
+    }
+  }
 
   // Watch the sources; a burst of saves is one reload, and a save during a reload starts another after it.
   let closed = false;
@@ -221,7 +237,7 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
         if (older !== undefined && older !== store) store.carryFrom(older);
       }
       stores = next.stores;
-      if (player.reload(next.config)) {
+      if (player.reload({ ...next.config, devtools: true })) {
         log(`reloaded in ${Date.now() - started} ms`);
         options.observe?.("reload", player);
       } else {
@@ -246,12 +262,14 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
         console.error(failure.error);
       }
       if (!open) break;
+      inspector?.update();
       await new Promise<void>((next) => setImmediate(next));
     }
   } finally {
     closed = true;
     if (timer !== null) clearTimeout(timer);
     for (const watcher of watchers) watcher.close();
+    await inspector?.close();
     player.close();
     delete (globalThis as Record<string, unknown>)[HOST_RUN_KEY];
   }

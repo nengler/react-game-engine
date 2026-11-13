@@ -116,7 +116,7 @@ export const runtimeManifest: RuntimeManifest = {
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
-    Game: ["name", "id", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "font", "controls", "timeScale", "paused", "textSize", "textColor"],
+    Game: ["name", "id", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "font", "controls", "timeScale", "paused", "textSize", "textColor", "overlayKey"],
     Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
     Collider: ["width", "height", "tag", "layer", "hits", "solid", "data", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "originX", "originY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "disabled", "onFocus", "onBlur", "contains", "focusPoint"],
@@ -203,7 +203,7 @@ export const runtimeManifest: RuntimeManifest = {
     "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys", "layoutContents",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
-    "markDirty", "markChanged", "markMoved", "after", "every", "cancelTimers", "pendingTimers", "stepTimers", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
+    "markDirty", "markChanged", "markMoved", "after", "every", "cancelTimers", "pendingTimers", "stepTimers", "renderCount", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
     "onInput", "onUpdate", "onMount", "onUnmount", "keepCleanup", "inert", "modal",
     "attachToWorld", "detachFromWorld", "ownedHandles", "hotKey", "$memo",
     // Object.prototype

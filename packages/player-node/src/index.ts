@@ -3,3 +3,4 @@ export { checkAbi, findNativeLibrary, loadNative, type BuildFlavor, type Native 
 export { contactSheet, decodePng, encodePng, type SheetOptions } from "./png.ts";
 export { renderRun, type Shot, type ShotOptions } from "./screenshot.ts";
 export { compileArgs, compilerCli, readGameSettings, type GameSettings } from "./dev.ts";
+export { startInspector, type Inspector, type InspectorOptions } from "./inspector.ts";

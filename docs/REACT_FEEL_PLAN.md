@@ -929,6 +929,9 @@ const { accent } = useContext(Theme);
 
 ### C4. A layout overlay and an inspector
 
+**Built 2026-11-13** (DESIGN.md, "Seeing inside a running game"). The page talks to the game over server-sent events and POSTs
+rather than a WebSocket (Node has no WebSocket server built in; it is the same exchange). Gaps are not outlined.
+
 **Today.** There is no way to see the tree or its state while the game runs. `docs/CLAY_NOTES.md` notes Clay's debug overlay
 ("a good tool for this engine too… not planned"). Debugging a `<Flex>` today means reasoning about the layout code or reading
 `rge screenshot` output; debugging state means `console.log`.
@@ -958,11 +961,11 @@ too slow for large trees, so the inspector reads only the selected component eac
 
 **Done when**
 
-- [ ] The layout overlay draws `Flex` boxes, colliders and pointers, toggled by a key, in `rge dev` only
-- [ ] The tree inspector shows components with props, state, refs, subscriptions and render counts
-- [ ] The game state inspector shows the store and each action's diff
-- [ ] Editing a value works and is marked as development-only
-- [ ] The guide's "When something goes wrong" table points to it
+- [x] The layout overlay draws `Flex` boxes, colliders and pointers, toggled by a key, in `rge dev` only
+- [x] The tree inspector shows components with props, state, refs, subscriptions and render counts
+- [x] The game state inspector shows the store and each action's diff
+- [x] Editing a value works and is marked as development-only
+- [x] The guide's "When something goes wrong" table points to it
 
 ---
 

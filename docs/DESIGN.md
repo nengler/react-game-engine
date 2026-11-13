@@ -1749,6 +1749,31 @@ the actions. Not built: rebinding at run time, and axes (a stick's value rather 
   handler that set the timer to run again.) A save never holds a timer either: a delay that is gameplay is state.
 - **Sequences** (cutscenes) are not built; they wait for a game with a cutscene (NEXT_PRIORITIES.md, "Not now").
 
+## Seeing inside a running game: the overlay and the inspector (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, C4. Both are development tools of `rge dev` only: the player takes `devtools` (which `playWithReload` sets),
+and without it neither exists.
+
+- **The layout overlay** (`player/src/overlay.ts`). With `devtools`, the root's `overlayKey` (F1) turns it on: the frame builder then
+  lists each `<Flex>` it lays out with where it was placed (`FrameBuilder.inspecting`, `inspected`, in both the world walk and the
+  HUD walk, so a floating box is where the layout put it), and the player draws, after the game's records and in window pixels
+  through the frame's views, an outline of each box and its padding, each collider (a colour per layer) and each `<Pointer>`, and
+  a label for the box under the mouse (its components, `componentPath`; its size; the `width` and `height` it was given). Gaps are
+  not outlined.
+- **The inspector** (`player-node/src/inspector.ts`): an HTTP server on 127.0.0.1 (a free port unless given) that `rge dev`
+  starts and prints the address of. The page is plain HTML and script; it gets the tree, the selected object and the game states
+  as server-sent events, a few times a second while it is open (`update()` from the dev loop, every tenth frame), and only what
+  changed; it sends a selection or an edit as a POST. Server-sent events and a POST rather than the WebSocket the plan named:
+  Node has no WebSocket server built in, and this is the same exchange.
+- **What it reads** (`runtime/src/inspect.ts`): `inspectTree` (components and built-ins, with list keys and a stable id per
+  object), `inspectObject` (props as data, `saveHotState` by source name, `gameStateKeys`, `renderCount`, which `runRender` now
+  counts). Only the selected object's details are read each time.
+- **Actions and their changes.** A `GameStore` wraps each action of its creator so it knows which one is running, and while
+  `recording` is on (the inspector turns it on) `setState` keeps the last 50 changes: the action's name (or `setState`) and each
+  leaf changed, before and after.
+- **Editing** sets a state through `loadHotState` (`editState`), as hot reload does, or a game-state leaf through `setState`; each
+  is logged as an edit from the inspector that a replay does not repeat (rewind, D1, will record them).
+
 ## Effects that happen at a moment (priority 7, 2026-11-11)
 
 Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each
