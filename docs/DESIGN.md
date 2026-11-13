@@ -2060,10 +2060,19 @@ the field initialiser. On a root it is assigned after `super()`
 inside the call to `super`. A function on any other built-in, or an unknown
 callback name, is `RGE1203`.
 
-**What `other` exposes** (decided 2026-11-09). `other` is a `Contact`: handler
-code may read `other.tag` and `other.owner`, both strings, and nothing else
+**What `other` exposes** (decided 2026-11-09; `data` 2026-11-13). `other` is a `Contact`: handler
+code may read `other.tag` and `other.owner`, both strings, and `other.data`, and nothing else
 (`'Contact' has no readable property 'width'`, `RGE1301`). The compiler checks
 the comparison like any other string.
+
+* `data` is the `data` prop of the other `<Collider>` (any value; undefined when it has none), so a
+  coin says what it is worth and an enemy how much it hurts without the game state keeping a table by id
+  (`REACT_FEEL_PLAN.md`, A3). Its type: `Contact` is `BaseContact` (`data: unknown`) until a game declares
+  the global interface `ColliderData` (`declare global { interface ColliderData { coin: { value: number } } }`),
+  then a union with one member per declared tag, so `other.tag === "coin"` narrows `other.data` in the
+  generated code as in the source. A global interface rather than an augmentation of `@rge/runtime`, because
+  TypeScript does not merge an augmentation into an interface that a module only re-exports. The `Collider`
+  class implements `BaseContact`; the world casts it when it calls a callback.
 
 * `tag` is the `tag` prop of the other `<Collider>` (`""` when it has none).
   It tells two colliders on one prefab apart, which the owner cannot.

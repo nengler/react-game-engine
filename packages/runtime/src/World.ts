@@ -1,5 +1,5 @@
 import { GameObject } from "./GameObject.ts";
-import { Collider } from "./components/Collider.ts";
+import { Collider, type Contact } from "./components/Collider.ts";
 import { Tilemap } from "./components/Tilemap.ts";
 import { boxesOverlap, type BodySpace, type Box } from "./body.ts";
 import { findTilemap } from "./tilemap.ts";
@@ -110,8 +110,8 @@ export class World implements BodySpace {
    * before the next step.
    */
   reportCollision(a: Collider, b: Collider): void {
-    if (a.world === this) a.onCollisionEnter?.(b);
-    if (b.world === this) b.onCollisionEnter?.(a);
+    if (a.world === this) a.onCollisionEnter?.(b as unknown as Contact);
+    if (b.world === this) b.onCollisionEnter?.(a as unknown as Contact);
   }
 
   /**
@@ -120,8 +120,8 @@ export class World implements BodySpace {
    * that is still mounted in this world (one that left is gone, and hears nothing). Dispatch only.
    */
   reportCollisionExit(a: Collider, b: Collider): void {
-    if (a.world === this) a.onCollisionExit?.(b);
-    if (b.world === this) b.onCollisionExit?.(a);
+    if (a.world === this) a.onCollisionExit?.(b as unknown as Contact);
+    if (b.world === this) b.onCollisionExit?.(a as unknown as Contact);
   }
 
   /**
