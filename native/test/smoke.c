@@ -398,6 +398,19 @@ int main(void) {
   expect(25, 11, C_GREEN, "...2 pixels deep");
   expect(25, 12, C_RED, "...then the fill");
   expect(10, 20, C_GREEN, "...and down the left side");
+  /* A small radius is a round corner, not a diamond. A 12 x 12 box with a radius of 6 is a circle: its top row is 4 pixels wide
+   * (4 to 7) and its left column fills from the 5th row (raylib's own segment count for so small a radius is one, which draws a
+   * diamond whose top row is 2 pixels wide, leaving both of these clear). */
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 12, 12, C_RED, C_GREEN, 0, 6); frame();
+  expect(14, 10, C_RED, "the top row of a small circle is 4 wide: its 5th pixel from the left is filled");
+  expect(17, 10, C_RED, "...and its 8th");
+  expect(10, 14, C_RED, "the left column of a small circle fills from the 5th row down");
+  expect(10, 10, CLEAR, "...and the corner itself is clear");
+  expect(16, 16, C_RED, "...and the middle is filled");
+  reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 12, 12, C_RED, C_GREEN, 2, 6); frame();
+  expect(14, 10, C_GREEN, "a ring of a small circle is round too: its top edge is 4 wide");
+  expect(16, 16, C_RED, "...with the fill inside it");
+
   /* A radius smaller than the border: the outer corner is rounded, and everything else of the 4 pixel block is border. */
   reset(); view(1, 0, 0, 1, 0, 0); box(10, 10, 30, 20, C_RED, C_GREEN, 4, 2); frame();
   expect(10, 10, CLEAR, "a radius of 2 rounds off the outer corner pixel");

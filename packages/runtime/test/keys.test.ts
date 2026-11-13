@@ -1,7 +1,7 @@
 /** Keys that press things: `pressKey` (a button's own shortcut), the focus (`focusable`, `autoFocus`) and the arrow keys moving it. */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createControls, createInputState, Entity, Flex, Pointer, World, type InputSnapshot } from "../src/index.ts";
+import { createControls, createInputState, Entity, Flex, Pointer, World, type InputSnapshot, type Pressable } from "../src/index.ts";
 
 const controls = createControls({ wave: ["Space"], left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"], confirm: ["Z"] });
 const press = (world: World, ...pressed: string[]): void => {
@@ -145,6 +145,46 @@ describe("disabled", () => {
     c.disabled = true;
     press(world);
     assert.equal(world.focused, null, "a focused one that is switched off lets go of the focus");
+  });
+});
+
+describe("onPressAt and onNavigate", () => {
+  it("tells a pressable where it was pressed, before onPress, and not when it is disabled or the press missed", () => {
+    const log: string[] = [];
+    const world = new World();
+    const root = new Entity();
+    const button: Pointer & Pressable = new Pointer({ width: 10, height: 10, onPress: () => log.push("press") });
+    button.onPressAt = (x: number, y: number) => log.push(`at ${x},${y}`);
+    root.addChild(button);
+    world.mount(root);
+    world.flush();
+    world.reportPress(button, 4, 6);
+    world.reportPress(button, 40, 6);
+    button.disabled = true;
+    world.reportPress(button, 4, 6);
+    assert.deepEqual(log, ["at 4,6", "press"]);
+  });
+
+  it("lets a focused pressable use a direction itself, so the focus stays, and moves the focus on when it does not", () => {
+    const world = new World();
+    const root = new Entity();
+    const used: string[] = [];
+    const a: Pointer & Pressable = at(new Pointer({ width: 10, height: 10, focusable: true }), 0, 0);
+    a.onNavigate = (dx: number, dy: number) => {
+      used.push(`${dx},${dy}`);
+      return dx !== 0; // left and right are its; up and down are not
+    };
+    const right = at(new Pointer({ width: 10, height: 10, focusable: true }), 40, 0);
+    const below = at(new Pointer({ width: 10, height: 10, focusable: true }), 0, 40);
+    for (const p of [a, right, below]) root.addChild(p);
+    world.mount(root);
+    world.flush();
+    world.focus(a);
+    press(world, "ArrowRight");
+    assert.equal(world.focused, a, "it used right");
+    press(world, "ArrowDown");
+    assert.equal(world.focused, below, "it did not use down");
+    assert.deepEqual(used, ["1,0", "0,1"]);
   });
 });
 

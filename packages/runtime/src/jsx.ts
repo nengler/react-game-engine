@@ -16,6 +16,8 @@ import type { GameProps } from "./components/Game.ts";
 import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps } from "./components/Collider.ts";
 import type { PointerProps } from "./components/Pointer.ts";
+import type { SliderProps } from "./components/Slider.ts";
+import type { ToggleProps } from "./components/Toggle.ts";
 import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
 import type { CameraProps } from "./components/Camera.ts";
@@ -232,6 +234,24 @@ export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
  */
 export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
   return compileTimeOnly("Flex");
+}
+
+/**
+ * A horizontal slider, a `<Flex>` with a thumb: `<Slider value={volume} min={0} max={10} step={1} onChange={(v) => setVolume(v)} />`. A press
+ * puts the thumb under the mouse and a drag moves it; with the focus the left and right keys move it. The track is the box's own `background`
+ * (so it takes a border, a radius and a colour for each state), the part left of the thumb is `fillColor`. `value` is where it starts and what
+ * you set; the slider moves it itself and calls `onChange` with the new value, only when it is a different one.
+ */
+export function Slider(_props: SliderProps): JSX.Element {
+  return compileTimeOnly("Slider");
+}
+
+/**
+ * An on and off switch, a `<Flex>` with a knob: `<Toggle checked={sound} onChange={(on) => setSound(on)} />`. A press, the confirm key with the
+ * focus, or its `pressKey` flips it; `onChange` is called with the new state. `onColor` and `offColor` colour the track, `thumbColor` the knob.
+ */
+export function Toggle(_props: ToggleProps): JSX.Element {
+  return compileTimeOnly("Toggle");
 }
 
 /**

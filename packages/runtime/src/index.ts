@@ -22,11 +22,13 @@ export { Collider, type ColliderProps, type Contact } from "./components/Collide
 export { Sound, addSoundPreload, getSoundSink, getVolume, setSoundSink, setVolume, type SoundSink, type VolumeGroup } from "./Sound.ts";
 export { createMemoryStorage, createSave, createSettings, getStorage, Save, setStorage, Settings, type EngineSettings, type SaveOptions, type SettingsOf, type SettingsOptions, type StorageSink } from "./storage.ts";
 export { Pointer, type PointerProps, type Pressable } from "./components/Pointer.ts";
+export { Slider, type SliderProps } from "./components/Slider.ts";
+export { Toggle, type ToggleProps } from "./components/Toggle.ts";
 export { Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
 export { AnimatedSprite, parseAnimations, type AnimatedSpriteProps, type AnimationEntry, type AnimationTable, type SheetAnimation } from "./components/AnimatedSprite.ts";
-export { Flex, FlexBox, FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, FLEX_OVERFLOW, type FlexAlignItems, type FlexAnchor, type FlexDirection, type FlexJustifyContent, type FlexOverflow, type FlexProps, type FlexSizing, type FlexTransition } from "./components/Flex.ts";
+export { Flex, FlexBox, flexBorderRoom, WIDGET_NONE, WIDGET_SLIDER, WIDGET_TOGGLE, FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, FLEX_OVERFLOW, type FlexAlignItems, type FlexAnchor, type FlexDirection, type FlexJustifyContent, type FlexOverflow, type FlexProps, type FlexSizing, type FlexTransition } from "./components/Flex.ts";
 export { Tilemap, type TilemapProps } from "./components/Tilemap.ts";
 export { findTilemap, getTilemap, registerTilemaps, TileGrid, TILE_FLIP_D, TILE_FLIP_H, TILE_FLIP_V, type TilemapData, type TilemapLayerData, type TilemapObject, type TilesetData } from "./tilemap.ts";
 export { Music, type MusicProps } from "./components/Music.ts";
@@ -49,5 +51,5 @@ export { Screen, SCREEN_FITS, type ScreenFit, type ScreenProps } from "./compone
 export { actionAware, Controls, createControls, createInputState, KEY_NAMES, NO_INPUT, type InputState, type InputSnapshot, type KeyName } from "./input.ts";
 export { clamp, NO_SHAKE, shakeOn, springBack, type ShakeState, type Vector2 } from "./math.ts";
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
-export { runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
+export { CALLBACK_PRIMITIVES, runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
 export { findPath, lineOfSight, type Cell, type PathGrid, type PathOptions, type PathPoint } from "./path.ts";

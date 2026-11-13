@@ -134,6 +134,7 @@ export class World {
     if (pointer.disabled === true) return true;
     if (pointer.focusable === true) this.focus(pointer);
     this.#pressed = pointer;
+    pointer.onPressAt?.(x, y);
     pointer.onPress?.();
     return true;
   }
@@ -261,7 +262,9 @@ export class World {
       const dy = dx !== 0 ? 0 : (ask("down", ["ArrowDown", "PadDown"]) ? 1 : 0) - (ask("up", ["ArrowUp", "PadUp"]) ? 1 : 0);
       if (dx !== 0 || dy !== 0) {
         if (this.#focused === null) this.focus(focusables[0]!);
-        else {
+        else if (this.#focused.onNavigate?.(dx, dy) === true) {
+          // It used the direction itself (a slider moving its thumb), so the focus stays.
+        } else {
           const next = nearestInDirection(this.#focused, focusables, dx, dy);
           if (next !== null) this.focus(next);
         }

@@ -29,6 +29,11 @@ import {
   type ScreenFit,
   type ViewTransform,
   type WorldTransform,
+  WIDGET_NONE,
+  WIDGET_SLIDER,
+  WIDGET_TOGGLE,
+  type Slider,
+  type Toggle,
 } from "@rge/runtime";
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
 import { stepTransition, type ShownColors } from "./transition.ts";
@@ -623,7 +628,7 @@ export class DrawList {
 
 /** A `<Flex>` takes the mouse when it has a press or a hover callback, or a prop that is drawn while the mouse is over it. */
 function hoverable(flex: Flex): boolean {
-  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined || flex.hoverBackgroundImage !== undefined;
+  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined || flex.hoverBackgroundImage !== undefined || flex.widget !== WIDGET_NONE;
 }
 
 /** Whether a `<Flex>` draws anything of its own, in any state: a background or a border, or a colour for one in a state. */
@@ -636,7 +641,7 @@ function paints(flex: Flex): boolean {
     flex.disabledBackground !== undefined || flex.disabledBorderColor !== undefined ||
     flex.backgroundImage !== undefined || flex.hoverBackgroundImage !== undefined || flex.focusBackgroundImage !== undefined ||
     flex.pressedBackgroundImage !== undefined || flex.disabledBackgroundImage !== undefined ||
-    flex.opacity !== 1 || (flex.transitionState !== null && (flex.transitionState.fromAlpha !== 1 || flex.transitionState.toAlpha !== 1))
+    flex.widget !== WIDGET_NONE || flex.opacity !== 1 || (flex.transitionState !== null && (flex.transitionState.fromAlpha !== 1 || flex.transitionState.toAlpha !== 1))
   );
 }
 
@@ -925,6 +930,8 @@ export class FrameBuilder {
   #time: number | undefined = undefined;
   /** Scratch for the colours a transitioning `<Flex>` shows, so drawing allocates nothing. */
   readonly #fadeColors: ShownColors = { fill: 0, edge: 0, alpha: 1 };
+  /** Scratch for where a part of a widget is (see `#partAt`). */
+  readonly #part = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
   /** The colour a text's shadow or outline copy is drawn in, while one is; undefined for the text itself. */
   #ink: PackedColor | undefined = undefined;
   /** Scratch for where a shadow or outline copy of a text is, so drawing the effects makes no object per copy. */
@@ -1710,6 +1717,7 @@ export class FrameBuilder {
     this.#paintColors(flex, world, background, borderColor, fading);
     // The image goes over the colours (a colour shows through where the image is transparent) and under the children.
     if (image !== undefined && image !== "") this.#paintImage(flex, world, image);
+    if (flex.widget !== WIDGET_NONE) this.#paintWidget(flex, world);
     if (alpha !== 1 && flex.drawnAlpha === 1) list.popAlpha();
   }
 
@@ -1735,6 +1743,49 @@ export class FrameBuilder {
     }
     if (background === undefined && borderWidth === 0) return;
     this.#list.box(world, width, height, background === undefined ? 0 : this.#color(background), borderWidth === 0 || borderColor === undefined ? 0 : this.#color(borderColor), borderWidth, radius);
+  }
+
+  /** Where a part of a box is, `ox` and `oy` pixels in from its top-left corner, taken through the box's own rotation and scale: a scratch transform, good until the next call. */
+  #partAt(world: WorldTransform, ox: number, oy: number): WorldTransform {
+    const part = this.#part;
+    const cos = world.rotation === 0 ? 1 : Math.cos(world.rotation);
+    const sin = world.rotation === 0 ? 0 : Math.sin(world.rotation);
+    const x = ox * world.scaleX;
+    const y = oy * world.scaleY;
+    part.x = world.x + x * cos - y * sin;
+    part.y = world.y + x * sin + y * cos;
+    part.rotation = world.rotation;
+    part.scaleX = world.scaleX;
+    part.scaleY = world.scaleY;
+    return part;
+  }
+
+  /**
+   * What a widget draws of its own, over its background and image and under its children: a slider's fill and thumb, a toggle's
+   * track and knob. Each is a `box` record inside the border, so they fade, clip and follow the transform as the box does.
+   */
+  #paintWidget(flex: Flex, world: WorldTransform): void {
+    const edge = borderRoom(flex);
+    const width = Math.max((flex.box.size[0] as number) - 2 * edge, 0);
+    const height = Math.max((flex.box.size[1] as number) - 2 * edge, 0);
+    if (!(width > 0 && height > 0)) return;
+    const list = this.#list;
+    // The track's own rounding, less the border it sits inside.
+    const radius = Math.max((flex.borderRadius > 0 ? flex.borderRadius : 0) - edge, 0);
+    if (flex.widget === WIDGET_SLIDER) {
+      const slider = flex as unknown as Slider;
+      const thumb = slider.thumbSize();
+      const x = edge + slider.fraction() * Math.max(width - thumb, 0);
+      const fill = x + thumb / 2 - edge;
+      if (fill > 0 && slider.fillColor !== "") list.box(this.#partAt(world, edge, edge), fill, height, this.#color(slider.fillColor), 0, 0, radius);
+      if (thumb > 0) list.box(this.#partAt(world, x, edge), thumb, height, this.#color(slider.thumbColor), 0, 0, radius);
+    } else if (flex.widget === WIDGET_TOGGLE) {
+      const toggle = flex as unknown as Toggle;
+      list.box(this.#partAt(world, edge, edge), width, height, this.#color(toggle.checked ? toggle.onColor : toggle.offColor), 0, 0, height / 2);
+      const gap = Math.min(2, height / 4);
+      const knob = Math.max(height - 2 * gap, 0);
+      if (knob > 0) list.box(this.#partAt(world, toggle.checked ? edge + width - gap - knob : edge + gap, edge + gap), knob, knob, this.#color(toggle.thumbColor), 0, 0, knob / 2);
+    }
   }
 
   /** The pixels of one side's slice (0 when it is not given, or not a number of at least 0). */

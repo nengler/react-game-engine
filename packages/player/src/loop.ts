@@ -1,4 +1,4 @@
-import { Flex, Game, World, captureHotState, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
+import { Flex, Game, WIDGET_NONE, World, captureHotState, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -301,7 +301,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     // A <Flex> collected only for its hover callbacks lets the press through to what is under it.
     for (let i = pointers.length - 1; i >= 0; i--) {
       const pointer = pointers[i] as Pressable;
-      if (pointer.onPress === undefined && pointer instanceof Flex) continue;
+      if (pointer.onPress === undefined && pointer instanceof Flex && pointer.widget === WIDGET_NONE) continue;
       const point = i >= hudPointersFrom ? hudAt : at;
       if (clippedOff(pointer as unknown as GameObject, point.x, point.y)) continue;
       if (world.reportPress(pointer, point.x, point.y)) return;
@@ -345,6 +345,20 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       else box.scrollX = after;
       return;
     }
+  };
+
+  /**
+   * A press that is still held keeps telling the pressable it began on where the mouse is (`onDrag`), wherever the mouse has gone:
+   * a slider's thumb follows it out of the box. Pressing it already told it once (`onPressAt`); this is every step after.
+   */
+  const dispatchDrag = (): void => {
+    const held = world.pressed;
+    if (held === null || held.onDrag === undefined) return;
+    if (((input.keys[LEFT_BUTTON] as number) & RGE_KEY_DOWN) === 0) return;
+    const index = pointers.indexOf(held);
+    if (index < 0) return;
+    const point = index >= hudPointersFrom ? input.pointThrough(hudView, input.screenX, input.screenY) : input.worldPoint(input.screenX, input.screenY);
+    held.onDrag(point.x, point.y);
   };
 
   /** The topmost pressable under the mouse, as last frame drew them, is the hovered one: `onPointerEnter` and `onPointerLeave` when it changes. */
@@ -427,6 +441,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     const realDt = input.values[RGE_IN_DT] as number;
     if (realDt > 0) smoothDt = smoothDt === 0 ? realDt : smoothDt * 0.9 + realDt * 0.1;
     dispatchPress();
+    dispatchDrag();
     dispatchHover();
     dispatchWheel();
     const dt = input.values[RGE_IN_DT] as number;
