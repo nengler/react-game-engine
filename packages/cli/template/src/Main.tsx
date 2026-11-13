@@ -22,7 +22,7 @@ export default function Main() {
   });
 
   return (
-    <Game name="Main" title="__NAME__" width={320} height={180} background="#10131c" assets="assets">
+    <Game title="__NAME__" width={320} height={180} background="#10131c" assets="assets">
       <Screen width={320} height={180} fit="integer">
         <Entity name="Hero" transform={{ x, y }}>
           <Sprite image="hero.png" originX={8} originY={8} />

@@ -4,6 +4,9 @@ import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
 import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
 import { ElementEmitter } from "./elements.ts";
 
+/** Built-ins whose `name` a component root takes from the component when it does not write one (`Game` extends `Entity`). */
+const NAMED_ROOTS: ReadonlySet<string> = new Set(["Entity", "Game"]);
+
 
 
 export interface GeneratorOptions {
@@ -369,7 +372,13 @@ class ComponentGenerator extends ElementEmitter {
         // state exists, so it gets a placeholder and its real value in the first `render()`, which the constructor runs.
         const required = this.requiredHostProps[c.root.component.name] ?? [];
         const placeholders = c.root.props.flatMap((p) => (p.kind === "DynamicProp" && required.includes(p.name) ? [`${propertyKey(p.name)}: undefined as never`] : []));
-        const hostEntries = this.within({ inlineMemos: true }, () => [...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`), ...placeholders]);
+        // A root `<Entity>` (or `<Game>`, a fragment, or the container a component or condition root is held in) with no
+        // `name` of its own is named after the component, as `<Entity name="Player">` would: what `other.owner` reads.
+        const defaultName =
+          c.root.component.kind === "Intrinsic" && NAMED_ROOTS.has(c.root.component.name) && !c.root.props.some((p) => "name" in p && p.name === "name")
+            ? [`name: ${JSON.stringify(c.name)}`]
+            : [];
+        const hostEntries = this.within({ inlineMemos: true }, () => [...defaultName, ...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`), ...placeholders]);
         const host = hostEntries.length > 0 ? `{ ${hostEntries.join(", ")} }` : "{}";
         if (c.propsType) w.line(`super(${host}, props${defaultsObject ? `, ${defaultsObject}` : ""});`);
         else w.line(hostEntries.length > 0 ? `super(${host});` : "super();");

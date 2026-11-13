@@ -380,6 +380,8 @@ eight props). It has 27 rule tests and replays to compare against.
 
 ### B1. A root `<Entity>` named after its component
 
+**Built 2026-11-13.** See DESIGN.md, "A root named after its component".
+
 **Today.** Nearly every component starts `<Entity name="Play">`, repeating the component's name: 17 times in Bramble alone. The
 name is not decoration. `Collider.owner` walks up the tree to the nearest non-empty `name` and falls back to the class name
 (`packages/runtime/src/components/Collider.ts`), and collision handlers read it as `other.owner`. So leaving the name out does not
@@ -402,9 +404,9 @@ they stay unnamed unless written.
 
 **Done when**
 
-- [ ] An unnamed root `<Entity>` or fragment gets the component's name, with a compiler test
-- [ ] A collision test reads `other.owner` from a component with no written name
-- [ ] The games, the template and the guide drop the redundant names
+- [x] An unnamed root `<Entity>` or fragment gets the component's name, with a compiler test
+- [x] A collision test reads `other.owner` from a component with no written name
+- [x] The games, the template and the guide drop the redundant names
 
 ### B2. Lists laid out with `<Flex>`, and `x` / `y` as shorthand
 
