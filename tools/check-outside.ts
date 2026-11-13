@@ -44,7 +44,7 @@ try {
   for (const file of readdirSync(join(work, "packs"))) {
     const pack = /^rge-(.+?)-\d/.exec(file)?.[1];
     if (pack === undefined) continue;
-    const section = pack === "cli" ? "devDependencies" : "dependencies";
+    const section = pack === "cli" || pack === "testing" ? "devDependencies" : "dependencies";
     (pkg[section] ??= {})[`@rge/${pack}`] = `file:${join(work, "packs", file)}`;
   }
   writeFileSync(manifest, `${JSON.stringify(pkg, null, 2)}\n`);

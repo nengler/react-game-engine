@@ -291,7 +291,7 @@ test("the player walks right", () => {
 **Done when**
 
 - [x] `@rge/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
-- [ ] The template's tests show it next to a rules test
+- [x] The template's tests show it (A8: beside a whole-game replay; the template has no rules left to test)
 - [x] A7's Hearth has component tests for its enemies and towers
 
 ### A5. Component state in saves
@@ -387,6 +387,12 @@ eight props). It has 27 rule tests and replays to compare against.
 
 ### A8. The guide, the template and the README teach components first
 
+**Built 2026-11-13.** The guide's mental model, "Coming from React", "Three places code can go", the recipes and "Custom hooks
+and plain functions" put game code in components and plain functions where React would extract them; "When something goes
+wrong" has the questions A2 and A6 raised. The template's hero is `src/Hero.tsx` with `useBody`, tested alone with `@rge/testing`
+(`test/hero.test.ts`), which is now packed (`npm run pack`) and a dev dependency of a new game. Checked by making a game from the
+packs outside the repository and running `rge check` (3 tests, parity with the Rust host).
+
 **Work.**
 
 - The README's first example stays as it is: it is the target.
@@ -398,7 +404,7 @@ eight props). It has 27 rule tests and replays to compare against.
 
 **Done when**
 
-- [ ] The guide, the template and the README all start from component state, checked by following the guide from scratch
+- [x] The guide, the template and the README all start from component state, checked by following the guide from scratch
 
 ---
 

@@ -20,8 +20,8 @@ import { transformSync } from "esbuild";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The packages a game installs. `native` and `cli` join them in M0.2 and M0.3. */
-export const PACKABLE = ["runtime", "compiler", "player", "native", "player-node", "cli"] as const;
+/** The packages a game installs. `native` and `cli` join them in M0.2 and M0.3; `testing` (a game's tests) with A8. */
+export const PACKABLE = ["runtime", "compiler", "player", "native", "player-node", "testing", "cli"] as const;
 
 type Flavor = "desktop" | "headless";
 const platform = `${process.platform}-${process.arch}`;

@@ -45,7 +45,8 @@ export function createCommand(args: readonly string[]): number {
     for (const file of tarballs) {
       const pack = /^rge-(.+?)-\d/.exec(file)?.[1] as string;
       const spec = `file:${join(dir, file)}`;
-      if (pack === "cli") devDependencies["@rge/cli"] = spec;
+      // The command line and the testing library are for making the game, not for running it.
+      if (pack === "cli" || pack === "testing") devDependencies[`@rge/${pack}`] = spec;
       else dependencies[`@rge/${pack}`] = spec;
     }
     pkg["dependencies"] = dependencies;

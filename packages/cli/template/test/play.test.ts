@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { parseInputScript, runScript, type Player } from "@rge/player";
 import type { GameObject } from "@rge/runtime";
 import { bindings, gameConfig } from "../game.ts";
-import { SPEED } from "../src/rules/move.ts";
 
 /** Where the hero is, read from the player's tree: the entity named Hero. */
 function heroAt(player: Player): { x: number; y: number } {
@@ -13,7 +12,10 @@ function heroAt(player: Player): { x: number; y: number } {
   return { x: hero.transform.x, y: hero.transform.y };
 }
 
-test("holding a key moves the hero, and letting go stops it", () => {
+/** The hero's speed, in pixels a second (its `speed` prop's default). */
+const SPEED = 120;
+
+test("the whole game: holding a key moves the hero, and letting go stops it", () => {
   // The components themselves, played on a recording backend: 30 steps right, a pause, 20 steps down.
   const frames = parseInputScript("right*30, _*10, down*20", { bindings });
   const { states } = runScript(gameConfig, frames, heroAt);
