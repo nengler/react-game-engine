@@ -11,7 +11,7 @@ export default function Main() {
   const screen = useGame((s) => s.screen);
 
   return (
-    <Game name="Main" id="bramble" controls={controls} upscale="sharp" title="Bramble" width={960} height={540} background="#10131c" assets="assets" fixedStep={60}>
+    <Game id="bramble" controls={controls} upscale="sharp" title="Bramble" width={960} height={540} background="#10131c" assets="assets" fixedStep={60}>
       <Screen width={320} height={180} fit="contain">
         <Router route={screen}>
           <Route name="title">

@@ -9,7 +9,7 @@ export function Title() {
   const { openTitle, choose } = useGame((s) => s);
   useMount(() => openTitle());
   return (
-    <Entity name="Title">
+    <Entity>
       <Text transform={{ x: 0, y: 30 }} width={320} align="center" size={30} color="#e8d9a8">BRAMBLE</Text>
       <Menu top={90} rows={titleRows(hasSave)} start={start} onChoose={choose} />
     </Entity>

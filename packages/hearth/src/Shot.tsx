@@ -16,7 +16,7 @@ export function Shot({ kind, x, y, tx, ty, t, flight, radius }: ShotProps) {
   const k = Math.min(t / flight, 1);
   const arc = kind === "mortar" ? -Math.sin(k * Math.PI) * 14 : 0;
   return (
-    <Entity name="Shot" transform={{ x: x + (tx - x) * k, y: y + (ty - y) * k + arc }}>
+    <Entity transform={{ x: x + (tx - x) * k, y: y + (ty - y) * k + arc }}>
       {kind === "frost" ? (
         <Shape kind="circle" width={radius * 2 * k} height={radius * 2 * k} color="#9ee7ff40" transform={{ x: -radius * k, y: -radius * k }} />
       ) : (

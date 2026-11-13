@@ -43,7 +43,7 @@ export function DashTrail({ dashing, x, y, height, flipX }: DashTrailProps) {
   });
 
   return (
-    <Entity name="DashTrail">
+    <Entity>
       {ghosts.map((g) => (
         <Sprite
           key={g.id}

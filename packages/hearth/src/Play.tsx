@@ -24,7 +24,7 @@ export function Play() {
   });
 
   return (
-    <Entity name="Play">
+    <Entity>
       <Field />
       {pads.map((p) => (
         <Pad key={p.id} {...p} />

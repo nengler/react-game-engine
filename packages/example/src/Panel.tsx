@@ -11,7 +11,7 @@ interface PanelProps {
  */
 export function Panel({ title, children }: PanelProps) {
   return (
-    <Entity name="Panel">
+    <Entity>
       <Sprite image={title === "hud" ? "panel-hud.png" : "panel.png"} />
       <Entity name="Content" transform={{ y: 16 }}>
         {children}

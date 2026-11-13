@@ -18,7 +18,7 @@ interface EnemyProps {
 /** One enemy: a four-frame walk facing the way it goes, white for a moment when hit, blue while slowed, a health bar once hurt. */
 export function Enemy({ kind, x, y, left, hp, maxHp, slow, flash }: EnemyProps) {
   return (
-    <Entity name="Enemy" transform={{ x, y }}>
+    <Entity transform={{ x, y }}>
       <AnimatedSprite
         sheet="enemies.png"
         frameWidth={14}

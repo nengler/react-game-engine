@@ -7,7 +7,7 @@ export function Gem() {
   const collect = useGame((s) => s.collect);
 
   return (
-    <Entity name="Gem">
+    <Entity>
       {gems === 0 && (
         <>
           <Shape kind="circle" width={8} height={8} color="#7de3ff" />

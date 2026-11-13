@@ -8,7 +8,7 @@ function Mover() {
   });
 
   return (
-    <Entity name="Mover" transform={{ x, y: 0 }}>
+    <Entity transform={{ x, y: 0 }}>
       <Sprite image={x > 100 ? "run.png" : "idle.png"} />
     </Entity>
   );

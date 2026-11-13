@@ -18,7 +18,7 @@ function Play() {
   const [shake, setShake] = useShake();
 
   return (
-    <Entity name="Play">
+    <Entity>
       {/* Dust hanging in the room's air (behind the rock, so only the air shows it), drifting up: it is there when the room is, and it stops when the world freezes (a dash,
           a death), which is how a freeze is felt. In the world, so a room change leaves the old room's dust behind it. */}
       <Particles
@@ -67,7 +67,6 @@ export default function Main() {
   return (
     <Game
       vsync={false}
-      name="Main"
       controls={controls}
       upscale="sharp"
       title="Kite"

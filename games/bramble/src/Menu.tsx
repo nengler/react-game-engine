@@ -25,7 +25,7 @@ export function Menu({ top, rows, start = 0, onChoose, onAdjust }: MenuProps) {
     if (input.pressed("confirm")) onChoose(id);
   });
   return (
-    <Entity name="Menu">
+    <Entity>
       <Shape kind="rect" width={300} height={12} color="#2b3350" transform={{ x: 10, y: top + cursor * 13 }} />
       {rows.map((row, i) => (
         <Entity key={row.id} name={row.id} transform={{ x: 14, y: top + i * 13 }}>

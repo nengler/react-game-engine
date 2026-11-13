@@ -28,7 +28,7 @@ function Hero() {
   });
 
   return (
-    <Entity name="Hero">
+    <Entity>
       <Sprite image={poisoned ? "poisoned.png" : "normal.png"} />
       <Collider
         width={16}
