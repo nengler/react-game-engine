@@ -8,6 +8,9 @@ conditions in `.map`, spread props, `!== undefined`, component roots, objects in
 `useEffect` stays out; what replaces each of its uses is decided in [DESIGN.md](DESIGN.md), "Why there is no `useEffect`"
 (2026-11-12). Two of those answers are built since: a cleanup returned from `useMount`, and `key` on any element.
 
+The fixes for what is left here (custom hooks, names that clash with the root, context, `useGame((s) => s)`, mirroring settings,
+repeated text style) are planned in [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md) (2026-11-13), with what that review found besides.
+
 ## 1. It looks like React but compiles a subset
 
 TSX invites people to write React, and then they hit `RGE` codes.
