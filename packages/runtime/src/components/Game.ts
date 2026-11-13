@@ -61,6 +61,16 @@ export interface GameProps extends EntityProps {
    * `input.pressed("jump")` then means any of the action's keys.
    */
   controls?: Controls;
+  /**
+   * How fast game time runs: with a fixed step, `2` runs two steps a frame (each the same `dt`, so the game plays exactly as at
+   * `1`, only faster: a fast-forward button). Read every frame, so it may be state (`timeScale={speed}`). Default 1.
+   */
+  timeScale?: number;
+  /**
+   * While true, no `useUpdate` runs: the game stands still. `useInput`, presses and the focus still work, so a pause menu can
+   * unpause it. Read every frame, so it may be state (`paused={paused}`). Default false.
+   */
+  paused?: boolean;
 }
 
 /**
@@ -71,7 +81,8 @@ export interface GameProps extends EntityProps {
  * is `<Game …>` extends it. It is optional: a game with any other root gets the default settings (and whatever the player was
  * configured with); a `<Game>` root overrides them, each prop only where it is written.
  *
- * Its settings are read before the tree is built, so they are literals (`width={640}`, never state), and a `<Game>`
+ * Its settings are read before the tree is built, so they are literals (`width={640}`, never state), except `timeScale` and
+ * `paused`, which are read every frame; a `<Game>`
  * is only ever a component's root, never a child. A field is `undefined` where its prop was not written.
  */
 export class Game<P extends object = {}> extends Entity<P> {
@@ -94,6 +105,8 @@ export class Game<P extends object = {}> extends Entity<P> {
   fpsKey: string | false | undefined;
   font: string | undefined;
   controls: Controls | undefined;
+  timeScale: number | undefined;
+  paused: boolean | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: GameProps = {}, props?: P, defaults?: Partial<P>) {
@@ -115,5 +128,7 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.fpsKey = hostProps.fpsKey;
     this.font = hostProps.font;
     this.controls = hostProps.controls;
+    this.timeScale = hostProps.timeScale;
+    this.paused = hostProps.paused;
   }
 }

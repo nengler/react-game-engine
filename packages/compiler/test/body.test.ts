@@ -5,7 +5,8 @@
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Entity, World, registerTilemaps, type TilemapData } from "@rge/runtime";
-import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
+import { dirname, join } from "node:path";
+import { cleanOutput, closeCompiler, compile, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -69,5 +70,50 @@ describe("useBody", () => {
     assert.equal(hero.transform.x, 12);
     assert.ok(landed.length > 0, "it landed");
     assert.equal(spiked, 0);
+  });
+});
+
+const TOWER = `
+interface TowerProps { onSee: (ids: string) => void }
+export function Tower({ onSee }: TowerProps) {
+  const { overlapping } = useBody({ x: -10, y: -10, width: 20, height: 20 });
+  useUpdate(() => {
+    onSee(overlapping("enemy").map((enemy) => enemy.data.id).join(","));
+  });
+  return <Entity />;
+}
+export function Field({ onSee }: TowerProps) {
+  return (
+    <Entity>
+      <Collider width={4} height={4} tag="enemy" data={{ id: "near" }} transform={{ x: 32, y: 30 }} />
+      <Collider width={4} height={4} tag="enemy" data={{ id: "far" }} transform={{ x: 80, y: 30 }} />
+      <Collider width={4} height={4} tag="wall" transform={{ x: 30, y: 30 }} />
+      <Entity transform={{ x: 30, y: 30 }}>
+        <Tower onSee={onSee} />
+      </Entity>
+    </Entity>
+  );
+}`;
+
+// What the game declares once: the data each tag carries, which types \`overlapping("enemy")\`'s contacts.
+const ENEMY_DATA = `declare global {
+  interface ColliderData { enemy: { id: string }; wall: undefined }
+}
+export {};
+`;
+
+describe("useBody's overlapping", () => {
+  it("answers which colliders of a tag overlap the body now, with their data, typed by tag", async () => {
+    const compiled = compile(TOWER);
+    const data = join(dirname(compiled.fileName), "colliders.ts");
+    assert.deepEqual(getCompiler().typeCheck([{ fileName: compiled.fileName, text: compiled.code }, { fileName: data, text: ENEMY_DATA }]), []);
+    assert.match(compiled.code, /overlapping = <Tag extends string>\(tag: Tag\)/, "the hook's function keeps its type parameter");
+    const { Field } = await load<{ Field: new (p: { onSee: (ids: string) => void }) => Entity }>(compiled);
+    const seen: string[] = [];
+    const world = new World();
+    world.mount(new Field({ onSee: (ids) => seen.push(ids) }));
+    world.flush();
+    world.tick(1 / 60);
+    assert.deepEqual(seen, ["near"], "the far enemy is outside its box, and the wall is not an enemy");
   });
 });

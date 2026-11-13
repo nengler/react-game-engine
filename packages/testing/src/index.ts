@@ -13,7 +13,7 @@
  *
  * Tests import the generated class, as a game's `game.ts` does.
  */
-import { parseInputScript } from "@rge/player";
+import { CollisionTracker, parseInputScript } from "@rge/player";
 import {
   Collider,
   Controls,
@@ -38,6 +38,11 @@ export interface RenderOptions {
   readonly dt?: number;
   /** Leave the game state as it is, rather than putting every store back to its initial state first. */
   readonly keepGameState?: boolean;
+  /**
+   * Find collisions after every step, as the player does: colliders that come to overlap report `onCollisionEnter` (and
+   * `onCollisionExit` when they part) by themselves. Default false: a test reports the contacts it wants with `collide`.
+   */
+  readonly collisions?: boolean;
 }
 
 /** A collider to touch the component with, made for the test: what the other side's `other` will read. */
@@ -46,6 +51,13 @@ export interface ContactSpec {
   readonly data?: unknown;
   readonly width?: number;
   readonly height?: number;
+}
+
+/** Another collider put in the world for a test (`place`): a contact spec, and where its top left is. */
+export interface PlacedSpec extends ContactSpec {
+  readonly x: number;
+  readonly y: number;
+  readonly layer?: string;
 }
 
 /** A component mounted for a test. Every method that runs the world flushes it after, so what is read is what would be drawn. */
@@ -57,11 +69,13 @@ export class Rendered<Root extends GameObject = GameObject> {
   /** Colliders made by `collide` to stand for the other side, kept so a second contact with the same spec is the same collider. */
   readonly #others = new Map<string, Collider>();
   readonly #holder = new Entity({ name: "$test" });
+  readonly #tracker: CollisionTracker | null;
 
   constructor(root: Root, options: RenderOptions) {
     this.root = root;
     this.#dt = options.dt ?? 1 / 60;
     this.#controls = options.controls;
+    this.#tracker = options.collisions === true ? new CollisionTracker() : null;
     this.world.mount(this.#holder);
     this.#holder.addChild(root);
     setGameTree(this.world, root);
@@ -70,10 +84,7 @@ export class Rendered<Root extends GameObject = GameObject> {
 
   /** Run `count` steps with nothing pressed. */
   step(count = 1): this {
-    for (let i = 0; i < count; i++) {
-      this.world.tick(this.#dt, NO_INPUT);
-      this.world.flush();
-    }
+    for (let i = 0; i < count; i++) this.#tick(this.#dt, NO_INPUT);
     return this;
   }
 
@@ -84,11 +95,45 @@ export class Rendered<Root extends GameObject = GameObject> {
   input(script: string): this {
     const bindings = this.#controls?.toJSON();
     const frames = parseInputScript(script, { dt: this.#dt, ...(bindings ? { bindings } : {}) });
-    for (const frame of frames) {
-      this.world.tick(frame.dt, createInputState({ pressed: frame.pressed, down: frame.down, released: frame.released }, this.#controls));
-      this.world.flush();
-    }
+    for (const frame of frames) this.#tick(frame.dt, createInputState({ pressed: frame.pressed, down: frame.down, released: frame.released }, this.#controls));
     return this;
+  }
+
+  /**
+   * Put another collider in the world, at (x, y) in the world's space: something for the component to find or touch (an enemy
+   * near a tower). Returns it, to move (`transform`) or take out (`remove`) later.
+   */
+  place(spec: PlacedSpec): Collider {
+    const collider = new Collider({ width: spec.width ?? 1, height: spec.height ?? 1, tag: spec.tag ?? "", data: spec.data, layer: spec.layer });
+    collider.transform.x = spec.x;
+    collider.transform.y = spec.y;
+    // In an entity of its own: colliders with the same parent are one thing's, and never touch each other.
+    const thing = new Entity({ name: "$placed" });
+    thing.addChild(collider);
+    this.#holder.addChild(thing);
+    this.world.flush();
+    return collider;
+  }
+
+  /** Take out what `place` put in. */
+  remove(collider: Collider): void {
+    if (collider.parent !== null) this.#holder.removeChild(collider.parent);
+    this.world.flush();
+  }
+
+  /** One step: the tick, its renders, and (with `collisions`) the contacts it made, and what they changed. */
+  #tick(dt: number, input: Parameters<World["tick"]>[1]): void {
+    this.world.tick(dt, input);
+    this.world.flush();
+    if (this.#tracker === null) return;
+    const entries: { collider: Collider; world: ReturnType<Collider["worldTransform"]> }[] = [];
+    const visit = (object: GameObject): void => {
+      if (object instanceof Collider) entries.push({ collider: object, world: object.worldTransform() });
+      for (const child of object.children) visit(child);
+    };
+    visit(this.#holder);
+    this.#tracker.update(this.world, entries);
+    this.world.flush();
   }
 
   /** Press a pointer (or a `<Flex onPress>`, anything pressable) at its own position, as a click on it would. */

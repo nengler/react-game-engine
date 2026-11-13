@@ -110,4 +110,28 @@ export function Faller() {
     t.step(30);
     assert.equal(t.state().y, 4, "stands on the floor's top (8) minus its height (4)");
   });
+
+  it("finds collisions by itself with collisions on, and places other things in the world", async () => {
+    const { Mine } = await build<{ Mine: new (p: { onBoom: () => void }) => GameObject }>(`
+interface MineProps { onBoom: () => void }
+export function Mine({ onBoom }: MineProps) {
+  const { overlapping } = useBody({ x: 0, y: 0, width: 40, height: 40 });
+  const [near, setNear] = useState(0);
+  useUpdate(() => { setNear(overlapping("walker").length); });
+  return <Collider width={8} height={8} tag="mine" onCollisionEnter={(other) => { if (other.tag === "walker") onBoom(); }} />;
+}`);
+    let booms = 0;
+    const t = render(Mine, { onBoom: () => booms++ }, { collisions: true });
+    const walker = t.place({ tag: "walker", x: 30, y: 30, width: 4, height: 4 });
+    t.step();
+    assert.deepEqual([t.state().near, booms], [1, 0], "near the mine (in its body's box), not on it");
+    walker.transform.x = 2;
+    walker.transform.y = 2;
+    walker.markChanged(); // a transform written outside a render says so, as anywhere in the runtime
+    t.step();
+    assert.equal(booms, 1, "stepping onto it is a contact, found by the step itself");
+    t.remove(walker);
+    t.step();
+    assert.equal(t.state().near, 0);
+  });
 });

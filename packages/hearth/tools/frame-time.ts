@@ -1,6 +1,6 @@
 /**
  * Script time of one frame of the busiest part of the game, over a scripted run of the good build on a recording backend: the mean
- * and the slowest step while wave 10 is on (the most enemies on the path), and with how many enemies, towers and shots that is.
+ * and the slowest frame (two steps: the replay plays at 2×) while wave 10 is on (the most enemies on the path), and with how many enemies, towers and shots that is.
  * Drawing in librge is not in it. Runs under Node and, bundled, under the Rust host (QuickJS), where it reports the same way:
  *
  *   node packages/hearth/tools/frame-time.ts
@@ -8,7 +8,7 @@
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
 import { bindings, gameConfig, screen } from "../game.ts";
-import { useGame } from "../src/GameState.ts";
+import { battleOf, findPlay } from "../test/battle-state.ts";
 import { REPLAYS } from "../test/replays.ts";
 
 const now = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -22,10 +22,11 @@ for (let i = 0; i < frames.length + 1; i++) {
   const start = now();
   player.step();
   const elapsed = now() - start;
-  const b = useGame.getState().battle;
-  if (b.wave === 10 && b.status === "playing") {
+  const play = findPlay();
+  const b = play === null ? null : battleOf(play);
+  if (b !== null && b.wave === 10) {
     times.push(elapsed);
-    if (b.enemies.length > busiest.enemies) busiest = { enemies: b.enemies.length, towers: b.pads.filter((p) => p.tower !== null).length, shots: b.shots.length };
+    if (b.enemies > busiest.enemies) busiest = { enemies: b.enemies, towers: b.towers, shots: b.shots };
   }
 }
 player.close();

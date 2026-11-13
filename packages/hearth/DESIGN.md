@@ -15,10 +15,12 @@ node packages/hearth/tools/balance.ts [--write]   the balance table
 
 - Playable from the title through ten waves to a win or a loss, by mouse, keyboard or gamepad (`test/replays.test.ts` plays it by
   clicks and keys: a good build wins with lives left, a thin one loses, the pause menu works).
-- The rules are tested without the engine (`test/rules.test.ts`): path following, targeting, damage, splash, slow, spawning, the
-  economy, leaking, winning and losing.
+- The battle is tested as components, without a window (`test/battle.test.ts`, `@rge/testing`): an enemy walking, taking a
+  blast, slowed, dying and getting through; a tower aiming, firing on its cooldown, a mortar's scatter and a frost pulse; a shell
+  landing; and `Play`'s economy, waves, rewards, leaks and loss. The data and helpers (map, path, generator, wave tables, the
+  towers' numbers, targeting) have plain tests (`test/data.test.ts`).
 - The balance table (`test/balance.expected.json`) says the waves are meant to be hard in the way described below, and a test fails
-  if a number changes it.
+  if a number changes it. `tools/balance.ts` plays `Play` headless, pressing what a player presses.
 - Original art, sound and music, made in code by `tools/make-assets.ts` and `tools/make-map.ts`.
 
 It is **not** finished as a game a person has played: nobody has played it in a real window, so the numbers are a first pass set by the
@@ -59,9 +61,15 @@ and gold rewards are half the plan's (runner 2, grunt 3, brute 8), because with 
 at all. The table now reads: a mixed build (bolts, mortars and frost on the best pads, then upgrades) wins wave 10 with lives left; the
 same money in bolts alone runs out in wave 10; three towers lose in wave 5.
 
+**How much luck is in it** (found 2026-11-13, rewriting the battle as components). The early waves are close for the mixed build:
+whether its first mortar's shells land decides whether it ever catches up. With the old rules the mixed build won on six of eight
+seeds and lost wave 5 or 6 on the other two; the components roll the same dice differently (each tower keeps its own scatter seed)
+and it wins on seven of eight. The table is seed 1's (`<Play seed>`): the mixed build wins with 8 lives (the old seed 1 kept 15).
+
 ## Controls
 
-All through `createControls` and `<Game controls>` (`rules/controls.ts`), and one path: every key and click calls a game-state action.
+All through `createControls` and `<Game controls>` (`rules/controls.ts`). The pads call game-state actions (the cursor is shared
+by the pads and the side panel); the side panel's buttons call `Play`'s functions, which it passes down.
 
 - **Mouse:** click a pad (empty or built) to select it; the panel shows the build menu or the upgrade panel; the buttons in the panel are
   clicks too. The range ring shows for the selected tower and for the tower the mouse is over (`onPointerEnter` / `onPointerLeave`).
@@ -73,32 +81,43 @@ All through `createControls` and `<Game controls>` (`rules/controls.ts`), and on
 
 ## How it is built
 
-The shape Kite settled on, used a second time on purpose:
+Since 2026-11-13 the game is in its components ([REACT_FEEL_PLAN.md](../../docs/REACT_FEEL_PLAN.md), A7), as the README's `Player`
+keeps its own `health`. Before, the whole simulation was one plain function, `stepBattle(battle, dt, commands)` in `rules/`, and
+the components drew what it returned.
 
 ```
-src/rules/     plain TypeScript, no engine: the whole simulation
-  battle.ts    stepBattle(battle, dt, commands, map) → { battle, events }: the one entry point
-  path.ts      the polyline and the markers; position-at-distance
-  targeting.ts, towers.ts, enemies.ts, waves.ts, economy.ts, rng.ts
-  view.ts      what the panel reads about the cursor's pad (focusOf), a tower's range
-  controls.ts  the action map, and keyLabel(action) for the buttons' labels
-  map.ts       the one map, read from the generated tilemap
-src/GameState.ts   screen, battle, cursor, panel, speed, pause; the actions the buttons and pads call; `step(dt)` is the one place a step is taken
-src/theme.ts       the colours and icon frames, by name
-src/effects.ts     particle and sound stores; playEvents(events)
-src/*.tsx          Main, Title, Play, End, Field, Pad, Tower, Barrel, RangeRing, LevelPips, MuzzleFlash,
-                   Enemy, HealthBar, Shot, SidePanel, StatRow, BuildMenu, BuildOption, UpgradePanel, MenuButton, Modal, Panel, Label, Icon
+src/Play.tsx       the battle: the gold, the lives, the wave and its spawner, the towers bought on each pad, the lists of
+                   enemies and shots; build, upgrade, sell and startWave, which the side panel's buttons call
+src/Enemy.tsx      walks the path (slower while frosted), takes what lands on it, reports when it dies or gets through
+src/Tower.tsx      cools down, finds the enemies near it (`overlapping("enemy")`), aims at the one furthest along, fires
+src/Shot.tsx       flies, then lands as a `blast` collider for one step
+src/Pad.tsx        a place to build: the focus, the press, the cursor, and its Tower
+src/battle.ts      the shapes they hand each other (Foe, Built, Fired), and what their colliders carry (`ColliderData`)
+src/GameState.ts   what the screens share: the screen, the cursor, the speed, the pause, how the last battle ended
+src/rules/         data and pure helpers: the towers', enemies' and waves' numbers, the path, the map, the generator,
+                   targeting (`pickTarget`), the controls
+src/effects.ts     particle and sound stores, called from the components' handlers
+src/*.tsx          Main, Title, End, Field, Barrel, RangeRing, LevelPips, MuzzleFlash, HealthBar, SidePanel, StatRow, BuildMenu,
+                   UpgradePanel, MenuButton, Modal, Panel, Label, Icon
 ```
 
-`stepBattle` takes the battle (enemies, pads with their towers, shots, gold, lives, the wave, the spawner's clock, the seed) and the
-commands of this step (build, upgrade, sell, start a wave), and returns the next battle and the step's events (`shot`, `hit`, `killed`,
-`leaked`, `built`, `waveCleared`, `denied`, …), which the game state hands to `effects.ts` for sounds and particles. At 2× speed `step` runs
-the rules twice per engine step. The game state holds the battle as one object, replaced every step; components select what they draw.
+**How the pieces talk.** Down by props, up by callbacks, and across by collisions:
 
-The component tree: `Main` (`<Game>`, `<Screen>`, `<Router>` on a `screen` leaf, `<Music>`) → `Title`, `Play`, `End` (won or lost, a `Modal`).
-`Play` draws the field, then `pads.map((p) => <Pad key={p.id} {...p} />)` (a `Pad` takes the focus and the press, shows the cursor, and its
-`Tower` when it has one, which only draws), `enemies.map(…)`, `shots.map(…)`, the particle layer,
-and a `<Hud>` holding the `SidePanel` and, while paused, a `Modal` whose children are two buttons.
+- `Play` draws `enemies.map((e) => <Enemy key={e.id} {...e} onKilled={killed} onLeaked={leaked} />)`, `pads.map(…)` and
+  `shots.map(…)`. An enemy calls `onKilled(id, kind, x, y)` (Play adds its gold and drops it from the list) or `onLeaked`; a tower
+  calls `onFire(shot)` (Play adds a `Shot`); a shot calls `onLanded(id)`. Each updates `Play`'s lists with updaters
+  (`setEnemies((list) => list.filter(…))`), as many report in one step.
+- An enemy's collider carries `data={{ id, dist, x, y, hp }}`; a tower asks its body which enemy colliders overlap its reach and
+  picks from their data. A shot lands as a collider tagged `blast` carrying `{ target, x, y, radius, damage, slow }`; each enemy
+  it touches decides whether it was hit (a bolt hits its target only, a shell or a pulse everything within its radius).
+- The side panel is `Play`'s child: it gets the numbers and `onBuild`, `onUpgrade`, `onSell`, `onStartWave` as props.
+- 2× speed and the pause are `<Game timeScale={speed} paused={paused}>`: two whole steps a frame, or none.
+
+**Timing.** Every update of a step sees the state as the step began, and collisions are reported after the step's updates
+([DESIGN.md](../../docs/DESIGN.md), "Sharing state between components"). So an enemy hit at the end of a step reports its death in
+the next one, and `Play` sees the list empty (the wave cleared) the step after that. All of it repeats exactly.
+
+**Seeds.** `<Play seed>` (default 1) seeds the enemies' lanes, and each pad's tower's mortar scatter (`seed * 101 + pad`).
 
 ## Which engine features it uses
 
@@ -107,19 +126,32 @@ the second game".
 
 | Feature | Where | State |
 | --- | --- | --- |
-| Spread props | `<Enemy key={e.id} {...e} />`, `<Shot {...s} />` (a `Tower` takes named props: spreading the whole tower passed its `cooldown`, which changes every step while it fires, so every firing tower re-rendered every step) | built |
+| Spread props | `<Enemy key={e.id} {...e} onKilled={killed} />`, `<Shot key={s.id} {...s} onLanded={landed} />` | built |
+| State in the components that own it | `Enemy` (`dist`, `hp`, `slow`, `flash`), `Tower` (`cooldown`, `angle`, `flash`, its scatter seed), `Shot` (`t`), `Play` (the battle) | built (A7) |
+| Contacts that carry data | an enemy's position for the towers, a blast's damage for the enemies | built (A3, used here) |
+| A body that asks what is near | `Tower`: `useBody` as big as its reach, `overlapping("enemy")` | built (A7) |
+| Fast-forward and pause | `<Game timeScale={speed} paused={paused}>` | built (A7) |
 | Conditional inside a list's map | `pads.map((p) => p.tower ? <Tower/> : <EmptyPad/>)`, `shots.map((s) => s.live && <Shot/>)` | built |
 | Forwarding `{children}` | `Modal` → `Panel` → its column | built |
 | Children on list items | `TOWER_LIST.map((d) => <MenuButton …><Icon/><Label/></MenuButton>)` | built (flat children only) |
-| Context | one value per tower for `Barrel`, `RangeRing`, `LevelPips`, `MuzzleFlash` | **not built, not needed**: each takes two or three props from `Tower` |
-| Computed selectors | `useGame((s) => s.cursor === id)` in `Tower`/`EmptyPad`, `useGame((s) => focusOf(s.battle, s.cursor))` in `UpgradePanel` | built after review |
+| Context | one value per tower for `Barrel`, `RangeRing`, `LevelPips`, `MuzzleFlash`; the battle's numbers for the side panel | built (C3), **not used**: the side panel is two levels below `Play`, and props were enough |
+| Computed selectors | `useGame((s) => s.cursor === id)` in `Pad` | built after review |
 | Constants and index reads in components | `ROW[kind] * 3 + level` in `Tower`, `ICON[d.kind]` in `BuildMenu`, `WALKS` in `Enemy`, `Math.PI` in `Shot` | built after review |
 | A component as the root | `BuildMenu` and `UpgradePanel` return `<Panel>`; `MuzzleFlash` returns `on ? <Sprite/> : null` | built after review |
 | Functions passed whole | `onPress={resume}`, `onPress={startWave}`; `MenuButton`'s `<Flex onPress={onPress}>` | built after review |
 
 ## Performance
 
-Wave 10 on the road: 109 enemies, 14 towers. Script time per step (the rules twice at 2× speed, the tree, the draw list; no drawing),
-`tools/frame-time.ts`: Node/V8 mean 1.0 ms (p99 2.7, slowest 7); QuickJS-ng mean 6.7 ms (p99 15, slowest 24). The rules are 0.1 ms (V8) and
-0.5 ms (QuickJS) of a step; the rest is 109 enemy components each re-rendered every step because they move. Inside a 16.7 ms frame at the
-mean, close to it at the 99th percentile on QuickJS. See NATIVE_PLAN.md.
+Wave 10 on the road: 109 enemies, 13 towers, at 2× (the replay's speed). Script time per frame (two steps: the tree, the collisions,
+the draw list; no drawing), `tools/frame-time.ts`:
+
+| | Node/V8 mean | p99 | QuickJS-ng mean | p99 |
+| --- | --- | --- | --- | --- |
+| The rules in `stepBattle` (before 2026-11-13): the rules twice, the tree once | 0.96 ms | 2.2 | 7.6 ms | 17.1 |
+| The battle in components: two whole steps | 1.58 ms | 4.9 | 13.2 ms | 32.3 |
+
+A step costs about what the old frame did (QuickJS 6.6 ms against 7.6): 109 enemy components re-render each step either way. What
+doubled is 2×, which now steps the whole world twice (two renders, two collision passes, two tree walks a frame) where the old game
+ran its rules twice and its tree once. At 1× it is inside a 16.7 ms frame on QuickJS; at 2× its mean is, its 99th percentile is not.
+The colliders' world boxes are cached per update phase for the towers' queries (QuickJS was 19.2 ms mean without). See
+NEXT_PRIORITIES.md, "Findings from Hearth in components".

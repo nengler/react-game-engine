@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, freeze, type InputState } from "@rge/runtime";
+import { Entity, freeze, Game, type InputState } from "@rge/runtime";
 import { createPlayer, FixedDriver, MAX_STEPS_PER_FRAME, RecordingBackend, RGE_KEY_DOWN, RGE_KEY_PRESSED, RGE_KEY_RELEASED, type InputFrame, type PlayerConfig } from "../src/index.ts";
 
 /** Records what each tick of it saw. */
@@ -74,6 +74,41 @@ describe("fixed timestep", () => {
 
   it("rejects a rate that is not positive", () => {
     assert.throws(() => run([], { fixedStep: 0 }), /fixedStep/);
+  });
+});
+
+describe("<Game timeScale paused>", () => {
+  /** A `<Game fixedStep={60}>` root holding a probe, run frame by frame; `between(i, game)` may change the game's props. */
+  function runGame(frames: readonly InputFrame[], between: (frame: number, game: Game) => void): Probe {
+    const backend = new RecordingBackend();
+    const probe = new Probe();
+    const game = new Game({ fixedStep: 60 });
+    game.addChild(probe);
+    for (const f of frames) backend.queueInput(f);
+    const player = createPlayer(backend, { root: () => game });
+    for (let i = 0; i <= frames.length; i++) {
+      between(i, game);
+      player.step();
+    }
+    player.close();
+    return probe;
+  }
+
+  it("timeScale 2 runs two steps a frame, each the same dt: a fast-forward that plays the game exactly as at 1", () => {
+    const probe = runGame(idle(10, 1 / 60), (_, game) => (game.timeScale = 2));
+    assert.equal(probe.dts.length, 20);
+    assert.ok(probe.dts.every((d) => d === 1 / 60));
+  });
+
+  it("is read every frame, so it may change while the game runs", () => {
+    const probe = runGame(idle(10, 1 / 60), (i, game) => (game.timeScale = i <= 5 ? 1 : 2));
+    assert.equal(probe.dts.length, 5 + 2 * 5);
+  });
+
+  it("paused stops every update, while input still reaches the game (a pause menu can unpause it)", () => {
+    const probe = runGame([...idle(3, 1 / 60), { dt: 1 / 60, pressed: ["Space"] }, ...idle(3, 1 / 60)], (i, game) => (game.paused = i >= 2 && i < 6));
+    assert.equal(probe.dts.length, 3, "two steps before the pause, one after");
+    assert.ok(probe.saw.includes("dp-"), "the press during the pause was seen by onInput");
   });
 });
 

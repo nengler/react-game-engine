@@ -69,6 +69,8 @@ export interface FunctionIR {
   readonly kind: "Function";
   readonly params: readonly ParamIR[];
   readonly body: readonly StatementIR[];
+  /** A function of the component's own with type parameters (`<Tag extends string>(tag: Tag) => …`): their source text, `<…>` included. */
+  readonly typeParams?: string;
 }
 
 /**

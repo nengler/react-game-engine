@@ -67,12 +67,13 @@ export function useBody(options) {
     return hit;
   };
   const touching = (tag: string) => body.touching(tag);
+  const overlapping = <Tag extends string>(tag: Tag) => body.overlapping(tag);
   const place = (toX: number, toY: number) => {
     body.place(toX, toY);
     setX(body.x);
     setY(body.y);
   };
-  return { x, y, move, touching, place };
+  return { x, y, move, touching, overlapping, place };
 }
 
 /**

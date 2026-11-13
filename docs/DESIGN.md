@@ -1239,7 +1239,8 @@ the defaults apply. A `<Game>` root overrides them, each prop only where it is w
 `undefined` on the object, which is how the player knows to fall back.
 
 **Literals, and only a root.** The player reads these settings before the tree is built, so each is a literal
-(`width={640}`, `smooth`, `resizable={false}`), never state or props: anything else is `RGE1210`. `<Game>` is only ever a
+(`width={640}`, `smooth`, `resizable={false}`), never state or props: anything else is `RGE1210`. Two are exceptions (below):
+`timeScale` and `paused` are read every frame and may be state. `<Game>` is only ever a
 component's root: as a child it is `RGE1003`. It is not placed, so it takes no `transform`. A prop it does not have is
 `RGE1203`, listing the ones it does. Its members are reserved names for a component that is rooted at it, like any
 built-in's.
@@ -1249,6 +1250,16 @@ starts every game state in the process from its initial values (`resetGameState`
 with or without a `<Game>`, so `state` is simply not one of its props.
 
 A user component cannot be called `Game`: it is an intrinsic like `Entity` (`RGE1206`). The demo's root is `Main`.
+
+**Fast-forward and pause: `timeScale` and `paused`** (2026-11-13, REACT_FEEL_PLAN.md A7). Hearth's 2× speed used to run its rules
+twice per engine step, and its pause skipped them: both were the rules' business, and with the battle in components there is no
+one function to call twice. They are the world's now. Each frame the player reads the current root's `timeScale` (default 1) and
+`paused`: the frame's time is multiplied by `timeScale` before it reaches the fixed-step driver, so `2` runs two whole steps of
+the same `dt` (a fast-forward that plays exactly as at 1; the cap on steps a frame grows with it), and `paused` sets
+`World.paused`, under which `tick` runs `onInput` and the presses but no `onUpdate` (the key edges of a paused step are not kept
+for later, as a freeze's are: the press that unpauses is not replayed into the first step). The compiler lets both take any
+expression (`LIVE_GAME_SETTINGS` in `transform/elements.ts`); the rest stay literals. The cost is what it says: 2× is two
+whole steps a frame, renders and collisions included.
 
 ## Camera
 
@@ -1698,6 +1709,10 @@ export const sfx = createSounds({ land: { src: "land.wav", volume: 0.5 }, start:
 <ParticleLayer particles={fx} />     {/* like <Toaster />: where bursts are drawn, in the world */}
 ```
 
+**Once a step** (2026-11-13, A7): a sound entry with `once: true` plays at most once a step, however many components ask for it.
+`World.tick` counts steps (`countStep` in `Sound.ts`); the store remembers the step a `once` sound last played in. Hearth's rules
+did this by hand over a step's events; with twenty towers each playing its own shot, the store has to.
+
 ```ts
 // called with what a step reports, by the component that runs it
 for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dust", e.x, e.y); }
@@ -1831,7 +1846,13 @@ from an input script and reading the game state or the draw records, which alone
 - `state(component)` reads `saveHotState()` back by source name (`"Enemy.health"` becomes `health`): the accessor B7 planned,
   which hot reload already had. `texts`, `find` and `findAll` read the tree.
 
-Every method flushes the world after it, so what a test reads is what would be drawn. Not done: compiling the component from
+Every method flushes the world after it, so what a test reads is what would be drawn.
+
+**Whole subtrees that collide** (2026-11-13, A7): with `collisions: true` every step ends as the player's does, with a
+`CollisionTracker` over every collider under the holder, so a battle whose shots hit its enemies is tested as one component
+(`render(Play, …, { collisions: true })`). `place({ tag, data, x, y, width, height })` puts another collider in the world, each in
+an entity of its own (colliders with the same parent are one thing's and never touch); `remove` takes it out. Without the option
+nothing collides on its own, and contacts are reported with `collide`, as before. Not done: compiling the component from
 its `.tsx` on demand (tests import the generated class, as `game.ts` does), and the template's tests (with A8, which also packs
 the package for games outside the repository).
 
@@ -1855,6 +1876,14 @@ same for a component, against the world it is mounted in:
 - **`useBody`** is a shipped hook (`hooks/library.ts`): the body in a lazy `useState`, `x` and `y` as state, and `move`,
   `touching` and `place` as functions of the component (B6) that move the body and set `x` and `y`. So the component renders where
   the body is, in the step it moved.
+- **`overlapping(tag)`** (2026-11-13, A7): every collider with the tag that overlaps the box, as contacts (`tag`, `owner`, `data`),
+  typed by tag through `ColliderData` (`ContactOf<Tag>`; the hook's function keeps its `<Tag extends string>`, as any function of
+  a component's own now keeps its type parameters). A Hearth tower keeps a body as big as its longest reach and asks it which
+  enemies are near; their colliders' `data` say where each is. `World` answers `tagIn`, `solidIn` and `collidersIn` from a cache
+  of the colliders' world boxes, made once per update phase (dropped as a tick starts and after each flush): transforms change
+  when the tree renders, so a query sees the colliders where they were when the step's updates began, the snapshot every update
+  of a step sees. Without it, thirteen towers each composing a hundred enemies' transforms up the tree cost QuickJS a third of
+  Hearth's step.
 
 Not done: a body is not itself a collider that others hit (a component draws a `<Collider>` at its position), there are no
 one-way platforms or slopes, and Kite still moves with its rules (rewriting it with `useBody` is part of A7's proof).

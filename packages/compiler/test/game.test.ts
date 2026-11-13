@@ -109,10 +109,26 @@ describe("<Game> as a component's root", () => {
     assert.doesNotThrow(() => build(`function A() { return <Game width={-5} title="x" resizable={true} vsync smooth={false} />; }`));
   });
 
+  it("takes state for timeScale and paused, which the player reads every frame", async () => {
+    const compiled = build(`export default function Main() {
+  const [fast, setFast] = useState(false);
+  const [stopped, setStopped] = useState(false);
+  useInput((input) => {
+    if (input.pressed("F")) setFast(!fast);
+    if (input.pressed("P")) setStopped(!stopped);
+  });
+  return <Game fixedStep={60} timeScale={fast ? 2 : 1} paused={stopped} />;
+}`);
+    const { default: Main } = await load<{ default: new () => Game }>(compiled);
+    const game = new Main();
+    assert.deepEqual([game.timeScale, game.paused], [1, false]);
+    assert.match(errors(`function A() { const [t] = useState(1); return <Game fixedStep={t} />; }`)[0]!.message, /<Game fixedStep> must be a literal/, "the others stay literals");
+  });
+
   it("rejects a prop it does not have, and a transform, saying what its settings are", () => {
     const unknown = errors(`function A() { return <Game fps={30} />; }`);
     assert.equal(unknown[0]!.code, DiagnosticCode.UnsupportedAttribute);
-    assert.match(unknown[0]!.message, /<Game> has no prop 'fps'\. Its settings: id, title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, gamepadDeadzone, upscale, showFps, fpsKey, font, controls\./);
+    assert.match(unknown[0]!.message, /<Game> has no prop 'fps'\. Its settings: id, title, width, height, background, assets, resizable, vsync, smooth, fullscreenKey, fixedStep, gamepadDeadzone, upscale, showFps, fpsKey, font, controls, timeScale, paused\./);
     assert.deepEqual(errors(`function A() { return <Game transform={{ x: 1 }} />; }`).map((d) => d.code), [DiagnosticCode.InvalidTransformAttribute]);
   });
 

@@ -446,13 +446,17 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     dispatchDrag();
     dispatchHover();
     dispatchWheel();
-    const dt = input.values[RGE_IN_DT] as number;
-    animationTime += dt > 0 ? Math.min(dt, MAX_DT) : 0;
+    // `<Game timeScale paused>` are read every frame: they may be state.
+    const live = current instanceof Game ? current : null;
+    const scale = live?.timeScale ?? 1;
+    world.paused = live?.paused === true;
+    const dt = (input.values[RGE_IN_DT] as number) * (scale > 0 ? scale : 0);
+    animationTime += dt > 0 ? Math.min(dt, MAX_DT * Math.max(1, scale)) : 0;
     if (driver === null) {
       world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
       collide();
     } else {
-      const steps = driver.advance(dt > 0 ? Math.min(dt, MAX_DT) : 0, input.keys, (stepKeys, updateKeys, stepDt) => {
+      const steps = driver.advance(dt > 0 ? Math.min(dt, MAX_DT * Math.max(1, scale)) : 0, input.keys, (stepKeys, updateKeys, stepDt) => {
         const frozen = world.frozenSteps > 0;
         input.handlerKeys = stepKeys;
         world.tick(stepDt, input, () => (input.handlerKeys = updateKeys));

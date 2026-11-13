@@ -1,3 +1,5 @@
+import { SELL_SHARE } from "./constants.ts";
+
 export type TowerKind = "bolt" | "mortar" | "frost";
 
 export interface TowerDef {
@@ -58,4 +60,9 @@ export function statsOf(kind: TowerKind, level: number): TowerStats {
 export function upgradeCost(kind: TowerKind, level: number): number | null {
   if (level >= MAX_LEVEL) return null;
   return Math.round(TOWERS[kind].cost * (UPGRADE_COST_SHARE[level] as number));
+}
+
+/** What selling a tower that has had `spent` gold put into it returns. */
+export function refundOf(spent: number): number {
+  return Math.floor(spent * SELL_SHARE);
 }

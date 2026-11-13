@@ -7,6 +7,7 @@
  * the world the body's component is mounted in. The body moves a pixel at a time (`moveActorX` / `moveActorY`), so it never ends
  * a step inside something however fast it goes.
  */
+import type { Contact, ContactOf } from "./components/Collider.ts";
 import type { GameObject } from "./GameObject.ts";
 import { moveActorX, moveActorY, type PixelActor } from "./move.ts";
 import type { World } from "./World.ts";
@@ -42,6 +43,8 @@ export interface BodySpace {
   solidIn(box: Box, ignore: GameObject): string | null;
   /** Whether a collider with this tag overlaps `box`. Colliders under `ignore` do not count. */
   tagIn(box: Box, tag: string, ignore: GameObject): boolean;
+  /** Every collider with this tag that overlaps `box`, in the order they joined the world. Colliders under `ignore` do not count. */
+  collidersIn(box: Box, tag: string, ignore: GameObject): Contact[];
 }
 
 export class Body implements PixelActor {
@@ -101,6 +104,15 @@ export class Body implements PixelActor {
   touching(tag: string): boolean {
     if (this.#world === null || this.#owner === null) return false;
     return this.#world.tagIn(this.#box(this.x, this.y), tag, this.#owner);
+  }
+
+  /**
+   * Every collider with this tag that overlaps the body now, as contacts (`tag`, `owner`, `data`), in the order they joined the
+   * world: a tower asking which enemies are near it. Its own colliders do not count.
+   */
+  overlapping<Tag extends string>(tag: Tag): ContactOf<Tag>[] {
+    if (this.#world === null || this.#owner === null) return [];
+    return this.#world.collidersIn(this.#box(this.x, this.y), tag, this.#owner) as ContactOf<Tag>[];
   }
 
   /** Put the body somewhere, with no collision (a respawn, a door). */

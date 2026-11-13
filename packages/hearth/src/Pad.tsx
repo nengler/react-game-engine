@@ -1,13 +1,16 @@
 import { Entity, Pointer, Sprite, useState } from "@rge/runtime/jsx";
+import type { Built, Fired } from "./battle.ts";
 import { useGame } from "./GameState.ts";
 import { Tower } from "./Tower.tsx";
-import type { Tower as TowerData } from "./rules/battle.ts";
 
 interface PadProps {
   id: number;
   x: number;
   y: number;
-  tower: TowerData | null;
+  /** What its towers' mortar shells scatter by. */
+  seed: number;
+  tower: Built | null;
+  onFire: (shot: Fired) => void;
 }
 
 /**
@@ -15,14 +18,14 @@ interface PadProps {
  * press (a click, or confirm while it has the focus), shows the cursor while it is the selected pad, and its tower's range while
  * selected or under the mouse.
  */
-export function Pad({ id, x, y, tower }: PadProps) {
+export function Pad({ id, x, y, seed, tower, onFire }: PadProps) {
   const selected = useGame((s) => s.cursor === id);
   const { point, select } = useGame.actions();
   const [hovered, setHovered] = useState(false);
 
   return (
     <Entity transform={{ x, y }}>
-      {tower !== null && <Tower kind={tower.kind} level={tower.level} angle={tower.angle} flash={tower.flash} ring={selected || hovered} />}
+      {tower !== null && <Tower seed={seed} kind={tower.kind} level={tower.level} x={x} y={y} ring={selected || hovered} onFire={onFire} />}
       <Pointer
         width={10}
         height={10}

@@ -77,6 +77,32 @@ export function A() {
     }
   });
 
+  it("are imported when only a function of the component's own uses them, values and types alike", () => {
+    const p = project({
+      "helpers.ts": `${HELPERS}export interface Shot { readonly speed: number }\nexport const SPEEDS = { fast: 3 };\n`,
+      "A.tsx": `import { Pointer, useState } from "@rge/runtime/jsx";
+import { ease, SPEEDS, type Shot } from "./helpers.ts";
+
+export function A() {
+  const [n, setN] = useState(0);
+  const fire = (shot: Shot) => {
+    setN(ease(shot.speed) + SPEEDS.fast);
+  };
+  return <Pointer width={4} height={4} transform={{ x: n }} onPress={() => fire({ speed: 2 })} />;
+}
+`,
+    });
+    try {
+      const r = p.run();
+      assert.equal(r.status, 0, r.stderr);
+      const code = p.out("A.ts");
+      assert.match(code, /import \{ ease, SPEEDS \} from "\.\.\/src\/helpers\.ts";/);
+      assert.match(code, /import type \{ Shot \} from "\.\.\/src\/helpers\.ts";/);
+    } finally {
+      rmSync(p.dir, { recursive: true, force: true });
+    }
+  });
+
   it("bring constants too: an imported array is a list's items (filtered by state), and an imported object's methods are called in handlers", () => {
     const p = project({
       "data.ts": `export interface RoomData { name: string; index: number; x: number }

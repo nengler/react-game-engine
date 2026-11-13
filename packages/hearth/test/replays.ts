@@ -3,8 +3,8 @@ import { BEST } from "../src/rules/coverage.ts";
 
 /**
  * Input scripts that play the whole game: they click pads to build and upgrade, start the waves and wait them out. The pad
- * positions come from the map, so the replays follow the map if it changes. Commands the player cannot afford are refused by the
- * rules (a denied event), so each round asks for everything still wanted, and what the gold allows is built. At 2× speed
+ * positions come from the map, so the replays follow the map if it changes. What the player cannot afford is refused (the deny
+ * sound), so each round asks for everything still wanted, and what the gold allows is built. At 2× speed
  * (`fast`) a wave of the table's size is over inside a round.
  */
 const click = (pad: number): string => `click@${MAP.pads[pad]!.x},${MAP.pads[pad]!.y}`;

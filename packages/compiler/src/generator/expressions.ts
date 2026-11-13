@@ -87,9 +87,10 @@ export class ExpressionEmitter {
    * spans lines, where adding indentation would change its contents.
    */
   protected arrow(params: string, lines: readonly string[], fn: FunctionIR): string {
-    if (lines.length === 1) return `(${params}) => { ${lines[0]} }`;
+    const generic = fn.typeParams ?? "";
+    if (lines.length === 1) return `${generic}(${params}) => { ${lines[0]} }`;
     const base = JSON.stringify(fn.body).includes("\\n") ? "" : this.w.indentation;
-    return `(${params}) => {\n${lines.map((l) => `${base}  ${l}`).join("\n")}\n${base}}`;
+    return `${generic}(${params}) => {\n${lines.map((l) => `${base}  ${l}`).join("\n")}\n${base}}`;
   }
 
   /** A handler passed as a value (`settings.subscribe(() => …)`): written by the handler layer, which writes statements. */
