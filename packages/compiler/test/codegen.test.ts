@@ -41,7 +41,7 @@ export class Player extends Entity {
   warningIcon: WarningIcon | null = null;
 
   constructor() {
-    super();
+    super({ name: "Player" });
     this.addChild(this.sprite, 0);
     this.render();
     this.commitStructure();

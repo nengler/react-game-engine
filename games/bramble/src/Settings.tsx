@@ -20,7 +20,7 @@ export function Settings() {
   /** The action whose row waits for a key, if any. */
   const [capturing, setCapturing] = useState<string | null>(null);
   return (
-    <Entity name="Settings">
+    <Entity>
       <Text transform={{ x: 0, y: 6 }} width={320} align="center" size={10} color="#e8d9a8">SETTINGS</Text>
       <Menu
         top={22}

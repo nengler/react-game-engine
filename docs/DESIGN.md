@@ -1840,6 +1840,15 @@ like any component. Details:
   anywhere, is `RGE1202`. A fragment nested as a child is an implicit `<Entity>`. A component, a condition or `null` as the
   root is "Component, condition and null roots" below.
 
+### A root named after its component (2026-11-13)
+
+A root `<Entity>`, `<Game>` or fragment (and the container a component or condition root is held in) with no `name` prop gets
+the component's name in its `super()` call: `function Player() { return <Entity>…</Entity>; }` generates
+`super({ name: "Player" })`, exactly what `<Entity name="Player">` did. A written `name`, static or dynamic, wins. Nested
+entities are not named. Every game wrote the component's name again on its root (`REACT_FEEL_PLAN.md`, B1), and `name` is
+what a collision's `other.owner` reads, so leaving it out used to change game logic without a sign in the source. The games,
+the template and the guide no longer write it. Only `Entity` and `Game` take a `name` (`NAMED_ROOTS` in the generator).
+
 ### Component, condition and null roots (2026-11-11)
 
 `return <Panel title="BUILD">…</Panel>`, `return on ? <Sprite …/> : null`, `return open && <Menu />` and `return null` are
@@ -1922,6 +1931,9 @@ the comparison like any other string.
 * `owner` is the `name` of the nearest `<Entity name>` at or above the other
   collider, or, when none is named, its class name. It needs no prop, so a game
   can start with it, but renaming an entity changes game logic.
+  A component's root `<Entity>` with no `name` is named after the component
+  (see "A root named after its component"), so `owner` is the component's name
+  unless the author wrote another.
 * A `<Collider>` also takes `layer` (a string, default `""`) and `hits` (a list
   of layers, default: every layer). A pair is tested only when **each** side's
   `hits` allows the other's `layer`, so a bullet that hits only enemies ignores

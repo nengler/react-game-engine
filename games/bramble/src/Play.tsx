@@ -28,7 +28,7 @@ export function Play() {
   });
 
   return (
-    <Entity name="Play">
+    <Entity>
       <World />
       <Camera bounds={[0, 0, width, height]} deadzone={[24, 16]} smoothing={0.12}>
         <Sprite image="things.png" frameWidth={16} frameHeight={16} frame={frame} tint={run.invuln > 0 ? "#ffffff99" : "#ffffffff"} transform={{ x, y }} />

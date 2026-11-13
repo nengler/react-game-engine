@@ -14,7 +14,7 @@ export function Pause() {
     if (input.pressed("back")) togglePause();
   });
   return (
-    <Entity name="Pause" modal>
+    <Entity modal>
       <Shape kind="rect" width={320} height={180} color="#10131cd9" />
       <Text transform={{ x: 12, y: 8 }} size={10} color="#e8d9a8">PAUSED</Text>
       <Inventory />
