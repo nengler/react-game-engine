@@ -13,7 +13,7 @@ import type { PrefabSchema } from "../prefabs/prefabs.ts";
 
 export const SCENE_VERSION = 1;
 const ENTITY_KEYS = ["id", "prefab", "props", "transform", "children"];
-const TRANSFORM_NUMBERS = ["x", "y", "z", "rotation", "scaleX", "scaleY"];
+const TRANSFORM_NUMBERS = ["x", "y", "z", "rotation", "scaleX", "scaleY", "opacity"];
 
 type Code = (typeof DiagnosticCode)[keyof typeof DiagnosticCode];
 

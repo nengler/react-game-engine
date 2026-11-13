@@ -9,7 +9,7 @@
  * test checks that this module exports exactly what the compiler accepts.
  */
 import type { InputState } from "./input.ts";
-import type { ShakeState, Vector2 } from "./math.ts";
+import type { ShakeState, SpringOptions, TweenOptions, Vector2 } from "./math.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { HudProps } from "./components/Hud.ts";
 import type { GameProps } from "./components/Game.ts";
@@ -34,7 +34,7 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 
 export type { TransformProps, Child } from "./jsx-runtime.ts";
 
-export { clamp, shakeOn, springBack } from "./math.ts";
+export { clamp, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
 export { readContext, type Context } from "./context.ts";
@@ -80,6 +80,34 @@ export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>
  */
 export function useSquash(_recover?: number): [Vector2, Setter<Vector2>] {
   return compileTimeOnly("useSquash");
+}
+
+/**
+ * A value that follows `target` like a spring: it moves toward it, overshooting by `bounce` (0, the default, for none), and settles in
+ * about `duration` seconds (default 0.5). A new target keeps the speed it had, so it turns round smoothly. A number: a point is two
+ * springs, one for each axis.
+ *
+ *     const y = useSpring(open ? 0 : -40, { duration: 0.4, bounce: 0.2 });
+ *     <Entity transform={{ y }}>…</Entity>
+ *
+ * It steps in this component's update, so it follows the fixed step, `freeze` and replays, and renders only while it moves. It
+ * starts at its first target. An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ */
+export function useSpring(_target: number, _options?: SpringOptions): number {
+  return compileTimeOnly("useSpring");
+}
+
+/**
+ * A value that eases to `target` over `duration` seconds (default 0.25), along `ease` (a name, default `"outCubic"`, or a function
+ * from a `.ts` file); a new target starts again from where it is. A number: a point is two tweens.
+ *
+ *     const opacity = useTween(visible ? 1 : 0, { duration: 0.25, ease: "outCubic" });
+ *     <Entity transform={{ opacity }}>…</Entity>
+ *
+ * It steps in this component's update and renders only while it moves. It starts at its first target.
+ */
+export function useTween(_target: number, _options?: TweenOptions): number {
+  return compileTimeOnly("useTween");
 }
 
 /**

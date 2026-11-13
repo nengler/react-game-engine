@@ -25,6 +25,12 @@ export class Transform {
   scaleY = 1;
   /** World space: ignores the parent (and, for `transform`, the placement), so this is where the object is. */
   global = false;
+  /**
+   * How opaque this object and everything under it are, 0 to 1: multiplied down the tree (a child at 0.5 under a parent at 0.5
+   * is at 0.25), and applied to each thing drawn on its own, so where two overlap the one below shows through. Not part of
+   * `WorldTransform`: only the player's draw pass reads it. Default 1.
+   */
+  opacity = 1;
 }
 
 /** A resolved, world-space transform. */

@@ -97,7 +97,7 @@ describe("z: diagnostics", () => {
     const duplicate = compileErrors(`function C() { return <Entity name="C" transform={{ z: 1, z: 2 }} />; }`);
     assert.ok(duplicate.some((d) => d.code === DiagnosticCode.InvalidTransformAttribute));
     const unknown = compileErrors(`function C() { return <Entity name="C" transform={{ depth: 1 }} />; }`);
-    assert.match(unknown[0]!.message, /'depth' is not a transform field \(x, y, z, rotation, scaleX, scaleY, global\)/);
+    assert.match(unknown[0]!.message, /'depth' is not a transform field \(x, y, z, rotation, scaleX, scaleY, global, opacity\)/);
   });
 
   it("type-checks z as a number in authored source", async () => {

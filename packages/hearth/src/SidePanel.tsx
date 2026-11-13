@@ -4,6 +4,7 @@ import { BuildMenu } from "./BuildMenu.tsx";
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
 import { MenuButton } from "./MenuButton.tsx";
+import { SlideIn } from "./SlideIn.tsx";
 import { StatRow } from "./StatRow.tsx";
 import { UpgradePanel } from "./UpgradePanel.tsx";
 import { keyLabel } from "./rules/controls.ts";
@@ -37,8 +38,16 @@ export function SidePanel({ gold, lives, wave, active, tower, onStartWave, onBui
         <StatRow icon={ICON.gold} color={COLOR.gold}>{gold}</StatRow>
         <StatRow icon={ICON.lives} color={COLOR.lives}>{lives}</StatRow>
         <StatRow icon={ICON.wave} color={COLOR.wave}>{wave}/{WAVE_COUNT}</StatRow>
-        {open && tower === null && <BuildMenu gold={gold} onBuild={onBuild} />}
-        {open && tower !== null && <UpgradePanel tower={tower} gold={gold} onUpgrade={onUpgrade} onSell={onSell} />}
+        {open && tower === null && (
+          <SlideIn>
+            <BuildMenu gold={gold} onBuild={onBuild} />
+          </SlideIn>
+        )}
+        {open && tower !== null && (
+          <SlideIn>
+            <UpgradePanel tower={tower} gold={gold} onUpgrade={onUpgrade} onSell={onSell} />
+          </SlideIn>
+        )}
         {!open && <Label color={COLOR.dim}>CLICK A PAD</Label>}
       </Flex>
       <Flex direction="column" gap={3} width="grow">

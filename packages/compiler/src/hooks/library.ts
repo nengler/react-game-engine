@@ -6,10 +6,10 @@
  */
 export const LIBRARY_FILE = "rge:hooks.tsx";
 
-export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, springBack, useMount, useState, useUpdate } from "@rge/runtime/jsx";
+export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useState, useUpdate } from "@rge/runtime/jsx";
 
 /**
- * Squash and stretch: a scale that is set at a moment and springs back to 1 at \\\`recover\\\` a second.
+ * Squash and stretch: a scale that is set at a moment and springs back to 1 at \`recover\` a second.
  *   const [squash, setSquash] = useSquash();
  *   setSquash({ x: 0.6, y: 1.4 });
  *   <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} />
@@ -20,6 +20,30 @@ export function useSquash(recover = 1.75) {
     setSquash((s) => springBack(s, recover, dt));
   });
   return [squash, setSquash];
+}
+
+/**
+ * A value that follows its target like a spring, set by \`duration\` (seconds to settle) and \`bounce\` (0: no overshoot).
+ *   const y = useSpring(open ? 0 : -40, { duration: 0.4, bounce: 0.2 });
+ */
+export function useSpring(target, options = {}) {
+  const [spring, setSpring] = useState(() => startSpring(target));
+  useUpdate((dt) => {
+    setSpring((s) => stepSpring(s, target, options, dt));
+  });
+  return spring.value;
+}
+
+/**
+ * A value that eases to its target over \`duration\` seconds, along \`ease\`; a new target starts again from where it is.
+ *   const opacity = useTween(visible ? 1 : 0, { duration: 0.25, ease: "outCubic" });
+ */
+export function useTween(target, options = {}) {
+  const [tween, setTween] = useState(() => startTween(target));
+  useUpdate((dt) => {
+    setTween((s) => stepTween(s, target, options, dt));
+  });
+  return tween.value;
 }
 
 /**
@@ -51,9 +75,9 @@ export function useTime() {
 }
 
 /**
- * A box that moves and is stopped by what is solid, in the same step: the solid tiles of a \\\`<Tilemap solid>\\\` and every
- * \\\`<Collider solid>\\\`. Its position is state; \\\`move\\\` returns the sides it was stopped on, \\\`touching(tag)\\\` says whether a
- * collider with that tag overlaps it now, and \\\`place\\\` puts it somewhere with no collision.
+ * A box that moves and is stopped by what is solid, in the same step: the solid tiles of a \`<Tilemap solid>\` and every
+ * \`<Collider solid>\`. Its position is state; \`move\` returns the sides it was stopped on, \`touching(tag)\` says whether a
+ * collider with that tag overlaps it now, and \`place\` puts it somewhere with no collision.
  *   const { x, y, move, touching } = useBody({ x: 16, y: 32, width: 8, height: 11 });
  */
 export function useBody(options) {
@@ -89,4 +113,4 @@ export function useStore(store, read) {
 `;
 
 /** The names of the library's hooks. */
-export const LIBRARY_HOOKS: readonly string[] = ["useSquash", "useShake", "useTime", "useStore", "useBody"];
+export const LIBRARY_HOOKS: readonly string[] = ["useSquash", "useShake", "useTime", "useStore", "useBody", "useSpring", "useTween"];
