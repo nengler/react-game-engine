@@ -407,6 +407,16 @@ Also decided on 2026-11-09, each as recommended:
 - **Not here:** tiling the edges and middle instead of stretching them, a scale for the corners, and a tint.
 - The draw pass keeps the nine parts' numbers in one scratch array, so a skin allocates nothing per frame.
 
+## Widgets: slider and toggle
+
+`<Slider>` and `<Toggle>` (PR 8a of the UI follow-ups; the text input is PR 8b, which needs a native character channel) are subclasses of `Flex`, so layout, hover, pressed and disabled styling, focus, clipping, opacity and the HUD all work with no new code. Nothing native changed. What they add:
+
+- **`Flex.widget`** says what a box is besides a box (`WIDGET_SLIDER`, `WIDGET_TOGGLE`). The draw pass paints a widget's parts in `#paintWidget`, over the background and image and under the children, inside the box's opacity: a slider's fill and thumb, a toggle's track and knob, each a `box` record placed through the box's rotation and scale, inside the border (`flexBorderRoom`, now one function in the runtime that layout and clips also use). A widget is always collected as a pointer, so it takes the mouse whether or not it has a callback.
+- **Three hooks on `Pressable`**, which are the whole of the new input model: `onPressAt(x, y)` (a press, with where, just before `onPress`), `onDrag(x, y)` (each step the button that pressed it is held, wherever the mouse has gone; `World.pressed` already tracked what is held) and `onNavigate(dx, dy)` (a direction key while it has the focus: true if used, and then the focus stays). A slider uses all three; a toggle none, since `onPress` is a flip.
+- **The slider's value** comes from `boxPoint` (a world point back through the box's transform): the thumb is centred on the mouse and kept inside the track, `step` snaps it (with the rounding errors of a step like 0.1 taken off) and it is held between `min` and `max`. It changes `value` itself and calls `onChange` only when the value is different. Left and right are used even at an end, so the focus does not jump away from a slider that is at its end; up and down move the focus on.
+- **`onChange` has a parameter.** Callback props of built-ins had only handle-type parameters; the manifest's `CALLBACK_PRIMITIVES` (`number`, `boolean`, `string`) now lets `onChange={(v) => setVolume(v)}` take a plain value, which the compiler already supports in a handler (`useUpdate`'s `dt` is one). The manifest test accepts a handle type or a primitive.
+- **Not here:** vertical sliders (a `direction` would do), a range with two thumbs, scroll-wheel adjusting, a hover colour for a toggle's track (style the box's border and focus ring), and the text input.
+
 ## Wrapping rows
 
 `wrap` on a row `<Flex>` (PR 7 of the UI follow-ups) is the inventory grid: a box with a width whose children keep their size and fall into lines. It is a CSS `flex-wrap: wrap`, less the parts that need a second sizing pass.
