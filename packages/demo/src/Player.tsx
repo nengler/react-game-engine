@@ -9,8 +9,7 @@ export function Player() {
   const [x, setX] = useState(0);
   const [y, setY] = useState(0);
   // Actions of the game's state: the player calls them and reads nothing, so a change never re-renders it.
-  const collect = useGame((s) => s.collect);
-  const hit = useGame((s) => s.hit);
+  const { collect, hit } = useGame.actions();
   const [hurt, setHurt] = useState(false);
 
   // The keys held this step: useUpdate gets the same input as useInput.

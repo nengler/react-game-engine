@@ -12,7 +12,7 @@ interface EndProps {
 
 /** The end of a run: a modal over the field saying how it went, and a way back to the title. */
 export function End({ won }: EndProps) {
-  const toTitle = useGame((s) => s.toTitle);
+  const { toTitle } = useGame.actions();
   const { lives, wave } = useGame((s) => s.battle);
 
   return (

@@ -10,7 +10,7 @@ import { COLOR } from "./theme.ts";
 export function UpgradePanel() {
   const focus = useGame((s) => focusOf(s.battle, s.cursor));
   const gold = useGame((s) => s.battle.gold);
-  const { upgrade, sell } = useGame((s) => s);
+  const { upgrade, sell } = useGame.actions();
   const cost = focus.upgrade;
   const canUpgrade = cost >= 0 && gold >= cost;
 

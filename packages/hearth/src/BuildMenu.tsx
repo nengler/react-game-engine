@@ -10,7 +10,7 @@ import { COLOR, ICON } from "./theme.ts";
 /** What the panel shows for an empty pad: the three towers, each a button with its price. */
 export function BuildMenu() {
   const gold = useGame((s) => s.battle.gold);
-  const build = useGame((s) => s.build);
+  const { build } = useGame.actions();
 
   return (
     <Panel title="BUILD">

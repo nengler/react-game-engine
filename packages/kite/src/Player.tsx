@@ -18,11 +18,7 @@ interface PlayerProps {
  */
 export function Player({ onDie }: PlayerProps) {
   const { room, originX, originY, finished } = useGame((s) => s.run);
-  const died = useGame((s) => s.died);
-  const respawned = useGame((s) => s.respawned);
-  const enteredRoom = useGame((s) => s.enteredRoom);
-  const reachedEnd = useGame((s) => s.finished);
-  const tick = useGame((s) => s.tick);
+  const { died, respawned, enteredRoom, finished: reachedEnd, tick } = useGame.actions();
   // Every run starts at the first room's start: the play screen is made fresh for each run, and this with it.
   const [me, setMe] = useState(() => spawnIn(0));
   const [squash, setSquash] = useSquash(1.75);

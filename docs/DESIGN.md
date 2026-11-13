@@ -1529,6 +1529,22 @@ The IR marks such a state `globalKey` (the dotted path) and has a `CallAction` s
 actions, which keeps what the compiler must understand small); save and restore of the store; arrays in the state;
 and more than one store per project (one store per process, one `createGameState` call per project).
 
+### Actions: `useGame.actions()` (2026-11-13)
+
+`const { collect, hurt } = useGame.actions()` takes the actions a component calls. It replaced
+`const { advance, togglePause } = useGame((s) => s)`, the one case where a component selected the whole state, which every game
+wrote and which reads like the Zustand anti-pattern it was an exception to (`REACT_FEEL_PLAN.md`, B4).
+
+- The destructuring split (`hooks/inline.ts`, `storeSelectionEdits`) turns each name into `const collect = useGame.$actions((s) => s.collect)`,
+  which `matchStoreStatement` reads as a selector with `via: "actions"`. An action binding subscribes to nothing, as it always did.
+- A name that is a value of the state is `RGE1108` and says how to read it (`const coins = useGame((s) => s.coins)`); a typo
+  names the nearest action. `useGame.actions()` must be destructured.
+- Names destructured from `useGame((s) => s)` are written `useGame.$wholeN(…)` (N tells the statements apart), and the actions
+  among them get one warning per statement that spells the `useGame.actions()` line to write. Values destructured that way
+  stay fine: each is its own subscription.
+- At run time `useGame.actions()` returns the state's functions, for plain code (`useGame.actions().collect()`). Its type is
+  `ActionsOf<S>`.
+
 ## Plain functions in components (priority 7)
 
 A component may import functions from a relative `.ts` file (`import { fadeThrough } from "./transitions.ts"`) and **call them in any expression** (a prop, a derived value, a handler) or **pass them as values** (`transition={fadeThrough}`). The compiler does not look inside them: TypeScript checks the call, the function is assumed pure, and a dynamic prop that calls one depends on the state in its arguments, so it is re-evaluated when those change. The function body is plain TypeScript with loops, arrays and anything else. This is the escape hatch from the restricted handler language: the logic goes in a `.ts` file, the component only wires it up.

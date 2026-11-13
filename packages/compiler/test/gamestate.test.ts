@@ -574,3 +574,55 @@ export function Bar() {
     assert.equal(useGame.getState().player.hp, 8);
   });
 });
+
+describe("useGame.actions()", () => {
+  it("takes the actions a component calls, and subscribes to nothing", async () => {
+    const compiled = build(`
+export function Shop() {
+  const { collect, hurt: ouch } = useGame.actions();
+  useUpdate(() => { collect(2); ouch(); });
+  return <Entity />;
+}`);
+    assert.doesNotMatch(compiled.code, /gameStateKeys/, "actions never change, so nothing is subscribed to");
+    assert.deepEqual(typeErrors(compiled), []);
+    const { Shop } = await load<{ Shop: new () => Entity }>(generated(compiled));
+    const world = new World();
+    world.mount(new Shop());
+    world.flush();
+    world.tick(1 / 60);
+    world.flush();
+    const state = useGame.getState();
+    assert.equal(state.coins, 2);
+    assert.equal(state.player.hp, 9);
+  });
+
+  it("is the store's functions in plain code", () => {
+    const actions = useGame.actions() as unknown as Record<string, unknown>;
+    assert.deepEqual(Object.keys(actions).sort(), ["collect", "hurt", "noop", "rename", "spawn"]);
+    (actions.collect as (n: number) => void)(5);
+    assert.equal(useGame.getState().coins, 5);
+  });
+
+  it("says when a name is a value or is not in the state, and that it must be destructured", () => {
+    const value = errors(`function A() { const { coins } = useGame.actions(); return <Entity />; }`);
+    assert.deepEqual(value.map((d) => d.code), [DiagnosticCode.InvalidGameState]);
+    assert.match(value[0]!.message, /'coins' is a value of the game state, not an action: read it with `const coins = useGame\(\(s\) => s\.coins\)`/);
+    const typo = errors(`function A() { const { colect } = useGame.actions(); return <Entity />; }`);
+    assert.match(typo[0]!.message, /'colect' is not an action of the game state \(did you mean "collect"\?\)/);
+    const whole = errors(`function A() { const all = useGame.actions(); return <Entity />; }`);
+    assert.match(whole[0]!.message, /Destructure the actions you call from useGame\.actions\(\)/);
+  });
+
+  it("warns when an action is taken from the whole state", () => {
+    const result = compiler.compile("Warn.tsx", withAuthoringImports(`import { useGame } from "./GameState.ts";
+export function A() {
+  const { coins, collect } = useGame((s) => s);
+  useUpdate(() => collect(coins));
+  return <Entity />;
+}`));
+    assert.ok(result.ok);
+    const warnings = result.diagnostics.filter((d) => d.severity === "warning");
+    assert.equal(warnings.length, 1, "only the action, not the value");
+    assert.match(warnings[0]!.message, /Take actions with `const \{ collect \} = useGame\.actions\(\)`/);
+  });
+});

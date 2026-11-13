@@ -4,7 +4,7 @@ import { Label } from "./Label.tsx";
 
 /** The end screen: how the climb went, and a way back to the title, in a centred column on the HUD layer. */
 export function End() {
-  const toTitle = useGame((s) => s.toTitle);
+  const { toTitle } = useGame.actions();
   const { deaths, time } = useGame((s) => s.run);
   const gems = useGame((s) => s.gems);
   const seconds = Math.floor(time);

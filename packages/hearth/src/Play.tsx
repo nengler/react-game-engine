@@ -13,7 +13,8 @@ import { Pad } from "./Pad.tsx";
 /** The play screen: the field with its pads, towers, enemies and shots, and over it the side panel and, when paused, a menu. */
 export function Play() {
   const { pads, enemies, shots } = useGame((s) => s.battle);
-  const { paused, step, close, resume, toTitle } = useGame((s) => s);
+  const paused = useGame((s) => s.paused);
+  const { step, close, resume, toTitle } = useGame.actions();
 
   // The one place the battle is stepped. Keys are the buttons' (`pressKey`) and the pads' (the focus); `back` closes the panel.
   useUpdate((dt) => {
