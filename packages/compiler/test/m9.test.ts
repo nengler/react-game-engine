@@ -239,7 +239,7 @@ describe("M9: diagnostics", () => {
   it("must be imported, and only at the top level", () => {
     const source = `import { Entity } from "@rge/runtime/jsx";\nfunction C() { useMount(() => {}); return <Entity name="C" />; }`;
     assert.deepEqual(getCompiler().compile("C.tsx", source).diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
-    assert.ok(codes(`function C() { if (true) { useMount(() => {}); } return <Entity name="C" />; }`).includes(DiagnosticCode.InvalidComponentBody));
+    assert.ok(codes(`function C() { if (true) { useMount(() => {}); } return <Entity name="C" />; }`).includes(DiagnosticCode.HookNotAtTopLevel));
     assert.ok(codes(`function C() { useMount(() => { useMount(() => {}); }); return <Entity name="C" />; }`).includes(DiagnosticCode.UnsupportedExpression));
   });
 });

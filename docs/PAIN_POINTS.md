@@ -15,8 +15,9 @@ repeated text style) are planned in [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md) (20
 
 TSX invites people to write React, and then they hit `RGE` codes.
 
-- **Three languages in one file.** The component body allows expressions only: no `let`, no loops. Handlers allow `let`, every loop,
-  `switch` and `try` (*since 2026-11-13*; before, `for…of` only). Plain `.ts` files allow anything. A newcomer has to know which zone they are in.
+- ~~**Three languages in one file.**~~ *Since 2026-11-13:* the component body takes `let`, loops and a list built up, worked out
+  together and again only when what they read changes; handlers take every loop, `try`, `new`, the standard library and in-place
+  changes to their own values. What remains is that a component body runs during render, so it cannot set state, as in React. Plain `.ts` files allow anything. A newcomer has to know which zone they are in.
 - **Method allowlists.** `push`, `sort` and "other methods of values" are rejected; the fix is "put it in a plain function". Defensible,
   but not visible from the syntax. *Since 2026-11-13:* in a handler, any method of a value the handler made itself, `new`, and the
   standard library work; only state and props stay immutable.

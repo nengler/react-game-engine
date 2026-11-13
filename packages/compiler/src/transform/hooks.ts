@@ -6,11 +6,13 @@ import { DiagnosticCode, warning, type CompilerDiagnostic } from "../diagnostics
 import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
-import { lowerFunction } from "./statements.ts";
+import { lowerFunction, lowerRenderBlock } from "./statements.ts";
 import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
 import { ExpressionLowering } from "./expressions.ts";
 
 export class HookLowering extends ExpressionLowering {
+  /** Render blocks lowered so far, to name their memos (`$block1`). */
+  private renderBlocks = 0;
   /** Actions taken from the whole state, by the statement they were written in: one warning each (see `lowerStoreHook`). */
   private readonly wholeStateActions = new Map<string, { index: number; names: string[] }>();
   /**
@@ -121,7 +123,7 @@ export class HookLowering extends ExpressionLowering {
     const hooks: HookIR[] = [];
     const state: StateIR[] = [];
     for (const hook of this.component.hooks) {
-      if (hook.kind !== "const" && hook.kind !== "useStore") this.requireImport(hook.kind, hook.call);
+      if (hook.kind !== "const" && hook.kind !== "block" && hook.kind !== "useStore") this.requireImport(hook.kind, hook.call);
       switch (hook.kind) {
         case "useStore":
           this.lowerStore(hook, state, hooks);
@@ -145,6 +147,21 @@ export class HookLowering extends ExpressionLowering {
         case "useSound":
           this.lowerUseSound(hook);
           break;
+        case "block": {
+          // Statements that compute together: one memo, worked out again when what the block reads changes; each name it declares
+          // is a derived value that reads its member.
+          const fn = this.within({ inRenderBlock: true }, () => lowerRenderBlock(this, hook.statements, hook.names, hook.first));
+          if (!fn) break;
+          const value: ExprIR = { kind: "Memo", key: `$block${++this.renderBlocks}`, value: { kind: "Block", fn } };
+          for (const name of hook.names) {
+            if (this.componentScope.hasOwn(name) || this.isCallableName(name)) {
+              this.report(DiagnosticCode.InvalidComponentBody, `'${name}' is already declared in this component (or reserved).`, hook.first);
+              continue;
+            }
+            this.componentScope.declare(name, { kind: "derived", name, value: { kind: "MemberRead", object: value, name, optional: false } });
+          }
+          break;
+        }
         case "const": {
           // Lowered now, against what is declared above it (state, refs, earlier consts), outside any handler.
           const lowered = this.lowerNode(hook.initializer);
