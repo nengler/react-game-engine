@@ -33,6 +33,7 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 export type { TransformProps, Child } from "./jsx-runtime.ts";
 
 export { clamp, shakeOn, springBack } from "./math.ts";
+export { keepIfEqual } from "./equal.ts";
 
 // -- state and refs -----------------------------------------------------------
 
@@ -103,6 +104,23 @@ export function useTime(): number {
  */
 export function useSound(_path: string): (volume?: number) => void {
   return compileTimeOnly("useSound");
+}
+
+/** Anything that says when it changed: `subscribe` takes a listener and returns the function that stops it (`createSettings` stores do). */
+export interface Subscribable {
+  subscribe(listener: () => void): () => void;
+}
+
+/**
+ * A value read from a store outside the game state, kept up to date, as React's \`useSyncExternalStore\`:
+ * `const values = useStore(settings, settingsView);`. `read` is a function of no arguments (imported from a \`.ts\` file) that
+ * returns what to show; it runs when the component mounts and each time the store notifies, and the component renders only when
+ * what it returns holds different data. The subscription ends when the component leaves.
+ *
+ * An ordinary hook the engine ships (\`useState\` and \`useMount\`, inlined like any custom hook).
+ */
+export function useStore<T>(_store: Subscribable, _read: () => T): T {
+  return compileTimeOnly("useStore");
 }
 
 /** A value that persists across frames but never renders. Read and write `.current` in handlers only. */

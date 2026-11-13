@@ -52,8 +52,8 @@ TSX invites people to write React, and then they hit `RGE` codes.
   2026-11-13:* actions come from `const { collect } = useGame.actions()`; taking them from `useGame((s) => s)` warns.
 - Actions are called as statements in handlers, never in JSX.
 - `GameState.ts` must return an object literal: no spreads or computed keys (`RGE1109`).
-- Settings and controls are stores of their own, so the game mirrors them by hand
-  (`settings.subscribe(() => useGame.setState(...))` in Bramble).
+- ~~Settings and controls are stores of their own, so the game mirrors them by hand~~ *Since 2026-11-13:*
+  `useStore(settings, settingsView)` shows a store outside the game state and follows it.
 - A selected object is trusted not to be changed in place; nothing enforces it.
 
 ## 5. Names collide with the root built-in

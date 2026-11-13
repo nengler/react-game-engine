@@ -563,6 +563,9 @@ const { advance, togglePause } = useGame.actions();
 
 ### B5. `useStore` for stores outside the game state
 
+**Built 2026-11-13.** See DESIGN.md, "`useStore`". As built, `read` takes no arguments and is required; the form with no `read`
+(the store's whole value) waits for a store that wants it.
+
 **Today.** Bramble's settings screen copies an outside store into local state by hand (`games/bramble/src/Settings.tsx`):
 
 ```tsx
@@ -600,9 +603,9 @@ already treats it as opaque and pure.
 
 **Done when**
 
-- [ ] `useStore` exists, with tests for render-on-change, no render on an equal value, and unsubscribe at unmount
-- [ ] Bramble's `Settings.tsx` uses it, and the mirror into `useGame` is gone wherever it was only for display
-- [ ] The guide's "Saved data and settings" section shows it
+- [x] `useStore` exists, with tests for render-on-change, no render on an equal value, and unsubscribe at unmount
+- [x] Bramble's `Settings.tsx` uses it, and the mirror into `useGame` is gone wherever it was only for display
+- [x] The guide's "Saved data and settings" section shows it
 
 ### B6. Custom hooks that behave like functions
 
