@@ -79,6 +79,7 @@ It keeps the CSS vocabulary already decided (`direction`, `alignItems`, `justify
 | `transition` | seconds | `0` | Fade `background` and `borderColor` between states (hover, press, focus, disabled) instead of snapping. The fade is worked out from the player's animation clock (the sum of each step's capped `dt`) and the colours kept on the box, so a frame built twice at one time shows the same thing; a fade cut short turns round from where it had got to. A colour that comes or goes fades its alpha, keeping its own red, green and blue. Layout never changes, and without `transition` the draw output is unchanged |
 | `backgroundImage`, `slice`, `sliceTop`, `sliceRight`, `sliceBottom`, `sliceLeft` | an image name, pixels | none, `0` | A nine-slice skin: the image over `background`, under the children. Corners keep their size, edges and middle stretch (see "Nine-slice backgrounds") |
 | `hoverBackgroundImage`, `focusBackgroundImage`, `pressedBackgroundImage`, `disabledBackgroundImage` | an image name | none | The image in a state, in the colours' order. Images change at once; `transition` fades colours only |
+| `opacity` | 0 to 1 | `1` | The box and everything in it drawn at this opacity, multiplied down the tree. Per part, not as a flattened layer (see "Opacity"). With a `transition` a change fades |
 | `overflow` | `"visible"`, `"hidden"`, `"scroll"` | `"visible"` | What happens to children outside the box. `hidden` clips to it; `scroll` also scrolls with the wheel and does not shrink the children, so there is content to scroll (see "Clipping and scrolling") |
 | `scrollX`, `scrollY` | pixels | `0` | A scroll box's offset: the wheel changes it, setting the prop jumps to it (clamped to the content) |
 | `onPress` | a callback | none | Pressable over the laid-out box (U4) |
@@ -403,6 +404,16 @@ Also decided on 2026-11-09, each as recommended:
 - **Missing or unsized:** a missing file is a magenta box (and a compile error when the name is a literal, through the same asset check as `<Sprite image>`). A backend that cannot report texture sizes cannot cut the picture, and draws nothing with one warning.
 - **Not here:** tiling the edges and middle instead of stretching them, a scale for the corners, and a tint.
 - The draw pass keeps the nine parts' numbers in one scratch array, so a skin allocates nothing per frame.
+
+## Opacity
+
+`opacity` on a `<Flex>` (PR 6 of the UI follow-ups) needs nothing of the native side. It is a multiplier the draw list applies to every colour it is given: `DrawList.alpha`, set by `pushAlpha` and `popAlpha` the way a clip is (the Flex pushes it before its own drawing, so its background and border fade too, and the walks pop it once the subtree has been left; `Flex.drawnAlpha` says it was pushed). Every emitter (`rect`, `ellipse`, `box`, `text`, `spriteRegionAt`) multiplies the alpha of the colour or tint it writes, and at an alpha of 0 writes nothing, so a faded-out menu costs no records. A colour's red, green and blue are untouched.
+
+- **A plain sprite** has no colour in its record (`RGE_OP_SPRITE`), so under a faded box it is drawn as the whole texture in a tinted `RGE_OP_SPRITE_REGION` (one more draw record shape, the size from `textureSize`). A backend that cannot report sizes draws it unfaded.
+- **The leaf fast paths** that write a shape's or sprite's record in place only run at an alpha of 1; below it they take the ordinary path through the emitters.
+- **Nesting** multiplies. A box that fades keeps its own state: `transition` fades `opacity` with the colours, from where the fade had got to, by the same clock and ease (`stepTransition` carries the alpha as a number beside the two packed colours), so an opacity set from 1 to 0 over 0.25 s is a menu fading out.
+- **Why not a layer.** This is PIXI's way (an alpha that multiplies down the tree), not CSS's (the box drawn on its own and blended once). It is exact for a box whose parts do not overlap and for a box at 0 or 1, and slightly different part way for one whose do: a dark button on a panel shows the panel through it, and an outline (copies of the text that overlap) fades slower than the glyphs. Flattening needs a native off-screen layer (a begin and end record, a render texture the size of the box, a blend, and a place in the clip and z order), which is its own ABI step; this PR leaves it open without closing it, since a layer would only change what `opacity` means for the overlaps.
+- **At 0** the box is still laid out and still takes the mouse and the focus. **Not here:** opacity on anything but a `<Flex>` (a `<Sprite>` has its own), and fading between background images (they could now cross-fade by drawing both).
 
 ## Text outline and shadow
 
