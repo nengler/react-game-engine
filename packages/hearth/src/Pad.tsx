@@ -21,7 +21,7 @@ export function Pad({ id, x, y, tower }: PadProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
-    <Entity name="Pad" transform={{ x, y }}>
+    <Entity transform={{ x, y }}>
       {tower !== null && <Tower kind={tower.kind} level={tower.level} angle={tower.angle} flash={tower.flash} ring={selected || hovered} />}
       <Pointer
         width={10}

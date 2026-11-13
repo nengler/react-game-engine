@@ -18,5 +18,5 @@ export function KeyPrompt({ onKey, onCancel }: KeyPromptProps) {
     if (key === "Escape") onCancel();
     else onKey(key);
   });
-  return <Entity name="KeyPrompt" modal />;
+  return <Entity modal />;
 }

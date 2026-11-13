@@ -22,7 +22,7 @@ export function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
   });
 
   return (
-    <Entity name="Enemy">
+    <Entity>
       <Sprite image={tint === "red" ? "enemy-red.png" : "enemy-blue.png"} />
       <Collider width={20} height={20} />
       {/* A shape shows the collider's bounds while there is no art for it. */}
@@ -55,7 +55,7 @@ function Level() {
   const [defeats, setDefeats] = useState<Defeat[]>([]);
   const bossVisible = defeats.some((d) => d.tint === "blue") && defeats.length >= 2;
   return (
-    <Entity name="Level">
+    <Entity>
       {spawns.map((s) => (
         <Enemy
           key={s.id}

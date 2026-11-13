@@ -8,7 +8,7 @@ export function Coin() {
   const [taken, setTaken] = useState(false);
 
   return (
-    <Entity name="Coin">
+    <Entity>
       {!taken && <Shape kind="circle" width={16} height={16} color="#e8a317" />}
       {!taken && (
         <Collider

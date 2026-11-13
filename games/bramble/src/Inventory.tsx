@@ -6,7 +6,7 @@ import { slotsOf } from "./rules/run.ts";
 export function Inventory() {
   const run = useGame((s) => s.run);
   return (
-    <Entity name="Inventory">
+    <Entity>
       {slotsOf(run).map((slot) => (
         <Entity key={slot.id} name="Slot" transform={{ x: slot.x, y: slot.y }}>
           <Shape kind="rect" width={42} height={36} color="#1b2036" />

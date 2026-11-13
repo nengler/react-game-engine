@@ -10,7 +10,7 @@ export function End() {
   const minutes = Math.floor(time / 60);
   const seconds = String(Math.floor(time % 60)).padStart(2, "0");
   return (
-    <Entity name="End">
+    <Entity>
       <Text transform={{ x: 0, y: 55 }} width={320} align="center" size={20} color="#e8d9a8">The gate opens.</Text>
       <Text transform={{ x: 0, y: 85 }} width={320} align="center" size={10} color="#a7b0c8">{`Time ${minutes}:${seconds}`}</Text>
       <Text transform={{ x: 0, y: 120 }} width={320} align="center" size={10} color="#a7b0c8">Press Enter</Text>

@@ -627,7 +627,7 @@ function Pair() {
     const root = result.ir.components[0]!.root;
     assert.deepEqual([root.component.name, root.props.length, root.transform.length], ["Entity", 0, 0]);
     assert.match(result.code, /export class Pair extends Entity \{/);
-    assert.match(result.code, /super\(\);/);
+    assert.match(result.code, /super\(\{ name: "Pair" \}\);/);
     assert.deepEqual(getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/Pair.tsx`, text: source }]), []);
   });
 

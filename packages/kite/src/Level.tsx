@@ -10,7 +10,7 @@ export function Level() {
   const room = useGame((s) => s.run.room);
 
   return (
-    <Entity name="Level">
+    <Entity>
       {ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => (
         <Tilemap key={r.map} map={r.map} image="tiles.png" layer="Tiles" transform={{ x: r.ox, y: r.oy }} />
       ))}

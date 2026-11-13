@@ -10,7 +10,7 @@ export default function Main() {
   const screen = useGame((s) => s.screen);
 
   return (
-    <Game vsync={false} name="Main" controls={controls} upscale="sharp" title="Hearth" width={960} height={540} background="#12151f" assets="assets" font="font.png" fixedStep={60}>
+    <Game vsync={false} controls={controls} upscale="sharp" title="Hearth" width={960} height={540} background="#12151f" assets="assets" font="font.png" fixedStep={60}>
       <Screen width={320} height={180} fit="contain">
         <Router route={screen}>
           <Route name="title">

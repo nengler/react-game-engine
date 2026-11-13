@@ -71,7 +71,7 @@ describe("<Game> as a component's root", () => {
 
   it("takes fixedStep, the rate of the fixed timestep, as a literal setting", async () => {
     const compiled = build(`function Main() { return <Game fixedStep={60} />; }`);
-    assert.match(compiled.code, /super\(\{ fixedStep: 60 \}\);/);
+    assert.match(compiled.code, /super\(\{ name: "Main", fixedStep: 60 \}\);/);
     const { Main } = await load<{ Main: new () => Game }>(compiled);
     assert.equal(new Main().fixedStep, 60);
     assert.equal(new Game().fixedStep, undefined, "off unless written");

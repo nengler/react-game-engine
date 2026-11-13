@@ -58,7 +58,7 @@ export function Player({ onDie }: PlayerProps) {
   });
 
   return (
-    <Entity name="Player" transform={{ x: originX + body.x, y: originY + body.y }}>
+    <Entity transform={{ x: originX + body.x, y: originY + body.y }}>
       {/* Copies of the character a dash leaves, drawn first so they are under it. */}
       <DashTrail dashing={body.state === "dash"} x={originX + body.x} y={originY + body.y} height={height} flipX={body.facing < 0} />
       {/* The hitbox is 8 × 11 (8 × 6 ducking); the picture is 12 × 12 with its origin at the feet, so it sits centred on the hitbox's bottom. */}
