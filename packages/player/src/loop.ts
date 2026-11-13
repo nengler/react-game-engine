@@ -404,6 +404,9 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       try {
         if (current !== null) {
           const old = current;
+          // A timer's callback closes over the instance that set it, which the reload replaces: pending timers do not carry over.
+          const timers = countTimers(old);
+          if (timers > 0) config.warn?.(`Hot reload dropped ${timers} pending timer${timers === 1 ? "" : "s"} (after, every): a timer calls code of the components it replaced. State is kept; set the timer again if it is still wanted.`);
           current = null;
           world.root.removeChild(old);
         }
@@ -604,6 +607,13 @@ export function layoutError(error: unknown, note: string, width: number, height:
   if (cut) lines.push({ text: "(the rest does not fit)", x: margin, y: Math.min(y, bottom + lineHeight), size: small, color: ERROR_DIM });
   lines.push({ text: note, x: margin, y: height - margin - size, size, color: ERROR_DIM });
   return lines;
+}
+
+/** The timers waiting in a tree. */
+function countTimers(root: GameObject): number {
+  let count = root.pendingTimers;
+  for (const child of root.children) count += countTimers(child);
+  return count;
 }
 
 function resolveBackground(css: string, warner: Warner): number {

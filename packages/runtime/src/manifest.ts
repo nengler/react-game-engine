@@ -203,7 +203,7 @@ export const runtimeManifest: RuntimeManifest = {
     "isDirty", "hasPendingStructure", "gameStateStore", "gameStateKeys", "layoutContents",
     "addChild", "removeChild", "queueAddChild", "queueRemoveChild", "queueReorder", "commitStructure", "childSpace",
     "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
-    "markDirty", "markChanged", "markMoved", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
+    "markDirty", "markChanged", "markMoved", "after", "every", "cancelTimers", "pendingTimers", "stepTimers", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
     "onInput", "onUpdate", "onMount", "onUnmount", "keepCleanup", "inert", "modal",
     "attachToWorld", "detachFromWorld", "ownedHandles", "hotKey", "$memo",
     // Object.prototype

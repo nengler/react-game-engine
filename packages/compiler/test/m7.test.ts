@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import * as authoring from "@rge/runtime/jsx";
 import { Transform, runtimeManifest } from "@rge/runtime";
 import { LIBRARY_HOOKS } from "../src/hooks/library.ts";
-import { AUTHORING_HOOKS, DiagnosticCode, TRANSFORM_FIELDS } from "../src/index.ts";
+import { TIMER_FUNCTIONS, AUTHORING_HOOKS, DiagnosticCode, TRANSFORM_FIELDS } from "../src/index.ts";
 import { OUTPUT_ROOT, cleanOutput, closeCompiler, compile, getCompiler } from "./helpers.ts";
 
 after(() => {
@@ -34,7 +34,7 @@ const IMPORTS = `import { useState, useRef, useUpdate, useInput, clamp, Entity, 
 
 describe("M7: the authoring module", () => {
   it("exports exactly the hooks, built-in elements and functions the compiler accepts, and the engine's own custom hooks", () => {
-    const expected = [...runtimeManifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(runtimeManifest.functions), ...LIBRARY_HOOKS].sort();
+    const expected = [...runtimeManifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(runtimeManifest.functions), ...LIBRARY_HOOKS, ...Object.keys(TIMER_FUNCTIONS)].sort();
     assert.deepEqual(Object.keys(authoring).sort(), expected);
   });
 

@@ -6,7 +6,7 @@ import { spanOf } from "../parser/parser.ts";
 import { type GameStateDefinition } from "../gamestate/schema.ts";
 import { type RuntimeManifest } from "@rge/runtime";
 import { type LoweringContext } from "./statements.ts";
-import { SOUND_CLASS, type AuthoringImports, checkStaticCycles } from "./helpers.ts";
+import { TIMER_FUNCTIONS, SOUND_CLASS, type AuthoringImports, checkStaticCycles } from "./helpers.ts";
 import { ElementLowering } from "./elements.ts";
 import { type ModuleContext } from "./lowering.ts";
 
@@ -54,7 +54,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   }
 
   // Names imported from the authoring module must be ones the compiler understands.
-  const authored = new Set([...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions)]);
+  const authored = new Set([...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions), ...Object.keys(TIMER_FUNCTIONS)]);
   const authoredTypes = new Set(AUTHORING_TYPES);
   for (const i of analysis.authoringImports) {
     if (i.isTypeOnly && !authoredTypes.has(i.name)) {

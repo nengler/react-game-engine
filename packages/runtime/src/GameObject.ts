@@ -498,9 +498,63 @@ export class GameObject<P extends object = {}> {
     return NO_HANDLES;
   }
 
+  /** This object's timers (`after`, `every`): seconds left, the period for a repeating one (0: once), and what to call. */
+  #timers: { left: number; period: number; fn: () => void }[] = [];
+
+  /**
+   * Call `fn` once, `seconds` of game time from now: `after(0.15, () => setFlash(false))` in a handler. Timers count the fixed
+   * step's time in the update phase (so they stop during `freeze` and `<Game paused>`, and replay), and are cancelled when this
+   * object leaves the world, so one never sets state on a component that is gone.
+   */
+  after(seconds: number, fn: () => void): void {
+    this.#addTimer(seconds, 0, fn);
+  }
+
+  /** Call `fn` every `seconds` of game time, the first time `seconds` from now, until `cancelTimers` or the object leaves the world. */
+  every(seconds: number, fn: () => void): void {
+    this.#addTimer(seconds, seconds > 0 ? seconds : 0, fn);
+  }
+
+  /** Cancel every timer of this object. */
+  cancelTimers(): void {
+    this.#timers = [];
+  }
+
+  /** How many timers of this object are waiting. */
+  get pendingTimers(): number {
+    return this.#timers.length;
+  }
+
+  #addTimer(seconds: number, period: number, fn: () => void): void {
+    this.#timers.push({ left: seconds > 0 ? seconds : 0, period, fn });
+    this.world?.addTimed(this);
+  }
+
+  /**
+   * Run the timers that are due after `dt` more seconds, in the order they were set (the world calls this in each update).
+   * Returns whether any are left.
+   */
+  stepTimers(dt: number): boolean {
+    const timers = this.#timers;
+    if (timers.length === 0) return false;
+    // A snapshot: a timer set by a callback starts counting from the next step.
+    const due = [...timers];
+    for (const timer of due) {
+      if (this.#timers !== timers || this.world === null) break; // cancelled by a callback, or gone
+      timer.left -= dt;
+      // A repeating timer due more than once in one step (a period shorter than the step) runs once a step: no bursts.
+      if (timer.left > 1e-9) continue;
+      if (timer.period > 0) timer.left += Math.max(timer.period, dt);
+      else timers.splice(timers.indexOf(timer), 1);
+      timer.fn();
+    }
+    return this.#timers.length > 0;
+  }
+
   attachToWorld(world: World): void {
     this.world = world;
     world.registerObject(this);
+    if (this.#timers.length > 0) world.addTimed(this);
     for (const handle of this.ownedHandles()) (handle as OwnedHandle | null)?.attachOwner?.(this, world);
     // Before the children attach, so an outer modal is below an inner one.
     if (this.#inert) world.setInert(this, true);
@@ -531,6 +585,8 @@ export class GameObject<P extends object = {}> {
       for (const cleanup of cleanups) cleanup();
     }
     for (const handle of this.ownedHandles()) (handle as OwnedHandle | null)?.detachOwner?.();
+    // Its timers go with it: a timer never calls back into a component that has left.
+    this.#timers = [];
     this.world?.unregisterObject(this);
     this.world = null;
     for (const child of this.children) child.detachFromWorld();

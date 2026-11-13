@@ -18,6 +18,7 @@ export type { RuntimeManifest } from "@rge/runtime";
 export * from "./diagnostics/diagnostics.ts";
 export { analyzeSourceFile, AUTHORING_HOOKS, AUTHORING_TYPES, type PropsAnalysis, type TypeDeclarationAnalysis, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
+export { TIMER_FUNCTIONS } from "./transform/helpers.ts";
 export { generateModule, generateModuleWithMap, generateModuleWithOrigins, type GeneratorOptions, type SourceMapOptions } from "./generator/generator.ts";
 export { type LineOrigin } from "./generator/writer.ts";
 export { mapToSource, type GeneratedFile } from "./diagnostics/source.ts";

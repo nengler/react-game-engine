@@ -134,6 +134,21 @@ describe("errors in the window", () => {
 });
 
 describe("reload", () => {
+  it("drops pending timers, which call code of the tree it replaces, and says how many", () => {
+    const warnings: string[] = [];
+    const player = createPlayer(new RecordingBackend(), { ...WINDOW, root: () => new Holder(1), warn: (m) => warnings.push(m) });
+    const old = player.world.root.children[0] as Holder;
+    let fired = 0;
+    old.after(1, () => fired++);
+    old.every(0.5, () => fired++);
+    assert.equal(player.reload({ root: () => new Holder(2) }), true);
+    assert.ok(warnings.some((m) => /dropped 2 pending timers/.test(m)), JSON.stringify(warnings));
+    assert.equal(old.pendingTimers, 0);
+    for (let i = 0; i < 3; i++) player.world.tick(1);
+    assert.equal(fired, 0, "nothing calls back into the old tree");
+    player.close();
+  });
+
   it("replaces the root in the same window and gives the new tree the old one's state", () => {
     let opens = 0;
     const backend = new (class extends RecordingBackend {

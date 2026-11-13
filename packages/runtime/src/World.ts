@@ -58,6 +58,13 @@ export class World implements BodySpace {
   #frozen = 0;
   /** While true no `onUpdate` runs (the player sets it from `<Game paused>`); `onInput` and presses still do. */
   paused = false;
+  /** Objects with timers waiting (`GameObject.after`, `every`), stepped after the updates of each step that is not frozen or paused. */
+  readonly #timed = new Set<GameObject>();
+
+  /** An object in this world has a timer waiting. */
+  addTimed(object: GameObject): void {
+    this.#timed.add(object);
+  }
 
   constructor() {
     this.root.attachToWorld(this);
@@ -97,6 +104,12 @@ export class World implements BodySpace {
       beforeUpdate?.();
       const updates = [...this.#onUpdate];
       for (const object of updates) if (object.world === this) object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
+      // Timers, after the updates of the step, in the order their objects first set one.
+      if (this.#timed.size > 0) {
+        for (const object of [...this.#timed]) {
+          if (object.world !== this || !object.stepTimers(dt)) this.#timed.delete(object);
+        }
+      }
     }
     // A freeze asked for during this tick starts with the next.
     if (freezeRequest > this.#frozen) this.#frozen = freezeRequest;
@@ -354,6 +367,7 @@ export class World implements BodySpace {
   }
 
   unregisterObject(object: GameObject): void {
+    this.#timed.delete(object);
     if (object instanceof Collider) this.#colliders.delete(object);
     else if (object instanceof Tilemap) this.#tilemaps.delete(object);
     this.#pressables.delete(object as GameObject & Pressable);

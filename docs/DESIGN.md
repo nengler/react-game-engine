@@ -1733,6 +1733,22 @@ the actions. Not built: rebinding at run time, and axes (a stick's value rather 
 - Not built: the plan's second layer (`transition` on a built-in's transform, eased by the runtime without renders), which waits for
   a game that measures the hooks as too costly.
 
+## Timers: `after`, `every`, `cancelTimers` (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, C2. React code writes `setTimeout` in a handler; here each delay was a countdown kept as state.
+
+- **Runtime.** `GameObject.after(seconds, fn)`, `every(seconds, fn)` and `cancelTimers()` keep a list of timers on the object; the
+  `World` keeps the objects that have any and calls `stepTimers(dt)` on each after the step's updates, in the update phase, so timers
+  stop during `freeze` and `<Game paused>`, follow the fixed step and replay. A repeating timer runs at most once a step. Leaving the
+  world clears an object's timers: a timer never calls back into a component that has gone (React's classic `setTimeout` bug).
+- **Compiler.** `after`, `every` and `cancelTimers` are imported from the authoring module and are statements in handlers only
+  (`TIMER_FUNCTIONS`); a call is the component's own method, `this.after(…)`, and the function passed is lowered as a handler (a
+  callback, as one handed to `settings.subscribe`). Their names are reserved members, so a state called `after` takes `$after`.
+- **Hot reload drops pending timers**, with a note in the log: a timer's function closes over the instance that set it, which the
+  reload replaces, and it cannot be carried to the new one. (The plan hoped to keep timers by call site; that would need the
+  handler that set the timer to run again.) A save never holds a timer either: a delay that is gameplay is state.
+- **Sequences** (cutscenes) are not built; they wait for a game with a cutscene (NEXT_PRIORITIES.md, "Not now").
+
 ## Effects that happen at a moment (priority 7, 2026-11-11)
 
 Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each

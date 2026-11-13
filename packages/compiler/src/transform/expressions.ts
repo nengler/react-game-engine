@@ -14,7 +14,7 @@ const HANDLER_NAMESPACES: ReadonlySet<string> = new Set(["Object", "JSON", "Numb
 /** Global functions a handler may call as written. */
 const HANDLER_GLOBALS: ReadonlySet<string> = new Set(["parseInt", "parseFloat", "isNaN", "isFinite"]);
 import { lowerCallbackValue, lowerFunction, lowerFunctionValue } from "./statements.ts";
-import { BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
+import { TIMER_FUNCTIONS, BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
 
 export class ExpressionLowering extends LoweringBase {
@@ -432,6 +432,23 @@ export class ExpressionLowering extends LoweringBase {
         if (!args) return null;
         return { kind: "Call", callee: { kind: "Function", name }, args };
       }
+    }
+    // A timer (`after(0.15, () => setFlash(false))`): the component's own, so it is cancelled when the component goes.
+    if (isIdentifier(callee) && Object.hasOwn(TIMER_FUNCTIONS, callee.text) && !this.scope.has(callee.text) && !this.plainImports.has(callee.text)) {
+      this.requireImport(callee.text, callee);
+      if (!this.mode.inHandler) {
+        this.report(DiagnosticCode.UnsupportedExpression, `'${callee.text}()' sets a timer, so it is only valid as a statement in a handler (\`useInput\`, \`useUpdate\`, \`useMount\`, a callback prop), not while rendering.`, node);
+        return null;
+      }
+      const expected = TIMER_FUNCTIONS[callee.text]!;
+      if (node.arguments.length !== expected) {
+        this.report(DiagnosticCode.UnsupportedExpression, `${callee.text} expects ${expected} argument(s)${expected === 2 ? ": the seconds, and the function to call (\`() => …\`)" : ""}.`, node);
+        return null;
+      }
+      // The function it calls is a handler of its own, run later: setters, actions and sounds, as in any handler.
+      const args = this.lowerPlainArgs(node.arguments);
+      if (!args) return null;
+      return { kind: "Call", callee: { kind: "Own", name: callee.text }, args };
     }
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
     if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
