@@ -3,6 +3,8 @@ import { Collider, type Contact } from "./components/Collider.ts";
 import { Tilemap } from "./components/Tilemap.ts";
 import { boxesOverlap, type BodySpace, type Box } from "./body.ts";
 import { findTilemap } from "./tilemap.ts";
+import { takeTreeRestore } from "./gameTree.ts";
+import { restoreHotState } from "./hot.ts";
 import type { Pressable } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 
@@ -338,6 +340,10 @@ export class World implements BodySpace {
       this.#structure.clear();
       for (const object of structure) object.commitStructure();
     }
+    // A save loaded with its tree (`createSave({ tree: true })`): the game state it applied has now built the tree, so its
+    // components take their saved state back. `restoreHotState` flushes again; the restore was taken, so it runs once.
+    const restore = takeTreeRestore(this);
+    if (restore !== null) restoreHotState(this, restore.root, restore.state);
     return renders;
   }
 }
