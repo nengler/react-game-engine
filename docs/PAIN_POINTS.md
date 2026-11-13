@@ -15,8 +15,8 @@ repeated text style) are planned in [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md) (20
 
 TSX invites people to write React, and then they hit `RGE` codes.
 
-- **Three languages in one file.** The component body allows expressions only: no `let`, no loops. Handlers allow `let`, `for…of` and
-  `switch`, but not `while`, C-style `for` or `try`. Plain `.ts` files allow anything. A newcomer has to know which zone they are in.
+- **Three languages in one file.** The component body allows expressions only: no `let`, no loops. Handlers allow `let`, every loop,
+  `switch` and `try` (*since 2026-11-13*; before, `for…of` only). Plain `.ts` files allow anything. A newcomer has to know which zone they are in.
 - **Method allowlists.** `push`, `sort` and "other methods of values" are rejected; the fix is "put it in a plain function". Defensible,
   but not visible from the syntax.
 - **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.

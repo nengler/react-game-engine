@@ -176,11 +176,12 @@ function C() {
   return <Entity name="C" />;
 }`).map((d) => d.code);
 
-  it("rejects loops, try, await, this and unknown calls", () => {
-    for (const stmt of ["while (true) {}", "for (;;) {}", "try { setN(1); } catch (e) {}", "this.x = 1;", "console.log(n);"]) {
+  it("rejects await, this and unknown calls", () => {
+    for (const stmt of ["this.x = 1;", "console.log(n);"]) {
       assert.ok(codes(`useUpdate(() => { ${stmt} });`).length > 0, stmt);
     }
-    assert.deepEqual(codes("useUpdate(() => { while (true) {} });"), [DiagnosticCode.UnsupportedStatement]);
+    // Loops and `try` are handler code since REACT_FEEL_PLAN.md A1 (see loops.test.ts); a labelled jump is still refused.
+    assert.deepEqual(codes("useUpdate(() => { outer: for (;;) { break outer; } });").length > 0, true);
     assert.deepEqual(codes("useUpdate(() => { console.log(n); });"), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes("useUpdate(() => { await setN(1); });").length > 0, true);
   });

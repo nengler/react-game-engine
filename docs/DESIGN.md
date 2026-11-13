@@ -267,16 +267,18 @@ Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
 `Assign` (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `||=`, `&&=`, `??=`) writes
 `ref.current` or a `let` local; `n++` / `--r.current` as a statement is
 `+= 1` / `-= 1` on those two. See "Transforms and refs". Position is not
-assigned: it is state. There is no `while` or C-style `for`: a `for…of` is
-bounded by its array, so a handler cannot hang a frame.
+assigned: it is state. `While` (`while`, and `do…while` with `doWhile`), `For` (C-style: `let` locals or
+assignments, a test that may be left out, and assignments as the update) and `Try` / `Throw` are written as
+they are (2026-11-13, see "Every loop, and `try`, in handlers"). A loop may now run forever and hang a frame, as
+it may in any JavaScript.
 
 **Expressions** added: `ParamRead`, `LocalRead`, `PropertyRead` (only on a
 parameter of a runtime handle type, e.g. `input.pointerX`), `Call` and
 `TemplateLiteral`. `Call` is limited to an allowlist (`Math.abs/floor/ceil/
 round/sign/sqrt/sin/cos/min/max`, `clamp`) and to methods of handle
 parameters (`input.pressed/down/released`); the tables live in
-`transform/handles.ts`. Everything else (`while` and C-style `for`, `try`,
-`var`, closures that escape (but for an arrow handed to a function, see "A cleanup from `useMount`"), `this`, `await`, other calls) is a diagnostic
+`transform/handles.ts`. Everything else (`var`, labelled jumps,
+closures that escape (but for an arrow handed to a function, see "A cleanup from `useMount`"), `this`, `await`, other calls) is a diagnostic
 (`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but `ref.current` or a
 `let` local is `RGE1402`, and `++` on anything else stays `RGE1301`.
 
@@ -340,6 +342,18 @@ input system's job.
 Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
 not JSX event props. Element-level events are callback props on the element
 (`<Collider onCollisionEnter>`, `<Pointer onPress>`).
+
+### Every loop, and `try`, in handlers (2026-11-13)
+
+Handlers allowed `for…of` only, so that a handler could not hang a frame. That rule was one of the subset's costs that pushed
+the games' logic out of components (`REACT_FEEL_PLAN.md`, A1), and a hung frame is a bug an author finds at once, as in any
+JavaScript. So a handler takes `while`, `do…while`, C-style `for` (with several `let`s and a comma list of updates),
+`try` / `catch` (with a name or none) / `finally`, and `throw`. `break` and `continue` work in every loop. Each is a statement
+kind of its own (`While`, `For`, `Try`, `Throw`), lowered like the rest and written out as it was written. A `for` loop's `let`s
+are scoped to the loop, as in JavaScript; its head may not call a setter. Labelled jumps stay out.
+
+This is the first step of A1. What an expression may be inside a handler (`new`, `typeof`, any method of a local value) is
+the next.
 
 ## Mount and unmount
 
