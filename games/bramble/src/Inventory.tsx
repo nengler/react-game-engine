@@ -8,12 +8,12 @@ export function Inventory() {
   return (
     <Entity>
       {slotsOf(run).map((slot) => (
-        <Entity key={slot.id} name="Slot" transform={{ x: slot.x, y: slot.y }}>
+        <Entity key={slot.id} name="Slot" x={slot.x} y={slot.y}>
           <Shape kind="rect" width={42} height={36} color="#1b2036" />
           {slot.filled && (
             <>
-              <Text transform={{ x: 3, y: 4 }}>{slot.name}</Text>
-              <Text transform={{ x: 3, y: 20 }} color="#a7b0c8">{slot.label}</Text>
+              <Text x={3} y={4}>{slot.name}</Text>
+              <Text x={3} y={20} color="#a7b0c8">{slot.label}</Text>
             </>
           )}
         </Entity>

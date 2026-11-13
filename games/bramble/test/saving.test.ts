@@ -8,11 +8,11 @@ import { settings } from "../src/settings.ts";
 import { controls } from "../src/rules/controls.ts";
 import { settingsRows, titleRows } from "../src/rules/menu.ts";
 
-/** The rows of the menu on screen, as `label:value`: each menu row is an entity holding its label and value texts. */
+/** The rows of the menu on screen, as `label:value`: each row of the `Menu` column holds its label and value texts. */
 function menuRows(player: Player): string[] {
   const rows: string[] = [];
   const visit = (o: GameObject): void => {
-    if ((o as { name?: string }).name === "Menu") {
+    if (o.constructor.name === "Menu") {
       for (const row of o.children) {
         const texts = row.children.filter((c): c is Text => c instanceof Text).map((t) => t.text);
         if (texts.length === 2) rows.push(`${texts[0]}:${texts[1]}`);

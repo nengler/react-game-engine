@@ -12,7 +12,7 @@ export function Level() {
   return (
     <Entity>
       {ROOM_LIST.filter((r) => Math.abs(r.index - room) <= 1).map((r) => (
-        <Tilemap key={r.map} map={r.map} image="tiles.png" layer="Tiles" transform={{ x: r.ox, y: r.oy }} />
+        <Tilemap key={r.map} map={r.map} image="tiles.png" layer="Tiles" x={r.ox} y={r.oy} />
       ))}
     </Entity>
   );

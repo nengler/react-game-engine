@@ -16,7 +16,7 @@ export default function Main() {
     <Game title="__NAME__" width={320} height={180} background="#10131c" assets="assets">
       <Screen width={320} height={180} fit="integer">
         <Hero />
-        <Text transform={{ x: 8, y: 8 }} size={12} color="white">{`steps: ${steps}`}</Text>
+        <Text x={8} y={8} size={12} color="white">{`steps: ${steps}`}</Text>
       </Screen>
     </Game>
   );

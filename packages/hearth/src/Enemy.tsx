@@ -50,7 +50,7 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
   });
 
   return (
-    <Entity transform={{ x, y }}>
+    <Entity x={x} y={y}>
       <AnimatedSprite
         sheet="enemies.png"
         frameWidth={14}
@@ -66,7 +66,7 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
       <Collider
         width={10}
         height={10}
-        transform={{ x: -5, y: -5 }}
+        x={-5} y={-5}
         tag="enemy"
         layer="enemy"
         hits={["blast"]}

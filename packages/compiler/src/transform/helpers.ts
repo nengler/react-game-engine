@@ -123,6 +123,13 @@ export function cleanJsxText(text: string): string {
 /** Attributes the compiler handles itself; they never become props. */
 export const SPECIAL_ATTRIBUTES: ReadonlySet<string> = new Set(["transform"]);
 
+/**
+ * Transform fields a built-in that takes `transform` also takes as props of their own: `<Sprite x={spot.x} y={spot.y} />` is
+ * `transform={{ x: spot.x, y: spot.y }}`. Not `global` (a flag, not a place) nor `opacity` (`<Sprite>`, `<Flex>` and
+ * `<Tilemap>` have an `opacity` prop of their own). Never on a component, where `x` is whatever the component's props say.
+ */
+export const TRANSFORM_SHORTHAND: ReadonlySet<string> = new Set(["x", "y", "z", "rotation", "scaleX", "scaleY"]);
+
 /** A declared prop's type as a state type (`useState(items)` takes the prop's type). */
 export function propTypeToType(type: PropTypeIR): TypeIR | null {
   switch (type.kind) {

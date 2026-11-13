@@ -9,7 +9,7 @@ export function World() {
     <Entity>
       <Tilemap map={run.map} layer="Ground" />
       {spotsOf(run).map((spot) => (
-        <Sprite key={spot.id} image="things.png" frameWidth={16} frameHeight={16} frame={spot.frame} transform={{ x: spot.x, y: spot.y }} />
+        <Sprite key={spot.id} image="things.png" frameWidth={16} frameHeight={16} frame={spot.frame} x={spot.x} y={spot.y} />
       ))}
     </Entity>
   );

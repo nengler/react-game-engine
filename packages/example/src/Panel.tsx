@@ -13,7 +13,7 @@ export function Panel({ title, children }: PanelProps) {
   return (
     <Entity>
       <Sprite image={title === "hud" ? "panel-hud.png" : "panel.png"} />
-      <Entity name="Content" transform={{ y: 16 }}>
+      <Entity name="Content" y={16}>
         {children}
       </Entity>
     </Entity>

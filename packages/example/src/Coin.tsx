@@ -11,7 +11,7 @@ const Coin = ({ value, spin = 1 }: CoinProps) => {
   useUpdate((dt) => {
     setAngle((angle) => angle + dt * spin);
   });
-  return <Sprite image={value >= 5 ? "gold-coin.png" : "coin.png"} transform={{ rotation: angle }} />;
+  return <Sprite image={value >= 5 ? "gold-coin.png" : "coin.png"} rotation={angle} />;
 };
 
 export default Coin;

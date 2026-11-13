@@ -5,7 +5,7 @@ import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
 import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type ValuePropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
 import { checkFreshName, lowerFunction } from "./statements.ts";
-import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, findAttribute, nearest } from "./helpers.ts";
+import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, TRANSFORM_SHORTHAND, findAttribute, nearest } from "./helpers.ts";
 import { HookLowering } from "./hooks.ts";
 
 
@@ -488,19 +488,34 @@ export class ElementLowering extends HookLowering {
    */
   protected lowerTransform(attributes: JsxAttributes, tag: string, isComponent: boolean): TransformPropIR[] {
     const attribute = findAttribute(attributes, "transform");
-    if (!attribute) return [];
     const code = DiagnosticCode.InvalidTransformAttribute;
+    // `<Sprite x={…} y={…} />`: the shorthand, on a built-in only (on a component, `x` is one of its props).
+    const shorthand = isComponent ? [] : attributes.properties.filter((a): a is JsxAttribute => isJsxAttribute(a) && isIdentifier(a.name) && TRANSFORM_SHORTHAND.has(a.name.text));
+    if (!attribute && shorthand.length === 0) return [];
     if (!isComponent && !this.manifest.transformIntrinsics.includes(tag)) {
-      this.report(code, `<${tag}> cannot be placed with \`transform\` (it is not in the runtime's transformIntrinsics). Wrap it in an <${this.hostIntrinsic}> to position it.`, attribute);
+      const what = attribute ? "`transform`" : `\`${(shorthand[0]!.name as { text: string }).text}\``;
+      this.report(code, `<${tag}> cannot be placed with ${what} (it is not in the runtime's transformIntrinsics). Wrap it in an <${this.hostIntrinsic}> to position it.`, attribute ?? shorthand[0]!);
       return [];
     }
+    const out: TransformPropIR[] = [];
+    for (const written of shorthand) {
+      const field = (written.name as { text: string }).text as TransformField;
+      const init = written.initializer;
+      let value: ExprIR | null = null;
+      if (init && isJsxExpression(init) && init.expression && !init.dotDotDotToken) value = this.lowerNode(init.expression);
+      else {
+        this.report(code, `\`${field}\` takes a number: \`${field}={${field === "rotation" ? "angle" : "12"}}\`.`, written);
+        continue;
+      }
+      if (value) out.push(valueProp(field, value));
+    }
+    if (!attribute) return out;
     const init = attribute.initializer;
     const object = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
     if (!object || !isObjectLiteralExpression(object)) {
       this.report(code, "`transform` takes an object literal: `transform={{ x, y: 0 }}`.", attribute);
-      return [];
+      return out;
     }
-    const out: TransformPropIR[] = [];
     for (const property of object.properties) {
       let field: string;
       let valueNode: Expression;
@@ -519,7 +534,13 @@ export class ElementLowering extends HookLowering {
         continue;
       }
       if (out.some((p) => p.name === field)) {
-        this.report(code, `Duplicate transform field '${field}'.`, property);
+        this.report(
+          code,
+          shorthand.some((a) => (a.name as { text: string }).text === field)
+            ? `'${field}' is written twice: as a prop (\`${field}={…}\`) and in \`transform\`. Keep one.`
+            : `Duplicate transform field '${field}'.`,
+          property,
+        );
         continue;
       }
       const value = this.lowerNode(valueNode);
@@ -560,6 +581,8 @@ export class ElementLowering extends HookLowering {
       }
       seen.add(name);
       if (SPECIAL_ATTRIBUTES.has(name) || (name === "key" && listItem)) continue;
+      // `x`, `y` and the rest of the shorthand are lowered with `transform` (`lowerTransform`).
+      if (!toComponent && TRANSFORM_SHORTHAND.has(name)) continue;
       // A built-in whose text is its children (`<Text>Score: {score}</Text>`) takes no `text` attribute: one way to write it.
       if (!toComponent && this.manifest.textContent[tag] === name) {
         this.report(

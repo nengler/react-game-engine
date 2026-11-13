@@ -73,13 +73,13 @@ function Level() {
       {/* The camera follows its children: once the third enemy arrives the view centres on it, and zooms in from wave 6. */}
       <Camera zoom={wave > 5 ? 2 : 1}>{wave >= 3 && <Enemy speed={wave} transform={{ x: 120 }} />}</Camera>
       {/* A hit area: a press inside it calls the handler. Pair it with a Shape to draw the button. */}
-      <Shape kind="rect" width={48} height={16} color="gray" transform={{ x: 160, y: 80 }} />
-      <Pointer width={48} height={16} transform={{ x: 160, y: 80 }} onPress={() => setWave((wave) => wave + 1)} />
+      <Shape kind="rect" width={48} height={16} color="gray" x={160} y={80} />
+      <Pointer width={48} height={16} x={160} y={80} onPress={() => setWave((wave) => wave + 1)} />
       <Panel title="hud" transform={{ x: 160 }}>
         <Coin value={score} />
         <Trail value={wave} transform={{ x: 40, y: 20 }} />
         {/* Text between the tags is the `text` prop: it follows `score` like any other value. */}
-        <Text size={12} color={score >= 5 ? "gold" : "white"} transform={{ y: 40 }}>
+        <Text size={12} color={score >= 5 ? "gold" : "white"} y={40}>
           Score: {score} (wave {wave})
         </Text>
       </Panel>

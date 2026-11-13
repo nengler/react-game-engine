@@ -489,11 +489,18 @@ weighed against it. A component that already declares an `x` prop of its own (He
 
 **Done when**
 
-- [ ] The guide has "Placing things", with `<Flex>` first and no HUD-only framing
-- [ ] Bramble's `Menu` is a `<Flex>` column, and its replays still pass
-- [ ] `x`, `y`, `rotation`, `scaleX`, `scaleY`, `z` work as props where `transform` does, with compiler tests and a diagnostic for a
+- [x] The guide has "Placing things", with `<Flex>` first and no HUD-only framing
+- [x] Bramble's `Menu` is a `<Flex>` column, and its replays still pass
+- [x] `x`, `y`, `rotation`, `scaleX`, `scaleY`, `z` work as props where `transform` does, with compiler tests and a diagnostic for a
       duplicate key
-- [ ] The games use the shorthand where it reads better
+- [x] The games use the shorthand where it reads better
+
+**Done (2026-11-13).** Open question 1: the shorthand is on built-ins only, never on a component. The compiler compiles one file at
+a time and cannot see whether an imported component declares an `x`, so `<Enemy x={…}>` always means the component's own prop and
+a component is placed with `transform`. Nothing is reserved: the shorthand is lowered to the element's transform, never a field.
+Open question 2: nothing new was needed. Bramble's menu is a `<Flex>` column whose rows take the cursor's bar as `background`, and
+it draws the same pixels as the hand-placed one (its stories' stored screenshots match). 52 `transform={{…}}` on built-ins in the
+games, the demo, the example and the template became `x={…} y={…}`.
 
 ### B3. Text wrappers that take their words as children
 
