@@ -73,6 +73,42 @@ describe("useBody", () => {
   });
 });
 
+const PROBE = `
+interface ProbeProps { onAsk: (answers: string) => void }
+export function Probe({ onAsk }: ProbeProps) {
+  const { blocked } = useBody({ x: 12, y: 20, width: 4, height: 4 });
+  useUpdate(() => {
+    onAsk([blocked(0, 1), blocked(0, -1), blocked(1, 0), blocked(-1, 0)].join(","));
+  });
+  return <Entity />;
+}
+export function Corner({ onAsk }: ProbeProps) {
+  return (
+    <Entity>
+      <Tilemap map="body-room" layer="Tiles" solid />
+      <Collider width={8} height={8} tag="crate" solid x={16} y={16} />
+      <Probe onAsk={onAsk} />
+    </Entity>
+  );
+}`;
+
+describe("useBody's blocked", () => {
+  it("says whether something solid is a move away, without moving: the floor below, the crate to the right", async () => {
+    registerTilemaps({ "body-room": ROOM });
+    const compiled = compile(PROBE);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Corner } = await load<{ Corner: new (p: { onAsk: (a: string) => void }) => Entity }>(compiled);
+    const asked: string[] = [];
+    const world = new World();
+    world.mount(new Corner({ onAsk: (a) => asked.push(a) }));
+    world.flush();
+    world.tick(1 / 60);
+    world.flush();
+    // Standing on the floor (its top is y = 24) against the crate (its left side is x = 16): below and right are solid.
+    assert.deepEqual(asked, ["true,false,true,false"]);
+  });
+});
+
 const TOWER = `
 interface TowerProps { onSee: (ids: string) => void }
 export function Tower({ onSee }: TowerProps) {

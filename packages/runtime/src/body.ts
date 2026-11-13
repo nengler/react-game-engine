@@ -100,6 +100,15 @@ export class Body implements PixelActor {
     return { ...sides, tags };
   }
 
+  /**
+   * Whether something solid is where the body would be moved by (dx, dy), without moving it: `blocked(0, 1)` is standing on
+   * the ground, `blocked(1, 0)` a wall on the right. What a platformer's rules ask every step (a jump's grace, a wall jump).
+   */
+  blocked(dx: number, dy: number): boolean {
+    if (this.#world === null || this.#owner === null) return false;
+    return this.#world.solidIn(this.#box(this.x + dx, this.y + dy), this.#owner) !== null;
+  }
+
   /** Whether a collider with this tag overlaps the body now (its own colliders do not count). */
   touching(tag: string): boolean {
     if (this.#world === null || this.#owner === null) return false;

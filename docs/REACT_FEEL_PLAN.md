@@ -206,7 +206,16 @@ and order is fixed.
 
 - [x] `useBody` moves against solid tiles and solid colliders and returns the sides it hit, in the same step
 - [x] `touching(tag)` answers in the same step; parity and replays pass
-- [ ] Kite's movement is written once with `useBody` in a component as a test (beside its rules, to compare feel and cost)
+- [x] Kite's movement is written once with `useBody` in a component as a test (beside its rules, to compare feel and cost)
+
+**Kite, compared (2026-11-13).** `packages/kite/src/Runner.tsx` is Kite's normal-state movement (run, fall, a held jump with its
+grace and buffer, speed kept into a wall, a jump sliding past a ceiling's corner) as a component with `useBody`, and
+`test/runner.test.ts` plays six scripts through it and through `stepBody`: the same pixel every step, in two rooms, through a wall
+(36 steps against it) and a ceiling. A step costs 6.7 µs in the rules and 11.3 µs as the component with its world's tick and
+render (Node). Writing it found one thing `useBody` lacked: asking whether a pixel away is solid without moving there. Kite asks
+it for the ground every step (a body standing still is stopped by nothing, so `move` says nothing of the floor), and for walls;
+the body and the hook now have `blocked(dx, dy)`. It also found that a namespace import (`import * as K`) is refused in a component,
+where Kite's rules use one for the constants. The dash, climbing, wall jumps and slides and ducking stay in the rules alone.
 - [x] The guide's "Tilemaps and movement" section leads with it
 
 ### A3. Contacts carry data
