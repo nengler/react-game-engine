@@ -111,7 +111,7 @@ export const runtimeManifest: RuntimeManifest = {
     Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
     Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "originX", "originY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "disabled", "onFocus", "onBlur", "contains", "focusPoint"],
-    Text: ["text", "size", "sized", "color", "width", "align", "font", "maxWidth", "lineGap", "reveal"],
+    Text: ["text", "size", "sized", "color", "width", "align", "font", "shadow", "shadowX", "shadowY", "outline", "outlineWidth", "maxWidth", "lineGap", "reveal"],
     Shape: ["kind", "width", "height", "color"],
     Camera: ["zoom", "shake", "bounds", "slide", "deadzone", "smoothing", "slideX", "slideY", "viewWidth", "viewHeight", "shakeOffset", "viewTransform", "worldToView", "viewToWorld"],
     AnimatedSprite: [

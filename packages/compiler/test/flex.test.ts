@@ -5,7 +5,7 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Flex, Shape, World, type GameObject } from "@rge/runtime";
+import { Flex, Shape, Text, World, type GameObject } from "@rge/runtime";
 import { FrameBuilder } from "@rge/player";
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -211,6 +211,25 @@ describe("Flex onPress and Text align", () => {
       ]);
     assert.deepEqual(check(`<Flex onPress={() => {}}><Text width={40} align={wide ? "left" : "right"}>x</Text></Flex>`), []);
     assert.ok(check(`<Text align={wide ? "left" : "middle"}>x</Text>`).length > 0);
+  });
+
+  it("type-checks a Text's shadow and outline: colours and numbers, from state too", async () => {
+    const check = (element: string) =>
+      getCompiler().typeCheckSources([
+        { fileName: `${process.cwd()}/.test-output/TextFx${Math.random()}.tsx`, text: `import { Text } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }` },
+      ]);
+    assert.deepEqual(check(`<Text shadow="black" shadowX={big ? 2 : 1} shadowY={1} outline="white" outlineWidth={big ? 2 : 1}>Hi</Text>`), []);
+    assert.ok(check(`<Text shadow={3}>Hi</Text>`).length > 0, "a shadow is a colour");
+    assert.ok(check(`<Text outlineWidth="thick">Hi</Text>`).length > 0, "an outline width is a number");
+    const { Label } = await load<{ Label: new () => Text & { setOn(v: boolean): void } }>(
+      compile(`function Label() { const [on, setOn] = useState(false); return <Text shadow="black" shadowX={on ? 3 : 1} outline={on ? "red" : "blue"} outlineWidth={2}>Hi</Text>; }`, "TextFx.tsx"),
+    );
+    const label = new Label();
+    new World().mount(label);
+    assert.deepEqual([label.shadow, label.shadowX, label.shadowY, label.outline, label.outlineWidth], ["black", 1, 1, "blue", 2]);
+    label.setOn(true);
+    label.world!.flush();
+    assert.deepEqual([label.shadowX, label.outline], [3, "red"]);
   });
 
   it("checks a Text's align literal with a suggestion", () => {

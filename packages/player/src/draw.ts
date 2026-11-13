@@ -175,6 +175,9 @@ function orderByZ(zs: readonly number[]): number[] | null {
   return order;
 }
 
+/** The thickest outline a `<Text>` draws, in pixels: each is a ring of more copies of the text. */
+const MAX_OUTLINE = 3;
+
 /** Where each thing about a nine-slice's three columns and three rows starts in `FrameBuilder.#parts`. */
 const SRC_X = 0;
 const SRC_W = 3;
@@ -870,6 +873,10 @@ export class FrameBuilder {
   #time: number | undefined = undefined;
   /** Scratch for the colours a transitioning `<Flex>` shows, so drawing allocates nothing. */
   readonly #fadeColors: ShownColors = { fill: 0, edge: 0 };
+  /** The colour a text's shadow or outline copy is drawn in, while one is; undefined for the text itself. */
+  #ink: PackedColor | undefined = undefined;
+  /** Scratch for where a shadow or outline copy of a text is, so drawing the effects makes no object per copy. */
+  readonly #shifted = { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1 };
   /** Scratch for the nine parts of a background image (see `#paintImage`): 24 numbers, three columns or rows each of eight things. */
   readonly #parts = new Float64Array(24);
   readonly #textureSizes = new Map<number, Size>();
@@ -1937,7 +1944,7 @@ export class FrameBuilder {
     const cellW = sheet.width / FONT_COLUMNS;
     const cellH = sheet.height / FONT_ROWS;
     const scale = (text.sized ? text.size : cellH) / cellH;
-    const color = this.#color(text.color);
+    const color = this.#ink ?? this.#color(text.color);
     const cos = Math.cos(at.rotation);
     const sin = Math.sin(at.rotation);
     const multiline = isMultiline(text);
@@ -1968,13 +1975,65 @@ export class FrameBuilder {
     }
   }
 
+  /**
+   * A `<Text>`, with its shadow and outline if it has them: the text is drawn again, under itself, in the shadow's colour and in
+   * the outline's, a pixel at a time around where it is, and then once in its own colour. Each is the whole text drawn the ordinary
+   * way (a record for each line, a region for each glyph of a bitmap font), shifted in the text's own axes so that it turns and
+   * scales with it. They are before the text in draw order, so the same `z`, and they take no room: layout measured the text alone.
+   */
   #text(text: Text, world: WorldTransform): void {
+    if (text.shadow === undefined && text.outline === undefined) {
+      this.#drawText(text, world);
+      return;
+    }
+    const reach = text.outline === undefined || !(text.outlineWidth >= 1) ? 0 : Math.min(MAX_OUTLINE, Math.round(text.outlineWidth));
+    const cos = Math.cos(world.rotation);
+    const sin = Math.sin(world.rotation);
+    const at = this.#shifted;
+    at.rotation = world.rotation;
+    at.scaleX = world.scaleX;
+    at.scaleY = world.scaleY;
+    // The shadow falls from the outlined shape, so it is a copy of the outline's every offset, and of the text itself, moved by its own.
+    if (text.shadow !== undefined) {
+      this.#ink = this.#color(text.shadow);
+      const sx = Number.isFinite(text.shadowX) ? text.shadowX : 0;
+      const sy = Number.isFinite(text.shadowY) ? text.shadowY : 0;
+      for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          if (dx * dx + dy * dy > reach * reach + reach) continue;
+          const lx = (sx + dx) * world.scaleX;
+          const ly = (sy + dy) * world.scaleY;
+          at.x = world.x + cos * lx - sin * ly;
+          at.y = world.y + sin * lx + cos * ly;
+          this.#drawText(text, at);
+        }
+      }
+    }
+    if (reach > 0) {
+      this.#ink = this.#color(text.outline as string);
+      for (let dy = -reach; dy <= reach; dy++) {
+        for (let dx = -reach; dx <= reach; dx++) {
+          if ((dx === 0 && dy === 0) || dx * dx + dy * dy > reach * reach + reach) continue;
+          const lx = dx * world.scaleX;
+          const ly = dy * world.scaleY;
+          at.x = world.x + cos * lx - sin * ly;
+          at.y = world.y + sin * lx + cos * ly;
+          this.#drawText(text, at);
+        }
+      }
+    }
+    this.#ink = undefined;
+    this.#drawText(text, world);
+  }
+
+  /** The text itself, once, in `#ink` if an effect is being drawn and in its own colour if not. */
+  #drawText(text: Text, world: WorldTransform): void {
     const font = text.font ?? this.font;
     if (font !== undefined) {
       this.#bitmapText(text, world);
       return;
     }
-    const color = this.#color(text.color);
+    const color = this.#ink ?? this.#color(text.color);
     if (isMultiline(text)) {
       // Wrapped, broken or revealed: a record for each line, one line height (and the gap) below the last, aligned by itself.
       const wrapped = this.#wrap(text, undefined);

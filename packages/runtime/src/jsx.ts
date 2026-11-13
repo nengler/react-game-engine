@@ -187,7 +187,10 @@ export type TextChild = string | number;
  */
 export type TextAttributes = Omit<TextProps, "text"> & { children: TextChild | readonly TextChild[] };
 
-/** A line of text (a label, a HUD readout). */
+/**
+ * A line of text (a label, a HUD readout). `shadow` and `outline` (with `shadowX`, `shadowY` and `outlineWidth`) draw the text again under
+ * itself in another colour, to keep it readable over a busy picture; they take no room in a layout.
+ */
 export function Text(_props: TextAttributes): JSX.Element {
   return compileTimeOnly("Text");
 }

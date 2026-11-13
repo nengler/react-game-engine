@@ -37,6 +37,22 @@ export interface TextProps {
    * keeps pixels square. Without `font` the text uses the built-in font.
    */
   font?: string;
+  /**
+   * A CSS colour for a shadow: the text drawn again under itself, `shadowX` and `shadowY` pixels away, in this colour. Default none.
+   * It does not take room in a layout, so leave padding for it.
+   */
+  shadow?: string;
+  /** Where the shadow falls, in pixels right and down from the text (negative goes left and up). Default 1 and 1. */
+  shadowX?: number;
+  shadowY?: number;
+  /**
+   * A CSS colour for an outline: the text drawn again under itself in this colour at every pixel within `outlineWidth` of where it
+   * is, so each letter has an edge of that colour. Default none. Use an opaque colour: a see-through one shows through where the
+   * copies overlap. A shadow falls from the outlined shape. Like a shadow it takes no room in a layout.
+   */
+  outline?: string;
+  /** How many pixels thick the outline is: 1 to 3 (more is drawn as 3, as each pixel of thickness is more copies of the text). Default 1. */
+  outlineWidth?: number;
 }
 
 const DEFAULT_TEXT_SIZE = 16;
@@ -56,6 +72,11 @@ export class Text<P extends object = {}> extends GameObject<P> {
   width: number | undefined;
   align: TextAlign;
   font: string | undefined;
+  shadow: string | undefined;
+  shadowX: number;
+  shadowY: number;
+  outline: string | undefined;
+  outlineWidth: number;
   maxWidth: number | undefined;
   lineGap: number;
   reveal: number | undefined;
@@ -88,6 +109,11 @@ export class Text<P extends object = {}> extends GameObject<P> {
     this.width = hostProps.width;
     this.align = hostProps.align ?? "left";
     this.font = hostProps.font;
+    this.shadow = hostProps.shadow;
+    this.shadowX = hostProps.shadowX ?? 1;
+    this.shadowY = hostProps.shadowY ?? 1;
+    this.outline = hostProps.outline;
+    this.outlineWidth = hostProps.outlineWidth ?? 1;
     this.maxWidth = hostProps.maxWidth;
     this.lineGap = hostProps.lineGap ?? 0;
     this.reveal = hostProps.reveal;
