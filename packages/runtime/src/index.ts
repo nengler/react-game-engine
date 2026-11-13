@@ -4,6 +4,7 @@ export { freeze, World } from "./World.ts";
 export { captureHotState, restoreHotState, type HotState } from "./hot.ts";
 export { createGameState, GameStore, resetGameState, type GameState, type ActionsOf, type GameStateCreator, type GetGameState, type SetGameState, type GameStateValue } from "./GameState.ts";
 export type { Child } from "./jsx-runtime.ts";
+export type { TextChild } from "./jsx.ts";
 export {
   loadScene,
   type PrefabDefinition,
@@ -24,7 +25,7 @@ export { createMemoryStorage, createSave, createSettings, getStorage, Save, setS
 export { Pointer, type PointerProps, type Pressable } from "./components/Pointer.ts";
 export { Slider, type SliderProps } from "./components/Slider.ts";
 export { Toggle, type ToggleProps } from "./components/Toggle.ts";
-export { Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
+export { setTextDefaults, Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";
 export { AnimatedSprite, parseAnimations, type AnimatedSpriteProps, type AnimationEntry, type AnimationTable, type SheetAnimation } from "./components/AnimatedSprite.ts";

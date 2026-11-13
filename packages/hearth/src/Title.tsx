@@ -13,10 +13,10 @@ export function Title() {
     <Hud>
       <Flex direction="column" alignItems="center" justifyContent="center" width="grow" height="grow" gap={10} pressKey="confirm" onPress={begin}>
         <Text size={40} color={COLOR.title}>HEARTH</Text>
-        <Label text="HOLD THE ROAD TEN WAVES" color={COLOR.dim} />
-        <Label text={`CLICK A PAD TO BUILD  ${keyLabel("wave")} STARTS A WAVE`} />
-        <Label text={`ARROWS MOVE  ${keyLabel("one")} ${keyLabel("two")} ${keyLabel("three")} TOWERS`} />
-        <Label text={`PRESS ${keyLabel("confirm")} OR CLICK TO START`} color={time % 1 < 0.66 ? COLOR.prompt : COLOR.background} />
+        <Label color={COLOR.dim}>HOLD THE ROAD TEN WAVES</Label>
+        <Label>CLICK A PAD TO BUILD  {keyLabel("wave")} STARTS A WAVE</Label>
+        <Label>ARROWS MOVE  {keyLabel("one")} {keyLabel("two")} {keyLabel("three")} TOWERS</Label>
+        <Label color={time % 1 < 0.66 ? COLOR.prompt : COLOR.background}>PRESS {keyLabel("confirm")} OR CLICK TO START</Label>
       </Flex>
     </Hud>
   );

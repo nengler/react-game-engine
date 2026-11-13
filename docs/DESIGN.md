@@ -1137,6 +1137,21 @@ non-string `text`.
 placeholder for (as `Sprite.image` does), and `text`, `size` and `color` become
 names a state, ref or prop may not use.
 
+**Text wrappers** (2026-11-13, REACT_FEEL_PLAN.md B3). React shares a text style with a component, `<Label>Coins: {coins}</Label>`;
+here it failed five ways (no `TextChild` type to import, `children` had to be `Child`, `{children}` inside `<Text>` meant nothing,
+and a component could not take text). Now a props type with `children: TextChild | readonly TextChild[]` (`isTextChildrenType`,
+which also takes `string`) makes `children` an ordinary value prop rather than a slot. At a use site, `childrenKind` sorts what is
+between a component's tags: words, and `{expressions}` that hold no JSX and are not a forwarded `{children}` slot, are text, and
+`lowerTextContent` folds them into the `children` prop exactly as it folds a `<Text>`'s into `text`; elements are lowered as
+before; both at once is `RGE1202`, naming the two props types. Inside the wrapper `<Text>{children}</Text>` reads the prop, and
+`<Button>{children}</Button>` passes it to a second wrapper the same way. Whether the component takes text is the type-check's to
+say. No inherited style (`<TextStyle>`) was added: a text's look does not depend on where it is in the tree.
+
+**Game-wide defaults.** `<Game textSize textColor>` set what a `<Text>` without its own `size` or `color` uses, as `font` sets its
+font: the player calls `setTextDefaults` from the root when it starts and on each reload (and `@rge/testing` clears them), and
+`Text.size` and `Text.color` are getters that fall back to them, then to 16 and white. `sized` counts the game's size as given,
+so a bitmap font is drawn at it. Literals, like the other settings.
+
 ## Shape
 
 `<Shape>` (M11) is a filled rectangle or circle, for debugging colliders and

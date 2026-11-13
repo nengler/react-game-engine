@@ -22,13 +22,13 @@ export function UpgradePanel({ tower, gold, onUpgrade, onSell }: UpgradePanelPro
 
   return (
     <Panel title={`${TOWERS[tower.kind].name} L${tower.level + 1}`}>
-      <Label text={`DMG ${Math.round(stats.damage * 10) / 10}`} />
-      <Label text={`RANGE ${Math.round(stats.range)}`} />
+      <Label>DMG {Math.round(stats.damage * 10) / 10}</Label>
+      <Label>RANGE {Math.round(stats.range)}</Label>
       <MenuButton enabled={canUpgrade} pressKey="upgrade" onPress={onUpgrade}>
-        <Label text={cost < 0 ? "MAXED" : `${keyLabel("upgrade")} UPGRADE ${cost}`} color={canUpgrade ? COLOR.text : COLOR.dim} />
+        <Label color={canUpgrade ? COLOR.text : COLOR.dim}>{cost < 0 ? "MAXED" : `${keyLabel("upgrade")} UPGRADE ${cost}`}</Label>
       </MenuButton>
       <MenuButton pressKey="sell" onPress={onSell}>
-        <Label text={`${keyLabel("sell")} SELL ${refundOf(tower.spent)}`} />
+        <Label>{keyLabel("sell")} SELL {refundOf(tower.spent)}</Label>
       </MenuButton>
     </Panel>
   );

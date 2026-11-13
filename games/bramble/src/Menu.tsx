@@ -29,8 +29,8 @@ export function Menu({ top, rows, start = 0, onChoose, onAdjust }: MenuProps) {
       <Shape kind="rect" width={300} height={12} color="#2b3350" transform={{ x: 10, y: top + cursor * 13 }} />
       {rows.map((row, i) => (
         <Entity key={row.id} name={row.id} transform={{ x: 14, y: top + i * 13 }}>
-          <Text size={10} color="#e8d9a8">{row.label}</Text>
-          <Text transform={{ x: 170, y: 0 }} size={10} color="#a7b0c8">{row.value}</Text>
+          <Text>{row.label}</Text>
+          <Text transform={{ x: 170, y: 0 }} color="#a7b0c8">{row.value}</Text>
         </Entity>
       ))}
     </Entity>

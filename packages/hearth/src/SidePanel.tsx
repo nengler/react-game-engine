@@ -34,22 +34,22 @@ export function SidePanel({ gold, lives, wave, active, tower, onStartWave, onBui
   return (
     <Flex float anchor="top-right" to="top-right" direction="column" justifyContent="space-between" width={80} height={180} padding={4} gap={4} background={COLOR.background}>
       <Flex direction="column" gap={4} width="grow">
-        <StatRow icon={ICON.gold} text={`${gold}`} color={COLOR.gold} />
-        <StatRow icon={ICON.lives} text={`${lives}`} color={COLOR.lives} />
-        <StatRow icon={ICON.wave} text={`${wave}/${WAVE_COUNT}`} color={COLOR.wave} />
+        <StatRow icon={ICON.gold} color={COLOR.gold}>{gold}</StatRow>
+        <StatRow icon={ICON.lives} color={COLOR.lives}>{lives}</StatRow>
+        <StatRow icon={ICON.wave} color={COLOR.wave}>{wave}/{WAVE_COUNT}</StatRow>
         {open && tower === null && <BuildMenu gold={gold} onBuild={onBuild} />}
         {open && tower !== null && <UpgradePanel tower={tower} gold={gold} onUpgrade={onUpgrade} onSell={onSell} />}
-        {!open && <Label text="CLICK A PAD" color={COLOR.dim} />}
+        {!open && <Label color={COLOR.dim}>CLICK A PAD</Label>}
       </Flex>
       <Flex direction="column" gap={3} width="grow">
         <MenuButton enabled={!active} pressKey="wave" onPress={onStartWave}>
-          <Label text={active ? "WAVE ON" : `${keyLabel("wave")} WAVE`} />
+          <Label>{active ? "WAVE ON" : `${keyLabel("wave")} WAVE`}</Label>
         </MenuButton>
         <MenuButton pressKey="fast" onPress={toggleSpeed}>
-          <Label text={`${keyLabel("fast")} SPEED X${speed}`} />
+          <Label>{keyLabel("fast")} SPEED X{speed}</Label>
         </MenuButton>
         <MenuButton pressKey="pause" onPress={togglePause}>
-          <Label text={`${keyLabel("pause")} PAUSE`} />
+          <Label>{keyLabel("pause")} PAUSE</Label>
         </MenuButton>
       </Flex>
     </Flex>

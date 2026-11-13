@@ -35,11 +35,11 @@ export function Play() {
       </Camera>
       <ParticleLayer particles={fx} />
       <Hud>
-        <Text transform={{ x: 4, y: 3 }} size={10} color="#ff6b6b">{`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`}</Text>
+        <Text transform={{ x: 4, y: 3 }} color="#ff6b6b">{`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`}</Text>
         {run.notice !== null && (
           <Entity name="Card" transform={{ x: 0, y: 18 }}>
             <Shape kind="rect" width={320} height={14} color="#10131ccc" />
-            <Text transform={{ x: 0, y: 2 }} width={320} align="center" size={10} color="#fff1d6">{run.notice}</Text>
+            <Text transform={{ x: 0, y: 2 }} width={320} align="center" color="#fff1d6">{run.notice}</Text>
           </Entity>
         )}
         {run.talk !== null && !paused && <Dialogue />}

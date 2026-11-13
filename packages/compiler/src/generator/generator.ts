@@ -269,6 +269,8 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
   if (exportedComponents(module).length > 0) types.add("PrefabDefinition");
   for (const c of module.components) {
     if (c.acceptsChildren) types.add("Child");
+    // A text wrapper's props (`children: TextChild | readonly TextChild[]`) name the type in the copied props interface.
+    if (c.props.some((p) => p.name === "children" && p.type.kind === "SourceText" && /\bTextChild\b/.test(p.type.text))) types.add("TextChild");
     values.add(c.root.component.name);
     visitProps(c.root.props);
     visitProps(c.root.transform);

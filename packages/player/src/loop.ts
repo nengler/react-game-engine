@@ -1,4 +1,4 @@
-import { Flex, Game, WIDGET_NONE, World, captureHotState, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, setGameTree, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
+import { Flex, Game, WIDGET_NONE, World, captureHotState, setTextDefaults, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, setGameTree, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -132,6 +132,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     failure = { error, note: defaultNote };
   }
   const game = root instanceof Game ? root : null;
+  // The size and colour of every <Text> that sets none, as the font is: the root's, for this game (a process may run several).
+  setTextDefaults({ size: game?.textSize, color: game?.textColor });
   // Each setting: the `<Game>` prop where it is written, else the player's config, else the default.
   // With nothing set, a game with a `<Screen>` opens at 3 × its resolution, so each game pixel is 3 × 3 window pixels.
   const screen0 = root === null ? null : rootScreen(root);
@@ -416,6 +418,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       const nextGame = fresh instanceof Game ? fresh : null;
       input.controls = nextGame?.controls ?? next.controls ?? input.controls;
       builder.font = nextGame?.font;
+      setTextDefaults({ size: nextGame?.textSize, color: nextGame?.textColor });
       failure = null;
       return true;
     },
