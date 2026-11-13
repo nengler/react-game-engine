@@ -4,7 +4,7 @@ import { Label } from "./Label.tsx";
 
 /** The title screen: the name, how to move, and a prompt that waits for a button. Laid out by a column on the HUD layer, which centres it whatever the screen's size. */
 export function Title() {
-  const begin = useGame((s) => s.begin);
+  const { begin } = useGame.actions();
   const [clock, setClock] = useState(0);
 
   useUpdate((dt) => {

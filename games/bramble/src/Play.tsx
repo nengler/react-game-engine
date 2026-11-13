@@ -13,7 +13,7 @@ import { World } from "./World.tsx";
 export function Play() {
   const run = useGame((s) => s.run);
   const paused = useGame((s) => s.paused);
-  const { advance, togglePause } = useGame((s) => s);
+  const { advance, togglePause } = useGame.actions();
   const { x, y, frame } = heroOf(run);
   const { width, height } = mapPixels(run.map);
 

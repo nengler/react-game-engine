@@ -2,7 +2,7 @@ import { Entity, Text, useInput } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 
 export function End() {
-  const toTitle = useGame((s) => s.toTitle);
+  const { toTitle } = useGame.actions();
   const time = useGame((s) => s.run.time);
   useInput((input) => {
     if (input.pressed("confirm")) toTitle();

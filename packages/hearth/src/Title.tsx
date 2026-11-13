@@ -6,7 +6,7 @@ import { COLOR } from "./theme.ts";
 
 /** The title screen: the name, how to play, and a prompt that waits for the confirm key or a click (both press the screen). */
 export function Title() {
-  const begin = useGame((s) => s.begin);
+  const { begin } = useGame.actions();
   const time = useTime();
 
   return (

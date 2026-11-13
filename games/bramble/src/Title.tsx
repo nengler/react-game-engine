@@ -6,7 +6,7 @@ import { titleRows } from "./rules/menu.ts";
 export function Title() {
   const hasSave = useGame((s) => s.hasSave);
   const start = useGame((s) => s.titleCursor);
-  const { openTitle, choose } = useGame((s) => s);
+  const { openTitle, choose } = useGame.actions();
   useMount(() => openTitle());
   return (
     <Entity>

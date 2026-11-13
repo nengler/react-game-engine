@@ -4,7 +4,7 @@ import { useGame } from "./GameState.ts";
 /** The optional pickup, off the main path of room 7: it takes itself when the character touches it, and is gone after. */
 export function Gem() {
   const gems = useGame((s) => s.gems);
-  const collect = useGame((s) => s.collect);
+  const { collect } = useGame.actions();
 
   return (
     <Entity>
