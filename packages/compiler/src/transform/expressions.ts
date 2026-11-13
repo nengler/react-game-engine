@@ -1,11 +1,19 @@
 // Layer 1 of ComponentLowering: lowers TypeScript expressions into ExprIR (reads, calls, array methods, handles).
 import { SyntaxKind, type Node, type ObjectLiteralExpression, type CallExpression, type Expression, type PropertyAccessExpression } from "typescript/ast";
-import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock, isElementAccessExpression, isNonNullExpression } from "typescript/ast/is";
+import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock, isElementAccessExpression, isNonNullExpression, isTypeOfExpression, isNewExpression } from "typescript/ast/is";
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import { assertNever, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
 import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
-import { lowerCallbackValue, lowerFunction } from "./statements.ts";
+import { warning } from "../diagnostics/diagnostics.ts";
+
+/** Constructors a handler may call with `new`, besides classes imported from `.ts` files. Not `Date`: it reads the clock. */
+const HANDLER_CONSTRUCTORS: ReadonlySet<string> = new Set(["Error", "TypeError", "RangeError", "Map", "Set", "WeakMap", "WeakSet", "Array"]);
+/** Namespaces whose functions a handler may call as written. */
+const HANDLER_NAMESPACES: ReadonlySet<string> = new Set(["Object", "JSON", "Number", "Array", "String", "Math", "console"]);
+/** Global functions a handler may call as written. */
+const HANDLER_GLOBALS: ReadonlySet<string> = new Set(["parseInt", "parseFloat", "isNaN", "isFinite"]);
+import { lowerCallbackValue, lowerFunction, lowerFunctionValue } from "./statements.ts";
 import { BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
 
@@ -25,6 +33,8 @@ export class ExpressionLowering extends LoweringBase {
       if (!binding && this.plainImports.has(node.text)) return { kind: "PlainRef", name: node.text };
       // `x !== undefined`, `cond ? undefined : x`: the global, which no import or declaration can shadow here.
       if (!binding && node.text === "undefined") return { kind: "PlainRef", name: "undefined" };
+      // `e instanceof Error`: a global constructor or namespace a handler may name as a value.
+      if (!binding && this.mode.inHandler && (HANDLER_CONSTRUCTORS.has(node.text) || HANDLER_NAMESPACES.has(node.text))) return { kind: "PlainRef", name: node.text };
       if (!binding) {
         const near = nearest(node.text, [...new Set([...this.scope.names(), ...this.plainImports])]);
         this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${near ? ` (did you mean '${near}'?)` : ""}.`, node);
@@ -67,6 +77,11 @@ export class ExpressionLowering extends LoweringBase {
         default: return assertNever(binding, "binding");
       }
     }
+    if (isTypeOfExpression(node)) {
+      const operand = this.lowerNode(node.expression);
+      return operand && { kind: "Unary", operator: "typeof", operand };
+    }
+    if (isNewExpression(node)) return this.lowerNew(node);
     if (isPrefixUnaryExpression(node)) {
       const operator = UNARY_OPERATORS.get(node.operator);
       if (!operator) {
@@ -137,6 +152,43 @@ export class ExpressionLowering extends LoweringBase {
     return null;
   }
 
+  /**
+   * `new Map<string, number>()`, `new Error("…")`, `new Enemy(…)`: in a handler only, of a global constructor (`HANDLER_CONSTRUCTORS`)
+   * or a class imported from a `.ts` file. A constructor in a component body would run on every render.
+   */
+  protected lowerNew(node: Expression & { kind: SyntaxKind.NewExpression }): ExprIR | null {
+    const created = node as unknown as { expression: Expression; typeArguments?: readonly Node[]; arguments?: readonly Expression[] };
+    const callee = unwrapParens(created.expression);
+    if (!this.mode.inHandler) {
+      this.report(DiagnosticCode.UnsupportedExpression, "`new` is only valid in a handler: in a component body it would run on every render. Make the value once with `useState(() => new …)`, or in a `.ts` file.", node);
+      return null;
+    }
+    const known = isIdentifier(callee) && !this.scope.has(callee.text) && (HANDLER_CONSTRUCTORS.has(callee.text) || this.plainImports.has(callee.text));
+    if (!known || !isIdentifier(callee)) {
+      this.report(DiagnosticCode.UnsupportedExpression, `\`new\` takes a class imported from a \`.ts\` file or one of ${[...HANDLER_CONSTRUCTORS].join(", ")}.`, callee);
+      return null;
+    }
+    const args = this.lowerPlainArgs(created.arguments ?? []);
+    if (!args) return null;
+    const typeArguments = created.typeArguments && created.typeArguments.length > 0 ? `<${created.typeArguments.map((t) => t.getText(this.sourceFile)).join(", ")}>` : null;
+    return { kind: "New", callee: callee.text, typeArguments, args };
+  }
+
+  /**
+   * Whether an expression is a handler's own local, or a member or element of one (`list`, `best.hits`, `grid[y]![x]`): a value the
+   * handler made, which it may change in place, call any method of and assign into. State and props are never this.
+   */
+  protected ownsValue(node: Expression): boolean {
+    let at: Expression = unwrapParens(node);
+    for (;;) {
+      if (isPropertyAccessExpression(at) || isElementAccessExpression(at) || isNonNullExpression(at)) at = unwrapParens(at.expression);
+      else break;
+    }
+    if (!this.mode.inHandler || !isIdentifier(at)) return false;
+    const binding = this.scope.get(at.text);
+    return binding?.kind === "local" && binding.owned === true;
+  }
+
   /** The functions a call may name, for diagnostics: `Math.*`, the global conversions and the runtime's functions. */
   protected allowlistedCalls(): string {
     const math = Object.keys(MATH_FUNCTIONS).map((n) => n.slice("Math.".length));
@@ -163,6 +215,18 @@ export class ExpressionLowering extends LoweringBase {
     for (const node of nodes) {
       const fn = unwrapParens(node);
       const lowered = isArrowFunction(fn) && this.mode.inHandler ? lowerCallbackValue(this, fn, "a state updater") : this.lowerNode(node);
+      if (!lowered) return null;
+      out.push(lowered);
+    }
+    return out;
+  }
+
+  /** Arguments of a method of a handler's own value or a standard library call: an arrow is a function that may return a value. */
+  protected lowerFunctionArgs(nodes: readonly Expression[]): ExprIR[] | null {
+    const out: ExprIR[] = [];
+    for (const node of nodes) {
+      const fn = unwrapParens(node);
+      const lowered = isArrowFunction(fn) ? (isBlock(fn.body) ? lowerFunctionValue(this, fn) : this.lowerArrow(fn, "function")) : this.lowerNode(node);
       if (!lowered) return null;
       out.push(lowered);
     }
@@ -335,6 +399,23 @@ export class ExpressionLowering extends LoweringBase {
       if (!args) return null;
       return { kind: "Call", callee: { kind: "Plain", name: `${callee.expression.text}.${callee.name.text}` }, args };
     }
+    // In a handler, the standard library as written: `Object.keys(…)`, `JSON.stringify(…)`, `Number.isFinite(…)`, `Array.from(…)`,
+    // any `Math` function, `console.log(…)`, `parseInt(…)`.
+    if (this.mode.inHandler) {
+      const namespace = isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && HANDLER_NAMESPACES.has(callee.expression.text) && !this.scope.has(callee.expression.text) && !this.plainImports.has(callee.expression.text)
+        ? `${callee.expression.text}.${callee.name.text}`
+        : null;
+      const global = isIdentifier(callee) && HANDLER_GLOBALS.has(callee.text) && !this.scope.has(callee.text) && !this.plainImports.has(callee.text) ? callee.text : null;
+      const name = namespace ?? global;
+      if (name !== null && !(namespace !== null && callee.kind === SyntaxKind.PropertyAccessExpression && Object.hasOwn(MATH_FUNCTIONS, name))) {
+        if (name === "Math.random") {
+          this.diagnostics.push(warning(DiagnosticCode.UnsupportedExpression, "`Math.random()` is different on every run, so replays, tests and the parity between hosts will not repeat it. Seed your own generator in a `.ts` file for game logic.", this.span(node)));
+        }
+        const args = this.lowerFunctionArgs(node.arguments);
+        if (!args) return null;
+        return { kind: "Call", callee: { kind: "Function", name }, args };
+      }
+    }
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
     if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
       const name = `Math.${callee.name.text}`;
@@ -376,6 +457,14 @@ export class ExpressionLowering extends LoweringBase {
   protected lowerArrayMethod(node: CallExpression, callee: PropertyAccessExpression): ExprIR | null {
     const name = callee.name.text;
     const code = DiagnosticCode.UnsupportedExpression;
+    // Any method of a value the handler made itself (`list.push(e)`, `seen.add(id)`, `best.sort(…)`): it may change it in place.
+    if (this.ownsValue(callee.expression) && !Object.hasOwn(ARRAY_METHODS, name)) {
+      const receiver = this.lowerNode(callee.expression);
+      if (!receiver) return null;
+      const args = this.lowerFunctionArgs(node.arguments);
+      if (!args) return null;
+      return { kind: "Call", callee: { kind: "ValueMethod", receiver, name, optional: callee.questionDotToken !== undefined || node.questionDotToken !== undefined }, args };
+    }
     // A method of a per-instance object (state a factory made): opaque, like a plain function.
     if (isIdentifier(callee.expression) && !Object.hasOwn(ARRAY_METHODS, name)) {
       const binding = this.scope.get(callee.expression.text);
@@ -461,6 +550,11 @@ export class ExpressionLowering extends LoweringBase {
     const ref = isPropertyAccessExpression(node) ? this.refAccess(node) : undefined;
     if (ref === "error") return null;
     if (ref) return { kind: "RefCurrent", ref };
+    // `best.hits = 0`, `grid[y]![x] = 1`: into a value the handler made.
+    if ((isPropertyAccessExpression(node) || isElementAccessExpression(node)) && this.ownsValue(node)) {
+      const target = this.lowerNode(node);
+      return target && { kind: "Path", target };
+    }
     const binding = isIdentifier(node) ? this.scope.get(node.text) : undefined;
     if (binding?.kind === "local") {
       if (binding.mutable) return { kind: "Local", local: binding.id, name: binding.name };
@@ -469,7 +563,7 @@ export class ExpressionLowering extends LoweringBase {
     }
     this.report(
       DiagnosticCode.UnsupportedStatement,
-      "Only `ref.current` and `let` locals can be assigned. Use the state setter to change state, including position (`transform={{ x }}`).",
+      "Only `ref.current`, `let` locals and the members of a handler's own values can be assigned. Use the state setter to change state, including position (`transform={{ x }}`).",
       node,
     );
     return null;

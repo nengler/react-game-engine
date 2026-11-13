@@ -130,7 +130,7 @@ export class HandlerEmitter extends ExpressionEmitter {
 
   /** `target op value`, with no semicolon: a statement, or a part of a `for` loop's head. */
   protected assignText(stmt: AssignStmtIR): string {
-    const target = stmt.target.kind === "RefCurrent" ? `this.${this.refField(stmt.target.ref)}` : stmt.target.name;
+    const target = stmt.target.kind === "RefCurrent" ? `this.${this.refField(stmt.target.ref)}` : stmt.target.kind === "Path" ? this.expr(stmt.target.target) : stmt.target.name;
     return `${target} ${stmt.operator} ${this.expr(stmt.value, true)}`;
   }
 

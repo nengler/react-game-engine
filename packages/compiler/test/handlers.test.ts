@@ -177,12 +177,13 @@ function C() {
 }`).map((d) => d.code);
 
   it("rejects await, this and unknown calls", () => {
-    for (const stmt of ["this.x = 1;", "console.log(n);"]) {
+    // `console.log` is the standard library, which a handler may call since REACT_FEEL_PLAN.md A1.
+    for (const stmt of ["this.x = 1;", "unknownFunction(n);"]) {
       assert.ok(codes(`useUpdate(() => { ${stmt} });`).length > 0, stmt);
     }
     // Loops and `try` are handler code since REACT_FEEL_PLAN.md A1 (see loops.test.ts); a labelled jump is still refused.
     assert.deepEqual(codes("useUpdate(() => { outer: for (;;) { break outer; } });").length > 0, true);
-    assert.deepEqual(codes("useUpdate(() => { console.log(n); });"), [DiagnosticCode.UnsupportedExpression]);
+    assert.ok(codes("useUpdate(() => { unknownFunction(n); });").length > 0);
     assert.deepEqual(codes("useUpdate(() => { await setN(1); });").length > 0, true);
   });
 
@@ -255,7 +256,7 @@ function C() {
   });
 
   it("rejects calls and members outside the allowlist", () => {
-    assert.deepEqual(codes("useUpdate(() => setN(Math.random()));"), [DiagnosticCode.UnsupportedExpression]);
+    // Math.random compiles in a handler since REACT_FEEL_PLAN.md A1, with a warning (handler-expressions.test.ts).
     assert.deepEqual(codes("useUpdate(() => setN(Math.max()));"), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes("useUpdate(() => setN(clamp(1, 2)));"), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes("useInput((input) => setN(input.nope));"), [DiagnosticCode.UnsupportedExpression]);

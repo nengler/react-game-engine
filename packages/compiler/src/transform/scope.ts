@@ -17,7 +17,11 @@ type Binding =
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
   /** A `const` (or, `mutable`, a `let`) declared in a handler body, or a `for…of` item. */
-  | { readonly kind: "local"; readonly id: LocalId; readonly name: string; readonly mutable: boolean }
+  /**
+   * `owned`: the handler made the value (a literal, `new`, a call's result), so it may change it in place. A local that reads
+   * state, a prop or another value (`const list = enemies`) is not owned: changing it would change state in place.
+   */
+  | { readonly kind: "local"; readonly id: LocalId; readonly name: string; readonly mutable: boolean; owned?: boolean }
   /** The parameter of a computed `useGame` selector (`s` in `(s) => s.cursor === id`): only read as a path, `s.cursor`. */
   | { readonly kind: "storeRoot"; readonly name: string }
   | { readonly kind: "param"; readonly id: LocalId; readonly name: string; readonly type: TypeIR };

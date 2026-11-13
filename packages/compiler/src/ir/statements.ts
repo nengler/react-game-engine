@@ -124,7 +124,13 @@ export interface PlaySoundStmtIR {
 export type AssignOperator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | "||=" | "&&=" | "??=";
 
 /** Where an assignment writes. Not reactive: no write marks anything dirty. */
-export type AssignTargetIR = RefCurrentTargetIR | LocalTargetIR;
+export type AssignTargetIR = RefCurrentTargetIR | LocalTargetIR | PathTargetIR;
+
+/** `best.hits = 0`, `grid[y]![x] = 1`: a member or element of a value the handler made (its own local). */
+export interface PathTargetIR {
+  readonly kind: "Path";
+  readonly target: ExprIR;
+}
 
 /** A `let` local of the enclosing function: `best = enemy`, `total += e.hp`. */
 export interface LocalTargetIR {
