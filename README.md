@@ -31,6 +31,12 @@ function Player() {
 compiles to [`packages/example/generated/Player.ts`](packages/example/generated/Player.ts)
 (the IR is next to it as `Player.ir.json`).
 
+Game code lives in components, as in React: a component keeps its own state (`useState`, or `useBody` for a position that walls
+stop), steps itself in `useUpdate`, takes hits in its collider's `onCollisionEnter`, and tells its parent what happened through
+callback props. [Hearth](packages/hearth) is built that way: its enemies, towers and shots each keep their own state, and each is
+tested alone with [`@rge/testing`](packages/testing), as React Testing Library tests one component. Plain functions in `.ts`
+files are for what you would extract in React too: tables, pure calculations, and code a search runs thousands of times.
+
 UI is laid out, not placed by hand. A `<Hud>` stays on screen while the camera moves, and a `<Flex>` in it places its
 children in a row or a column (see [docs/UI_PLAN.md](docs/UI_PLAN.md)):
 

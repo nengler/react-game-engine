@@ -1853,8 +1853,8 @@ Every method flushes the world after it, so what a test reads is what would be d
 (`render(Play, …, { collisions: true })`). `place({ tag, data, x, y, width, height })` puts another collider in the world, each in
 an entity of its own (colliders with the same parent are one thing's and never touch); `remove` takes it out. Without the option
 nothing collides on its own, and contacts are reported with `collide`, as before. Not done: compiling the component from
-its `.tsx` on demand (tests import the generated class, as `game.ts` does), and the template's tests (with A8, which also packs
-the package for games outside the repository).
+its `.tsx` on demand (tests import the generated class, as `game.ts` does). Since A8 it is packed (`npm run pack`) and a dev
+dependency of every new game, whose template tests its `Hero` with it.
 
 ## Bodies: `useBody` (2026-11-13)
 

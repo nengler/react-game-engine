@@ -41,12 +41,13 @@ test("create refuses a folder that is not empty, and a bad name", () => {
 test("create --packs writes file: dependencies on the tarballs", () => {
   const packs = join(root, "packs");
   execFileSync("mkdir", [packs]);
-  for (const name of ["runtime", "player", "native", "player-node", "compiler", "cli"]) writeFileSync(join(packs, `rge-${name}-0.0.0.tgz`), "");
+  for (const name of ["runtime", "player", "native", "player-node", "compiler", "testing", "cli"]) writeFileSync(join(packs, `rge-${name}-0.0.0.tgz`), "");
   const made = rge(["create", join(root, "packed"), "--packs", packs]);
   assert.equal(made.status, 0, made.stderr);
   const pkg = JSON.parse(readFileSync(join(root, "packed/package.json"), "utf8")) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
   assert.equal(pkg.dependencies["@rge/runtime"], `file:${join(packs, "rge-runtime-0.0.0.tgz")}`);
   assert.equal(pkg.devDependencies["@rge/cli"], `file:${join(packs, "rge-cli-0.0.0.tgz")}`);
+  assert.equal(pkg.devDependencies["@rge/testing"], `file:${join(packs, "rge-testing-0.0.0.tgz")}`, "the tests' library is for development");
 });
 
 test("build compiles src to generated", () => {
@@ -59,12 +60,13 @@ test("check passes on the template: compile, typecheck, tests, parity", { timeou
   const checked = rge(["check", game]);
   assert.equal(checked.status, 0, checked.stdout + checked.stderr);
   for (const step of ["compile", "typecheck", "tests", "parity"]) assert.match(checked.stdout, new RegExp(`ok   ${step}`));
-  // The template ships two tests: the rules (move.test.ts) and the components played on a recording backend (play.test.ts).
-  assert.match(checked.stdout, /2 passed, 0 failed/);
+  // The template ships three tests: its Hero component alone (hero.test.ts, @rge/testing) and the whole game played on a
+  // recording backend (play.test.ts).
+  assert.match(checked.stdout, /3 passed, 0 failed/);
 });
 
 test("check fails, and says which step, when a test fails", { timeout: 120_000 }, () => {
-  writeFileSync(join(game, "test/move.test.ts"), `import { test } from "node:test";\nimport assert from "node:assert/strict";\ntest("broken", () => assert.equal(1, 2));\n`);
+  writeFileSync(join(game, "test/broken.test.ts"), `import { test } from "node:test";\nimport assert from "node:assert/strict";\ntest("broken", () => assert.equal(1, 2));\n`);
   const checked = rge(["check", game]);
   assert.equal(checked.status, 1);
   assert.match(checked.stdout, /FAIL tests/);
@@ -77,9 +79,9 @@ test("an error in a component names its own line in src/, not the generated file
   // Z calls a plain function that throws, from the useInput handler of the template's Main.
   const main = readFileSync(join(errors, "src/Main.tsx"), "utf8")
     .replace('if (input.pressed("Z")) step();', 'if (input.pressed("Z")) boom();')
-    .replace('import { useGame }', 'import { boom } from "./rules/boom.ts";\nimport { useGame }');
+    .replace('import { useGame }', 'import { boom } from "./boom.ts";\nimport { useGame }');
   writeFileSync(join(errors, "src/Main.tsx"), main);
-  writeFileSync(join(errors, "src/rules/boom.ts"), 'export function boom(): void {\n  throw new Error("boom");\n}\n');
+  writeFileSync(join(errors, "src/boom.ts"), 'export function boom(): void {\n  throw new Error("boom");\n}\n');
   const built = rge(["build", errors]);
   assert.equal(built.status, 0, built.stdout + built.stderr);
   assert.ok(existsSync(join(errors, "generated/Main.ts.map")), "a source map is written beside each generated file");

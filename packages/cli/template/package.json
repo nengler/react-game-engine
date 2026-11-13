@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@rge/cli": "0.0.0",
+    "@rge/testing": "0.0.0",
     "@types/node": "^22.10.0"
   },
   "scripts": {

@@ -145,14 +145,20 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 cd ~/my-game &amp;&amp; npm install
 npm run check</code></pre>
 <p><code>rge create</code> copies the template. <code>rge check</code> compiles, type-checks, runs the tests, and plays a short scripted run under Node and under the Rust host, which must print the same. The template passes it before you change anything.</p>
-<p>What is in the folder: <code>package.json</code> (its <code>"rge"</code> field names the entry and folders), <code>main.ts</code> (starts the player), <code>game.ts</code> (the root and the names a script may use), <code>src/Main.tsx</code> (the game), <code>src/GameState.ts</code>, <code>src/rules/</code> (plain TypeScript), <code>test/</code>, <code>assets/</code>, <code>parity.ts</code>.</p>
+<p>What is in the folder: <code>package.json</code> (its <code>"rge"</code> field names the entry and folders), <code>main.ts</code> (starts the player), <code>game.ts</code> (the root and the names a script may use), <code>src/Main.tsx</code> (the root), <code>src/Hero.tsx</code> (a component that keeps its own position and moves itself), <code>src/GameState.ts</code> (what the whole game shares), <code>test/</code>, <code>assets/</code>, <code>parity.ts</code>.</p>
 
 <h2>2. A moving square</h2>
-<p><code>npm run dev</code> opens a window and hot reloads: save a file under <code>src/</code> and the window changes, keeping the state. The template's <code>src/Main.tsx</code> already moves a sprite with the arrow keys:</p>
-<pre class="code" data-lang="tsx"><code>useUpdate((dt, input) =&gt; {
-  const dirX = (input.down(&quot;ArrowRight&quot;) ? 1 : 0) - (input.down(&quot;ArrowLeft&quot;) ? 1 : 0);
-  setX((x) =&gt; moveBy(x, dirX, dt));   // rules/move.ts: plain TypeScript, tested without a window
-});</code></pre>
+<p><code>npm run dev</code> opens a window and hot reloads: save a file under <code>src/</code> and the window changes, keeping the state. The template's <code>src/Hero.tsx</code> already moves a sprite with the arrow keys. It keeps its own position, as a React component keeps its own state:</p>
+<pre class="code" data-lang="tsx"><code>export function Hero({ speed = 120 }: HeroProps) {
+  const { x, y, move } = useBody({ x: 152, y: 82, width: 16, height: 16 });   // where it is: state
+  useUpdate((dt, input) =&gt; {
+    const dirX = (input.down(&quot;ArrowRight&quot;) ? 1 : 0) - (input.down(&quot;ArrowLeft&quot;) ? 1 : 0);
+    const dirY = (input.down(&quot;ArrowDown&quot;) ? 1 : 0) - (input.down(&quot;ArrowUp&quot;) ? 1 : 0);
+    move(dirX * speed * dt, dirY * speed * dt);   // stopped by anything solid, in the same step
+  });
+  return &lt;Entity transform={{ x, y }}&gt;&lt;Sprite image=&quot;hero.png&quot; /&gt;&lt;/Entity&gt;;
+}</code></pre>
+<p><code>useBody</code> is a box that moves a pixel at a time: add a <code>&lt;Tilemap solid&gt;</code> or a <code>&lt;Collider solid&gt;</code> to the level and <code>move</code> stops at it.</p>
 <p>Movement is over time, so it reads the held keys in <code>useUpdate</code>, which gets the same <code>input</code> as <code>useInput</code>. Something that happens once, on a press (<code>if (input.pressed(&quot;Z&quot;)) step();</code>), goes in <code>useInput</code>. There is no need to copy keys into a <code>useRef</code> to carry them from one to the other.</p>
 <p>Replace the <code>&lt;Sprite&gt;</code> with <code>&lt;Shape kind="rect" width={16} height={16} color="gold" /&gt;</code> to see a square, and back to see the sprite from <code>assets/hero.png</code>.</p>
 
@@ -184,17 +190,19 @@ step: () =&gt; {
 <p><code>Title</code> is a component in <code>src/Title.tsx</code> that calls <code>start()</code> when Enter is pressed (<code>useInput</code>). Only the screen the router shows is in the world.</p>
 
 <h2>6. A test</h2>
-<pre class="code" data-lang="ts"><code>// test/state.test.ts
+<pre class="code" data-lang="ts"><code>// test/hero.test.ts
 import assert from &quot;node:assert/strict&quot;;
 import { test } from &quot;node:test&quot;;
-import { useGame } from &quot;../src/GameState.ts&quot;;
+import { render } from &quot;@rge/testing&quot;;
+import { Hero } from &quot;../generated/Hero.ts&quot;;
 
-test(&quot;stepping counts&quot;, () =&gt; {
-  useGame.getState().step();
-  useGame.getState().step();
-  assert.equal(useGame.getState().steps, 2);
+test(&quot;holding right moves the hero its speed a second&quot;, () =&gt; {
+  const t = render(Hero, {});                 // one component, no window
+  const start = t.state().x as number;        // its own state, by the names in its source
+  t.input(&quot;ArrowRight*60&quot;);                   // an input script: one second of holding right
+  assert.equal(t.state().x, start + 120);
 });</code></pre>
-<p>Rules in <code>src/rules/</code> are plain functions, so most tests need no window. To play the components themselves, <code>runScript(gameConfig, parseInputScript("Enter, _*3, right*30", { bindings }), observe)</code> from <code>@rge/player</code> runs an input script on a recording backend. The template's <code>test/play.test.ts</code> does exactly this: it holds the arrow keys and checks where the hero ends up.</p>
+<p>As React Testing Library tests one React component, <code>render</code> mounts one compiled component in a world with no window: step it, press keys, report collisions, and read its state and what it would draw (see <a href="effects.html#testing">Testing one component</a>). To play the whole game, <code>runScript(gameConfig, parseInputScript("Enter, _*3, right*30", { bindings }), observe)</code> from <code>@rge/player</code> runs an input script on a recording backend; the template's <code>test/play.test.ts</code> does that.</p>
 
 <h2>7. Check it</h2>
 <pre class="code" data-lang="sh"><code>npm run check</code></pre>
