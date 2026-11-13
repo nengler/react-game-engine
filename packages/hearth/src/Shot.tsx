@@ -46,9 +46,9 @@ export function Shot({ id, kind, x, y, tx, ty, flight, target, damage, radius, s
 
   return (
     <Entity>
-      <Entity transform={{ x: x + (tx - x) * k, y: y + (ty - y) * k + arc }}>
+      <Entity x={x + (tx - x) * k} y={y + (ty - y) * k + arc}>
         {kind === "frost" ? (
-          <Shape kind="circle" width={radius * 2 * k} height={radius * 2 * k} color="#9ee7ff40" transform={{ x: -radius * k, y: -radius * k }} />
+          <Shape kind="circle" width={radius * 2 * k} height={radius * 2 * k} color="#9ee7ff40" x={-radius * k} y={-radius * k} />
         ) : (
           <Sprite image="shots.png" frameWidth={8} frameHeight={8} frame={kind === "bolt" ? 0 : 1} originX={4} originY={4} />
         )}
@@ -57,7 +57,7 @@ export function Shot({ id, kind, x, y, tx, ty, flight, target, damage, radius, s
         <Collider
           width={reach * 2}
           height={reach * 2}
-          transform={{ x: tx - reach, y: ty - reach }}
+          x={tx - reach} y={ty - reach}
           tag="blast"
           layer="blast"
           hits={["enemy"]}

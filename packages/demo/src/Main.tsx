@@ -26,7 +26,7 @@ export default function Main() {
         <Spikes transform={{ x: 84, y: 10 }} />
         <Coin transform={{ x: 60, y: 8 }} />
         {/* The HUD stays where it is while the camera follows the player, and is laid out, not placed by hand: a column holding the coin count and the button. */}
-        <Hud transform={{ x: 16, y: 16 }}>
+        <Hud x={16} y={16}>
           <Flex direction="column" gap={8}>
             <CoinCounter />
             {/* The button is a Flex: its label is centred by layout, and a press on its box counts. */}

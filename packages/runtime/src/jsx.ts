@@ -32,7 +32,8 @@ import type { MusicProps } from "./components/Music.ts";
 import type { RouteProps, RouterProps } from "./components/Router.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
 
-export type { TransformProps, Child } from "./jsx-runtime.ts";
+export type { TransformProps, TransformShorthand, Child } from "./jsx-runtime.ts";
+import type { TransformShorthand } from "./jsx-runtime.ts";
 
 export { clamp, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
@@ -249,7 +250,7 @@ export function useUnmount(_handler: () => void): void {
 // -- elements -----------------------------------------------------------------
 
 /** A named container; the usual root of a component. */
-export function Entity(_props: EntityProps & { children?: Child }): JSX.Element {
+export function Entity(_props: EntityProps & { children?: Child } & TransformShorthand): JSX.Element {
   return compileTimeOnly("Entity");
 }
 
@@ -265,17 +266,17 @@ export function Game(_props: GameProps & { children?: Child }): JSX.Element {
 }
 
 /** Draws an image. */
-export function Sprite(_props: SpriteProps): JSX.Element {
+export function Sprite(_props: SpriteProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Sprite");
 }
 
 /** A hit area for collisions. */
-export function Collider(_props: ColliderProps): JSX.Element {
+export function Collider(_props: ColliderProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Collider");
 }
 
 /** A hit area for presses (clicks and taps). */
-export function Pointer(_props: PointerProps): JSX.Element {
+export function Pointer(_props: PointerProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Pointer");
 }
 
@@ -293,12 +294,12 @@ export type TextAttributes = Omit<TextProps, "text"> & { children: TextChild | r
  * A line of text (a label, a HUD readout). `shadow` and `outline` (with `shadowX`, `shadowY` and `outlineWidth`) draw the text again under
  * itself in another colour, to keep it readable over a busy picture; they take no room in a layout.
  */
-export function Text(_props: TextAttributes): JSX.Element {
+export function Text(_props: TextAttributes & TransformShorthand): JSX.Element {
   return compileTimeOnly("Text");
 }
 
 /** A filled rectangle or circle, for debugging colliders and prototyping before art exists. */
-export function Shape(_props: ShapeProps): JSX.Element {
+export function Shape(_props: ShapeProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Shape");
 }
 
@@ -307,7 +308,7 @@ export function Shape(_props: ShapeProps): JSX.Element {
  * and it follows its children: `<Camera><Player /></Camera>` keeps the view on
  * the player. With no children it stays where it is.
  */
-export function Camera(_props: CameraProps & { children?: Child }): JSX.Element {
+export function Camera(_props: CameraProps & { children?: Child } & TransformShorthand): JSX.Element {
   return compileTimeOnly("Camera");
 }
 
@@ -315,7 +316,7 @@ export function Camera(_props: CameraProps & { children?: Child }): JSX.Element 
  * A sprite that cycles through `frames` at `fps`. `playing={false}` freezes it; a
  * different `frames` restarts it. Playing costs no renders.
  */
-export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
+export function AnimatedSprite(_props: AnimatedSpriteProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("AnimatedSprite");
 }
 
@@ -332,7 +333,7 @@ export function AnimatedSprite(_props: AnimatedSpriteProps): JSX.Element {
  * `backgroundImage` and `slice` skin it with a nine-slice picture (and `hoverBackgroundImage` and the like swap it by state).
  * `overflow` clips children that stick out of the box (`"hidden"`) and lets the mouse wheel scroll them (`"scroll"`, with `scrollX` / `scrollY`).
  */
-export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
+export function Flex(_props: FlexProps & { children?: Child } & TransformShorthand): JSX.Element {
   return compileTimeOnly("Flex");
 }
 
@@ -342,7 +343,7 @@ export function Flex(_props: FlexProps & { children?: Child }): JSX.Element {
  * (so it takes a border, a radius and a colour for each state), the part left of the thumb is `fillColor`. `value` is where it starts and what
  * you set; the slider moves it itself and calls `onChange` with the new value, only when it is a different one.
  */
-export function Slider(_props: SliderProps): JSX.Element {
+export function Slider(_props: SliderProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Slider");
 }
 
@@ -350,7 +351,7 @@ export function Slider(_props: SliderProps): JSX.Element {
  * An on and off switch, a `<Flex>` with a knob: `<Toggle checked={sound} onChange={(on) => setSound(on)} />`. A press, the confirm key with the
  * focus, or its `pressKey` flips it; `onChange` is called with the new state. `onColor` and `offColor` colour the track, `thumbColor` the knob.
  */
-export function Toggle(_props: ToggleProps): JSX.Element {
+export function Toggle(_props: ToggleProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Toggle");
 }
 
@@ -359,7 +360,7 @@ export function Toggle(_props: ToggleProps): JSX.Element {
  * `room1` with the tiles of `tiles.png`; without `image`, each tile comes from its own tileset's sheet, as saved in Tiled. The same
  * map, as `getTilemap("room1")`, is the solid grid that movement code reads. Placed by `transform` at the map's top left; `layer` draws one layer only. A leaf.
  */
-export function Tilemap(_props: TilemapProps): JSX.Element {
+export function Tilemap(_props: TilemapProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Tilemap");
 }
 
@@ -368,7 +369,7 @@ export function Tilemap(_props: TilemapProps): JSX.Element {
  * `burst` at once when it turns on (or when it is made), each living `lifetime` seconds, thrown at `speed` toward `angle` ± `spread`,
  * pulled by `gravity`, fading or shrinking. `space="world"` leaves them where they were made. A leaf, placed by `transform`.
  */
-export function Particles(_props: ParticlesProps): JSX.Element {
+export function Particles(_props: ParticlesProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Particles");
 }
 
@@ -377,7 +378,7 @@ export function Particles(_props: ParticlesProps): JSX.Element {
  * `.ts` module, `<ParticleLayer particles={fx} />` once (inside the `<Camera>`, for bursts at world positions), then
  * `fx.burst("dust", x, y)` from an action, a plain function or a handler. A leaf.
  */
-export function ParticleLayer(_props: ParticleLayerProps): JSX.Element {
+export function ParticleLayer(_props: ParticleLayerProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("ParticleLayer");
 }
 
@@ -444,7 +445,7 @@ export function freeze(_steps: number): void {
  * A layer that stays on the screen while the camera moves, drawn after the world: a score, a health bar, a button.
  * Its coordinates are screen pixels (game pixels under a `<Screen>`). `transform` moves the whole layer.
  */
-export function Hud(_props: HudProps & { children?: Child }): JSX.Element {
+export function Hud(_props: HudProps & { children?: Child } & TransformShorthand): JSX.Element {
   return compileTimeOnly("Hud");
 }
 

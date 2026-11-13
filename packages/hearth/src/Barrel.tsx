@@ -9,5 +9,5 @@ interface BarrelProps {
 
 /** The part of a tower that turns toward its target, around the middle of its pad. */
 export function Barrel({ frame, angle }: BarrelProps) {
-  return <Sprite image="barrels.png" frameWidth={12} frameHeight={12} frame={frame} originX={6} originY={6} transform={{ rotation: angle }} />;
+  return <Sprite image="barrels.png" frameWidth={12} frameHeight={12} frame={frame} originX={6} originY={6} rotation={angle} />;
 }

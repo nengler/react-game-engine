@@ -32,11 +32,11 @@ export function Play() {
     <Entity>
       <World />
       <Camera bounds={[0, 0, width, height]} deadzone={[24, 16]} smoothing={0.12}>
-        <Sprite image="things.png" frameWidth={16} frameHeight={16} frame={frame} tint={run.invuln > 0 ? "#ffffff99" : "#ffffffff"} transform={{ x, y }} />
+        <Sprite image="things.png" frameWidth={16} frameHeight={16} frame={frame} tint={run.invuln > 0 ? "#ffffff99" : "#ffffffff"} x={x} y={y} />
       </Camera>
       <ParticleLayer particles={fx} />
       <Hud>
-        <Text transform={{ x: 4, y: 3 }} color="#ff6b6b">{`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`}</Text>
+        <Text x={4} y={3} color="#ff6b6b">{`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`}</Text>
         {run.notice !== null && <Notice text={run.notice} />}
         {run.talk !== null && !paused && <Dialogue />}
         {paused && <Pause />}

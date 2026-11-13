@@ -11,7 +11,7 @@ export function Gem() {
       {gems === 0 && (
         <>
           <Shape kind="circle" width={8} height={8} color="#7de3ff" />
-          <Shape kind="circle" width={4} height={4} color="#e8fbff" transform={{ x: 2, y: 1 }} />
+          <Shape kind="circle" width={4} height={4} color="#e8fbff" x={2} y={1} />
           <Collider
             width={8}
             height={8}

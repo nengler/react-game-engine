@@ -1805,6 +1805,20 @@ and without it neither exists.
 - **Cost** (Hearth, wave 10 at 2×, V8): a frame 1.46 → 1.83 ms mean while recording (p99 3.9 → 4.8); going back half a second
   46 ms, a whole second 67 ms.
 
+## Placing things: `<Flex>` anywhere, and `x` / `y` as props (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, B2.
+
+- **Shorthand.** `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` are props of every built-in in the manifest's
+  `transformIntrinsics` (`TRANSFORM_SHORTHAND`, `lowerTransform`): they lower to the same transform writes as `transform={{ … }}`,
+  so nothing changes at run time and no member is reserved. `opacity` and `global` are not shorthand (`<Sprite>`, `<Flex>` and
+  `<Tilemap>` have an `opacity` prop of their own). A field written both ways is RGE1207, as is the shorthand on a built-in that
+  has no transform. The authoring types add `TransformShorthand` to those built-ins only.
+- **Not on components.** The compiler compiles one file at a time and does not know whether an imported component declares an `x`,
+  so on a component `x` is always its own prop, and placement is `transform`. One rule, with no case that depends on another file.
+- **`<Flex>` in world space** needed nothing new: Bramble's menu is a column of rows, the cursor's bar each row's `background`, and
+  it draws the same pixels as the hand-placed version (its stories' screenshots did not change).
+
 ## Diagnostics in the editor: `rge lsp` (2026-11-13)
 
 `REACT_FEEL_PLAN.md`, D2. `packages/language-server` (the server and the quick fixes), `rge lsp` (the command line starts it),

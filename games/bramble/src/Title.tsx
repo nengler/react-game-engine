@@ -10,7 +10,7 @@ export function Title() {
   useMount(() => openTitle());
   return (
     <Entity>
-      <Text transform={{ x: 0, y: 30 }} width={320} align="center" size={30}>BRAMBLE</Text>
+      <Text x={0} y={30} width={320} align="center" size={30}>BRAMBLE</Text>
       <Menu top={90} rows={titleRows(hasSave)} start={start} onChoose={choose} />
     </Entity>
   );

@@ -36,7 +36,7 @@ function Play() {
         prewarm
         space="world"
         max={64}
-        transform={{ x: originX, y: originY }}
+        x={originX} y={originY}
       />
       <Level />
       <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />

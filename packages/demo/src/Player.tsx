@@ -21,7 +21,7 @@ export function Player() {
   });
 
   return (
-    <Entity transform={{ x, y }}>
+    <Entity x={x} y={y}>
       <Shape kind="rect" width={24} height={24} color={hurt ? "tomato" : "gold"} />
       <Collider
         width={24}

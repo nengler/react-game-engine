@@ -1,4 +1,4 @@
-import { Entity, Shape, Text, useInput, useState } from "@rge/runtime/jsx";
+import { Flex, Text, useInput, useState } from "@rge/runtime/jsx";
 import { type Row, wrap } from "./rules/menu.ts";
 
 interface MenuProps {
@@ -13,7 +13,10 @@ interface MenuProps {
   onAdjust?: (id: string, direction: number) => void;
 }
 
-/** Rows of a menu, with a bar behind the one the cursor is on. Up and down move the cursor; the screen acts on what is chosen. */
+/**
+ * Rows of a menu, laid out as a column: the row the cursor is on has a bar behind it. Up and down move the cursor; the screen acts
+ * on what is chosen. Each row is a label and, from 170 pixels in, its value (a volume, the keys).
+ */
 export function Menu({ top, rows, start = 0, onChoose, onAdjust }: MenuProps) {
   const [cursor, setCursor] = useState(start);
   useInput((input) => {
@@ -25,14 +28,13 @@ export function Menu({ top, rows, start = 0, onChoose, onAdjust }: MenuProps) {
     if (input.pressed("confirm")) onChoose(id);
   });
   return (
-    <Entity>
-      <Shape kind="rect" width={300} height={12} color="#2b3350" transform={{ x: 10, y: top + cursor * 13 }} />
+    <Flex direction="column" gap={1} x={10} y={top}>
       {rows.map((row, i) => (
-        <Entity key={row.id} name={row.id} transform={{ x: 14, y: top + i * 13 }}>
-          <Text>{row.label}</Text>
-          <Text transform={{ x: 170, y: 0 }} color="#a7b0c8">{row.value}</Text>
-        </Entity>
+        <Flex key={row.id} direction="row" width={300} height={12} paddingLeft={4} background={i === cursor ? "#2b3350" : undefined}>
+          <Text width={166}>{row.label}</Text>
+          <Text color="#a7b0c8">{row.value}</Text>
+        </Flex>
       ))}
-    </Entity>
+    </Flex>
   );
 }

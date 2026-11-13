@@ -24,7 +24,7 @@ export function Pad({ id, x, y, seed, tower, onFire }: PadProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
-    <Entity transform={{ x, y }}>
+    <Entity x={x} y={y}>
       {tower !== null && <Tower seed={seed} kind={tower.kind} level={tower.level} x={x} y={y} ring={selected || hovered} onFire={onFire} />}
       <Pointer
         width={10}

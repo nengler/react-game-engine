@@ -6,7 +6,7 @@ export function Field() {
   return (
     <Entity>
       <Tilemap map="field" image="tiles.png" layer="Tiles" />
-      <Sprite image="hearth.png" originX={10} originY={14} transform={{ x: HEARTH.x - 4, y: HEARTH.y + 4 }} />
+      <Sprite image="hearth.png" originX={10} originY={14} x={HEARTH.x - 4} y={HEARTH.y + 4} />
     </Entity>
   );
 }

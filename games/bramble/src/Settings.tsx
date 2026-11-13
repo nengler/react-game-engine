@@ -15,7 +15,7 @@ export function Settings() {
   const [capturing, setCapturing] = useState<string | null>(null);
   return (
     <Entity>
-      <Text transform={{ x: 0, y: 6 }} width={320} align="center">SETTINGS</Text>
+      <Text x={0} y={6} width={320} align="center">SETTINGS</Text>
       <Menu
         top={22}
         rows={settingsRows(values, bindings, capturing)}

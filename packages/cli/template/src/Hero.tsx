@@ -21,7 +21,7 @@ export function Hero({ speed = 120 }: HeroProps) {
   });
 
   return (
-    <Entity transform={{ x, y }}>
+    <Entity x={x} y={y}>
       <Sprite image="hero.png" />
     </Entity>
   );

@@ -9,6 +9,20 @@ import type { Transform } from "./Transform.ts";
 /** Position, rotation, scale and `global`, derived from the runtime's `Transform`. All optional. */
 export type TransformProps = Partial<Transform>;
 
+/**
+ * The transform's place as props of their own, on every built-in that takes `transform`: `<Sprite image="coin.png" x={spot.x}
+ * y={spot.y} />` is `transform={{ x: spot.x, y: spot.y }}`. Writing a field both ways is an error. Not on components, whose `x`
+ * is whatever their props say; place a component with `transform`.
+ */
+export interface TransformShorthand {
+  x?: number;
+  y?: number;
+  z?: number;
+  rotation?: number;
+  scaleX?: number;
+  scaleY?: number;
+}
+
 /** What a JSX element may be inside another element: elements, and the `false`/`null` that `{cond && <X />}` and `{cond ? <X /> : null}` produce. */
 export type Child = JSX.Element | false | null | undefined | readonly Child[];
 
