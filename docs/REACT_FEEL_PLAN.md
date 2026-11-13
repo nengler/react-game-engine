@@ -84,9 +84,11 @@ chooses to put some logic in a reducer; it is not the engine's default.
 
 ### A1. Handlers are plain TypeScript, and the body may compute
 
-**In progress.** Built in steps, one PR each: (a) every loop, `try` and `throw` in handlers (2026-11-13; DESIGN.md, "Every loop,
+**Built 2026-11-13**, in three steps, one PR each: (a) every loop, `try` and `throw` in handlers (2026-11-13; DESIGN.md, "Every loop,
 and `try`, in handlers"); (b) any expression in a handler: `new`, `typeof`, `instanceof`, methods of local values (2026-11-13; DESIGN.md, "Any expression in
-handlers"); (c) statements in the component body.
+handlers"); (c) statements in the component body (2026-11-13; DESIGN.md, "Statements in the component body"). Left for
+later: destructuring declarations in a block. Point 2's check is by the compiler (an owned value, see DESIGN.md), not by
+`readonly` types.
 
 **Today.** Three languages in one file (PAIN_POINTS.md section 1): the component body allows expressions only; handlers allow `let`,
 `for…of` and `switch` but not `while`, C-style `for`, `try`, or methods outside an allowlist (`push` and `sort` are rejected);
@@ -139,10 +141,10 @@ of the rewrite.
 
 **Done when**
 
-- [ ] Any TypeScript compiles in a handler, with tests for `while`, C-style `for`, `try`, local arrays and closures
-- [ ] Direct assignment to state and in-place mutation of state are errors at the right line
-- [ ] A component body may hold statements, re-run only when what they read changes
-- [ ] PAIN_POINTS.md section 1's first two bullets are closed
+- [x] Any TypeScript compiles in a handler, with tests for `while`, C-style `for`, `try`, local arrays and closures
+- [x] Direct assignment to state and in-place mutation of state are errors at the right line
+- [x] A component body may hold statements, re-run only when what they read changes
+- [x] PAIN_POINTS.md section 1's first two bullets are closed
 
 ### A2. Movement and collisions answered in the same step: `useBody`
 

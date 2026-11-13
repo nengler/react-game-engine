@@ -47,6 +47,7 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "Arrow":
       return [e.body];
     case "Callback":
+    case "Block":
       return []; // its body is statements, which `walkExpr` walks
     case "Call":
       return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod" ? [e.callee.receiver, ...e.args] : e.args;
@@ -68,7 +69,7 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
 /** Pre-order walk over an expression tree. */
 export function walkExpr(expr: ExprIR, visit: (e: ExprIR) => void): void {
   visit(expr);
-  if (expr.kind === "Callback") walkStatements(expr.fn.body, visit);
+  if (expr.kind === "Callback" || expr.kind === "Block") walkStatements(expr.fn.body, visit);
   for (const child of childExpressions(expr)) walkExpr(child, visit);
 }
 

@@ -273,7 +273,7 @@ function C() {
 
   it("rejects hooks that are not top-level statements", () => {
     assert.ok(codes("useUpdate(() => { useUpdate(() => setN(1)); });").includes(DiagnosticCode.UnsupportedExpression));
-    assert.ok(codes("if (n > 0) { useUpdate(() => setN(1)); }").includes(DiagnosticCode.InvalidComponentBody));
+    assert.ok(codes("if (n > 0) { useUpdate(() => setN(1)); }").includes(DiagnosticCode.HookNotAtTopLevel));
     const inJsx = compileErrors(`
 function C() {
   const [n, setN] = useState(0);

@@ -34,7 +34,7 @@ export class ExpressionLowering extends LoweringBase {
       // `x !== undefined`, `cond ? undefined : x`: the global, which no import or declaration can shadow here.
       if (!binding && node.text === "undefined") return { kind: "PlainRef", name: "undefined" };
       // `e instanceof Error`: a global constructor or namespace a handler may name as a value.
-      if (!binding && this.mode.inHandler && (HANDLER_CONSTRUCTORS.has(node.text) || HANDLER_NAMESPACES.has(node.text))) return { kind: "PlainRef", name: node.text };
+      if (!binding && this.computes() && (HANDLER_CONSTRUCTORS.has(node.text) || HANDLER_NAMESPACES.has(node.text))) return { kind: "PlainRef", name: node.text };
       if (!binding) {
         const near = nearest(node.text, [...new Set([...this.scope.names(), ...this.plainImports])]);
         this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${near ? ` (did you mean '${near}'?)` : ""}.`, node);
@@ -159,8 +159,8 @@ export class ExpressionLowering extends LoweringBase {
   protected lowerNew(node: Expression & { kind: SyntaxKind.NewExpression }): ExprIR | null {
     const created = node as unknown as { expression: Expression; typeArguments?: readonly Node[]; arguments?: readonly Expression[] };
     const callee = unwrapParens(created.expression);
-    if (!this.mode.inHandler) {
-      this.report(DiagnosticCode.UnsupportedExpression, "`new` is only valid in a handler: in a component body it would run on every render. Make the value once with `useState(() => new …)`, or in a `.ts` file.", node);
+    if (!this.computes()) {
+      this.report(DiagnosticCode.UnsupportedExpression, "`new` is only valid in a handler or in statements of the component body (which are worked out again only when what they read changes), not in a single expression: it would run on every render. Make the value once with `useState(() => new …)`, or in a `.ts` file.", node);
       return null;
     }
     const known = isIdentifier(callee) && !this.scope.has(callee.text) && (HANDLER_CONSTRUCTORS.has(callee.text) || this.plainImports.has(callee.text));
@@ -174,6 +174,11 @@ export class ExpressionLowering extends LoweringBase {
     return { kind: "New", callee: callee.text, typeArguments, args };
   }
 
+  /** In a handler, or in statements of the component body: where code computes with loops, its own values and the standard library. */
+  protected computes(): boolean {
+    return this.mode.inHandler || this.mode.inRenderBlock;
+  }
+
   /**
    * Whether an expression is a handler's own local, or a member or element of one (`list`, `best.hits`, `grid[y]![x]`): a value the
    * handler made, which it may change in place, call any method of and assign into. State and props are never this.
@@ -184,7 +189,7 @@ export class ExpressionLowering extends LoweringBase {
       if (isPropertyAccessExpression(at) || isElementAccessExpression(at) || isNonNullExpression(at)) at = unwrapParens(at.expression);
       else break;
     }
-    if (!this.mode.inHandler || !isIdentifier(at)) return false;
+    if (!this.computes() || !isIdentifier(at)) return false;
     const binding = this.scope.get(at.text);
     return binding?.kind === "local" && binding.owned === true;
   }
@@ -401,7 +406,7 @@ export class ExpressionLowering extends LoweringBase {
     }
     // In a handler, the standard library as written: `Object.keys(…)`, `JSON.stringify(…)`, `Number.isFinite(…)`, `Array.from(…)`,
     // any `Math` function, `console.log(…)`, `parseInt(…)`.
-    if (this.mode.inHandler) {
+    if (this.computes()) {
       const namespace = isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && HANDLER_NAMESPACES.has(callee.expression.text) && !this.scope.has(callee.expression.text) && !this.plainImports.has(callee.expression.text)
         ? `${callee.expression.text}.${callee.name.text}`
         : null;

@@ -35,7 +35,17 @@ export type ExprIR =
   | BinaryExprIR
   | ConditionalExprIR
   | NewExprIR
+  | BlockExprIR
   | MemoIR;
+
+/**
+ * Statements in the component body worked out together (a render block): a function of no parameters, run where it is read and
+ * returning an object of the names the block declares. Always inside a `Memo`, so it runs again only when what it reads changes.
+ */
+export interface BlockExprIR {
+  readonly kind: "Block";
+  readonly fn: FunctionIR;
+}
 
 /**
  * `new Map<string, number>()`, `new Error("…")`, `new Enemy(…)` in a handler: a global constructor or a class imported from a `.ts`

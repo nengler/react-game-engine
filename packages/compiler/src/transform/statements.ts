@@ -38,6 +38,8 @@ import {
   type AssignTargetIR,
   type LocalConstStmtIR,
   type LoopBindingIR,
+  type ObjectPropertyIR,
+  walkStatements,
   type ExprIR,
   type FunctionIR,
   type ParamIR,
@@ -60,6 +62,8 @@ export interface LoweringContext {
   stateType(state: StateId): TypeIR;
   /** False in a `useUnmount` handler: the component is going away, so a state update could never render. */
   canSetState(): boolean;
+  /** In statements of the component body, which run during render (see `LoweringMode.inRenderBlock`). */
+  inRenderBlock(): boolean;
   /** False in a state updater: it runs inside the setter, whether or not the update changes anything. */
   canPlaySound(): boolean;
   /** True in a handler, outside a state updater: where a handler may hand a callback to a function (`settings.subscribe(() => …)`). */
@@ -127,6 +131,37 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
       body = stmt && [options.returns === "cleanup" && stmt.kind === "ExpressionStatement" ? { kind: "Return", value: stmt.expression } : stmt];
     }
     return body && { kind: "Function", params, body };
+  });
+}
+
+/**
+ * Statements of the component body that compute together (a render block): lowered like a handler's, in a scope of their own,
+ * then a `return { a, b }` of the names declared at the top is added, so what reads them after the block reads them from it. A
+ * `return` of the author's is refused: a component returns once, at its end.
+ */
+export function lowerRenderBlock(ctx: LoweringContext, statements: readonly Statement[], names: readonly string[], at: Node): FunctionIR | null {
+  return ctx.inScope(() => {
+    const body = lowerStatements(ctx, statements, { paramTypes: [], returns: "void", what: "The component body" }, { newScope: false, jumps: NO_JUMPS });
+    if (!body) return null;
+    let returns = false;
+    walkStatements(body, () => {}, (s) => {
+      if (s.kind === "Return") returns = true;
+    });
+    if (returns) {
+      ctx.error(DiagnosticCode.InvalidComponentBody, "A component returns once, at its end: compute a value here and test it in the `return` (`return open ? <Menu /> : null`).", at);
+      return null;
+    }
+    const properties: ObjectPropertyIR[] = [];
+    for (const name of names) {
+      const binding = ctx.scope.get(name);
+      if (binding?.kind !== "local") {
+        ctx.error(DiagnosticCode.InvalidComponentBody, `'${name}' must be declared with \`const\` or \`let\` and one name, in statements of the component body.`, at);
+        return null;
+      }
+      properties.push({ kind: "Property", name, value: { kind: "LocalRead", local: binding.id, name } });
+    }
+    body.push({ kind: "Return", value: { kind: "ObjectLiteral", properties } });
+    return { kind: "Function", params: [], body };
   });
 }
 
@@ -286,7 +321,8 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const mutable = (list.flags & NodeFlags.Let) !== 0;
     const isConst = (list.flags & NodeFlags.Const) !== 0;
     if ((!isConst && !mutable) || list.declarations.length !== 1 || !isIdentifier(decl.name) || !decl.initializer) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, "Only `const name = expression;` and `let name = expression;` declarations (one name, with a value) are supported in handlers.", statement);
+      const where = ctx.inRenderBlock() ? "in statements of the component body" : "in handlers";
+      ctx.error(ctx.inRenderBlock() ? DiagnosticCode.InvalidComponentBody : DiagnosticCode.UnsupportedStatement, `Only \`const name = expression;\` and \`let name = expression;\` declarations (one name, with a value) are supported ${where}.`, statement);
       return null;
     }
     // `const events = step(input, dt);`: a game-state action whose result the handler uses (only here, in a handler, where it
@@ -295,6 +331,10 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const action = isCallExpression(init) && isIdentifier(init.expression) ? ctx.scope.get(init.expression.text) : undefined;
     let value: ExprIR | null;
     if (action?.kind === "action" && isCallExpression(init)) {
+      if (ctx.inRenderBlock()) {
+        ctx.error(DiagnosticCode.InvalidComponentBody, `An action cannot be called in the component body: it runs on every render. Call \`${action.name}()\` in a handler.`, init);
+        return null;
+      }
       if (!ctx.canPlaySound()) {
         ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${action.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler.`, init);
         return null;
@@ -573,6 +613,15 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (increment !== undefined) return increment;
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
+    if (ctx.inRenderBlock() && (callee?.kind === "sound" || callee?.kind === "action" || callee?.kind === "setter")) {
+      const what = callee.kind === "setter" ? "A setter" : callee.kind === "sound" ? "A sound" : "An action";
+      ctx.error(
+        DiagnosticCode.InvalidComponentBody,
+        `${what} cannot be called in the component body: it runs on every render. Call \`${call.expression.text}()\` in a handler (\`useUpdate\`, \`useMount\`, a callback prop), or compute the value here and use it.`,
+        call,
+      );
+      return null;
+    }
     if (callee?.kind === "sound") {
       if (call.arguments.length > 1) {
         ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes at most one argument, the volume from 0 to 1: the sound and its path are fixed where it is declared.`, call);

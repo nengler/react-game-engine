@@ -375,6 +375,26 @@ error. Now, in a handler:
 
 What stays out: `this`, `await`, `var`, labelled jumps, and calls of unknown globals.
 
+### Statements in the component body (2026-11-13)
+
+The third step of A1. A component body held hooks, derived `const`s and a `return`; a `let`, a loop or a list built up was
+`RGE1101`, so every list a screen drew was made by the rules (Bramble's `rules/view.ts`). Now a run of body statements that are
+not hooks, and not all `const name = …`, is a **render block** (`RenderBlockAnalysis` in the analyzer):
+
+- The analyzer groups consecutive non-hook statements; a run of only derived `const`s keeps each as its own derived value, as
+  before. A run with a hook call inside it (`if (open) { useUpdate(…) }`) is not a block: the hook is reported as not at the
+  top level, and nothing else.
+- The block is lowered like a handler (`lowerRenderBlock`, in a scope of its own, with `inRenderBlock` set), so loops, owned
+  values, `new` and the standard library work, and then `return { a, b }` of the names it declares at its top level is added.
+  Its value is `Memo(Block(fn))`: `this.$memo("$block1", [deps], () => (() => { … })())`, the deps being every state, prop and
+  game-state path the block reads, so it runs again only when one of them changes (as a derived `const` that calls something).
+  Each declared name is a derived value reading its member of the memo.
+- It runs during render, so a setter, a sound or an action called in it is `RGE1101` ("it runs on every render"), a ref read is
+  refused as anywhere outside a handler, and a `return` in it is refused: a component returns once, at its end.
+- Declarations in it are `const` or `let` with one name each, for now; destructuring is refused with a message.
+
+`var` stays out, and a `while (true)` in a block hangs the render as it would in React.
+
 ## Mount and unmount
 
 `useMount(() => …)` and `useUnmount(() => …)` (M9) are handler hooks like

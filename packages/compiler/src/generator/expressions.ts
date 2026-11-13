@@ -155,6 +155,7 @@ export class ExpressionEmitter {
         return `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
       case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.arrowBody(e.body)}`);
       case "Callback": return this.callback(e.fn);
+      case "Block": return `(${this.callback(e.fn)})()`;
       case "Call": {
         const args = e.args.map((a) => this.expr(a, true)).join(", ");
         switch (e.callee.kind) {

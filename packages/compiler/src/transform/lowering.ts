@@ -24,13 +24,18 @@ export interface LoweringMode {
   readonly inUnmount: boolean;
   /** In a state updater: it runs inside the setter and may run again, so no sounds or actions. */
   readonly inUpdater: boolean;
+  /**
+   * In a render block (statements in the component body): it computes like a handler (loops, its own values, the standard
+   * library) but runs during render, so it may not set state, play sounds, call actions or read refs.
+   */
+  readonly inRenderBlock: boolean;
   /** Lowering the value of `onX={onX}`, where a callback prop may be forwarded whole. */
   readonly allowCallbackRead: boolean;
   /** In a computed selector: where the snapshots of the paths it reads go. */
   readonly storeReads: { readonly state: StateIR[]; readonly hooks: HookIR[]; readonly storeName: string } | null;
 }
 
-const TOP_LEVEL: LoweringMode = { inHandler: false, inUnmount: false, inUpdater: false, allowCallbackRead: false, storeReads: null };
+const TOP_LEVEL: LoweringMode = { inHandler: false, inUnmount: false, inUpdater: false, inRenderBlock: false, allowCallbackRead: false, storeReads: null };
 
 /** What every component of a module is lowered against: built once per file in `buildModuleIR`, shared by its components. */
 export interface ModuleContext {
@@ -414,6 +419,10 @@ export class LoweringBase {
 
   canSetState(): boolean {
     return !this.mode.inUnmount;
+  }
+
+  inRenderBlock(): boolean {
+    return this.mode.inRenderBlock;
   }
 
   canPassCallback(): boolean {
