@@ -2,6 +2,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Entity, World, createGameState } from "@rge/runtime";
+import { createPlayer, RecordingBackend, Rewind } from "@rge/player";
 import { startInspector } from "../src/inspector.ts";
 
 /** A component as the compiler writes one, as far as the inspector looks: a `managed` class with state it saves and loads. */
@@ -89,6 +90,31 @@ describe("the inspector", () => {
       assert.equal(history.at(-2)?.action, "setState", "the inspector's own edit");
     } finally {
       await inspector.close();
+    }
+  });
+
+  it("shows rewind's timeline and drives it: pause, go to a frame, play on", async () => {
+    const backend = new RecordingBackend();
+    for (let i = 0; i < 90; i++) backend.queueInput({ dt: 1 / 60 });
+    const config = { root: () => new Enemy({}), fixedStep: 60 };
+    const rewind = new Rewind(backend, { config: () => config, stores: () => new Map() });
+    const player = createPlayer(rewind.backend, config);
+    rewind.attach(player);
+    for (let i = 0; i < 90; i++) rewind.step();
+    const inspector = await startInspector({ root: () => player.world.root.children[0] ?? null, stores: () => new Map(), rewind });
+    try {
+      const first = await events(inspector.url, (seen) => seen.has("rewind"));
+      assert.deepEqual(first.get("rewind"), { paused: null, from: 0, to: 90, snapshots: [0, 60], divergence: null });
+      assert.equal((await post(inspector.url, "/rewind", { action: "seek", frame: 70 })).status, 200);
+      assert.equal(rewind.paused, 70);
+      const paused = await events(inspector.url, (seen) => seen.has("rewind"));
+      assert.equal((paused.get("rewind") as { paused: number }).paused, 70);
+      await post(inspector.url, "/rewind", { action: "resume" });
+      assert.equal(rewind.paused, null);
+      assert.equal(rewind.range.to, 70);
+    } finally {
+      await inspector.close();
+      player.close();
     }
   });
 });

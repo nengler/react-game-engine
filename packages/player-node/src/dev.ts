@@ -19,11 +19,11 @@
  * restart. Each build stays in memory (ES modules cannot be unloaded), which is fine for a session of edits.
  */
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { registerHooks } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createPlayer, HOST_BACKEND_KEY, HOST_RUN_KEY, type Backend, type Player, type PlayerConfig } from "@rge/player";
+import { createPlayer, HOST_BACKEND_KEY, HOST_RUN_KEY, Rewind, type Backend, type Player, type PlayerConfig } from "@rge/player";
 import { GameStore } from "@rge/runtime";
 import { startInspector, type Inspector } from "./inspector.ts";
 
@@ -41,6 +41,8 @@ export interface DevOptions {
    * (0, the default, takes a free one), or false for none. Its address is printed when the game starts.
    */
   readonly inspector?: number | false;
+  /** Rewind (F2 pauses, the arrows step, F4 saves the moment to `moments/`). Default on. */
+  readonly rewind?: boolean;
   /** Told when the game has started, after each reload that worked, and when a reload failed. For tests. */
   readonly observe?: (event: "start" | "reload" | "error", player: Player) => void;
 }
@@ -175,13 +177,30 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
 
   const start = await importGame();
   let stores = start.stores;
-  // Development tools: the layout overlay (F1) in the window, and the inspector's page in a browser.
-  const player: Player = createPlayer(backend, { ...start.config, showErrors: true, errorNote: NOTE, devtools: true });
+  // Development tools: the layout overlay (F1) in the window, rewind (F2), and the inspector's page in a browser.
+  let config: PlayerConfig = { ...start.config, showErrors: true, errorNote: NOTE, devtools: true };
+  const rewind =
+    options.rewind === false
+      ? null
+      : new Rewind(backend, {
+          config: () => config,
+          stores: () => stores,
+          log,
+          saveMoment: (moment) => {
+            const folder = join(gameDir, "moments");
+            mkdirSync(folder, { recursive: true });
+            const file = join(folder, `frame-${moment.frame}-${Date.now()}.json`);
+            writeFileSync(file, `${JSON.stringify(moment)}\n`);
+            log(`rewind: wrote ${file}: replay it in a test with replayMoment (see the guide's "Rewind")`);
+          },
+        });
+  const player: Player = createPlayer(rewind?.backend ?? backend, config);
+  rewind?.attach(player);
   let inspector: Inspector | null = null;
   if (options.inspector !== false) {
     try {
-      inspector = await startInspector({ root: () => player.world.root.children[0] ?? null, stores: () => stores, port: options.inspector ?? 0, log });
-      log(`inspector: ${inspector.url}  (F1 in the window outlines the layout)`);
+      inspector = await startInspector({ root: () => player.world.root.children[0] ?? null, stores: () => stores, port: options.inspector ?? 0, log, rewind });
+      log(`inspector: ${inspector.url}  (F1 in the window outlines the layout${rewind !== null ? ", F2 pauses to rewind" : ""})`);
     } catch (error) {
       log(`The inspector could not start: ${String(error)}`);
     }
@@ -237,7 +256,9 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
         if (older !== undefined && older !== store) store.carryFrom(older);
       }
       stores = next.stores;
-      if (player.reload({ ...next.config, devtools: true })) {
+      config = { ...next.config, showErrors: true, errorNote: NOTE, devtools: true };
+      if (player.reload(config)) {
+        rewind?.reloaded();
         log(`reloaded in ${Date.now() - started} ms`);
         options.observe?.("reload", player);
       } else {
@@ -255,7 +276,7 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
   options.observe?.("start", player);
   try {
     for (;;) {
-      const open = player.step();
+      const open = rewind !== null ? rewind.step() : player.step();
       const failure = player.failure;
       if (failure !== null && failure.error !== printed && !(typeof failure.error === "string")) {
         printed = failure.error;
