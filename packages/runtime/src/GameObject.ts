@@ -53,6 +53,11 @@ export class GameObject<P extends object = {}> {
    */
   layoutX = 0;
   layoutY = 0;
+  /**
+   * A list item's key (`key={e.id}`), set by the list that made it: hot reload and saves name a keyed object by it
+   * (`Enemy[beetle-3]`), so state stays with its item when an earlier one is removed. Undefined for anything else.
+   */
+  hotKey: string | number | undefined = undefined;
   /** The component's props: a private copy, updated in place by `updateProps`. */
   props: P;
   parent: GameObject | null = null;

@@ -225,6 +225,8 @@ export class ElementEmitter extends HandlerEmitter {
         }
       });
       w.line(`${items}.set($key, $item);`);
+      // Hot reload and saves find a list item by its key, so removing one item does not move state between the others.
+      w.line("$item.hotKey = $key;");
       if (records) w.line(`${records}.set($key, $rec);`);
       w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, ${position})` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
       if (records || hasDynamicProps(el.props) || (alt !== null && hasDynamicProps(alt.props))) {

@@ -7,6 +7,7 @@
  * What is stored is text: JSON as `{ "version": n, "data": … }`. Calls are synchronous (the entries are small and the host's calls
  * block), so they are made from game-state actions, as `sfx.play` is.
  */
+import { captureGameTree, queueTreeRestore } from "./gameTree.ts";
 import type { Controls } from "./input.ts";
 import { setVolume } from "./Sound.ts";
 
@@ -49,12 +50,13 @@ const defaultWarn = (message: string): void => {
   (globalThis as { console?: { warn?: (m: string) => void } }).console?.warn?.(message);
 };
 
-/** Parse an entry's `{ version, data }`, or say why not. */
-function parseEntry(text: string): { version: number; data: unknown } | null {
+/** Parse an entry's `{ version, data }` (and a save's `tree`, when it kept one), or say why not. */
+function parseEntry(text: string): { version: number; data: unknown; tree?: Record<string, Record<string, unknown>> } | null {
   try {
-    const value = JSON.parse(text) as { version?: unknown; data?: unknown } | null;
+    const value = JSON.parse(text) as { version?: unknown; data?: unknown; tree?: unknown } | null;
     if (typeof value === "object" && value !== null && typeof value.version === "number" && Number.isInteger(value.version) && "data" in value) {
-      return { version: value.version, data: value.data };
+      const tree = typeof value.tree === "object" && value.tree !== null ? (value.tree as Record<string, Record<string, unknown>>) : undefined;
+      return { version: value.version, data: value.data, ...(tree ? { tree } : {}) };
     }
   } catch {
     // Not JSON: handled below, as a file that does not parse.
@@ -67,10 +69,17 @@ export interface SaveOptions<Data> {
   readonly name: string;
   /** The version of what `pick` returns. Raise it when its shape changes and add a step to `migrate`. */
   readonly version: number;
-  /** What to keep: a plain, JSON-safe object picked from the game's state. */
-  readonly pick: () => Data;
+  /** What to keep: a plain, JSON-safe object picked from the game's state. Optional with `tree`. */
+  readonly pick?: () => Data;
   /** Put a loaded save into the game's state. */
-  readonly apply: (data: Data) => void;
+  readonly apply?: (data: Data) => void;
+  /**
+   * Keep every component's own state too (`useState` values and refs, as hot reload keeps them), not only what `pick` takes
+   * from the game state. On `load`, `apply` runs first, and once the tree it builds has settled, each component takes its saved
+   * state back, found by its path (a list item by its key). Values that are not plain data (a function, a class instance such
+   * as a body) are left out, said once. Default false.
+   */
+  readonly tree?: boolean;
   /** Steps from an older version: `migrate[1]` turns version 1's data into version 2's, and so on up to the current one. */
   readonly migrate?: Readonly<Record<number, (old: any) => any>>;
   /** Where a problem is reported (an unreadable or too-new save). Default `console.warn`. */
@@ -81,6 +90,7 @@ export interface SaveOptions<Data> {
 export class Save<Data> {
   readonly #options: SaveOptions<Data>;
   #warned = false;
+  #warnedTree = false;
 
   constructor(options: SaveOptions<Data>) {
     this.#options = options;
@@ -94,8 +104,9 @@ export class Save<Data> {
   /** Keep what `pick` returns. True when it was written. */
   write(): boolean {
     if (sink === null) return false;
-    const text = JSON.stringify({ version: this.#options.version, data: this.#options.pick() });
-    return sink.write(this.#options.name, text);
+    const entry: { version: number; data: unknown; tree?: Record<string, Record<string, unknown>> } = { version: this.#options.version, data: this.#options.pick?.() ?? null };
+    if (this.#options.tree) entry.tree = this.#plainTree();
+    return sink.write(this.#options.name, JSON.stringify(entry));
   }
 
   /**
@@ -129,13 +140,43 @@ export class Save<Data> {
       this.#warned = true;
       return false;
     }
-    this.#options.apply(data as Data);
+    this.#options.apply?.(data as Data);
+    if (this.#options.tree && entry.tree !== undefined) queueTreeRestore(new Map(Object.entries(entry.tree)));
     return true;
+  }
+
+  /** The game's tree as JSON-safe data: each component's state by path, without the values that are not plain data. */
+  #plainTree(): Record<string, Record<string, unknown>> {
+    const out: Record<string, Record<string, unknown>> = {};
+    const skipped: string[] = [];
+    for (const [path, fields] of captureGameTree()) {
+      const kept: Record<string, unknown> = {};
+      for (const [field, value] of Object.entries(fields)) {
+        if (isPlainData(value)) kept[field] = value;
+        else skipped.push(`${path} ${field}`);
+      }
+      out[path] = kept;
+    }
+    if (skipped.length > 0 && !this.#warnedTree) {
+      (this.#options.warn ?? defaultWarn)(`The save '${this.#options.name}' leaves out state that is not plain data (it cannot be written as JSON): ${skipped.join(", ")}.`);
+      this.#warnedTree = true;
+    }
+    return out;
   }
 
   remove(): void {
     sink?.remove(this.#options.name);
   }
+}
+
+/** A number that JSON keeps, a string, a boolean, null, or an array or plain object of those. */
+function isPlainData(value: unknown): boolean {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isPlainData);
+  if (typeof value !== "object") return false;
+  const proto = Object.getPrototypeOf(value);
+  return (proto === Object.prototype || proto === null) && Object.values(value as object).every(isPlainData);
 }
 
 /** Make a save. Keep the result in a module: `export const save = createSave({ … })`. */

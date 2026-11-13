@@ -25,6 +25,7 @@ import {
   createInputState,
   registerTilemaps,
   resetGameState,
+  setGameTree,
   type TilemapData,
 } from "@rge/runtime";
 
@@ -63,6 +64,7 @@ export class Rendered<Root extends GameObject = GameObject> {
     this.#controls = options.controls;
     this.world.mount(this.#holder);
     this.#holder.addChild(root);
+    setGameTree(this.world, root);
     this.world.flush();
   }
 

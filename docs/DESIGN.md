@@ -1768,6 +1768,25 @@ sound, action or own-function call, an assignment, `++`) is a statement; any oth
 Not done: diagnostics inside a hook still point at the expanded text's mapping, not "the hook's line, called from the component's".
 
 
+## Component state in saves (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, A5. A save picked from the game state, so state a component kept itself was lost on save, one more reason
+the games kept everything in the store. `createSave({ …, tree: true })` keeps the tree too:
+
+- **The game's tree.** `gameTree.ts` holds the world and root the game runs: the player sets it when it mounts the root (and
+  again on a hot reload), and `@rge/testing` when it renders.
+- **Writing.** The entry is `{ version, data, tree }`, `tree` being `captureHotState(root)` (each component's `saveHotState`
+  by path) as JSON, without the values that are not plain data (said once, naming each path and field). `pick` and `apply` are
+  optional with `tree`.
+- **Loading.** `apply` runs first, in the handler that called `load`, then the tree is queued (`queueTreeRestore`); the next
+  `World.flush`, once the tree the applied state builds has settled, takes it and runs `restoreHotState`, as a hot reload does.
+- **Keys.** A keyed list sets `hotKey` on each item it makes, and a path names such an item by its key (`Pack:0/Enemy[b]`)
+  rather than by its place among siblings, so removing an earlier item does not move state between the others. Hot reload
+  gains the same.
+
+`version` and `migrate` apply to `data`; the tree is restored as it was saved, field by field where a value still fits
+(`hotFits`), as a hot reload restores across code changes.
+
 ## Testing one component: `@rge/testing` (2026-11-13)
 
 `REACT_FEEL_PLAN.md`, A4. A rule is a function, so a test calls it; a component could be tested only by running the whole game
