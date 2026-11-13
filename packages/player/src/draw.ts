@@ -986,6 +986,14 @@ export class FrameBuilder {
   /** The bitmap font of a `<Text>` without its own: the root `<Game>`'s `font`, set again on a reload. */
   font: string | undefined;
 
+  /**
+   * While true, each build lists every `<Flex>` it lays out in `inspected`, where it was placed (the development overlay draws
+   * them: REACT_FEEL_PLAN.md C4). Off by default: a game pays nothing for it.
+   */
+  inspecting = false;
+  /** The `<Flex>` boxes of the last build, while `inspecting`: where each was placed, and whether it is in a `<Hud>`. */
+  readonly inspected: { readonly flex: Flex; readonly world: WorldTransform; readonly hud: boolean }[] = [];
+
   constructor(options: FrameBuilderOptions) {
     this.#options = options;
     this.#retain = options.retain !== false;
@@ -1010,6 +1018,7 @@ export class FrameBuilder {
    * and scaled by the canvas record; any other game is drawn through views that scale to the window themselves.
    */
   build(root: GameObject, width: number, height: number, time?: number): BuiltFrame {
+    this.inspected.length = 0;
     // The animation clock: where a `<Flex transition>` is in its fade is worked out from it, so building the frame twice at one
     // time shows the same thing. Without one (a test, a screenshot) a transition has no time to run in, and colours snap.
     this.#time = time;
@@ -1232,6 +1241,7 @@ export class FrameBuilder {
             pointerZs.push(drawZ);
           }
           if (placed !== undefined) at = placed;
+          if (this.inspecting) this.inspected.push({ flex: node as Flex, world: { ...at }, hud: false });
           if ((node as Flex).overflow !== "visible") {
             if ((node as Flex).overflow === "scroll") scrollers.push(node as Flex);
             // Only a box with children is paired with the pop below (a leaf returns before it).
@@ -1539,6 +1549,7 @@ export class FrameBuilder {
                     hudPointers.push(object as Flex);
                     hudPointerZs.push(z);
                   }
+                  if (this.inspecting) this.inspected.push({ flex: object as Flex, world: { ...(placed ?? world) }, hud: true });
                   if ((object as Flex).overflow !== "visible") {
                     if ((object as Flex).overflow === "scroll") scrollers.push(object as Flex);
                     // Every box pushed here is popped by `leave` below, which runs for a leaf too.

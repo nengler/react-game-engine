@@ -66,6 +66,11 @@ export interface GameProps extends EntityProps {
    * `1`, only faster: a fast-forward button). Read every frame, so it may be state (`timeScale={speed}`). Default 1.
    */
   timeScale?: number;
+  /**
+   * The key that turns the development layout overlay on and off, under `rge dev` (outlines of every `<Flex>`, collider and
+   * pointer). Default `"F1"`; `false` turns the key off. A packaged game never has the overlay.
+   */
+  overlayKey?: string | false;
   /** The size of every `<Text>` that does not set its own (`<Text size>`), as `font` is its font. Default: 16. */
   textSize?: number;
   /** The colour of every `<Text>` that does not set its own (`<Text color>`). Default: white. */
@@ -113,6 +118,7 @@ export class Game<P extends object = {}> extends Entity<P> {
   paused: boolean | undefined;
   textSize: number | undefined;
   textColor: string | undefined;
+  overlayKey: string | false | undefined;
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: GameProps = {}, props?: P, defaults?: Partial<P>) {
@@ -138,5 +144,6 @@ export class Game<P extends object = {}> extends Entity<P> {
     this.paused = hostProps.paused;
     this.textSize = hostProps.textSize;
     this.textColor = hostProps.textColor;
+    this.overlayKey = hostProps.overlayKey;
   }
 }

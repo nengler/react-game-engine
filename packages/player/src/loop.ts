@@ -4,11 +4,12 @@ import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
 import { DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame } from "./draw.ts";
 import { FixedDriver, MAX_STEPS_PER_FRAME } from "./fixed.ts";
+import { drawOverlay } from "./overlay.ts";
 import { HOST_RUN_KEY } from "./host.ts";
 import { PlayerInput } from "./input.ts";
 import { borderRoom } from "./layout.ts";
 import { onScreen, type ScreenPlacement } from "./screen.ts";
-import { KEYS, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_QUIT, RGE_IN_WHEEL, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
+import { KEYS, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_MOUSE_X, RGE_IN_MOUSE_Y, RGE_IN_QUIT, RGE_IN_WHEEL, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
 import { Warner } from "./warn.ts";
 
 /** The window a game gets when neither its `<Game>` root nor the player's config say otherwise. */
@@ -36,6 +37,11 @@ export interface PlayerConfig extends Partial<WindowConfig> {
   readonly gamepadDeadzone?: number;
   /** How a pixel-perfect screen is scaled up at a scale that is not a whole number, as the `<Game>` prop `upscale`. */
   readonly upscale?: "nearest" | "sharp";
+  /**
+   * Development tools: the layout overlay, toggled by `<Game overlayKey>` (F1 by default). `rge dev` turns it on; a packaged build
+   * never has it. Default false.
+   */
+  readonly devtools?: boolean;
   /** The frame-rate counter, as the `<Game>` props `showFps` and `fpsKey`. */
   readonly showFps?: boolean;
   readonly fpsKey?: string | false;
@@ -238,6 +244,10 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
 
   // The frame-rate counter: the frame rate from the time the backend measures between frames, and what the script cost (the step, without the backend's draw and wait), each smoothed.
   let showFps = game?.showFps ?? config.showFps ?? false;
+  // The development overlay: only with `devtools` (rge dev), toggled by its key.
+  const overlaySetting = config.devtools === true ? (game?.overlayKey ?? "F1") : false;
+  const overlayKey = overlaySetting === false ? undefined : KEY_INDEX.get(overlaySetting);
+  let overlay = false;
   const fpsSetting = game?.fpsKey ?? config.fpsKey ?? "F3";
   const fpsKey = fpsSetting === false ? undefined : KEY_INDEX.get(fpsSetting);
   let smoothDt = 0;
@@ -446,6 +456,11 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     const started = clock();
     toggleFullscreen();
     if (fpsKey !== undefined && ((input.keys[fpsKey] as number) & RGE_KEY_PRESSED) !== 0) showFps = !showFps;
+    if (overlayKey !== undefined && ((input.keys[overlayKey] as number) & RGE_KEY_PRESSED) !== 0) {
+      overlay = !overlay;
+      builder.inspecting = overlay;
+      stale = true; // draw this frame again, with the boxes listed
+    }
     const realDt = input.values[RGE_IN_DT] as number;
     if (realDt > 0) smoothDt = smoothDt === 0 ? realDt : smoothDt * 0.9 + realDt * 0.1;
     dispatchPress();
@@ -486,6 +501,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     hudView = built.hudView;
     screen = built.screen;
     input.view = built.view;
+    if (overlay) drawOverlay(built.list, built, builder.inspected, input.values[RGE_IN_MOUSE_X] as number, input.values[RGE_IN_MOUSE_Y] as number, input.width);
     if (showFps) {
       const ms = clock() - started;
       smoothMs = smoothMs === 0 ? ms : smoothMs * 0.9 + ms * 0.1;

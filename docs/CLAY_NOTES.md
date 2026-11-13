@@ -89,7 +89,7 @@ A floating element is a **separate root** attached to a point on its "parent": `
 - **Borders, corner radius, image and custom elements:** configs for the render commands; custom elements pass one pointer through to the renderer. Not adopted (needs new draw records).
 - **Visibility culling:** on by default; only elements with at least one pixel of their box in the viewport produce render commands. Not adopted; relevant if a UI ever has hundreds of items.
 - **Retained mode:** render commands carry the element ID, and are small enough to compare byte-wise between frames to find what changed. Relevant to a web backend, not now.
-- **Debug tools:** an inspector (`Clay_SetDebugModeEnabled`) that injects render commands to draw a panel. A layout debug overlay would be a good tool for this engine too (draw every `Flex` box outline); not planned.
+- **Debug tools:** an inspector (`Clay_SetDebugModeEnabled`) that injects render commands to draw a panel. A layout debug overlay would be a good tool for this engine too (draw every `Flex` box outline); built 2026-11-13 as `rge dev`'s F1 overlay (REACT_FEEL_PLAN.md C4).
 - **Multiple instances** (`Clay_SetCurrentContext`): not relevant.
 
 ## What this suggests next
