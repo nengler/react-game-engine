@@ -1768,6 +1768,30 @@ sound, action or own-function call, an assignment, `++`) is a statement; any oth
 Not done: diagnostics inside a hook still point at the expanded text's mapping, not "the hook's line, called from the component's".
 
 
+## Bodies: `useBody` (2026-11-13)
+
+`REACT_FEEL_PLAN.md`, A2. Collisions are found after every step and reported to `onCollisionEnter` after the step's update
+("Why collisions are per step"), so a component that moved itself learned it hit a wall a step late, inside it. Kite answered by
+moving in plain functions over the tile grid (`moveActorX` / `moveActorY` with a `blocked(x, y)` the rules write). A body does the
+same for a component, against the world it is mounted in:
+
+- **`Body`** (`runtime/src/body.ts`) is a `PixelActor`: `move(dx, dy)` runs `moveActorX` then `moveActorY` with a `blocked` that
+  asks the world, and returns `{ left, right, up, down, tags }`; `touching(tag)` asks whether a collider with that tag overlaps the
+  box; `place(x, y)` moves it with no collision. Its box is in its owner's parent's space, offset by the parent's world position
+  (not scaled or turned: bodies are boxes on the grid).
+- **What is solid.** The `World` keeps the colliders and tilemaps registered in it (`registerObject`), and answers `solidIn(box,
+  ignore)`: a solid tile of a `<Tilemap solid>` (its `TileGrid.solidAt`, at the map's world position) or a `<Collider solid>` whose
+  box overlaps, not under the body's own component. Both `solid` props are new, default false.
+- **How a body knows its world.** A per-instance object a factory made (`useState(() => createBody(…))`, a "handle" state, now
+  marked `handle` in the IR) is listed by the generated `ownedHandles()`; `GameObject.attachToWorld` calls each one's
+  `attachOwner(owner, world)` if it has one, and `detachFromWorld` its `detachOwner()`. Any runtime object may use this.
+- **`useBody`** is a shipped hook (`hooks/library.ts`): the body in a lazy `useState`, `x` and `y` as state, and `move`,
+  `touching` and `place` as functions of the component (B6) that move the body and set `x` and `y`. So the component renders where
+  the body is, in the step it moved.
+
+Not done: a body is not itself a collider that others hit (a component draws a `<Collider>` at its position), there are no
+one-way platforms or slopes, and Kite still moves with its rules (rewriting it with `useBody` is part of A7's proof).
+
 ## Tilemap, assets and the other built-ins (priority 7)
 
 `<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [NATIVE_PLAN.md](NATIVE_PLAN.md) ("Priority 7 additions"). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.

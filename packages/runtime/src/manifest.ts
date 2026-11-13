@@ -109,7 +109,7 @@ export const runtimeManifest: RuntimeManifest = {
     Entity: ["name"],
     Game: ["name", "id", "title", "width", "height", "background", "assets", "resizable", "vsync", "smooth", "fullscreenKey", "fixedStep", "gamepadDeadzone", "upscale", "showFps", "fpsKey", "font", "controls"],
     Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
-    Collider: ["width", "height", "tag", "layer", "hits", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
+    Collider: ["width", "height", "tag", "layer", "hits", "solid", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
     Pointer: ["width", "height", "originX", "originY", "onPress", "onPointerEnter", "onPointerLeave", "pressKey", "focusable", "autoFocus", "disabled", "onFocus", "onBlur", "contains", "focusPoint"],
     Text: ["text", "size", "sized", "color", "width", "align", "font", "shadow", "shadowX", "shadowY", "outline", "outlineWidth", "maxWidth", "lineGap", "reveal"],
     Shape: ["kind", "width", "height", "color"],
@@ -120,7 +120,7 @@ export const runtimeManifest: RuntimeManifest = {
     ],
     Screen: ["width", "height", "fit", "pixelPerfect", "border"],
     Hud: [],
-    Tilemap: ["map", "image", "layer", "opacity"],
+    Tilemap: ["map", "image", "layer", "opacity", "solid"],
     Particles: ["rate", "burst", "lifetime", "speed", "angle", "spread", "gravity", "color", "endColor", "size", "shrink", "fade", "emitting", "max", "space", "seed", "width", "height", "prewarm", "count", "read", "emit", "emitAt"],
     ParticleLayer: ["particles", "emitBurst"],
     Fade: ["color", "on", "duration", "amount"],
@@ -188,7 +188,7 @@ export const runtimeManifest: RuntimeManifest = {
     "passedChildrenHost", "passedChildrenSlot", "passedChildrenForward", "acceptsPassedChildren", "attachPassedChild", "queueAttachPassedChild", "queueDetachPassedChild", "queueReorderPassedChildren",
     "markDirty", "markChanged", "markMoved", "reportsChanges", "selfChangedAt", "subtreeChangedAt", "contentChangedAt", "drawCache", "drawKind", "runRender", "renderInPass", "commitState", "render", "saveHotState", "loadHotState", "hotFits",
     "onInput", "onUpdate", "onMount", "onUnmount", "keepCleanup", "inert", "modal",
-    "attachToWorld", "detachFromWorld", "$memo",
+    "attachToWorld", "detachFromWorld", "ownedHandles", "$memo",
     // Object.prototype
     "constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable",
   ],
@@ -200,5 +200,5 @@ export const runtimeManifest: RuntimeManifest = {
     },
     Contact: { methods: {}, properties: ["tag", "owner"] },
   },
-  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2, keepIfEqual: 2 },
+  functions: { clamp: 3, freeze: 1, springBack: 3, shakeOn: 2, keepIfEqual: 2, createBody: 1 },
 };

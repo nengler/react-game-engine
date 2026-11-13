@@ -148,6 +148,10 @@ of the rewrite.
 
 ### A2. Movement and collisions answered in the same step: `useBody`
 
+**Built 2026-11-13** as `const { x, y, move, touching, place } = useBody({ … })` (DESIGN.md, "Bodies: `useBody`"): the hook
+returns functions, which B6 made possible, rather than a handle with methods. Not done: the body as a collider others hit, one-way
+platforms, and Kite's movement rewritten with it (left to A7).
+
 **Today.** Collisions are found after every step and reported to `onCollisionEnter` after the step's `useUpdate` (DESIGN.md, "Why
 collisions are per step"). So a component that moves in its update learns it hit a wall one step later, after it is already inside
 it. Kite read tiles in its rules instead, with `moveActorX` / `moveActorY` (`runtime/src/move.ts`), which take a `blocked(x, y)`
@@ -200,10 +204,10 @@ and order is fixed.
 
 **Done when**
 
-- [ ] `useBody` moves against solid tiles and solid colliders and returns the sides it hit, in the same step
-- [ ] `touching(tag)` answers in the same step; parity and replays pass
+- [x] `useBody` moves against solid tiles and solid colliders and returns the sides it hit, in the same step
+- [x] `touching(tag)` answers in the same step; parity and replays pass
 - [ ] Kite's movement is written once with `useBody` in a component as a test (beside its rules, to compare feel and cost)
-- [ ] The guide's "Tilemaps and movement" section leads with it
+- [x] The guide's "Tilemaps and movement" section leads with it
 
 ### A3. Contacts carry data
 

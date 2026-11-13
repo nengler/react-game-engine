@@ -233,8 +233,9 @@ export class HookLowering extends ExpressionLowering {
           }
           const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
           if (!type) continue;
-          if (type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain")) this.handleStates.add(id);
-          state.push({ kind: "State", id, name: field, type, initialValue });
+          const handle = type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain");
+          if (handle) this.handleStates.add(id);
+          state.push({ kind: "State", id, name: field, type, initialValue, ...(handle ? { handle: true as const } : {}) });
           this.stateTypes.set(id, type);
           hooks.push({ kind: "UseState", state: id, setterName: setterMethod, span: this.span(hook.declaration) });
           this.componentScope.declare(hook.valueName, { kind: "state", id });
