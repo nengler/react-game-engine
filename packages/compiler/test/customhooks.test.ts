@@ -166,8 +166,8 @@ function Two() {
     assert.match(recursive[0]!.message, /levels deep|recurse/);
   });
 
-  it("keep the rules of a component: a hook that mutates state in place is the same error it would be inline", () => {
-    const found = compileErrors(`function useBad() { const s = useMutable({ items: [] as number[] }); useUpdate(() => { s.items.push(1); }); } function C() { useBad(); return <Entity name="C" />; }`);
+  it("keep the rules of a component: a hook that returns a list method's result is the same error it would be inline", () => {
+    const found = compileErrors(`function useBad() { const s = useMutable({ items: [] as number[] }); useUpdate(() => { const n = s.items.push(1); s.items = [n]; }); } function C() { useBad(); return <Entity name="C" />; }`);
     assert.ok(found.length > 0);
   });
 

@@ -195,6 +195,10 @@ export class ExpressionLowering extends LoweringBase {
       this.report(DiagnosticCode.UnsupportedExpression, "`await` is not supported: a component runs in the game's steps, which do not wait. Wait with `after(seconds, () => …)`, or keep asynchronous work in a `.ts` file and set state when it is done.", node);
       return null;
     }
+    if ((node.kind === SyntaxKind.PostfixUnaryExpression || node.kind === SyntaxKind.PrefixUnaryExpression) && [SyntaxKind.PlusPlusToken, SyntaxKind.MinusMinusToken].includes((node as unknown as { operator: SyntaxKind }).operator)) {
+      this.report(DiagnosticCode.UnsupportedExpression, "`++` and `--` are statements of their own, on a `let`, a ref property or a `useMutable` field (`s.n++`, `s.foes[i].hp--`); they are not available inside an expression, nor through another name for state's own value.", node);
+      return null;
+    }
     this.report(DiagnosticCode.UnsupportedExpression, `Unsupported expression (${SyntaxKind[node.kind]}).`, node);
     return null;
   }
@@ -616,7 +620,7 @@ export class ExpressionLowering extends LoweringBase {
         };
         this.report(
           code,
-          `\`${name}\` changes \`${list}\` in place, which the component would not see. Give the field a new array: \`${instead[name] ?? `${list} = …`}\`.`,
+          `\`${name}\` changes \`${list}\` in place: write it as a statement of its own (\`${list}.${name}(…);\`), which the compiler turns into a new array. As a value it is not available; for the new array: \`${instead[name] ?? `${list} = …`}\`.`,
           callee.name,
         );
         return null;
@@ -645,23 +649,28 @@ export class ExpressionLowering extends LoweringBase {
       this.report(code, `Optional calls of array methods are not supported: check the value first.`, node);
       return null;
     }
-    const method = ARRAY_METHODS[name as ArrayMethodName];
-    const [min, max] = method.args;
-    const count = node.arguments.length;
-    if (count < min || count > max) {
-      const expected = min === max ? `${min}` : max === Infinity ? `at least ${min}` : `${min} to ${max}`;
-      this.report(code, `\`${name}\` expects ${expected} argument(s).`, node);
-      return null;
-    }
     const receiver = this.lowerNode(callee.expression);
     if (!receiver) return null;
+    return this.lowerArrayCall(receiver, name as ArrayMethodName, node.arguments, node);
+  }
+
+  /** An allowlisted array method called on a receiver already lowered: its arguments counted and lowered (an arrow for a callback). */
+  lowerArrayCall(receiver: ExprIR, name: ArrayMethodName, argNodes: readonly Expression[], at: Node): ExprIR | null {
+    const method = ARRAY_METHODS[name];
+    const [min, max] = method.args;
+    const count = argNodes.length;
+    if (count < min || count > max) {
+      const expected = min === max ? `${min}` : max === Infinity ? `at least ${min}` : `${min} to ${max}`;
+      this.report(DiagnosticCode.UnsupportedExpression, `\`${name}\` expects ${expected} argument(s).`, at);
+      return null;
+    }
     const args: ExprIR[] = [];
-    for (const [i, argument] of node.arguments.entries()) {
+    for (const [i, argument] of argNodes.entries()) {
       const lowered = method.callback && i === 0 ? this.lowerArrow(argument, name) : this.lowerNode(argument);
       if (!lowered) return null;
       args.push(lowered);
     }
-    return { kind: "Call", callee: { kind: "ArrayMethod", receiver, name: name as ArrayMethodName }, args };
+    return { kind: "Call", callee: { kind: "ArrayMethod", receiver, name }, args };
   }
 
   /** Resolves an expression that must be a handler parameter of a named runtime type. */
@@ -700,7 +709,7 @@ export class ExpressionLowering extends LoweringBase {
     }
     this.report(
       DiagnosticCode.UnsupportedStatement,
-      "Only `ref.current`, `let` locals and the members of a handler's own values can be assigned. Use the state setter to change state, including position (`transform={{ x }}`).",
+      "Only `ref.current`, `let` locals and the members of a handler's own values can be assigned. To change state, write through its `useMutable` field (`s.foes[i].hp = 0`, `s.pos.x = 3`) or give the field a new value (`s.foes = s.foes.map(…)`): a name for one of its items (`const e = s.foes[0]`) or a loop variable is a read, not a way to write.",
       node,
     );
     return null;

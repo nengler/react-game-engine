@@ -1,4 +1,4 @@
-import { NodeFlags, SyntaxKind, type ArrowFunction, type BinaryExpression, type Expression, type Node, type PropertyAccessExpression, type Statement } from "typescript/ast";
+import { NodeFlags, SyntaxKind, type ArrowFunction, type BinaryExpression, type CallExpression, type Expression, type Node, type PropertyAccessExpression, type Statement } from "typescript/ast";
 import {
   isArrowFunction,
   isBinaryExpression,
@@ -24,6 +24,9 @@ import {
   isPrefixUnaryExpression,
   isPropertyAccessExpression,
   isElementAccessExpression,
+  isSpreadElement,
+  isNumericLiteral,
+  isStringLiteral,
   isNonNullExpression,
   isReturnStatement,
   isVariableDeclarationList,
@@ -34,6 +37,9 @@ import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import {
   localId,
+  MUTATING_ARRAY_METHODS,
+  type ArrayMethodName,
+  type ArrayElementIR,
   type AssignOperator,
   type BinaryOperator,
   type AssignStmtIR,
@@ -62,6 +68,10 @@ export interface LoweringContext {
   /** Resolves `r.current.prop`; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
   lowerAssignTarget(node: Expression): AssignTargetIR | null;
   stateType(state: StateId): TypeIR;
+  /** `receiver.name(args)` for an allowlisted array method (`toSpliced`, `with`, …), the arguments lowered as a call would. */
+  lowerArrayCall(receiver: ExprIR, name: ArrayMethodName, args: readonly Expression[], at: Node): ExprIR | null;
+  /** Whether a state slot holds a per-instance object (a physics body): its members are called, never written through the field. */
+  isHandleState(state: StateId): boolean;
   /** `s.vx` on a `useMutable` value `s`: its state slot. Undefined if `node` is not on one, "error" after reporting. */
   mutableField(node: PropertyAccessExpression): StateId | "error" | undefined;
   /** False in a `useUnmount` handler: the component is going away, so a state update could never render. */
@@ -601,29 +611,194 @@ const ASSIGNMENT_TOKENS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.GreaterThanGreaterThanEqualsToken, SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
 ]);
 
+/** A step from a `useMutable` field into a value it holds: `.hp`, or `[i]`. `bang` is a `!` after it, kept so the generated code type-checks. */
+type PathStep =
+  | { readonly kind: "prop"; readonly name: string; readonly bang: boolean }
+  | { readonly kind: "index"; readonly index: Expression; readonly bang: boolean };
+
+/** `s.enemies[i].hp`: the field (`s.enemies`) and what is reached through it. */
+interface MutablePath {
+  readonly state: StateId;
+  readonly steps: readonly PathStep[];
+}
+
+/** An index written through a field is worked out twice (once to read, once to write), so it must be a plain value. */
+function isPlainIndex(node: Expression): boolean {
+  const e = unwrapParens(node);
+  if (isNumericLiteral(e) || isStringLiteral(e) || isIdentifier(e)) return true;
+  if (isPropertyAccessExpression(e) || isNonNullExpression(e)) return isPlainIndex(e.expression);
+  if (isElementAccessExpression(e)) return isPlainIndex(e.expression) && isPlainIndex(e.argumentExpression);
+  if (isPrefixUnaryExpression(e)) return e.operator === SyntaxKind.MinusToken && isPlainIndex(e.operand);
+  if (isBinaryExpression(e)) {
+    const k = e.operatorToken.kind;
+    return (k === SyntaxKind.PlusToken || k === SyntaxKind.MinusToken || k === SyntaxKind.AsteriskToken || k === SyntaxKind.PercentToken) && isPlainIndex(e.left) && isPlainIndex(e.right);
+  }
+  return false;
+}
+
 /**
- * `s.vx = value`, `s.vx += value`, `s.vx++` on a `useMutable` value: a write of that state. The handler reads it back at once (a `live`
- * read), so `s.vx += 1; if (s.vx > 3) …` sees the sum. Undefined if `target` is not a `useMutable` field (the caller carries on).
+ * `s.enemies`, `s.enemies[i].hp`, `s.pos.x`: a `useMutable` field and the steps into what it holds. Undefined if `target` does not
+ * start at a field (the caller carries on), null after reporting.
  */
-function lowerMutableWrite(ctx: LoweringContext, target: Expression, operator: AssignOperator, rhs: Expression | null, at: Node): StatementIR | null | undefined {
-  const node = unwrapParens(target);
-  if (!isPropertyAccessExpression(node)) return undefined;
-  const state = ctx.mutableField(node);
-  if (state === undefined) return undefined;
-  if (state === "error") return null;
+function mutablePath(ctx: LoweringContext, target: Expression): MutablePath | null | undefined {
+  const steps: PathStep[] = [];
+  let node = unwrapParens(target);
+  let bang = false;
+  for (;;) {
+    if (isNonNullExpression(node)) {
+      bang = true;
+      node = unwrapParens(node.expression);
+    } else if (isPropertyAccessExpression(node)) {
+      const state = ctx.mutableField(node);
+      if (state === "error") return null;
+      if (state !== undefined) return { state, steps };
+      if (node.questionDotToken) {
+        ctx.error(DiagnosticCode.UnsupportedStatement, "A write through a field cannot use `?.`: check the value first.", node);
+        return null;
+      }
+      steps.unshift({ kind: "prop", name: node.name.text, bang });
+      bang = false;
+      node = unwrapParens(node.expression);
+    } else if (isElementAccessExpression(node)) {
+      if (node.questionDotToken) {
+        ctx.error(DiagnosticCode.UnsupportedStatement, "A write through a field cannot use `?.`: check the value first.", node);
+        return null;
+      }
+      if (!isPlainIndex(node.argumentExpression)) {
+        ctx.error(
+          DiagnosticCode.UnsupportedStatement,
+          "An index written through a field is read and written, so it must be a plain value (a name, a number, a property): compute it into a `const` first.",
+          node.argumentExpression,
+        );
+        return null;
+      }
+      steps.unshift({ kind: "index", index: node.argumentExpression, bang });
+      bang = false;
+      node = unwrapParens(node.expression);
+    } else {
+      return undefined;
+    }
+  }
+}
+
+/**
+ * The new value of a field after a write inside it, as the author would write it by hand: `s.enemies[i].hp -= 1` is
+ * `s.enemies = s.enemies.with(i, { ...s.enemies[i], hp: s.enemies[i].hp - 1 })`. A write copies each level it passes through and
+ * nothing else, so the value the frame committed stays as it was and render and other components compare references as before.
+ * `leaf` gets the current value at the end of the path (a live read) and returns what replaces it.
+ */
+function rebuildPath(ctx: LoweringContext, path: MutablePath, leaf: (current: ExprIR) => ExprIR | null): ExprIR | null {
+  const go = (read: ExprIR, i: number): ExprIR | null => {
+    const step = path.steps[i];
+    if (step === undefined) return leaf(read);
+    if (step.kind === "prop") {
+      const member: ExprIR = { kind: "MemberRead", object: read, name: step.name, optional: false };
+      const value = go(step.bang ? { kind: "NonNull", expression: member } : member, i + 1);
+      return value && { kind: "ObjectLiteral", properties: [{ kind: "Spread", value: read }, { kind: "Property", name: step.name, value }] };
+    }
+    const index = ctx.lowerExpression(step.index);
+    if (!index) return null;
+    const element: ExprIR = { kind: "IndexRead", object: read, index, optional: false };
+    const value = go(step.bang ? { kind: "NonNull", expression: element } : element, i + 1);
+    return value && { kind: "Call", callee: { kind: "ArrayMethod", receiver: read, name: "with" }, args: [index, value] };
+  };
+  return go({ kind: "StateRead", state: path.state, live: true }, 0);
+}
+
+/** True, after reporting, where a field cannot be written: the component body, and `useUnmount`. */
+function writeBlocked(ctx: LoweringContext, at: Node): boolean {
   if (ctx.inRenderBlock()) {
     ctx.error(DiagnosticCode.InvalidComponentBody, "A `useMutable` field cannot be written in the component body: it runs on every render. Write it in a handler (`useUpdate`, `useMount`, a callback prop).", at);
-    return null;
+    return true;
   }
   if (!ctx.canSetState()) {
     ctx.error(DiagnosticCode.UnsupportedStatement, "A `useMutable` field cannot be written in `useUnmount`: the component is going away, so the update could never render. Tell the parent with a callback prop (`onGone?.()`), or write a ref.", at);
-    return null;
+    return true;
   }
+  return false;
+}
+
+/**
+ * `s.vx = value`, `s.vx += value`, `s.vx++` on a `useMutable` value, and the same inside what a field holds (`s.list[i].hp -= 1`,
+ * `s.pos.x = 3`): a write of that state. The handler reads it back at once (a `live` read), so `s.vx += 1; if (s.vx > 3) …` sees the
+ * sum. Undefined if `target` is not on a `useMutable` field (the caller carries on).
+ */
+function lowerMutableWrite(ctx: LoweringContext, target: Expression, operator: AssignOperator, rhs: Expression | null, at: Node): StatementIR | null | undefined {
+  const path = mutablePath(ctx, target);
+  if (path === undefined) return undefined;
+  if (path === null) return null;
+  // A physics body is a per-instance object: its members are called, not written.
+  if (path.steps.length > 0 && ctx.isHandleState(path.state)) return undefined;
+  if (writeBlocked(ctx, at)) return null;
   const value = rhs === null ? ({ kind: "NumberLiteral", value: 1 } as ExprIR) : ctx.lowerExpression(rhs);
   if (!value) return null;
-  if (operator === "=") return { kind: "SetState", state, value };
-  const read: ExprIR = { kind: "StateRead", state, live: true };
-  return { kind: "SetState", state, value: { kind: "Binary", operator: operator.slice(0, -1) as BinaryOperator, left: read, right: value } };
+  const next = rebuildPath(ctx, path, (current) =>
+    operator === "=" ? value : { kind: "Binary", operator: operator.slice(0, -1) as BinaryOperator, left: current, right: value },
+  );
+  return next && { kind: "SetState", state: path.state, value: next };
+}
+
+/**
+ * `s.enemies.push(e)`, `s.enemies[i].tags.splice(0, 1)`, `s.queue.shift()`: an array method that changes a list in place, as a
+ * statement on a field's list. The list is replaced by a copy with the change made (`push` is a spread, `splice` is `toSpliced`).
+ * Undefined if the call is not one of these (the caller carries on).
+ */
+function lowerMutableMethod(ctx: LoweringContext, call: CallExpression): StatementIR | null | undefined {
+  if (!isPropertyAccessExpression(call.expression)) return undefined;
+  const callee = call.expression;
+  const name = callee.name.text;
+  if (!Object.hasOwn(MUTATING_ARRAY_METHODS, name) || name === "forEach") return undefined;
+  const path = mutablePath(ctx, callee.expression);
+  if (path === undefined) return undefined;
+  if (path === null) return null;
+  if (path.steps.length > 0 && ctx.isHandleState(path.state)) return undefined;
+  if (writeBlocked(ctx, call)) return null;
+  if (call.questionDotToken || callee.questionDotToken) {
+    ctx.error(DiagnosticCode.UnsupportedStatement, `\`?.${name}\` is not supported on a field: check the value first.`, call);
+    return null;
+  }
+  const list = callee.expression.getText();
+  const elements = (): ArrayElementIR[] | null => {
+    const out: ArrayElementIR[] = [];
+    for (const argument of call.arguments) {
+      const spread = isSpreadElement(argument);
+      const value = ctx.lowerExpression(spread ? argument.expression : argument);
+      if (!value) return null;
+      out.push({ spread, value });
+    }
+    return out;
+  };
+  const noArguments = (): boolean => {
+    if (call.arguments.length === 0) return true;
+    ctx.error(DiagnosticCode.UnsupportedStatement, `\`${name}\` takes no arguments here.`, call);
+    return false;
+  };
+  const next = rebuildPath(ctx, path, (current): ExprIR | null => {
+    switch (name) {
+      case "push": {
+        const added = elements();
+        return added && { kind: "ArrayLiteral", elements: [{ spread: true, value: current }, ...added] };
+      }
+      case "unshift": {
+        const added = elements();
+        return added && { kind: "ArrayLiteral", elements: [...added, { spread: true, value: current }] };
+      }
+      case "pop":
+        return noArguments() ? { kind: "Call", callee: { kind: "ArrayMethod", receiver: current, name: "slice" }, args: [{ kind: "NumberLiteral", value: 0 }, { kind: "NumberLiteral", value: -1 }] } : null;
+      case "shift":
+        return noArguments() ? { kind: "Call", callee: { kind: "ArrayMethod", receiver: current, name: "slice" }, args: [{ kind: "NumberLiteral", value: 1 }] } : null;
+      case "splice":
+        return ctx.lowerArrayCall(current, "toSpliced", call.arguments, call);
+      case "sort":
+        return ctx.lowerArrayCall(current, "toSorted", call.arguments, call);
+      case "reverse":
+        return noArguments() ? ctx.lowerArrayCall(current, "toReversed", [], call) : null;
+      default:
+        ctx.error(DiagnosticCode.UnsupportedStatement, `\`${name}\` is not supported on a field's list: write \`${list} = ${list}.map(…)\` for the list you want.`, call);
+        return null;
+    }
+  });
+  return next && { kind: "SetState", state: path.state, value: next };
 }
 
 /** `target = value` / `target += value` (ref properties). */
@@ -675,6 +850,10 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (isBinaryExpression(call) && ASSIGNMENT_TOKENS.has(call.operatorToken.kind)) return lowerAssignment(ctx, call);
   const increment = lowerIncrement(ctx, call);
   if (increment !== undefined) return increment;
+  if (isCallExpression(call)) {
+    const method = lowerMutableMethod(ctx, call);
+    if (method !== undefined) return method;
+  }
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
     if (ctx.inRenderBlock() && (callee?.kind === "sound" || callee?.kind === "action")) {

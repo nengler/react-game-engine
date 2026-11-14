@@ -1,7 +1,7 @@
 # State you write directly: a design note
 
 As of 2026-11-14. **Status: decided and built in #121 for a component's own state** (the hook is `useMutable`, and `useState` is
-removed); changing lists in place, and props read live, are still open. "What #121 built" at the end says what was settled and
+removed), as is changing a list or an object in place (option 2, below); props read live are still open. "What #121 built" at the end says what was settled and
 what building it found. Written while reviewing #121 (`useSim`), which adds a second state hook whose fields are
 written directly (`s.vx += 1`) and read back at once in handlers. This note asks the larger question that PR raises: should that be
 the engine's state model, not an extra hook beside `useState`? It changes two settled decisions in [DESIGN.md](DESIGN.md) ("State
@@ -221,7 +221,7 @@ field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games 
 ## Open questions
 
 1. The hook's name: `useMutable` is the lean.
-2. In-place writes to lists and objects: option 3 (versions) is the lean, pending a measure of its speed.
+2. In-place writes to lists and objects: settled as option 2 (copies), see "What #121 built". Revisit if the copy per write is measured to matter.
 3. The update order within a frame (needed by "live everywhere"): tree order with parents first is the lean.
 4. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
    "state that never renders", which may be better said as an option than a second hook.
@@ -247,9 +247,24 @@ Settled:
 - **From outside**, a compiled component's `component.s.vx` reads the committed value and `component.s.vx = 1` writes through the
   setter, so tests and tools write state the way handlers do. `@rge/testing`'s `state()` shows a mutable as `{ s: { vx } }`.
 
+- **In-place writes to lists and objects: option 2, the compiler lowers them to copies** (open question 2). Option 3 (versions) was
+  the lean, and was set aside because a version on the slot cannot reach what the engine compares item by item: a keyed list hands
+  each child its item, a child's props guard is `===`, and an item changed in place is the same object. Copying keeps `===` true
+  to what changed everywhere, needs nothing at run time, and keeps the committed value a snapshot (so rule 2 holds for lists as for
+  numbers). What is lowered, as statements on a path from a field (`s.a`, `s.a[i].b`, `s.a[i].tags`):
+  - `push`, `unshift`, `pop`, `shift`, `splice`, `sort`, `reverse`: a spread, `slice`, `toSpliced`, `toSorted`, `toReversed`;
+  - `=`, the compound operators, `++` and `--` through an index or a property: `with(i, { ...item, hp })` and `{ ...pos, x }`, copying
+    each level the path passes through and sharing the rest.
+
+  What is refused, each with the form to write: the result of one of these methods used as a value; an index that is not plain (it is
+  read and written, so it cannot call anything); `?.`; and a write through another name (`const e = s.list[0]; e.hp = 0`, a loop
+  variable), because the compiler would have to follow the alias, and a helper taking the list could not be followed at all
+  (`readonly` types in the field catch that one in the editor). Index writes need an array; a record is replaced with a spread.
+  The cost is a copy per write: a loop writing every item of a list is quadratic in its length, where the list is hundreds of
+  items, not thousands. A write that needs to be fast can build the list in a local (`const next = s.list.map(…)`) and assign it once.
+
 Still open:
 
-- **In-place writes to lists and objects** (open question 2). `s.list.push(x)` is refused, with the assignment to write instead.
 - **Props read live across components** ("Shared lists: live everywhere", option A). Props and context still carry what the
   parent's last render committed; a child's callback writes the parent's pending value, which the parent's own handlers then read.
   So between components the old one-step lag holds.

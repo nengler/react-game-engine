@@ -329,6 +329,10 @@ export class LoweringBase {
     return { name: decl.name, role: decl.role };
   }
 
+  isHandleState(state: StateId): boolean {
+    return this.handleStates.has(state);
+  }
+
   /** Resolves `s.vx` for a `useMutable` value `s` to its state slot. Undefined if `node` is not on one, "error" after reporting. */
   mutableField(node: PropertyAccessExpression): StateId | "error" | undefined {
     const object = unwrapParens(node.expression);
