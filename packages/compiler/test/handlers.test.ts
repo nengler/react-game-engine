@@ -272,7 +272,8 @@ function C() {
   });
 
   it("rejects hooks that are not top-level statements", () => {
-    assert.ok(codes("useUpdate(() => { useUpdate(() => setN(1)); });").includes(DiagnosticCode.UnsupportedExpression));
+    // One error: the hook's place. (It used to be reported a second time as a call the compiler does not know.)
+    assert.deepEqual(codes("useUpdate(() => { useUpdate(() => setN(1)); });"), [DiagnosticCode.HookNotAtTopLevel]);
     assert.ok(codes("if (n > 0) { useUpdate(() => setN(1)); }").includes(DiagnosticCode.HookNotAtTopLevel));
     const inJsx = compileErrors(`
 function C() {

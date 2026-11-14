@@ -28,6 +28,7 @@ import {
   isReturnStatement,
   isVariableDeclarationList,
   isVariableStatement,
+  isFunctionDeclaration,
 } from "typescript/ast/is";
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
@@ -307,6 +308,15 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
       return value && { kind: "Return", value };
     }
     if (options.returns === "void") {
+      if (statement.expression && options.what === "The component body") {
+        // React's `if (!hero) return null;`: here a component has one return, of its JSX, and the condition goes in it.
+        ctx.error(
+          DiagnosticCode.InvalidComponentBody,
+          "A component returns its JSX once, at the end; an early `return` (`if (dead) return null;`) is not supported. Put the condition in what it returns: `return dead ? null : <Text>…</Text>;`, or `{!dead && <Text>…</Text>}` inside an element.",
+          statement,
+        );
+        return null;
+      }
       if (statement.expression) {
         ctx.error(DiagnosticCode.InvalidHandler, `${options.what} cannot return a value.`, statement);
         return null;
@@ -357,9 +367,20 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     return { kind: "LocalConst", id, name, value, ...(mutable ? { mutable: true as const } : {}), ...(type ? { type } : {}) };
   }
 
+  if (isFunctionDeclaration(statement)) {
+    const name = statement.name?.text ?? "f";
+    ctx.error(
+      DiagnosticCode.UnsupportedStatement,
+      /^[A-Z]/.test(name)
+        ? `Declare the component <${name}> at the top level of the file, not inside another component: each component is compiled on its own, and one declared inside would be made again on every render.`
+        : `Write the function as \`const ${name} = (…) => { … };\`: a function declaration is not supported ${ctx.inRenderBlock() ? "in the component body" : "in a handler"}.`,
+      statement,
+    );
+    return null;
+  }
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
-    `Unsupported statement in handler (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
+    `Unsupported statement ${ctx.inRenderBlock() ? "in the component body" : "in a handler"} (${SyntaxKind[statement.kind]}). Supported: state setter calls, assignments to \`ref.current\` and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
     statement,
   );
   return null;

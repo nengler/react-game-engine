@@ -17,6 +17,20 @@ import { lowerCallbackValue, lowerFunction, lowerFunctionValue } from "./stateme
 import { TIMER_FUNCTIONS, BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
 
+/** What to write instead of a call the browser or Node has and a component does not: the game's clock and its replays decide. */
+const TIMERS_INSTEAD = "runs on the game's clock in a component: `after(seconds, () => …)` calls once and `every(seconds, () => …)` repeats, both pausing with the game and stopping when the component leaves (`cancelTimers()` stops them sooner).";
+const INSTEAD: Readonly<Record<string, string>> = {
+  setTimeout: `There is no \`setTimeout\`: a delay ${TIMERS_INSTEAD}`,
+  setInterval: `There is no \`setInterval\`: a repeat ${TIMERS_INSTEAD}`,
+  clearTimeout: "There is no `clearTimeout`: `cancelTimers()` stops the component's `after` and `every` timers.",
+  clearInterval: "There is no `clearInterval`: `cancelTimers()` stops the component's `after` and `every` timers.",
+  requestAnimationFrame: "There is no `requestAnimationFrame`: `useUpdate((dt, input) => …)` runs every step, with the step's time.",
+  "Math.random": "`Math.random` would make every replay and test play differently. Roll from a seed you keep in state, with a function in a `.ts` file (Hearth's `rules/rng.ts`), so the same input plays the same game.",
+  "Date.now": "`Date.now` is the wall clock, which replays do not repeat: add up the `dt` that `useUpdate((dt) => …)` is given.",
+  "performance.now": "`performance.now` is the wall clock, which replays do not repeat: add up the `dt` that `useUpdate((dt) => …)` is given.",
+  fetch: "`fetch` is not available in a game: load data from the `assets` folder, or from a `.ts` file that imports it.",
+};
+
 export class ExpressionLowering extends LoweringBase {
   protected lowerNode(node: Expression): ExprIR | null {
     if (isParenthesizedExpression(node)) return this.lowerNode(node.expression);
@@ -36,6 +50,8 @@ export class ExpressionLowering extends LoweringBase {
       // `e instanceof Error`: a global constructor or namespace a handler may name as a value.
       if (!binding && this.computes() && (HANDLER_CONSTRUCTORS.has(node.text) || HANDLER_NAMESPACES.has(node.text))) return { kind: "PlainRef", name: node.text };
       if (!binding) {
+        // Declared, but its declaration was refused above: that error is the one to read.
+        if (this.declaredAfterError(node.text)) return null;
         const near = nearest(node.text, [...new Set([...this.scope.names(), ...this.plainImports])]);
         this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${near ? ` (did you mean '${near}'?)` : ""}.`, node);
         return null;
@@ -148,6 +164,10 @@ export class ExpressionLowering extends LoweringBase {
         "An arrow function can only be a callback prop (`onX={() => …}`), a state updater (`setX((x) => …)`) or the argument of an array method (`items.filter((e) => …)`).",
         node,
       );
+      return null;
+    }
+    if (node.kind === SyntaxKind.AwaitExpression) {
+      this.report(DiagnosticCode.UnsupportedExpression, "`await` is not supported: a component runs in the game's steps, which do not wait. Wait with `after(seconds, () => …)`, or keep asynchronous work in a `.ts` file and set state when it is done.", node);
       return null;
     }
     this.report(DiagnosticCode.UnsupportedExpression, `Unsupported expression (${SyntaxKind[node.kind]}).`, node);
@@ -473,6 +493,22 @@ export class ExpressionLowering extends LoweringBase {
       result = { callee: { kind: "Method", receiver: receiver.read, name: callee.name.text }, expected, label: callee.name.text };
     }
     if (!result) {
+      const said = isIdentifier(callee) ? callee.text : isPropertyAccessExpression(callee) && isIdentifier(callee.expression) ? `${callee.expression.text}.${callee.name.text}` : null;
+      const instead = said === null ? undefined : INSTEAD[said];
+      if (instead !== undefined) {
+        this.report(DiagnosticCode.UnsupportedExpression, instead, node);
+        return null;
+      }
+      if (isIdentifier(callee) && !this.scope.has(callee.text)) {
+        if (this.declaredAfterError(callee.text)) return null;
+        const near = nearest(callee.text, [...this.plainImports, ...Object.keys(this.manifest.functions), ...Object.keys(GLOBAL_FUNCTIONS)]);
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          `'${callee.text}' is not a function the compiler knows${near !== null ? ` (did you mean '${near}'?)` : ""}. A component calls functions imported from a \`.ts\` file (\`import { ${callee.text} } from "./rules.ts"\`), its own functions, and ${this.allowlistedCalls()}.`,
+          node,
+        );
+        return null;
+      }
       this.report(DiagnosticCode.UnsupportedExpression, `Only allowlisted calls are supported: ${this.allowlistedCalls()}, and methods of handler parameters.`, node);
       return null;
     }
@@ -522,6 +558,11 @@ export class ExpressionLowering extends LoweringBase {
       if (!args) return null;
       return { kind: "Call", callee: { kind: "ValueMethod", receiver, name }, args };
     }
+    if (name === "forEach") {
+      // It changes nothing itself; its function does, through the variables around it, which the compiler does not follow there.
+      this.report(code, "`forEach` is not supported: write a `for (const item of items) { … }` loop, which works in the component body and in handlers, or `map`, `filter` or `some` for a value.", callee.name);
+      return null;
+    }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
       this.report(
         code,
@@ -531,6 +572,11 @@ export class ExpressionLowering extends LoweringBase {
       return null;
     }
     if (!Object.hasOwn(ARRAY_METHODS, name)) {
+      const near = nearest(name, [...Object.keys(ARRAY_METHODS), ...VALUE_METHODS, ...Object.keys(MUTATING_ARRAY_METHODS)]);
+      if (near !== null) {
+        this.report(code, `'${name}' is not a method the compiler knows: did you mean '${near}'?`, callee.name);
+        return null;
+      }
       this.report(
         code,
         `'${name}' is not an allowlisted call. Supported: ${this.allowlistedCalls()}, methods of handler parameters, the array methods ${Object.keys(ARRAY_METHODS).join(", ")}, and the string and number methods ${[...VALUE_METHODS].join(", ")}.`,

@@ -349,11 +349,15 @@ describe("M5a: diagnostics", () => {
   });
 
   it("rejects mutating array methods, naming the immutable alternative", () => {
-    for (const method of ["push", "splice", "sort", "forEach"]) {
+    for (const method of ["push", "splice", "sort"]) {
       const errors = compileErrors(withHandler(`const [items, setItems] = useState<Item[]>([]);`, `items.${method}((e) => e);`));
       assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedExpression], method);
       assert.match(errors[0]!.message, /in place/, method);
     }
+    // `forEach` changes nothing itself: it is refused for a loop, not as a change in place.
+    const forEach = compileErrors(withHandler(`const [items, setItems] = useState<Item[]>([]);`, `items.forEach((e) => e);`));
+    assert.deepEqual(forEach.map((d) => d.code), [DiagnosticCode.UnsupportedExpression]);
+    assert.match(forEach[0]!.message, /^`forEach` is not supported: write a `for \(const item of items\)/);
     assert.match(compileErrors(withHandler(`const [items, setItems] = useState<Item[]>([]);`, `items.push({ id: "a", n: 1 });`))[0]!.message, /setItems\(\[\.\.\.items, item\]\)/);
   });
 
