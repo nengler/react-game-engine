@@ -6,7 +6,6 @@ export declare const elementIdBrand: unique symbol;
 
 export declare const localIdBrand: unique symbol;
 
-export declare const refIdBrand: unique symbol;
 
 export declare const soundIdBrand: unique symbol;
 
@@ -19,18 +18,11 @@ export type ElementId = string & { readonly [elementIdBrand]: true };
 /** Identifies a parameter or `const` local inside one function body. */
 export type LocalId = string & { readonly [localIdBrand]: true };
 
-/** Identifies a `useRef` value within a component. */
-export type RefId = string & { readonly [refIdBrand]: true };
-
 /** Identifies a `useSound` binding within a component. */
 export type SoundId = string & { readonly [soundIdBrand]: true };
 
 export function soundId(component: string, name: string): SoundId {
   return `${component}.${name}` as SoundId;
-}
-
-export function refId(component: string, name: string): RefId {
-  return `${component}.${name}` as RefId;
 }
 
 export function localId(component: string, name: string, serial: number): LocalId {

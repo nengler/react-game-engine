@@ -64,6 +64,19 @@ describe("what to write instead", () => {
   });
 
 
+  it("useRef: a useMutable field, in the author's own names, once", () => {
+    const source = `export function A() { const timer = useRef(0); useUpdate((dt) => { timer.current += dt; }); return <Text>hi</Text>; }`;
+    const found = getCompiler()
+      .compile("src/A.tsx", `import { Text, useRef, useUpdate } from "@rge/runtime/jsx";\n${source}`)
+      .diagnostics.filter((d) => d.severity === "error");
+    assert.equal(found.length, 1, found.map((e) => `${e.code} ${e.message}`).join("\n"));
+    assert.equal(found[0]!.code, "RGE1102");
+    assert.match(found[0]!.message, /^`useRef` is replaced by `useMutable`.*`const s = useMutable\(\{ timer: 0 \}\)`, read and written as `s\.timer` where `timer\.current` was\./);
+    const imported = getCompiler().compile("src/B.tsx", `import { Entity, useRef } from "@rge/runtime/jsx";\nexport function B() { return <Entity />; }`).diagnostics;
+    assert.equal(imported.length, 1);
+    assert.match(imported[0]!.message, /^`useRef` is replaced by `useMutable`/);
+  });
+
   it("an early return in a form it does not take: the form it takes, and the condition in what is returned", () => {
     const e = only(`interface P { hp: number }\nexport function A({ hp }: P) { if (hp <= 0) { return null; } else { } return <Text>{hp}</Text>; }`);
     assert.equal(e.code, "RGE1002");

@@ -21,13 +21,13 @@ export interface Fix {
   readonly preferred?: boolean;
 }
 
-/** What moves a file from `useState` to `useMutable`: the compiler (`Compiler.convertToMutable`), which parses it. */
+/** What moves a file from `useState` and `useRef` to `useMutable`: the compiler (`Compiler.convertToMutable`), which parses it. */
 export interface MutableConverter {
   convertToMutable(fileName: string, text: string): { readonly text: string; readonly changed: boolean };
 }
 
 /**
- * The fixes for one diagnostic in `source`. With `converter`, a `useState` is offered its move to `useMutable`: the whole file
+ * The fixes for one diagnostic in `source`. With `converter`, a `useState` or `useRef` is offered its move to `useMutable`: the whole file
  * at once, since every read and every setter call of the state changes with it.
  */
 export function fixesFor(source: string, diagnostic: CompilerDiagnostic, converter?: MutableConverter): Fix[] {
@@ -54,10 +54,11 @@ export function fixesFor(source: string, diagnostic: CompilerDiagnostic, convert
     case "RGE1108":
       return /^Take actions with/.test(diagnostic.message) ? wholeStateToActions(source, span.start, span.end) : [];
     case "RGE1102": {
-      if (/^`useState` is replaced by `useMutable`/.test(diagnostic.message)) {
+      const replaced = /^`(useState|useRef)` is replaced by `useMutable`/.exec(diagnostic.message)?.[1];
+      if (replaced !== undefined) {
         if (converter === undefined) return [];
         const converted = converter.convertToMutable(span.fileName, source);
-        return converted.changed ? [{ title: "Move this file's useState to useMutable", edits: [{ start: 0, end: source.length, text: converted.text }], preferred: true }] : [];
+        return converted.changed ? [{ title: `Move this file's ${replaced} to useMutable`, edits: [{ start: 0, end: source.length, text: converted.text }], preferred: true }] : [];
       }
       return replaceReactHook(source, span.start, span.end);
     }

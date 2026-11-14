@@ -337,7 +337,7 @@ Still open:
     the list's filter and an alternate element applied), an item's own children, and nested children (the getter reads the
     child's own props live, recursively). Doing it for some of these and not others gives the two rules depending on where an
     element sits, which this note calls the worst outcome. It was built in steps: the direct case, then list items and keys; the cases above still read the last render: `generator/elements.ts` (`propGetters`, `emitList`) and `GameObject.liveProp`.
-- **`useRef`** (open question 4) is unchanged; **game-state actions** (open question 5) are proposed in "The game state: actions write, readers read", not built.
+- **`useRef`** (open question 4) was removed (see MUTABLE_STATE_FOLLOWUPS.md); **game-state actions** (open question 5) are proposed in "The game state: actions write, readers read", not built.
 
 Found while building it:
 

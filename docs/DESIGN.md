@@ -13,6 +13,8 @@ editor's quick fix and `tools/codemod-mutable.ts` convert a file (`codemod/mutab
 pending value, a setter, a hot-reload key), so what they say about storage, rendering and saving holds; what they say about
 setters, updaters and a handler seeing a snapshot does not.
 
+**No `useRef` either, since the same change.** A value that persists and never renders is a `useMutable` field the JSX does not read (`const s = useMutable({ timer: 0 })`, `s.timer -= dt`, where `timer.current -= dt` was). A write marks the component, which re-runs `render()`, but each part of it is guarded by what it reads, so a field nothing reads changes nothing drawn. A `useRef` is `RGE1102`, whose message writes out the conversion; the same codemod and quick fix convert it (a ref used as a value, such as returned from a hook, is left for a person: return the `useMutable` instead). A field cannot be written in `useUnmount`, which a ref could (see "Lifecycle"); to tell the parent, call a callback prop (`onGone?.()`): the update would have nowhere to render.
+
 ## Ground rules and settled decisions
 
 A change that breaks one of these rules needs a design note first, as Phase 3's [NATIVE_PLAN.md](NATIVE_PLAN.md) was for the player. That document adds the player's own rules (the runtime stays backend-free; `@rge/player` and `@rge/runtime` import nothing from Node; `rge.h` is the source of truth for the protocol; the C side does no maths): see its [Ground rules](NATIVE_PLAN.md#ground-rules).
@@ -36,7 +38,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
 | State reads in handlers | `useMutable` (2026-11-14, #121; it replaces `useState`, whose React snapshot semantics were decided 2026-11-08): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. "Every handler in a frame sees the same state" becomes "every handler sees the latest writes, in the order handlers run; render sees the frame's committed state". See [MUTABLE_STATE.md](MUTABLE_STATE.md) |
 | Global state | One nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
-| Refs | Refs hold values only (`const timer = useRef(0)`, or any type given as an argument, `useRef<Point[]>([])`, except one that names an element; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
+| Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`RGE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
@@ -139,7 +141,7 @@ ignored):
 
 * A component is a top-level `function` declaration or `const` arrow function
   with a capitalised name (optionally `export`ed, or the module's default
-  export) whose body is: hooks (`useState`, `useRef`, `useSound`, the handler hooks),
+  export) whose body is: hooks (`useMutable`, `useSound`, the handler hooks),
   `const name = expression;` derived values, then one `return`. An arrow with
   an expression body (`const Dot = () => <Sprite … />`) is just its return. A derived `const` (`const hurt = health < 25;`) may read
   anything declared above it; it is inlined where it is used, so JSX that uses
@@ -182,9 +184,8 @@ ignored):
   element (`<Entity>`, `<Sprite>`, `<Collider>`, `<Text>`, `<Shape>`, `<Camera>`,
   `<AnimatedSprite>`, `<Pointer>`; the root or a child),
   relative to its parent unless
-  it sets `global: true`. There is no transform hook. Refs hold values:
-  `const timer = useRef(0)`, read and written as `timer.current` in handlers.
-  There is no `ref={…}` on elements. See "Transforms and refs".
+  it sets `global: true`. There is no transform hook. A value that never renders is a `useMutable`
+  field. There is no `ref={…}` on elements. See "Transforms and refs".
 * Hooks: top-level `useInput((input) => ...)`, `useUpdate((dt) => ...)`,
   `useMount(() => ...)` and `useUnmount(() => ...)` statements; each may
   appear several times and runs in source order.
@@ -448,7 +449,7 @@ in its world when its own hook runs.
 **State.** `useMount` may set state: the setter schedules a render, which runs
 in the same `World.flush()` that mounted it. `useUnmount` may not (`RGE1402`):
 the component is going away, so the update could never render. It may read
-state, write refs, and call callback props, which is how the parent finds out
+state and call callback props, which is how the parent finds out
 (`onDone?.()`). A callback created for a list item can still read its item
 there (see "Keyed lists").
 
@@ -1478,28 +1479,15 @@ re-evaluates all of the component's dynamic props; the IR already records each
 prop's `dependencies`, so a later optimisation can re-evaluate only the props
 whose state changed.
 
-**useRef** (values that never render): `const cooldown = useRef(0)` (or
-`useRef<number>(0)`; types as for `useState`) is a value that persists across
-frames but is not state. `RefIR { id, name, type, initialValue }` in
-`ComponentIR.refs` compiles to a plain field (`cooldown: number = 0`);
-`cooldown.current` reads it (`RefRead`) and `cooldown.current -= dt` writes it
-(`Assign` with a `RefCurrent` target). Neither marks anything dirty, so a ref
-is for bookkeeping nothing on screen depends on: timers, accumulators,
-previous values. Refs do not point at elements or components: what is on
-screen is driven by state and props, so `ref={…}` on any element is `RGE1106`
-(`RGE1404`, which guarded writes through element refs, is retired). The
-initial value must not read state, and a ref name must not clash with state
-(`RGE1106`).
-
-**Reads only in handlers**: `ref.current` in JSX, a `useState` initialiser or
-a derived `const` would be evaluated at render and then go stale, because
-changing a ref never renders. That is `RGE1304`. Use state for anything JSX
-depends on.
+**useRef** was removed on 2026-11-14 (docs/MUTABLE_STATE_FOLLOWUPS.md). It held a value that persists and never renders; since a `useMutable`
+field is written directly and read at once in a handler, a ref was a field that happened not to render, spelt `r.current` and readable in
+handlers only. The IR lost `RefIR`, `RefRead` and the `RefCurrent` assignment target, and `RGE1304` (a `ref.current` read in JSX) is
+retired. `ref={…}` on any element is still `RGE1106`, and `useRef` is `RGE1102`.
 
 **useSound** (M15): `const playHit = useSound("hit.wav")` binds a sound, and
 `playHit()` as a statement in a handler (`useUpdate`, `useInput`, `useMount`,
 `onCollisionEnter`, `onPress`, a callback inside an `if`) plays it. It is a
-top-level hook like `useRef`, with one binding per call, so two bindings of the
+top-level hook like `useMutable`, with one binding per call, so two bindings of the
 same path are independent. The path is a string literal (`RGE1107` otherwise),
 so a missing asset can be reported at build time once there is an asset list.
 `SoundIR { id, name, path }` in `ComponentIR.sounds` compiles to a field
@@ -2004,7 +1992,7 @@ component body is replaced, before the file is compiled, by the hook's own state
 rest of the compiler is unchanged and every rule and diagnostic applies to the expanded component):
 
 ```tsx
-function usePlatformerBody() { const step = useGame((s) => s.step); const buttons = useRef(0); useInput(…); useUpdate((dt) => { step(buttons.current, dt); }); }
+function usePlatformerBody() { const step = useGame((s) => s.step); const s = useMutable({ buttons: 0 }); useInput(…); useUpdate((dt) => { step(s.buttons, dt); }); }
 export function Player() { usePlatformerBody(); … }
 ```
 
@@ -2205,9 +2193,9 @@ parent (compiling one file at a time) cannot see. A function passed to a
 built-in, `key` and `children` are errors (`RGE1203`, `RGE1202`).
 
 **Reads.** A prop may be read in JSX, conditions, derived values, handlers,
-`transform` fields, and the initial value of `useState` / `useRef` (read once,
+`transform` fields, and the initial value of a `useMutable` field (read once,
 at construction, as in React); a `useState` initial that is a primitive prop
-takes its type from the prop's declaration. State and refs are unchanged.
+takes its type from the prop's declaration. State is unchanged.
 
 **Placement.** `transform` on a component element sets the child's
 `placement`, which composes under the child's own `transform`
@@ -2565,7 +2553,7 @@ change. A host can also show its own error (`player.showError(error, note)`): th
 **Hot reload** (priority 5, 2026-11-11). `player.reload(config)` builds `config.root` again, from a newer build of the game's
 classes, and puts it in place of the current root in the same window and world. What carries over:
 
-- **Each component's own state.** The compiler gives a component with `useState` or `useRef` a `saveHotState()` (its values by
+- **Each component's own state.** The compiler gives a component with `useMutable` state a `saveHotState()` (its values by
   their IR ids, `"Coin.taken"`, the pending value a setter wrote included) and a `loadHotState(saved)` that writes them back as a
   setter would and marks the component dirty. `captureHotState(root)` collects them by **tree path**: each object is named by its
   class and its index among its siblings of that class (`Main/Level:0/Player:0`), so a component keeps its state when the code

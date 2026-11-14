@@ -1,5 +1,5 @@
 // The IR of a module and its declarations: components, hooks, state, refs and sounds.
-import { type StateId, type RefId, type SoundId, type SourceSpan } from "./ids.ts";
+import { type StateId, type SoundId, type SourceSpan } from "./ids.ts";
 import { type TypeIR, type FunctionIR } from "./values.ts";
 import { type HostElementIR, type PropDeclIR } from "./elements.ts";
 import { type ExprIR } from "./expressions.ts";
@@ -73,8 +73,6 @@ export interface ComponentIR {
   readonly hooks: readonly HookIR[];
   /** Persistent storage slots created by hooks. */
   readonly state: readonly StateIR[];
-  /** `useRef` values: mutable fields that never cause a render. */
-  readonly refs: readonly RefIR[];
   /** `useSound` bindings: a sound each, played by calling its function in a handler. */
   readonly sounds: readonly SoundIR[];
   /** Functions declared in the body (`const handleHit = (id: string) => { … }`): handlers of the component's own, kept in fields. */
@@ -104,7 +102,7 @@ export interface ComponentIR {
 // Hooks and state
 // ---------------------------------------------------------------------------
 
-/** Hook declarations. (`useRef` is not a hook entry: its handle is a `RefIR` in `ComponentIR.refs`.) */
+/** Hook declarations. */
 export type HookIR = UseStateHookIR | OnUpdateHookIR | OnInputHookIR | OnMountHookIR | OnUnmountHookIR;
 
 /**
@@ -127,25 +125,6 @@ export interface SoundIR {
   /** Also the generated field name. */
   readonly name: string;
   readonly path: string;
-  readonly span: SourceSpan;
-}
-
-/**
- * `const cooldown = useRef(0)`: a value that persists across frames and
- * renders but is not state. Reading or writing `cooldown.current` never marks
- * anything dirty, so it is for bookkeeping nothing on screen depends on
- * (timers, accumulators, previous values). Refs hold values only; there is no
- * `ref={…}` on elements.
- */
-export interface RefIR {
-  readonly kind: "Ref";
-  readonly id: RefId;
-  /** Also the generated field name. */
-  readonly name: string;
-  /** A primitive inferred from the initial value, or the type argument (`useRef<Point[]>([])`). */
-  readonly type: TypeIR;
-  /** Must not read state. */
-  readonly initialValue: ExprIR;
   readonly span: SourceSpan;
 }
 

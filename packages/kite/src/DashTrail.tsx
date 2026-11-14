@@ -1,4 +1,4 @@
-import { Entity, Sprite, useRef, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Sprite, useMutable, useUpdate } from "@rge/runtime/jsx";
 
 /** One copy of the character: where its feet were in the world, which way it faced, and how old it is. */
 interface Ghost {
@@ -26,17 +26,15 @@ interface DashTrailProps {
  * each copy is placed back from where the character is now to where it was.
  */
 export function DashTrail({ dashing, x, y, height, flipX }: DashTrailProps) {
-  const s = useMutable({ ghosts: [] as Ghost[] });
-  const wait = useRef(0);
-  const made = useRef(0);
+  const s = useMutable({ ghosts: [] as Ghost[], wait: 0, made: 0 });
 
   useUpdate((dt) => {
-    wait.current -= dt;
+    s.wait -= dt;
     const aged = s.ghosts.map((g) => ({ ...g, age: g.age + dt })).filter((g) => g.age < 0.3);
-    if (dashing && wait.current <= 0) {
-      wait.current = 0.08;
-      made.current += 1;
-      s.ghosts = [...aged, { id: made.current, x: x + 4, y: y + height, flipX, age: 0 }];
+    if (dashing && s.wait <= 0) {
+      s.wait = 0.08;
+      s.made += 1;
+      s.ghosts = [...aged, { id: s.made, x: x + 4, y: y + height, flipX, age: 0 }];
     } else if (s.ghosts.length > 0) {
       s.ghosts = aged;
     }

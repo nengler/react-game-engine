@@ -1,10 +1,9 @@
-import type { ExprIR, LocalId, RefId, SoundId, StateId, TypeIR } from "../ir/types.ts";
+import type { ExprIR, LocalId, SoundId, StateId, TypeIR } from "../ir/types.ts";
 
 type Binding =
   | { readonly kind: "state"; readonly id: StateId }
   /** `const s = useMutable({ vx: 0 })`: each field is a state slot, read and written as `s.vx`. */
   | { readonly kind: "mutable"; readonly name: string; readonly fields: ReadonlyMap<string, StateId> }
-  | { readonly kind: "ref"; readonly id: RefId; readonly name: string }
   /** A `useSound` function: only called, as a statement in a handler. */
   | { readonly kind: "sound"; readonly id: SoundId; readonly name: string }
   /** A game-state action (`const collect = useGame((s) => s.collect)`): only called, as a statement in a handler. */

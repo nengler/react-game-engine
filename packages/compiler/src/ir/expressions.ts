@@ -1,5 +1,5 @@
 // The IR of expressions: reads, literals, calls, array methods and operators.
-import { type StateId, type LocalId, type RefId } from "./ids.ts";
+import { type StateId, type LocalId } from "./ids.ts";
 import { type FunctionIR, type ParamIR } from "./values.ts";
 
 
@@ -20,7 +20,6 @@ export type ExprIR =
   | ParamReadIR
   | PropertyReadIR
   | PropReadIR
-  | RefReadIR
   | MemberReadIR
   | IndexReadIR
   | NonNullIR
@@ -154,12 +153,6 @@ export interface PropReadIR {
   readonly name: string;
   /** In a handler: the prop as the parent has it now (`liveProp`), not as its last render copied it. */
   readonly live?: true;
-}
-
-/** `r.current`: the ref's current value. Only valid inside handlers (a JSX read would never update). */
-export interface RefReadIR {
-  readonly kind: "RefRead";
-  readonly ref: RefId;
 }
 
 /**

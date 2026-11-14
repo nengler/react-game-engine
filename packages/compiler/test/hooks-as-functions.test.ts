@@ -46,24 +46,13 @@ export function Pair() {
     assert.equal(pair.text, "3 1");
   });
 
-  it("return a ref by itself", async () => {
-    const counter = await run<Text>(`function useCounter() { const count = useRef(0); return count; }
-export function Counter() {
-  const steps = useCounter();
-  const s = useMutable({ shown: 0 });
-  useUpdate(() => { steps.current += 1; s.shown = steps.current; });
-  return <Text>{s.shown}</Text>;
-}`, "Counter", 3);
-    assert.equal(counter.text, "3");
-  });
-
   it("take a callback", async () => {
     const ticker = await run<Text>(`function useEvery(seconds: number, fn: () => void) {
-  const elapsed = useRef(0);
+  const s = useMutable({ elapsed: 0 });
   useUpdate((dt) => {
-    elapsed.current += dt;
-    if (elapsed.current >= seconds) {
-      elapsed.current = 0;
+    s.elapsed += dt;
+    if (s.elapsed >= seconds) {
+      s.elapsed = 0;
       fn();
     }
   });

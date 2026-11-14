@@ -30,7 +30,7 @@ function checkSource(source: string): { code: string; message: string }[] {
     .map((d) => ({ code: d.code, message: d.message }));
 }
 
-const IMPORTS = `import { useMutable, useRef, useUpdate, useInput, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";`;
+const IMPORTS = `import { useMutable, useUpdate, useInput, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";`;
 
 describe("M7: the authoring module", () => {
   it("exports exactly the hooks, built-in elements and functions the compiler accepts, and the engine's own custom hooks", () => {
@@ -51,11 +51,10 @@ describe("M7: type-checking authored TSX", () => {
   it("accepts a component that uses every hook, built-in and a transform", () => {
     const source = `${IMPORTS}
 function Hero() {
-  const s = useMutable({ health: 100, title: "hero", alive: (true) as boolean });
-  const travelled = useRef(0);
+  const s = useMutable({ health: 100, title: "hero", alive: (true) as boolean, travelled: 0 });
   useUpdate((dt) => {
     s.health = clamp(s.health - dt, 0, 100);
-    travelled.current += dt;
+    s.travelled += dt;
   });
   useInput((input) => {
     if (input.pressed("Space")) s.title = \`hero \${input.pointerX}\`;
@@ -120,8 +119,7 @@ function Level() { return <Entity name="level"><Coin value={1} transform={{ x: 1
     for (const body of [`s.n = "a";`, `s.nope = 1;`, `r.current = "a";`, `useUpdate((dt) => dt.x);`, `useInput((input) => input.nope);`]) {
       const errors = checkSource(`${IMPORTS}
 function C() {
-  const s = useMutable({ n: 0 });
-  const r = useRef(0);
+  const s = useMutable({ n: 0, r: 0 });
   ${body}
   return <Entity />;
 }`);
@@ -191,8 +189,8 @@ function C() {
   });
 
   it("checks every hook kind, including the ones that shaped earlier tests", () => {
-    for (const hook of ["useMutable", "useRef", "useUpdate", "useInput"]) {
-      const body = hook === "useMutable" ? `const a = useMutable({ n: 0 });` : hook === "useRef" ? `const a = useRef(0);` : `${hook}(() => {});`;
+    for (const hook of ["useMutable", "useUpdate", "useInput"]) {
+      const body = hook === "useMutable" ? `const a = useMutable({ n: 0 });` : `${hook}(() => {});`;
       const others = ["Entity", ...AUTHORING_HOOKS.filter((h) => h !== hook)].join(", ");
       const result = codes(`import { ${others} } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`);
       assert.deepEqual(result, [DiagnosticCode.MissingImport], hook);

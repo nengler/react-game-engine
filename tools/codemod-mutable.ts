@@ -74,7 +74,7 @@ export function convertTestFile(parser: TsxParser, fileName: string, text: strin
     const sf = parsed.sourceFile;
     const visit = (node: Node): void => {
       const template = isNoSubstitutionTemplateLiteral(node) || isTemplateExpression(node);
-      if (template && text.slice(node.getStart(sf), node.getEnd()).includes("useState")) {
+      if (template && /use(State|Ref)\b/.test(text.slice(node.getStart(sf), node.getEnd()))) {
         const start = node.getStart(sf) + 1;
         const end = node.getEnd() - 1;
         const { code, holes } = cook(text.slice(start, end));
@@ -107,7 +107,7 @@ if (process.argv[1]?.endsWith("codemod-mutable.ts")) {
   try {
     for (const file of args.filter((a) => !a.startsWith("--")).flatMap(filesUnder)) {
       const text = readFileSync(file, "utf8");
-      const result = file.endsWith(".tsx") ? convertToMutable(parser, file, text) : file.endsWith(".ts") && text.includes("useState") ? convertTestFile(parser, file, text) : null;
+      const result = file.endsWith(".tsx") ? convertToMutable(parser, file, text) : file.endsWith(".ts") && /use(State|Ref)\b/.test(text) ? convertTestFile(parser, file, text) : null;
       if (result === null) continue;
       for (const p of result.problems) console.log(`${file}:${p}`);
       problems += result.problems.length;

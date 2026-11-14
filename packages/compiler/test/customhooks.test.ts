@@ -15,13 +15,12 @@ after(() => {
 
 const SOURCE = `
 function useRunner(speed: number, key: string) {
-  const s = useMutable({ x: 0 });
-  const dir = useRef(0);
+  const s = useMutable({ x: 0, dir: 0 });
   useInput((input) => {
-    dir.current = input.down(key) ? 1 : 0;
+    s.dir = input.down(key) ? 1 : 0;
   });
   useUpdate((dt) => {
-    s.x += dir.current * speed * dt;
+    s.x += s.dir * speed * dt;
   });
   const far = s.x > 50;
   return { x: s.x, far };
@@ -128,8 +127,8 @@ function Two() {
     const compiled = compile(
       `function useBeep(path: string, volume: number, count: number) {
          const play = useSound(path);
-         const seen = useRef(0);
-         useUpdate(() => { if (count !== seen.current) { seen.current = count; play(volume); } });
+         const s = useMutable({ seen: 0 });
+         useUpdate(() => { if (count !== s.seen) { s.seen = count; play(volume); } });
        }
        function Hit() { const s = useMutable({ hits: 0 }); useBeep("hit.wav", 0.5, s.hits); return <Entity name="H" />; }`,
       "Hit.tsx",
@@ -191,7 +190,7 @@ function Two() {
 
   it("still type-check as authored source: the author's editor sees an ordinary function", () => {
     const found = getCompiler().typeCheckSources([
-      { fileName: `${process.cwd()}/.test-output/H${Math.random()}.tsx`, text: `import { Entity, useMutable, useRef, useInput, useUpdate } from "@rge/runtime/jsx";\n${SOURCE}` },
+      { fileName: `${process.cwd()}/.test-output/H${Math.random()}.tsx`, text: `import { Entity, useMutable, useInput, useUpdate } from "@rge/runtime/jsx";\n${SOURCE}` },
     ]);
     assert.deepEqual(found, []);
   });

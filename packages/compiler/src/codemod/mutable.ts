@@ -114,6 +114,12 @@ const MUTABLE_NAMES = ["s", "st", "state", "local", "mutable"];
 
 /** Convert one TSX source. `lineOffset` is added to reported lines (a snippet's line in the file that holds it). */
 export function convertToMutable(parser: TsxParser, fileName: string, text: string, lineOffset = 0): Converted {
+  const states = convertStates(parser, fileName, text, lineOffset);
+  const refs = convertRefs(parser, fileName, states.text, lineOffset);
+  return { text: refs.text, changed: states.changed || refs.changed, problems: [...states.problems, ...refs.problems] };
+}
+
+function convertStates(parser: TsxParser, fileName: string, text: string, lineOffset: number): Converted {
   const parsed = parser.parse(fileName, text);
   try {
     const sf = parsed.sourceFile;
@@ -374,6 +380,197 @@ export function convertToMutable(parser: TsxParser, fileName: string, text: stri
         const index = specifiers.indexOf(state);
         const start = index < specifiers.length - 1 ? state.getStart(sf) : specifiers[index - 1]!.getEnd();
         const end = index < specifiers.length - 1 ? specifiers[index + 1]!.getStart(sf) : state.getEnd();
+        edits.push({ start, end, text: "" });
+      }
+    }
+    return { text: applyEdits(text, edits), changed: true, problems };
+  } finally {
+    parsed.dispose();
+  }
+}
+
+/** `const r = useRef(init)` (or `useRef<T>(init)`), as a component body's statement; null if it is not one. */
+function useRefOf(statement: Node, text: string, sf: SourceFile): { name: string; init: Node | null; type: string | null } | null {
+  if (!isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) return null;
+  if ((statement.declarationList.flags & NodeFlags.Const) === 0) return null;
+  const d = statement.declarationList.declarations[0]!;
+  const call = d.initializer;
+  if (!call || !isCallExpression(call) || !isIdentifier(call.expression) || call.expression.text !== "useRef" || !isIdentifier(d.name)) return null;
+  const typeArgument = call.typeArguments?.[0];
+  return { name: d.name.text, init: call.arguments[0] ?? null, type: typeArgument ? text.slice(typeArgument.getStart(sf), typeArgument.getEnd()) : null };
+}
+
+/**
+ * From `useRef` to a `useMutable` field (docs/MUTABLE_STATE_FOLLOWUPS.md, "Decided: remove `useRef`"): `const timer = useRef(0)` becomes a
+ * field `timer: 0` of the function's `useMutable` (one is made if there is none, and a field is added to it if there is), and
+ * `timer.current` becomes `s.timer`. A ref used as a value (`return timer`, `useThing(timer)`) is where it stops.
+ */
+function convertRefs(parser: TsxParser, fileName: string, text: string, lineOffset: number): Converted {
+  if (!text.includes("useRef")) return { text, changed: false, problems: [] };
+  const parsed = parser.parse(fileName, text);
+  try {
+    const sf = parsed.sourceFile;
+    const edits: Edit[] = [];
+    const problems: string[] = [];
+    const lineOf = (pos: number): number => text.slice(0, pos).split("\n").length + lineOffset;
+    const src = (n: Node): string => text.slice(n.getStart(sf), n.getEnd());
+    let converted = 0;
+    let total = 0;
+
+    const functions: Node[] = [];
+    const findFunctions = (node: Node): void => {
+      if ((isFunctionDeclaration(node) || isArrowFunction(node) || isFunctionExpression(node)) && node.body && isBlock(node.body) && node.body.statements.some((s) => useRefOf(s, text, sf) !== null)) {
+        functions.push(node);
+        return;
+      }
+      for (const c of children(node)) findFunctions(c);
+    };
+    findFunctions(sf);
+    total = functions.length;
+
+    for (const fn of functions) {
+      const body = (fn as unknown as { body: Node }).body;
+      const statements = (body as unknown as { statements: readonly Node[] }).statements;
+      const fnName = isFunctionDeclaration(fn) && fn.name ? fn.name.text : "(arrow)";
+      const fail = (at: Node, why: string): void => {
+        problems.push(`${lineOf(at.getStart(sf))}: ${fnName}: ${why}`);
+      };
+      const refs: { name: string; field: string; comment: string; statement: Node }[] = [];
+      let ok = true;
+      for (const statement of statements) {
+        const found = useRefOf(statement, text, sf);
+        if (found === null) continue;
+        if (found.init === null) {
+          fail(statement, `useRef(${found.name}) has no initial value`);
+          ok = false;
+          continue;
+        }
+        let field = src(found.init);
+        if (found.type !== null) {
+          const init = found.init;
+          const simple = isIdentifier(init) || init.kind === SyntaxKind.NullKeyword || init.kind === SyntaxKind.ArrayLiteralExpression || init.kind === SyntaxKind.ObjectLiteralExpression || init.kind === SyntaxKind.NumericLiteral || init.kind === SyntaxKind.StringLiteral || isCallExpression(init) || isPropertyAccessExpression(init) || isParenthesizedExpression(init);
+          field = `${simple ? field : `(${field})`} as ${found.type}`;
+        }
+        const leading = text.slice(statement.pos, statement.getStart(sf));
+        refs.push({ name: found.name, field, comment: leading.includes("/") ? leading.trim() : "", statement });
+      }
+      if (!ok) continue;
+
+      // The function's own useMutable, if it has one: the fields join it.
+      let existing: { name: string; literal: Node; properties: readonly Node[] } | null = null;
+      for (const statement of statements) {
+        if (!isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) continue;
+        const d = statement.declarationList.declarations[0]!;
+        const call = d.initializer;
+        if (!call || !isCallExpression(call) || !isIdentifier(call.expression) || call.expression.text !== "useMutable" || !isIdentifier(d.name)) continue;
+        const arg = call.arguments[0];
+        if (arg === undefined || arg.kind !== SyntaxKind.ObjectLiteralExpression) continue;
+        existing = { name: d.name.text, literal: arg, properties: (arg as unknown as { properties: readonly Node[] }).properties };
+        break;
+      }
+
+      const used = new Set<string>();
+      const collect = (n: Node): void => {
+        if (isIdentifier(n)) used.add(n.text);
+        for (const c of children(n)) collect(c);
+      };
+      collect(fn);
+      const m = existing !== null ? existing.name : MUTABLE_NAMES.find((n) => !used.has(n));
+      if (m === undefined) {
+        fail(fn, "no free name for the useMutable");
+        continue;
+      }
+      const taken = new Set(existing?.properties.map((p) => (isPropertyAssignment(p) && isIdentifier(p.name) ? p.name.text : isShorthandPropertyAssignment(p) ? (p.name as unknown as { text: string }).text : "")) ?? []);
+      const clash = refs.find((r) => taken.has(r.name));
+      if (clash !== undefined) {
+        fail(clash.statement, `the useMutable already has a field '${clash.name}'`);
+        continue;
+      }
+
+      // Each `name.current` becomes `m.name`; the ref used any other way is where it stops. A parameter or local of the same name hides it.
+      const names = new Set(refs.map((r) => r.name));
+      const local: Edit[] = [];
+      let bad = false;
+      const walk = (node: Node, parent: Node | null, shadowed: ReadonlySet<string>): void => {
+        if (refs.some((r) => r.statement === node)) return;
+        let inner = shadowed;
+        if (node !== body && node !== fn) {
+          const own = declaredBy(node);
+          if (own.size > 0) inner = new Set([...shadowed, ...[...own].filter((n) => names.has(n))]);
+        }
+        if (isIdentifier(node) && names.has(node.text) && !shadowed.has(node.text) && parent !== null) {
+          const isMember = isPropertyAccessExpression(parent) && parent.name === node;
+          const isKey = (isPropertyAssignment(parent) && parent.name === node) || (isJsxAttribute(parent) && parent.name === node);
+          const isDeclaration = (isVariableDeclaration(parent) || isBindingElement(parent) || isParameterDeclaration(parent) || isFunctionDeclaration(parent)) && (parent as unknown as { name: Node }).name === node;
+          if (!isMember && !isKey && !isDeclaration) {
+            if (isPropertyAccessExpression(parent) && parent.expression === node && parent.name.text === "current") {
+              local.push({ start: parent.getStart(sf), end: parent.getEnd(), text: `${m}.${node.text}` });
+            } else if (isShorthandPropertyAssignment(parent)) {
+              fail(node, `'${node.text}' is used as a value: change it by hand`);
+              bad = true;
+            } else {
+              fail(node, `'${node.text}' is used as a value, not as '${node.text}.current': change it by hand`);
+              bad = true;
+            }
+          }
+        }
+        for (const c of children(node)) walk(c, node, inner);
+      };
+      walk(body, fn, new Set());
+      if (bad) continue;
+
+      if (existing === null) {
+        const first = refs[0]!.statement;
+        const indent = /[ \t]*$/.exec(text.slice(0, first.getStart(sf)))![0];
+        const multiline = refs.length > 3 || refs.some((r) => r.comment !== "") || refs.map((r) => r.field).join("").length > 70;
+        const fields = refs.map((r) => `${r.name}: ${r.field}`);
+        const declaration = multiline
+          ? `const ${m} = useMutable({\n${refs.map((r, i) => `${r.comment !== "" ? `${indent}  ${r.comment.split("\n").map((l) => l.trim()).join(`\n${indent}  `)}\n` : ""}${indent}  ${fields[i]},`).join("\n")}\n${indent}});`
+          : `const ${m} = useMutable({ ${fields.join(", ")} });`;
+        const leading = text.slice(first.pos, first.getStart(sf));
+        const from = refs[0]!.comment !== "" ? first.pos + leading.search(/\S/) : first.getStart(sf);
+        edits.push({ start: from, end: first.getEnd(), text: declaration });
+      } else {
+        const last = existing.properties[existing.properties.length - 1];
+        const literalText = src(existing.literal);
+        const multiline = literalText.includes("\n");
+        const indent = multiline && last !== undefined ? /[ \t]*$/.exec(text.slice(0, last.getStart(sf)))![0] : "";
+        const added = refs.map((r) => `${r.comment !== "" ? `${r.comment} ` : ""}${r.name}: ${r.field}`);
+        if (last === undefined) {
+          edits.push({ start: existing.literal.getStart(sf), end: existing.literal.getEnd(), text: `{ ${added.join(", ")} }` });
+        } else if (multiline) {
+          const afterLast = text.slice(last.getEnd());
+          const comma = afterLast.startsWith(",");
+          const at = last.getEnd() + (comma ? 1 : 0);
+          edits.push({ start: at, end: at, text: `${comma ? "" : ","}${added.map((a) => `\n${indent}${a},`).join("")}` });
+        } else {
+          edits.push({ start: last.getEnd(), end: last.getEnd(), text: `, ${added.join(", ")}` });
+        }
+        for (const r of refs) edits.push({ start: r.statement.pos, end: r.statement.getEnd(), text: "" });
+      }
+      if (existing === null) for (const r of refs.slice(1)) edits.push({ start: r.statement.pos, end: r.statement.getEnd(), text: "" });
+      edits.push(...local);
+      converted++;
+    }
+
+    if (converted === 0) return { text, changed: false, problems };
+
+    // The import: `useMutable` in place of `useRef`, or beside it while a function the codemod stopped at still uses it.
+    const allConverted = converted === total;
+    for (const statement of sf.statements) {
+      if (!isImportDeclaration(statement) || !statement.importClause?.namedBindings || !isNamedImports(statement.importClause.namedBindings)) continue;
+      const specifiers = statement.importClause.namedBindings.elements;
+      const ref = specifiers.find((s) => isImportSpecifier(s) && s.name.text === "useRef");
+      if (ref === undefined) continue;
+      const hasMutable = specifiers.some((s) => s.name.text === "useMutable");
+      if (!allConverted) {
+        if (!hasMutable) edits.push({ start: ref.getEnd(), end: ref.getEnd(), text: ", useMutable" });
+      } else if (!hasMutable) {
+        edits.push({ start: ref.getStart(sf), end: ref.getEnd(), text: "useMutable" });
+      } else {
+        const index = specifiers.indexOf(ref);
+        const start = index < specifiers.length - 1 ? ref.getStart(sf) : specifiers[index - 1]!.getEnd();
+        const end = index < specifiers.length - 1 ? specifiers[index + 1]!.getStart(sf) : ref.getEnd();
         edits.push({ start, end, text: "" });
       }
     }

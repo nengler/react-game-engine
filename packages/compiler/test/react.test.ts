@@ -128,7 +128,6 @@ function Pickup() {
     assert.ok(compile(`function C() { const f = () => 1; return <Entity />; }`).code.includes("readonly f = () =>"));
     // `let` and loops in the body are a render block since REACT_FEEL_PLAN.md A1 (render-blocks.test.ts); `var` is not.
     assert.deepEqual(codes("var a = 1;"), [DiagnosticCode.InvalidComponentBody]);
-    assert.ok(codes("const r = useRef(0); const s = r.current;").includes(DiagnosticCode.HandleReadOutsideHandler));
   });
 
   it("gives every handler the latest writes, in the order they run, and renders once (docs/MUTABLE_STATE.md)", async () => {

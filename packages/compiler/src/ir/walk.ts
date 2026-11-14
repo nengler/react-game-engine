@@ -28,7 +28,6 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "StateRead":
     case "LocalRead":
     case "ParamRead":
-    case "RefRead":
     case "PropRead":
       return [];
     case "PropertyRead":

@@ -30,9 +30,9 @@ interface FlameProps {
 }
 
 function Flame({ fps }: FlameProps) {
-  const ticks = useRef(0);
+  const s = useMutable({ ticks: 0 });
   useUpdate(() => {
-    ticks.current += 1;
+    s.ticks += 1;
   });
   return <AnimatedSprite frames={["f1.png", "f2.png"]} fps={fps} />;
 }
@@ -44,13 +44,13 @@ interface LoopProps {
 const Loop = ({ frames }: LoopProps) => <AnimatedSprite frames={frames} fps={2} />;
 
 function Twice() {
-  const ticks = useRef(0);
+  const s = useMutable({ ticks: 0 });
   useUpdate((dt) => {
-    ticks.current += 1;
+    s.ticks += 1;
   });
   useUpdate(() => {
-    if (ticks.current > 100) return;
-    ticks.current += 10;
+    if (s.ticks > 100) return;
+    s.ticks += 10;
   });
   return <AnimatedSprite frames={["t1.png", "t2.png"]} fps={4} />;
 }
@@ -62,11 +62,11 @@ interface WalkerInstance extends Entity {
   s: { [field: string]: unknown };
 }
 interface FlameInstance extends AnimatedSprite {
-  ticks: number;
+  s: { ticks: number };
   updateProps(next: { fps: number }): void;
 }
 interface TwiceInstance extends AnimatedSprite {
-  ticks: number;
+  s: { ticks: number };
 }
 interface LoopInstance extends AnimatedSprite {
   updateProps(next: { frames: string[] }): void;
@@ -105,7 +105,7 @@ describe("M13: IR and generated code", () => {
 
   it("calls super first in a hook override on a component rooted at one that implements the hook", () => {
     assert.match(compiled.code, /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(\);\n\s+\}/);
-    assert.match(compiled.code, /#onUpdate0\(\): void \{\n\s+this\.ticks \+= 1;/);
+    assert.match(compiled.code, /#onUpdate0\(\): void \{\n\s+this\.\$set_s_ticks\(this\.#\$s_ticksNext \+ 1\);/);
   });
 
   it("calls super once, then each handler in order, when there are several", () => {
@@ -113,10 +113,10 @@ describe("M13: IR and generated code", () => {
   });
 
   it("does not add super to a component whose root does not implement the hook", () => {
-    const plain = compile(`function C() { const r = useRef(0); useUpdate(() => { r.current += 1; }); return <Shape kind="rect" width={1} height={1} />; }`);
+    const plain = compile(`function C() { const s = useMutable({ r: 0 }); useUpdate(() => { s.r += 1; }); return <Shape kind="rect" width={1} height={1} />; }`);
     assert.doesNotMatch(plain.code, /super\.onUpdate/);
     assert.match(plain.code, /override onUpdate\(\): void \{/);
-    const mount = compile(`function C() { const r = useRef(0); useMount(() => { r.current += 1; }); return <Camera />; }`);
+    const mount = compile(`function C() { const s = useMutable({ r: 0 }); useMount(() => { s.r += 1; }); return <Camera />; }`);
     assert.doesNotMatch(mount.code, /super\.onMount/, "the camera does not implement onMount");
   });
 
@@ -214,7 +214,7 @@ describe("M13: runtime behaviour", () => {
     assert.ok(flame instanceof AnimatedSprite);
     world.tick(0.1);
     world.tick(0.1);
-    assert.equal(flame.ticks, 2, "its own handler ran");
+    assert.equal(flame.s.ticks, 2, "its own handler ran");
     assert.equal(flame.image, "f1.png", "and the sprite advanced two frames, back to the first");
     world.tick(0.1);
     assert.equal(flame.image, "f2.png");
@@ -253,7 +253,7 @@ describe("M13: runtime behaviour", () => {
     const twice = new Twice();
     world.mount(twice);
     world.tick(0.25);
-    assert.equal(twice.ticks, 11, "both handlers ran");
+    assert.equal(twice.s.ticks, 11, "both handlers ran");
     assert.equal(twice.image, "t2.png", "and the sprite advanced");
   });
 });
@@ -275,7 +275,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
     const withSuper = (manifest: typeof runtimeManifest) => {
       const compiler = new (getCompiler().constructor as new (config: object) => ReturnType<typeof getCompiler>)({ manifest });
       try {
-        const result = compiler.compile("C.tsx", `import { Shape, useUpdate, useRef } from "@rge/runtime/jsx";\nfunction C() { const r = useRef(0); useUpdate((dt) => { r.current += dt; }); return <Shape kind="rect" width={1} height={1} />; }`);
+        const result = compiler.compile("C.tsx", `import { Shape, useUpdate, useMutable } from "@rge/runtime/jsx";\nfunction C() { const s = useMutable({ r: 0 }); useUpdate((dt) => { s.r += dt; }); return <Shape kind="rect" width={1} height={1} />; }`);
         assert.ok(result.ok, JSON.stringify(result.diagnostics));
         return result.code;
       } finally {

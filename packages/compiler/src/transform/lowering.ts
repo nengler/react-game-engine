@@ -3,7 +3,7 @@ import { SyntaxKind, type Expression, type PropertyAccessExpression, type Node, 
 import { isPropertyAccessExpression, isIdentifier, isArrayTypeNode, isUnionTypeNode, isBindingElement, isFunctionDeclaration, isImportClause, isImportSpecifier, isNamespaceImport, isParameterDeclaration, isVariableDeclaration } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type OwnFunctionIR, type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType, type StateIR, type HookIR } from "../ir/types.ts";
+import { type OwnFunctionIR, type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType, type StateIR, type HookIR } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
 import { type GameStateDefinition } from "../gamestate/schema.ts";
 import { type RuntimeManifest } from "@rge/runtime";
@@ -18,7 +18,7 @@ const CSS_ALIASES: Readonly<Record<string, string>> = { "flex-start": "start", "
  * (never assigned directly), so leaving the stretch always restores it.
  */
 export interface LoweringMode {
-  /** In a handler or callback body: the only place `ref.current` may be read. */
+  /** In a handler or callback body: where a handler's own `let` locals live. */
   readonly inHandler: boolean;
   /** In a `useUnmount` handler: the component is going away, so a setter could never render. */
   readonly inUnmount: boolean;
@@ -87,7 +87,6 @@ export class LoweringBase {
   protected slotSeen = false;
   /** A `{children}` was written where it cannot go (already reported, so the missing slot is not reported again). */
   protected slotRejected = false;
-  protected readonly refs: RefIR[] = [];
   protected readonly sounds: SoundIR[] = [];
   /** Functions declared in the body (`const handleHit = (id: string) => { … }`). */
   protected readonly functions: OwnFunctionIR[] = [];
@@ -347,18 +346,6 @@ export class LoweringBase {
     return id;
   }
 
-  /** Resolves `r.current` for a ref `r`. Undefined if `node` is not on a ref (the caller carries on), "error" after reporting. */
-  protected refAccess(node: PropertyAccessExpression): RefId | "error" | undefined {
-    const object = unwrapParens(node.expression);
-    const binding = isIdentifier(object) ? this.scope.get(object.text) : undefined;
-    if (binding?.kind !== "ref") return undefined;
-    if (node.name.text !== "current") {
-      this.report(DiagnosticCode.UnsupportedExpression, `Refs only have \`.current\`, not '${node.name.text}'.`, node.name);
-      return "error";
-    }
-    return binding.id;
-  }
-
   /** The primitive type of a name, if it is a parameter or state slot whose type is known to be primitive. */
   protected knownPrimitive(node: Expression): ValueType | null {
     const target = unwrapParens(node);
@@ -401,7 +388,7 @@ export class LoweringBase {
   }
 
   /**
-   * The field a state, ref or sound named `name` is kept in: `name` itself, or, when that is a member the runtime's object
+   * The field a state or sound named `name` is kept in: `name` itself, or, when that is a member the runtime's object
    * already has (`name` of an `<Entity>` root, `image` of a `<Sprite>`, `parent`), `$name`, so the author's name never clashes
    * with the root built-in. `$` names are the compiler's own. Null (after reporting) when this component already declared it.
    */

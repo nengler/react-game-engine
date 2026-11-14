@@ -336,10 +336,6 @@ describe("M5a: diagnostics", () => {
     assert.match(compile(withHandler(`const s = useMutable({ item: { id: "a", n: 1 } });`, ``)).code, /\$s_item: \{ id: string; n: number \} = /);
   });
 
-  it("keeps refs to values: a type that names an element is rejected", () => {
-    assert.deepEqual(codes(withHandler(`const r = useRef<Sprite | null>(null);`, ``)), [DiagnosticCode.InvalidUseRef]);
-  });
-
   it("rejects mutating array methods used as values, naming the statement and the immutable alternative", () => {
     for (const method of ["push", "splice", "sort"]) {
       const errors = compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `const r = s.items.${method}((e) => e);`));

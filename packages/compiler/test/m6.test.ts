@@ -31,7 +31,7 @@ after(() => {
 });
 
 const WORLD = `
-import { type Child, Entity, Sprite, useMount, useRef, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite, useMount, useMutable, useUpdate } from "@rge/runtime/jsx";
 
 interface EnemyProps {
   speed: number;
@@ -82,9 +82,9 @@ interface ProbeProps {
 }
 
 export function Probe({ tag }: ProbeProps) {
-  const mounted = useRef(0);
+  const s = useMutable({ mounted: 0 });
   useMount(() => {
-    mounted.current += 1;
+    s.mounted += 1;
   });
   return <Entity name={tag} />;
 }
@@ -475,7 +475,8 @@ describe("M6: loadScene", () => {
   it("mounts every object once, children first, however deep", () => {
     const w = new World();
     const ids = loadScene(w, { version: 1, entities: [{ id: "f", prefab: "Frame", props: { title: "t" }, children: [{ id: "p", prefab: "Probe", props: { tag: "p" } }] }] }, world.prefabs);
-    assert.equal((ids.get("p") as unknown as { mounted: number }).mounted, 1);
+    w.flush();
+    assert.equal((ids.get("p") as unknown as { s: { mounted: number } }).s.mounted, 1);
   });
 
   it("returns every object, nested ones included, by id", () => {

@@ -138,7 +138,6 @@ class ComponentLowering extends ElementLowering implements LoweringContext {
       span: this.span(this.component.declaration),
       hooks,
       state,
-      refs: this.refs,
       sounds: this.sounds,
       functions: this.functions,
       props,

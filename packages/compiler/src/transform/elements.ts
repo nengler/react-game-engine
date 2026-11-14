@@ -605,7 +605,7 @@ export class ElementLowering extends HookLowering {
         continue;
       }
       if (name === "ref") {
-        this.report(DiagnosticCode.InvalidUseRef, "Elements cannot be referenced: refs hold values (`const timer = useRef(0)`), and what is on screen is driven by state and props.", attribute);
+        this.report(DiagnosticCode.ElementRef, "Elements cannot be referenced: what is on screen is driven by state and props. Keep what you need from an element (a position, a count) in a `useMutable` field.", attribute);
         continue;
       }
       const init = attribute.initializer;

@@ -107,9 +107,6 @@ export class ExpressionLowering extends LoweringBase {
         case "sound":
           this.report(DiagnosticCode.SoundOutsideHandler, `'${node.text}' is a sound: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
           return null;
-        case "ref":
-          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a ref; read and write \`${node.text}.current\`.`, node);
-          return null;
         case "action":
           this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a game-state action: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
           return null;
@@ -336,7 +333,7 @@ export class ExpressionLowering extends LoweringBase {
     return { kind: "Arrow", params: lowered.params, body: only.value };
   }
 
-  /** `ref.current`, or `param.name` where `param` is a handler parameter of a runtime handle type. */
+  /** `param.name` where `param` is a handler parameter of a runtime handle type. */
   protected lowerPropertyRead(node: PropertyAccessExpression): ExprIR | null {
     // `s.battle.gold` in a computed selector: the snapshot of that path.
     const storePath: string[] = [];
@@ -362,19 +359,6 @@ export class ExpressionLowering extends LoweringBase {
     const mutable = this.mutableField(node);
     if (mutable === "error") return null;
     if (mutable) return { kind: "StateRead", state: mutable, ...(this.mode.inHandler ? { live: true as const } : {}) };
-    const ref = this.refAccess(node);
-    if (ref === "error") return null;
-    if (ref) {
-      if (!this.mode.inHandler) {
-        this.report(
-          DiagnosticCode.HandleReadOutsideHandler,
-          "`ref.current` can only be read inside handlers: refs never cause a render, so a read here would go stale. Use state for values JSX depends on.",
-          node,
-        );
-        return null;
-      }
-      return { kind: "RefRead", ref };
-    }
     const receiver = this.handleParam(node.expression);
     const name = node.name.text;
     if (receiver) {
@@ -693,9 +677,6 @@ export class ExpressionLowering extends LoweringBase {
   }
 
   lowerAssignTarget(node: Expression): AssignTargetIR | null {
-    const ref = isPropertyAccessExpression(node) ? this.refAccess(node) : undefined;
-    if (ref === "error") return null;
-    if (ref) return { kind: "RefCurrent", ref };
     // `best.hits = 0`, `grid[y]![x] = 1`: into a value the handler made.
     if ((isPropertyAccessExpression(node) || isElementAccessExpression(node)) && this.ownsValue(node)) {
       const target = this.lowerNode(node);
@@ -707,9 +688,13 @@ export class ExpressionLowering extends LoweringBase {
       this.report(DiagnosticCode.UnsupportedStatement, `'${binding.name}' is a \`const\`: declare it with \`let\` to assign to it.`, node);
       return null;
     }
+    // A name whose declaration was refused already has its error (`useRef`, a failed `const`): the write is not reported again.
+    let root: Expression = node;
+    while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root)) root = unwrapParens(root.expression);
+    if (isIdentifier(root) && !this.scope.has(root.text) && this.declaredAfterError(root.text)) return null;
     this.report(
       DiagnosticCode.UnsupportedStatement,
-      "Only `ref.current`, `let` locals and the members of a handler's own values can be assigned. To change state, write through its `useMutable` field (`s.foes[i].hp = 0`, `s.pos.x = 3`) or give the field a new value (`s.foes = s.foes.map(…)`): a name for one of its items (`const e = s.foes[0]`) or a loop variable is a read, not a way to write.",
+      "Only `let` locals and the members of a handler's own values can be assigned. To change state, write through its `useMutable` field (`s.foes[i].hp = 0`, `s.pos.x = 3`) or give the field a new value (`s.foes = s.foes.map(…)`): a name for one of its items (`const e = s.foes[0]`) or a loop variable is a read, not a way to write.",
       node,
     );
     return null;

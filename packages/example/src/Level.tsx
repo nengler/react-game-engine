@@ -1,4 +1,4 @@
-import { useMutable, useRef, useUpdate, AnimatedSprite, Camera, Entity, Sprite, Collider, Pointer, Shape, Text } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, AnimatedSprite, Camera, Entity, Sprite, Collider, Pointer, Shape, Text } from "@rge/runtime/jsx";
 import Coin, { Trail } from "./Coin.tsx";
 import { Banner } from "./Banner.tsx";
 import { Panel } from "./Panel.tsx";
@@ -10,13 +10,12 @@ interface EnemyProps {
 }
 
 export function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
-  const s = useMutable({ hp: 3 });
-  const reported = useRef(false);
+  const s = useMutable({ hp: 3, reported: false });
 
   useUpdate((dt) => {
     s.hp -= dt * speed;
-    if (s.hp <= 0 && !reported.current) {
-      reported.current = true;
+    if (s.hp <= 0 && !s.reported) {
+      s.reported = true;
       onDefeated?.();
     }
   });

@@ -97,9 +97,8 @@ export function Counter({ n }: P) {
 describe("what statements in the body may not do", () => {
   const codes = (body: string) =>
     compileErrors(`function C() {
-  const s = useMutable({ n: 0 });
+  const s = useMutable({ n: 0, r: 0 });
   const playHit = useSound("hit.wav");
-  const r = useRef(0);
   ${body}
   return <Entity />;
 }`).map((d) => d.code);
