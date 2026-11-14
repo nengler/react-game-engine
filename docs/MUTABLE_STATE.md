@@ -49,7 +49,7 @@ useUpdate((dt) => {
 ```
 
 Each field is still a state slot as `useState` makes it: it renders when it changes, it is saved, and hot reload and rewind keep it.
-(Name to be settled: `useSim` reads as "for simulations"; this note calls it `useSim` because #121 does.)
+(Name to be settled, `useMutable` is the lean: `useSim` reads as "for simulations"; this note calls it `useSim` because #121 does.)
 
 ### 2. One timing rule, for all state
 
@@ -99,23 +99,27 @@ largest piece of work here, and the question to settle before anything else:
 
 The first, with per-handler batching, looks like the right start: it changes nothing downstream.
 
-## `useState`
+## One hook: `useState` is removed
 
-Kept, compiling with React's semantics, so React code and examples still work as written. It stops being taught: the guide, the
-template and the README use the direct form, and a diagnostic offers to convert a `useState` where a handler copies state into locals
-and writes it back, or reads a value right after setting it.
+Leaning (2026-11-14): one state hook, named for what it is (`useMutable` or similar), and `useState` removed. Keeping both leaves a
+choice every author has to make between two hooks that hold the same kind of value; renaming the direct hook to `useState` would
+give React's name a meaning React code does not expect (`setA(b); setB(a)` and `setX(x + 1)` twice behave differently). A new name
+says plainly that this is not React's hook.
+
+`useState` becomes a diagnostic that names the replacement and shows the conversion (`const [hp, setHp] = useState(3)` becomes a
+field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games move with a codemod.
 
 ## What changes
 
 - DESIGN.md's decisions table: "State reads in handlers" and "Mutating state in place" are replaced by rules 1, 2 and the list decision.
 - REACT_FEEL_PLAN.md: "written like React" becomes "React's model, with state you write directly".
-- The guide, the template and the README teach the direct form first.
+- The guide, the template and the README teach the direct form only.
 - Kite, Hearth and Bramble move to it (#121 does `Runner`, `Enemy`, `Tower` and `Play`); the rest can be a codemod, since each
   `useState` maps to a field.
 
 ## Open questions
 
-1. The hook's name.
+1. The hook's name: `useMutable` is the lean.
 2. In-place writes to lists and objects: copies or tracking (above).
 3. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
    "state that never renders", which may be better said as an option than a second hook.
