@@ -39,10 +39,9 @@ function parse(output: string): Map<string, number> {
 
 let failures = 0;
 
-function check(engine: string, output: string, budgets: Record<string, number>): void {
+function check(engine: string, output: string, results: Map<string, number>, budgets: Record<string, number>): void {
   console.log(`--- ${engine} ---`);
   console.log(output.trimEnd());
-  const results = parse(output);
   console.log(`\n${"scene".padEnd(45)} ${"ms".padStart(8)} ${"budget".padStart(8)}`);
   for (const [scene, limit] of Object.entries(budgets)) {
     const ms = results.get(scene);
@@ -70,7 +69,23 @@ function check(engine: string, output: string, budgets: Record<string, number>):
 
 const run = (command: string, commandArgs: string[]): string => execFileSync(command, commandArgs, { cwd: root, encoding: "utf8", maxBuffer: 1 << 24 });
 
-check("Node", run(process.execPath, [bench]), budget.node);
+/**
+ * A shared runner has noisy neighbours, and a scene that takes hundredths of a millisecond can be slowed several times over by
+ * one. Slowness from noise does not repeat, a real regression does: so a failing run is measured again (up to twice), keeping each
+ * scene's best time, and only a scene that is over budget every time fails.
+ */
+const attempts = 3;
+let output = run(process.execPath, [bench]);
+let results = parse(output);
+for (let attempt = 1; attempt < attempts; attempt++) {
+  const over = Object.entries(budget.node).some(([scene, limit]) => (results.get(scene) ?? Infinity) > limit);
+  if (!over) break;
+  console.log(`Over budget; measuring again (${attempt + 1} of ${attempts}), keeping the best time per scene.\n`);
+  output = run(process.execPath, [bench]);
+  for (const [scene, ms] of parse(output)) results.set(scene, Math.min(ms, results.get(scene) ?? Infinity));
+}
+
+check("Node", output, results, budget.node);
 
 if (failures > 0) {
   console.error(`${failures} bench check(s) failed. If a change made a scene slower on purpose, raise its budget in packages/player/bench/budget.json and say why.`);
