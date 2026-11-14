@@ -124,7 +124,8 @@ function C() {
 }`,
       );
       assert.ok(result.ok, result.diagnostics.map((d) => d.message).join("\n"));
-      assert.match(result.code, /_useTime1_s_time/);
+      // The hook's own state is named after it (`time`), numbered because the component already has a `time`.
+      assert.match(result.code, /\$time2_time/);
     } finally {
       compiler.close();
     }

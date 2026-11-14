@@ -280,9 +280,9 @@ Found while building it:
   changed, not the next). The tests that pinned the old timing were updated to the new one, with the reason written beside them.
 - **The codemod is mechanical, and `setX(x + 1); use(x + 1)` is the pattern to check after it.** With a snapshot, `use(x + 1)` read
   the old `x`; converted to `s.x += 1; use(s.x + 1)` it adds one twice. One test hit exactly this (`sharing.test.ts`).
-- **A hook's internal mutable keeps a call-specific name** where the hook returns fields rather than the object (`useBody` returns
-  `{ x, y, move, … }` from `b`): its state is saved as `_useBody1_b.x`. Tests that read a body's position read where the component
-  draws instead. Naming it after the hook (`body.x`) would make it readable; not done.
+- **A hook's internal mutable was named for its call** where the hook returns fields rather than the object (`useBody` returns
+  `{ x, y, move, … }` from `b`): its state was saved as `_useBody1_b.x`. It is now named after the hook, `body.x` (`body2` for a
+  second call or where the component has a `body`), which `t.state()` and the inspector show.
 - **The updater paths in the compiler were unreachable once `useState` went** (`SetState` with an `updater`, `lowerSetState`,
   `updaterInPlace`, the setter binding, `inUpdater`); they are removed.
 
