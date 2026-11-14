@@ -270,12 +270,17 @@ Still open:
   the parent gives it (`GameObject.propGetters`, read as `this.$live.health`, a property so TypeScript narrows it), so a child
   after the one that wrote `s.health` in the tree order sees the new value in the same step (`liveprops.test.ts`). Render reads what the
   frame committed, as before. A getter under a condition (`tower !== null && <Tower …/>`) says nothing where the condition no longer
-  holds, and the child's last props stand. Not built yet, so these still read what the parent's last render copied (the old one-step lag):
-  - children made inside a keyed list, and any element with a `key` (it is a list of one): a getter has to find its item again by key in
-    the live list, and must not read the next key's value while the old instance is on its way out (`key={page}` with `label={page}`
-    first showed it: the old page unmounted as the new one). No getter is made for them until that lookup exists;
+  holds, and the child's last props stand. A list item (`{s.foes.map((f) => <Watch key={f.id} hp={f.hp} />)}`, also with a spread of the
+  item or a condition on it) has its item found again by key in the live list, the source and the filter read live, so a sibling's write
+  to an item shows in the step; an item whose key is gone says nothing, so an old page that is on its way out as `key={page}` changes
+  keeps reading its own last props, not the next key's (`liveprops.test.ts`). Not built yet, so these still read what the parent's last
+  render copied (the old one-step lag):
   - a value passed by context (`<Ctx.Provider value={s.x}>`);
+  - what is below a list item (an item's own children), and a list item that switches between two elements (`c ? <A key … /> : <B key … />`);
   - a callback prop is never live (it is created once).
+  A getter in a list item finds its item with a `find` over the live list on each read, so a child reading several props in many items
+  costs a pass of the list per read; Hearth's wave 10 and the bench budget are within bounds, and a per-frame cache is the way to cut it
+  if a game needs that.
   The way in that was built is the second of these; the first was looked at and not built:
   - *Render the parent before a child's handler runs, when the parent has pending writes.* It reuses what the engine has (a render
     already pushes props into the children with `updateProps`), but a child's callback writes the parent again, so the parent
@@ -286,8 +291,7 @@ Still open:
     makes a child: a plain element, a conditional one, a keyed list's items (the item found again by key in the live list, with
     the list's filter and an alternate element applied), an item's own children, and nested children (the getter reads the
     child's own props live, recursively). Doing it for some of these and not others gives the two rules depending on where an
-    element sits, which this note calls the worst outcome. It is being built in steps, so for now the two rules do exist, as listed
-    above, until the list, key and context cases are done: `generator/elements.ts` (`propGetters`, `emitList`) and `GameObject.liveProp`.
+    element sits, which this note calls the worst outcome. It was built in steps: the direct case, then list items and keys; the cases above still read the last render: `generator/elements.ts` (`propGetters`, `emitList`) and `GameObject.liveProp`.
 - **`useRef`** (open question 4) and **game-state actions** (open question 5) are unchanged.
 
 Found while building it:

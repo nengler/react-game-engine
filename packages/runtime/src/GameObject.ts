@@ -77,8 +77,9 @@ export class GameObject<P extends object = {}> {
         const value = own() as P[K];
         if (value !== undefined) return value;
       } else if (getters["$all"] !== undefined) {
-        const value = (getters["$all"]() as P)[name];
-        if (value !== undefined) return value;
+        // Nothing, where the item or the condition it was made under is gone: the last props stand.
+        const all = getters["$all"]() as P | undefined;
+        if (all !== undefined && all[name] !== undefined) return all[name];
       }
     }
     return this.props[name];

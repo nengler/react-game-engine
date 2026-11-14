@@ -27,7 +27,7 @@ async function run(source: string, steps = 1): Promise<{ root: Entity; find: (na
     world.flush();
   }
   const find = (name: string): Entity & { s: Record<string, unknown> } => {
-    const walk = (o: Entity): Entity | null => (o.constructor.name === name ? o : (o.children.map((c) => walk(c as Entity)).find((x) => x !== null) ?? null));
+    const walk = (o: Entity): Entity | null => (o.constructor.name === name || o.name === name ? o : (o.children.map((c) => walk(c as Entity)).find((x) => x !== null) ?? null));
     return walk(root) as Entity & { s: Record<string, unknown> };
   };
   return { root, find };
@@ -85,5 +85,65 @@ export function Parent() {
   return <Entity><Hurt onHit={hit} /><Show health={s.health} /></Entity>;
 }`);
     assert.equal(find("Show").name, "hp80", "after the frame's render, the committed value");
+  });
+});
+
+describe("props read live: list items", () => {
+  const ITEMS = `${HURT}
+interface Foe { id: number; hp: number }
+export function Watch({ id, hp }: { id: number; hp: number }) { const s = useMutable({ saw: -1 }); useUpdate(() => { s.saw = hp; }); return <Entity name={"w" + id} />; }
+`;
+
+  it("an item's prop is found again by key in the live list: a sibling's write to the item shows in the step", async () => {
+    const { find } = await run(`${ITEMS}
+export function Parent() {
+  const s = useMutable({ foes: [{ id: 1, hp: 10 }, { id: 2, hp: 10 }] as Foe[] });
+  const hit = (n: number) => { s.foes[1]!.hp -= n; };
+  return <Entity><Hurt onHit={hit} />{s.foes.map((f) => <Watch key={f.id} id={f.id} hp={f.hp} />)}</Entity>;
+}`);
+    assert.equal(find("w2").s.saw, 10 - 20, "the item as the parent has it now");
+    assert.equal(find("w1").s.saw, 10, "another item is as it was");
+  });
+
+  it("a spread of the item, under a condition on it: where the condition no longer holds, the last props stand", async () => {
+    const compiled = compile(`${HURT}
+interface Foe { id: number; hp: number }
+export function See({ id, hp, onSee }: { id: number; hp: number; onSee: (line: string) => void }) { useUpdate(() => { onSee(id + ":" + hp); }); return <Entity />; }
+export function Parent({ onSee }: { onSee: (line: string) => void }) {
+  const s = useMutable({ foes: [{ id: 1, hp: 10 }, { id: 2, hp: 10 }] as Foe[] });
+  const hit = (n: number) => { s.foes[0]!.hp -= n; };
+  return <Entity><Hurt onHit={hit} />{s.foes.map((f) => f.hp >= 0 && <See key={f.id} {...f} onSee={onSee} />)}</Entity>;
+}`);
+    const module = await load<Record<string, new (p: object) => Entity>>(compiled);
+    const log: string[] = [];
+    const world = new World();
+    world.mount(new module["Parent"]!({ onSee: (line: string) => log.push(line) }));
+    world.flush();
+    world.tick(1 / 60);
+    world.flush();
+    // Foe 1 is hit to -10 first (Hurt is before the list): its condition no longer holds, so it says nothing and reads the 10 it had.
+    assert.deepEqual(log, ["1:10", "2:10"]);
+  });
+
+  it("an item whose key is gone reads its own last props, not the next key's: the page that is on its way out", async () => {
+    const compiled = compile(`
+export function Page({ label, onLog }: { label: string; onLog: (line: string) => void }) {
+  useUpdate(() => { onLog("saw " + label); });
+  return <Entity />;
+}
+export function Parent({ onLog }: { onLog: (line: string) => void }) {
+  const s = useMutable({ page: "a" });
+  useUpdate(() => { s.page = "b"; });
+  return <Entity><Page key={s.page} label={s.page} onLog={onLog} /></Entity>;
+}`);
+    const module = await load<Record<string, new (p: object) => Entity>>(compiled);
+    const log: string[] = [];
+    const world = new World();
+    world.mount(new module["Parent"]!({ onLog: (line: string) => log.push(line) }));
+    world.flush();
+    world.tick(1 / 60);
+    world.flush();
+    // The parent set the page to "b" first (tree order); the old "a" page runs next in the same step and still reads "a".
+    assert.deepEqual(log, ["saw a"]);
   });
 });
