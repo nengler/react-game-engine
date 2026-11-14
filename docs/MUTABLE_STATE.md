@@ -262,6 +262,9 @@ export const useGame = createGameState(
 
 ## Open questions
 
+Since written: question 4 is decided (`useRef` is removed), and what is left, with the rough edges found building #121, is in
+[MUTABLE_STATE_FOLLOWUPS.md](MUTABLE_STATE_FOLLOWUPS.md).
+
 1. The hook's name: `useMutable` is the lean.
 2. In-place writes to lists and objects: settled as option 2 (copies), see "What #121 built". Revisit if the copy per write is measured to matter.
 3. The update order within a frame (needed by "live everywhere"): settled as tree order, depth first, a parent before its children and siblings in their order (`World.tick`, pinned by `packages/runtime/test/update-order.test.ts`). It was registration order before, which put a child mounted later after its parent's later siblings and ignored a reorder.
