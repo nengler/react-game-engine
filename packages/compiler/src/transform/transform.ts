@@ -97,7 +97,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   // A top-level constant or helper function is read like a plain import (it is in the generated module itself).
   const plainNames = new Set([...analysis.plainImports.map((i) => i.name), ...analysis.moduleDeclarations.map((d) => d.name)]);
   const moduleDeclarations = analysis.moduleDeclarations.map((d) => ({ kind: "ModuleDeclaration" as const, name: d.name, text: d.text, reads: d.reads }));
-  const plainImports = analysis.plainImports.map((i) => ({ name: i.name, module: i.module }));
+  const plainImports = analysis.plainImports.map((i) => ({ name: i.name, module: i.module, ...(i.isNamespace === true ? { namespace: true as const } : {}) }));
 
   const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
   const typeDeclarations: TypeDeclarationIR[] = analysis.typeDeclarations.map((t) => ({ kind: "TypeDeclaration", name: t.name, text: t.text }));

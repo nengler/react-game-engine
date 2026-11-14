@@ -150,6 +150,18 @@ export function analyzeSourceFile(
     );
   }
 
+  // A props type written in a component's parameter is declared as an interface of its own, named for the component, unless the
+  // file declares that name already (then it says so).
+  for (const component of components) {
+    const inline = component.props?.inline;
+    if (inline === undefined) continue;
+    const name = component.props!.typeName;
+    if (typeDeclarations.some((t) => t.name === name)) {
+      diagnostics.push(error(DiagnosticCode.InvalidProps, `Component '${component.name}': its props type is written in its parameter, and this file also declares '${name}'. Use one: \`({ … }: ${name})\`, or rename the interface.`, span(inline)));
+      continue;
+    }
+    typeDeclarations.push({ name, node: inline, text: `interface ${name} ${inline.getText(sourceFile)}` });
+  }
   // Resolve `export default Enemy;` against the components declared in this file.
   let resolved = components;
   for (const { name, node } of defaultExports) {

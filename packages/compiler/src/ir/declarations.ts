@@ -45,6 +45,8 @@ export interface PlainImportIR {
   readonly name: string;
   /** The specifier as written (`./transitions.ts`); the generator points it at the source folder. */
   readonly module: string;
+  /** `import * as K from "./constants.ts"`: imported whole, under this name. */
+  readonly namespace?: boolean;
 }
 
 /** A source `interface Name { … }` or `type Name = { … }`, kept as text. */

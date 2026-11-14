@@ -312,7 +312,7 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
         // React's `if (!hero) return null;`: here a component has one return, of its JSX, and the condition goes in it.
         ctx.error(
           DiagnosticCode.InvalidComponentBody,
-          "A component returns its JSX once, at the end; an early `return` (`if (dead) return null;`) is not supported. Put the condition in what it returns: `return dead ? null : <Text>…</Text>;`, or `{!dead && <Text>…</Text>}` inside an element.",
+          "This `return` is not supported: an early return is `if (condition) return …;` (or `{ return …; }`) at the top level of the component body, with no `else`, as React components usually guard (`if (!hero) return null;`). Otherwise put the condition in what the last `return` returns: `return dead ? null : <Text>…</Text>;`, or `{!dead && <Text>…</Text>}` inside an element.",
           statement,
         );
         return null;

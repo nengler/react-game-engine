@@ -1,5 +1,5 @@
 // What the analyzer finds in a source file: the analysis records for components, props, hooks and imports, and the tables of hook names.
-import { type CallExpression, type ArrowFunction, type Expression, type JsxFragment, type InterfaceDeclaration, type JsxElement, type JsxSelfClosingElement, type Node, type SourceFile, type Statement, type TypeAliasDeclaration, type VariableDeclaration } from "typescript/ast";
+import { type CallExpression, type ArrowFunction, type Expression, type JsxFragment, type InterfaceDeclaration, type JsxElement, type JsxSelfClosingElement, type Node, type SourceFile, type Statement, type TypeAliasDeclaration, type VariableDeclaration, type TypeLiteralNode } from "typescript/ast";
 import { type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 
 
@@ -44,6 +44,8 @@ export interface ImportAnalysis {
   readonly isTypeOnly: boolean;
   /** `import type { Tower as TowerData }`: the name it has in its module, when it is renamed here. */
   readonly importedName?: string;
+  /** `import * as K from "./constants.ts"`: the whole module, read as `K.RUN_SPEED` and called as `K.statsOf(…)`. */
+  readonly isNamespace?: boolean;
   readonly node: Node;
 }
 
@@ -56,7 +58,8 @@ export type JsxRoot = JsxElement | JsxSelfClosingElement | JsxFragment | Express
 /** `interface EnemyProps { … }` or `type EnemyProps = { … }`. The transform reads its members for the props. */
 export interface TypeDeclarationAnalysis {
   readonly name: string;
-  readonly node: InterfaceDeclaration | TypeAliasDeclaration;
+  /** A type literal for a props type written in the component's parameter (`PropsAnalysis.inline`). */
+  readonly node: InterfaceDeclaration | TypeAliasDeclaration | TypeLiteralNode;
   /** The declaration as written, without `export`. */
   readonly text: string;
 }
@@ -75,6 +78,11 @@ export interface ModuleDeclarationAnalysis {
 export interface PropsAnalysis {
   /** The name of the props type, resolved against the file's declarations in the transform. */
   readonly typeName: string;
+  /**
+   * `({ hp }: { hp: number })`: the props type written in the parameter. The analysis declares it under `typeName`
+   * (`<Component>Props`), as if the file said `interface HeartProps { hp: number }`.
+   */
+  readonly inline?: TypeLiteralNode;
   readonly typeNode: Node;
   /** `({ speed }: EnemyProps)`: each destructured prop. Empty for the object form. */
   readonly bindings: readonly PropBindingAnalysis[];

@@ -94,7 +94,8 @@ export class HookLowering extends ExpressionLowering {
     const code = DiagnosticCode.InvalidProps;
     const node = decl.node;
     let elements: readonly Node[];
-    if (isInterfaceDeclaration(node)) {
+    if (isTypeLiteralNode(node)) elements = node.members;
+    else if (isInterfaceDeclaration(node)) {
       if (node.heritageClauses && node.heritageClauses.length > 0) {
         this.report(code, `Props type '${decl.name}' cannot extend another type: list the props in one interface.`, node);
         return null;
@@ -546,11 +547,54 @@ export class HookLowering extends ExpressionLowering {
     if (initial.kind === "Call" && (initial.callee.kind === "Function" || initial.callee.kind === "Plain") && !initial.callee.name.startsWith("Math.")) {
       return { kind: "SourceType", text: `ReturnType<typeof ${initial.callee.name}>` };
     }
+    // `useState({ x: 0, y: 0 })`: the literal's type, as TypeScript infers it (`{ x: number; y: number }`).
+    const literal = this.literalType(initial);
+    if (literal !== null) return { kind: "SourceType", text: literal };
     const code = DiagnosticCode.UnsupportedStateType;
     if (initial.kind === "ArrayLiteral" || initial.kind === "ObjectLiteral") {
-      this.report(code, `An ${initial.kind === "ArrayLiteral" ? "array" : "object"} state needs its type: \`useState<${initial.kind === "ArrayLiteral" ? "EnemyData[]" : "EnemyData"}>(…)\`, with the type declared in this file.`, at);
+      this.report(
+        code,
+        initial.kind === "ArrayLiteral" && initial.elements.length === 0
+          ? "An empty array state needs its type, as in TypeScript, where `[]` alone is `never[]`: `useState<EnemyData[]>([])`."
+          : `This ${initial.kind === "ArrayLiteral" ? "array" : "object"}'s type cannot be worked out from its values: write it, \`useState<${initial.kind === "ArrayLiteral" ? "EnemyData[]" : "EnemyData"}>(…)\`, with the type declared in this file.`,
+        at,
+      );
     } else {
       this.report(code, "Cannot infer the type; use a number/string/boolean literal, a prop, or `useState<T>(...)`.", at);
+    }
+    return null;
+  }
+
+  /**
+   * The type TypeScript would infer for a literal of numbers, strings and booleans, objects of them and non-empty arrays of one
+   * type of them (`{ x: 0, tags: ["a"] }` is `{ x: number; tags: string[] }`); null for anything else, which needs its type
+   * written.
+   */
+  protected literalType(e: ExprIR): string | null {
+    const primitive = this.inferType(e);
+    if (primitive !== null) return primitive;
+    if (e.kind === "ObjectLiteral") {
+      const fields: string[] = [];
+      for (const p of e.properties) {
+        if (p.kind !== "Property") return null;
+        const type = this.literalType(p.value);
+        if (type === null) return null;
+        fields.push(`${/^[A-Za-z_$][\w$]*$/.test(p.name) ? p.name : JSON.stringify(p.name)}: ${type}`);
+      }
+      return `{ ${fields.join("; ")} }`;
+    }
+    if (e.kind === "ArrayLiteral") {
+      if (e.elements.length === 0) return null;
+      const types = new Set<string>();
+      for (const element of e.elements) {
+        if (element.spread) return null;
+        const type = this.literalType(element.value);
+        if (type === null) return null;
+        types.add(type);
+      }
+      if (types.size !== 1) return null;
+      const [type] = types;
+      return type!.startsWith("{") ? `(${type})[]` : `${type}[]`;
     }
     return null;
   }

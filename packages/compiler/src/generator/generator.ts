@@ -90,11 +90,14 @@ function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
     w.line(`import { ${options.gameState.name} } from ${JSON.stringify(options.gameState.importFrom)};`);
   }
   const byModule = new Map<string, string[]>();
-  for (const i of module.plainImports) if (usage.plain.has(i.name)) (byModule.get(i.module) ?? byModule.set(i.module, []).get(i.module)!).push(i.name);
-  for (const [specifier, names] of byModule) {
-    const from = options.sourceFromOutput ?? "..";
-    w.line(`import { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};`);
+  const from = options.sourceFromOutput ?? "..";
+  const fromOutput = (specifier: string): string => JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`);
+  for (const i of module.plainImports) {
+    if (!usage.plain.has(i.name)) continue;
+    if (i.namespace === true) w.line(`import * as ${i.name} from ${fromOutput(i.module)};`);
+    else (byModule.get(i.module) ?? byModule.set(i.module, []).get(i.module)!).push(i.name);
   }
+  for (const [specifier, names] of byModule) w.line(`import { ${names.join(", ")} } from ${fromOutput(specifier)};`);
   for (const line of typeImportLines(module, options.sourceFromOutput ?? "..")) w.line(line);
   for (const [specifier, { defaultName, names }] of collectComponentImports(module)) {
     const clause = [defaultName, names.length > 0 ? `{ ${names.join(", ")} }` : null].filter((part) => part !== null).join(", ");

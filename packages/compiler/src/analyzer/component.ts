@@ -1,6 +1,6 @@
 // Analysis of one component and of the props it declares, and of its named imports.
 import { SyntaxKind, type CallExpression, type Block, type Expression, type NodeArray, type ParameterDeclaration, type ImportDeclaration, type JsxSelfClosingElement, type Node, type Statement } from "typescript/ast";
-import { isBinaryExpression, isConditionalExpression, isBlock, isJsxFragment, isCallExpression, isIdentifier, isNamedImports, isObjectBindingPattern, isArrayBindingPattern, isOmittedExpression, isVariableStatement, isTypeReferenceNode, isJsxElement, isJsxSelfClosingElement, isReturnStatement } from "typescript/ast/is";
+import { isBinaryExpression, isConditionalExpression, isBlock, isJsxFragment, isCallExpression, isIdentifier, isNamedImports, isObjectBindingPattern, isArrayBindingPattern, isOmittedExpression, isVariableStatement, isTypeReferenceNode, isJsxElement, isJsxSelfClosingElement, isReturnStatement, isNamespaceImport, isTypeLiteralNode } from "typescript/ast/is";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { spanOf } from "../parser/parser.ts";
 import { type ImportAnalysis, type JsxRoot, type PropsAnalysis, type PropBindingAnalysis, type ComponentAnalysis, type HookCallAnalysis, type RenderConstAnalysis, HOOK_NAME, KNOWN_HOOKS } from "./model.ts";
@@ -39,6 +39,11 @@ export function analyzeNamedImport(
 ): void {
   const clause = statement.importClause;
   const bindings = clause?.namedBindings;
+  // `import * as K from "./constants.ts"`: a plain module, whole, where types may be imported (a `.ts` file).
+  if (clause && !clause.name && bindings && isNamespaceImport(bindings) && clause.phaseModifier === undefined && allowTypeSpecifiers && module.endsWith(".ts")) {
+    imports.push({ name: bindings.name.text, isDefault: false, isTypeOnly: false, isNamespace: true, module, node: bindings });
+    return;
+  }
   const wellFormed = clause && (clause.name ? allowDefault : true) && (bindings ? isNamedImports(bindings) : clause.name !== undefined);
   if (!clause || !wellFormed) {
     // A component file only declares; code that runs when a module loads (`registerTilemaps(…)`) belongs to a plain .ts file.
@@ -97,11 +102,15 @@ function analyzeProps(
     return invalid("the props parameter must be a plain name or destructuring, without a rest, default or `?`.", param);
   }
   const type = param.type;
-  if (!type || !isTypeReferenceNode(type) || !isIdentifier(type.typeName) || type.typeArguments) {
-    return invalid("annotate the props parameter with the name of a props type declared in this file: `({ speed }: EnemyProps)`.", type ?? param);
+  // `({ hp }: { hp: number })`: the type written in place, declared under the component's name (`HeartProps`) by the analysis.
+  const inline = type !== undefined && isTypeLiteralNode(type) ? type : undefined;
+  if (!type || (inline === undefined && (!isTypeReferenceNode(type) || !isIdentifier(type.typeName) || type.typeArguments))) {
+    return invalid("annotate the props parameter with its type: `({ speed }: { speed: number })`, or the name of a props type declared in this file, `({ speed }: EnemyProps)`.", type ?? param);
   }
+  const typeName = inline !== undefined ? `${name}Props` : (type as unknown as { typeName: { text: string } }).typeName.text;
+  const inlined = inline !== undefined ? { inline } : {};
   if (isIdentifier(param.name)) {
-    return { typeName: type.typeName.text, typeNode: type, bindings: [], objectName: param.name.text };
+    return { typeName, typeNode: type, bindings: [], objectName: param.name.text, ...inlined };
   }
   if (!isObjectBindingPattern(param.name)) {
     return invalid("destructure the props in the parameter (`{ speed }: EnemyProps`) or take them as one object (`props: EnemyProps`).", param.name);
@@ -114,7 +123,7 @@ function analyzeProps(
     }
     bindings.push({ name: element.name.text, defaultValue: element.initializer ?? null, node: element });
   }
-  return { typeName: type.typeName.text, typeNode: type, bindings, objectName: null };
+  return { typeName, typeNode: type, bindings, objectName: null, ...inlined };
 }
 
 /** The names a run of statements declares at its top level (`const` and `let`, plain names and destructured ones). */

@@ -338,10 +338,11 @@ describe("M5a: runtime behaviour", () => {
 });
 
 describe("M5a: diagnostics", () => {
-  it("asks for a type argument for an array or object initial value", () => {
+  it("asks for a type argument for an empty array, and infers an object of plain values as TypeScript does", () => {
     assert.deepEqual(codes(withHandler(`const [items, setItems] = useState([]);`, ``)), [DiagnosticCode.UnsupportedStateType]);
-    assert.deepEqual(codes(withHandler(`const [item, setItem] = useState({ id: "a", n: 1 });`, ``)), [DiagnosticCode.UnsupportedStateType]);
-    assert.match(compileErrors(withHandler(`const [items, setItems] = useState([]);`, ``))[0]!.message, /useState<EnemyData\[\]>/);
+    assert.match(compileErrors(withHandler(`const [items, setItems] = useState([]);`, ``))[0]!.message, /useState<EnemyData\[\]>\(\[\]\)/);
+    // Since 2026-11-14: `{ id: "a", n: 1 }` is `{ id: string; n: number }`, as TypeScript infers it.
+    assert.match(compile(withHandler(`const [item, setItem] = useState({ id: "a", n: 1 });`, ``)).code, /item: \{ id: string; n: number \} = /);
   });
 
   it("keeps refs to values: a type that names an element is rejected", () => {
