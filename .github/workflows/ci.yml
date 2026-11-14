@@ -14,6 +14,14 @@ on:
   pull_request:
     paths-ignore: ["**.md", "docs/**"]
 
+permissions:
+  contents: read
+
+env:
+  # CI builds from scratch or from a cache, never incrementally: incremental data only bloats the cache.
+  CARGO_INCREMENTAL: "0"
+  CARGO_TERM_COLOR: never
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -21,6 +29,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,9 +37,10 @@ jobs:
           node-version: "22.18"
           cache: npm
       - run: npm ci
+      # `generate` runs once here; --ignore-scripts skips the pretest and pretypecheck hooks that would run it again.
       - run: npm run generate
-      - run: npm test
-      - run: npm run typecheck
+      - run: npm test --ignore-scripts
+      - run: npm run typecheck --ignore-scripts
       # Fails when a scene is over its budget in packages/player/bench/budget.json, or grows faster than its size.
       - name: Script frame time under Node, against budgets
         run: npm run bench:check
@@ -40,6 +50,7 @@ jobs:
   # library a failure instead of a skip.
   native:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -83,6 +94,7 @@ jobs:
   # pack @rge/native.
   outside:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -112,6 +124,7 @@ jobs:
   # The same library on the real OpenGL path (GLFW), against Mesa's software GL on a virtual display.
   native-desktop:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -123,7 +136,7 @@ jobs:
       - name: Install X11, GL and a virtual display
         run: |
           sudo apt-get update
-          sudo apt-get install -y libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libgl1-mesa-dri xvfb
+          sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libgl1-mesa-dri xvfb
       - name: Note the compiler versions (they key the build cache)
         id: toolchain
         run: echo "id=$(echo "$(cc -dumpfullversion) $(cmake --version | head -1) $(rustc --version)" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
@@ -173,6 +186,7 @@ jobs:
   # byte-identical output.
   host:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
