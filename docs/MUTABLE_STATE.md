@@ -88,17 +88,77 @@ No writes in the component body (`RGE1402` today, and #121 keeps it for its fiel
 
 Today a list is replaced whole: `s.enemies = [...s.enemies, e]`, and `push` is `RGE1301`. Once fields are written directly, authors
 will write `s.enemies.push(e)` and `enemy.hp -= 1` inside a list, and refusing it makes the model stop at the first list. This is the
-largest piece of work here, and the question to settle before anything else:
+largest piece of work here, and the question to settle before anything else.
 
-- **Lower in-place writes to copies.** `s.enemies.push(e)` becomes `s.enemies = [...s.enemies, e]`, `s.enemies[i].hp -= 1` becomes a
-  copy of that item and of the list. Simple, keeps the reference comparison that setters, render's guards (`$in`) and memos rely on (rewind and saves deep-copy, so
-  they are unaffected either way), but a step that touches many
-  items copies the list many times; the compiler could batch the copies within one handler (copy once on the first write, then write
-  in place).
-- **Track changes in place.** Mark the field dirty on any write through it and keep copy-on-write snapshots for rewind and saves.
-  Cheaper per write, but it changes how every consumer of state detects a change.
+### What breaks if it is simply allowed
 
-The first, with per-handler batching, looks like the right start: it changes nothing downstream.
+A number written directly is fine: every write goes through the generated setter. A write inside a list or an object changes its
+contents but keeps the same reference, and the engine finds changes by comparing references:
+
+1. **The screen does not update.** The setter returns early when `next === pending`; render's guards (`$in`, REACT_FEEL_PLAN.md D5)
+   and the derived-value memos (`$memo`) compare each input with its value at the last render. A pushed list is the same array, so
+   the parts that draw it, and the props handed to children, are skipped.
+2. **The timing rule bends.** The committed value and the live value are the same object, so another component sees the list changed
+   mid-frame, before any render, while it still sees numbers as the frame began.
+3. **The compiler cannot see every write.** `s.enemies.push(e)` in a component, yes. `const e = s.enemies[i]; e.hp -= 1` takes alias
+   tracking, and `damage(s.enemies, 3)` in a `rules/*.ts` helper cannot be seen at all.
+
+Rewind and saves are not affected: they deep-copy state with `structuredClone` (`packages/player/src/rewind.ts`).
+
+### How Svelte went through the same question
+
+Svelte 4 was compile-time, like this engine: an assignment was what made a value reactive, so `arr.push(x)` updated nothing and the
+documented fix was `arr.push(x); arr = arr;`. Reactivity also stopped at file boundaries: a `.js` helper that changed an object went
+unseen. It was one of Svelte's best-known pain points.
+
+Svelte 5 moved to runtime proxies (signals): `$state` on an object or array returns a deeply reactive proxy, nested objects are
+proxied lazily on access, and every write is tracked wherever it happens, a plain `.js` helper included, because the proxy travels
+with the value. Its escape hatches show the costs: `$state.raw` turns deep tracking off for large data (a proxy trap on every read is
+slow), `$state.snapshot` hands a plain copy to code that cannot take a proxy (`structuredClone`, outside libraries), and class
+instances are not proxied (a class declares `$state` fields instead).
+
+The lesson for this engine: compile-time tracking alone runs into aliases and helpers sooner or later; the runtime answer works, but
+it is paid for on every read.
+
+### Signals inside the engine, not exposed to authors
+
+DESIGN.md's ground rule is "no signals … updates stay direct". Change detection that only says *this changed*, while render still
+assigns fields directly, keeps to the spirit of that rule, so signals used only inside the engine are worth considering. But signals do
+two jobs, and the engine needs only one:
+
+- **Noticing writes** (this value changed): missing today for writes the compiler cannot see.
+- **Tracking reads** (this part of the screen read that value, re-run it): already done at compile time by D5's guards. Doing it again
+  at run time would duplicate it and cost more.
+
+Hidden proxies would still cost:
+
+- **Speed.** A proxy trap on each property read in a per-frame loop is far slower in V8 than a plain read. Hearth's wave 10 is about
+  1.2 ms a frame, and CI holds bench budgets.
+- **Rewind, silently.** `structuredClone` cannot copy a proxy; `copyState` catches the error and keeps the live reference, so a proxied
+  list would stop being snapshotted with no error. It would need an unwrap step, as Svelte's `$state.snapshot`.
+- **Identity and debugging.** A proxy is not `===` to its target, the debugger shows `Proxy {}`, and classes, `Map` and `Set` need
+  special handling. "Not exposed" is not wholly true: authors meet proxies in the debugger and in edge cases.
+
+### The options
+
+1. **Keep refusing in-place writes** (what #121 does). Consistent and free, but the model is "mutable, except lists".
+2. **The compiler lowers in-place writes to copies.** `s.enemies.push(e)` becomes `s.enemies = [...s.enemies, e]`, copied once on a
+   handler's first write and changed in place after. Nothing downstream changes, and the timing rule holds. Aliases and helpers are
+   refused; TypeScript enforces much of that already if fields are `readonly Foe[]` with `Readonly<Foe>` items, so a helper taking
+   `Foe[]` does not type-check.
+3. **Versions, with "assume changed" after calls the compiler cannot see.** Each state slot gets a version; render's guards and memos
+   compare reference *and* version. Writes the compiler sees (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`) bump it, at the cost of
+   an increment. A call it cannot see into that takes state (`damage(s.enemies, 3)`) bumps it afterwards; the worst case is checking
+   a part of render that did not need it. Known-pure calls (`Math`, the allowlisted array methods) are exempt. This catches the helper
+   case Svelte 5 needed proxies for, with nothing added to the read path. The gap is a helper that keeps a reference and changes it in
+   a later frame: rare, a documented rule, and mostly caught by `readonly` types.
+4. **Hidden write-tracking proxies.** Catches everything, at the costs above.
+
+Options 3 and 4 change lists in place, so the timing rule loosens for them: *a list changed in place is shared, not a snapshot*;
+another component sees the change before the next render. Only copying (option 2, or copy-on-write) keeps the snapshot.
+
+**Lean:** option 3, adding the copy of option 2 only where a list must stay a snapshot, and option 4 only if option 3 proves too
+coarse. To settle: whether the shared-list timing is acceptable, and the measure of option 3 on Hearth's wave 10.
 
 ## One hook: `useState` is removed
 
@@ -121,7 +181,7 @@ field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games 
 ## Open questions
 
 1. The hook's name: `useMutable` is the lean.
-2. In-place writes to lists and objects: copies or tracking (above).
+2. In-place writes to lists and objects: which option, and whether a list changed in place may be shared (above).
 3. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
    "state that never renders", which may be better said as an option than a second hook.
 4. Whether a game-state action (`useGame`) gets the same direct form, so a store reads like component state.
