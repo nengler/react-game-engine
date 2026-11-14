@@ -141,7 +141,7 @@ describe("M4: generated code", () => {
 
   it("builds a child with all its props and callbacks, and re-sends the dynamic ones in one call", () => {
     const { code } = compile(GAME, "Game.tsx");
-    assert.match(code, /readonly enemy: Enemy = new Enemy\(\{ speed: \(this\.\$s_score > 10\) \? 2 : 1, onDefeated: \(\) => \{ this\.\$set_s_score\(/);
+    assert.match(code, /readonly enemy: Enemy = this\.withPropGetters\(new Enemy\(\{ speed: \(this\.\$s_score > 10\) \? 2 : 1, onDefeated: \(\) => \{ this\.\$set_s_score\(/);
     assert.match(code, /this\.enemy\.updateProps\(\{ speed: \(this\.\$s_score > 10\) \? 2 : 1 \}\);/);
     assert.doesNotMatch(code.slice(code.indexOf("class Level")), /updateProps\(\{[^}]*onDefeated/, "a callback is created once, never re-sent");
   });
@@ -153,7 +153,7 @@ function Spinner({ rate = 2, label }: SpinProps) {
   useUpdate((dt) => { s.angle += dt * rate; });
   return <Entity name="spinner" transform={{ rotation: s.angle * rate, x: label ? 1 : 0 }} />;
 }`);
-    assert.match(compiled.code, /dt \* this\.props\.rate!/);
+    assert.match(compiled.code, /dt \* this\.\$live\.rate!/);
     assert.match(compiled.code, /this\.props\.label\b(?!!)/, "an optional prop without a default really can be undefined");
     assert.deepEqual(typeCheck(compiled), []);
   });

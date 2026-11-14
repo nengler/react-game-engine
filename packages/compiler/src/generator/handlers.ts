@@ -211,6 +211,10 @@ export class HandlerEmitter extends ExpressionEmitter {
         changed = true;
         return { ...node, live: true };
       }
+      if (node["kind"] === "PropRead" && this.c.props.find((p) => p.name === node["name"])?.role === "value") {
+        changed = true;
+        return { ...node, live: true };
+      }
       const out: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(node)) out[k] = map(v);
       if (node["kind"] === "Memo" && JSON.stringify(out) !== JSON.stringify(node)) out["key"] = `${String(node["key"])}@live`;

@@ -265,10 +265,18 @@ Settled:
 
 Still open:
 
-- **Props read live across components** ("Shared lists: live everywhere", option A). Props and context still carry what the
-  parent's last render committed; a child's callback writes the parent's pending value, which the parent's own handlers then read.
-  So between components the old one-step lag holds.
-  Two ways in were looked at and not built:
+- **Props read live across components** ("Shared lists: live everywhere", option A): built for a child whose props read the parent's
+  state or props (`<Watch health={s.health} />`). A handler of the child reads `health` as the parent has it now, through a getter
+  the parent gives it (`GameObject.propGetters`, read as `this.$live.health`, a property so TypeScript narrows it), so a child
+  after the one that wrote `s.health` in the tree order sees the new value in the same step (`liveprops.test.ts`). Render reads what the
+  frame committed, as before. A getter under a condition (`tower !== null && <Tower …/>`) says nothing where the condition no longer
+  holds, and the child's last props stand. Not built yet, so these still read what the parent's last render copied (the old one-step lag):
+  - children made inside a keyed list, and any element with a `key` (it is a list of one): a getter has to find its item again by key in
+    the live list, and must not read the next key's value while the old instance is on its way out (`key={page}` with `label={page}`
+    first showed it: the old page unmounted as the new one). No getter is made for them until that lookup exists;
+  - a value passed by context (`<Ctx.Provider value={s.x}>`);
+  - a callback prop is never live (it is created once).
+  The way in that was built is the second of these; the first was looked at and not built:
   - *Render the parent before a child's handler runs, when the parent has pending writes.* It reuses what the engine has (a render
     already pushes props into the children with `updateProps`), but a child's callback writes the parent again, so the parent
     renders again before the next child: up to one full render of the parent per child per frame (Hearth's `Play` with its
@@ -278,8 +286,8 @@ Still open:
     makes a child: a plain element, a conditional one, a keyed list's items (the item found again by key in the live list, with
     the list's filter and an alternate element applied), an item's own children, and nested children (the getter reads the
     child's own props live, recursively). Doing it for some of these and not others gives the two rules depending on where an
-    element sits, which this note calls the worst outcome, so it is one piece of work, in `generator/elements.ts` and
-    `emitList`, and a field on `GameObject` for the getter.
+    element sits, which this note calls the worst outcome. It is being built in steps, so for now the two rules do exist, as listed
+    above, until the list, key and context cases are done: `generator/elements.ts` (`propGetters`, `emitList`) and `GameObject.liveProp`.
 - **`useRef`** (open question 4) and **game-state actions** (open question 5) are unchanged.
 
 Found while building it:

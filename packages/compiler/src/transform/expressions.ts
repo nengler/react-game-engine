@@ -87,7 +87,7 @@ export class ExpressionLowering extends LoweringBase {
             this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a callback prop: call it (\`${node.text}?.()\`) or forward it whole (\`onX={${node.text}}\`).`, node);
             return null;
           }
-          return { kind: "PropRead", name: binding.name };
+          return { kind: "PropRead", name: binding.name, ...(this.mode.inHandler && binding.role === "value" ? { live: true as const } : {}) };
         // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
         // in a handler it reads the current state, like recomputing it there.
         case "derived": {
@@ -357,7 +357,7 @@ export class ExpressionLowering extends LoweringBase {
         this.report(DiagnosticCode.UnsupportedExpression, `'${propsObject.name}' is a callback prop: call it (\`props.${propsObject.name}?.()\`) or forward it whole (\`onX={props.${propsObject.name}}\`).`, node);
         return null;
       }
-      return { kind: "PropRead", name: propsObject.name };
+      return { kind: "PropRead", name: propsObject.name, ...(this.mode.inHandler && propsObject.role === "value" ? { live: true as const } : {}) };
     }
     const mutable = this.mutableField(node);
     if (mutable === "error") return null;

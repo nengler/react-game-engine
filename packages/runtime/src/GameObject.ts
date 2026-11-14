@@ -60,6 +60,35 @@ export class GameObject<P extends object = {}> {
   hotKey: string | number | undefined = undefined;
   /** The component's props: a private copy, updated in place by `updateProps`. */
   props: P;
+  /**
+   * How to read a prop as the component that made this one has it now, set by that component (`withPropGetters`): a handler reads
+   * `health` through it, so it sees what a handler that ran before it wrote to the parent's state, where `props` holds what the
+   * parent's last render copied. `$all` works out every value prop at once (a spread among them). Null where the props are all
+   * constants, or the parent could not say.
+   */
+  propGetters: Readonly<Record<string, () => unknown>> | null = null;
+
+  /** A prop as a handler reads it: the parent's current value, or the last render's where the parent gave no getter. */
+  liveProp<K extends keyof P>(name: K): P[K] {
+    const getters = this.propGetters;
+    if (getters !== null) {
+      const own = getters[name as string];
+      if (own !== undefined) {
+        const value = own() as P[K];
+        if (value !== undefined) return value;
+      } else if (getters["$all"] !== undefined) {
+        const value = (getters["$all"]() as P)[name];
+        if (value !== undefined) return value;
+      }
+    }
+    return this.props[name];
+  }
+
+  /** `child` with its prop getters set; what generated code writes where it makes a child whose props read state. */
+  withPropGetters<T extends GameObject<any>>(child: T, getters: Readonly<Record<string, () => unknown>>): T {
+    child.propGetters = getters;
+    return child;
+  }
   parent: GameObject | null = null;
   /**
    * The game state this object reads from (`useGame(s => …)`), and the dotted paths it reads. Generated code overrides

@@ -1,9 +1,12 @@
 // Layer 2 of ComponentGenerator: the element tree, keyed lists, mounts and transforms, and the code that builds and updates each element.
-import { assertNever, childExpressions, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam, readsParam, walkStatements } from "../ir/types.ts";
+import { assertNever, childExpressions, type LocalId, type ChildIR, type ElementIR, type ExprIR, type PropIR, type KeyedListChildIR, functionReadsParam, readsParam, walkStatements } from "../ir/types.ts";
 import { type Mount, mountOf, addChild, queueAddChild, queueRemoveChild, type Presence, transformTarget, propertyKey, access } from "./helpers.ts";
 import { HandlerEmitter } from "./handlers.ts";
 
 export class ElementEmitter extends HandlerEmitter {
+  /** The parameters of the keyed lists being emitted (the item, its index): what a child's prop may not read if it is to have a getter. */
+  protected readonly itemIds = new Set<LocalId>();
+
   // -- fields ---------------------------------------------------------------
 
   protected emitElementFields(children: readonly ChildIR[], presence: Presence): void {
@@ -166,6 +169,17 @@ export class ElementEmitter extends HandlerEmitter {
    * sequence changed.
    */
   protected emitList(list: KeyedListChildIR, mount: Mount, slot: number): void {
+    // While its items are made, a prop that reads the item or its index is not given a getter (see `propGetters`).
+    const ids = [list.item.id, ...(list.index ? [list.index.id] : [])];
+    for (const id of ids) this.itemIds.add(id);
+    try {
+      this.emitListBody(list, mount, slot);
+    } finally {
+      for (const id of ids) this.itemIds.delete(id);
+    }
+  }
+
+  protected emitListBody(list: KeyedListChildIR, mount: Mount, slot: number): void {
     const w = this.w;
     const el = list.element;
     const alt = list.alternate;
@@ -389,7 +403,38 @@ export class ElementEmitter extends HandlerEmitter {
 
   /** Every prop goes in at construction, callbacks too; on a component, the dynamic ones are re-sent through `updateProps` on render. */
   protected construct(el: ElementIR): string {
-    return el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
+    const made = el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
+    const getters = this.propGetters(el);
+    return getters === null ? made : `this.withPropGetters(${made}, ${getters})`;
+  }
+
+  /**
+   * The getters a child is given for its props that read this component's state or props (`health={s.health}`), so a handler of the
+   * child reads what this component has now: a write by an earlier handler of this step, the child's own sibling's callback included.
+   * Each is the prop's expression read as a handler of this component reads it. Null for a component with no such prop, and for
+   * a prop that reads a keyed list's item (its getter would have to find the item again in the live list: it reads the last render's).
+   */
+  protected propGetters(el: ElementIR): string | null {
+    if (el.component.kind === "Intrinsic") return null;
+    // An instance a keyed list keeps (a `key` on any element is a list of one) goes when its key does, and until then it must not read
+    // a value that already belongs to the next key (`key={page}` with `label={page}`: the old page would unmount as the new one).
+    if (this.itemIds.size > 0) return null;
+    const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
+    const spread = el.props.some((p) => p.kind === "SpreadProp");
+    if (dynamic.length === 0 && !spread) return null;
+    // Under the conditions the child is made under (`tower !== null && <Tower …/>`) as they hold now: where they do not, the child is on its
+    // way out, and the getter says nothing (the child's last props stand), so it never reads what the condition kept it from.
+    const when = this.mode.conditions.map((c) => this.within({ inCallback: true }, () => this.expr(this.live(c))));
+    const read = (value: ExprIR): string => {
+      const text = this.within({ inCallback: true }, () => this.expr(this.live(value), true));
+      return when.length === 0 ? text : `(${when.join(" && ")}) ? ${text} : undefined`;
+    };
+    if (spread) {
+      // A spread's members are not known here: every value prop is worked out at once, in order, as the construction does.
+      const all = el.props.filter((p) => p.kind !== "CallbackProp").map((p) => (p.kind === "SpreadProp" ? `...(${read(p.value)})` : `${propertyKey((p as { name: string }).name)}: ${read((p as { value: ExprIR }).value)}`));
+      return `{ $all: () => ({ ${all.join(", ")} }) }`;
+    }
+    return `{ ${dynamic.map((p) => `${propertyKey((p as { name: string }).name)}: () => ${read((p as { value: ExprIR }).value)}`).join(", ")} }`;
   }
 
   protected propsObject(props: readonly PropIR[]): string {
