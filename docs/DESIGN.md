@@ -41,7 +41,7 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
-| Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09). A `useMutable` field is written directly (`s.vx += 1`, `s.enemies = [...s.enemies, e]`), each write going through its generated setter; changing a list or an object in a field in place is still refused (`RGE1301`, with the assignment to write instead). Whether in-place writes should be allowed, and how changes would then be found, is still open in [MUTABLE_STATE.md](MUTABLE_STATE.md) |
+| Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09). A `useMutable` field is written directly (`s.vx += 1`), each write going through its generated setter. Changing a list or an object in a field in place (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`, `s.pos.x = 3`) is lowered to the copy the author would write (option 2 in [MUTABLE_STATE.md](MUTABLE_STATE.md)): the field gets a new value, copying only what the path passes through, so `===` still finds every change. A result used as a value, an alias (`const e = s.enemies[i]; e.hp = 0`) and a loop variable are refused (`RGE1301` / `RGE1402`, with what to write instead) |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
 | Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) |
 | Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on any built-in element (decided 2026-11-08; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the attribute). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters |
@@ -154,7 +154,7 @@ ignored):
   of plain fields. Calls anywhere else, or a `use*` call that is not one of the hooks, are errors.
   A field's type is inferred from its initial literal (`number`/`string`/`boolean`, and objects and
   arrays of them) or a prop; an empty array or a record needs its type (`enemies: [] as EnemyData[]`,
-  with `EnemyData` declared in the file) and is replaced, not changed in place. See
+  with `EnemyData` declared in the file) and is changed in place (`s.enemies.push(e)`, written as a new array) or replaced. See
   "Arrays and records".
 * Children: elements, `{condition && <Element />}`,
   `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two
@@ -269,8 +269,7 @@ annotation: `let best: Enemy | null = null`), `If` (an `else` holding only an
 `const` may destructure, nested, `for (const [i, { id }] of xs.entries())`),
 `Switch` (written as is, falling through as in JS, its cases sharing one
 scope), `Block` (`{ … }`), `Break` (inside a `for…of` or `switch`) /
-`Continue` (inside a `for…of`), of the same function, `Return`, and `SetState`, which is either
-`{ state, value }` or `{ state, updater: FunctionIR }` for `setX(prev => …)`.
+`Continue` (inside a `for…of`), of the same function, `Return`, and `SetState` (`{ state, value }`, for `s.x = value`).
 Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
 `Assign` (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `||=`, `&&=`, `??=`) writes
 `ref.current` or a `let` local; `n++` / `--r.current` as a statement is
@@ -477,7 +476,7 @@ both allowed, a returned arrow is a `Callback`, and an expression body that is a
 statement. Every other handler keeps `returns: "void"`, so `return value;` in `useUpdate` or `useUnmount` is still `RGE1401`.
 
 **Callbacks as values.** The subscription needs an arrow handed to a function, which handlers could not do before ("closures
-that escape" were a diagnostic). Now, in a handler and outside a state updater, an arrow passed to a plain function, a method of
+that escape" were a diagnostic). Now, in a handler, an arrow passed to a plain function, a method of
 an imported object, a callback prop or a local holding a function is a `CallbackIR` (`{ kind: "Callback", fn: FunctionIR }`):
 a handler of its own, lowered like a callback prop (contextual parameters, handler statements, state set through `this`). It
 may run later, after the component has left; a setter called then marks a detached object, which never renders, so nothing
@@ -641,23 +640,9 @@ override onUpdate(dt: number): void {
 An arrow whose body is an object literal is parenthesised, in callbacks and in
 updaters (`setP((p: P) => ({ ...p, x: 1 }))`).
 
-**An updater of one expression, in a hook, is written out in place**, because a
-moving object calls a setter or two every frame and the host's interpreter pays
-for the arrow and for both calls each time. `setX((x) => x + speed * dt)` in a
-`useUpdate` generates what the setter would do with it:
-
-```ts
-{
-  const x = this.#xNext;
-  this.#xNext = x + (this.props.speed * dt);
-  if (this.#xNext !== x) this.markDirty();
-}
-```
-
-The block's only name is the updater's own parameter, so it hides the same outer
-names as the arrow did. Everything else still calls the setter: a plain value
-(`setX(5)`), an updater with statements, and any setter in a callback handed to
-an element (`onPress`, `onCollisionEnter`), which runs on an event.
+**Updaters are gone** (#121 removed `useState`, and with it `setX(prev => …)` and the in-place block the generator wrote for
+a one-expression updater). A handler's `s.x += speed * dt` is a read of the pending value and a call to the field's setter,
+which is the whole of what that block did.
 
 ## Keyed lists
 
@@ -2023,7 +2008,7 @@ function usePlatformerBody() { const step = useGame((s) => s.step); const button
 export function Player() { usePlatformerBody(); … }
 ```
 
-- **Names.** What the hook declares at its top level (its `const`s, its `[x, setX]` state, its parameters) is given a prefix unique to the call, `_useName3_x`, so two calls make two separate states and nothing clashes with the component's own names. Properties, keys and JSX attribute names are left alone; `{ x }` becomes `{ x: _useName3_x }`.
+- **Names.** What the hook declares at its top level (its `const`s, its `[x, setX]` state, its parameters) is given a prefix unique to the call, `_useName3_x`, so two calls make two separate states and nothing clashes with the component's own names. The exception is a hook's own `useMutable` (`const b = useMutable(…)`), named after the hook, `useBody` → `body`, so its state is saved as `Comp.body.x`; a second call, or a name the component already uses, numbers it (`body2`), and a hook named for a keyword (`useDefault`) keeps the prefix. A mutable the hook returns (`return s`) takes the caller's name. Properties, keys and JSX attribute names are left alone; `{ x }` becomes `{ x: _useName3_x }`.
 - **Parameters.** A literal argument (a string, number or boolean) is written into the hook where the parameter is used, so a parameter can be a `useSound` path; any other argument is bound with `const _useName3_p = (argument);`. A missing argument takes the parameter's default. A destructured parameter is a diagnostic.
 - **Results.** `const v = useX()`, `const { a, b } = useX()` (the hook returns an object literal) and `const [a, b] = useX()` (an array literal) become `const` declarations of the returned expressions. A name the hook declares and returns as it is (`return [count, setCount]`, `return { on, toggle: setOn }`) is not copied: the hook's own declaration takes the caller's name, so a hook can return a setter, as in React (decided 2026-11-11). Anything else returned is a value (a state-derived expression); refs cannot be returned (they are not readable outside handlers).
 - **Where.** In the component's file, or imported from a relative `.tsx` (`import { useClock } from "./hooks.tsx"`, read by the CLI; the hook's imports from the authoring module are added to the file that uses it). Hooks may call hooks, to a depth of six, which also stops recursion. A call anywhere but as a statement of the component body (in a condition, a callback, an expression) is `RGE1101` with the hook's name.

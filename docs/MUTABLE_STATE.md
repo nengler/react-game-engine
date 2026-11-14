@@ -1,7 +1,7 @@
 # State you write directly: a design note
 
 As of 2026-11-14. **Status: decided and built in #121 for a component's own state** (the hook is `useMutable`, and `useState` is
-removed); changing lists in place, and props read live, are still open. "What #121 built" at the end says what was settled and
+removed), as is changing a list or an object in place (option 2, below); props read live are still open. "What #121 built" at the end says what was settled and
 what building it found. Written while reviewing #121 (`useSim`), which adds a second state hook whose fields are
 written directly (`s.vx += 1`) and read back at once in handlers. This note asks the larger question that PR raises: should that be
 the engine's state model, not an extra hook beside `useState`? It changes two settled decisions in [DESIGN.md](DESIGN.md) ("State
@@ -263,8 +263,8 @@ export const useGame = createGameState(
 ## Open questions
 
 1. The hook's name: `useMutable` is the lean.
-2. In-place writes to lists and objects: option 3 (versions) is the lean, pending a measure of its speed.
-3. The update order within a frame (needed by "live everywhere"): tree order with parents first is the lean.
+2. In-place writes to lists and objects: settled as option 2 (copies), see "What #121 built". Revisit if the copy per write is measured to matter.
+3. The update order within a frame (needed by "live everywhere"): settled as tree order, depth first, a parent before its children and siblings in their order (`World.tick`, pinned by `packages/runtime/test/update-order.test.ts`). It was registration order before, which put a child mounted later after its parent's later siblings and ignored a reorder.
 4. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
    "state that never renders", which may be better said as an option than a second hook.
 5. The game state's shape: `createGameState(data, actions)` with actions writing directly and components never writing (lean, see "The game state"), and whether a `free` list is ever needed.
@@ -289,12 +289,51 @@ Settled:
 - **From outside**, a compiled component's `component.s.vx` reads the committed value and `component.s.vx = 1` writes through the
   setter, so tests and tools write state the way handlers do. `@rge/testing`'s `state()` shows a mutable as `{ s: { vx } }`.
 
+- **In-place writes to lists and objects: option 2, the compiler lowers them to copies** (open question 2). Option 3 (versions) was
+  the lean, and was set aside because a version on the slot cannot reach what the engine compares item by item: a keyed list hands
+  each child its item, a child's props guard is `===`, and an item changed in place is the same object. Copying keeps `===` true
+  to what changed everywhere, needs nothing at run time, and keeps the committed value a snapshot (so rule 2 holds for lists as for
+  numbers). What is lowered, as statements on a path from a field (`s.a`, `s.a[i].b`, `s.a[i].tags`):
+  - `push`, `unshift`, `pop`, `shift`, `splice`, `sort`, `reverse`: a spread, `slice`, `toSpliced`, `toSorted`, `toReversed`;
+  - `=`, the compound operators, `++` and `--` through an index or a property: `with(i, { ...item, hp })` and `{ ...pos, x }`, copying
+    each level the path passes through and sharing the rest.
+
+  What is refused, each with the form to write: the result of one of these methods used as a value; an index that is not plain (it is
+  read and written, so it cannot call anything); `?.`; and a write through another name (`const e = s.list[0]; e.hp = 0`, a loop
+  variable), because the compiler would have to follow the alias, and a helper taking the list could not be followed at all
+  (`readonly` types in the field catch that one in the editor). Index writes need an array; a record is replaced with a spread.
+  The cost is a copy per write: a loop writing every item of a list is quadratic in its length, where the list is hundreds of
+  items, not thousands. A write that needs to be fast can build the list in a local (`const next = s.list.map(…)`) and assign it once.
+
 Still open:
 
-- **In-place writes to lists and objects** (open question 2). `s.list.push(x)` is refused, with the assignment to write instead.
-- **Props read live across components** ("Shared lists: live everywhere", option A). Props and context still carry what the
-  parent's last render committed; a child's callback writes the parent's pending value, which the parent's own handlers then read.
-  So between components the old one-step lag holds.
+- **Props read live across components** ("Shared lists: live everywhere", option A): built for a child whose props read the parent's
+  state or props (`<Watch health={s.health} />`). A handler of the child reads `health` as the parent has it now, through a getter
+  the parent gives it (`GameObject.propGetters`, read as `this.$live.health`, a property so TypeScript narrows it), so a child
+  after the one that wrote `s.health` in the tree order sees the new value in the same step (`liveprops.test.ts`). Render reads what the
+  frame committed, as before. A getter under a condition (`tower !== null && <Tower …/>`) says nothing where the condition no longer
+  holds, and the child's last props stand. A list item (`{s.foes.map((f) => <Watch key={f.id} hp={f.hp} />)}`, also with a spread of the
+  item or a condition on it) has its item found again by key in the live list, the source and the filter read live, so a sibling's write
+  to an item shows in the step; an item whose key is gone says nothing, so an old page that is on its way out as `key={page}` changes
+  keeps reading its own last props, not the next key's (`liveprops.test.ts`). Not built yet, so these still read what the parent's last
+  render copied (the old one-step lag):
+  - a value passed by context (`<Ctx.Provider value={s.x}>`);
+  - what is below a list item (an item's own children), and a list item that switches between two elements (`c ? <A key … /> : <B key … />`);
+  - a callback prop is never live (it is created once).
+  A getter in a list item finds its item with a `find` over the live list on each read, so a child reading several props in many items
+  costs a pass of the list per read; Hearth's wave 10 and the bench budget are within bounds, and a per-frame cache is the way to cut it
+  if a game needs that.
+  The way in that was built is the second of these; the first was looked at and not built:
+  - *Render the parent before a child's handler runs, when the parent has pending writes.* It reuses what the engine has (a render
+    already pushes props into the children with `updateProps`), but a child's callback writes the parent again, so the parent
+    renders again before the next child: up to one full render of the parent per child per frame (Hearth's `Play` with its
+    enemies), where today it renders once.
+  - *The parent hands each child a getter for its props, worked out from the parent's live state*, as derived consts are worked out
+    in handlers. No extra renders, and a read costs only what the child reads. It has to be written for every place the generator
+    makes a child: a plain element, a conditional one, a keyed list's items (the item found again by key in the live list, with
+    the list's filter and an alternate element applied), an item's own children, and nested children (the getter reads the
+    child's own props live, recursively). Doing it for some of these and not others gives the two rules depending on where an
+    element sits, which this note calls the worst outcome. It was built in steps: the direct case, then list items and keys; the cases above still read the last render: `generator/elements.ts` (`propGetters`, `emitList`) and `GameObject.liveProp`.
 - **`useRef`** (open question 4) is unchanged; **game-state actions** (open question 5) are proposed in "The game state: actions write, readers read", not built.
 
 Found while building it:
@@ -307,9 +346,9 @@ Found while building it:
   changed, not the next). The tests that pinned the old timing were updated to the new one, with the reason written beside them.
 - **The codemod is mechanical, and `setX(x + 1); use(x + 1)` is the pattern to check after it.** With a snapshot, `use(x + 1)` read
   the old `x`; converted to `s.x += 1; use(s.x + 1)` it adds one twice. One test hit exactly this (`sharing.test.ts`).
-- **A hook's internal mutable keeps a call-specific name** where the hook returns fields rather than the object (`useBody` returns
-  `{ x, y, move, … }` from `b`): its state is saved as `_useBody1_b.x`. Tests that read a body's position read where the component
-  draws instead. Naming it after the hook (`body.x`) would make it readable; not done.
-- **The updater paths in the compiler are unreachable now** (`SetState` with an `updater`, `lowerSetState`, `updaterInPlace`), as
-  nothing declares a setter binding. Removing them is a cleanup for a later change.
+- **A hook's internal mutable was named for its call** where the hook returns fields rather than the object (`useBody` returns
+  `{ x, y, move, … }` from `b`): its state was saved as `_useBody1_b.x`. It is now named after the hook, `body.x` (`body2` for a
+  second call or where the component has a `body`), which `t.state()` and the inspector show.
+- **The updater paths in the compiler were unreachable once `useState` went** (`SetState` with an `updater`, `lowerSetState`,
+  `updaterInPlace`, the setter binding, `inUpdater`); they are removed.
 

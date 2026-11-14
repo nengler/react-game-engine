@@ -60,6 +60,36 @@ export class GameObject<P extends object = {}> {
   hotKey: string | number | undefined = undefined;
   /** The component's props: a private copy, updated in place by `updateProps`. */
   props: P;
+  /**
+   * How to read a prop as the component that made this one has it now, set by that component (`withPropGetters`): a handler reads
+   * `health` through it, so it sees what a handler that ran before it wrote to the parent's state, where `props` holds what the
+   * parent's last render copied. `$all` works out every value prop at once (a spread among them). Null where the props are all
+   * constants, or the parent could not say.
+   */
+  propGetters: Readonly<Record<string, () => unknown>> | null = null;
+
+  /** A prop as a handler reads it: the parent's current value, or the last render's where the parent gave no getter. */
+  liveProp<K extends keyof P>(name: K): P[K] {
+    const getters = this.propGetters;
+    if (getters !== null) {
+      const own = getters[name as string];
+      if (own !== undefined) {
+        const value = own() as P[K];
+        if (value !== undefined) return value;
+      } else if (getters["$all"] !== undefined) {
+        // Nothing, where the item or the condition it was made under is gone: the last props stand.
+        const all = getters["$all"]() as P | undefined;
+        if (all !== undefined && all[name] !== undefined) return all[name];
+      }
+    }
+    return this.props[name];
+  }
+
+  /** `child` with its prop getters set; what generated code writes where it makes a child whose props read state. */
+  withPropGetters<T extends GameObject<any>>(child: T, getters: Readonly<Record<string, () => unknown>>): T {
+    child.propGetters = getters;
+    return child;
+  }
   parent: GameObject | null = null;
   /**
    * The game state this object reads from (`useGame(s => …)`), and the dotted paths it reads. Generated code overrides
@@ -222,7 +252,10 @@ export class GameObject<P extends object = {}> {
       this.children.splice(index, 0, child);
     }
     this.markChanged();
-    if (this.world !== null) child.attachToWorld(this.world);
+    if (this.world !== null) {
+      this.world.orderChanged();
+      child.attachToWorld(this.world);
+    }
   }
 
   /** Immediately detach a child. */
@@ -231,6 +264,7 @@ export class GameObject<P extends object = {}> {
     if (index === -1) throw new Error("GameObject is not a child of this object");
     this.markChanged();
     this.children.splice(index, 1);
+    this.world?.orderChanged();
     child.parent = null;
     child.drawCache = null;
     child.#slot = Infinity;
@@ -286,6 +320,7 @@ export class GameObject<P extends object = {}> {
     this.markChanged();
     // Children are kept sorted by (slot, order), and the sort is stable, so only this slot's range can move.
     this.children.sort((a, b) => (a.#slot === b.#slot ? a.#order - b.#order : a.#slot < b.#slot ? -1 : 1));
+    this.world?.orderChanged();
   }
 
   /**

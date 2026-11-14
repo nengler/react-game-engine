@@ -161,7 +161,6 @@ function typeTexts(module: IRModule): string[] {
       if (e.kind === "Callback") fn(e.fn); // its own `let` types
     }, (stmt) => {
       if (stmt.kind === "LocalConst" && stmt.type) type(stmt.type);
-      if (stmt.kind === "SetState" && "updater" in stmt) stmt.updater.params.forEach((p) => type(p.type));
     });
   };
   const children = (list: readonly ChildIR[]): void => {
@@ -366,6 +365,14 @@ class ComponentGenerator extends ElementEmitter {
         const members = fields.map((f) => `get ${f.mutable!.field}() { return self.${f.name}; }, set ${f.mutable!.field}(value: ${typeText(f.type)}) { self.${this.setter(f.id)}(value); }`);
         w.line(`${cache}: ${type} | undefined;`);
         w.line(`get ${view}(): ${type} { const self = this; return (this.${cache} ??= { ${members.join(", ")} }); }`);
+      }
+      // Its value props as a handler reads them (`this.$live.hp`): what its parent has now (see `GameObject.liveProp`). A property, not a
+      // call, so TypeScript narrows it (`tower !== null && …`) as it does `this.props.tower`.
+      const valueProps = c.props.filter((p) => p.role === "value");
+      if (valueProps.length > 0 && runtimeProps) {
+        const type = `Pick<${runtimeProps}, ${valueProps.map((p) => JSON.stringify(p.name)).join(" | ")}>`;
+        w.line(`#liveView: ${type} | undefined;`);
+        w.line(`get $live(): ${type} { const self = this; return (this.#liveView ??= { ${valueProps.map((p) => `get ${propertyKey(p.name)}() { return self.liveProp(${JSON.stringify(p.name)}); }`).join(", ")} }); }`);
       }
       // The paths it reads: the runtime tells it when one changes (see `GameObject.gameStateKeys`).
       const globals = c.state.filter((s) => s.globalKey !== undefined);

@@ -219,16 +219,6 @@ export interface HandlerCallAnalysis {
   readonly statement: Statement;
 }
 
-export interface UseStateCallAnalysis {
-  readonly kind: "useState";
-  readonly valueName: string;
-  readonly setterName: string | null;
-  readonly initializer: Expression | null;
-  readonly typeArgument: Node | null;
-  readonly call: CallExpression;
-  readonly declaration: VariableDeclaration;
-}
-
 /**
  * `const s = useMutable({ vx: 0, vy: 0 })`: state written directly (`s.vx += 1`) and read back at once in handlers. Each field is
  * an ordinary state slot underneath; only the way a handler reaches it differs.

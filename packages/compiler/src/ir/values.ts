@@ -64,7 +64,7 @@ export interface ParamIR {
   readonly type: TypeIR;
 }
 
-/** A small function body: a hook handler or a `setX(prev => ...)` updater. */
+/** A small function body: a hook handler or a callback. */
 export interface FunctionIR {
   readonly kind: "Function";
   readonly params: readonly ParamIR[];

@@ -1,8 +1,8 @@
-// Layer 1 of ComponentGenerator: the handler methods, state setters and updaters, and the statements and callbacks inside them.
+// Layer 1 of ComponentGenerator: the handler methods, state setters, and the statements and callbacks inside them.
 import { assertNever, type FunctionIR, type AssignStmtIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId, type ExprIR } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { walkExpr } from "../ir/walk.ts";
-import { param, annotated, pendingRef, propertyKey } from "./helpers.ts";
+import { param, annotated, propertyKey } from "./helpers.ts";
 import { ExpressionEmitter } from "./expressions.ts";
 
 /** A `for…of` binding as written: `e`, `[i, e]`, `{ id, hp: health }`. */
@@ -16,7 +16,7 @@ function loopBinding(binding: LoopBindingIR): string {
   }
 }
 
-/** Whether a function's own statements return a value (a `useMount` cleanup); nested callbacks and updaters are not its own. */
+/** Whether a function's own statements return a value (a `useMount` cleanup); nested callbacks are not its own. */
 function returnsValue(body: readonly StatementIR[]): boolean {
   return body.some((stmt) => {
     switch (stmt.kind) {
@@ -90,42 +90,6 @@ export class HandlerEmitter extends ExpressionEmitter {
     throw new Error(`State ${state} has no setter in component ${this.c.name}`);
   }
 
-  protected updater(fn: FunctionIR): string {
-    const params = fn.params.map(param).join(", ");
-    const only = fn.body.length === 1 ? fn.body[0]! : null;
-    if (only?.kind === "Return" && only.value) return `(${params}) => ${this.arrowBody(only.value)}`;
-    return this.arrow(params, this.capture(() => this.stmts(fn.body)), fn);
-  }
-
-  /**
-   * `setX((x) => x + 1)` written out where it stands, when the updater is one expression of the previous value:
-   *
-   *     {
-   *       const x = this.#xNext;
-   *       this.#xNext = x + 1;
-   *       if (this.#xNext !== x) this.markDirty();
-   *     }
-   *
-   * which is what the setter does with the arrow, without making the arrow and calling it through the setter (an
-   * interpreter pays for both on every call, and a moving object calls a setter or two every frame). The block's only name
-   * is the updater's own parameter, which hides the same outer names in the expression as it did in the arrow. Returns false,
-   * having written nothing, for any other updater: the caller writes the call to the setter.
-   */
-  protected updaterInPlace(state: StateId, fn: FunctionIR): boolean {
-    const only = fn.body.length === 1 ? fn.body[0]! : null;
-    const previous = fn.params.length === 1 ? fn.params[0]! : null;
-    // Not in a callback handed to an element: those run on an event, not every frame, and read better as the call.
-    if (this.mode.inCallback || previous === null || only?.kind !== "Return" || !only.value || !this.hasSetter(state)) return false;
-    const w = this.w;
-    const slot = pendingRef(this.state(state));
-    w.open("{");
-    w.line(`const ${previous.name} = ${slot};`);
-    w.line(`${slot} = ${this.expr(only.value, true)};`);
-    w.line(`if (${slot} !== ${previous.name}) this.markDirty();`);
-    w.close("}");
-    return true;
-  }
-
   // -- handler statements --------------------------------------------------
 
   /** `target op value`, with no semicolon: a statement, or a part of a `for` loop's head. */
@@ -142,8 +106,7 @@ export class HandlerEmitter extends ExpressionEmitter {
           w.line(`${this.expr(stmt.expression, true)};`);
           break;
         case "SetState":
-          if ("updater" in stmt && this.updaterInPlace(stmt.state, stmt.updater)) break;
-          w.line(`this.${this.setter(stmt.state)}(${"updater" in stmt ? this.updater(stmt.updater) : this.expr(stmt.value, true)});`);
+          w.line(`this.${this.setter(stmt.state)}(${this.expr(stmt.value, true)});`);
           break;
         case "PlaySound":
           w.line(`this.${this.soundField(stmt.sound)}.play(${stmt.volume === null ? "" : this.expr(stmt.volume, true)});`);
@@ -245,6 +208,10 @@ export class HandlerEmitter extends ExpressionEmitter {
       if (value === null || typeof value !== "object") return value;
       const node = value as Record<string, unknown>;
       if (node["kind"] === "StateRead" && mutable.has(node["state"] as StateId)) {
+        changed = true;
+        return { ...node, live: true };
+      }
+      if (node["kind"] === "PropRead" && this.c.props.find((p) => p.name === node["name"])?.role === "value") {
         changed = true;
         return { ...node, live: true };
       }

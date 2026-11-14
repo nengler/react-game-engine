@@ -47,6 +47,12 @@ export class World implements BodySpace {
   #structure = new Set<GameObject>();
   #onInput = new Set<GameObject>();
   #onUpdate = new Set<GameObject>();
+  /**
+   * The objects with an `onInput` or an `onUpdate`, in tree order (depth first, a parent before its children, siblings as they are
+   * children of their parent): the order handlers run in. It is made when a frame needs it after the tree or the set of handlers
+   * changed (`orderChanged`), and a frame runs over the list it began with, so an object added during it starts next frame.
+   */
+  #order: { readonly input: readonly GameObject[]; readonly update: readonly GameObject[] } | null = null;
   readonly #inert = new Set<GameObject>();
   /** Objects with `modal`, in the order they were mounted: the last one in this world takes the input. */
   readonly #modals: GameObject[] = [];
@@ -97,12 +103,13 @@ export class World implements BodySpace {
     this.#boxes = null;
     const anyInert = this.#hasInert();
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
-    const inputs = [...this.#onInput];
+    const order = (this.#order ??= this.#treeOrder());
+    const inputs = order.input;
     for (const object of inputs) if (object.world === this) object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
     if (this.#frozen > 0) this.#frozen--;
     else if (!this.paused) {
       beforeUpdate?.();
-      const updates = [...this.#onUpdate];
+      const updates = order.update;
       for (const object of updates) if (object.world === this) object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
       // Timers, after the updates of the step, in the order their objects first set one.
       if (this.#timed.size > 0) {
@@ -365,12 +372,36 @@ export class World implements BodySpace {
     return box;
   }
 
+  /** The tree changed (a child added, removed or moved) or an object with handlers joined or left: the order handlers run in is made again. */
+  orderChanged(): void {
+    this.#order = null;
+  }
+
+  #treeOrder(): { readonly input: readonly GameObject[]; readonly update: readonly GameObject[] } {
+    const input: GameObject[] = [];
+    const update: GameObject[] = [];
+    const seen = new Set<GameObject>();
+    const stack: GameObject[] = [this.root];
+    while (stack.length > 0) {
+      const object = stack.pop() as GameObject;
+      seen.add(object);
+      if (this.#onInput.has(object)) input.push(object);
+      if (this.#onUpdate.has(object)) update.push(object);
+      for (let i = object.children.length - 1; i >= 0; i--) stack.push(object.children[i] as GameObject);
+    }
+    // An object registered but not under the root (it should not happen) still runs, after the rest, as it did before.
+    for (const object of this.#onInput) if (!seen.has(object)) input.push(object);
+    for (const object of this.#onUpdate) if (!seen.has(object)) update.push(object);
+    return { input, update };
+  }
+
   registerObject(object: GameObject): void {
     if (object instanceof Collider) this.#colliders.add(object);
     else if (object instanceof Tilemap) this.#tilemaps.add(object);
     if ("pressKey" in object && "focusable" in object) this.#pressables.add(object as GameObject & Pressable);
     if (object.onInput !== GameObject.prototype.onInput) this.#onInput.add(object);
     if (object.onUpdate !== GameObject.prototype.onUpdate) this.#onUpdate.add(object);
+    this.#order = null;
   }
 
   unregisterObject(object: GameObject): void {
@@ -382,6 +413,7 @@ export class World implements BodySpace {
     if (this.#pressed === (object as unknown as Pressable)) this.#pressed = null;
     this.#onInput.delete(object);
     this.#onUpdate.delete(object);
+    this.#order = null;
   }
 
   /** Process all pending work until the tree is stable. Returns the number of renders run. */

@@ -340,9 +340,9 @@ describe("M5a: diagnostics", () => {
     assert.deepEqual(codes(withHandler(`const r = useRef<Sprite | null>(null);`, ``)), [DiagnosticCode.InvalidUseRef]);
   });
 
-  it("rejects mutating array methods, naming the immutable alternative", () => {
+  it("rejects mutating array methods used as values, naming the statement and the immutable alternative", () => {
     for (const method of ["push", "splice", "sort"]) {
-      const errors = compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.${method}((e) => e);`));
+      const errors = compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `const r = s.items.${method}((e) => e);`));
       assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedExpression], method);
       assert.match(errors[0]!.message, /in place/, method);
     }
@@ -350,7 +350,8 @@ describe("M5a: diagnostics", () => {
     const forEach = compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.forEach((e) => e);`));
     assert.deepEqual(forEach.map((d) => d.code), [DiagnosticCode.UnsupportedExpression]);
     assert.match(forEach[0]!.message, /^`forEach` is not supported: write a `for \(const item of items\)/);
-    assert.match(compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.push({ id: "a", n: 1 });`))[0]!.message, /s\.items = \[\.\.\.s\.items, \{ id: "a", n: 1 \}\]/);
+    // As a statement, `push` is written for the author: a new array with the item added.
+    assert.match(compile(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.push({ id: "a", n: 1 });`)).code, /\$set_s_items\(\[\.\.\.this\.#\$s_itemsNext, \{ id: "a", n: 1 \}\]\)/);
   });
 
   it("rejects array methods outside the allowlist, wrong argument counts and optional calls", () => {

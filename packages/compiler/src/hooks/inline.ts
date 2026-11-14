@@ -153,6 +153,9 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
         let found = false;
         for (const statement of sf.statements) {
           for (const body of componentBodies(statement)) {
+            // Every name the component uses: what a hook's `useMutable` is named after the hook must not be one of them.
+            const fileNames = new Set((body.parent ?? body).getText(sf).match(/[A-Za-z_$][\w$]*/g));
+            const bodyNames = new Set<string>();
             for (const stmt of body.statements) {
               const call = hookCall(stmt, stores);
               if (call === null) {
@@ -164,7 +167,7 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
               if (hook === undefined) continue;
               found = true;
               if (!expandedHere.includes(call.name)) expandedHere.push(call.name);
-              const expanded = expandCall(files, stmt, call, hook, sf, fileName, `_${call.name}${++counter}_`, diagnostics);
+              const expanded = expandCall(files, stmt, call, hook, sf, fileName, `_${call.name}${++counter}_`, (name) => !fileNames.has(name) && !bodyNames.has(name), bodyNames, diagnostics);
               if (hook.fileName !== fileName) collectImports(files, hook, needed);
               if (expanded !== null) edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: expanded });
             }
@@ -525,8 +528,15 @@ function removeHookDeclarations(sf: SourceFile, stores: ReadonlySet<string>, aut
   return edits;
 }
 
+/** Words a hook's name cannot be shortened to (`useDefault` is not `default`). */
+const RESERVED_NAMES: ReadonlySet<string> = new Set([
+  "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else", "enum", "export", "extends", "false", "finally",
+  "for", "function", "if", "import", "in", "instanceof", "new", "null", "return", "super", "switch", "this", "throw", "true", "try", "typeof", "var",
+  "void", "while", "with", "yield", "let", "static", "await", "async", "of",
+]);
+
 /** The text that replaces a hook call, or null (with a diagnostic) when it cannot be expanded. */
-function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook: Hook, callSf: SourceFile, callFile: string, prefix: string, diagnostics: CompilerDiagnostic[]): string | null {
+function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook: Hook, callSf: SourceFile, callFile: string, prefix: string, isFree: (name: string) => boolean, claimed: Set<string>, diagnostics: CompilerDiagnostic[]): string | null {
   const at = spanOf(statement, callSf, callFile);
   const sf = files.get(hook.fileName, hook.text);
   const declaration = sf.statements.find((s): s is FunctionDeclaration => isFunctionDeclaration(s) && s.name?.text === hook.name);
@@ -632,7 +642,25 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
       }
     }
   }
-  const rename = (name: string): string => aliases.get(name) ?? literals.get(name) ?? `${prefix}${name}`;
+  // A `useMutable` the hook keeps to itself is named after the hook (`useBody` → `body`, so its state is `Comp.body.x`, not `_useBody1_b.x`),
+  // with a number after it where the name is taken. One the hook returns is named by the call (above).
+  const mutableNames = new Map<string, string>();
+  {
+    const own = kept.flatMap((s) => (isVariableStatement(s) ? s.declarationList.declarations : [])).filter((d) => isIdentifier(d.name) && d.initializer !== undefined && isCallExpression(d.initializer) && isIdentifier(d.initializer.expression) && d.initializer.expression.text === "useMutable");
+    const stem = hook.name.slice(3, 4).toLowerCase() + hook.name.slice(4);
+    if (own.length > 0 && stem !== "" && !RESERVED_NAMES.has(stem)) {
+      for (const d of own) {
+        const local = (d.name as { text: string }).text;
+        if (aliases.has(local)) continue;
+        const base = own.length === 1 ? stem : `${stem}_${local}`;
+        let name = base;
+        for (let n = 2; !isFree(name) || RESERVED_NAMES.has(name); n++) name = `${base}${n}`;
+        claimed.add(name);
+        mutableNames.set(local, name);
+      }
+    }
+  }
+  const rename = (name: string): string => aliases.get(name) ?? literals.get(name) ?? mutableNames.get(name) ?? `${prefix}${name}`;
 
   const args = call.call.arguments;
   if (args.length > params.length) {

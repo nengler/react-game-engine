@@ -325,17 +325,118 @@ describe("useMutable: what it refuses", () => {
     assert.match(errors("const s = useMutable({});")[0] ?? "", /at least one field/);
   });
 
-  it("a list changed in place, with the assignment to write instead", () => {
+  it("a list method used as a value, with the statement to write and the new array", () => {
     const header = "interface Foe { id: number }\n";
-    const push = errors("const s = useMutable({ enemies: [] as readonly Foe[] }); useUpdate(() => { s.enemies.push({ id: 1 }); });", header);
+    const push = errors("const s = useMutable({ enemies: [] as readonly Foe[], n: 0 }); useUpdate(() => { const n = s.enemies.push({ id: 1 }); s.n = n; });", header);
     assert.equal(push.length, 1);
-    assert.match(push[0]!, /`push` changes `s\.enemies` in place/);
+    assert.match(push[0]!, /`push` changes `s\.enemies` in place: write it as a statement of its own \(`s\.enemies\.push\(…\);`\)/);
     assert.match(push[0]!, /`s\.enemies = \[\.\.\.s\.enemies, \{ id: 1 \}\]`/);
-    const sort = errors("const s = useMutable({ enemies: [] as readonly Foe[] }); useUpdate(() => { s.enemies.sort((a, b) => a.id - b.id); });", header);
+    const sort = errors("const s = useMutable({ enemies: [] as readonly Foe[] }); useUpdate(() => { s.enemies = s.enemies.sort((a, b) => a.id - b.id); });", header);
     assert.match(sort[0] ?? "", /`s\.enemies = s\.enemies\.toSorted\(…\)`/);
   });
 
   it("an array field with no type", () => {
     assert.match(errors("const s = useMutable({ list: [] });")[0] ?? "", /needs its type/);
+  });
+});
+
+describe("useMutable: changing a list or an object in place", () => {
+  const errors = (body: string, header = ""): string[] =>
+    compileErrors(`${header}${body}`).map((d) => `${d.code}: ${d.message}`);
+  const foes = (body: string, extra = "") => `interface Foe { id: number; hp: number; tags: string[] }
+export function Hero() {
+  const s = useMutable({ foes: [{ id: 1, hp: 3, tags: [] }, { id: 2, hp: 5, tags: ["a"] }] as Foe[], pos: { x: 0, y: 0 }, n: 0${extra} });
+  useMount(() => {
+    ${body}
+  });
+  return <Entity />;
+}`;
+
+  it("list methods as statements: each is a new array, and the handler reads it back at once", async () => {
+    const hero = await run(
+      `interface Foe { id: number }
+       export function Hero() {
+         const s = useMutable({ list: [3, 1, 2] as number[], queue: [10, 20, 30] as number[], seen: 0, last: 0 });
+         useMount(() => {
+           s.list.push(9, 8);
+           s.seen = s.list.length;
+           s.list.sort((a, b) => a - b);
+           s.list.reverse();
+           s.list.unshift(0);
+           s.list.splice(1, 1);
+           s.last = s.list[0]!;
+           s.queue.shift();
+           s.queue.pop();
+         });
+         return <Entity />;
+       }`,
+      "Hero",
+    );
+    assert.deepEqual(hero.s, { list: [0, 8, 3, 2, 1], queue: [20], seen: 5, last: 0 });
+  });
+
+  it("writes through an index and a property copy what they pass, and share the rest", async () => {
+    const compiled = compile(foes(`
+      s.foes[1]!.hp -= 2;
+      s.foes[0]!.hp++;
+      s.pos.x = 9;
+      s.pos.y += 4;
+      s.n = s.foes[1]!.hp + s.pos.x;`));
+    assert.deepEqual(typeCheck(compiled), []);
+    const module = await load<Record<string, new () => Entity>>(compiled);
+    const world = new World();
+    const hero = new module.Hero!() as Entity & { s: { foes: { id: number; hp: number; tags: string[] }[]; pos: { x: number; y: number }; n: number } };
+    const before = hero.s.foes;
+    const first = before[0]!;
+    const second = before[1]!;
+    world.mount(hero);
+    world.flush();
+    assert.deepEqual(hero.s.foes.map((f) => f.hp), [4, 3]);
+    assert.deepEqual(hero.s.pos, { x: 9, y: 4 });
+    assert.equal(hero.s.n, 12, "read back at once, including the property write before it");
+    assert.deepEqual(before.map((f) => f.hp), [3, 5], "the list the frame began with is untouched");
+    assert.deepEqual([first.hp, second.hp], [3, 5], "and so are its items");
+    assert.notEqual(hero.s.foes, before);
+    assert.notEqual(hero.s.foes[1], second);
+  });
+
+  it("goes as deep as the path does: a list inside an item", async () => {
+    const hero = await run(foes(`const i = 1; s.foes[i]!.tags.push("b", "c"); s.foes[0]!.tags = ["z"]; s.foes[i + 0 - 1]!.tags.unshift("y");`), "Hero");
+    assert.deepEqual((hero.s.foes as { tags: string[] }[]).map((f) => f.tags), [["y", "z"], ["a", "b", "c"]]);
+  });
+
+  it("changes the handlers of a step see in the order they run, and compounds over several steps", async () => {
+    const hero = await run(
+      `export function Hero() {
+         const s = useMutable({ hp: [3, 3] as number[] });
+         useUpdate(() => { s.hp[0]! -= 1; });
+         useUpdate(() => { s.hp[1]! += s.hp[0]!; });
+         return <Entity />;
+       }`,
+      "Hero",
+      3,
+    );
+    assert.deepEqual(hero.s.hp, [0, 3 + 2 + 1 + 0]);
+  });
+
+  it("refuses a write the compiler would have to follow: an alias, a loop variable, an index with a call, `?.`", () => {
+    assert.match(errors(foes("const f = s.foes[0]!; f.hp = 0;"))[0] ?? "", /write through its `useMutable` field \(`s\.foes\[i\]\.hp = 0`/, "an alias");
+    assert.match(errors(foes("for (const f of s.foes) { f.hp = 0; }"))[0] ?? "", /a loop variable is a read, not a way to write/, "a loop variable");
+    assert.match(errors(foes("const f = s.foes[0]!; f.hp++;"))[0] ?? "", /`\+\+` and `--` are statements of their own/, "an alias, counted");
+    assert.match(errors(foes("s.foes[Math.floor(1)]!.hp = 0;"))[0] ?? "", /index written through a field .* plain value/);
+    assert.match(errors(foes("s.foes[0]?.tags.push('x');"))[0] ?? "", /cannot use `\?\.`/);
+  });
+
+  it("not in the component body, nor in useUnmount", () => {
+    assert.match(
+      errors(`interface Foe { id: number }
+export function Hero() { const s = useMutable({ list: [] as Foe[] }); s.list.push({ id: 1 }); return <Entity />; }`)[0] ?? "",
+      /cannot be written in the component body/,
+    );
+    assert.match(
+      errors(`interface Foe { id: number }
+export function Hero() { const s = useMutable({ list: [] as Foe[] }); useUnmount(() => { s.list.push({ id: 1 }); }); return <Entity />; }`)[0] ?? "",
+      /cannot be written in `useUnmount`/,
+    );
   });
 });

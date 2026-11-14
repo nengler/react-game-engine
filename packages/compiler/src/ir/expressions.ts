@@ -152,6 +152,8 @@ export interface PropertyReadIR {
 export interface PropReadIR {
   readonly kind: "PropRead";
   readonly name: string;
+  /** In a handler: the prop as the parent has it now (`liveProp`), not as its last render copied it. */
+  readonly live?: true;
 }
 
 /** `r.current`: the ref's current value. Only valid inside handlers (a JSX read would never update). */

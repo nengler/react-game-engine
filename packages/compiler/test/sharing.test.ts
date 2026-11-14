@@ -1,6 +1,7 @@
 /**
  * Sharing state between components (REACT_FEEL_PLAN.md, A6): lifted up to a common parent and passed down by props or through
- * context, with the timing pinned. A value a child reports up in a step is seen by its siblings in the next one.
+ * context, with the timing pinned. A value a child reports up in a step is seen, in that step, by a sibling after it that reads it by
+ * a prop (props are read live in handlers); a value passed by context is still the one the parent last rendered, seen in the next step.
  */
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -58,7 +59,7 @@ export function Level({ onChaserSees, onWatcherSees }: LevelProps) {
 }`;
 
 describe("sharing state between components", () => {
-  it("lifts it up: what a child reports in a step, the others see in the next, by props and through context alike", async () => {
+  it("lifts it up: what a child reports in a step, a later sibling sees by props at once, and through context in the next", async () => {
     const compiled = compile(SOURCE, "Level.tsx");
     mkdirSync(dirname(compiled.fileName), { recursive: true });
     writeFileSync(join(dirname(compiled.fileName), "..", "level.ts"), LEVEL);
@@ -73,8 +74,9 @@ describe("sharing state between components", () => {
       world.tick(1 / 60);
       world.flush();
     }
-    // Step 1: the player moves to 1 and reports it; the others still see 0, the state as the step began.
-    assert.deepEqual(byProps, [0, 1, 2, 3]);
+    // Step 1: the player moves to 1 and reports it. The chaser, after it in the tree, reads `target` as the parent has it now: 1.
+    assert.deepEqual(byProps, [1, 2, 3, 4]);
+    // The watcher reads a context value, which is what the parent last rendered: 0, the state as the step began (not live yet).
     assert.deepEqual(byContext, [0, 1, 2, 3]);
   });
 });

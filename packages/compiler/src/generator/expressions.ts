@@ -238,7 +238,7 @@ export class ExpressionEmitter {
         // A prop with a default is never undefined (the runtime applies the default at construction and on update),
         // but its declared type is optional; `!` says what the runtime guarantees.
         const guaranteed = this.c.props.find((p) => p.name === e.name)?.defaultValue != null;
-        return `this.props.${e.name}${guaranteed ? "!" : ""}`;
+        return `${e.live ? `this.$live.${e.name}` : `this.props.${e.name}`}${guaranteed ? "!" : ""}`;
       }
       case "RefRead": return `this.${this.refField(e.ref)}`;
       case "MemberRead": return `${this.expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
@@ -285,11 +285,13 @@ export class ExpressionEmitter {
         // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
         // A memo a handler works out from `useMutable` fields as they are now (`spawns@live`) depends on their live values.
         const live = new Set<StateId>();
+        const liveProps = new Set<string>();
         walkExpr(e.value, (x) => {
           if (x.kind === "StateRead" && x.live) live.add(x.state);
+          if (x.kind === "PropRead" && x.live) liveProps.add(x.name);
         });
         const deps = collectDependencies(e.value).map((d) =>
-          d.kind === "State" ? (live.has(d.state) ? pendingRef(this.state(d.state)) : `this.${this.state(d.state).name}`) : d.kind === "Prop" ? `this.props.${d.name}` : null,
+          d.kind === "State" ? (live.has(d.state) ? pendingRef(this.state(d.state)) : `this.${this.state(d.state).name}`) : d.kind === "Prop" ? (liveProps.has(d.name) ? `this.$live.${d.name}` : `this.props.${d.name}`) : null,
         );
         if (deps.includes(null)) throw new Error(`A memo of ${this.c.name} reads a list item`);
         // Read under a condition (`return hero ? <Hp value={hp} /> : null` from `if (!hero) return null;`): TypeScript does not carry

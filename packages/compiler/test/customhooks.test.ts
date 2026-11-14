@@ -146,8 +146,9 @@ function Two() {
       "Both.tsx",
     );
     assert.deepEqual(typeCheck(compiled), []);
-    // The hook's mutable keeps a name of its own call (`_useThing1_s`), so its `x` never meets the component's.
-    assert.match(compiled.code, /\$_useThing1_s_x: number = 1;/);
+    // The hook's mutable is named after the hook (`thing`), so its `x` never meets the component's `s.x`.
+    assert.match(compiled.code, /\$thing_x: number = 1;/);
+    assert.match(compiled.code, /"Both\.thing\.x"/, "and is saved under that name");
     assert.match(compiled.code, /\$s_x: number = 100;/);
   });
 
@@ -166,8 +167,8 @@ function Two() {
     assert.match(recursive[0]!.message, /levels deep|recurse/);
   });
 
-  it("keep the rules of a component: a hook that mutates state in place is the same error it would be inline", () => {
-    const found = compileErrors(`function useBad() { const s = useMutable({ items: [] as number[] }); useUpdate(() => { s.items.push(1); }); } function C() { useBad(); return <Entity name="C" />; }`);
+  it("keep the rules of a component: a hook that returns a list method's result is the same error it would be inline", () => {
+    const found = compileErrors(`function useBad() { const s = useMutable({ items: [] as number[] }); useUpdate(() => { const n = s.items.push(1); s.items = [n]; }); } function C() { useBad(); return <Entity name="C" />; }`);
     assert.ok(found.length > 0);
   });
 
@@ -180,7 +181,7 @@ function Two() {
       const repo = resolve(import.meta.dirname, "../../..");
       execFileSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out"), "--no-check"], { cwd: repo, stdio: "pipe" });
       const clock = readFileSync(join(dir, "out/Clock.ts"), "utf8");
-      assert.match(clock, /\$_useClock1_s_t: number = 0;/, "the hook's state is the component's own, under the call's name");
+      assert.match(clock, /\$clock_t: number = 0;/, "the hook's state is the component's own, named after the hook");
       assert.doesNotMatch(clock, /useClock\(/);
       assert.doesNotMatch(clock, /hooks\.ts/, "the hook's file is not imported at run time");
     } finally {
@@ -193,5 +194,32 @@ function Two() {
       { fileName: `${process.cwd()}/.test-output/H${Math.random()}.tsx`, text: `import { Entity, useMutable, useRef, useInput, useUpdate } from "@rge/runtime/jsx";\n${SOURCE}` },
     ]);
     assert.deepEqual(found, []);
+  });
+});
+
+describe("custom hooks: the name of a hook's own state", () => {
+  it("is the hook's name without `use`, numbered where it is taken, and never a name the component has", () => {
+    const compiled = compile(
+      `function useThing() { const s = useMutable({ x: 1 }); useUpdate(() => { s.x += 1; }); return s.x; }
+       function Twice() { const a = useThing(); const b = useThing(); return <Entity name="T" transform={{ x: a, y: b }} />; }
+       function Taken() { const thing = useMutable({ n: 0 }); const a = useThing(); return <Entity name="K" transform={{ x: a + thing.n }} />; }`,
+      "Names.tsx",
+    );
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /\$thing_x: number = 1;/);
+    assert.match(compiled.code, /\$thing2_x: number = 1;/, "a second call of the same hook");
+    assert.match(compiled.code, /\$thing_n: number = 0;[^]*\$thing2_x/, "and one the component already has");
+  });
+
+  it("is the call's own name where the hook returns it, and falls back to a prefix where the hook's name is a keyword", () => {
+    const compiled = compile(
+      `function useCounter() { const s = useMutable({ n: 0 }); return s; }
+       function useDefault() { const s = useMutable({ n: 0 }); useUpdate(() => { s.n += 1; }); return s.n; }
+       function C() { const counter = useCounter(); const d = useDefault(); return <Entity name="C" transform={{ x: counter.n + d }} />; }`,
+      "Names2.tsx",
+    );
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /\$counter_n: number = 0;/);
+    assert.match(compiled.code, /\$_useDefault\d_s_n: number = 0;/);
   });
 });

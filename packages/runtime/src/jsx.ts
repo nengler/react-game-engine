@@ -201,7 +201,7 @@ export function Provider<T>(_props: { context: Context<T>; value: T; children?: 
  * A component's state, written directly: `const s = useMutable({ vx: 0, vy: 0 })`, then `s.vx += 1` in a handler. Each field
  * renders when it changes, is saved, and is kept by hot reload and rewind. A handler reads its own writes at once (and every
  * earlier handler's in the step); render, and the props and context it hands down, see what the frame committed. Fields are
- * written in handlers only, and a list or record is replaced, not changed in place. It replaces React's `useState`.
+ * written in handlers only. A list or record may be changed in place (`s.list.push(x)`, `s.list[i].hp -= 1`): the field is given the copy. It replaces React's `useState`.
  */
 export function useMutable<T extends Record<string, unknown>>(_initial: T): T {
   return compileTimeOnly("useMutable");

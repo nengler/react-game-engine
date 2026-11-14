@@ -78,7 +78,7 @@ describe("what a component owns and does itself", () => {
       const code = p.out("Enemy.ts");
       assert.match(code, /tally: ReturnType<typeof makeTally> = makeTally\(\);/);
       assert.match(code, /this\.#\$st_tallyNext\.add\(/);
-      assert.match(code, /const blow = useGame\.getState\(\)\.strike\(this\.props\.power\);/);
+      assert.match(code, /const blow = useGame\.getState\(\)\.strike\(this\.\$live\.power\);/);
       assert.match(code, /springBack\(/, "useSquash was inlined: its spring back is this component's own update");
       assert.match(code, /shakeOn\(/, "and so was useShake");
       const { Enemy } = (await import(pathToFileURL(join(p.dir, "out", "Enemy.ts")).href)) as {
