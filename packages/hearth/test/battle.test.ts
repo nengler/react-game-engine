@@ -32,8 +32,8 @@ function enemy(kind: "runner" | "grunt" | "brute" = "brute", maxHp = 1000) {
   return { t, onKilled, onLeaked };
 }
 
-/** A component's `useSim` fields (`s`), as the test reads them. */
-const sim = (t: { state(): Record<string, unknown> }) => t.state().s as Record<string, number | boolean>;
+/** A component's `useMutable` fields (`s`), as the test reads them. */
+const fields = (t: { state(): Record<string, unknown> }) => t.state().s as Record<string, number | boolean>;
 
 /** What lands on an enemy: a blast at (x, y) (its middle, by default the path's start, where a new enemy stands). */
 const blast = (over: Partial<ColliderData["blast"]> = {}) => ({ tag: "blast", data: { target: -1, x: START.x, y: START.y, radius: 14, damage: 18, slow: 0, ...over } });
@@ -42,37 +42,37 @@ describe("an enemy", () => {
   it("walks the path at its kind's speed", () => {
     const { t } = enemy("brute");
     t.step(STEPS_A_SECOND);
-    assert.ok(Math.abs((sim(t).dist as number) - ENEMIES.brute.speed) < 1e-6, `walked ${sim(t).dist}`);
+    assert.ok(Math.abs((fields(t).dist as number) - ENEMIES.brute.speed) < 1e-6, `walked ${fields(t).dist}`);
   });
 
   it("takes a blast's damage when its middle is within the blast's radius, and flashes", () => {
     const { t } = enemy();
     t.collide("enemy", blast());
-    assert.equal(sim(t).hp, 1000 - 18);
-    assert.equal(sim(t).flash, true);
+    assert.equal(fields(t).hp, 1000 - 18);
+    assert.equal(fields(t).flash, true);
     t.step(8);
-    assert.equal(sim(t).flash, false, "for 0.12 s");
+    assert.equal(fields(t).flash, false, "for 0.12 s");
     t.collide("enemy", blast({ x: START.x + 30 }));
-    assert.equal(sim(t).hp, 1000 - 18, "a blast whose circle it is outside of does nothing");
+    assert.equal(fields(t).hp, 1000 - 18, "a blast whose circle it is outside of does nothing");
   });
 
   it("is hit by a bolt aimed at it, and not by one aimed at another", () => {
     const { t } = enemy();
     t.collide("enemy", blast({ target: 2, damage: 6, radius: 0 }));
-    assert.equal(sim(t).hp, 1000);
+    assert.equal(fields(t).hp, 1000);
     t.collide("enemy", blast({ target: 1, damage: 6, radius: 0, x: 0, y: 0 }));
-    assert.equal(sim(t).hp, 1000 - 6);
+    assert.equal(fields(t).hp, 1000 - 6);
   });
 
   it("is slowed by frost: 40% slower for as long as the pulse says", () => {
-    const free = sim(enemy().t.step(30)).dist as number;
+    const free = fields(enemy().t.step(30)).dist as number;
     const { t } = enemy();
     t.collide("enemy", blast({ damage: 2, slow: TOWERS.frost.slowFor }));
     t.step(30);
-    assert.ok(Math.abs((sim(t).dist as number) - free * (1 - TOWERS.frost.slow)) < 1e-6, `walked ${sim(t).dist}`);
-    assert.ok((sim(t).slow as number) > 0);
+    assert.ok(Math.abs((fields(t).dist as number) - free * (1 - TOWERS.frost.slow)) < 1e-6, `walked ${fields(t).dist}`);
+    assert.ok((fields(t).slow as number) > 0);
     t.step(STEPS_A_SECOND + 1);
-    assert.equal(sim(t).slow, 0, "and walks freely again after 1.5 s");
+    assert.equal(fields(t).slow, 0, "and walks freely again after 1.5 s");
   });
 
   it("says when it dies, with where it fell, the step after its hit points run out", () => {
@@ -120,7 +120,7 @@ describe("a tower", () => {
     near(3, 44, 0, 120); // inside the box it asks about, outside its 40 px reach
     t.step(13);
     assert.equal((onFire.mock.calls[0]?.arguments[0] as { target: number }).target, 2);
-    assert.ok(Math.abs((sim(t).angle as number) - Math.PI / 2) < 1e-9);
+    assert.ok(Math.abs((fields(t).angle as number) - Math.PI / 2) < 1e-9);
   });
 
   it("does not fire with nothing in range, and keeps its barrel where it was", () => {
@@ -128,7 +128,7 @@ describe("a tower", () => {
     near(1, 200, 0, 50);
     t.step(STEPS_A_SECOND);
     assert.equal(onFire.mock.callCount(), 0);
-    assert.equal(sim(t).angle, -Math.PI / 2);
+    assert.equal(fields(t).angle, -Math.PI / 2);
   });
 
   it("a mortar fires a shell that lands near where the target was, a little off", () => {

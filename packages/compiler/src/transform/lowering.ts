@@ -63,8 +63,8 @@ export class LoweringBase {
   /** Component scope; function lowering nests scopes beneath it via `scope`. */
   protected readonly componentScope = new Scope();
   protected readonly stateTypes = new Map<StateId, TypeIR>();
-  /** The state slots that are fields of a `useSim`: a handler reads them as they are now (a `live` read). */
-  protected readonly simStates = new Set<StateId>();
+  /** The state slots that are fields of a `useMutable`: a handler reads them as they are now (a `live` read). */
+  protected readonly mutableStates = new Set<StateId>();
   protected serial = 0;
   scope: Scope = this.componentScope;
   protected readonly usedNames: Set<string>;
@@ -331,11 +331,11 @@ export class LoweringBase {
     return { name: decl.name, role: decl.role };
   }
 
-  /** Resolves `s.vx` for a `useSim` value `s` to its state slot. Undefined if `node` is not on one, "error" after reporting. */
-  simField(node: PropertyAccessExpression): StateId | "error" | undefined {
+  /** Resolves `s.vx` for a `useMutable` value `s` to its state slot. Undefined if `node` is not on one, "error" after reporting. */
+  mutableField(node: PropertyAccessExpression): StateId | "error" | undefined {
     const object = unwrapParens(node.expression);
     const binding = isIdentifier(object) ? this.scope.get(object.text) : undefined;
-    if (binding?.kind !== "sim") return undefined;
+    if (binding?.kind !== "mutable") return undefined;
     const id = binding.fields.get(node.name.text);
     if (id === undefined) {
       const near = nearest(node.name.text, [...binding.fields.keys()]);

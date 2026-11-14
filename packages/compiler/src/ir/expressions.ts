@@ -121,7 +121,7 @@ export interface StateReadIR {
   readonly kind: "StateRead";
   readonly state: StateId;
   /**
-   * A handler's read of a `useSim` field: the value as this handler (or an earlier one this step) last wrote it, not the
+   * A handler's read of a `useMutable` field: the value as this handler (or an earlier one this step) last wrote it, not the
    * committed one render sees.
    */
   readonly live?: true;

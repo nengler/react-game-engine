@@ -277,7 +277,7 @@ export class ExpressionEmitter {
         const local = this.mode.memoLocals.get(e.key) ?? (this.mode.inCallback ? undefined : this.mode.renderMemos.get(e.key));
         if (local !== undefined) return local;
         // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
-        // A memo a handler works out from `useSim` fields as they are now (`spawns@live`) depends on their live values.
+        // A memo a handler works out from `useMutable` fields as they are now (`spawns@live`) depends on their live values.
         const live = new Set<StateId>();
         walkExpr(e.value, (x) => {
           if (x.kind === "StateRead" && x.live) live.add(x.state);

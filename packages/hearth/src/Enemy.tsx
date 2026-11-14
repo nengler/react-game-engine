@@ -1,4 +1,4 @@
-import { AnimatedSprite, Collider, Entity, after, cancelTimers, useSim, useUpdate } from "@rge/runtime/jsx";
+import { AnimatedSprite, Collider, Entity, after, cancelTimers, useMutable, useUpdate } from "@rge/runtime/jsx";
 import { HealthBar } from "./HealthBar.tsx";
 import { FLASH } from "./rules/constants.ts";
 import { ENEMIES } from "./rules/enemies.ts";
@@ -27,7 +27,7 @@ interface EnemyProps {
  * hit, blue while slowed, a health bar once hurt. Towers find it by its collider, whose data says where it is.
  */
 export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps) {
-  const s = useSim({ dist: 0, hp: maxHp, slow: 0, flash: false });
+  const s = useMutable({ dist: 0, hp: maxHp, slow: 0, flash: false });
   const at = pathAt(MAP.path, s.dist);
   const x = at.x - at.dy * lane;
   const y = at.y + at.dx * lane;

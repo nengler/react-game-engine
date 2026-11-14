@@ -1,9 +1,9 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type ArrowFunction, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
-import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseStateCallAnalysis, type UseSimCallAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis, type UseContextCallAnalysis } from "../analyzer/analyzer.ts";
+import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseStateCallAnalysis, type UseMutableCallAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis, type UseContextCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type SimFieldIR, type StateIR } from "../ir/types.ts";
+import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type MutableFieldIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { lowerFunction, lowerRenderBlock } from "./statements.ts";
@@ -163,7 +163,7 @@ export class HookLowering extends ExpressionLowering {
           if (!fn) break;
           const key = `$block${++this.renderBlocks}`;
           const value: ExprIR = { kind: "Memo", key, value: { kind: "Block", fn } };
-          // In a handler, the block is worked out from `useSim` fields as they are now: under a memo of its own, so once until a
+          // In a handler, the block is worked out from `useMutable` fields as they are now: under a memo of its own, so once until a
           // field it reads is written.
           const relowerBlock = (): ExprIR | null => {
             const live = this.within({ inRenderBlock: true }, () => lowerRenderBlock(this, hook.statements, hook.names, hook.first));
@@ -189,7 +189,7 @@ export class HookLowering extends ExpressionLowering {
           const lowered = this.lowerNode(hook.initializer);
           if (!lowered) break;
           const value = memoized(hook.name, lowered);
-          // In a handler, worked out from `useSim` fields as they are now (`@live`: a memo of its own, with the fields' live values as
+          // In a handler, worked out from `useMutable` fields as they are now (`@live`: a memo of its own, with the fields' live values as
           // what it depends on, so once until a field it reads is written).
           const initializer = hook.initializer;
           const relowerValue = (): ExprIR | null => {
@@ -224,8 +224,8 @@ export class HookLowering extends ExpressionLowering {
         case "useState":
           this.lowerUseState(hook, state, hooks);
           break;
-        case "useSim":
-          this.lowerUseSim(hook, state, hooks);
+        case "useMutable":
+          this.lowerUseMutable(hook, state, hooks);
           break;
       }
     }
@@ -233,13 +233,13 @@ export class HookLowering extends ExpressionLowering {
   }
 
   /**
-   * `const s = useSim({ vx: 0, vy: 0 })`: each field is a state slot of its own, as if declared with `useState`; `s.vx` reads it
+   * `const s = useMutable({ vx: 0, vy: 0 })`: each field is a state slot of its own, as if declared with `useState`; `s.vx` reads it
    * and `s.vx = …` writes it. What differs is the handler's view: it reads its own writes at once (a `live` read), while render
    * and everything else sees the committed value, as with any state. The name is claimed as a field (`s`, or `$s` where the root
    * built-in has that member), since the class gets a getter of that name (`component.s.vx`). Each slot's id is `Hero.s.vx`: hot
    * reload, saves, the inspector and `@rge/testing` know it as `s.vx`, and a dot cannot be part of a name, so it is unambiguous.
    */
-  protected lowerUseSim(hook: UseSimCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
+  protected lowerUseMutable(hook: UseMutableCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
     if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
       this.report(DiagnosticCode.InvalidUseState, `'${hook.name}' is already declared in this component.`, hook.declaration);
       return;
@@ -249,24 +249,24 @@ export class HookLowering extends ExpressionLowering {
     const fields = new Map<string, StateId>();
     for (const field of hook.fields) {
       if (fields.has(field.name)) {
-        this.report(DiagnosticCode.InvalidUseState, `useSim has '${field.name}' twice.`, hook.declaration);
+        this.report(DiagnosticCode.InvalidUseState, `useMutable has '${field.name}' twice.`, hook.declaration);
         return;
       }
-      const sim: SimFieldIR = { name: hook.name, view, field: field.name };
-      const id = this.lowerUseState({ kind: "useState", valueName: field.name, setterName: field.name, initializer: field.initializer, typeArgument: field.typeNode, call: hook.call, declaration: hook.declaration }, state, hooks, sim);
+      const mutable: MutableFieldIR = { name: hook.name, view, field: field.name };
+      const id = this.lowerUseState({ kind: "useState", valueName: field.name, setterName: field.name, initializer: field.initializer, typeArgument: field.typeNode, call: hook.call, declaration: hook.declaration }, state, hooks, mutable);
       if (id === null) return;
-      this.simStates.add(id);
+      this.mutableStates.add(id);
       fields.set(field.name, id);
     }
-    this.componentScope.declare(hook.name, { kind: "sim", name: hook.name, fields });
+    this.componentScope.declare(hook.name, { kind: "mutable", name: hook.name, fields });
   }
 
   /**
-   * One `useState`, or, with `sim`, one field of a `useSim` (kept in `$s_vx`, set by `$set_s_vx`, and not in scope by a name of its
+   * One `useState`, or, with `mutable`, one field of a `useMutable` (kept in `$s_vx`, set by `$set_s_vx`, and not in scope by a name of its
    * own: it is read as `s.vx`). The state's id, or null after reporting.
    */
-  protected lowerUseState(hook: UseStateCallAnalysis, state: StateIR[], hooks: HookIR[], sim: SimFieldIR | null = null): StateId | null {
-    if (sim === null) {
+  protected lowerUseState(hook: UseStateCallAnalysis, state: StateIR[], hooks: HookIR[], mutable: MutableFieldIR | null = null): StateId | null {
+    if (mutable === null) {
       const taken = [hook.valueName, hook.setterName].find((n) => n !== null && this.componentScope.hasOwn(n));
       if (taken) {
         this.report(DiagnosticCode.InvalidUseState, `'${taken}' is already declared in this component.`, hook.declaration);
@@ -274,12 +274,12 @@ export class HookLowering extends ExpressionLowering {
       }
     }
     // The fields and the setter take the author's names, or `$name` where the root built-in already has that member.
-    const field = this.claimField(sim === null ? hook.valueName : `$${sim.view}_${sim.field}`, hook.declaration);
+    const field = this.claimField(mutable === null ? hook.valueName : `$${mutable.view}_${mutable.field}`, hook.declaration);
     if (field === null) return null;
-    const setterName = sim === null ? hook.setterName : `$set_${sim.view}_${sim.field}`;
+    const setterName = mutable === null ? hook.setterName : `$set_${mutable.view}_${mutable.field}`;
     const setterMethod = setterName === null ? null : this.claimField(setterName, hook.declaration);
     if (setterName !== null && setterMethod === null) return null;
-    const id = stateId(this.component.name, sim === null ? hook.valueName : `${sim.name}.${sim.field}`);
+    const id = stateId(this.component.name, mutable === null ? hook.valueName : `${mutable.name}.${mutable.field}`);
     if (!hook.initializer) {
       this.report(DiagnosticCode.InvalidUseState, "useState requires an initial value.", hook.call);
       return null;
@@ -305,10 +305,10 @@ export class HookLowering extends ExpressionLowering {
     if (!type) return null;
     const handle = type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain");
     if (handle) this.handleStates.add(id);
-    state.push({ kind: "State", id, name: field, type, initialValue, ...(handle ? { handle: true as const } : {}), ...(sim !== null ? { sim } : {}) });
+    state.push({ kind: "State", id, name: field, type, initialValue, ...(handle ? { handle: true as const } : {}), ...(mutable !== null ? { mutable } : {}) });
     this.stateTypes.set(id, type);
     hooks.push({ kind: "UseState", state: id, setterName: setterMethod, span: this.span(hook.declaration) });
-    if (sim === null) {
+    if (mutable === null) {
       this.componentScope.declare(hook.valueName, { kind: "state", id });
       if (hook.setterName !== null) this.componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
     }

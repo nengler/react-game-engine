@@ -143,7 +143,7 @@ export interface UseStoreCallAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | UseSimCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis | UseContextCallAnalysis;
+export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | UseMutableCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis | UseContextCallAnalysis;
 
 /** `const theme = useContext(Theme)` or `const { accent, text: ink } = useContext(Theme)`. */
 export interface UseContextCallAnalysis {
@@ -230,11 +230,11 @@ export interface UseStateCallAnalysis {
 }
 
 /**
- * `const s = useSim({ vx: 0, vy: 0 })`: state written directly (`s.vx += 1`) and read back at once in handlers. Each field is
+ * `const s = useMutable({ vx: 0, vy: 0 })`: state written directly (`s.vx += 1`) and read back at once in handlers. Each field is
  * an ordinary state slot underneath; only the way a handler reaches it differs.
  */
-export interface UseSimCallAnalysis {
-  readonly kind: "useSim";
+export interface UseMutableCallAnalysis {
+  readonly kind: "useMutable";
   readonly name: string;
   readonly fields: readonly { readonly name: string; readonly initializer: Expression; readonly typeNode: Node | null }[];
   readonly call: CallExpression;
@@ -245,7 +245,7 @@ export const HOOK_NAME = /^use[A-Z0-9]/;
 
 export const HANDLER_HOOKS: ReadonlySet<string> = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 
-export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useState", "useSim", "useRef", "useSound", "useContext", ...HANDLER_HOOKS]);
+export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useState", "useMutable", "useRef", "useSound", "useContext", ...HANDLER_HOOKS]);
 
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS];

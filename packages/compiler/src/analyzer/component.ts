@@ -5,7 +5,7 @@ import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/d
 import { spanOf } from "../parser/parser.ts";
 import { type ImportAnalysis, type JsxRoot, type PropsAnalysis, type PropBindingAnalysis, type ComponentAnalysis, type HookCallAnalysis, type RenderConstAnalysis, HOOK_NAME, KNOWN_HOOKS } from "./model.ts";
 import { unwrapParens, visit } from "./util.ts";
-import { matchSimStatement, matchUseStateStatement, matchRenderConst, matchStoreStatement, matchHandleStatement, matchHandlerStatement, matchContextStatement, type StatementMatch } from "./matchers.ts";
+import { matchMutableStatement, matchUseStateStatement, matchRenderConst, matchStoreStatement, matchHandleStatement, matchHandlerStatement, matchContextStatement, type StatementMatch } from "./matchers.ts";
 
 
 
@@ -173,7 +173,7 @@ export function analyzeComponent(
   const matchers: readonly ((statement: Statement) => StatementMatch | null)[] = [
     (statement) => matchStoreStatement(statement, storeNames),
     matchUseStateStatement,
-    matchSimStatement,
+    matchMutableStatement,
     matchHandleStatement,
     matchContextStatement,
     matchHandlerStatement,

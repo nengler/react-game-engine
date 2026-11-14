@@ -1,4 +1,4 @@
-import { Entity, Sprite, useBody, useSim, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Sprite, useBody, useMutable, useUpdate } from "@rge/runtime/jsx";
 import type { Fired } from "./battle.ts";
 import { Barrel } from "./Barrel.tsx";
 import { sfx } from "./effects.ts";
@@ -33,7 +33,7 @@ interface TowerProps {
  * each one is from its collider's data. It draws the base, the barrel, the pips, the flash of a shot, and its range.
  */
 export function Tower({ seed, kind, level, x, y, ring, onFire }: TowerProps) {
-  const s = useSim({ cooldown: 0.2, angle: -Math.PI / 2, flash: 0, scatter: seed });
+  const s = useMutable({ cooldown: 0.2, angle: -Math.PI / 2, flash: 0, scatter: seed });
   const stats = statsOf(kind, level);
   const reach = statsOf(kind, MAX_LEVEL).range;
   const { overlapping } = useBody({ x: -reach, y: -reach, width: reach * 2, height: reach * 2 });

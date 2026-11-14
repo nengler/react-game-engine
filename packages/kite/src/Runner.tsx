@@ -1,4 +1,4 @@
-import { Entity, Shape, Tilemap, useBody, useSim, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Shape, Tilemap, useBody, useMutable, useUpdate } from "@rge/runtime/jsx";
 import * as K from "./rules/constants.ts";
 import { readControls } from "./rules/controls.ts";
 import { ROOM_LIST } from "./rules/rooms.ts";
@@ -12,7 +12,7 @@ const approach = (value: number, target: number, amount: number): number => (val
 const sign = (n: number): number => (n > 0 ? 1 : n < 0 ? -1 : 0);
 
 /**
- * Kite's running, falling and jumping written as a component with `useBody` and `useSim` (REACT_FEEL_PLAN.md, A2), beside the rules the game
+ * Kite's running, falling and jumping written as a component with `useBody` and `useMutable` (REACT_FEEL_PLAN.md, A2), beside the rules the game
  * plays (`rules/body.ts`), to compare the two: the same numbers and the same order each step, with the room's solid tiles found by
  * the body instead of by `solidAt`. Not in the game: `test/runner.test.ts` plays both on the same input. Only the normal state's
  * ground moves are here (run, fall, a held jump with its grace and buffer, speed kept into a wall, a jump sliding past a ceiling's
@@ -21,7 +21,7 @@ const sign = (n: number): number => (n > 0 ? 1 : n < 0 ? -1 : 0);
 export function Runner({ room }: RunnerProps) {
   const start = ROOM_LIST[room]!;
   const { x, y, move, blocked } = useBody({ x: start.spawnX, y: start.spawnY, width: K.BODY_W, height: K.BODY_H });
-  const s = useSim({
+  const s = useMutable({
     vx: 0,
     vy: 0,
     /** Seconds left of the jump's grace after leaving the ground, of a jump pressed early, and of a held jump keeping its speed. */

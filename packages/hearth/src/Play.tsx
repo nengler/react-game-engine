@@ -1,4 +1,4 @@
-import { Entity, Hud, ParticleLayer, useInput, useRef, useSim, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Hud, ParticleLayer, useInput, useRef, useMutable, useUpdate } from "@rge/runtime/jsx";
 import { hpOf, type Built, type Fired, type Foe, type InFlight } from "./battle.ts";
 import { Enemy } from "./Enemy.tsx";
 import { fx, sfx } from "./effects.ts";
@@ -38,7 +38,7 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
   const paused = useGame((s) => s.paused);
   const { close, resume, toTitle, finish } = useGame.actions();
 
-  const s = useSim({
+  const s = useMutable({
     gold: startGold,
     lives: START_LIVES as number,
     /** Waves started so far, and whether one is on (enemies are coming or alive). */

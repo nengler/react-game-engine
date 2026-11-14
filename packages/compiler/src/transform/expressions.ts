@@ -64,8 +64,8 @@ export class ExpressionLowering extends LoweringBase {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
-        case "sim":
-          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a useSim value: read a field (\`${node.text}.${[...binding.fields.keys()][0]}\`). It cannot be passed or read whole.`, node);
+        case "mutable":
+          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a useMutable value: read a field (\`${node.text}.${[...binding.fields.keys()][0]}\`). It cannot be passed or read whole.`, node);
           return null;
         case "propsObject":
           this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`, node);
@@ -82,9 +82,9 @@ export class ExpressionLowering extends LoweringBase {
         // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
         // in a handler it reads the current state, like recomputing it there.
         case "derived": {
-          // In a handler, a value that depends on a `useSim` field is worked out from the fields as they are now.
+          // In a handler, a value that depends on a `useMutable` field is worked out from the fields as they are now.
           // Lowered against the component's scope, so a handler's own locals cannot shadow what the `const` reads.
-          if (this.mode.inHandler && binding.relower !== undefined && stateReads(binding.value).some((id) => this.simStates.has(id))) {
+          if (this.mode.inHandler && binding.relower !== undefined && stateReads(binding.value).some((id) => this.mutableStates.has(id))) {
             const outer = this.scope;
             this.scope = this.componentScope;
             try {
@@ -346,9 +346,9 @@ export class ExpressionLowering extends LoweringBase {
       }
       return { kind: "PropRead", name: propsObject.name };
     }
-    const sim = this.simField(node);
-    if (sim === "error") return null;
-    if (sim) return { kind: "StateRead", state: sim, ...(this.mode.inHandler ? { live: true as const } : {}) };
+    const mutable = this.mutableField(node);
+    if (mutable === "error") return null;
+    if (mutable) return { kind: "StateRead", state: mutable, ...(this.mode.inHandler ? { live: true as const } : {}) };
     const ref = this.refAccess(node);
     if (ref === "error") return null;
     if (ref) {
@@ -583,11 +583,11 @@ export class ExpressionLowering extends LoweringBase {
       return null;
     }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
-      // On a `useSim` field (`s.enemies.push(e)`): the field is assigned a new array, written as the author would write it.
+      // On a `useMutable` field (`s.enemies.push(e)`): the field is assigned a new array, written as the author would write it.
       const receiver = unwrapParens(callee.expression);
-      const sim = isPropertyAccessExpression(receiver) ? this.simField(receiver) : undefined;
-      if (sim === "error") return null;
-      if (sim !== undefined) {
+      const mutable = isPropertyAccessExpression(receiver) ? this.mutableField(receiver) : undefined;
+      if (mutable === "error") return null;
+      if (mutable !== undefined) {
         const list = receiver.getText(this.sourceFile);
         const item = node.arguments[0]?.getText(this.sourceFile) ?? "item";
         const instead: Readonly<Record<string, string>> = {

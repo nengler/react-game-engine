@@ -161,23 +161,23 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   return typeof one === "string" ? invalid(one) : { kind: "ok", hooks: [one] };
 }
 
-/** Recognises `const s = useSim({ a: 0, b: 0 })` (optionally `useSim<{ a: number; b: number }>({ … })`); null if the statement is not one. */
-export function matchSimStatement(statement: Statement): StatementMatch | null {
+/** Recognises `const s = useMutable({ a: 0, b: 0 })` (optionally `useMutable<{ a: number; b: number }>({ … })`); null if the statement is not one. */
+export function matchMutableStatement(statement: Statement): StatementMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
   if (list.declarations.length !== 1) return null;
   const declaration = list.declarations[0]!;
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
-  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useSim") return null;
+  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useMutable") return null;
   const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
-  if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) return invalid("useSim must be bound with a plain `const` name: `const s = useSim({ x: 0 })`.");
+  if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) return invalid("useMutable must be bound with a plain `const` name: `const s = useMutable({ x: 0 })`.");
   const arg = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
-  if (init.arguments.length !== 1 || !arg || !isObjectLiteralExpression(arg)) return invalid("useSim takes one object literal of initial values: `const s = useSim({ x: 0, y: 0 })`.");
+  if (init.arguments.length !== 1 || !arg || !isObjectLiteralExpression(arg)) return invalid("useMutable takes one object literal of initial values: `const s = useMutable({ x: 0, y: 0 })`.");
   const typeArgument = init.typeArguments?.[0];
   const typed = typeArgument && isTypeLiteralNode(typeArgument) ? typeArgument : null;
   const fields: { name: string; initializer: Expression; typeNode: Node | null }[] = [];
   for (const property of arg.properties) {
-    if (!isPropertyAssignment(property) || !isIdentifier(property.name)) return invalid("useSim's fields are written `name: value`, with plain names (no shorthand, spreads or computed keys).");
+    if (!isPropertyAssignment(property) || !isIdentifier(property.name)) return invalid("useMutable's fields are written `name: value`, with plain names (no shorthand, spreads or computed keys).");
     const key = property.name.text;
     const member = typed?.members.map((m) => m as unknown as { kind: SyntaxKind; name?: Node; type?: Node }).find((m) => m.kind === SyntaxKind.PropertySignature && m.name !== undefined && isIdentifier(m.name) && m.name.text === key);
     // `enemies: [] as readonly Foe[]`: the field's type, where the value alone does not say it.
@@ -185,8 +185,8 @@ export function matchSimStatement(statement: Statement): StatementMatch | null {
     const asserted = isAsExpression(written) && !(isTypeReferenceNode(written.type) && isIdentifier(written.type.typeName) && written.type.typeName.text === "const");
     fields.push({ name: key, initializer: asserted ? written.expression : property.initializer, typeNode: member?.type ?? (asserted ? written.type : null) });
   }
-  if (fields.length === 0) return invalid("useSim needs at least one field.");
-  return { kind: "ok", hooks: [{ kind: "useSim", name: declaration.name.text, fields, call: init, declaration }] };
+  if (fields.length === 0) return invalid("useMutable needs at least one field.");
+  return { kind: "ok", hooks: [{ kind: "useMutable", name: declaration.name.text, fields, call: init, declaration }] };
 }
 
 /** Recognises `const r = useRef<T>()` and `const play = useSound("a.wav")`; null if the statement is not one. */

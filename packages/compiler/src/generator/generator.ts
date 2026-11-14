@@ -352,16 +352,16 @@ class ComponentGenerator extends ElementEmitter {
         // The value setters write; it becomes `s.name` when the component next renders.
         if (this.hasSetter(s.id)) w.line(`${pending(s)}: ${typeText(s.type)} = this.${s.name};`);
       }
-      // A `useSim` is stored a field at a time (`$s_vx`); its getter reads them back as the source writes them, `component.s.vx`:
+      // A `useMutable` is stored a field at a time (`$s_vx`); its getter reads them back as the source writes them, `component.s.vx`:
       // the committed values (what render saw), for tests and tools. Made when asked for, so it costs nothing otherwise.
-      const sims = new Map<string, StateIR[]>();
+      const mutables = new Map<string, StateIR[]>();
       for (const s of c.state) {
-        if (s.sim === undefined) continue;
-        sims.set(s.sim.view, [...(sims.get(s.sim.view) ?? []), s]);
+        if (s.mutable === undefined) continue;
+        mutables.set(s.mutable.view, [...(mutables.get(s.mutable.view) ?? []), s]);
       }
-      for (const [view, fields] of sims) {
-        const type = fields.map((f) => `readonly ${f.sim!.field}: ${typeText(f.type)}`).join("; ");
-        w.line(`get ${view}(): { ${type} } { return { ${fields.map((f) => `${f.sim!.field}: this.${f.name}`).join(", ")} }; }`);
+      for (const [view, fields] of mutables) {
+        const type = fields.map((f) => `readonly ${f.mutable!.field}: ${typeText(f.type)}`).join("; ");
+        w.line(`get ${view}(): { ${type} } { return { ${fields.map((f) => `${f.mutable!.field}: this.${f.name}`).join(", ")} }; }`);
       }
       // The paths it reads: the runtime tells it when one changes (see `GameObject.gameStateKeys`).
       const globals = c.state.filter((s) => s.globalKey !== undefined);
