@@ -163,6 +163,8 @@ export class LoweringBase {
       case "StringLiteral":
       case "TemplateLiteral": return "string";
       case "BooleanLiteral": return "boolean";
+      /** `Math.PI`, `Math.E`: the constants a component may write. */
+      case "PlainRef": return /^Math\.[A-Z][A-Z0-9_]*$/.test(expr.name) ? "number" : null;
       case "StateRead": {
         const type = this.stateTypes.get(expr.state);
         return type?.kind === "Primitive" ? (type.name as ValueType) : null;
