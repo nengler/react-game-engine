@@ -3,9 +3,8 @@
 As of 2026-11-14. A follow-up to [MUTABLE_STATE.md](MUTABLE_STATE.md), written after `useMutable` replaced `useState` (#121). It
 records what that change left open and what building it turned up, and one decision taken since: **`useRef` is removed.**
 
-Props read live across components ("Shared lists: live everywhere", option A) is being built on its own branch and is not covered
-here. Gap 1 below interacts with it: a list item is found again by key in the parent's live list, so how a list is changed in place
-has to agree with that lookup.
+Props read live across components, tree-order handlers and in-place list writes were built in #124 (a separate branch, still open when
+this was written). What follows assumes #124's choices; where this note first leaned another way, it says so.
 
 ## Decided: remove `useRef`
 
@@ -34,32 +33,31 @@ To do:
 - One thing to settle first: a ref was handler-only, so it never showed in render. A field can be read in render. A field written in
   a handler and read in render makes the part that reads it render, which is correct and what the author asked for.
 
-## Open: changing a list or an object in place
+## Settled in #124, with what it leaves: changing a list or an object in place
 
-The largest gap, and the one to settle first. A list is replaced whole (`s.enemies = [...s.enemies, e]`) and `s.enemies.push(e)` is
-refused (`RGE1301`). Once fields are written directly, authors reach for `push` and `enemy.hp -= 1` at once, so the model reads as
-"mutable, except lists". The analysis (what breaks if it is allowed, how Svelte 4 and 5 went through it, the four options) is in
-[MUTABLE_STATE.md](MUTABLE_STATE.md), "Open: changing a list or an object in place". The short version:
+This note first leaned to option 3 (versions on each state slot). #124 built **option 2 instead: the compiler lowers an in-place
+write to the copy the author would write** (`s.list.push(x)` becomes `s.list = [...s.list, x]`, `s.list[i].hp -= 1` becomes
+`with(i, { ...item, hp })`, copying only what the path passes through). The reason it gives is the right one: a version on the slot
+cannot reach what the engine compares item by item (a keyed list hands each child its item, and a child's props guard is `===`), so
+copying keeps `===` true everywhere, costs nothing at run time and keeps the committed value a snapshot. Gap 1 as first written is
+closed, and the decision here is to keep the copy model and not add versions. What is left is the edges of it:
 
-- The engine finds changes by reference. A pushed list is the same array, so the setter's `next === pending` early return, render's
-  `$in` guards and the `$memo` memos all skip it, and the screen does not update.
-- The compiler cannot see every write (`const e = s.enemies[i]; e.hp -= 1`, or `damage(s.enemies, 3)` in a `rules/*.ts` helper).
-- The lean is option 3: each state slot gets a version, render's guards compare reference and version, writes the compiler sees bump
-  it, and a call it cannot see into that takes state bumps it afterwards. No proxies, nothing on the read path.
-
-**A silent failure that already exists.** Render compares what it reads by `===`, so a list or object changed in place by code the
-compiler does not check (plain `.ts` files allow anything) shows nothing on screen, and nothing warns. This is the same failure as
-the one above, reachable today. Until versions exist, a development warning is worth having: a slot whose contents changed while its
-reference did not, found by comparing against the committed copy that rewind already takes.
-
-**Open before building it:**
-
-1. Measure the cost on Hearth's wave 10 (about 1.2 ms a frame, held by CI bench budgets). A version bump per write is the cost to
-   count.
-2. How it meets live props: a child finds its list item by key in the parent's live list, so a change in place to that item must be
-   visible there at once, and a re-keyed item must still read its own last props.
-3. The gap it leaves: a helper that keeps a reference and changes it in a later frame. Rare; a documented rule, mostly caught by
-   `readonly` types (`readonly Foe[]`, `Readonly<Foe>`).
+1. **A helper or alias changes a list in place and nothing warns.** The compiler refuses the forms it can see (an alias,
+   `const e = s.list[0]; e.hp = 0`, a loop variable, the result of `push` used as a value) with what to write instead. It cannot see
+   `damage(s.enemies, 3)` in a plain `.ts` file, which allows anything, and render compares by `===`, so the screen shows nothing
+   and nothing says why. `readonly Foe[]` and `Readonly<Foe>` on the field catch it in the editor; they are not required. Two cheap
+   fixes, in order: make `readonly` the inferred type of an array or record field of `useMutable`, so a helper taking `Foe[]` does
+   not type-check; and a development warning when a slot's contents differ from the committed copy that rewind already takes while
+   its reference is the same.
+2. **A copy per write.** A loop writing every item of a list is quadratic in its length. #124 puts the limit at hundreds of items,
+   not thousands, and says to build the list in a local and assign it once. Measure it on Hearth's wave 10 (about 1.2 ms a frame,
+   held by CI bench budgets) before it is relied on for a bigger list, and have the diagnostic that refuses an unsupported form name
+   the local-and-assign pattern.
+3. **The refusals are a list to keep short.** `?.` in a write, an index that is not plain, an alias, a loop variable and a method's
+   result used as a value are refused. Each should keep a test that shows its message. If authors hit one often (a loop over a list
+   writing its items is the likeliest), lower it rather than refuse it.
+4. **Live props still read the last render in three places** (below): the same "two rules depending on where an element sits" the
+   design note warns of. In-place writes make this easier to hit, because a handler can now change an item a child reads by context.
 
 ## Open: the game state is not migrated
 
@@ -80,6 +78,19 @@ changed through `set` and a handler reads the old value after an action. Items t
   `free: [...]` list of fields components may write, not a setter per field.
 - `GameState.ts` must still return an object literal (`RGE1109`): decide whether the new shape keeps that.
 
+## Open: props still read the last render in three places
+
+#124 makes a child's props live in its handlers, found again by key for a list item. Not built there, and still reading what the
+parent's last render copied (the old one-step lag):
+
+- a value passed by context (`<Ctx.Provider value={s.x}>`);
+- what is below a list item (an item's own children), and a list item that switches between two elements (`c ? <A key … /> : <B key … />`);
+- a callback prop, which is never live (it is created once). This is by design: a callback is a function, not a value.
+
+Doing it for some elements and not others leaves two rules depending on where an element sits, so either finish these or document
+the three in the guide's frame-timing note, where an author looks. A list-item getter also does a `find` over the live list on each
+read; a per-frame cache is the fix if a game needs it.
+
 ## Rough edges found while building #121
 
 Each is real today. The first two cause wrong behavior; the rest cost time.
@@ -96,15 +107,11 @@ Each is real today. The first two cause wrong behavior; the rest cost time.
    tween starts in the step its target changes, not the next. The tests that pinned the old timing were updated with the reason
    beside each. Anything outside the repo that pins a replay or tuned feel to the old timing will differ, and the guide's frame-timing
    note should say so once.
-4. **A hook's internal mutable has a call-specific name.** Where a hook returns fields rather than the object (`useBody` returns
-   `{ x, y, move, … }` from `b`), its state is saved as `_useBody1_b.x`, so tests read where the component draws instead. Naming it
-   after the hook (`body.x`) would make it readable; not done. It also shows in the inspector and in saves.
+4. ~~**A hook's internal mutable has a call-specific name.**~~ *Fixed in #124:* named after the hook (`body.x`, `body2` on a clash).
+   Hot-reload keys for a hook's own state changed with it.
 5. **`s` read whole is a copy.** `total(s)` and `<Camera shake={shake}>` hand over a copy of the fields, not the live object, so a
    write inside the callee is lost. It is the opposite of `return s` from a hook, which hands the object back. Either make a copy an
    error where the callee could write it, or say it where `useMutable` is taught.
-6. **Dead code from `useState`.** The updater paths are unreachable now (`SetState` with an `updater`, `lowerSetState` in
-   `transform/statements.ts`, `updaterInPlace` in `generator/handlers.ts`), as nothing declares a setter binding. Remove them in a
-   change of their own.
-7. **Stale text.** `packages/kite/DESIGN.md` (line 22) still says the character's state is `useState`, and the doc comment on
-   `useMutable` in `packages/runtime/src/jsx.ts` (near line 204) still says a list or record "is replaced, not changed in place" and
-   that it "replaces React's `useState`" in the old terms; both change with gap 1.
+6. ~~**Dead code from `useState`.**~~ *Fixed in #124:* the updater paths, setter binding and `inUpdater` are removed.
+7. **Stale text.** `packages/kite/DESIGN.md` (line 22) still says the character's state is `useState`. The doc comment on `useMutable`
+   in `packages/runtime/src/jsx.ts` was updated in #124.
