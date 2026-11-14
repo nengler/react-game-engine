@@ -439,7 +439,7 @@ export class GameObject<P extends object = {}> {
   render(): void {}
 
   /**
-   * For hot reload: this object's own state (`useState` values, refs) by stable id, or null when it has none. Generated code
+   * For hot reload: this object's own state (`useMutable` fields, refs) by stable id, or null when it has none. Generated code
    * overrides it for a component with state or refs. See `captureHotState`.
    */
   saveHotState(): Record<string, unknown> | null {
@@ -503,7 +503,7 @@ export class GameObject<P extends object = {}> {
   }
 
   /**
-   * The per-instance objects this component keeps in state (`useState(() => createBody(…))`) that want to know their owner and
+   * The per-instance objects this component keeps in state (`useMutable({ body: createBody(…) })`) that want to know their owner and
    * world: each is told when the component joins a world and leaves it (`attachOwner` / `detachOwner`). Generated code lists them.
    */
   protected ownedHandles(): readonly unknown[] {

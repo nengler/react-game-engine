@@ -26,10 +26,10 @@ function compileProject(files: Record<string, string>): { status: number | null;
 describe("diagnostics in the source", () => {
   it("reports a type error in the source once, and does not check the generated code until the source passes", () => {
     const r = compileProject({
-      "A.tsx": `import { Entity, Sprite, useState } from "@rge/runtime/jsx";
+      "A.tsx": `import { Entity, Sprite, useMutable } from "@rge/runtime/jsx";
 export function A() {
-  const [n, setN] = useState(0);
-  return <Entity name="A"><Sprite image={n} /></Entity>;
+  const s = useMutable({ n: 0 });
+  return <Entity name="A"><Sprite image={s.n} /></Entity>;
 }
 `,
     });

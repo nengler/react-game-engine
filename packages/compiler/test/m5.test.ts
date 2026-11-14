@@ -1,7 +1,7 @@
 /**
  * M5a: records and arrays in handler code. Array and object literals (with
  * spreads), member reads on values, the non-mutating array methods with inline
- * arrow callbacks, and array or record state (`useState<EnemyData[]>([])`).
+ * arrow callbacks, and array or record state (`enemies: [] as EnemyData[]`).
  * Keyed lists in JSX (M5b) build on this.
  */
 import { after, before, describe, it } from "node:test";
@@ -34,26 +34,24 @@ function Target({ id, onHit }: TargetProps) {
 }
 
 function Swarm() {
-  const [enemies, setEnemies] = useState<EnemyData[]>([]);
-  const [spawned, setSpawned] = useState(0);
-  const [weakest, setWeakest] = useState("");
-  const full = enemies.length >= 3;
+  const s = useMutable({ enemies: [] as EnemyData[], spawned: 0, weakest: "" });
+  const full = s.enemies.length >= 3;
 
   useUpdate((dt) => {
     if (!full) {
-      setEnemies((list) => [...list, { id: \`e\${spawned}\`, hp: 2 + spawned }]);
-      setSpawned((n) => n + 1);
+      s.enemies = [...s.enemies, { id: \`e\${s.spawned}\`, hp: 2 + s.spawned }];
+      s.spawned += 1;
       return;
     }
-    const next = enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0);
-    if (next.some((e) => e.hp < 1)) setWeakest(next.find((e) => e.hp < 1)?.id ?? "");
-    setEnemies(next);
+    const next = s.enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0);
+    if (next.some((e) => e.hp < 1)) s.weakest = next.find((e) => e.hp < 1)?.id ?? "";
+    s.enemies = next;
   });
 
   return (
     <Entity name="Swarm">
       <Sprite image={full ? "full.png" : "spawning.png"} />
-      <Target id="t" onHit={(id) => setEnemies(enemies.filter((e) => e.id !== id))} />
+      <Target id="t" onHit={(id) => { s.enemies = s.enemies.filter((e) => e.id !== id); }} />
     </Entity>
   );
 }
@@ -64,10 +62,7 @@ interface EnemyData {
   hp: number;
 }
 interface SwarmInstance extends Entity {
-  enemies: EnemyData[];
-  spawned: number;
-  weakest: string;
-  setEnemies(value: EnemyData[] | ((previous: EnemyData[]) => EnemyData[])): void;
+  s: { enemies: EnemyData[]; spawned: number; weakest: string };
   readonly sprite: Sprite;
   readonly target: Entity & { onInput(input: InputState): void };
 }
@@ -105,10 +100,12 @@ describe("M5a: IR shape", () => {
     const c = component(
       `interface Item { id: string }
 function C() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [current, setCurrent] = useState<Item>({ id: "a" });
-  const [grid, setGrid] = useState<number[][]>([]);
-  const [mixed, setMixed] = useState<(Item | null)[]>([]);
+  const s = useMutable({
+    items: [] as Item[],
+    current: { id: "a" } as Item,
+    grid: [] as number[][],
+    mixed: [] as (Item | null)[],
+  });
   return <Entity name="C" />;
 }`,
       "C",
@@ -127,11 +124,12 @@ function C() {
   });
 
   it("lowers literals with spreads, member reads and array methods with arrow callbacks", () => {
-    const c = component(withHandler(`const [items, setItems] = useState<Item[]>([]);`, `setItems([...items.filter((e) => e.n > dt), { id: "x", n: items.length }]);`), "C");
+    const c = component(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items = [...s.items.filter((e) => e.n > dt), { id: "x", n: s.items.length }];`), "C");
     const handler = c.hooks.find((h) => h.kind === "OnUpdate");
     assert.ok(handler?.kind === "OnUpdate");
     const set = handler.handler.body[0] as StatementIR & { kind: "SetState"; value: ExprIR };
-    const items = { kind: "StateRead", state: "C.items" };
+    // A handler reads the field as it is now (its pending value).
+    const items = { kind: "StateRead", state: "C.s.items", live: true };
     const [arrow] = (stripSpans(set.value) as { elements: { value: { args: { params: { id: string }[] }[] } }[] }).elements[0]!.value.args;
     const e = { kind: "ParamRead", param: arrow!.params[0]!.id, name: "e" };
     assert.deepEqual(stripSpans(set.value), {
@@ -174,15 +172,15 @@ function C() {
     const c = component(
       `interface Item { n: number }
 function C() {
-  const [items, setItems] = useState<Item[]>([]);
-  return <Entity name="C"><Sprite image={items.some((e) => e.n > 3) ? "a.png" : "b.png"} /></Entity>;
+  const s = useMutable({ items: [] as Item[] });
+  return <Entity name="C"><Sprite image={s.items.some((e) => e.n > 3) ? "a.png" : "b.png"} /></Entity>;
 }`,
       "C",
     );
     const sprite = elementOf(c.root.children[0]!);
     const image = sprite.props[0]!;
     assert.equal(image.kind, "DynamicProp");
-    assert.deepEqual(image.kind === "DynamicProp" && image.dependencies, [{ kind: "State", state: "C.items" }]);
+    assert.deepEqual(image.kind === "DynamicProp" && image.dependencies, [{ kind: "State", state: "C.s.items" }]);
   });
 
   it("takes an array prop's type for state initialised from it", () => {
@@ -190,7 +188,7 @@ function C() {
       `interface Item { id: string }
 interface P { items: Item[] }
 function C({ items }: P) {
-  const [list, setList] = useState(items);
+  const s = useMutable({ list: items });
   return <Entity name="C" />;
 }`,
       "C",
@@ -203,54 +201,50 @@ function C({ items }: P) {
 describe("M5a: generated code", () => {
   it("types the state field, its pending value and its setter", () => {
     const { code } = compile(SWARM, "Swarm.tsx");
-    assert.match(code, /^ {2}enemies: EnemyData\[\] = \[\];$/m);
-    assert.match(code, /^ {2}#enemiesNext: EnemyData\[\] = this\.enemies;$/m);
-    assert.match(code, /setEnemies\(value: EnemyData\[\] \| \(\(previous: EnemyData\[\]\) => EnemyData\[\]\)\): void/);
+    assert.match(code, /^ {2}\$s_enemies: EnemyData\[\] = \[\];$/m);
+    assert.match(code, /^ {2}#\$s_enemiesNext: EnemyData\[\] = this\.\$s_enemies;$/m);
+    assert.match(code, /\$set_s_enemies\(value: EnemyData\[\]\): void/);
     assert.match(code, /^export interface EnemyData \{/m, "the record type is copied into the module");
   });
 
   it("emits literals, spreads, member reads and arrow callbacks; an object body is parenthesised", () => {
     const { code } = compile(SWARM, "Swarm.tsx");
-    // An updater of one expression, in a hook, is written out in place (see "updaters written in place" in behavior.test.ts).
-    assert.match(code, /const list = this\.#enemiesNext;\n\s+this\.#enemiesNext = \[\.\.\.list, \{ id: `e\$\{this\.spawned\}`, hp: 2 \+ this\.spawned \}\];\n\s+if \(this\.#enemiesNext !== list\) this\.markDirty\(\);/);
-    assert.match(code, /const next = this\.enemies\.map\(\(e\) => \(\{ \.\.\.e, hp: e\.hp - dt \}\)\)\.filter\(\(e\) => e\.hp > 0\);/);
-    assert.match(code, /this\.setWeakest\(next\.find\(\(e\) => e\.hp < 1\)\?\.id \?\? ""\);/);
-    assert.match(code, /onHit: \(id\) => \{ this\.setEnemies\(this\.enemies\.filter\(\(e\) => e\.id !== id\)\); \}/);
-    assert.match(code, /const (\$\d+) = \(this\.enemies\.length >= 3\) \? "full\.png" : "spawning\.png";[^]*?this\.sprite\.image = \1;/);
+    // A write is a call of the field's setter; a handler reads a field as it is now (its pending value), render as committed.
+    assert.match(code, /this\.\$set_s_enemies\(\[\.\.\.this\.#\$s_enemiesNext, \{ id: `e\$\{this\.#\$s_spawnedNext\}`, hp: 2 \+ this\.#\$s_spawnedNext \}\]\);/);
+    assert.match(code, /const next = this\.#\$s_enemiesNext\.map\(\(e\) => \(\{ \.\.\.e, hp: e\.hp - dt \}\)\)\.filter\(\(e\) => e\.hp > 0\);/);
+    assert.match(code, /this\.\$set_s_weakest\(next\.find\(\(e\) => e\.hp < 1\)\?\.id \?\? ""\);/);
+    assert.match(code, /onHit: \(id\) => \{ this\.\$set_s_enemies\(this\.#\$s_enemiesNext\.filter\(\(e\) => e\.id !== id\)\); \}/);
+    assert.match(code, /const (\$\d+) = \(this\.\$s_enemies\.length >= 3\) \? "full\.png" : "spawning\.png";[^]*?this\.sprite\.image = \1;/);
   });
 
-  it("parenthesises an object returned by an updater, and an array type of a union", () => {
+  it("writes an object to a field in a callback and in a hook, and types an array of a union", () => {
     const { code } = compile(`interface P2 { x: number }
 function C() {
-  const [p, setP] = useState<P2>({ x: 0 });
-  const [xs, setXs] = useState<(number | string)[]>([]);
-  useUpdate((dt) => { setP((p) => ({ ...p, x: p.x + dt })); });
-  return <Entity name="C"><Pointer width={1} height={1} onPress={() => setP((p) => ({ ...p, x: 0 }))} /></Entity>;
+  const s = useMutable({ p: { x: 0 } as P2, xs: [] as (number | string)[] });
+  useUpdate((dt) => { s.p = ({ ...s.p, x: s.p.x + dt }); });
+  return <Entity name="C"><Pointer width={1} height={1} onPress={() => { s.p = ({ ...s.p, x: 0 }); }} /></Entity>;
 }`);
-    // In a callback the updater stays an arrow, and its object body needs the parentheses; in the hook it is an assignment, and does not.
-    assert.match(code, /this\.setP\(\(p: P2\) => \(\{ \.\.\.p, x: 0 \}\)\);/);
-    assert.match(code, /this\.#pNext = \{ \.\.\.p, x: p\.x \+ dt \};/);
-    assert.match(code, /xs: \(number \| string\)\[\] = \[\];/);
+    assert.match(code, /onPress: \(\) => \{ this\.\$set_s_p\(\{ \.\.\.this\.#\$s_pNext, x: 0 \}\); \}/);
+    assert.match(code, /this\.\$set_s_p\(\{ \.\.\.this\.#\$s_pNext, x: this\.#\$s_pNext\.x \+ dt \}\);/);
+    assert.match(code, /\$s_xs: \(number \| string\)\[\] = \[\];/);
   });
 
   it("type-checks every allowlisted array method", () => {
     const compiled = compile(
       withHandler(
-        `const [items, setItems] = useState<Item[]>([{ id: "a", n: 1 }]);
-  const [count, setCount] = useState(0);
-  const [found, setFound] = useState(false);`,
-        `const ids = items.map((e, i) => e.id + i);
-    const first = items.find((e) => e.n > 0);
-    setFound(items.some((e) => e.n > dt) && items.every((e) => e.n >= 0) && ids.includes("a"));
-    setCount(items.findIndex((e) => e.id === "a") + ids.indexOf("a") + (first?.n ?? 0));
-    setItems(items.slice(1).concat([{ id: "b", n: 2 }], items.slice(0, 1)));`,
+        `const s = useMutable({ items: [{ id: "a", n: 1 }] as Item[], count: 0, found: false });`,
+        `const ids = s.items.map((e, i) => e.id + i);
+    const first = s.items.find((e) => e.n > 0);
+    s.found = s.items.some((e) => e.n > dt) && s.items.every((e) => e.n >= 0) && ids.includes("a");
+    s.count = s.items.findIndex((e) => e.id === "a") + ids.indexOf("a") + (first?.n ?? 0);
+    s.items = s.items.slice(1).concat([{ id: "b", n: 2 }], s.items.slice(0, 1));`,
       ),
     );
     assert.deepEqual(typeCheck(compiled), []);
   });
 
   it("leaves members of values to the type-check, which catches a wrong one", () => {
-    const compiled = compile(withHandler(`const [items, setItems] = useState<Item[]>([]);`, `setItems(items.filter((e) => e.nope));`));
+    const compiled = compile(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items = s.items.filter((e) => e.nope);`));
     const errors = typeCheck(compiled);
     assert.ok(errors.some((d) => d.code === DiagnosticCode.GeneratedTypeError && d.message.includes("nope")), JSON.stringify(errors));
   });
@@ -260,14 +254,13 @@ function C() {
   });
 
   it("type-checks authored source with array and record state", () => {
-    const source = `import { useState, useUpdate, Entity } from "@rge/runtime/jsx";
+    const source = `import { useMutable, useUpdate, Entity } from "@rge/runtime/jsx";
 interface Item { id: string; n: number }
 function C() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [best, setBest] = useState<Item>({ id: "", n: 0 });
+  const s = useMutable({ items: [] as Item[], best: { id: "", n: 0 } as Item });
   useUpdate((dt) => {
-    setItems([...items, { id: "x", n: dt }]);
-    setBest(items.find((e) => e.n > best.n) ?? best);
+    s.items = [...s.items, { id: "x", n: dt }];
+    s.best = s.items.find((e) => e.n > s.best.n) ?? s.best;
   });
   return <Entity name="C" />;
 }`;
@@ -283,14 +276,14 @@ describe("M5a: runtime behaviour", () => {
     const world = new World();
     const swarm = new Swarm();
     world.mount(swarm);
-    assert.deepEqual(swarm.enemies, []);
+    assert.deepEqual(swarm.s.enemies, []);
     assert.equal(swarm.sprite.image, "spawning.png");
 
     assert.equal(world.tick(0.5), 1, "one render for two setters");
-    assert.deepEqual(swarm.enemies, [{ id: "e0", hp: 2 }]);
+    assert.deepEqual(swarm.s.enemies, [{ id: "e0", hp: 2 }]);
     world.tick(0.5);
     world.tick(0.5);
-    assert.deepEqual(swarm.enemies, [{ id: "e0", hp: 2 }, { id: "e1", hp: 3 }, { id: "e2", hp: 4 }]);
+    assert.deepEqual(swarm.s.enemies, [{ id: "e0", hp: 2 }, { id: "e1", hp: 3 }, { id: "e2", hp: 4 }]);
     assert.equal(swarm.sprite.image, "full.png", "JSX that reads the array's length followed it");
   });
 
@@ -299,14 +292,14 @@ describe("M5a: runtime behaviour", () => {
     const swarm = new Swarm();
     world.mount(swarm);
     for (let i = 0; i < 3; i++) world.tick(0);
-    const before = swarm.enemies;
+    const before = swarm.s.enemies;
     world.tick(1.5);
-    assert.deepEqual(swarm.enemies, [{ id: "e0", hp: 0.5 }, { id: "e1", hp: 1.5 }, { id: "e2", hp: 2.5 }]);
-    assert.notEqual(swarm.enemies, before, "a new array");
+    assert.deepEqual(swarm.s.enemies, [{ id: "e0", hp: 0.5 }, { id: "e1", hp: 1.5 }, { id: "e2", hp: 2.5 }]);
+    assert.notEqual(swarm.s.enemies, before, "a new array");
     assert.deepEqual(before, [{ id: "e0", hp: 2 }, { id: "e1", hp: 3 }, { id: "e2", hp: 4 }], "the old array and records are untouched");
-    assert.equal(swarm.weakest, "e0", "find and optional member read");
+    assert.equal(swarm.s.weakest, "e0", "find and optional member read");
     world.tick(1);
-    assert.deepEqual(swarm.enemies.map((e) => e.id), ["e1", "e2"]);
+    assert.deepEqual(swarm.s.enemies.map((e) => e.id), ["e1", "e2"]);
   });
 
   it("passes a callback that filters the parent's array to a child", () => {
@@ -315,34 +308,32 @@ describe("M5a: runtime behaviour", () => {
     world.mount(swarm);
     for (let i = 0; i < 3; i++) world.tick(0);
     world.tick(0, input(["t"]));
-    // The Target's callback ran in the input phase, before the Swarm's update, which then rebuilt from the snapshot.
-    swarm.setEnemies([{ id: "t", hp: 9 }, { id: "u", hp: 9 }]);
+    // The Target's callback ran in the input phase, before the Swarm's update.
+    swarm.s.enemies = ([{ id: "t", hp: 9 }, { id: "u", hp: 9 }]);
     world.flush();
     swarm.target.onInput(input(["t"]));
     world.flush();
-    assert.deepEqual(swarm.enemies, [{ id: "u", hp: 9 }]);
+    assert.deepEqual(swarm.s.enemies, [{ id: "u", hp: 9 }]);
   });
 
-  it("does not render when a setter gets the same array", () => {
+  it("does not render when a field is given the same array", () => {
     const world = new World();
     const swarm = new Swarm();
     world.mount(swarm);
     world.flush();
-    swarm.setEnemies(swarm.enemies);
+    swarm.s.enemies = (swarm.s.enemies);
     assert.equal(world.flush(), 0);
-    swarm.setEnemies((list) => list);
-    assert.equal(world.flush(), 0);
-    swarm.setEnemies([...swarm.enemies]);
+    swarm.s.enemies = ([...swarm.s.enemies]);
     assert.equal(world.flush(), 1, "a copy is a new value");
   });
 });
 
 describe("M5a: diagnostics", () => {
   it("asks for a type argument for an empty array, and infers an object of plain values as TypeScript does", () => {
-    assert.deepEqual(codes(withHandler(`const [items, setItems] = useState([]);`, ``)), [DiagnosticCode.UnsupportedStateType]);
-    assert.match(compileErrors(withHandler(`const [items, setItems] = useState([]);`, ``))[0]!.message, /useState<EnemyData\[\]>\(\[\]\)/);
+    assert.deepEqual(codes(withHandler(`const s = useMutable({ items: [] });`, ``)), [DiagnosticCode.UnsupportedStateType]);
+    assert.match(compileErrors(withHandler(`const s = useMutable({ items: [] });`, ``))[0]!.message, /enemies: \[\] as EnemyData\[\]/);
     // Since 2026-11-14: `{ id: "a", n: 1 }` is `{ id: string; n: number }`, as TypeScript infers it.
-    assert.match(compile(withHandler(`const [item, setItem] = useState({ id: "a", n: 1 });`, ``)).code, /item: \{ id: string; n: number \} = /);
+    assert.match(compile(withHandler(`const s = useMutable({ item: { id: "a", n: 1 } });`, ``)).code, /\$s_item: \{ id: string; n: number \} = /);
   });
 
   it("keeps refs to values: a type that names an element is rejected", () => {
@@ -351,47 +342,47 @@ describe("M5a: diagnostics", () => {
 
   it("rejects mutating array methods, naming the immutable alternative", () => {
     for (const method of ["push", "splice", "sort"]) {
-      const errors = compileErrors(withHandler(`const [items, setItems] = useState<Item[]>([]);`, `items.${method}((e) => e);`));
+      const errors = compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.${method}((e) => e);`));
       assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedExpression], method);
       assert.match(errors[0]!.message, /in place/, method);
     }
     // `forEach` changes nothing itself: it is refused for a loop, not as a change in place.
-    const forEach = compileErrors(withHandler(`const [items, setItems] = useState<Item[]>([]);`, `items.forEach((e) => e);`));
+    const forEach = compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.forEach((e) => e);`));
     assert.deepEqual(forEach.map((d) => d.code), [DiagnosticCode.UnsupportedExpression]);
     assert.match(forEach[0]!.message, /^`forEach` is not supported: write a `for \(const item of items\)/);
-    assert.match(compileErrors(withHandler(`const [items, setItems] = useState<Item[]>([]);`, `items.push({ id: "a", n: 1 });`))[0]!.message, /setItems\(\[\.\.\.items, item\]\)/);
+    assert.match(compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.push({ id: "a", n: 1 });`))[0]!.message, /s\.items = \[\.\.\.s\.items, \{ id: "a", n: 1 \}\]/);
   });
 
   it("rejects array methods outside the allowlist, wrong argument counts and optional calls", () => {
-    const state = `const [items, setItems] = useState<Item[]>([]);`;
-    assert.deepEqual(codes(withHandler(state, `setItems(items.reduce((a, e) => a, []));`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(withHandler(state, `setItems(items.filter());`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(withHandler(state, `setItems(items.slice(1, 2, 3));`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(withHandler(state, `setItems(items?.filter((e) => e.n > 0));`)), [DiagnosticCode.UnsupportedExpression]);
+    const state = `const s = useMutable({ items: [] as Item[] });`;
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.reduce((a, e) => a, []);`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter();`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.slice(1, 2, 3);`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items?.filter((e) => e.n > 0);`)), [DiagnosticCode.UnsupportedExpression]);
   });
 
   it("takes only inline expression-bodied arrows as array callbacks", () => {
-    const state = `const [items, setItems] = useState<Item[]>([]);`;
-    assert.deepEqual(codes(withHandler(state, `setItems(items.filter((e) => { return e.n > 0; }));`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(withHandler(state, `setItems(items.filter(dt));`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(withHandler(state, `setItems(items.map((e) => setItems([])));`)), [DiagnosticCode.UnsupportedExpression], "a setter is not an expression");
-    assert.deepEqual(codes(withHandler(state, `setItems(items.filter(({ n }) => n > 0));`)), [DiagnosticCode.InvalidHandler]);
+    const state = `const s = useMutable({ items: [] as Item[] });`;
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter((e) => { return e.n > 0; });`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter(dt);`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.map((e) => (s.items = []));`)), [DiagnosticCode.UnsupportedExpression], "a write is not an expression");
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter(({ n }) => n > 0);`)), [DiagnosticCode.InvalidHandler]);
   });
 
   it("rejects arrow functions anywhere else", () => {
-    assert.deepEqual(codes(withHandler(`const [n, setN] = useState(0);`, `const f = () => 1;`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(`const s = useMutable({ n: 0 });`, `const f = () => 1;`)), [DiagnosticCode.UnsupportedExpression]);
   });
 
   it("rejects object methods, getters and computed names", () => {
-    const state = `const [item, setItem] = useState<Item>({ id: "a", n: 1 });`;
-    assert.deepEqual(codes(withHandler(state, `setItem({ id: "b", n() { return 1; } } as never);`)).includes(DiagnosticCode.UnsupportedExpression), true);
-    assert.deepEqual(codes(withHandler(state, `setItem({ ["id"]: "b", n: 1 });`)), [DiagnosticCode.UnsupportedExpression]);
+    const state = `const s = useMutable({ item: { id: "a", n: 1 } as Item });`;
+    assert.deepEqual(codes(withHandler(state, `s.item = { id: "b", n() { return 1; } } as never;`)).includes(DiagnosticCode.UnsupportedExpression), true);
+    assert.deepEqual(codes(withHandler(state, `s.item = { ["id"]: "b", n: 1 };`)), [DiagnosticCode.UnsupportedExpression]);
   });
 
   it("still rejects members of numbers and booleans", () => {
-    assert.deepEqual(codes(withHandler(`const [n, setN] = useState(0);`, `setN(n.x);`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(withHandler(`const [b, setB] = useState(false);`, `setB(b.x);`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.doesNotThrow(() => compile(withHandler(`const [s, setS] = useState("ab"); const [n, setN] = useState(0);`, `setN(s.length);`)), "a string's length is fine");
+    assert.deepEqual(codes(withHandler(`const s = useMutable({ n: 0 });`, `s.n = s.n.x;`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(`const s = useMutable({ b: false });`, `s.b = s.b.x;`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.doesNotThrow(() => compile(withHandler(`const s = useMutable({ str: "ab", n: 0 });`, `s.n = s.str.length;`)), "a string's length is fine");
   });
 });
 
@@ -415,26 +406,24 @@ function Enemy({ speed, onDefeated }: EnemyProps) {
 }
 
 function Pack() {
-  const [enemies, setEnemies] = useState<EnemyData[]>([]);
-  const [defeated, setDefeated] = useState("");
-  const [showBoss, setShowBoss] = useState(false);
+  const s = useMutable({ enemies: [] as EnemyData[], defeated: "", showBoss: false });
   return (
     <Entity name="Pack">
       <Sprite image="bg.png" />
-      {enemies.map((e) => (
+      {s.enemies.map((e) => (
         <Enemy
           key={e.id}
           speed={e.speed}
           onDefeated={() => {
-            setDefeated(\`\${e.id}@\${e.speed}\`);
-            setEnemies(enemies.filter((x) => x.id !== e.id));
+            s.defeated = \`\${e.id}@\${e.speed}\`;
+            s.enemies = s.enemies.filter((x) => x.id !== e.id);
           }}
         />
       ))}
       <Sprite image="fg.png" />
-      {showBoss && (
+      {s.showBoss && (
         <Entity name="Boss">
-          {enemies.filter((e) => e.speed > 5).map((e, i) => <Sprite key={e.id} image={e.id + ".png"} transform={{ x: i * 10 }} />)}
+          {s.enemies.filter((e) => e.speed > 5).map((e, i) => <Sprite key={e.id} image={e.id + ".png"} transform={{ x: i * 10 }} />)}
         </Entity>
       )}
     </Entity>
@@ -446,15 +435,12 @@ interface EnemyBInstance extends Entity {
   props: { speed: number; onDefeated?: () => void };
 }
 interface PackInstance extends Entity {
-  enemies: EnemyData2[];
-  defeated: string;
-  setEnemies(value: EnemyData2[]): void;
-  setShowBoss(value: boolean): void;
   readonly enemyItems: Map<string | number, EnemyBInstance>;
   readonly sprite: Sprite;
   readonly sprite2: Sprite;
   entity: Entity | null;
   readonly sprite3Items: Map<string | number, Sprite>;
+  s: { enemies: EnemyData2[]; defeated: string; showBoss: boolean };
 }
 interface EnemyData2 {
   id: string;
@@ -472,7 +458,7 @@ function pack(enemies: EnemyData2[] = []): { world: World; pack: PackInstance } 
   const world = new World();
   const p = new Pack();
   world.mount(p);
-  p.setEnemies(enemies);
+  p.s.enemies = (enemies);
   world.flush();
   return { world, pack: p };
 }
@@ -485,8 +471,8 @@ describe("M5b: IR shape", () => {
     const list = c.root.children[1]!;
     assert.equal(list.kind, "KeyedListChild");
     if (list.kind !== "KeyedListChild") return;
-    assert.deepEqual(list.source, { kind: "StateRead", state: "Pack.enemies" });
-    assert.deepEqual(list.dependencies, [{ kind: "State", state: "Pack.enemies" }]);
+    assert.deepEqual(list.source, { kind: "StateRead", state: "Pack.s.enemies" });
+    assert.deepEqual(list.dependencies, [{ kind: "State", state: "Pack.s.enemies" }]);
     assert.equal(list.item.name, "e");
     assert.equal(list.index, null);
     assert.deepEqual(list.key, { kind: "MemberRead", object: { kind: "ParamRead", param: list.item.id, name: "e" }, name: "id", optional: false });
@@ -527,7 +513,7 @@ describe("M5b: generated code", () => {
     const { code } = compile(PACK, "Pack.tsx");
     assert.match(code, /readonly enemyItems: Map<string \| number, Enemy> = new Map\(\);/);
     assert.match(code, /#enemyOrder: \(string \| number\)\[\] = \[\];/);
-    assert.match(code, /#enemyRecords: Map<string \| number, \{ current: Pack\["enemies"\]\[number\] \}> = new Map\(\);/, "a callback reads the item");
+    assert.match(code, /#enemyRecords: Map<string \| number, \{ current: Pack\["\$s_enemies"\]\[number\] \}> = new Map\(\);/, "a callback reads the item");
     assert.doesNotMatch(code, /#sprite3Records/, "no callback reads the item: no records");
   });
 
@@ -547,8 +533,8 @@ describe("M5b: generated code", () => {
     assert.match(code, /const \$rec = \{ current: e \};/);
     assert.match(code, /this\.#enemyRecords\.set\(\$key, \$rec\);/);
     assert.match(code, /this\.#enemyRecords\.get\(\$key\)!\.current = e;/, "refreshed on every render");
-    assert.match(code, /this\.setDefeated\(`\$\{\$rec\.current\.id\}@\$\{\$rec\.current\.speed\}`\);/);
-    assert.match(code, /this\.enemies\.filter\(\(x\) => x\.id !== \$rec\.current\.id\)/);
+    assert.match(code, /this\.\$set_s_defeated\(`\$\{\$rec\.current\.id\}@\$\{\$rec\.current\.speed\}`\);/);
+    assert.match(code, /this\.#\$s_enemiesNext\.filter\(\(x\) => x\.id !== \$rec\.current\.id\)/);
   });
 
   it("empties a list when its conditional subtree unmounts", () => {
@@ -561,11 +547,11 @@ describe("M5b: generated code", () => {
   });
 
   it("type-checks authored source with a list", () => {
-    const source = `import { useState, Entity, Sprite } from "@rge/runtime/jsx";
+    const source = `import { useMutable, Entity, Sprite } from "@rge/runtime/jsx";
 interface Item { id: string; n: number }
 function C() {
-  const [items, setItems] = useState<Item[]>([]);
-  return <Entity name="C">{items.map((e, i) => <Sprite key={e.id} image={e.id} transform={{ x: i * e.n }} />)}</Entity>;
+  const s = useMutable({ items: [] as Item[] });
+  return <Entity name="C">{s.items.map((e, i) => <Sprite key={e.id} image={e.id} transform={{ x: i * e.n }} />)}</Entity>;
 }`;
     assert.ok(getCompiler().compile("C.tsx", source).ok);
     assert.deepEqual(getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M5bSource.tsx`, text: source }]), []);
@@ -587,7 +573,7 @@ describe("M5b: runtime behaviour", () => {
       const render = item.render.bind(item);
       item.render = () => { renders[name]++; render(); };
     }
-    p.setEnemies([{ id: "a", speed: 1 }, { id: "b", speed: 5 }]);
+    p.s.enemies = ([{ id: "a", speed: 1 }, { id: "b", speed: 5 }]);
     assert.equal(world.flush(), 2, "the pack and the changed item render once each");
     assert.deepEqual(renders, { a: 0, b: 1 });
     assert.equal(p.enemyItems.get("a"), a);
@@ -599,7 +585,7 @@ describe("M5b: runtime behaviour", () => {
   it("removes items whose key is gone", () => {
     const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }, { id: "c", speed: 3 }]);
     const b = p.enemyItems.get("b")!;
-    p.setEnemies([{ id: "a", speed: 1 }, { id: "c", speed: 3 }]);
+    p.s.enemies = ([{ id: "a", speed: 1 }, { id: "c", speed: 3 }]);
     world.flush();
     assert.deepEqual(ids(p), ["bg.png", "1", "3", "fg.png"]);
     assert.equal(b.parent, null);
@@ -610,7 +596,7 @@ describe("M5b: runtime behaviour", () => {
   it("reorders by key, keeping instances, with static siblings in place", () => {
     const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }, { id: "c", speed: 3 }]);
     const before = [...p.enemyItems.values()];
-    p.setEnemies([{ id: "c", speed: 3 }, { id: "x", speed: 9 }, { id: "a", speed: 1 }, { id: "b", speed: 2 }]);
+    p.s.enemies = ([{ id: "c", speed: 3 }, { id: "x", speed: 9 }, { id: "a", speed: 1 }, { id: "b", speed: 2 }]);
     world.flush();
     assert.deepEqual(ids(p), ["bg.png", "3", "9", "1", "2", "fg.png"]);
     assert.ok(before.every((item) => [...p.enemyItems.values()].includes(item)), "same instances");
@@ -621,7 +607,7 @@ describe("M5b: runtime behaviour", () => {
   it("throws on a duplicate key without changing the list", () => {
     const { world, pack: p } = pack([{ id: "a", speed: 1 }]);
     const a = p.enemyItems.get("a");
-    p.setEnemies([{ id: "a", speed: 1 }, { id: "a", speed: 2 }]);
+    p.s.enemies = ([{ id: "a", speed: 1 }, { id: "a", speed: 2 }]);
     assert.throws(() => world.flush(), /Duplicate key "a" in the <Enemy> list of Pack/);
     assert.deepEqual([...p.enemyItems.keys()], ["a"]);
     assert.equal(p.enemyItems.get("a"), a);
@@ -629,29 +615,29 @@ describe("M5b: runtime behaviour", () => {
 
   it("gives a callback the item's current value, not the one it was created with", () => {
     const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }]);
-    p.setEnemies([{ id: "a", speed: 7 }, { id: "b", speed: 2 }]);
+    p.s.enemies = ([{ id: "a", speed: 7 }, { id: "b", speed: 2 }]);
     world.flush();
     p.enemyItems.get("a")!.props.onDefeated!();
     world.flush();
-    assert.equal(p.defeated, "a@7");
-    assert.deepEqual(p.enemies, [{ id: "b", speed: 2 }]);
+    assert.equal(p.s.defeated, "a@7");
+    assert.deepEqual(p.s.enemies, [{ id: "b", speed: 2 }]);
     assert.deepEqual(ids(p), ["bg.png", "2", "fg.png"]);
   });
 
   it("renders a filtered list inside a conditional, and starts it afresh when it remounts", () => {
     const { world, pack: p } = pack([{ id: "slow", speed: 1 }, { id: "fast", speed: 8 }, { id: "faster", speed: 9 }]);
-    p.setShowBoss(true);
+    p.s.showBoss = (true);
     world.flush();
     const boss = p.entity!;
     assert.deepEqual(boss.children.map((c) => [(c as Sprite).image, c.transform.x]), [["fast.png", 0], ["faster.png", 10]]);
-    p.setEnemies([{ id: "faster", speed: 9 }, { id: "fast", speed: 8 }]);
+    p.s.enemies = ([{ id: "faster", speed: 9 }, { id: "fast", speed: 8 }]);
     world.flush();
     assert.deepEqual(boss.children.map((c) => [(c as Sprite).image, c.transform.x]), [["faster.png", 0], ["fast.png", 10]], "the index follows the order");
-    p.setShowBoss(false);
+    p.s.showBoss = (false);
     world.flush();
     assert.equal(p.entity, null);
     assert.equal(p.sprite3Items.size, 0);
-    p.setShowBoss(true);
+    p.s.showBoss = (true);
     world.flush();
     assert.notEqual(p.entity, boss);
     assert.deepEqual(p.entity!.children.map((c) => (c as Sprite).image), ["faster.png", "fast.png"]);
@@ -671,7 +657,7 @@ function C({ items }: P) {
 });
 
 describe("M5b: diagnostics", () => {
-  const list = (item: string, state = `const [items, setItems] = useState<Item[]>([]);`) => `interface Item { id: string; n: number }
+  const list = (item: string, state = `const s = useMutable({ items: [] as Item[] });\n  const items = s.items;`) => `interface Item { id: string; n: number }
 function C() {
   ${state}
   return <Entity name="C">{${item}}</Entity>;
@@ -717,9 +703,8 @@ function C() {
 interface RowProps { onPick: () => void }
 function Row({ onPick }: RowProps) { return <Entity name="r" />; }
 function C() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [picked, setPicked] = useState(0);
-  return <Entity name="C">{items.map((e, i) => <Row key={e.id} onPick={() => setPicked(i)} />)}</Entity>;
+  const s = useMutable({ items: [] as Item[], picked: 0 });
+  return <Entity name="C">{s.items.map((e, i) => <Row key={e.id} onPick={() => { s.picked = i; }} />)}</Entity>;
 }`;
     assert.deepEqual(codes(P), [DiagnosticCode.InvalidList]);
   });
@@ -730,7 +715,7 @@ function C() {
 
   it("rejects key on a component's root (it goes where the component is used); a key on a child is a keyed element", () => {
     assert.deepEqual(codes(`function A() { return <Entity name="A" key="x"><Sprite image="a" /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
-    assert.doesNotThrow(() => compile(`function A() { const [k, setK] = useState(0); return <Entity name="A"><Sprite key={k} image="a" /></Entity>; }`));
+    assert.doesNotThrow(() => compile(`function A() { const s = useMutable({ k: 0 }); return <Entity name="A"><Sprite key={s.k} image="a" /></Entity>; }`));
   });
 });
 
@@ -739,7 +724,7 @@ function C() {
 // ---------------------------------------------------------------------------
 
 const CARD = `
-import { type Child, Entity, Sprite, Collider, useState } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite, Collider, useMutable } from "@rge/runtime/jsx";
 
 interface PanelProps {
   title: string;
@@ -760,19 +745,18 @@ function Panel({ title, children }: PanelProps) {
 }
 
 function Card() {
-  const [open, setOpen] = useState(false);
-  const [label, setLabel] = useState("a");
+  const s = useMutable({ open: false, label: "a" });
   return (
     <Entity name="Card">
-      <Panel title={label}>
+      <Panel title={s.label}>
         <Sprite image="first.png" />
-        {open && <Sprite image={label + "-open.png"} />}
+        {s.open && <Sprite image={s.label + "-open.png"} />}
         <Sprite image="last.png" />
       </Panel>
-      {open && (
+      {s.open && (
         <Panel title="shown">
           <Sprite image="inner.png" />
-          {label === "b" && <Sprite image="inner-b.png" />}
+          {s.label === "b" && <Sprite image="inner-b.png" />}
         </Panel>
       )}
     </Entity>
@@ -785,10 +769,9 @@ interface PanelInstance extends Entity {
   readonly entity: Entity;
 }
 interface CardInstance extends Entity {
-  setOpen(value: boolean): void;
-  setLabel(value: string): void;
   readonly panel: PanelInstance;
   panel2: PanelInstance | null;
+  s: { open: boolean; label: string };
 }
 
 let Card: new () => CardInstance;
@@ -819,7 +802,7 @@ describe("M8: IR shape", () => {
     assert.deepEqual(panel.children.map((k) => k.kind), ["StaticChild", "ConditionalChild", "StaticChild"]);
     const conditional = panel.children[1]!;
     assert.ok(conditional.kind === "ConditionalChild");
-    assert.deepEqual(conditional.dependencies, [{ kind: "State", state: "Card.open" }]);
+    assert.deepEqual(conditional.dependencies, [{ kind: "State", state: "Card.s.open" }]);
   });
 });
 
@@ -881,10 +864,10 @@ describe("M8: runtime behaviour", () => {
     const world = new World();
     const card = new Card();
     world.mount(card);
-    card.setOpen(true);
+    card.s.open = (true);
     world.flush();
     assert.deepEqual(kids(body(card.panel)), ["1", "first.png", "a-open.png", "last.png", "2"]);
-    card.setOpen(false);
+    card.s.open = (false);
     world.flush();
     assert.deepEqual(kids(body(card.panel)), ["1", "first.png", "last.png", "2"]);
   });
@@ -893,10 +876,10 @@ describe("M8: runtime behaviour", () => {
     const world = new World();
     const card = new Card();
     world.mount(card);
-    card.setOpen(true);
+    card.s.open = (true);
     world.flush();
     const open = body(card.panel).children[2] as Sprite;
-    card.setLabel("b");
+    card.s.label = ("b");
     world.flush();
     assert.equal(open.image, "b-open.png", "same instance, the parent's prop followed its state");
     assert.equal(card.panel.props.title, "b");
@@ -906,15 +889,15 @@ describe("M8: runtime behaviour", () => {
     const world = new World();
     const card = new Card();
     world.mount(card);
-    card.setOpen(true);
-    card.setLabel("b");
+    card.s.open = (true);
+    card.s.label = ("b");
     world.flush();
     const first = card.panel2!;
     assert.deepEqual(kids(body(first)), ["1", "inner.png", "inner-b.png", "2"]);
-    card.setOpen(false);
+    card.s.open = (false);
     world.flush();
     assert.equal(card.panel2, null);
-    card.setOpen(true);
+    card.s.open = (true);
     world.flush();
     assert.notEqual(card.panel2, first);
     assert.deepEqual(kids(body(card.panel2!)), ["1", "inner.png", "inner-b.png", "2"]);
@@ -930,25 +913,23 @@ describe("M8: runtime behaviour", () => {
 
 describe("M8: conditional passed children keep their place among static ones", () => {
   const SOURCE = `
-import { type Child, Entity, Sprite, useState } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite, useMutable } from "@rge/runtime/jsx";
 interface BoxProps { children: Child }
 function Box({ children }: BoxProps) { return <Entity name="Box"><Entity name="Slot">{children}</Entity></Entity>; }
 function Host() {
-  const [x, setX] = useState(false);
-  const [y, setY] = useState(false);
+  const s = useMutable({ x: false, y: false });
   return (
     <Entity name="Host">
       <Box>
-        {x && <Sprite image="A" />}
+        {s.x && <Sprite image="A" />}
         <Sprite image="B" />
-        {y && <Sprite image="C" />}
+        {s.y && <Sprite image="C" />}
       </Box>
     </Entity>
   );
 }`;
   interface HostInstance extends Entity {
-    setX(value: boolean): void;
-    setY(value: boolean): void;
+    s: { x: boolean; y: boolean };
     readonly box: Entity;
   }
   let Host: new () => HostInstance;
@@ -964,8 +945,8 @@ function Host() {
       world.mount(host);
       assert.deepEqual(images(host), ["B"]);
       for (const which of order) {
-        if (which === "x") host.setX(true);
-        else host.setY(true);
+        if (which === "x") host.s.x = (true);
+        else host.s.y = (true);
         world.flush();
       }
       assert.deepEqual(images(host), ["A", "B", "C"], `turned on in the order ${order}`);
@@ -976,13 +957,13 @@ function Host() {
     const world = new World();
     const host = new Host();
     world.mount(host);
-    host.setX(true);
-    host.setY(true);
+    host.s.x = (true);
+    host.s.y = (true);
     world.flush();
-    host.setX(false);
+    host.s.x = (false);
     world.flush();
     assert.deepEqual(images(host), ["B", "C"]);
-    host.setX(true);
+    host.s.x = (true);
     world.flush();
     assert.deepEqual(images(host), ["A", "B", "C"]);
   });
@@ -990,19 +971,19 @@ function Host() {
 
 describe("M8: a list as the children", () => {
   const LIST = `
-import { type Child, Entity, Sprite, Collider, useState } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite, Collider, useMutable } from "@rge/runtime/jsx";
 interface Row { id: string }
 interface ColumnProps { children: Child }
 function Column({ children }: ColumnProps) {
   return <Entity name="Column"><Sprite image="header" />{children}<Sprite image="footer" /></Entity>;
 }
 function Table() {
-  const [rows, setRows] = useState<Row[]>([]);
-  return <Entity name="Table"><Column>{rows.map((r) => <Sprite key={r.id} image={r.id} />)}</Column></Entity>;
+  const s = useMutable({ rows: [] as Row[] });
+  return <Entity name="Table"><Column>{s.rows.map((r) => <Sprite key={r.id} image={r.id} />)}</Column></Entity>;
 }
 `;
   interface TableInstance extends Entity {
-    setRows(value: { id: string }[]): void;
+    s: { rows: { id: string }[] };
     readonly column: Entity;
   }
   let Table: new () => TableInstance;
@@ -1022,17 +1003,17 @@ function Table() {
     const world = new World();
     const t = new Table();
     world.mount(t);
-    t.setRows([{ id: "a" }, { id: "b" }, { id: "c" }]);
+    t.s.rows = ([{ id: "a" }, { id: "b" }, { id: "c" }]);
     world.flush();
     assert.deepEqual(kids(t.column), ["header", "a", "b", "c", "footer"]);
-    t.setRows([{ id: "c" }, { id: "x" }, { id: "a" }]);
+    t.s.rows = ([{ id: "c" }, { id: "x" }, { id: "a" }]);
     world.flush();
     assert.deepEqual(kids(t.column), ["header", "c", "x", "a", "footer"]);
   });
 });
 
 describe("M8: diagnostics", () => {
-  const IMPORT = `import { type Child, Entity, Sprite, Collider, useState } from "@rge/runtime/jsx";\n`;
+  const IMPORT = `import { type Child, Entity, Sprite, Collider, useMutable } from "@rge/runtime/jsx";\n`;
   const box = (props: string, body: string) => `${IMPORT}interface BoxProps { ${props} }\nfunction Box({ ${props.includes("children") ? "children" : ""} }: BoxProps) { return <Entity name="Box">${body}</Entity>; }`;
   const diag = (source: string) => compileErrors(source).map((d) => d.code);
 
@@ -1075,7 +1056,8 @@ function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{child
     const parent = (children: string) => `${box("children: Child", "{children}")}
 interface Row { id: string }
 function Table() {
-  const [rows, setRows] = useState<Row[]>([]);
+  const s = useMutable({ rows: [] as Row[] });
+  const rows = s.rows;
   return <Entity name="Table"><Box>${children}</Box></Entity>;
 }`;
     assert.ok(diag(parent(`<Sprite image="x" />{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)).includes(DiagnosticCode.InvalidList));
@@ -1086,8 +1068,8 @@ function Table() {
     const source = `${box("children: Child", "{children}")}
 interface Row { id: string }
 function Table() {
-  const [rows, setRows] = useState<Row[]>([]);
-  return <Entity name="Table">{rows.map((r) => <Box key={r.id}><Entity name="x"><Sprite image="x" /></Entity></Box>)}</Entity>;
+  const s = useMutable({ rows: [] as Row[] });
+  return <Entity name="Table">{s.rows.map((r) => <Box key={r.id}><Entity name="x"><Sprite image="x" /></Entity></Box>)}</Entity>;
 }`;
     assert.doesNotThrow(() => compile(source));
     assert.ok(diag(`${box("children: Child", "{children}")}\nfunction A() { return <Entity name="A"><Box children={1} /></Entity>; }`).includes(DiagnosticCode.UnsupportedAttribute));

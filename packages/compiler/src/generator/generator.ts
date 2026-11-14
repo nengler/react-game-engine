@@ -352,16 +352,20 @@ class ComponentGenerator extends ElementEmitter {
         // The value setters write; it becomes `s.name` when the component next renders.
         if (this.hasSetter(s.id)) w.line(`${pending(s)}: ${typeText(s.type)} = this.${s.name};`);
       }
-      // A `useMutable` is stored a field at a time (`$s_vx`); its getter reads them back as the source writes them, `component.s.vx`:
-      // the committed values (what render saw), for tests and tools. Made when asked for, so it costs nothing otherwise.
+      // A `useMutable` is stored a field at a time (`$s_vx`); its view reads and writes them as the source does, `component.s.vx`,
+      // for tests and tools: a read is the committed value (what render saw), a write goes through the field's setter, so it renders
+      // as a handler's write would. Made the first time it is asked for, so it costs nothing otherwise.
       const mutables = new Map<string, StateIR[]>();
       for (const s of c.state) {
         if (s.mutable === undefined) continue;
         mutables.set(s.mutable.view, [...(mutables.get(s.mutable.view) ?? []), s]);
       }
       for (const [view, fields] of mutables) {
-        const type = fields.map((f) => `readonly ${f.mutable!.field}: ${typeText(f.type)}`).join("; ");
-        w.line(`get ${view}(): { ${type} } { return { ${fields.map((f) => `${f.mutable!.field}: this.${f.name}`).join(", ")} }; }`);
+        const type = `{ ${fields.map((f) => `${f.mutable!.field}: ${typeText(f.type)}`).join("; ")} }`;
+        const cache = `#${view}View`;
+        const members = fields.map((f) => `get ${f.mutable!.field}() { return self.${f.name}; }, set ${f.mutable!.field}(value: ${typeText(f.type)}) { self.${this.setter(f.id)}(value); }`);
+        w.line(`${cache}: ${type} | undefined;`);
+        w.line(`get ${view}(): ${type} { const self = this; return (this.${cache} ??= { ${members.join(", ")} }); }`);
       }
       // The paths it reads: the runtime tells it when one changes (see `GameObject.gameStateKeys`).
       const globals = c.state.filter((s) => s.globalKey !== undefined);
@@ -444,11 +448,11 @@ class ComponentGenerator extends ElementEmitter {
             const s = this.state(hook.state);
             const type = typeText(s.type);
             w.blank();
-            // React semantics: reads see the value from the last render; updaters chain on the pending value.
-            w.at(hook.span, () => w.block(`${hook.setterName}(value: ${type} | ((previous: ${type}) => ${type})): void`, () => {
-              w.line(`const next = typeof value === "function" ? value(${pendingRef(s)}) : value;`);
-              w.line(`if (next === ${pendingRef(s)}) return;`);
-              w.line(`${pendingRef(s)} = next;`);
+            // A write: the next value, which a handler reads back at once and render sees once committed. Only a different value
+            // (`===`) renders.
+            w.at(hook.span, () => w.block(`${hook.setterName}(value: ${type}): void`, () => {
+              w.line(`if (value === ${pendingRef(s)}) return;`);
+              w.line(`${pendingRef(s)} = value;`);
               w.line("this.markDirty();");
             }));
             break;

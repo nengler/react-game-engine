@@ -213,12 +213,12 @@ export function Badge() {
     assert.equal((badge.children[0] as Text).text, "Bo");
   });
 
-  it("starts a useState from the game state as it is when the component is made", async () => {
+  it("starts a useMutable field from the game state as it is when the component is made", async () => {
     const compiled = build(`
 export function Counter() {
   const coins = useGame((s) => s.coins);
-  const [start, setStart] = useState(coins * 10);
-  return <Text size={12}>{\`\${start}\`}</Text>;
+  const st = useMutable({ start: coins * 10 });
+  return <Text size={12}>{\`\${st.start}\`}</Text>;
 }`);
     assert.deepEqual(typeErrors(compiled), []);
     const { Counter } = await load<{ Counter: new () => Text }>(generated(compiled));
@@ -231,8 +231,8 @@ export function Counter() {
     act("collect", 1);
     world.flush();
     assert.equal(counter.text, "30", "only the first value: it is the component's own state from then on");
-    // As in React, the component's own state declared above may give the first value too (its value when the component is made).
-    const own = build(`export function A() { const [a] = useState(7); const [b] = useState(a * 2); return <Text>{b}</Text>; }`);
+    // The component's own state declared above may give the first value too (its value when the component is made).
+    const own = build(`export function A() { const s = useMutable({ a: 7 }); const t = useMutable({ b: s.a * 2 }); return <Text>{t.b}</Text>; }`);
     const { A } = await load<{ A: new () => Text }>(generated(own));
     assert.equal(new A().text, "14");
   });
@@ -247,7 +247,7 @@ export function Counter() {
   });
 
   it("does not touch a component that uses only useState", () => {
-    const compiled = build(`function A() { const [n, setN] = useState(0); useUpdate(() => setN(n + 1)); return <Entity />; }`);
+    const compiled = build(`function A() { const s = useMutable({ n: 0 }); useUpdate(() => { s.n += 1; }); return <Entity />; }`);
     assert.doesNotMatch(compiled.code, /GameState|useGame/);
   });
 
@@ -325,11 +325,10 @@ export function Swarm() {
     assert.ok(errors(`function A() { if (true) { const c = useGame((s) => s.coins); } return <Entity />; }`).some((d) => d.code === DiagnosticCode.HookNotAtTopLevel));
   });
 
-  it("keeps an action out of values: it is only called, as a statement, and not in an updater", () => {
-    const run = (body: string) => errors(`function A() { const [n, setN] = useState(0); const hurt = useGame((s) => s.hurt); ${body} return <Entity name="A" />; }`).map((d) => d.code);
+  it("keeps an action out of values: it is only called, as a statement", () => {
+    const run = (body: string) => errors(`function A() { const st = useMutable({ n: 0 }); const hurt = useGame((s) => s.hurt); ${body} return <Entity name="A" />; }`).map((d) => d.code);
     assert.deepEqual(run(`useUpdate(() => { const x = hurt; });`), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(run(`useUpdate(() => { setN(hurt()); });`), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(run(`useUpdate(() => { setN((n) => { hurt(); return n; }); });`), [DiagnosticCode.SoundOutsideHandler]);
+    assert.deepEqual(run(`useUpdate(() => { st.n = hurt(); });`), [DiagnosticCode.UnsupportedExpression]);
     assert.ok(errors(`function A() { const hurt = useGame((s) => s.hurt); return <Text size={hurt}>x</Text>; }`).length > 0);
   });
 

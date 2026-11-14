@@ -133,7 +133,7 @@ export class Body implements PixelActor {
   }
 }
 
-/** Make a body: `useBody` does, in a `useState` of the component that owns it. */
+/** Make a body: `useBody` does, in a `useMutable` field of the component that owns it. */
 export function createBody(options: BodyOptions): Body {
   return new Body(options);
 }

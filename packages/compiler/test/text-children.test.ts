@@ -13,7 +13,7 @@ after(() => {
   cleanOutput();
 });
 
-const LABEL = `import { Entity, Text, useInput, useState, type TextChild } from "@rge/runtime/jsx";
+const LABEL = `import { Entity, Text, useInput, useMutable, type TextChild } from "@rge/runtime/jsx";
 interface LabelProps {
   color?: string;
   children: TextChild | readonly TextChild[];
@@ -34,15 +34,15 @@ export function Button({ children }: ButtonProps) {
 }
 
 export function Purse() {
-  const [coins, setCoins] = useState(3);
+  const s = useMutable({ coins: 3 });
   useInput((input) => {
-    if (input.pressed("Space")) setCoins(coins + 1);
+    if (input.pressed("Space")) s.coins += 1;
   });
   return (
     <Entity>
-      <Label>Coins: {coins}</Label>
+      <Label>Coins: {s.coins}</Label>
       <Label color="red">GAME OVER</Label>
-      <Button>Buy for {coins * 2}</Button>
+      <Button>Buy for {s.coins * 2}</Button>
     </Entity>
   );
 }`;

@@ -21,10 +21,10 @@ interface BadgeProps {
 }
 
 function Badge({ id, onGone }: BadgeProps) {
-  const [ready, setReady] = useState(false);
+  const s = useMutable({ ready: false });
   const mounted = useRef(0);
   useMount(() => {
-    setReady(true);
+    s.ready = true;
     mounted.current += 1;
   });
   useUnmount(() => {
@@ -33,7 +33,7 @@ function Badge({ id, onGone }: BadgeProps) {
   });
   return (
     <Entity name={id}>
-      <Sprite image={ready ? "ready.png" : "pending.png"} />
+      <Sprite image={s.ready ? "ready.png" : "pending.png"} />
     </Entity>
   );
 }
@@ -43,14 +43,12 @@ interface Item {
 }
 
 function Board() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [gone, setGone] = useState("");
-  const [open, setOpen] = useState(false);
+  const s = useMutable({ items: [] as Item[], gone: "", open: false });
   return (
     <Entity name="Board">
-      {open && <Badge id="solo" onGone={() => setGone("solo")} />}
-      {items.map((it) => (
-        <Badge key={it.id} id={it.id} onGone={() => setGone("item:" + it.id)} />
+      {s.open && <Badge id="solo" onGone={() => { s.gone = "solo"; }} />}
+      {s.items.map((it) => (
+        <Badge key={it.id} id={it.id} onGone={() => { s.gone = "item:" + it.id; }} />
       ))}
     </Entity>
   );
@@ -58,16 +56,14 @@ function Board() {
 `;
 
 interface BadgeInstance extends Entity {
-  ready: boolean;
   mounted: number;
   readonly sprite: Sprite;
+  s: { ready: boolean };
 }
 interface BoardInstance extends Entity {
-  gone: string;
-  setItems(value: { id: string }[]): void;
-  setOpen(value: boolean): void;
   badge: BadgeInstance | null;
   readonly badge2Items: Map<string | number, BadgeInstance>;
+  s: { gone: string; open: boolean; items: { id: string }[] };
 }
 
 let Board: new () => BoardInstance;
@@ -91,7 +87,7 @@ describe("M9: IR and generated code", () => {
 
   it("overrides onMount and onUnmount", () => {
     const { code } = compile(BOARD, "Board.tsx");
-    assert.match(code, /override onMount\(\): void \{\n\s+this\.setReady\(true\);\n\s+this\.mounted \+= 1;\n\s+\}/);
+    assert.match(code, /override onMount\(\): void \{\n\s+this\.\$set_s_ready\(true\);\n\s+this\.mounted \+= 1;\n\s+\}/);
     assert.match(code, /override onUnmount\(\): void \{\n\s+this\.mounted -= 1;\n\s+this\.props\.onGone\?\.\(\);\n\s+\}/);
   });
 
@@ -125,11 +121,11 @@ describe("M9: runtime behaviour", () => {
     const world = new World();
     const board = new Board();
     world.mount(board);
-    board.setOpen(true);
+    board.s.open = (true);
     assert.equal(world.flush(), 2, "the board renders, then the mounted badge renders its new state");
     const solo = board.badge!;
     assert.equal(solo.mounted, 1);
-    assert.equal(solo.ready, true);
+    assert.equal(solo.s.ready, true);
     assert.equal(solo.sprite.image, "ready.png");
   });
 
@@ -137,11 +133,11 @@ describe("M9: runtime behaviour", () => {
     const world = new World();
     const board = new Board();
     world.mount(board);
-    board.setItems([{ id: "a" }, { id: "b" }]);
+    board.s.items = ([{ id: "a" }, { id: "b" }]);
     world.flush();
     const [a, b] = [board.badge2Items.get("a")!, board.badge2Items.get("b")!];
-    assert.deepEqual([a.mounted, a.ready, b.mounted, b.ready], [1, true, 1, true]);
-    board.setItems([{ id: "a" }, { id: "b" }, { id: "c" }]);
+    assert.deepEqual([a.mounted, a.s.ready, b.mounted, b.s.ready], [1, true, 1, true]);
+    board.s.items = ([{ id: "a" }, { id: "b" }, { id: "c" }]);
     world.flush();
     assert.equal(a.mounted, 1, "existing items do not mount again");
     assert.equal(board.badge2Items.get("c")!.mounted, 1);
@@ -151,13 +147,13 @@ describe("M9: runtime behaviour", () => {
     const world = new World();
     const board = new Board();
     world.mount(board);
-    board.setOpen(true);
+    board.s.open = (true);
     world.flush();
     const solo = board.badge!;
-    board.setOpen(false);
+    board.s.open = (false);
     world.flush();
     assert.equal(solo.mounted, 0, "the ref was written");
-    assert.equal(board.gone, "solo", "the callback reached the parent");
+    assert.equal(board.s.gone, "solo", "the callback reached the parent");
     assert.equal(board.badge, null);
   });
 
@@ -165,29 +161,29 @@ describe("M9: runtime behaviour", () => {
     const world = new World();
     const board = new Board();
     world.mount(board);
-    board.setItems([{ id: "a" }, { id: "b" }]);
+    board.s.items = ([{ id: "a" }, { id: "b" }]);
     world.flush();
     const a = board.badge2Items.get("a")!;
-    board.setItems([{ id: "b" }]);
+    board.s.items = ([{ id: "b" }]);
     world.flush();
     assert.equal(a.mounted, 0);
-    assert.equal(board.gone, "item:a", "the removed item's record was still readable when its unmount ran");
+    assert.equal(board.s.gone, "item:a", "the removed item's record was still readable when its unmount ran");
   });
 
   it("mounts children before their parent, so the parent sees them mounted", async () => {
-    const { Parent } = await load<{ Parent: new () => Entity & { log: string } }>(
+    const { Parent } = await load<{ Parent: new () => Entity & { s: { log: string } } }>(
       compile(`interface LeafProps { id: string; onUp: (id: string) => void }
 function Leaf({ id, onUp }: LeafProps) {
   useMount(() => onUp(id));
   return <Entity name={id} />;
 }
 function Parent() {
-  const [log, setLog] = useState("");
-  useMount(() => setLog((log) => log + "P"));
+  const s = useMutable({ log: "" });
+  useMount(() => { s.log += "P"; });
   return (
     <Entity name="Parent">
-      <Leaf id="a" onUp={(id) => setLog((log) => log + id)} />
-      <Leaf id="b" onUp={(id) => setLog((log) => log + id)} />
+      <Leaf id="a" onUp={(id) => { s.log += id; }} />
+      <Leaf id="b" onUp={(id) => { s.log += id; }} />
     </Entity>
   );
 }`),
@@ -196,19 +192,19 @@ function Parent() {
     const parent = new Parent();
     world.mount(parent);
     world.flush();
-    assert.equal(parent.log, "abP");
+    assert.equal(parent.s.log, "abP");
   });
 
   it("does nothing for a component that is never mounted", () => {
     const board = new Board();
-    board.setOpen(true);
+    board.s.open = (true);
     assert.equal(board.badge, null, "no world, no render, no mount");
   });
 });
 
 describe("M9: diagnostics", () => {
   const unmount = (body: string) => `function C() {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   const r = useRef(0);
   useUnmount(() => { ${body} });
   return <Entity name="C" />;
@@ -216,16 +212,16 @@ describe("M9: diagnostics", () => {
   const codes = (source: string) => compileErrors(source).map((d) => d.code);
 
   it("rejects setting state in useUnmount, pointing at the alternatives", () => {
-    const errors = compileErrors(unmount("setN(1);"));
+    const errors = compileErrors(unmount("s.n = 1;"));
     assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedStatement]);
     assert.match(errors[0]!.message, /useUnmount/);
     assert.match(errors[0]!.message, /callback prop/);
-    assert.deepEqual(codes(unmount("if (r.current > 0) { setN((n) => n + 1); }")), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(codes(unmount("if (r.current > 0) { s.n += 1; }")), [DiagnosticCode.UnsupportedStatement]);
   });
 
   it("allows refs, reads and callback props in useUnmount, and state in useMount", () => {
-    assert.doesNotThrow(() => compile(unmount("r.current = n + 1;")));
-    assert.doesNotThrow(() => compile(`function C() { const [n, setN] = useState(0); useMount(() => setN(1)); return <Entity name="C" />; }`));
+    assert.doesNotThrow(() => compile(unmount("r.current = s.n + 1;")));
+    assert.doesNotThrow(() => compile(`function C() { const s = useMutable({ n: 0 }); useMount(() => { s.n = 1; }); return <Entity name="C" />; }`));
   });
 
   it("takes exactly one arrow function with no parameters", () => {

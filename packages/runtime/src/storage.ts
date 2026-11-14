@@ -74,7 +74,7 @@ export interface SaveOptions<Data> {
   /** Put a loaded save into the game's state. */
   readonly apply?: (data: Data) => void;
   /**
-   * Keep every component's own state too (`useState` values and refs, as hot reload keeps them), not only what `pick` takes
+   * Keep every component's own state too (`useMutable` fields and refs, as hot reload keeps them), not only what `pick` takes
    * from the game state. On `load`, `apply` runs first, and once the tree it builds has settled, each component takes its saved
    * state back, found by its path (a list item by its key). Values that are not plain data (a function, a class instance such
    * as a body) are left out, said once. Default false.

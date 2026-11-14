@@ -1,7 +1,7 @@
 /**
  * The authoring entry point: what component source imports.
  *
- *   import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+ *   import { useMutable, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
  *
  * Source TSX is compiled, never run, so everything here is a declaration that
  * exists for the type-checker (the functions throw if called). Prop types are
@@ -44,7 +44,7 @@ import type { BodyHit, BodyOptions } from "./body.ts";
 
 // -- state and refs -----------------------------------------------------------
 
-/** `useState(100)` infers `number`, not the literal `100`. Arrays and records are kept as written. */
+/** `useRef(100)` infers `number`, not the literal `100`. Arrays and records are kept as written. */
 type Widen<T> = T extends number ? number : T extends string ? string : T extends boolean ? boolean : T;
 
 /** Primitive values, the only thing a ref holds. */
@@ -54,20 +54,6 @@ export type Setter<T> = (value: T | ((previous: T) => T)) => void;
 
 function compileTimeOnly(name: string): never {
   throw new Error(`${name} is a compile-time declaration: components are compiled by @rge/compiler, not executed.`);
-}
-
-/**
- * State: reads are a snapshot of the last render, as in React; setters batch
- * into one render per frame. Arrays and records need their type
- * (`useState<EnemyData[]>([])`) and are updated immutably: a setter only
- * renders when it is given a new value, so `setItems([...items, item])`, never
- * a mutation of `items`.
- */
-export function useState<T>(_initial: () => T): [Widen<T>, Setter<Widen<T>>];
-export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>];
-/** `useState(() => makeThing())`: React's lazy initial value, made once per instance (an object with methods, such as an effect). */
-export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>>] {
-  return compileTimeOnly("useState");
 }
 
 /**
@@ -153,7 +139,7 @@ export interface Subscribable {
  * returns what to show; it runs when the component mounts and each time the store notifies, and the component renders only when
  * what it returns holds different data. The subscription ends when the component leaves.
  *
- * An ordinary hook the engine ships (\`useState\` and \`useMount\`, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and \`useMount\`, inlined like any custom hook).
  */
 export function useStore<T>(_store: Subscribable, _read: () => T): T {
   return compileTimeOnly("useStore");
@@ -188,7 +174,7 @@ export interface BodyHandle {
  *     return <Entity transform={{ x, y }}>…</Entity>;
  *
  * Position is in the component's parent's space, as `transform` is. `x` and `y` are state: they render where the body is.
- * An ordinary hook the engine ships (\`useState\` and functions of the component, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and functions of the component, inlined like any custom hook).
  */
 export function useBody(_options: BodyOptions): BodyHandle {
   return compileTimeOnly("useBody");
@@ -212,10 +198,10 @@ export function Provider<T>(_props: { context: Context<T>; value: T; children?: 
 }
 
 /**
- * State written directly: `const s = useMutable({ vx: 0, vy: 0 })`, then `s.vx += 1` in a handler. Each field is a state value as
- * `useState` makes (it renders, it is saved, hot reload and rewind keep it); what differs is that a handler reads its own writes
- * at once, so a step can work on `s.vx` where `useState` would need a local copy and a setter. Render, the component's children and
- * other components see the value as the step began until the next render, as with any state. Fields are written in handlers only.
+ * A component's state, written directly: `const s = useMutable({ vx: 0, vy: 0 })`, then `s.vx += 1` in a handler. Each field
+ * renders when it changes, is saved, and is kept by hot reload and rewind. A handler reads its own writes at once (and every
+ * earlier handler's in the step); render, and the props and context it hands down, see what the frame committed. Fields are
+ * written in handlers only, and a list or record is replaced, not changed in place. It replaces React's `useState`.
  */
 export function useMutable<T extends Record<string, unknown>>(_initial: T): T {
   return compileTimeOnly("useMutable");

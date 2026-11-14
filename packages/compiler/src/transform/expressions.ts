@@ -52,8 +52,16 @@ export class ExpressionLowering extends LoweringBase {
       if (!binding) {
         // Declared, but its declaration was refused above: that error is the one to read.
         if (this.declaredAfterError(node.text)) return null;
-        const near = nearest(node.text, [...new Set([...this.scope.names(), ...this.plainImports])]);
-        this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${near ? ` (did you mean '${near}'?)` : ""}.`, node);
+        // A `useMutable` field is read through its owner (`count` → `s.count`), the slip of someone used to `useState`.
+        const fields = new Map<string, string>();
+        for (const name of this.scope.names()) {
+          const owner = this.scope.get(name);
+          if (owner?.kind === "mutable") for (const field of owner.fields.keys()) if (!fields.has(field)) fields.set(field, `${name}.${field}`);
+        }
+        const names = [...new Set([...this.scope.names(), ...this.plainImports])];
+        const near = nearest(node.text, [...names, ...[...fields.keys()].filter((f) => !names.includes(f))]);
+        const suggestion = near !== null && fields.has(near) && !names.includes(near) ? fields.get(near)! : near;
+        this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${suggestion ? ` (did you mean '${suggestion}'?)` : ""}.`, node);
         return null;
       }
       if (binding.kind === "setter") {

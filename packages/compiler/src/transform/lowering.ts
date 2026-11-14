@@ -364,6 +364,13 @@ export class LoweringBase {
     let type: TypeIR | undefined;
     if (binding?.kind === "param") type = binding.type;
     else if (binding?.kind === "state") type = this.stateTypes.get(binding.id);
+    else if (isPropertyAccessExpression(target)) {
+      // `s.n`: a `useMutable` field.
+      const owner = unwrapParens(target.expression);
+      const mutable = isIdentifier(owner) ? this.scope.get(owner.text) : undefined;
+      const field = mutable?.kind === "mutable" ? mutable.fields.get(target.name.text) : undefined;
+      if (field !== undefined) type = this.stateTypes.get(field);
+    }
     return type?.kind === "Primitive" && type.name !== "void" ? type.name : null;
   }
 

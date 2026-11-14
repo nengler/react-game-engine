@@ -16,11 +16,11 @@ after(() => {
 async function run(body: string, frames = 1): Promise<string> {
   const compiled = compile(`
 export function Probe() {
-  const [out, setOut] = useState("");
+  const s = useMutable({ out: "" });
   useUpdate((dt) => {
     ${body}
   });
-  return <Text>{out}</Text>;
+  return <Text>{s.out}</Text>;
 }`);
   assert.deepEqual(typeCheck(compiled), []);
   const { Probe } = await load<{ Probe: new () => Text }>(compiled);
@@ -44,7 +44,7 @@ describe("loops in handlers", () => {
       if (i > 4) break;
       text += \`\${i}:\${j} \`;
     }
-    setOut(text);`),
+    s.out = text;`),
       "0:10 2:6 3:4 4:2 ",
     );
   });
@@ -61,7 +61,7 @@ describe("loops in handlers", () => {
     do {
       text += "!";
     } while (false);
-    setOut(text);`),
+    s.out = text;`),
       "31-1!",
     );
   });
@@ -74,7 +74,7 @@ describe("loops in handlers", () => {
       n++;
       if (n === 3) break;
     }
-    setOut(String(n));`),
+    s.out = String(n);`),
       "3",
     );
   });
@@ -96,7 +96,7 @@ describe("loops in handlers", () => {
     } catch {
       text += "never";
     }
-    setOut(text);`),
+    s.out = text;`),
       "aboom!b",
     );
   });
@@ -105,12 +105,12 @@ describe("loops in handlers", () => {
     const compiled = compile(`
 export function Counter() {
   const steps = useRef(0);
-  const [out, setOut] = useState(0);
+  const s = useMutable({ out: 0 });
   useUpdate(() => {
     for (steps.current = 0; steps.current < 4; steps.current++) {}
-    setOut(steps.current);
+    s.out = steps.current;
   });
-  return <Text>{out}</Text>;
+  return <Text>{s.out}</Text>;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
     const { Counter } = await load<{ Counter: new () => Text }>(compiled);
@@ -125,17 +125,17 @@ export function Counter() {
 
 describe("what a loop's head may hold", () => {
   const codes = (body: string) =>
-    compileErrors(`function C() { const [n, setN] = useState(0); useUpdate(() => { ${body} }); return <Entity />; }`).map((d) => d.code);
+    compileErrors(`function C() { const s = useMutable({ n: 0 }); useUpdate(() => { ${body} }); return <Entity />; }`).map((d) => d.code);
 
   it("keeps state out of a for's head and a label off a jump", () => {
-    assert.deepEqual(codes("for (let i = 0; i < 3; setN(i)) {}"), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(codes("for (let i = 0; i < 3; s.n = i) {}"), [DiagnosticCode.UnsupportedStatement]);
     assert.deepEqual(codes("for (const i = 0; i < 3;) {}"), [DiagnosticCode.UnsupportedStatement]);
     assert.ok(codes("outer: while (true) { break outer; }").length > 0);
     assert.deepEqual(codes("break;"), [DiagnosticCode.UnsupportedStatement]);
   });
 
   it("scopes a for's lets to the loop", () => {
-    assert.ok(codes("for (let i = 0; i < 3; i++) {} setN(i);").length > 0, "i is not declared after the loop");
+    assert.ok(codes("for (let i = 0; i < 3; i++) {} s.n = i;").length > 0, "i is not declared after the loop");
   });
 });
 

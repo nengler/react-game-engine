@@ -62,7 +62,7 @@ export function analyzeSourceFile(
       } else if (specifier !== null && RELATIVE_TS.test(specifier)) {
         analyzeNamedImport(statement, specifier, relativeImports, diagnostics, span, "Imports from a .ts file", `import { useGame } from "${specifier}"`, false, true);
       } else if (specifier !== null && specifier === authoringModule) {
-        analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useState, Entity, type Child } from "${specifier}"`, false, true);
+        analyzeNamedImport(statement, specifier, authoringImports, diagnostics, span, "Imports from the authoring module", `import { useMutable, Entity, type Child } from "${specifier}"`, false, true);
       } else {
         diagnostics.push(
           error(
@@ -125,7 +125,7 @@ export function analyzeSourceFile(
       const declaration = statement.declarationList.declarations[0]!;
       const name = (declaration.name as { text: string }).text;
       if ((statement.declarationList.flags & NodeFlags.Const) === 0) {
-        diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `'${name}': a top-level value must be a \`const\` (state that changes belongs in \`useState\` or the game state).`, span(statement)));
+        diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `'${name}': a top-level value must be a \`const\` (state that changes belongs in \`useMutable\` or the game state).`, span(statement)));
         continue;
       }
       if (declaration.initializer) {

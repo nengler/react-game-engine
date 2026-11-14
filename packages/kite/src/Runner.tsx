@@ -92,7 +92,6 @@ export function Runner({ room }: RunnerProps) {
       for (const side of s.vx < 0 ? [-1] : s.vx > 0 ? [1] : [-1, 1]) {
         for (let i = 1; i <= K.UPWARD_CORNER_CORRECTION && !slid; i++) {
           if (!blocked(side * i, -1)) {
-            // `x` and `y` are this step's snapshot, from before the move: the body is moved from where it is now.
             move(side * i, -1);
             slid = true;
           }

@@ -624,7 +624,7 @@ function lowerMutableWrite(ctx: LoweringContext, target: Expression, operator: A
     return null;
   }
   if (!ctx.canSetState()) {
-    ctx.error(DiagnosticCode.UnsupportedStatement, "A `useMutable` field cannot be written in `useUnmount`: the component is going away, so the update could never render.", at);
+    ctx.error(DiagnosticCode.UnsupportedStatement, "A `useMutable` field cannot be written in `useUnmount`: the component is going away, so the update could never render. Tell the parent with a callback prop (`onGone?.()`), or write a ref.", at);
     return null;
   }
   const value = rhs === null ? ({ kind: "NumberLiteral", value: 1 } as ExprIR) : ctx.lowerExpression(rhs);

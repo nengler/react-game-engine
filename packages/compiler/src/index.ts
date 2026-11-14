@@ -6,6 +6,7 @@ import { generateModuleWithMap, generateModuleWithOrigins, type GeneratorOptions
 import { type LineOrigin } from "./generator/writer.ts";
 import type { IRModule } from "./ir/types.ts";
 import { TsxParser } from "./parser/parser.ts";
+import { convertToMutable, type Converted } from "./codemod/mutable.ts";
 import type { PrefabSchema } from "./prefabs/prefabs.ts";
 import { validateScene } from "./scenes/validate.ts";
 import { buildModuleIR } from "./transform/transform.ts";
@@ -32,6 +33,7 @@ export { importTilemap, tilemapsSource, type TilemapImport, type TilemapImportOp
 export { readTsx, type TilesetJson } from "./scenes/tsx.ts";
 export { inlineCustomHooks, expandCustomHooks, type ExpandedSource, type HookResolver, type HookSource } from "./hooks/inline.ts";
 export { EditMap } from "./hooks/edits.ts";
+export { convertToMutable, type Converted } from "./codemod/mutable.ts";
 export { checkProject, prefabsIndexSource, prefabsJson, projectSchemas, type ProjectModule } from "./project.ts";
 export { typeCheckFiles, typeCheckSources, generatedCodeCompilerOptions, sourceCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
 
@@ -195,6 +197,14 @@ export class Compiler {
    */
   setTilemapsModule(importFrom: string | undefined): void {
     this.#tilemapsModule = importFrom;
+  }
+
+  /**
+   * A component file moved from `useState` to `useMutable` (`codemod/mutable.ts`): the new text, whether anything changed, and where it
+   * stopped for a person to finish. The editor's quick fix for a `useState` uses it.
+   */
+  convertToMutable(fileName: string, text: string): Converted {
+    return convertToMutable(this.#parser, fileName, text);
   }
 
   close(): void {

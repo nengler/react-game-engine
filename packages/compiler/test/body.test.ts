@@ -22,14 +22,14 @@ const ROOM: TilemapData = {
 const HERO = `
 interface HeroProps { onLanded: (y: number) => void; onSpikes: () => void }
 export function Hero({ onLanded, onSpikes }: HeroProps) {
-  const [vy, setVy] = useState(0);
+  const s = useMutable({ vy: 0 });
   const { x, y, move, touching } = useBody({ x: 0, y: 0, width: 4, height: 4 });
   useUpdate((dt) => {
-    const hit = move(40 * dt, vy * dt);
+    const hit = move(40 * dt, s.vy * dt);
     if (hit.down) {
-      setVy(0);
+      s.vy = 0;
       onLanded(y);
-    } else setVy(vy + 400 * dt);
+    } else s.vy += 400 * dt;
     if (touching("spikes")) onSpikes();
   });
   return <Entity transform={{ x, y }} />;

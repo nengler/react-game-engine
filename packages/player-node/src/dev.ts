@@ -11,7 +11,7 @@
  *    not: one runtime, one window;
  * 3. carries each game state (`createGameState`) over to its new build, matched by file and export name
  *    (`GameStore.carryFrom`), so the new components are built against the old values;
- * 4. puts the new root in place of the old one (`Player.reload`), which gives each component the `useState` values and refs
+ * 4. puts the new root in place of the old one (`Player.reload`), which gives each component the `useMutable` fields and refs
  *    of the component it replaces, by its place in the tree.
  *
  * What is not kept: a built-in's own state (an animation's frame, a camera's slide, particles in flight), and module-level

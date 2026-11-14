@@ -75,7 +75,7 @@ describe("<Game> as a component's root", () => {
     const { Main } = await load<{ Main: new () => Game }>(compiled);
     assert.equal(new Main().fixedStep, 60);
     assert.equal(new Game().fixedStep, undefined, "off unless written");
-    assert.match(errors(`function A() { const [n] = useState(60); return <Game fixedStep={n} />; }`)[0]!.message, /<Game fixedStep> must be a literal/);
+    assert.match(errors(`function A() { const s = useMutable({ n: 60 }); return <Game fixedStep={s.n} />; }`)[0]!.message, /<Game fixedStep> must be a literal/);
   });
 
   it("has no state prop (every game state starts fresh with the game): it is not one of its settings", () => {
@@ -101,28 +101,27 @@ describe("<Game> as a component's root", () => {
 
   it("takes only literals for its settings: they are read before the tree exists", () => {
     for (const setting of [`title={t}`, `width={w}`, `width={1 + 2}`, `title={"a" + "b"}`, `background={\`a\${t}\`}`, `smooth={flag}`, `resizable={!flag}`, `title={props.c}`]) {
-      const found = errors(`function A() { const [t] = useState("x"); const [w] = useState(1); const [flag] = useState(true); return <Game ${setting} />; }`);
+      const found = errors(`function A() { const s = useMutable({ t: "x", w: 1, flag: true }); return <Game ${setting} />; }`);
       assert.ok(found.some((d) => d.code === DiagnosticCode.InvalidPropValue || d.code === DiagnosticCode.UnsupportedExpression || d.code === DiagnosticCode.UnknownIdentifier), `${setting}: ${JSON.stringify(found)}`);
     }
-    assert.match(errors(`function A() { const [t] = useState("x"); return <Game title={t} />; }`)[0]!.message, /<Game title> must be a literal/);
-    assert.match(errors(`function A() { const [w] = useState(1); return <Game width={w} />; }`)[0]!.message, /<Game width> must be a literal/);
+    assert.match(errors(`function A() { const s = useMutable({ t: "x" }); return <Game title={s.t} />; }`)[0]!.message, /<Game title> must be a literal/);
+    assert.match(errors(`function A() { const s = useMutable({ w: 1 }); return <Game width={s.w} />; }`)[0]!.message, /<Game width> must be a literal/);
     assert.doesNotThrow(() => build(`function A() { return <Game width={-5} title="x" resizable={true} vsync smooth={false} />; }`));
   });
 
   it("takes state for timeScale and paused, which the player reads every frame", async () => {
     const compiled = build(`export default function Main() {
-  const [fast, setFast] = useState(false);
-  const [stopped, setStopped] = useState(false);
+  const s = useMutable({ fast: false, stopped: false });
   useInput((input) => {
-    if (input.pressed("F")) setFast(!fast);
-    if (input.pressed("P")) setStopped(!stopped);
+    if (input.pressed("F")) s.fast = !s.fast;
+    if (input.pressed("P")) s.stopped = !s.stopped;
   });
-  return <Game fixedStep={60} timeScale={fast ? 2 : 1} paused={stopped} />;
+  return <Game fixedStep={60} timeScale={s.fast ? 2 : 1} paused={s.stopped} />;
 }`);
     const { default: Main } = await load<{ default: new () => Game }>(compiled);
     const game = new Main();
     assert.deepEqual([game.timeScale, game.paused], [1, false]);
-    assert.match(errors(`function A() { const [t] = useState(1); return <Game fixedStep={t} />; }`)[0]!.message, /<Game fixedStep> must be a literal/, "the others stay literals");
+    assert.match(errors(`function A() { const s = useMutable({ t: 1 }); return <Game fixedStep={s.t} />; }`)[0]!.message, /<Game fixedStep> must be a literal/, "the others stay literals");
   });
 
   it("rejects a prop it does not have, and a transform, saying what its settings are", () => {

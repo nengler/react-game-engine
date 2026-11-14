@@ -57,9 +57,9 @@ describe("reads by index and Math's constants", () => {
 const FRAMES: Record<string, number> = { bolt: 0, frost: 2 };
 interface IconProps { kind: string; angles: number[]; at: number; }
 export function Icon({ kind, angles, at }: IconProps) {
-  const [turns, setTurns] = useState(0);
+  const s = useMutable({ turns: 0 });
   const angle = angles[at] ?? 0;
-  useUpdate(() => { setTurns(turns + angles[at]! / (Math.PI * 2)); });
+  useUpdate(() => { s.turns += angles[at]! / (Math.PI * 2); });
   return <Sprite image="icons.png" frame={FRAMES[kind]!} transform={{ rotation: angle + Math.PI }} />;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
@@ -195,12 +195,12 @@ export function Blink() {
     const compiled = compile(`
 interface TipProps { onPointerEnter: () => void; }
 export function Tip({ onPointerEnter }: TipProps) {
-  const [over, setOver] = useState(false);
+  const s = useMutable({ over: false });
   return (
     <Entity>
-      <Pointer width={4} height={4} onPointerEnter={() => setOver(true)} onPointerLeave={() => setOver(false)} />
+      <Pointer width={4} height={4} onPointerEnter={() => { s.over = true; }} onPointerLeave={() => { s.over = false; }} />
       <Flex onPointerEnter={onPointerEnter} />
-      {over && <Text size={8}>tip</Text>}
+      {s.over && <Text size={8}>tip</Text>}
     </Entity>
   );
 }`);
@@ -235,13 +235,13 @@ describe("keys that press things, from TSX", () => {
     const compiled = compile(`
 interface PadsProps { onWave: () => void; }
 export function Pads({ onWave }: PadsProps) {
-  const [focused, setFocused] = useState(-1);
+  const s = useMutable({ focused: -1 });
   return (
     <Entity>
       <Flex pressKey="Space" onPress={onWave} />
-      <Pointer width={10} height={10} originX={5} originY={5} focusable autoFocus onFocus={() => setFocused(0)} />
-      <Pointer width={10} height={10} originX={5} originY={5} transform={{ x: 30 }} focusable onFocus={() => setFocused(1)} onBlur={() => setFocused(-1)} />
-      <Text size={8}>{\`\${focused}\`}</Text>
+      <Pointer width={10} height={10} originX={5} originY={5} focusable autoFocus onFocus={() => { s.focused = 0; }} />
+      <Pointer width={10} height={10} originX={5} originY={5} transform={{ x: 30 }} focusable onFocus={() => { s.focused = 1; }} onBlur={() => { s.focused = -1; }} />
+      <Text size={8}>{\`\${s.focused}\`}</Text>
     </Entity>
   );
 }`);

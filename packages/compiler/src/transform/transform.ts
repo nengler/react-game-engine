@@ -1,5 +1,6 @@
 import { type Node } from "typescript/ast";
 import { AUTHORING_HOOKS, AUTHORING_TYPES, type SourceAnalysis } from "../analyzer/analyzer.ts";
+import { REMOVED_HOOKS } from "../analyzer/model.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type TypeDeclarationIR, type ComponentIR, type IRModule, type SourceSpan } from "../ir/types.ts";
 import { spanOf } from "../parser/parser.ts";
@@ -63,6 +64,11 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
       );
     } else if (!i.isTypeOnly && authoredTypes.has(i.name)) {
       diagnostics.push(error(DiagnosticCode.UnknownImport, `'${i.name}' is a type: write \`import { type ${i.name} } from "${manifest.authoringModule}"\`.`, span(i.node)));
+    } else if (!i.isTypeOnly && REMOVED_HOOKS[i.name] !== undefined) {
+      // A hook that was replaced (`useState`, `useEffect`): where the file calls it, that call says what to write instead, once; an
+      // import with no call says it here.
+      const called = new RegExp(`\\b${i.name}\\s*[<(]`).test(analysis.sourceFile.text.slice(i.node.getEnd()));
+      if (!called) diagnostics.push(error(DiagnosticCode.UnknownImport, REMOVED_HOOKS[i.name]!, span(i.node)));
     } else if (!i.isTypeOnly && !authored.has(i.name)) {
       diagnostics.push(
         error(

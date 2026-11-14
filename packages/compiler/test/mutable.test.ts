@@ -285,17 +285,18 @@ describe("useMutable: its name", () => {
     assert.match(compiled.code, /readonly enemy2: Enemy/);
   });
 
-  it("is not guessed from a `$` in a name: a useState called `a$b` stays a state of its own", async () => {
-    const compiled = compile(`
-      export function Hero() {
-        const [a$b, setAB] = useState(1);
+  it("is not guessed from a `$` in a name: a mutable called `a$b`, and a field called `x$y`, keep their names", async () => {
+    const hero = await run(
+      `export function Hero() {
+        const a$b = useMutable({ x$y: 1 });
         const s = useMutable({ n: 0 });
-        useUpdate(() => { setAB(a$b + 1); s.n = a$b; });
+        useUpdate(() => { a$b.x$y += 1; s.n = a$b.x$y; });
         return <Entity />;
-      }`);
-    assert.deepEqual(typeCheck(compiled), []);
-    assert.doesNotMatch(compiled.code, /get a\(\)/);
-    assert.match(compiled.code, /get s\(\): \{ readonly n: number \}/);
+      }`,
+      "Hero",
+    );
+    assert.deepEqual(hero.saveHotState(), { "Hero.a$b.x$y": 2, "Hero.s.n": 2 });
+    assert.deepEqual({ ...(hero as unknown as { a$b: object }).a$b }, { x$y: 2 });
   });
 });
 

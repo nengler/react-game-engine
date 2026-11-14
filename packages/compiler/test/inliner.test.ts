@@ -15,11 +15,11 @@ describe("positions after inlining", () => {
   it("an error below a custom hook call is reported at its line and column as written", () => {
     // The hook expands to several lines; the error after it must not move down with them.
     const source = withAuthoringImports(`function useCounter(step: number) {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   useUpdate(() => {
-    setN((n) => n + step);
+    s.n += step;
   });
-  return n;
+  return s.n;
 }
 
 function C() {
@@ -38,9 +38,9 @@ function C() {
 
   it("IR spans are in the source as written; a span made inside an expansion covers the hook call", () => {
     const source = withAuthoringImports(`function useTicker() {
-  const [t, setT] = useState(0);
-  useUpdate((dt) => { setT((t) => t + dt); });
-  return t;
+  const s = useMutable({ t: 0 });
+  useUpdate((dt) => { s.t += dt; });
+  return s.t;
 }
 
 export function C() {

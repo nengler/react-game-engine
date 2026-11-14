@@ -20,14 +20,14 @@ interface HudProps {
 }
 
 function Scoreboard({ label }: HudProps) {
-  const [score, setScore] = useState(0);
+  const s = useMutable({ score: 0 });
   return (
     <Entity name="Scoreboard">
       <Text size={12}>
-        Score: {score}
+        Score: {s.score}
       </Text>
-      <Text color={score > 5 ? "gold" : "white"} transform={{ x: 4 }}>{label + ":"}</Text>
-      <Text>{\`Total \${score * 2}\`}</Text>
+      <Text color={s.score > 5 ? "gold" : "white"} transform={{ x: 4 }}>{label + ":"}</Text>
+      <Text>{\`Total \${s.score * 2}\`}</Text>
       <Text>Fixed</Text>
     </Entity>
   );
@@ -41,11 +41,11 @@ const Badge = ({ points }: BadgeProps) => <Text color="gold">+{points}</Text>;
 `;
 
 interface HudInstance extends Entity {
-  setScore(value: number): void;
   readonly text: Text;
   readonly text2: Text;
   readonly text3: Text;
   readonly text4: Text;
+  s: { [field: string]: unknown };
 }
 interface BadgeInstance extends Text {
   updateProps(next: { points: number }): void;
@@ -76,8 +76,8 @@ describe("M10: IR", () => {
   it("makes text between the tags a template over the state it reads, as a dynamic prop", () => {
     const text = prop(texts[0]!.props, "text");
     assert.equal(text.kind, "DynamicProp");
-    assert.deepEqual(valueOf(text), { kind: "TemplateLiteral", quasis: ["Score: ", ""], expressions: [{ kind: "StateRead", state: "Scoreboard.score" }] });
-    assert.deepEqual(text.kind === "DynamicProp" && text.dependencies, [{ kind: "State", state: "Scoreboard.score" }]);
+    assert.deepEqual(valueOf(text), { kind: "TemplateLiteral", quasis: ["Score: ", ""], expressions: [{ kind: "StateRead", state: "Scoreboard.s.score" }] });
+    assert.deepEqual(text.kind === "DynamicProp" && text.dependencies, [{ kind: "State", state: "Scoreboard.s.score" }]);
     assert.equal(prop(texts[0]!.props, "size").kind, "StaticProp");
   });
 
@@ -109,7 +109,7 @@ describe("M10: IR", () => {
 describe("M10: whitespace and literals follow JSX", () => {
   /** The text prop of `<Text>…</Text>` with the given content, as a string (` ${n}` marks the one expression). */
   function content(body: string): string {
-    const c = compile(`function C() { const [n, setN] = useState(0); return <Text>${body}</Text>; }`).ir.components[0]!;
+    const c = compile(`function C() { const s = useMutable({ n: 0 }); const n = s.n; return <Text>${body}</Text>; }`).ir.components[0]!;
     const value = valueOf(prop(c.root.props, "text"));
     if (value.kind === "StringLiteral") return value.value;
     assert.equal(value.kind, "TemplateLiteral");
@@ -140,10 +140,10 @@ describe("M10: generated code", () => {
   const { code } = compile(HUD, "Scoreboard.tsx");
 
   it("builds the element with its text and updates the field in place", () => {
-    assert.match(code, /readonly text: Text = new Text\(\{ size: 12, text: `Score: \$\{this\.score\}` \}\);/);
-    assert.match(code, /const (\$\d+) = `Score: \$\{this\.score\}`;[^]*?this\.text\.text = \1;/);
+    assert.match(code, /readonly text: Text = new Text\(\{ size: 12, text: `Score: \$\{this\.\$s_score\}` \}\);/);
+    assert.match(code, /const (\$\d+) = `Score: \$\{this\.\$s_score\}`;[^]*?this\.text\.text = \1;/);
     assert.match(code, /const (\$\d+) = `\$\{this\.props\.label \+ ":"\}`;[^]*?this\.text2\.text = \1;/, "an expression child is a dynamic text, as a template literal (always a string)");
-    assert.match(code, /const (\$\d+) = \(this\.score > 5\) \? "gold" : "white";[^]*?this\.text2\.color = \1;/);
+    assert.match(code, /const (\$\d+) = \(this\.\$s_score > 5\) \? "gold" : "white";[^]*?this\.text2\.color = \1;/);
     assert.match(code, /readonly text4: Text = new Text\(\{ text: "Fixed" \}\);/);
   });
 
@@ -190,7 +190,7 @@ describe("M10: runtime behaviour", () => {
     world.mount(hud);
     assert.deepEqual([hud.text.text, hud.text2.text, hud.text3.text, hud.text4.text], ["Score: 0", "HP:", "Total 0", "Fixed"]);
     const [first, second] = [hud.text, hud.text2];
-    hud.setScore(7);
+    hud.s.score = (7);
     assert.equal(world.flush(), 1, "one render for the component, none for the texts");
     assert.deepEqual([hud.text.text, hud.text2.color, hud.text3.text], ["Score: 7", "gold", "Total 14"]);
     assert.equal(hud.text, first);
@@ -249,6 +249,6 @@ describe("M10: diagnostics", () => {
   });
 
   it("keeps state apart from its fields, since a component rooted at a Text extends it", () => {
-    assert.ok(compile(`function C() { const [text, setText] = useState("a"); return <Text>x</Text>; }`).code.includes("$text: string"));
+    assert.ok(compile(`function C() { const text = useMutable({ n: 0 }); return <Text>x</Text>; }`).code.includes("get $text()"));
   });
 });

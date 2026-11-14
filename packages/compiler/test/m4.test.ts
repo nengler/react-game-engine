@@ -22,10 +22,10 @@ interface EnemyProps {
 }
 
 function Enemy({ speed, skin = "red", onDefeated }: EnemyProps) {
-  const [hp, setHp] = useState(10);
+  const s = useMutable({ hp: 10 });
   useUpdate((dt) => {
-    setHp((hp) => hp - speed * dt);
-    if (hp <= 0) onDefeated?.();
+    s.hp -= speed * dt;
+    if (s.hp <= 0) onDefeated?.();
   });
   return (
     <Entity name="Enemy" transform={{ x: speed }}>
@@ -35,10 +35,10 @@ function Enemy({ speed, skin = "red", onDefeated }: EnemyProps) {
 }
 
 function Level() {
-  const [score, setScore] = useState(0);
+  const s = useMutable({ score: 0 });
   return (
     <Entity name="Level">
-      <Enemy speed={score > 10 ? 2 : 1} onDefeated={() => setScore((score) => score + 1)} />
+      <Enemy speed={s.score > 10 ? 2 : 1} onDefeated={() => { s.score += 1; }} />
     </Entity>
   );
 }
@@ -51,13 +51,12 @@ interface EnemyProps {
 }
 interface EnemyInstance extends Entity {
   props: EnemyProps;
-  hp: number;
   updateProps(next: Partial<EnemyProps>): void;
   readonly sprite: Sprite;
+  s: { hp: number };
 }
 interface LevelInstance extends Entity {
-  score: number;
-  setScore(value: number | ((previous: number) => number)): void;
+  s: { score: number };
   readonly enemy: EnemyInstance;
 }
 
@@ -121,7 +120,7 @@ function P({ points }: Shape) { return <Entity name="P" />; }`, "P");
     const parametrised = component(
       `interface ChildProps { onHit: (amount: number) => void }
 function Child({ onHit }: ChildProps) { return <Entity name="C" />; }
-function P() { const [n, setN] = useState(0); return <Entity name="P"><Child onHit={(amount) => setN(n + amount)} /></Entity>; }`,
+function P() { const s = useMutable({ n: 0 }); return <Entity name="P"><Child onHit={(amount) => { s.n += amount; }} /></Entity>; }`,
       "P",
     );
     const hit = elementOf(parametrised.root.children[0]!).props[0]!;
@@ -142,17 +141,17 @@ describe("M4: generated code", () => {
 
   it("builds a child with all its props and callbacks, and re-sends the dynamic ones in one call", () => {
     const { code } = compile(GAME, "Game.tsx");
-    assert.match(code, /readonly enemy: Enemy = new Enemy\(\{ speed: \(this\.score > 10\) \? 2 : 1, onDefeated: \(\) => \{ this\.setScore\(/);
-    assert.match(code, /this\.enemy\.updateProps\(\{ speed: \(this\.score > 10\) \? 2 : 1 \}\);/);
+    assert.match(code, /readonly enemy: Enemy = new Enemy\(\{ speed: \(this\.\$s_score > 10\) \? 2 : 1, onDefeated: \(\) => \{ this\.\$set_s_score\(/);
+    assert.match(code, /this\.enemy\.updateProps\(\{ speed: \(this\.\$s_score > 10\) \? 2 : 1 \}\);/);
     assert.doesNotMatch(code.slice(code.indexOf("class Level")), /updateProps\(\{[^}]*onDefeated/, "a callback is created once, never re-sent");
   });
 
   it("treats an optional prop with a default as defined, so arithmetic on it type-checks", () => {
     const compiled = compile(`interface SpinProps { rate?: number; label?: string }
 function Spinner({ rate = 2, label }: SpinProps) {
-  const [angle, setAngle] = useState(0);
-  useUpdate((dt) => setAngle((angle) => angle + dt * rate));
-  return <Entity name="spinner" transform={{ rotation: angle * rate, x: label ? 1 : 0 }} />;
+  const s = useMutable({ angle: 0 });
+  useUpdate((dt) => { s.angle += dt * rate; });
+  return <Entity name="spinner" transform={{ rotation: s.angle * rate, x: label ? 1 : 0 }} />;
 }`);
     assert.match(compiled.code, /dt \* this\.props\.rate!/);
     assert.match(compiled.code, /this\.props\.label\b(?!!)/, "an optional prop without a default really can be undefined");
@@ -192,7 +191,7 @@ describe("M4: runtime behaviour", () => {
     const render = enemy.render.bind(enemy);
     enemy.render = () => { childRenders++; render(); };
 
-    level.setScore(11);
+    level.s.score = (11);
     assert.equal(world.flush(), 2, "the parent renders once and re-renders the child once, in the same flush");
     assert.equal(childRenders, 1);
     assert.equal(level.enemy, enemy, "same instance");
@@ -205,7 +204,7 @@ describe("M4: runtime behaviour", () => {
     const level = new Level();
     world.mount(level);
     const enemy = level.enemy;
-    level.setScore(1); // speed stays 1
+    level.s.score = (1); // speed stays 1
     assert.equal(world.flush(), 1);
     assert.equal(enemy.isDirty, false);
   });
@@ -214,11 +213,12 @@ describe("M4: runtime behaviour", () => {
     const world = new World();
     const level = new Level();
     world.mount(level);
-    world.tick(20); // hp: 10 - 1 * 20 = -10, applied at the render
-    assert.equal(level.enemy.hp, -10);
-    assert.equal(level.score, 0);
-    world.tick(1); // the handler now sees hp <= 0 and calls onDefeated
-    assert.equal(level.score, 1, "the callback's setter was applied in the same tick's flush");
+    world.tick(19); // hp: 10 - 1 * 19 = -9 at the end of the step...
+    assert.equal(level.enemy.s.hp, -9);
+    // ...and the handler read the hp it had just written, so it called onDefeated in that same step, and the parent's write rendered.
+    assert.equal(level.s.score, 1, "the callback's write was applied in the same tick's flush");
+    world.tick(1);
+    assert.equal(level.s.score, 2, "still at or below 0: defeated again");
   });
 
   it("calls an optional callback that was not passed without error", () => {
@@ -260,12 +260,12 @@ describe("M4: runtime behaviour", () => {
 
 describe("M4: where props can be read", () => {
   it("reads props when a state value is first created, and in handlers, conditions and derived values", async () => {
-    const { Counter } = await load<{ Counter: new (props: { start: number; limit: number; show?: boolean }) => Entity & { n: number; updateProps(p: object): void } }>(
+    const { Counter } = await load<{ Counter: new (props: { start: number; limit: number; show?: boolean }) => Entity & { updateProps(p: object): void; s: { n: number } } }>(
       compile(`interface CounterProps { start: number; limit: number; show?: boolean }
 function Counter({ start, limit, show = true }: CounterProps) {
-  const [n, setN] = useState(start);
-  const over = n >= limit;
-  useUpdate(() => setN((n) => n + 1));
+  const s = useMutable({ n: start });
+  const over = s.n >= limit;
+  useUpdate(() => { s.n += 1; });
   return (
     <Entity name="Counter">
       {show && over && <Sprite image="over.png" />}
@@ -276,10 +276,10 @@ function Counter({ start, limit, show = true }: CounterProps) {
     const world = new World();
     const counter = new Counter({ start: 3, limit: 5 });
     world.mount(counter);
-    assert.equal(counter.n, 3, "the initial state read the prop");
+    assert.equal(counter.s.n, 3, "the initial state read the prop");
     world.tick(1);
     world.tick(1);
-    assert.equal(counter.n, 5);
+    assert.equal(counter.s.n, 5);
     assert.equal(counter.children.length, 1, "a condition that reads a prop and state is true");
     counter.updateProps({ show: false });
     world.flush();
@@ -293,8 +293,8 @@ function Counter({ start, limit, show = true }: CounterProps) {
     const { Panel } = await load<{ Panel: new (props: { onDone?: () => void }) => Entity & { updateProps(p: object): void } }>(
       compile(`interface BarProps { start: number; onDone?: () => void }
 function Bar({ start, onDone }: BarProps) {
-  const [n, setN] = useState(start);
-  useUpdate(() => { if (n > 3) onDone?.(); });
+  const s = useMutable({ n: start });
+  useUpdate(() => { if (s.n > 3) onDone?.(); });
   return <Entity name="Bar" />;
 }
 interface PanelProps { onDone?: () => void }
@@ -319,21 +319,20 @@ function Panel({ onDone }: PanelProps) {
 describe("M4: placing a component with transform", () => {
   const SCENE = `
 function Mover() {
-  const [x, setX] = useState(0);
-  return <Entity name="Mover" transform={{ x }} />;
+  const s = useMutable({ x: 0 });
+  return <Entity name="Mover" transform={{ x: s.x }} />;
 }
 function Scene() {
-  const [spawn, setSpawn] = useState(50);
-  const [pinned, setPinned] = useState(false);
+  const s = useMutable({ spawn: 50, pinned: false });
   return (
     <Entity name="Scene" transform={{ x: 100 }}>
-      <Mover transform={{ x: spawn, y: 5, global: pinned }} />
+      <Mover transform={{ x: s.spawn, y: 5, global: s.pinned }} />
     </Entity>
   );
 }`;
 
   it("composes the parent's placement under the child's own transform", async () => {
-    const { Scene } = await load<{ Scene: new () => Entity & { mover: Entity & { setX(v: number): void }; setSpawn(v: number): void; setPinned(v: boolean): void } }>(compile(SCENE));
+    const { Scene } = await load<{ Scene: new () => Entity & { mover: Entity & { s: { x: number } }; s: { spawn: number; pinned: boolean } } }>(compile(SCENE));
     const world = new World();
     const scene = new Scene();
     world.mount(scene);
@@ -341,15 +340,15 @@ function Scene() {
     assert.deepEqual([mover.placement.x, mover.placement.y, mover.transform.x], [50, 5, 0]);
     assert.deepEqual([mover.worldTransform().x, mover.worldTransform().y], [150, 5], "scene 100 + placement 50, own transform 0");
 
-    mover.setX(7);
+    mover.s.x = (7);
     world.flush();
     assert.equal(mover.worldTransform().x, 157, "the child moves relative to where it was placed");
 
-    scene.setSpawn(80);
+    scene.s.spawn = (80);
     world.flush();
     assert.equal(mover.worldTransform().x, 187, "placement follows the parent's state");
 
-    scene.setPinned(true);
+    scene.s.pinned = (true);
     world.flush();
     assert.equal(mover.worldTransform().x, 87, "a global placement ignores the scene's transform; the child's own still applies");
   });
@@ -368,11 +367,10 @@ export function Enemy({ speed, onDefeated }: EnemyProps) {
 }`,
     "Level.tsx": `import { Enemy } from "./Enemy.tsx";
 export function Level() {
-  const [score, setScore] = useState(0);
-  const [speed, setSpeed] = useState(1);
+  const s = useMutable({ score: 0, speed: 1 });
   return (
     <Entity name="Level">
-      <Enemy speed={speed} onDefeated={() => setScore((score) => score + 1)} transform={{ y: score }} />
+      <Enemy speed={s.speed} onDefeated={() => { s.score += 1; }} transform={{ y: s.score }} />
     </Entity>
   );
 }`,
@@ -381,21 +379,21 @@ export function Level() {
   it("passes props and callbacks to an imported component, and the project type-checks", async () => {
     const project = compileProject(FILES);
     assert.deepEqual(typeCheckProject(project), []);
-    const { Level } = await loadProject<{ Level: new () => Entity & { score: number; setSpeed(v: number): void; enemy: Entity } }>(project, "Level.tsx");
+    const { Level } = await loadProject<{ Level: new () => Entity & { s: { score: number; speed: number }; enemy: Entity } }>(project, "Level.tsx");
     const world = new World();
     const level = new Level();
     world.mount(level);
     assert.equal(level.enemy.transform.x, 1);
-    level.setSpeed(9);
+    level.s.speed = (9);
     world.flush();
     assert.equal(level.enemy.transform.x, 9);
     world.tick(1);
-    assert.equal(level.score, 1, "the imported child called the parent's callback");
+    assert.equal(level.s.score, 1, "the imported child called the parent's callback");
     assert.equal(level.enemy.placement.y, 1, "and the placement follows the score");
   });
 
   it("catches a wrong prop to an imported component in the project's type-check", () => {
-    const bad = compileProject({ ...FILES, "Level.tsx": FILES["Level.tsx"].replace("speed={speed}", `speed="fast"`) });
+    const bad = compileProject({ ...FILES, "Level.tsx": FILES["Level.tsx"].replace("speed={s.speed}", `speed="fast"`) });
     assert.ok(typeCheckProject(bad).length > 0);
   });
 });
@@ -437,7 +435,7 @@ describe("M4: diagnostics", () => {
 
   it("infers a state's type from a primitive prop, and asks for a type argument otherwise", () => {
     const P = `interface P { label: string; count: number; items: number[]; onX?: () => void }`;
-    const state = (initial: string, typeArgument = "") => withProps(P, `{ label, count, items }: P`, `const [v, setV] = useState${typeArgument}(${initial});`);
+    const state = (initial: string, type = "") => withProps(P, `{ label, count, items }: P`, `const s = useMutable({ v: ${type === "" ? initial : `${initial} as ${type}`} });`);
     const primitive = (name: string) => ({ kind: "Primitive", name });
     assert.deepEqual(compile(state("label")).ir.components[0]!.state[0]!.type, primitive("string"));
     assert.deepEqual(compile(state("count")).ir.components[0]!.state[0]!.type, primitive("number"));
@@ -446,7 +444,7 @@ describe("M4: diagnostics", () => {
       assert.deepEqual(compile(state(initial)).ir.components[0]!.state[0]!.type, primitive(type), initial);
     }
     assert.deepEqual(codes(state("count > 3 ? 1 : label")), [DiagnosticCode.UnsupportedStateType], "branches of different types");
-    assert.deepEqual(compile(state("count", "<number>")).ir.components[0]!.state[0]!.type, primitive("number"));
+    assert.deepEqual(compile(state("count", "number")).ir.components[0]!.state[0]!.type, primitive("number"));
   });
 
   it("imports a runtime function that is used only in a prop's default", async () => {
@@ -461,11 +459,11 @@ export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Cap
   });
 
   it("keeps the generated updateProps name free", () => {
-    assert.ok(compile(`function A() { const [updateProps, setU] = useState(0); return <Entity name="A" />; }`).code.includes("$updateProps: number"));
+    assert.ok(compile(`function A() { const updateProps = useMutable({ n: 0 }); return <Entity name="A" />; }`).code.includes("get $updateProps()"));
   });
 
   it("rejects a prop that clashes with state", () => {
-    assert.ok(codes(withProps(`interface P { n: number }`, `{ n }: P`, `const [n, setN] = useState(0);`)).includes(DiagnosticCode.InvalidUseState));
+    assert.ok(codes(withProps(`interface P { n: number }`, `{ n }: P`, `const n = useMutable({ v: 0 });`)).includes(DiagnosticCode.InvalidUseState));
   });
 
   it("rejects calling a value, and reading a callback as a value", () => {
@@ -488,11 +486,11 @@ export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Cap
 
 describe("M4b: component forms", () => {
   it("compiles an arrow-function component with props, hooks and state like a function declaration", async () => {
-    const { Badge } = await load<{ Badge: new (props: { label: string; step?: number }) => Entity & { n: number } }>(
+    const { Badge } = await load<{ Badge: new (props: { label: string; step?: number }) => Entity & { s: { n: number } } }>(
       compile(`interface BadgeProps { label: string; step?: number }
 export const Badge = ({ label, step = 2 }: BadgeProps) => {
-  const [n, setN] = useState(0);
-  useUpdate(() => setN((n) => n + step));
+  const s = useMutable({ n: 0 });
+  useUpdate(() => { s.n += step; });
   return <Entity name={label} />;
 };`),
     );
@@ -500,7 +498,7 @@ export const Badge = ({ label, step = 2 }: BadgeProps) => {
     const badge = new Badge({ label: "b" });
     world.mount(badge);
     world.tick(1);
-    assert.deepEqual([badge.name, badge.n], ["b", 2]);
+    assert.deepEqual([badge.name, badge.s.n], ["b", 2]);
   });
 
   it("compiles an arrow with an expression body, which can hold no hooks", async () => {
@@ -555,10 +553,10 @@ export function Level() {
 describe("M4b: the props object", () => {
   const SOURCE = `interface EnemyProps { speed: number; skin?: "red" | "blue"; onDefeated?: () => void }
 function Enemy(props: EnemyProps) {
-  const [hp, setHp] = useState(props.speed * 10);
+  const s = useMutable({ hp: props.speed * 10 });
   useUpdate((dt) => {
-    setHp((hp) => hp - dt * props.speed);
-    if (hp <= 0) props.onDefeated?.();
+    s.hp -= dt * props.speed;
+    if (s.hp <= 0) props.onDefeated?.();
   });
   return (
     <Entity name="Enemy" transform={{ x: props.speed }}>
@@ -579,14 +577,15 @@ function Enemy(props: EnemyProps) {
     const world = new World();
     const e = new Enemy({ speed: 2, onDefeated: () => { defeated++; } });
     world.mount(e);
-    assert.equal(e.hp, 20);
+    assert.equal(e.s.hp, 20);
     e.updateProps({ speed: 5, skin: "blue" });
     world.flush();
     assert.equal(e.transform.x, 5, "JSX that reads props.speed followed the update");
     assert.equal(e.sprite.image, "blue.png");
     world.tick(100);
+    assert.equal(defeated, 1, "the handler reads the hp it just wrote: defeated in the step that took it to 0");
     world.tick(1);
-    assert.equal(defeated, 1);
+    assert.equal(defeated, 2);
   });
 
   it("applies no defaults, since there is no destructuring to hold them", () => {
@@ -614,12 +613,12 @@ function Panel(props: BarProps) { return <Entity name="Panel"><Bar onDone={props
 
 describe("M4b: roots", () => {
   it("lowers a fragment root to an implicit container, without needing Entity imported", async () => {
-    const source = `import { useState, Sprite } from "@rge/runtime/jsx";
+    const source = `import { useMutable, Sprite } from "@rge/runtime/jsx";
 function Pair() {
-  const [on, setOn] = useState(true);
+  const s = useMutable({ on: true });
   return (<>
     <Sprite image="a.png" />
-    {on && <Sprite image="b.png" />}
+    {s.on && <Sprite image="b.png" />}
   </>);
 }`;
     const result = getCompiler().compile("Pair.tsx", source);
@@ -634,9 +633,9 @@ function Pair() {
   it("lets a component be a Sprite, with no container around it", async () => {
     const compiled = compile(`interface CoinProps { value: number }
 function Coin({ value }: CoinProps) {
-  const [spin, setSpin] = useState(0);
-  useUpdate(() => setSpin((n) => n + value));
-  return <Sprite image={spin > 5 ? "gold.png" : "coin.png"} />;
+  const s = useMutable({ spin: 0 });
+  useUpdate(() => { s.spin += value; });
+  return <Sprite image={s.spin > 5 ? "gold.png" : "coin.png"} />;
 }
 function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }} /></Entity>; }`);
     assert.match(compiled.code, /export class Coin extends Sprite<CoinProps> \{/);
@@ -664,28 +663,28 @@ function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }}
 
   it("lets a component be a Collider whose callback is set after super()", async () => {
     const compiled = compile(`function Trap() {
-  const [touches, setTouches] = useState(0);
-  return <Collider width={10} height={10} onCollisionEnter={() => setTouches((n) => n + 1)} />;
+  const s = useMutable({ touches: 0 });
+  return <Collider width={10} height={10} onCollisionEnter={() => { s.touches += 1; }} />;
 }`);
     assert.match(compiled.code, /export class Trap extends Collider \{/);
-    assert.match(compiled.code, /super\(\{ width: 10, height: 10 \}\);\n\s+this\.onCollisionEnter = \(\) => \{ this\.setTouches/, "an arrow that uses `this` cannot be made inside the super() call");
+    assert.match(compiled.code, /super\(\{ width: 10, height: 10 \}\);\n\s+this\.onCollisionEnter = \(\) => \{ this\.\$set_s_touches/, "an arrow that uses `this` cannot be made inside the super() call");
     assert.deepEqual(typeCheck(compiled), []);
-    const { Trap } = await load<{ Trap: new () => Collider & { touches: number } }>(compiled);
+    const { Trap } = await load<{ Trap: new () => Collider & { s: { touches: number } } }>(compiled);
     const world = new World();
     const trap = new Trap();
     world.mount(trap);
     world.reportCollision(trap, new Collider({ width: 1, height: 1 }));
     world.flush();
-    assert.equal(trap.touches, 1);
+    assert.equal(trap.s.touches, 1);
   });
 
   it("keeps the root's own fields free of state, refs and props", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
     for (const [root, field] of [["Sprite image=\"a\"", "image"], ["Collider width={1} height={1}", "width"], ["Entity", "name"]] as const) {
-      assert.ok(compile(`function A() { const [${field}, setX] = useState(0); return <${root} />; }`).code.includes(`$${field}: number`), `${root}: ${field}`);
+      assert.ok(compile(`function A() { const ${field} = useMutable({ n: 0 }); return <${root} />; }`).code.includes(`get $${field}()`), `${root}: ${field}`);
     }
-    // A field of a different built-in is free.
-    assert.doesNotThrow(() => compile(`function A() { const [image, setImage] = useState(0); return <Collider width={1} height={1} />; }`));
+    // A name of a different built-in is free.
+    assert.ok(compile(`function A() { const image = useMutable({ n: 0 }); return <Collider width={1} height={1} />; }`).code.includes("get image()"));
   });
 
   it("takes a component as a root (a see-through container), and rejects children on a leaf built-in (a nested fragment is an implicit Entity)", () => {
@@ -720,13 +719,12 @@ describe("M4b: collider callbacks", () => {
 
   it("lets a handler read the other collider's tag and owner, and nothing else", () => {
     const compiled = compile(`function Hero() {
-  const [coins, setCoins] = useState(0);
-  const [hurt, setHurt] = useState(false);
+  const s = useMutable({ coins: 0, hurt: false });
   return (
     <Entity name="H">
       <Collider width={1} height={1} tag="player" layer="player" hits={["coin", "enemy"]}
-        onCollisionEnter={(other) => { if (other.tag === "coin") setCoins(coins + 1); else if (other.owner === "Spikes") setHurt(true); }}
-        onCollisionExit={(other) => { if (other.tag === "enemy") setHurt(false); }} />
+        onCollisionEnter={(other) => { if (other.tag === "coin") s.coins += 1; else if (other.owner === "Spikes") s.hurt = true; }}
+        onCollisionExit={(other) => { if (other.tag === "enemy") s.hurt = false; }} />
     </Entity>
   );
 }`);
@@ -738,14 +736,14 @@ describe("M4b: collider callbacks", () => {
   });
 
   it("type-checks authored collider callbacks", () => {
-    const source = `import { useState, Entity, Collider } from "@rge/runtime/jsx";
+    const source = `import { useMutable, Entity, Collider } from "@rge/runtime/jsx";
 function A() {
-  const [n, setN] = useState(0);
-  return <Entity name="A"><Collider width={1} height={1} onCollisionEnter={(other) => setN(n + 1)} /></Entity>;
+  const s = useMutable({ n: 0 });
+  return <Entity name="A"><Collider width={1} height={1} onCollisionEnter={(other) => { s.n += 1; }} /></Entity>;
 }`;
     const check = (text: string) => getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/Cb.tsx`, text }]);
     assert.deepEqual(check(source), []);
-    assert.ok(check(source.replace("setN(n + 1)", `setN("a")`)).length > 0);
+    assert.ok(check(source.replace("s.n += 1", `s.n = "a"`)).length > 0);
     assert.ok(check(source.replace("(other) =>", "(other: string) =>")).length > 0, "the parameter is typed");
   });
 });

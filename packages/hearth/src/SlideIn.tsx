@@ -1,4 +1,4 @@
-import { type Child, Flex, useMount, useSpring, useState, useTween } from "@rge/runtime/jsx";
+import { type Child, Flex, useMount, useSpring, useMutable, useTween } from "@rge/runtime/jsx";
 
 interface SlideInProps {
   children: Child;
@@ -9,12 +9,12 @@ interface SlideInProps {
  * tween follow it. The side panel's build menu and upgrade panel come in this way.
  */
 export function SlideIn({ children }: SlideInProps) {
-  const [shown, setShown] = useState(false);
+  const s = useMutable({ shown: false });
   useMount(() => {
-    setShown(true);
+    s.shown = true;
   });
-  const x = useSpring(shown ? 0 : 24, { duration: 0.3, bounce: 0.15 });
-  const opacity = useTween(shown ? 1 : 0, { duration: 0.15 });
+  const x = useSpring(s.shown ? 0 : 24, { duration: 0.3, bounce: 0.15 });
+  const opacity = useTween(s.shown ? 1 : 0, { duration: 0.15 });
 
   return (
     <Flex direction="column" width="grow" transform={{ x, opacity }}>

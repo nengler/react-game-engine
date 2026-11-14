@@ -12,7 +12,7 @@ const diagnose = (source: string): CompilerDiagnostic[] => [...compiler.compile(
 function fix(source: string, code: string): string {
   const diagnostic = diagnose(source).find((d) => d.code === code);
   assert.ok(diagnostic, `no ${code} in:\n${source}\n${diagnose(source).map((d) => `${d.code} ${d.message}`).join("\n")}`);
-  const fixes = fixesFor(source, diagnostic);
+  const fixes = fixesFor(source, diagnostic, compiler);
   const chosen = fixes.find((f) => f.preferred) ?? fixes[0];
   assert.ok(chosen, `no fix for ${code}: ${diagnostic.message}`);
   return applyEdits(source, chosen.edits);
@@ -22,14 +22,14 @@ const codes = (source: string): string[] => diagnose(source).map((d) => d.code);
 
 describe("quick fixes", () => {
   it("imports a hook or built-in that is used but not imported, keeping the list sorted", () => {
-    const fixed = fix(`import { Entity, useInput } from "@rge/runtime/jsx";\nexport function A() {\n  const [x] = useState(0);\n  return <Entity />;\n}\n`, "RGE1005");
-    assert.match(fixed, /^import \{ Entity, useInput, useState \} from "@rge\/runtime\/jsx";/);
+    const fixed = fix(`import { Entity, useInput } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 0 });\n  return <Entity />;\n}\n`, "RGE1005");
+    assert.match(fixed, /^import \{ Entity, useInput, useMutable \} from "@rge\/runtime\/jsx";/);
     assert.deepEqual(codes(fixed), []);
   });
 
   it("imports from the authoring module instead of react, into the import that is there", () => {
-    const fixed = fix(`import { useState } from "react";\nimport { Entity } from "@rge/runtime/jsx";\nexport function A() {\n  const [x] = useState(0);\n  return <Entity />;\n}\n`, "RGE1001");
-    assert.equal(fixed.split("\n")[0], `import { Entity, useState } from "@rge/runtime/jsx";`);
+    const fixed = fix(`import { useMutable } from "react";\nimport { Entity } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 0 });\n  return <Entity />;\n}\n`, "RGE1001");
+    assert.equal(fixed.split("\n")[0], `import { Entity, useMutable } from "@rge/runtime/jsx";`);
     assert.deepEqual(codes(fixed), []);
   });
 
@@ -43,26 +43,26 @@ describe("quick fixes", () => {
   });
 
   it("turns useEffect with [] into useMount, and fixes the import", () => {
-    const source = `import { Entity, useEffect, useState } from "@rge/runtime/jsx";\nexport function A() {\n  const [x, setX] = useState(0);\n  useEffect(() => {\n    setX(1);\n  }, []);\n  return <Entity />;\n}\n`;
+    const source = `import { Entity, useEffect, useMutable } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 0 });\n  useEffect(() => {\n    s.x = 1;\n  }, []);\n  return <Entity />;\n}\n`;
     const fixed = fix(source, "RGE1102");
-    assert.match(fixed, /import \{ Entity, useMount, useState \}/);
-    assert.match(fixed, /useMount\(\(\) => \{\n {4}setX\(1\);\n {2}\}\);/);
+    assert.match(fixed, /import \{ Entity, useMount, useMutable \}/);
+    assert.match(fixed, /useMount\(\(\) => \{\n {4}s\.x = 1;\n {2}\}\);/);
     assert.deepEqual(codes(fixed), []);
   });
 
   it("offers nothing for an effect with dependencies: the message says what to do instead", () => {
-    const source = `import { Entity, useEffect, useState } from "@rge/runtime/jsx";\nexport function A() {\n  const [x, setX] = useState(0);\n  useEffect(() => setX(1), [x]);\n  return <Entity />;\n}\n`;
+    const source = `import { Entity, useEffect, useMutable } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 0 });\n  useEffect(() => { s.x = 1; }, [s.x]);\n  return <Entity />;\n}\n`;
     const diagnostic = diagnose(source).find((d) => d.code === "RGE1102")!;
     assert.deepEqual(fixesFor(source, diagnostic), []);
   });
 
   it("turns useMemo into the value and useCallback into the function", () => {
-    const memo = fix(`import { Entity, useMemo, useState } from "@rge/runtime/jsx";\nexport function A() {\n  const [x] = useState(2);\n  const twice = useMemo(() => (x * 2), [x]);\n  return <Entity transform={{ x: twice }} />;\n}\n`, "RGE1102");
-    assert.match(memo, /const twice = x \* 2;/);
-    assert.match(memo, /import \{ Entity, useState \}/);
+    const memo = fix(`import { Entity, useMemo, useMutable } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const twice = useMemo(() => (s.x * 2), [s.x]);\n  return <Entity transform={{ x: twice }} />;\n}\n`, "RGE1102");
+    assert.match(memo, /const twice = s\.x \* 2;/);
+    assert.match(memo, /import \{ Entity, useMutable \}/);
     assert.deepEqual(codes(memo), []);
-    const callback = fix(`import { Entity, useCallback, useState } from "@rge/runtime/jsx";\nexport function A() {\n  const [x, setX] = useState(2);\n  const more = useCallback(() => setX(x + 1), [x]);\n  return <Entity onPress={more} />;\n}\n`, "RGE1102");
-    assert.match(callback, /const more = \(\) => setX\(x \+ 1\);/);
+    const callback = fix(`import { Entity, useCallback, useMutable } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const more = useCallback(() => { s.x += 1; }, [s.x]);\n  return <Entity onPress={more} />;\n}\n`, "RGE1102");
+    assert.match(callback, /const more = \(\) => \{ s\.x \+= 1; \};/);
   });
 
   it("takes actions with useGame.actions() instead of from the whole state", () => {
@@ -104,17 +104,19 @@ export function Lamp() {
     for (let round = 0; round < 10; round++) {
       const found = diagnose(source).filter((d) => d.severity === "error");
       if (found.length === 0) break;
-      const fixable = found.map((d) => ({ d, fix: fixesFor(source, d).find((f) => f.preferred) ?? fixesFor(source, d)[0] })).find((x) => x.fix !== undefined);
+      const fixable = found.map((d) => ({ d, fix: fixesFor(source, d, compiler).find((f) => f.preferred) ?? fixesFor(source, d, compiler)[0] })).find((x) => x.fix !== undefined);
       assert.ok(fixable, `no fix left for:\n${found.map((d) => `${d.code} ${d.message}`).join("\n")}\n${source}`);
       applied.push(fixable.fix!.title);
       source = applyEdits(source, fixable.fix!.edits);
     }
     assert.deepEqual(codes(source), [], source);
     assert.ok(compiler.compile("src/A.tsx", source).ok);
-    assert.match(source, /^import \{ Entity, Text, useMount, useState \} from "@rge\/runtime\/jsx";$/m);
-    assert.match(source, /useMount\(\(\) => \{/);
-    assert.match(source, /const glow = lit \? 1 : 0\.2;/);
+    assert.match(source, /^import \{ Entity, Text, useMount, useMutable \} from "@rge\/runtime\/jsx";$/m);
+    assert.match(source, /const s = useMutable\(\{ lit: false \}\);/);
+    assert.match(source, /useMount\(\(\) => \{\n {4}s\.lit = true;/);
+    assert.match(source, /const glow = s\.lit \? 1 : 0\.2;/);
     assert.match(source, /<Text>lamp<\/Text>/);
-    assert.equal(applied.length, 5, applied.join("\n"));
+    assert.ok(applied.includes("Move this file's useState to useMutable"), applied.join("\n"));
+    assert.equal(applied.length, 6, applied.join("\n"));
   });
 });

@@ -5,6 +5,14 @@ compiler as it stands after Phase 2 (M0–M15), the decisions taken, and the
 alternatives that were considered. It is the place to push back on a decision before more code is
 built on top of it.
 
+**State, since 2026-11-14 (#121): `useMutable`, and no `useState`.** A component's state is `const s = useMutable({ hp: 3 })`,
+written directly (`s.hp -= 1`); a handler reads its own writes, render sees what the frame committed (see "State reads in
+handlers" below and [MUTABLE_STATE.md](MUTABLE_STATE.md)). A `useState` is `RGE1102`, whose message writes out the conversion; the
+editor's quick fix and `tools/codemod-mutable.ts` convert a file (`codemod/mutable.ts`). Sections written before then describe
+`useState`, `setX(…)` and updaters as they were built: each `useMutable` field is still one of those state slots (a field, a
+pending value, a setter, a hot-reload key), so what they say about storage, rendering and saving holds; what they say about
+setters, updaters and a handler seeing a snapshot does not.
+
 ## Ground rules and settled decisions
 
 A change that breaks one of these rules needs a design note first, as Phase 3's [NATIVE_PLAN.md](NATIVE_PLAN.md) was for the player. That document adds the player's own rules (the runtime stays backend-free; `@rge/player` and `@rge/runtime` import nothing from Node; `rge.h` is the source of truth for the protocol; the C side does no maths): see its [Ground rules](NATIVE_PLAN.md#ground-rules).
@@ -13,7 +21,7 @@ A change that breaks one of these rules needs a design note first, as Phase 3's 
 - **IR first.** Each feature starts as new variants in the `packages/compiler/src/ir/` files (`types.ts` re-exports them all). Code is generated only from IR, never from the AST.
 - **Exhaustive unions.** Add the variant, then let `assertNever` failures show every place that must handle it. Never add a `default:` that silently passes.
 - **No React, no virtual DOM, no signals, no ECS, no generic reconciler.** Updates stay direct: field assignments and queued add/remove on persistent instances.
-- **Hooks are compiler intrinsics.** New hooks follow the `useState` rule: top-level statement in the component body, rejected anywhere else.
+- **Hooks are compiler intrinsics.** New hooks follow the `useMutable` rule: top-level statement in the component body, rejected anywhere else.
 - **TypeScript 7.1 only through the two adapters.** Only `parser/parser.ts` and `typecheck/typecheck.ts` import `typescript/sync`. Verify any new API against the installed `.d.ts` before use.
 - **Unsupported means a diagnostic.** Never silently drop syntax. Diagnostic codes in `diagnostics.ts` are append-only.
 - **Generated code must type-check.** Every feature adds a test that runs generated output through `typeCheckFiles` and one that imports and runs it against the runtime.
@@ -26,14 +34,14 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Input model | Per-frame `useInput` hook with polled `InputState` for devices. Events that belong to an element are callback props on that element (`<Collider onCollisionEnter>`, `<Pointer onPress>`), lowered to `CallbackProp` with parameter types from the manifest's `intrinsicCallbacks`; no separate event-prop IR variant |
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs |
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
-| State reads in handlers | `useState`: React's snapshot semantics: reads see the value from the last render; setters queue, updaters chain on the pending value, and `commitState()` applies them just before the render (decided 2026-11-08). `useMutable` (2026-11-14, #121): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler; render sees what the frame committed. So "every handler in a frame sees the same state" now holds for `useState` only. Making the direct form the only state hook, and what the timing rule is across components, is proposed in [MUTABLE_STATE.md](MUTABLE_STATE.md) |
+| State reads in handlers | `useMutable` (2026-11-14, #121; it replaces `useState`, whose React snapshot semantics were decided 2026-11-08): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. "Every handler in a frame sees the same state" becomes "every handler sees the latest writes, in the order handlers run; render sees the frame's committed state". See [MUTABLE_STATE.md](MUTABLE_STATE.md) |
 | Global state | One nested store, shaped like Zustand: `GameState.ts` is real code, `export const useGame = createGameState<State>()((set, get) => ({ coins: 0, collect: () => set(…) }))`. **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (a plain path the compiler checks and subscribes to); **update** with actions that call `set` (shallow merge), picked with a selector and called in a handler. Per process, reset by the player. Primitives only for now. See "Global state" (decided 2026-11-09) |
 | Refs | Refs hold values only (`const timer = useRef(0)`, or any type given as an argument, `useRef<Point[]>([])`, except one that names an element; plain fields, never render, `.current` readable only in handlers). No `ref={…}` on elements or components: what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
-| Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09). A `useMutable` field is written directly (`s.vx += 1`, `s.enemies = [...s.enemies, e]`), each write going through its generated setter; changing a list or an object in a field in place is still refused (`RGE1301`, with the assignment to write instead). Whether in-place writes should be allowed, and how changes would then be found, is open in [MUTABLE_STATE.md](MUTABLE_STATE.md) |
+| Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09). A `useMutable` field is written directly (`s.vx += 1`, `s.enemies = [...s.enemies, e]`), each write going through its generated setter; changing a list or an object in a field in place is still refused (`RGE1301`, with the assignment to write instead). Whether in-place writes should be allowed, and how changes would then be found, is still open in [MUTABLE_STATE.md](MUTABLE_STATE.md) |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
 | Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) |
 | Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on any built-in element (decided 2026-11-08; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the attribute). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters |
@@ -142,11 +150,11 @@ ignored):
   built-in), so its props are applied to `this`, and its children become
   children of `this`. A fragment `<>…</>` is an implicit container, a bare
   `Entity`. See "Roots and component forms".
-* `useState` is a compiler intrinsic. It must be a top-level `const` array
-  destructuring. Calls anywhere else, or a `use*` call that is not one of the hooks, are errors.
-  State type is inferred from the initial literal (`number`/`string`/`boolean`)
-  or a prop; an array or record needs its type (`useState<EnemyData[]>([])`,
-  with `EnemyData` declared in the file) and is updated immutably. See
+* `useMutable` is a compiler intrinsic. It must be a top-level `const s = useMutable({ … })`
+  of plain fields. Calls anywhere else, or a `use*` call that is not one of the hooks, are errors.
+  A field's type is inferred from its initial literal (`number`/`string`/`boolean`, and objects and
+  arrays of them) or a prop; an empty array or a record needs its type (`enemies: [] as EnemyData[]`,
+  with `EnemyData` declared in the file) and is replaced, not changed in place. See
   "Arrays and records".
 * Children: elements, `{condition && <Element />}`,
   `{condition ? <A /> : <B />}` (a branch may be `null`; it lowers to two

@@ -24,14 +24,13 @@ function Pause({ onLog }: PauseProps) {
 
 interface RootProps { onLog: (s: string) => void }
 function Root({ onLog }: RootProps) {
-  const [paused, setPaused] = useState(false);
-  const [disabled, setDisabled] = useState(false);
+  const s = useMutable({ paused: false, disabled: false });
   useInput((input) => { if (input.pressed("Enter")) onLog("world"); });
   return (
     <Entity name="Root">
-      <Menu disabled={disabled} onLog={onLog} />
-      <Hud inert={paused}><Entity name="hint" /></Hud>
-      {paused && <Pause onLog={onLog} />}
+      <Menu disabled={s.disabled} onLog={onLog} />
+      <Hud inert={s.paused}><Entity name="hint" /></Hud>
+      {s.paused && <Pause onLog={onLog} />}
     </Entity>
   );
 }`;
@@ -53,14 +52,14 @@ describe("inert and modal in components", () => {
       return log.splice(0);
     };
     assert.deepEqual(press(), ["world", "menu"]);
-    root.setDisabled(true);
+    root.s.disabled = (true);
     world.flush();
     assert.deepEqual(press(), ["world"]);
-    root.setDisabled(false);
-    root.setPaused(true);
+    root.s.disabled = (false);
+    root.s.paused = (true);
     world.flush();
     assert.deepEqual(press(), ["pause"]);
-    root.setPaused(false);
+    root.s.paused = (false);
     world.flush();
     assert.deepEqual(press(), ["world", "menu"]);
   });

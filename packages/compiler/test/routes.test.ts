@@ -13,25 +13,25 @@ const SOURCES = {
   "Counter.tsx": `
 interface Props { label: string }
 export function Counter({ label }: Props) {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   useInput((input) => {
     if (input.pressed("Z")) {
-      setN((v) => v + 1);
+      s.n += 1;
     }
   });
-  return <Text size={8}>{label} {n}</Text>;
+  return <Text size={8}>{label} {s.n}</Text>;
 }`,
   "Main.tsx": `
 import { Counter } from "./Counter.tsx";
 export function Main() {
-  const [screen, setScreen] = useState("a");
+  const st = useMutable({ screen: "a" });
   useInput((input) => {
     if (input.pressed("X")) {
-      setScreen((s) => (s === "a" ? "b" : "a"));
+      st.screen = (st.screen === "a" ? "b" : "a");
     }
   });
   return (
-    <Router route={screen}>
+    <Router route={st.screen}>
       <Route name="a"><Counter label="a" /></Route>
       <Route name="b" keepAlive><Counter label="b" /></Route>
     </Router>

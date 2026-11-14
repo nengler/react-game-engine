@@ -11,9 +11,8 @@ after(() => {
 describe("state typed through Math's constants", () => {
   it("infers a number from Math.PI and Math.E, alone or in arithmetic", () => {
     const compiled = compile(`export function Barrel() {
-      const [angle, setAngle] = useState(-Math.PI / 2);
-      const [e] = useState(Math.E);
-      useUpdate((dt) => setAngle(angle + dt * e));
+      const s = useMutable({ angle: -Math.PI / 2, e: Math.E });
+      useUpdate((dt) => { s.angle += dt * s.e; });
       return <Entity />;
     }`);
     assert.deepEqual(typeCheck(compiled), []);

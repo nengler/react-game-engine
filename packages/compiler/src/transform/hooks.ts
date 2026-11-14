@@ -1,4 +1,4 @@
-// Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
+// Layer 2 of ComponentLowering: props declarations, hooks (useMutable, useRef, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type ArrowFunction, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
 import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseStateCallAnalysis, type UseMutableCallAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis, type UseContextCallAnalysis } from "../analyzer/analyzer.ts";
@@ -233,9 +233,6 @@ export class HookLowering extends ExpressionLowering {
           }
           break;
         }
-        case "useState":
-          this.lowerUseState(hook, state, hooks);
-          break;
         case "useMutable":
           this.lowerUseMutable(hook, state, hooks);
           break;
@@ -293,7 +290,7 @@ export class HookLowering extends ExpressionLowering {
     if (setterName !== null && setterMethod === null) return null;
     const id = stateId(this.component.name, mutable === null ? hook.valueName : `${mutable.name}.${mutable.field}`);
     if (!hook.initializer) {
-      this.report(DiagnosticCode.InvalidUseState, "useState requires an initial value.", hook.call);
+      this.report(DiagnosticCode.InvalidUseState, "A useMutable field needs an initial value.", hook.call);
       return null;
     }
     // Initial values are evaluated before any state exists: lower with the scope as it is so far,
@@ -303,7 +300,7 @@ export class HookLowering extends ExpressionLowering {
     let initializer = hook.initializer;
     if (isArrowFunction(lazy)) {
       if (lazy.parameters.length > 0 || isBlock(lazy.body)) {
-        this.report(DiagnosticCode.InvalidUseState, "A lazy initial value is an arrow with no parameters returning the value: `useState(() => createSquash())`.", lazy);
+        this.report(DiagnosticCode.InvalidUseState, "A field's lazy initial value is an arrow with no parameters returning the value: `squash: () => createSquash()`.", lazy);
         return null;
       }
       initializer = lazy.body as typeof initializer;
@@ -623,7 +620,7 @@ export class HookLowering extends ExpressionLowering {
     if (initial.kind === "Call" && (initial.callee.kind === "Function" || initial.callee.kind === "Plain") && !initial.callee.name.startsWith("Math.")) {
       return { kind: "SourceType", text: `ReturnType<typeof ${initial.callee.name}>` };
     }
-    // `useState({ x: 0, y: 0 })`: the literal's type, as TypeScript infers it (`{ x: number; y: number }`).
+    // `pos: { x: 0, y: 0 }`: the literal's type, as TypeScript infers it (`{ x: number; y: number }`).
     const literal = this.literalType(initial);
     if (literal !== null) return { kind: "SourceType", text: literal };
     const code = DiagnosticCode.UnsupportedStateType;
@@ -631,12 +628,12 @@ export class HookLowering extends ExpressionLowering {
       this.report(
         code,
         initial.kind === "ArrayLiteral" && initial.elements.length === 0
-          ? "An empty array state needs its type, as in TypeScript, where `[]` alone is `never[]`: `useState<EnemyData[]>([])`."
-          : `This ${initial.kind === "ArrayLiteral" ? "array" : "object"}'s type cannot be worked out from its values: write it, \`useState<${initial.kind === "ArrayLiteral" ? "EnemyData[]" : "EnemyData"}>(…)\`, with the type declared in this file.`,
+          ? "An empty array needs its type, as in TypeScript, where `[]` alone is `never[]`: `enemies: [] as EnemyData[]`."
+          : `This ${initial.kind === "ArrayLiteral" ? "array" : "object"}'s type cannot be worked out from its values: write it, \`${initial.kind === "ArrayLiteral" ? "enemies: [] as EnemyData[]" : "enemy: { … } as EnemyData"}\`, with the type declared in this file.`,
         at,
       );
     } else {
-      this.report(code, "Cannot infer the type; use a number/string/boolean literal, a prop, or `useState<T>(...)`.", at);
+      this.report(code, "Cannot infer the type; use a number/string/boolean literal or a prop, or give it: `angle: start as number`.", at);
     }
     return null;
   }

@@ -23,7 +23,7 @@ export interface InspectedObject {
   readonly name: string;
   /** Its props, as data (functions as `"ƒ name"`). */
   readonly props: Record<string, unknown>;
-  /** Its `useState` values and refs, by their names in the source. */
+  /** Its `useMutable` fields (`s.vx`) and refs, by their names in the source. */
   readonly state: Record<string, unknown>;
   /** The game-state paths it reads (`useGame((s) => s.player.hp)` → `player.hp`). */
   readonly subscriptions: readonly string[];

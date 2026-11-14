@@ -15,7 +15,7 @@ const THEME = `import { createContext } from "@rge/runtime";
 export const Theme = createContext({ accent: "gold", size: 10 });
 `;
 
-const SOURCE = `import { Entity, Text, useContext, useState, useUpdate } from "@rge/runtime/jsx";
+const SOURCE = `import { Entity, Text, useContext, useMutable, useUpdate } from "@rge/runtime/jsx";
 import { Theme } from "./theme.ts";
 
 function Label() {
@@ -30,11 +30,11 @@ function Panel() {
   return <Entity><Label /><Badge /></Entity>;
 }
 export function App() {
-  const [dark, setDark] = useState(false);
-  useUpdate(() => setDark(true));
+  const s = useMutable({ dark: false });
+  useUpdate(() => { s.dark = true; });
   return (
     <Entity>
-      <Theme.Provider value={{ accent: dark ? "violet" : "gold", size: dark ? 12 : 10 }}>
+      <Theme.Provider value={{ accent: s.dark ? "violet" : "gold", size: s.dark ? 12 : 10 }}>
         <Panel />
       </Theme.Provider>
       <Label />

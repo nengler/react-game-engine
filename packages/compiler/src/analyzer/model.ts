@@ -143,7 +143,7 @@ export interface UseStoreCallAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStoreCallAnalysis | UseStateCallAnalysis | UseMutableCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis | UseContextCallAnalysis;
+export type HookCallAnalysis = UseStoreCallAnalysis | UseMutableCallAnalysis | UseRefCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis | UseContextCallAnalysis;
 
 /** `const theme = useContext(Theme)` or `const { accent, text: ink } = useContext(Theme)`. */
 export interface UseContextCallAnalysis {
@@ -245,7 +245,7 @@ export const HOOK_NAME = /^use[A-Z0-9]/;
 
 export const HANDLER_HOOKS: ReadonlySet<string> = new Set(["useUpdate", "useInput", "useMount", "useUnmount"]);
 
-export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useState", "useMutable", "useRef", "useSound", "useContext", ...HANDLER_HOOKS]);
+export const KNOWN_HOOKS: ReadonlySet<string> = new Set(["useMutable", "useRef", "useSound", "useContext", ...HANDLER_HOOKS]);
 
 /** Every hook the compiler understands, i.e. the hook names the authoring module must export. */
 export const AUTHORING_HOOKS: readonly string[] = [...KNOWN_HOOKS];
@@ -261,6 +261,9 @@ const EFFECT_MESSAGE = (hook: string): string =>
 export const REMOVED_HOOKS: Readonly<Record<string, string>> = {
   onUpdate: "'onUpdate' was renamed to 'useUpdate' (hooks start with `use`, as in React).",
   onInput: "'onInput' was renamed to 'useInput' (hooks start with `use`, as in React).",
+  useState:
+    "`useState` is replaced by `useMutable`, state you write directly: `const s = useMutable({ hp: 3 })`, read as `s.hp` and written as " +
+    "`s.hp = v` (where `setHp(v)` was). A handler reads its own writes at once. `node tools/codemod-mutable.ts <file>` converts a file.",
   useEffect: EFFECT_MESSAGE("useEffect"),
   useLayoutEffect: EFFECT_MESSAGE("useLayoutEffect"),
   onCollisionEnter: "'onCollisionEnter' is no longer a hook: pass it to the collider, `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`, so you know which collider was hit.",

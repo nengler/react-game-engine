@@ -22,10 +22,13 @@ after(() => {
   rmSync(OUT, { recursive: true, force: true });
 });
 
+/** A component's `useMutable` fields (`s`), as the test reads them. */
+const fields = (t: { state(): Record<string, unknown> }) => t.state().s as Record<string, unknown>;
+
 let counter = 0;
 /** Compile a component file and import the generated module. */
 async function build<T>(source: string): Promise<T> {
-  const imports = `import { Collider, Entity, Pointer, Text, Tilemap, useBody, useState, useUpdate, useInput } from "@rge/runtime/jsx";\n`;
+  const imports = `import { Collider, Entity, Pointer, Text, Tilemap, useBody, useMutable, useUpdate, useInput } from "@rge/runtime/jsx";\n`;
   const result = compiler.compile("Test.tsx", imports + source);
   if (!result.ok) throw new Error(result.diagnostics.map(formatDiagnostic).join("\n"));
   const file = join(OUT, String(++counter), "Test.ts");
@@ -37,19 +40,18 @@ async function build<T>(source: string): Promise<T> {
 const ENEMY = `
 interface EnemyProps { hp: number; onDefeated: () => void }
 export function Enemy({ hp, onDefeated }: EnemyProps) {
-  const [health, setHealth] = useState(hp);
-  const [flash, setFlash] = useState(0);
+  const s = useMutable({ health: hp, flash: 0 });
   useUpdate((dt) => {
-    if (flash > 0) setFlash(Math.max(0, flash - dt));
+    if (s.flash > 0) s.flash = Math.max(0, s.flash - dt);
   });
   return (
     <Entity>
-      <Text>{health > 0 ? \`hp \${health}\` : "down"}</Text>
+      <Text>{s.health > 0 ? \`hp \${s.health}\` : "down"}</Text>
       <Collider width={8} height={8} tag="enemy" onCollisionEnter={(other) => {
-        if (other.tag !== "shot" || health <= 0) return;
-        const left = health - 1;
-        setHealth(left);
-        setFlash(0.1);
+        if (other.tag !== "shot" || s.health <= 0) return;
+        const left = s.health - 1;
+        s.health = left;
+        s.flash = 0.1;
         if (left === 0) onDefeated();
       }} />
     </Entity>
@@ -64,35 +66,34 @@ describe("render", () => {
     assert.deepEqual(t.texts(), ["hp 3"]);
     t.collide("enemy", { tag: "shot" }, 2);
     assert.deepEqual(t.texts(), ["hp 1"]);
-    assert.equal(t.state().health, 1);
-    assert.ok((t.state().flash as number) > 0);
+    assert.equal(fields(t).health, 1);
+    assert.ok((fields(t).flash as number) > 0);
     t.collide("enemy", { tag: "shot" });
     assert.equal(onDefeated.mock.callCount(), 1);
     assert.deepEqual(t.texts(), ["down"]);
     t.step(10);
-    assert.equal(t.state().flash, 0);
+    assert.equal(fields(t).flash, 0);
   });
 
   it("runs an input script through the game's controls, and presses a pointer", async () => {
     const { Menu } = await build<{ Menu: new () => GameObject }>(`
 export function Menu() {
-  const [cursor, setCursor] = useState(0);
-  const [chosen, setChosen] = useState("none");
+  const s = useMutable({ cursor: 0, chosen: "none" });
   useInput((input) => {
-    if (input.pressed("down")) setCursor((c) => c + 1);
-    if (input.pressed("confirm")) setChosen(\`row \${cursor}\`);
+    if (input.pressed("down")) s.cursor += 1;
+    if (input.pressed("confirm")) s.chosen = \`row \${s.cursor}\`;
   });
   return (
     <Entity>
-      <Text>{chosen}</Text>
-      <Pointer width={10} height={10} onPress={() => setChosen("clicked")} />
+      <Text>{s.chosen}</Text>
+      <Pointer width={10} height={10} onPress={() => { s.chosen = "clicked"; }} />
     </Entity>
   );
 }`);
     const controls = createControls({ down: ["ArrowDown"], confirm: ["Enter"] });
     const t = render(Menu, undefined, { controls });
     t.input("down, _, down, _, confirm, _");
-    assert.equal(t.state().cursor, 2);
+    assert.equal(fields(t).cursor, 2);
     assert.deepEqual(t.texts(), ["row 2"]);
     t.press(t.find(Pointer)!);
     assert.deepEqual(t.texts(), ["clicked"]);
@@ -117,15 +118,15 @@ export function Faller() {
 interface MineProps { onBoom: () => void }
 export function Mine({ onBoom }: MineProps) {
   const { overlapping } = useBody({ x: 0, y: 0, width: 40, height: 40 });
-  const [near, setNear] = useState(0);
-  useUpdate(() => { setNear(overlapping("walker").length); });
+  const s = useMutable({ near: 0 });
+  useUpdate(() => { s.near = overlapping("walker").length; });
   return <Collider width={8} height={8} tag="mine" onCollisionEnter={(other) => { if (other.tag === "walker") onBoom(); }} />;
 }`);
     let booms = 0;
     const t = render(Mine, { onBoom: () => booms++ }, { collisions: true });
     const walker = t.place({ tag: "walker", x: 30, y: 30, width: 4, height: 4 });
     t.step();
-    assert.deepEqual([t.state().near, booms], [1, 0], "near the mine (in its body's box), not on it");
+    assert.deepEqual([fields(t).near, booms], [1, 0], "near the mine (in its body's box), not on it");
     walker.transform.x = 2;
     walker.transform.y = 2;
     walker.markChanged(); // a transform written outside a render says so, as anywhere in the runtime
@@ -133,6 +134,6 @@ export function Mine({ onBoom }: MineProps) {
     assert.equal(booms, 1, "stepping onto it is a contact, found by the step itself");
     t.remove(walker);
     t.step();
-    assert.equal(t.state().near, 0);
+    assert.equal(fields(t).near, 0);
   });
 });
