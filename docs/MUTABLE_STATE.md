@@ -91,7 +91,8 @@ will write `s.enemies.push(e)` and `enemy.hp -= 1` inside a list, and refusing i
 largest piece of work here, and the question to settle before anything else:
 
 - **Lower in-place writes to copies.** `s.enemies.push(e)` becomes `s.enemies = [...s.enemies, e]`, `s.enemies[i].hp -= 1` becomes a
-  copy of that item and of the list. Simple, keeps the `===` check every renderer and rewind relies on, but a step that touches many
+  copy of that item and of the list. Simple, keeps the reference comparison that setters, render's guards (`$in`) and memos rely on (rewind and saves deep-copy, so
+  they are unaffected either way), but a step that touches many
   items copies the list many times; the compiler could batch the copies within one handler (copy once on the first write, then write
   in place).
 - **Track changes in place.** Mark the field dirty on any write through it and keep copy-on-write snapshots for rewind and saves.
