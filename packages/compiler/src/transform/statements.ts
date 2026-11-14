@@ -68,12 +68,8 @@ export interface LoweringContext {
   canSetState(): boolean;
   /** In statements of the component body, which run during render (see `LoweringMode.inRenderBlock`). */
   inRenderBlock(): boolean;
-  /** False in a state updater: it runs inside the setter, whether or not the update changes anything. */
-  canPlaySound(): boolean;
-  /** True in a handler, outside a state updater: where a handler may hand a callback to a function (`settings.subscribe(() => …)`). */
+  /** True in a handler: where it may hand a callback to a function (`settings.subscribe(() => …)`). */
   canPassCallback(): boolean;
-  /** Lowers a state updater: sounds cannot be played in it. */
-  inUpdater<T>(lower: () => T): T;
   /** Lowers something in a new scope beneath the current one, restored afterwards. */
   inScope<T>(lower: (scope: Scope) => T): T;
   nextSerial(): number;
@@ -93,7 +89,7 @@ interface FunctionOptions {
   /** `declared`: each parameter's own annotation, as written (`(id: string) => …` in a component body). */
   readonly paramTypes: readonly TypeIR[] | "contextual" | "declared";
   /**
-   * `void`: handlers (`return;` only). `value`: updaters (`return expr;` required). `cleanup`: `useMount`, which may return
+   * `void`: handlers (`return;` only). `value`: a function that returns a value (`return expr;` required). `cleanup`: `useMount`, which may return
    * a cleanup (`return () => …;`, `return settings.subscribe(…);`, or an expression body that calls a function). `any`: a function
    * a handler hands to a method or the standard library (`list.sort((a, b) => …)`), which may return a value or nothing.
    */
@@ -354,10 +350,6 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
         ctx.error(DiagnosticCode.InvalidComponentBody, `An action cannot be called in the component body: it runs on every render. Call \`${action.name}()\` in a handler.`, init);
         return null;
       }
-      if (!ctx.canPlaySound()) {
-        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${action.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler.`, init);
-        return null;
-      }
       const args = ctx.lowerAll(init.arguments);
       if (!args) return null;
       value = { kind: "Call", callee: { kind: "Action", name: action.action }, args };
@@ -399,7 +391,7 @@ function isEffect(ctx: LoweringContext, body: Node): boolean {
   if (isPrefixUnaryExpression(e) || isPostfixUnaryExpression(e)) return e.operator === SyntaxKind.PlusPlusToken || e.operator === SyntaxKind.MinusMinusToken;
   if (!isCallExpression(e) || !isIdentifier(e.expression)) return false;
   const kind = ctx.scope.get(e.expression.text)?.kind;
-  return kind === "setter" || kind === "sound" || kind === "action" || kind === "function";
+  return kind === "sound" || kind === "action" || kind === "function";
 }
 
 /** Whether a value is new, made where it is written (a literal, `new`, a call's result), rather than a read of something that exists. */
@@ -685,8 +677,8 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   if (increment !== undefined) return increment;
   if (isCallExpression(call) && isIdentifier(call.expression)) {
     const callee = ctx.scope.get(call.expression.text);
-    if (ctx.inRenderBlock() && (callee?.kind === "sound" || callee?.kind === "action" || callee?.kind === "setter")) {
-      const what = callee.kind === "setter" ? "A setter" : callee.kind === "sound" ? "A sound" : "An action";
+    if (ctx.inRenderBlock() && (callee?.kind === "sound" || callee?.kind === "action")) {
+      const what = callee.kind === "sound" ? "A sound" : "An action";
       ctx.error(
         DiagnosticCode.InvalidComponentBody,
         `${what} cannot be called in the component body: it runs on every render. Call \`${call.expression.text}()\` in a handler (\`useUpdate\`, \`useMount\`, a callback prop), or compute the value here and use it.`,
@@ -699,33 +691,14 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
         ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes at most one argument, the volume from 0 to 1: the sound and its path are fixed where it is declared.`, call);
         return null;
       }
-      if (!ctx.canPlaySound()) {
-        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Play the sound in the handler, next to the setter call.`, call);
-        return null;
-      }
       const volume = call.arguments.length === 1 ? ctx.lowerExpression(call.arguments[0]!) : null;
       if (call.arguments.length === 1 && volume === null) return null;
       return { kind: "PlaySound", sound: callee.id, volume };
     }
     if (callee?.kind === "action") {
-      if (!ctx.canPlaySound()) {
-        ctx.error(DiagnosticCode.SoundOutsideHandler, `\`${callee.name}()\` cannot be called in a state updater: it runs inside the setter and may run again. Call it in the handler, next to the setter call.`, call);
-        return null;
-      }
       const args = ctx.lowerAll(call.arguments);
       if (!args) return null;
       return { kind: "CallAction", action: callee.action, args };
-    }
-    if (callee?.kind === "setter") {
-      if (!ctx.canSetState()) {
-        ctx.error(
-          DiagnosticCode.UnsupportedStatement,
-          `\`${call.expression.text}\` cannot be called in \`useUnmount\`: the component is going away, so the update could never render. Tell the parent with a callback prop (\`onGone?.()\`), or write a ref.`,
-          call,
-        );
-        return null;
-      }
-      return lowerSetState(ctx, call.arguments, callee.state, call);
     }
   }
   const lowered = ctx.lowerExpression(call);
@@ -735,21 +708,6 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
     return null;
   }
   return { kind: "ExpressionStatement", expression: lowered };
-}
-
-function lowerSetState(ctx: LoweringContext, args: readonly Expression[], state: StateId, at: Node): StatementIR | null {
-  if (args.length !== 1) {
-    ctx.error(DiagnosticCode.UnsupportedStatement, "State setters take exactly one argument.", at);
-    return null;
-  }
-  const arg = unwrapParens(args[0]!);
-  if (isArrowFunction(arg)) {
-    const type = ctx.stateType(state);
-    const updater = ctx.inUpdater(() => lowerFunction(ctx, arg, { paramTypes: [type], returns: "value", what: "State updater" }));
-    return updater && { kind: "SetState", state, updater };
-  }
-  const value = ctx.lowerExpression(arg);
-  return value && { kind: "SetState", state, value };
 }
 
 /**

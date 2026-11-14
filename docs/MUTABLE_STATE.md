@@ -268,6 +268,6 @@ Found while building it:
 - **A hook's internal mutable keeps a call-specific name** where the hook returns fields rather than the object (`useBody` returns
   `{ x, y, move, … }` from `b`): its state is saved as `_useBody1_b.x`. Tests that read a body's position read where the component
   draws instead. Naming it after the hook (`body.x`) would make it readable; not done.
-- **The updater paths in the compiler are unreachable now** (`SetState` with an `updater`, `lowerSetState`, `updaterInPlace`), as
-  nothing declares a setter binding. Removing them is a cleanup for a later change.
+- **The updater paths in the compiler were unreachable once `useState` went** (`SetState` with an `updater`, `lowerSetState`,
+  `updaterInPlace`, the setter binding, `inUpdater`); they are removed.
 

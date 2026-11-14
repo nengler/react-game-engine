@@ -4,7 +4,6 @@ type Binding =
   | { readonly kind: "state"; readonly id: StateId }
   /** `const s = useMutable({ vx: 0 })`: each field is a state slot, read and written as `s.vx`. */
   | { readonly kind: "mutable"; readonly name: string; readonly fields: ReadonlyMap<string, StateId> }
-  | { readonly kind: "setter"; readonly state: StateId; readonly name: string }
   | { readonly kind: "ref"; readonly id: RefId; readonly name: string }
   /** A `useSound` function: only called, as a statement in a handler. */
   | { readonly kind: "sound"; readonly id: SoundId; readonly name: string }

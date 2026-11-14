@@ -64,10 +64,6 @@ export class ExpressionLowering extends LoweringBase {
         this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${suggestion ? ` (did you mean '${suggestion}'?)` : ""}.`, node);
         return null;
       }
-      if (binding.kind === "setter") {
-        this.report(DiagnosticCode.UnsupportedExpression, `State setter '${node.text}' cannot be used in an expression yet.`, node);
-        return null;
-      }
       switch (binding.kind) {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
@@ -190,7 +186,7 @@ export class ExpressionLowering extends LoweringBase {
     if (isArrowFunction(node)) {
       this.report(
         DiagnosticCode.UnsupportedExpression,
-        "An arrow function can only be a callback prop (`onX={() => …}`), a state updater (`setX((x) => …)`) or the argument of an array method (`items.filter((e) => …)`).",
+        "An arrow function can only be a callback prop (`onX={() => …}`) or the argument of an array method (`items.filter((e) => …)`).",
         node,
       );
       return null;
@@ -270,7 +266,7 @@ export class ExpressionLowering extends LoweringBase {
     const out: ExprIR[] = [];
     for (const node of nodes) {
       const fn = unwrapParens(node);
-      const lowered = isArrowFunction(fn) && this.mode.inHandler ? lowerCallbackValue(this, fn, "a state updater") : this.lowerNode(node);
+      const lowered = isArrowFunction(fn) && this.mode.inHandler ? lowerCallbackValue(this, fn, "this place") : this.lowerNode(node);
       if (!lowered) return null;
       out.push(lowered);
     }

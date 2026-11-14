@@ -269,8 +269,7 @@ annotation: `let best: Enemy | null = null`), `If` (an `else` holding only an
 `const` may destructure, nested, `for (const [i, { id }] of xs.entries())`),
 `Switch` (written as is, falling through as in JS, its cases sharing one
 scope), `Block` (`{ … }`), `Break` (inside a `for…of` or `switch`) /
-`Continue` (inside a `for…of`), of the same function, `Return`, and `SetState`, which is either
-`{ state, value }` or `{ state, updater: FunctionIR }` for `setX(prev => …)`.
+`Continue` (inside a `for…of`), of the same function, `Return`, and `SetState` (`{ state, value }`, for `s.x = value`).
 Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
 `Assign` (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `||=`, `&&=`, `??=`) writes
 `ref.current` or a `let` local; `n++` / `--r.current` as a statement is
@@ -477,7 +476,7 @@ both allowed, a returned arrow is a `Callback`, and an expression body that is a
 statement. Every other handler keeps `returns: "void"`, so `return value;` in `useUpdate` or `useUnmount` is still `RGE1401`.
 
 **Callbacks as values.** The subscription needs an arrow handed to a function, which handlers could not do before ("closures
-that escape" were a diagnostic). Now, in a handler and outside a state updater, an arrow passed to a plain function, a method of
+that escape" were a diagnostic). Now, in a handler, an arrow passed to a plain function, a method of
 an imported object, a callback prop or a local holding a function is a `CallbackIR` (`{ kind: "Callback", fn: FunctionIR }`):
 a handler of its own, lowered like a callback prop (contextual parameters, handler statements, state set through `this`). It
 may run later, after the component has left; a setter called then marks a detached object, which never renders, so nothing
@@ -641,23 +640,9 @@ override onUpdate(dt: number): void {
 An arrow whose body is an object literal is parenthesised, in callbacks and in
 updaters (`setP((p: P) => ({ ...p, x: 1 }))`).
 
-**An updater of one expression, in a hook, is written out in place**, because a
-moving object calls a setter or two every frame and the host's interpreter pays
-for the arrow and for both calls each time. `setX((x) => x + speed * dt)` in a
-`useUpdate` generates what the setter would do with it:
-
-```ts
-{
-  const x = this.#xNext;
-  this.#xNext = x + (this.props.speed * dt);
-  if (this.#xNext !== x) this.markDirty();
-}
-```
-
-The block's only name is the updater's own parameter, so it hides the same outer
-names as the arrow did. Everything else still calls the setter: a plain value
-(`setX(5)`), an updater with statements, and any setter in a callback handed to
-an element (`onPress`, `onCollisionEnter`), which runs on an event.
+**Updaters are gone** (#121 removed `useState`, and with it `setX(prev => …)` and the in-place block the generator wrote for
+a one-expression updater). A handler's `s.x += speed * dt` is a read of the pending value and a call to the field's setter,
+which is the whole of what that block did.
 
 ## Keyed lists
 

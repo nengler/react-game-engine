@@ -1,6 +1,6 @@
 // The IR of statements: assignments, state setters, sounds, control flow and actions.
 import { type StateId, type LocalId, type RefId, type SoundId } from "./ids.ts";
-import { type FunctionIR, type TypeIR } from "./values.ts";
+import { type TypeIR } from "./values.ts";
 import { type ExprIR } from "./expressions.ts";
 
 
@@ -179,27 +179,15 @@ export interface IfStmtIR {
   readonly else: readonly StatementIR[];
 }
 
-/** `return;` in a handler, `return expr;` in an updater. */
+/** `return;` in a handler, `return expr;` in a function that returns a value. */
 export interface ReturnStmtIR {
   readonly kind: "Return";
   readonly value: ExprIR | null;
 }
 
-/**
- * `setX(value)` or `setX(prev => ...)`. Emitted as a call to the generated setter, except an updater of one expression in a
- * hook, which is written out as what the setter would do with it (see `HandlerEmitter.updaterInPlace`).
- */
-export type SetStateStmtIR = SetStateValueIR | SetStateUpdaterIR;
-
-export interface SetStateValueIR {
+/** `s.x = value` on a `useMutable` field. Emitted as a call to the generated setter. */
+export interface SetStateStmtIR {
   readonly kind: "SetState";
   readonly state: StateId;
   readonly value: ExprIR;
-}
-
-export interface SetStateUpdaterIR {
-  readonly kind: "SetState";
-  readonly state: StateId;
-  /** One parameter (the previous value), returning the next value. */
-  readonly updater: FunctionIR;
 }

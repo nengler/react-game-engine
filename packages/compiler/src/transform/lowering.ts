@@ -22,8 +22,6 @@ export interface LoweringMode {
   readonly inHandler: boolean;
   /** In a `useUnmount` handler: the component is going away, so a setter could never render. */
   readonly inUnmount: boolean;
-  /** In a state updater: it runs inside the setter and may run again, so no sounds or actions. */
-  readonly inUpdater: boolean;
   /**
    * In a render block (statements in the component body): it computes like a handler (loops, its own values, the standard
    * library) but runs during render, so it may not set state, play sounds, call actions or read refs.
@@ -35,7 +33,7 @@ export interface LoweringMode {
   readonly storeReads: { readonly state: StateIR[]; readonly hooks: HookIR[]; readonly storeName: string } | null;
 }
 
-const TOP_LEVEL: LoweringMode = { inHandler: false, inUnmount: false, inUpdater: false, inRenderBlock: false, allowCallbackRead: false, storeReads: null };
+const TOP_LEVEL: LoweringMode = { inHandler: false, inUnmount: false, inRenderBlock: false, allowCallbackRead: false, storeReads: null };
 
 /** What every component of a module is lowered against: built once per file in `buildModuleIR`, shared by its components. */
 export interface ModuleContext {
@@ -473,15 +471,7 @@ export class LoweringBase {
   }
 
   canPassCallback(): boolean {
-    return this.mode.inHandler && !this.mode.inUpdater;
-  }
-
-    canPlaySound(): boolean {
-    return !this.mode.inUpdater;
-  }
-
-  inUpdater<T>(lower: () => T): T {
-    return this.within({ inUpdater: true }, lower);
+    return this.mode.inHandler;
   }
 
   nextSerial(): number {

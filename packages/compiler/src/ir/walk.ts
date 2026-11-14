@@ -96,7 +96,7 @@ export function sameDependency(a: DependencyIR, b: DependencyIR): boolean {
 }
 
 /**
- * Every expression in a function body, including nested functions (updaters), in pre-order. `visitStatement`, if given, sees
+ * Every expression in a function body, including nested functions, in pre-order. `visitStatement`, if given, sees
  * each statement before its expressions.
  */
 export function walkFunction(fn: FunctionIR, visit: (e: ExprIR) => void, visitStatement?: (s: StatementIR) => void): void {
@@ -135,7 +135,7 @@ export function walkStatements(body: readonly StatementIR[], visit: (e: ExprIR) 
         break;
       case "Break": case "Continue": break;
       case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
-      case "SetState": if ("updater" in stmt) walkFunction(stmt.updater, visit, visitStatement); else walkExpr(stmt.value, visit); break;
+      case "SetState": walkExpr(stmt.value, visit); break;
       case "Assign": if (stmt.target.kind === "Path") walkExpr(stmt.target.target, visit); walkExpr(stmt.value, visit); break;
       case "PlaySound": if (stmt.volume) walkExpr(stmt.volume, visit); break;
       case "CallAction": for (const arg of stmt.args) walkExpr(arg, visit); break;

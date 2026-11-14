@@ -161,7 +161,6 @@ function typeTexts(module: IRModule): string[] {
       if (e.kind === "Callback") fn(e.fn); // its own `let` types
     }, (stmt) => {
       if (stmt.kind === "LocalConst" && stmt.type) type(stmt.type);
-      if (stmt.kind === "SetState" && "updater" in stmt) stmt.updater.params.forEach((p) => type(p.type));
     });
   };
   const children = (list: readonly ChildIR[]): void => {
