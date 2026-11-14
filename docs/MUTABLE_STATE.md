@@ -54,8 +54,8 @@ Each field is still a state slot as `useState` makes it: it renders when it chan
 ### 2. One timing rule, for all state
 
 **A handler sees every write at once. Render sees the state the frame committed.** `useInput` then `useUpdate` run, each seeing the
-other's writes; then the component renders once from what they left. Between components, state is still a snapshot until the next
-render: a child sees the prop its parent last rendered.
+other's writes; then the component renders once from what they left. This holds across components too (lean, see "Shared lists"
+below): a child's handler reading a prop sees its parent's value as it is now, and only render sees what the frame committed.
 
 Taught once, for all state, this is easy to hold. It only felt like "two views of one value" in #121 because it applied to one hook
 and not the other.
@@ -154,11 +154,47 @@ Hidden proxies would still cost:
    a later frame: rare, a documented rule, and mostly caught by `readonly` types.
 4. **Hidden write-tracking proxies.** Catches everything, at the costs above.
 
-Options 3 and 4 change lists in place, so the timing rule loosens for them: *a list changed in place is shared, not a snapshot*;
-another component sees the change before the next render. Only copying (option 2, or copy-on-write) keeps the snapshot.
+Options 3 and 4 change lists in place, so another component sees the change before the next render. Only copying (option 2, or
+copy-on-write) keeps the list a snapshot. Which is right depends on the timing between components, below.
 
-**Lean:** option 3, adding the copy of option 2 only where a list must stay a snapshot, and option 4 only if option 3 proves too
-coarse. To settle: whether the shared-list timing is acceptable, and the measure of option 3 on Hearth's wave 10.
+**Lean:** option 3, and option 4 only if option 3 proves too coarse. Speed is set aside for now; it is measured on Hearth's wave 10
+before this is built.
+
+### Shared lists: live everywhere
+
+Under today's rule, state is a snapshot between components until the next render. A list changed in place breaks that while a number
+does not, which leaves two rules depending on the type of a value: the worst outcome. There are two consistent ways out.
+
+**A. Live everywhere (Svelte's way).** Svelte 5 keeps one copy of each value: props are not copied into a child but read through
+getters to the parent's state, so a child reading `hp` or `enemies` straight after its parent wrote it sees the new value. Only the
+screen lags. Here, rule 2 extends across components: every handler reads current values, its own state and its props alike, and only
+render sees the frame's committed state. The compiler can do it the way #121 handles derived consts: in a handler, a prop read is
+worked out again against the parent's live state.
+
+- One rule for every value and every component; lists are shared in place for free; it is how game code is usually reasoned about.
+- **Update order becomes visible.** Whether a child sees its parent's write depends on whether the parent's `useUpdate` ran first.
+  It stays deterministic, so replays do not change, but the order has to be defined and documented, as Unity documents its script
+  execution order.
+
+**B. Snapshot everywhere (React's way).** A list changed in place is copied on its first write in a frame, so other components see it
+as the frame began, as they see numbers.
+
+- Update order does not matter: every handler in a frame sees the same outside world, the guarantee DESIGN.md took on 2026-11-08.
+- A copy on the first write each frame, and a split model: your own state is live, everyone else's is stale.
+
+**Lean: A.** #121 already gives up "every handler sees the same state" within a component; A applies the same rule across components
+instead of drawing a line at their edges. Game logic usually wants live reads. Two towers firing at an enemy with 1 hp: under B both
+see it alive and both fire, the second shot wasted unless the author guards against it; under A the second sees it dead and picks
+another target. React keeps reads stale for reasons of UI (a consistent screen, concurrent rendering) that a fixed-step game loop
+does not have.
+
+A needs:
+
+1. **A defined update order** within a frame: likely tree order, parents before children, with `useInput` before `useUpdate` across
+   the whole tree. Documented, and held by a replay test.
+2. **Props read live in handlers and committed in render**, the split a component's own state has.
+3. **DESIGN.md's guarantee restated:** "every handler in a frame sees the same state" becomes "every handler sees the latest writes;
+   render sees the frame's committed state".
 
 ## One hook: `useState` is removed
 
@@ -172,7 +208,9 @@ field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games 
 
 ## What changes
 
-- DESIGN.md's decisions table: "State reads in handlers" and "Mutating state in place" are replaced by rules 1, 2 and the list decision.
+- DESIGN.md's decisions table: "State reads in handlers" and "Mutating state in place" are replaced by rules 1, 2 and the list decision;
+  "every handler in a frame sees the same state" becomes "every handler sees the latest writes; render sees the frame's committed state".
+- The guide documents the update order within a frame.
 - REACT_FEEL_PLAN.md: "written like React" becomes "React's model, with state you write directly".
 - The guide, the template and the README teach the direct form only.
 - Kite, Hearth and Bramble move to it (#121 does `Runner`, `Enemy`, `Tower` and `Play`); the rest can be a codemod, since each
@@ -181,7 +219,8 @@ field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games 
 ## Open questions
 
 1. The hook's name: `useMutable` is the lean.
-2. In-place writes to lists and objects: which option, and whether a list changed in place may be shared (above).
-3. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
+2. In-place writes to lists and objects: option 3 (versions) is the lean, pending a measure of its speed.
+3. The update order within a frame (needed by "live everywhere"): tree order with parents first is the lean.
+4. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
    "state that never renders", which may be better said as an option than a second hook.
-4. Whether a game-state action (`useGame`) gets the same direct form, so a store reads like component state.
+5. Whether a game-state action (`useGame`) gets the same direct form, so a store reads like component state.
