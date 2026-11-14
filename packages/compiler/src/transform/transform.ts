@@ -102,7 +102,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
   const typeDeclarations: TypeDeclarationIR[] = analysis.typeDeclarations.map((t) => ({ kind: "TypeDeclaration", name: t.name, text: t.text }));
 
-  const context: ModuleContext = { sourceFile, fileName: analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, gameState: options.gameState, storeImports, plainImports: plainNames };
+  const context: ModuleContext = { sourceFile, fileName: analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, analysisFailed: analysis.diagnostics.some((d) => d.severity === "error"), gameState: options.gameState, storeImports, plainImports: plainNames };
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
     const lowered = new ComponentLowering(c, context).lower();

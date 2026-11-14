@@ -1,6 +1,6 @@
 // The base of the component lowering: fields, names, diagnostics and type helpers. Layer 0 of ComponentLowering (see transform.ts).
 import { SyntaxKind, type Expression, type PropertyAccessExpression, type Node, type SourceFile } from "typescript/ast";
-import { isPropertyAccessExpression, isIdentifier, isArrayTypeNode, isUnionTypeNode } from "typescript/ast/is";
+import { isPropertyAccessExpression, isIdentifier, isArrayTypeNode, isUnionTypeNode, isBindingElement, isFunctionDeclaration, isImportClause, isImportSpecifier, isNamespaceImport, isParameterDeclaration, isVariableDeclaration } from "typescript/ast/is";
 import { unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type OwnFunctionIR, type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type RefId, type RefIR, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType, type StateIR, type HookIR } from "../ir/types.ts";
@@ -50,6 +50,8 @@ export interface ModuleContext {
   readonly typeDecls: ReadonlyMap<string, TypeDeclarationAnalysis>;
   /** Shared by every component: each pushes its diagnostics here. */
   readonly diagnostics: CompilerDiagnostic[];
+  /** The analysis found an error already (a props parameter not in the supported form): names it left undeclared are not reported again. */
+  readonly analysisFailed: boolean;
   readonly gameState: GameStateDefinition | undefined;
   readonly storeImports: ReadonlySet<string>;
   /** Functions and constants from relative `.ts` files and the file's own top-level declarations. */
@@ -116,6 +118,7 @@ export class LoweringBase {
     this.locals = module.locals;
     this.hostIntrinsic = module.manifest.hostIntrinsic;
     this.diagnostics = module.diagnostics;
+    this.analysisFailed = module.analysisFailed;
   }
 
   /** A prop type as the compiler understands it; anything else is carried as source text. */
@@ -466,6 +469,32 @@ export class LoweringBase {
 
   protected span(node: Node): SourceSpan {
     return spanOf(node, this.sourceFile, this.fileName);
+  }
+
+  /** Every name declared in the component (its locals, state, parameters, functions) or imported by the file. */
+  #declared: Set<string> | null = null;
+  protected readonly analysisFailed: boolean;
+
+  /**
+   * Whether a name the scope does not know is one the author did declare: after an error, the declaration that failed (a `const`
+   * whose value was refused, a `useState` without its type) left it out of the scope, and every read of it would be reported
+   * again as unknown. Those reads are not: one mistake, one error.
+   */
+  protected declaredAfterError(name: string): boolean {
+    if (this.errorCount === 0 && !this.analysisFailed) return false;
+    if (this.#declared === null) {
+      const names = new Set<string>();
+      const visit = (node: Node): void => {
+        if (isVariableDeclaration(node) || isParameterDeclaration(node) || isBindingElement(node) || isFunctionDeclaration(node) || isImportClause(node) || isNamespaceImport(node) || isImportSpecifier(node)) {
+          const name = (node as { name?: Node }).name;
+          if (name !== undefined && isIdentifier(name)) names.add(name.text);
+        }
+        node.forEachChild(visit);
+      };
+      visit(this.sourceFile);
+      this.#declared = names;
+    }
+    return this.#declared.has(name);
   }
 
   protected report(code: CompilerDiagnostic["code"], message: string, node: Node): void {

@@ -1,6 +1,6 @@
 # Pain points for a new author
 
-As of 2026-11-12. What still reads unlike React, or would confuse someone opening the engine for the first time, gathered by
+As of 2026-11-12, with section 8 added 2026-11-14. What still reads unlike React, or would confuse someone opening the engine for the first time, gathered by
 reading the authoring guide (`docs/*.html`), the findings in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md) and
 [`games/bramble/DESIGN.md`](../games/bramble/DESIGN.md), and Bramble's code. Findings that have already been fixed (computed lists,
 conditions in `.map`, spread props, `!== undefined`, component roots, objects in the game state) are left out.
@@ -101,6 +101,48 @@ no React equivalent.
 - ~~**Input scripts hold a key until it changes**~~ *Done:* the guide's testing section says it, and what an unknown name does.
 - **The guide is dense and terse** and mixes design reasons with usage; priority 8's "checked by following it from scratch" is not
   ticked yet.
+
+## 8. React written as React, run through the compiler (2026-11-14)
+
+After everything in [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md) but D3, 28 everyday React idioms were compiled one by one. 12 are
+accepted as written: arrow-function components and `export default` of one, `filter(…).map(…)` in JSX, a ternary at the root, a
+fragment of several roots, `switch` and `let` in the body, a function of the component's own, `useState(() => …)` with an updater,
+`?.` and `??`, an index key, and `{n && <X />}`. The rest, in three kinds:
+
+**Messages that were wrong or noisy** (each shown as the author types now, `rge lsp`). *Fixed 2026-11-14:*
+
+- ~~One mistake, several errors~~: a `const` whose value was refused, a `useState` without its type or a props parameter not in the
+  supported form left the name undeclared, and every read of it was reported again (`'m' is not a state value of this component`,
+  three times for one typo). Now a name that is declared, once an error has been reported, is not reported again.
+- ~~`forEach` "changes the array in place"~~: it does not; it is refused for its function, which changes variables around it. The
+  message now says to write a `for…of` loop.
+- ~~A misspelt method listed the `Math` functions~~: `n.toFixedd(2)` now says `did you mean 'toFixed'?`, and a misspelt function
+  (`clmap`) names the nearest one (`clamp`).
+- ~~`setTimeout` got the allowlist~~: `setTimeout`, `setInterval`, `clearTimeout`, `requestAnimationFrame`, `Date.now`,
+  `performance.now` and `fetch` each say what to use instead (`after`, `every`, `cancelTimers`, `useUpdate`'s `dt`).
+- ~~`if (!hero) return null;` said "the component body cannot return a value"~~: it now says to put the condition in what is
+  returned, `return dead ? null : <Text>…</Text>;` (which works) or `{!dead && …}`.
+- ~~A component declared inside another was "an unsupported statement in handler"~~: it now says to declare it at the top level; a
+  plain `function` in the body says to write it as `const f = (…) => …`. Neither is a handler, and the word is gone from both.
+- ~~`await` was `Unsupported expression (AwaitExpression)`~~: it now says the game's steps do not wait, and what to use.
+
+**React that could be supported** (not planned yet):
+
+- `useState({ x: 0, y: 0 })` needs its type written (`useState<Point>(…)`, RGE1104), where TypeScript infers it.
+- An inline props type, `({ hp }: { hp: number })`, is refused (RGE1208): the type must be named and declared in the file.
+- An early `return` before the last one, the most common React guard.
+- `import * as K from "./constants.ts"` is refused (RGE1001); Kite's rules use one, and porting them to a component hit it.
+- `useReducer` does not exist.
+- A list inside a list item (RGE1209): the item has to become a component.
+
+**Different on purpose** (said in the guide, or to be):
+
+- No refs on elements, no spreading props onto a built-in, no render props or function children, no generic components, no
+  `async` handlers (the game's clock has timers).
+- `x` / `y` as props on built-ins only; a component is placed with `transform` (its own props may say `x`).
+- Since D5 a render compares what it reads by `===`, so state changed in place shows nothing, as in React; nothing warns.
+- Inside `useUpdate`, `useBody`'s `x` and `y` are the step's snapshot even after `move`, as every state is; `blocked` asks the body
+  where it is now.
 
 ## What to fix first
 

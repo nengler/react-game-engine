@@ -414,6 +414,8 @@ export class ElementLowering extends HookLowering {
       component = { kind: "Imported", name: tag.text, module, isDefault };
     }
     else {
+      // A component declared where it cannot be (inside another): that error is already said.
+      if (this.declaredAfterError(tag.text)) return null;
       const near = nearest(tag.text, [...this.intrinsics, ...this.locals, ...this.imported.keys()]);
       this.report(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>${near ? ` (did you mean <${near}>?)` : ""}. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`, tag);
       return null;
