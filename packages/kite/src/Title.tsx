@@ -1,14 +1,14 @@
-import { useInput, useState, useUpdate, Flex, Hud } from "@rge/runtime/jsx";
+import { useInput, useMutable, useUpdate, Flex, Hud } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
 
 /** The title screen: the name, how to move, and a prompt that waits for a button. Laid out by a column on the HUD layer, which centres it whatever the screen's size. */
 export function Title() {
   const { begin } = useGame.actions();
-  const [clock, setClock] = useState(0);
+  const s = useMutable({ clock: 0 });
 
   useUpdate((dt) => {
-    setClock((t) => t + dt);
+    s.clock += dt;
   });
 
   useInput((input) => {
@@ -24,7 +24,7 @@ export function Title() {
         <Label text="THE FOOTHILLS" color="#8e9ac2" />
         <Label text="ARROWS MOVE  Z JUMP  X DASH  C GRAB" />
         {/* The prompt blinks by changing colour, not by leaving, so the column does not move. */}
-        <Label text="PRESS Z TO START" color={clock % 1 < 0.66 ? "#7de3ff" : "#12151f"} />
+        <Label text="PRESS Z TO START" color={s.clock % 1 < 0.66 ? "#7de3ff" : "#12151f"} />
       </Flex>
     </Hud>
   );

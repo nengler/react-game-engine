@@ -15,16 +15,16 @@ after(() => {
 
 const SOURCE = `
 function useRunner(speed: number, key: string) {
-  const [x, setX] = useState(0);
+  const s = useMutable({ x: 0 });
   const dir = useRef(0);
   useInput((input) => {
     dir.current = input.down(key) ? 1 : 0;
   });
   useUpdate((dt) => {
-    setX((x) => x + dir.current * speed * dt);
+    s.x += dir.current * speed * dt;
   });
-  const far = x > 50;
-  return { x, far };
+  const far = s.x > 50;
+  return { x: s.x, far };
 }
 
 function Pair() {
@@ -59,9 +59,9 @@ describe("custom hooks", () => {
   it("can be used without a result, take a default for a parameter left out, and call other hooks", async () => {
     const compiled = compile(
       `function useCounter(step = 2) {
-         const [n, setN] = useState(0);
-         useUpdate(() => { setN((n) => n + step); });
-         return n;
+         const s = useMutable({ n: 0 });
+         useUpdate(() => { s.n += step; });
+         return s.n;
        }
        function useDoubleCounter() {
          const one = useCounter();
@@ -89,35 +89,39 @@ describe("custom hooks", () => {
     assert.deepEqual([c.transform.x, c.transform.y], [4, 10], "the first counter steps by its default of 2, the second by 5");
   });
 
-  it("return their own state and setter, as React's do: the caller's names are the hook's state, one per call", async () => {
+  it("hand back their own state, a useMutable the caller writes under its own name, one per call; and functions that change it", async () => {
     const compiled = compile(`
 function useCounter(start: number) {
-  const [count, setCount] = useState(start);
-  return [count, setCount];
+  const s = useMutable({ count: start });
+  return s;
 }
 function useNamed() {
-  const [on, setOn] = useState(false);
-  return { on, toggle: setOn };
+  const s = useMutable({ on: false });
+  const toggle = () => {
+    s.on = !s.on;
+  };
+  return { on: s.on, toggle };
 }
 function Two() {
-  const [a, setA] = useCounter(1);
-  const [b, setB] = useCounter(10);
+  const a = useCounter(1);
+  const b = useCounter(10);
   const { on, toggle } = useNamed();
   useUpdate(() => {
-    setA((n) => n + 1);
-    setB(b + 5);
-    toggle(!on);
+    a.count += 1;
+    b.count += 5;
+    toggle();
   });
-  return <Entity name="Two" transform={{ x: a, y: b }} />;
+  return <Entity name="Two" transform={{ x: a.count, y: b.count, z: on ? 1 : 0 }} />;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
-    const { Two } = await load<{ Two: new () => Entity & { a: number; b: number; on: boolean } }>(compiled);
+    const { Two } = await load<{ Two: new () => Entity & { a: { count: number }; b: { count: number } } }>(compiled);
     const world = new World();
     const two = new Two();
     world.mount(two);
     world.tick(0.1);
-    assert.deepEqual([two.a, two.b, two.on], [2, 15, true]);
+    assert.deepEqual([two.a.count, two.b.count], [2, 15]);
     assert.deepEqual([two.transform.x, two.transform.y], [2, 15]);
+    assert.equal(Object.entries(two.saveHotState() ?? {}).find(([key]) => key.endsWith(".on"))?.[1], true, "toggled by the hook's own function");
   });
 
   it("write a literal argument into the hook, so a parameter can be a sound's path", () => {
@@ -127,7 +131,7 @@ function Two() {
          const seen = useRef(0);
          useUpdate(() => { if (count !== seen.current) { seen.current = count; play(volume); } });
        }
-       function Hit() { const [hits] = useState(0); useBeep("hit.wav", 0.5, hits); return <Entity name="H" />; }`,
+       function Hit() { const s = useMutable({ hits: 0 }); useBeep("hit.wav", 0.5, s.hits); return <Entity name="H" />; }`,
       "Hit.tsx",
     );
     assert.deepEqual(typeCheck(compiled), []);
@@ -137,20 +141,20 @@ function Two() {
 
   it("do not leak: a hook's names cannot clash with the component's own", () => {
     const compiled = compile(
-      `function useThing() { const [x, setX] = useState(1); useUpdate(() => { setX((x) => x + 1); }); return x; }
-       function Both() { const [x] = useState(100); const y = useThing(); return <Entity name="B" transform={{ x, y }} />; }`,
+      `function useThing() { const s = useMutable({ x: 1 }); useUpdate(() => { s.x += 1; }); return s.x; }
+       function Both() { const s = useMutable({ x: 100 }); const y = useThing(); return <Entity name="B" transform={{ x: s.x, y }} />; }`,
       "Both.tsx",
     );
     assert.deepEqual(typeCheck(compiled), []);
-    // The name the hook returns takes the caller's name (`const y = useThing()`), so its own `x` never meets the component's.
-    assert.match(compiled.code, /\by: number = 1;/);
-    assert.match(compiled.code, /\bx: number = 100;/);
+    // The hook's mutable keeps a name of its own call (`_useThing1_s`), so its `x` never meets the component's.
+    assert.match(compiled.code, /\$_useThing1_s_x: number = 1;/);
+    assert.match(compiled.code, /\$s_x: number = 100;/);
   });
 
   it("report a hook called where only a component statement may be, and a call that does not match the hook", () => {
-    const nested = compileErrors(`function useA() { const [n] = useState(0); return n; } function C() { const [on] = useState(true); const v = on ? useA() : 0; return <Entity name="C" transform={{ x: v }} />; }`);
+    const nested = compileErrors(`function useA() { const s = useMutable({ n: 0 }); return s.n; } function C() { const s = useMutable({ on: true }); const v = s.on ? useA() : 0; return <Entity name="C" transform={{ x: v }} />; }`);
     assert.match(nested[0]!.message, /must be a statement of the component body/);
-    const tooMany = compileErrors(`function useA(a: number) { const [n] = useState(a); return n; } function C() { const n = useA(1, 2); return <Entity name="C" transform={{ x: n }} />; }`);
+    const tooMany = compileErrors(`function useA(a: number) { const s = useMutable({ n: a }); return s.n; } function C() { const n = useA(1, 2); return <Entity name="C" transform={{ x: n }} />; }`);
     assert.match(tooMany[0]!.message, /takes 1 argument, but the call passes 2/);
     const none = compileErrors(`function useA() { useUpdate(() => {}); } function C() { const n = useA(); return <Entity name="C" transform={{ x: n }} />; }`);
     assert.match(none[0]!.message, /returns nothing, but its result is used/);
@@ -163,7 +167,7 @@ function Two() {
   });
 
   it("keep the rules of a component: a hook that mutates state in place is the same error it would be inline", () => {
-    const found = compileErrors(`function useBad() { const [items] = useState<number[]>([]); useUpdate(() => { items.push(1); }); } function C() { useBad(); return <Entity name="C" />; }`);
+    const found = compileErrors(`function useBad() { const s = useMutable({ items: [] as number[] }); useUpdate(() => { s.items.push(1); }); } function C() { useBad(); return <Entity name="C" />; }`);
     assert.ok(found.length > 0);
   });
 
@@ -171,12 +175,12 @@ function Two() {
     const dir = mkdtempSync(join(tmpdir(), "rge-hooks-"));
     try {
       mkdirSync(join(dir, "src"));
-      writeFileSync(join(dir, "src/hooks.tsx"), `import { useState, useUpdate } from "@rge/runtime/jsx";\nexport function useClock(rate: number) {\n  const [t, setT] = useState(0);\n  useUpdate((dt) => { setT((t) => t + dt * rate); });\n  return t;\n}\n`);
+      writeFileSync(join(dir, "src/hooks.tsx"), `import { useMutable, useUpdate } from "@rge/runtime/jsx";\nexport function useClock(rate: number) {\n  const s = useMutable({ t: 0 });\n  useUpdate((dt) => { s.t += dt * rate; });\n  return s.t;\n}\n`);
       writeFileSync(join(dir, "src/Clock.tsx"), `import { Entity } from "@rge/runtime/jsx";\nimport { useClock } from "./hooks.tsx";\nexport function Clock() {\n  const t = useClock(2);\n  return <Entity name="Clock" transform={{ x: t }} />;\n}\n`);
       const repo = resolve(import.meta.dirname, "../../..");
       execFileSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out"), "--no-check"], { cwd: repo, stdio: "pipe" });
       const clock = readFileSync(join(dir, "out/Clock.ts"), "utf8");
-      assert.match(clock, /\bt: number = 0;/, "the returned state takes the caller's name");
+      assert.match(clock, /\$_useClock1_s_t: number = 0;/, "the hook's state is the component's own, under the call's name");
       assert.doesNotMatch(clock, /useClock\(/);
       assert.doesNotMatch(clock, /hooks\.ts/, "the hook's file is not imported at run time");
     } finally {
@@ -186,7 +190,7 @@ function Two() {
 
   it("still type-check as authored source: the author's editor sees an ordinary function", () => {
     const found = getCompiler().typeCheckSources([
-      { fileName: `${process.cwd()}/.test-output/H${Math.random()}.tsx`, text: `import { Entity, useState } from "@rge/runtime/jsx";\n${SOURCE.replace("function useRunner", "function useRunner")}`.replace(`import { Entity, useState }`, `import { Entity, useState, useRef, useInput, useUpdate }`) },
+      { fileName: `${process.cwd()}/.test-output/H${Math.random()}.tsx`, text: `import { Entity, useMutable, useRef, useInput, useUpdate } from "@rge/runtime/jsx";\n${SOURCE}` },
     ]);
     assert.deepEqual(found, []);
   });

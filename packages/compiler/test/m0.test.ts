@@ -14,13 +14,12 @@ after(() => {
 describe("M0: nested conditionals commit without a World", () => {
   const NESTED = `
 function Nested() {
-  const [outer, setOuter] = useState(true);
-  const [inner, setInner] = useState(true);
+  const s = useMutable({ outer: true, inner: true });
   return (
     <Entity name="Nested">
-      {outer && (
+      {s.outer && (
         <Entity name="Outer">
-          {inner && <Sprite image="deep.png" />}
+          {s.inner && <Sprite image="deep.png" />}
         </Entity>
       )}
     </Entity>
@@ -39,20 +38,20 @@ function Nested() {
   });
 
   it("still settles correctly inside a World when state flips later", async () => {
-    const mod = await load<{ Nested: new () => Entity & { setOuter(v: boolean): void; setInner(v: boolean): void } }>(
+    const mod = await load<{ Nested: new () => Entity & { s: { [field: string]: unknown } } }>(
       compile(NESTED, "Nested.tsx"),
     );
     const world = new World();
     const nested = new mod.Nested();
     world.mount(nested);
-    nested.setInner(false);
+    nested.s.inner = (false);
     world.flush();
     assert.equal(nested.children[0]!.children.length, 0);
-    nested.setOuter(false);
+    nested.s.outer = (false);
     world.flush();
     assert.equal(nested.children.length, 0);
-    nested.setOuter(true);
-    nested.setInner(true);
+    nested.s.outer = (true);
+    nested.s.inner = (true);
     world.flush();
     assert.equal(nested.children[0]!.children.length, 1);
   });
@@ -92,16 +91,16 @@ function Lamp() {
   });
 
   it("keeps generated state apart from the manifest's member names", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
     const compiler = new Compiler();
     try {
       const result = compiler.compile("Bad.tsx", withAuthoringImports(`
 function Bad() {
-  const [render, setRender] = useState(0);
+  const render = useMutable({ n: 0 });
   return <Entity name="Bad" />;
 }`));
       assert.ok(result.ok);
-      assert.match(result.code, /\$render: number = 0;/);
+      assert.match(result.code, /get \$render\(\)/);
     } finally {
       compiler.close();
     }
@@ -113,14 +112,14 @@ function Bad() {
     try {
       const reserved = compiler.compile("R.tsx", withAuthoringImports(`
 function R() {
-  const [score, setScore] = useState(0);
+  const score = useMutable({ n: 0 });
   return <Entity name="R" />;
 }`, manifest));
-      assert.ok(reserved.ok && reserved.code.includes("$score: number = 0;"), "a reserved name from the manifest is kept apart, as `$score`");
+      assert.ok(reserved.ok && reserved.code.includes("get $score()"), "a reserved name from the manifest is kept apart, as `$score`");
       const calls = compiler.compile("W.tsx", withAuthoringImports(`
 function W() {
-  const [n, setN] = useState(0);
-  useUpdate(() => setN(wrap(n, 10)));
+  const s = useMutable({ n: 0 });
+  useUpdate(() => { s.n = wrap(s.n, 10); });
   return <Entity name="W" />;
 }`, manifest));
       assert.ok(calls.ok);
@@ -144,10 +143,10 @@ export function WarningIcon() {
 import { WarningIcon } from "./WarningIcon.tsx";
 
 function Player() {
-  const [health, setHealth] = useState(100);
+  const s = useMutable({ health: 100 });
   return (
     <Entity name="Player">
-      {health < 25 && <WarningIcon />}
+      {s.health < 25 && <WarningIcon />}
       <WarningIcon />
     </Entity>
   );
@@ -183,13 +182,13 @@ function Player() {
 
   it("runs: the imported component is a persistent child, the conditional one appears when state flips", async () => {
     const project = compileProject({ "WarningIcon.tsx": WARNING, "Player.tsx": PLAYER });
-    const { Player } = await loadProject<{ Player: new () => Entity & { setHealth(v: number): void } }>(project, "Player.tsx");
+    const { Player } = await loadProject<{ Player: new () => Entity & { s: { [field: string]: unknown } } }>(project, "Player.tsx");
     const world = new World();
     const player = new Player();
     world.mount(player);
     assert.equal(player.children.length, 1);
     assert.equal(player.children[0]!.constructor.name, "WarningIcon");
-    player.setHealth(10);
+    player.s.health = (10);
     world.flush();
     assert.equal(player.children.length, 2);
   });
@@ -259,10 +258,10 @@ function Player() {
   });
 
   it("accepts the authoring module's hooks, built-ins and functions, and leaves no trace of the import in the output", () => {
-    const { code } = compile(`import { useState, useUpdate, clamp, Entity, Sprite } from "@rge/runtime/jsx";
+    const { code } = compile(`import { useMutable, useUpdate, clamp, Entity, Sprite } from "@rge/runtime/jsx";
 function S() {
-  const [n, setN] = useState(0);
-  useUpdate((dt) => setN((n) => clamp(n + dt, 0, 10)));
+  const s = useMutable({ n: 0 });
+  useUpdate((dt) => { s.n = clamp(s.n + dt, 0, 10); });
   return <Entity name="S"><Sprite image="a.png" /></Entity>;
 }`, "S.tsx");
     assert.doesNotMatch(code, /rge\/runtime\/jsx/);
@@ -271,7 +270,8 @@ function S() {
 
   it("rejects names the authoring module does not export", () => {
     const result = compileErrors(`import { useState, useTransform, Nope, Entity } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`);
-    assert.deepEqual(result.map((d) => d.code), [DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport]);
-    assert.match(result[0]!.message, /'useTransform' is not exported/);
+    assert.deepEqual(result.map((d) => d.code), [DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport]);
+    assert.match(result[0]!.message, /^`useState` is replaced by `useMutable`/, "a hook that was replaced says what replaced it");
+    assert.match(result[1]!.message, /'useTransform' is not exported/);
   });
 });

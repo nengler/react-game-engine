@@ -10,11 +10,11 @@ after(() => {
 
 const PLAYER = `
 function Player() {
-  const [health, setHealth] = useState(100);
+  const s = useMutable({ health: 100 });
   return (
     <Entity>
       <Sprite image="player.png" />
-      {health < 25 && <WarningIcon />}
+      {s.health < 25 && <WarningIcon />}
     </Entity>
   );
 }
@@ -35,8 +35,10 @@ import { Entity, Sprite } from "@rge/runtime";
 export class Player extends Entity {
   static readonly managed = true;
   protected override readonly reportsChanges = true;
-  health: number = 100;
-  #healthNext: number = this.health;
+  $s_health: number = 100;
+  #$s_healthNext: number = this.$s_health;
+  #sView: { health: number } | undefined;
+  get s(): { health: number } { const self = this; return (this.#sView ??= { get health() { return self.$s_health; }, set health(value: number) { self.$set_s_health(value); } }); }
   readonly sprite: Sprite = new Sprite({ image: "player.png" });
   warningIcon: WarningIcon | null = null;
 
@@ -47,30 +49,29 @@ export class Player extends Entity {
     this.commitStructure();
   }
 
-  setHealth(value: number | ((previous: number) => number)): void {
-    const next = typeof value === "function" ? value(this.#healthNext) : value;
-    if (next === this.#healthNext) return;
-    this.#healthNext = next;
+  $set_s_health(value: number): void {
+    if (value === this.#$s_healthNext) return;
+    this.#$s_healthNext = value;
     this.markDirty();
   }
 
   override commitState(): void {
-    this.health = this.#healthNext;
+    this.$s_health = this.#$s_healthNext;
   }
 
   override saveHotState(): Record<string, unknown> {
-    return { "Player.health": this.#healthNext };
+    return { "Player.s.health": this.#$s_healthNext };
   }
 
   override loadHotState(saved: Record<string, unknown>): void {
     let value: unknown;
-    value = saved["Player.health"];
-    if (this.hotFits(value, this.#healthNext)) this.#healthNext = value as number;
+    value = saved["Player.s.health"];
+    if (this.hotFits(value, this.#$s_healthNext)) this.#$s_healthNext = value as number;
     this.markDirty();
   }
 
   override render(): void {
-    if (this.health < 25) {
+    if (this.$s_health < 25) {
       if (this.warningIcon === null) {
         this.warningIcon = new WarningIcon();
         this.queueAddChild(this.warningIcon, 1);
@@ -111,34 +112,32 @@ export class WarningIcon extends Entity {
     assert.doesNotMatch(code, /render\(\)/);
   });
 
-  it("turns state into typed instance fields with setters", () => {
+  it("turns each field into a typed instance field with a setter", () => {
     const { code } = compile(`
       function P() {
-        const [health, setHealth] = useState(100);
-        const [label, setLabel] = useState("idle");
-        const [alive] = useState(true);
-        return <Entity name={label} />;
+        const s = useMutable({ health: 100, label: "idle", alive: true });
+        return <Entity name={s.label} />;
       }
     `);
-    assert.match(code, /^ {2}health: number = 100;$/m);
-    assert.match(code, /^ {2}label: string = "idle";$/m);
-    assert.match(code, /^ {2}alive: boolean = true;$/m);
-    assert.match(code, /setHealth\(value: number \| \(\(previous: number\) => number\)\): void/);
-    assert.match(code, /setLabel\(value: string \| \(\(previous: string\) => string\)\): void/);
-    assert.doesNotMatch(code, /setAlive/);
+    assert.match(code, /^ {2}\$s_health: number = 100;$/m);
+    assert.match(code, /^ {2}\$s_label: string = "idle";$/m);
+    assert.match(code, /^ {2}\$s_alive: boolean = true;$/m);
+    assert.match(code, /\$set_s_health\(value: number\): void/);
+    assert.match(code, /\$set_s_label\(value: string\): void/);
+    assert.match(code, /\$set_s_alive\(value: boolean\): void/, "every field can be written");
   });
 
   it("updates dynamic props by assigning to the existing instance", () => {
     const { code } = compile(`
       function P() {
-        const [health, setHealth] = useState(100);
-        return <Entity><Sprite image={health > 50 ? "normal.png" : "hurt.png"} /></Entity>;
+        const s = useMutable({ health: 100 });
+        return <Entity><Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} /></Entity>;
       }
     `);
     // Written only when it differs, and then the sprite is told: a render that changes nothing reports nothing.
     assert.match(
       code,
-      /override render\(\): void \{\n {4}const \$1 = \(this\.health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/,
+      /override render\(\): void \{\n {4}const \$1 = \(this\.\$s_health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/,
     );
     // The sprite is only ever constructed in its field initialiser.
     assert.equal(code.match(/new Sprite/g)?.length, 1);
@@ -147,13 +146,12 @@ export class WarningIcon extends Entity {
   it("parenthesises expressions so precedence is preserved", () => {
     const { code } = compile(`
       function P() {
-        const [a, setA] = useState(1);
-        const [b, setB] = useState(2);
-        return <Entity><Collider width={(a + b) * 2} height={a + b * 2} /></Entity>;
+        const s = useMutable({ a: 1, b: 2 });
+        return <Entity><Collider width={(s.a + s.b) * 2} height={s.a + s.b * 2} /></Entity>;
       }
     `);
-    assert.match(code, /const (\$\d+) = \(this\.a \+ this\.b\) \* 2;[^]*?this\.collider\.width = \1;/);
-    assert.match(code, /const (\$\d+) = this\.a \+ \(this\.b \* 2\);[^]*?this\.collider\.height = \1;/);
+    assert.match(code, /const (\$\d+) = \(this\.\$s_a \+ this\.\$s_b\) \* 2;[^]*?this\.collider\.width = \1;/);
+    assert.match(code, /const (\$\d+) = this\.\$s_a \+ \(this\.\$s_b \* 2\);[^]*?this\.collider\.height = \1;/);
   });
 });
 
@@ -161,17 +159,16 @@ describe("type-checking generated code", () => {
   it("generated TypeScript compiles and type-checks", () => {
     const compiled = compile(`
       function Player() {
-        const [health, setHealth] = useState(100);
-        const [visible, setVisible] = useState(true);
+        const s = useMutable({ health: 100, visible: true });
         return (
           <Entity name="Player">
-            <Sprite image={health > 50 ? "normal.png" : "hurt.png"} />
+            <Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} />
             <Collider width={16} height={24} />
-            {health < 25 && <WarningIcon />}
-            {visible && (
+            {s.health < 25 && <WarningIcon />}
+            {s.visible && (
               <Entity name="Shield">
-                <Sprite image={health > 10 ? "shield.png" : "shield-cracked.png"} />
-                {health < 5 && <Collider width={health} height={2} />}
+                <Sprite image={s.health > 10 ? "shield.png" : "shield-cracked.png"} />
+                {s.health < 5 && <Collider width={s.health} height={2} />}
               </Entity>
             )}
           </Entity>

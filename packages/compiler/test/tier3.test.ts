@@ -30,16 +30,16 @@ interface Item {
 }
 
 function Row() {
-  const [items, setItems] = useState<Item[]>([{ id: 1, x: 10, label: "a" }, { id: 2, x: 20, label: "b" }]);
-  return <Entity name="Row">{items.map((i) => <Box key={i.id} {...i} />)}</Entity>;
+  const s = useMutable({ items: [{ id: 1, x: 10, label: "a" }, { id: 2, x: 20, label: "b" }] as Item[] });
+  return <Entity name="Row">{s.items.map((i) => <Box key={i.id} {...i} />)}</Entity>;
 }
 
 function Named() {
-  const [o, setO] = useState<BoxProps>({ x: 1, label: "from-object" });
+  const s = useMutable({ o: { x: 1, label: "from-object" } as BoxProps });
   return (
     <Entity name="Named">
-      <Box {...o} x={9} />
-      <Box {...o} />
+      <Box {...s.o} x={9} />
+      <Box {...s.o} />
     </Entity>
   );
 }
@@ -55,14 +55,13 @@ interface BoxInstance extends Entity {
   props: { x: number; label: string };
 }
 interface RowInstance extends Entity {
-  setItems(items: { id: number; x: number; label: string }[]): void;
   readonly boxItems: Map<number, BoxInstance>;
-  readonly items: { id: number; x: number; label: string }[];
+  s: { items: { id: number; x: number; label: string }[] };
 }
 interface NamedInstance extends Entity {
-  setO(o: { x: number; label: string }): void;
   readonly box: BoxInstance;
   readonly box2: BoxInstance;
+  s: { [field: string]: unknown };
 }
 
 let Row: new () => RowInstance;
@@ -81,13 +80,13 @@ describe("spread props: IR and generated code", () => {
     assert.deepEqual(first!.props.map((p) => p.kind), ["SpreadProp", "StaticProp"], "the spread, then the named prop that wins over it");
     assert.deepEqual(second!.props.map((p) => p.kind), ["SpreadProp"]);
     const spread = first!.props[0]!;
-    assert.deepEqual(spread.kind === "SpreadProp" && spread.dependencies, [{ kind: "State", state: "Named.o" }]);
+    assert.deepEqual(spread.kind === "SpreadProp" && spread.dependencies, [{ kind: "State", state: "Named.s.o" }]);
   });
 
   it("spreads for real in the constructor call and in updateProps, with the named props in order", () => {
-    assert.match(compiled.code, /new Box\(\{ \.\.\.\(this\.o\), x: 9 \}\)/);
-    assert.match(compiled.code, /new Box\(\{ \.\.\.\(this\.o\) \}\)/);
-    assert.match(compiled.code, /\.updateProps\(\{ \.\.\.\(this\.o\), x: 9 \}\)/, "a named prop after the spread is sent with it, so it still wins");
+    assert.match(compiled.code, /new Box\(\{ \.\.\.\(this\.\$s_o\), x: 9 \}\)/);
+    assert.match(compiled.code, /new Box\(\{ \.\.\.\(this\.\$s_o\) \}\)/);
+    assert.match(compiled.code, /\.updateProps\(\{ \.\.\.\(this\.\$s_o\), x: 9 \}\)/, "a named prop after the spread is sent with it, so it still wins");
     assert.match(compiled.code, /new Box\(\{ \.\.\.\(i\) \}\)/, "in a list the item is the spread");
     assert.match(compiled.code, /\$item\.updateProps\(\{ \.\.\.\(i\) \}\)/);
   });
@@ -110,7 +109,7 @@ describe("spread props: runtime", () => {
     world.mount(row);
     const boxes = [...row.boxItems.values()];
     assert.deepEqual(boxes.map((b) => [b.props.x, b.props.label]), [[10, "a"], [20, "b"]]);
-    row.setItems([{ id: 1, x: 11, label: "a" }, { id: 2, x: 20, label: "b" }]);
+    row.s.items = ([{ id: 1, x: 11, label: "a" }, { id: 2, x: 20, label: "b" }]);
     world.flush();
     assert.deepEqual([...row.boxItems.values()].map((b) => b.props.x), [11, 20]);
   });
@@ -129,7 +128,7 @@ describe("spread props: runtime", () => {
       };
     }
     // A new array with a new object for a, and the same object for b.
-    row.setItems([{ id: 1, x: 12, label: "a" }, { ...row.items[1]! }]);
+    row.s.items = ([{ id: 1, x: 12, label: "a" }, { ...row.s.items[1]! }]);
     world.flush();
     assert.deepEqual(marked, ["a"], "b's props were equal key by key, so b was not marked");
   });
@@ -140,7 +139,7 @@ describe("spread props: runtime", () => {
     world.mount(named);
     assert.equal(named.box.props.x, 9);
     assert.equal(named.box2.props.x, 1, "no named prop: the object's x");
-    named.setO({ x: 4, label: "new" });
+    named.s.o = ({ x: 4, label: "new" });
     world.flush();
     assert.equal(named.box.props.x, 9, "still the named prop after the update");
     assert.equal(named.box2.props.x, 4);
@@ -151,7 +150,7 @@ describe("spread props: runtime", () => {
 describe("spread props: what is still rejected", () => {
   it("rejects a spread onto a built-in, with a reason", () => {
     const errors = compileErrors(`interface ShapeSize { width: number; height: number }
-function C() { const [p] = useState<ShapeSize>({ width: 4, height: 4 }); return <Entity name="C"><Shape kind="rect" {...p} /></Entity>; }`);
+function C() { const s = useMutable({ p: { width: 4, height: 4 } as ShapeSize }); return <Entity name="C"><Shape kind="rect" {...s.p} /></Entity>; }`);
     assert.equal(errors[0]?.code, DiagnosticCode.UnsupportedAttribute);
     assert.match(errors[0]!.message, /Spreading props onto a built-in/);
   });
@@ -187,18 +186,22 @@ function Ring({ x }: DotProps) {
 }
 
 function Switching() {
-  const [spots, setSpots] = useState<Spot[]>([{ id: 1, on: true, x: 1 }, { id: 2, on: false, x: 2 }, { id: 3, on: true, x: 3 }]);
-  return <Entity name="Switching">{spots.map((s) => (s.on ? <Dot key={s.id} x={s.x} /> : <Ring key={s.id} x={s.x} />))}</Entity>;
+  const st = useMutable({
+    spots: [{ id: 1, on: true, x: 1 }, { id: 2, on: false, x: 2 }, { id: 3, on: true, x: 3 }] as Spot[],
+  });
+  return <Entity name="Switching">{st.spots.map((s) => (s.on ? <Dot key={s.id} x={s.x} /> : <Ring key={s.id} x={s.x} />))}</Entity>;
 }
 
 function Only() {
-  const [spots, setSpots] = useState<Spot[]>([{ id: 1, on: true, x: 1 }, { id: 2, on: false, x: 2 }, { id: 3, on: true, x: 3 }]);
-  return <Entity name="Only">{spots.map((s) => s.on && <Dot key={s.id} x={s.x} />)}</Entity>;
+  const st = useMutable({
+    spots: [{ id: 1, on: true, x: 1 }, { id: 2, on: false, x: 2 }, { id: 3, on: true, x: 3 }] as Spot[],
+  });
+  return <Entity name="Only">{st.spots.map((s) => s.on && <Dot key={s.id} x={s.x} />)}</Entity>;
 }
 
 function WithNull() {
-  const [spots, setSpots] = useState<Spot[]>([{ id: 1, on: true, x: 1 }, { id: 2, on: false, x: 2 }]);
-  return <Entity name="WithNull">{spots.map((s) => (s.on ? <Dot key={s.id} x={s.x} /> : null))}</Entity>;
+  const st = useMutable({ spots: [{ id: 1, on: true, x: 1 }, { id: 2, on: false, x: 2 }] as Spot[] });
+  return <Entity name="WithNull">{st.spots.map((s) => (s.on ? <Dot key={s.id} x={s.x} /> : null))}</Entity>;
 }
 `;
 
@@ -208,7 +211,7 @@ interface SpotData {
   x: number;
 }
 interface SpotsInstance extends Entity {
-  setSpots(spots: SpotData[]): void;
+  st: { spots: SpotData[] };
 }
 
 describe("conditionals in a list's map: runtime", () => {
@@ -234,11 +237,11 @@ describe("conditionals in a list's map: runtime", () => {
     const world = new World();
     const s = new Switching();
     world.mount(s);
-    s.setSpots([{ id: 1, on: true, x: 1 }, { id: 2, on: true, x: 2 }, { id: 3, on: true, x: 3 }]);
+    s.st.spots = ([{ id: 1, on: true, x: 1 }, { id: 2, on: true, x: 2 }, { id: 3, on: true, x: 3 }]);
     world.flush();
     assert.deepEqual(kinds(s), ["dot", "dot", "dot"]);
     assert.deepEqual(xs(s), [1, 2, 3]);
-    s.setSpots([{ id: 1, on: false, x: 1 }, { id: 2, on: true, x: 2 }, { id: 3, on: false, x: 30 }]);
+    s.st.spots = ([{ id: 1, on: false, x: 1 }, { id: 2, on: true, x: 2 }, { id: 3, on: false, x: 30 }]);
     world.flush();
     assert.deepEqual(kinds(s), ["ring", "dot", "ring"]);
     assert.deepEqual(xs(s), [1, 2, 30], "and the new instance has the item's current props");
@@ -248,7 +251,7 @@ describe("conditionals in a list's map: runtime", () => {
     const world = new World();
     const s = new Switching();
     world.mount(s);
-    s.setSpots([{ id: 3, on: true, x: 33 }, { id: 4, on: false, x: 4 }, { id: 1, on: true, x: 1 }]);
+    s.st.spots = ([{ id: 3, on: true, x: 33 }, { id: 4, on: false, x: 4 }, { id: 1, on: true, x: 1 }]);
     world.flush();
     assert.deepEqual(kinds(s), ["dot", "ring", "dot"]);
     assert.deepEqual(xs(s), [33, 4, 1]);
@@ -259,7 +262,7 @@ describe("conditionals in a list's map: runtime", () => {
     const o = new Only();
     world.mount(o);
     assert.deepEqual(xs(o), [1, 3]);
-    o.setSpots([{ id: 1, on: true, x: 1 }, { id: 2, on: true, x: 2 }, { id: 3, on: false, x: 3 }]);
+    o.st.spots = ([{ id: 1, on: true, x: 1 }, { id: 2, on: true, x: 2 }, { id: 3, on: false, x: 3 }]);
     world.flush();
     assert.deepEqual(xs(o), [1, 2], "item 2 appears between, item 3 is gone");
   });
@@ -286,7 +289,7 @@ describe("conditionals in a list's map: generated code and diagnostics", () => {
   });
 
   it("filters the `&&` form and tests the branch of a ternary with the condition itself (so TypeScript narrows it)", () => {
-    assert.match(compiled.code, /const \$list = this\.spots\.filter\(\(s\) => s\.on\);/);
+    assert.match(compiled.code, /const \$list = this\.\$st_spots\.filter\(\(s\) => s\.on\);/);
     assert.match(compiled.code, /const \$branch = s\.on \? 0 : 1;/);
     assert.match(compiled.code, /if \(s\.on\) \{\n\s+\$item = new Dot\(/);
   });
@@ -296,15 +299,15 @@ describe("conditionals in a list's map: generated code and diagnostics", () => {
   });
 
   it("rejects different keys in the two branches", () => {
-    const errors = compileErrors(`${COND}\nfunction Bad() { const [spots] = useState<Spot[]>([]); return <Entity name="B">{spots.map((s) => (s.on ? <Dot key={s.id} x={1} /> : <Ring key={s.x} x={1} />))}</Entity>; }`);
+    const errors = compileErrors(`${COND}\nfunction Bad() { const st = useMutable({ spots: [] as Spot[] }); return <Entity name="B">{st.spots.map((s) => (s.on ? <Dot key={s.id} x={1} /> : <Ring key={s.x} x={1} />))}</Entity>; }`);
     assert.equal(errors[0]?.code, DiagnosticCode.InvalidList);
     assert.match(errors[0]!.message, /same `key`/);
   });
 
   it("still rejects a fragment as a branch, and the index in a conditional list", () => {
-    const fragment = compileErrors(`${COND}\nfunction Bad() { const [spots] = useState<Spot[]>([]); return <Entity name="B">{spots.map((s) => (s.on ? <><Dot key={s.id} x={1} /></> : null))}</Entity>; }`);
+    const fragment = compileErrors(`${COND}\nfunction Bad() { const st = useMutable({ spots: [] as Spot[] }); return <Entity name="B">{st.spots.map((s) => (s.on ? <><Dot key={s.id} x={1} /></> : null))}</Entity>; }`);
     assert.equal(fragment[0]?.code, DiagnosticCode.InvalidList);
-    const index = compileErrors(`${COND}\nfunction Bad() { const [spots] = useState<Spot[]>([]); return <Entity name="B">{spots.map((s, i) => s.on && <Dot key={s.id} x={i} />)}</Entity>; }`);
+    const index = compileErrors(`${COND}\nfunction Bad() { const st = useMutable({ spots: [] as Spot[] }); return <Entity name="B">{st.spots.map((s, i) => s.on && <Dot key={s.id} x={i} />)}</Entity>; }`);
     assert.match(index[0]!.message, /cannot take the index/);
   });
 });
@@ -344,13 +347,12 @@ function Outer({ title, children }: BoxProps) {
 }
 
 function Use() {
-  const [on, setOn] = useState(true);
-  const [ids, setIds] = useState<number[]>([1, 2]);
+  const s = useMutable({ on: true, ids: [1, 2] as number[] });
   return (
     <Entity name="use">
       <Outer title="t">
         <Entity name="static" />
-        {on && <Entity name="maybe" />}
+        {s.on && <Entity name="maybe" />}
         <Entity name="last" />
       </Outer>
     </Entity>
@@ -358,16 +360,16 @@ function Use() {
 }
 
 function UseList() {
-  const [ids, setIds] = useState<number[]>([1, 2]);
-  return <Entity name="use"><Outer title="t">{ids.map((i) => <Entity key={i} name={"n" + i} />)}</Outer></Entity>;
+  const s = useMutable({ ids: [1, 2] as number[] });
+  return <Entity name="use"><Outer title="t">{s.ids.map((i) => <Entity key={i} name={"n" + i} />)}</Outer></Entity>;
 }
 `;
 
 interface UseInstance extends Entity {
-  setOn(on: boolean): void;
+  s: { [field: string]: unknown };
 }
 interface UseListInstance extends Entity {
-  setIds(ids: number[]): void;
+  s: { [field: string]: unknown };
 }
 
 describe("forwarding {children}", () => {
@@ -394,10 +396,10 @@ describe("forwarding {children}", () => {
     world.mount(u);
     world.flush();
     assert.deepEqual(bodyNames(u), ["static", "maybe", "last"]);
-    u.setOn(false);
+    u.s.on = (false);
     world.flush();
     assert.deepEqual(bodyNames(u), ["static", "last"]);
-    u.setOn(true);
+    u.s.on = (true);
     world.flush();
     assert.deepEqual(bodyNames(u), ["static", "maybe", "last"], "a child that comes back lands between its siblings");
   });
@@ -408,10 +410,10 @@ describe("forwarding {children}", () => {
     world.mount(l);
     world.flush();
     assert.deepEqual(bodyNames(l), ["n1", "n2"]);
-    l.setIds([3, 2, 1]);
+    l.s.ids = ([3, 2, 1]);
     world.flush();
     assert.deepEqual(bodyNames(l), ["n3", "n2", "n1"]);
-    l.setIds([2]);
+    l.s.ids = ([2]);
     world.flush();
     assert.deepEqual(bodyNames(l), ["n2"]);
   });
@@ -440,7 +442,7 @@ describe("forwarding {children}", () => {
     const beside = compileErrors(`${head}function Mod({ children }: P) { return <Entity name="m"><Box><Entity name="x" />{children}</Box></Entity>; }`);
     assert.equal(beside[0]?.code, DiagnosticCode.UnsupportedJsxChild);
     assert.match(beside[0]!.message, /must be the only child passed to it/);
-    const conditional = compileErrors(`${head}function Mod({ children }: P) { const [on] = useState(true); return <Entity name="m">{on && <Box>{children}</Box>}</Entity>; }`);
+    const conditional = compileErrors(`${head}function Mod({ children }: P) { const s = useMutable({ on: true }); return <Entity name="m">{s.on && <Box>{children}</Box>}</Entity>; }`);
     assert.equal(conditional[0]?.code, DiagnosticCode.UnsupportedJsxChild);
     assert.match(conditional[0]!.message, /always present/);
   });
@@ -481,12 +483,14 @@ function Tag({ text }: TagProps) {
 }
 
 function Menu() {
-  const [opts, setOpts] = useState<Opt[]>([{ id: 1, label: "a", ok: true }, { id: 2, label: "b", ok: false }]);
-  const [picked, setPicked] = useState(0);
+  const s = useMutable({
+    opts: [{ id: 1, label: "a", ok: true }, { id: 2, label: "b", ok: false }] as Opt[],
+    picked: 0,
+  });
   return (
     <Entity name="Menu">
-      {opts.map((o) => (
-        <Btn key={o.id} on={o.ok} onPress={() => setPicked(o.id)}>
+      {s.opts.map((o) => (
+        <Btn key={o.id} on={o.ok} onPress={() => { s.picked = o.id; }}>
           <Tag text={o.label} />
           <Tag text={"#" + o.id} />
         </Btn>
@@ -496,10 +500,10 @@ function Menu() {
 }
 
 function Rows() {
-  const [opts, setOpts] = useState<Opt[]>([{ id: 1, label: "a", ok: true }]);
+  const s = useMutable({ opts: [{ id: 1, label: "a", ok: true }] as Opt[] });
   return (
     <Entity name="Rows">
-      {opts.map((o) => (
+      {s.opts.map((o) => (
         <Entity key={o.id} name={o.label}>
           <Shape kind="rect" width={o.id} height={1} />
         </Entity>
@@ -510,8 +514,8 @@ function Rows() {
 `;
 
 interface MenuInstance extends Entity {
-  setOpts(opts: { id: number; label: string; ok: boolean }[]): void;
   readonly picked: number;
+  s: { [field: string]: unknown };
 }
 
 describe("children on list items", () => {
@@ -541,7 +545,7 @@ describe("children on list items", () => {
     const m = new Menu();
     world.mount(m);
     world.flush();
-    m.setOpts([{ id: 1, label: "A", ok: false }, { id: 2, label: "b", ok: false }, { id: 3, label: "c", ok: true }]);
+    m.s.opts = ([{ id: 1, label: "A", ok: false }, { id: 2, label: "b", ok: false }, { id: 3, label: "c", ok: true }]);
     world.flush();
     assert.deepEqual(summary(m), [["off", ["A", "#1"]], ["off", ["b", "#2"]], ["on", ["c", "#3"]]]);
   });
@@ -551,13 +555,13 @@ describe("children on list items", () => {
     const m = new Menu();
     world.mount(m);
     world.flush();
-    m.setOpts([{ id: 2, label: "b", ok: false }]);
+    m.s.opts = ([{ id: 2, label: "b", ok: false }]);
     world.flush();
     assert.deepEqual(summary(m), [["off", ["b", "#2"]]]);
     const pointer = (m.children[0] as Entity).children[0] as Pointer;
     world.reportPress(pointer, 1, 1);
     world.flush();
-    assert.equal(m.picked, 2);
+    assert.equal(m.s.picked, 2);
   });
 
   it("takes children on a built-in item too", () => {
@@ -578,7 +582,7 @@ describe("children on list items", () => {
   });
 
   it("still rejects a list inside an item's children", () => {
-    const errors = compileErrors(`${ITEM_CHILDREN}\nfunction Bad() { const [opts] = useState<Opt[]>([]); return <Entity name="B">{opts.map((o) => <Btn key={o.id} on onPress={() => {}}>{opts.map((p) => <Tag key={p.id} text="x" />)}</Btn>)}</Entity>; }`);
+    const errors = compileErrors(`${ITEM_CHILDREN}\nfunction Bad() { const s = useMutable({ opts: [] as Opt[] }); return <Entity name="B">{s.opts.map((o) => <Btn key={o.id} on onPress={() => {}}>{s.opts.map((p) => <Tag key={p.id} text="x" />)}</Btn>)}</Entity>; }`);
     assert.equal(errors[0]?.code, DiagnosticCode.InvalidList);
   });
 });
@@ -596,18 +600,20 @@ interface Grid {
 }
 
 function Inventory() {
-  const [grid, setGrid] = useState<Grid>({ slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "", count: 0, locked: true }] });
-  const [picked, setPicked] = useState("");
+  const st = useMutable({
+    grid: { slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "", count: 0, locked: true }] } as Grid,
+    picked: "",
+  });
   return (
     <Entity name="Inventory">
-      {grid.slots.map((s) => (
+      {st.grid.slots.map((s) => (
         <Entity key={s.id} name={"slot" + s.id}>
           <Shape kind="rect" width={10} height={10} />
           {s.count > 0 && (
             <Entity name="filled">
               <Text>{s.label}</Text>
               {s.count > 1 && <Text>{"x" + s.count}</Text>}
-              <Pointer width={4} height={4} onPress={() => setPicked(s.label)} />
+              <Pointer width={4} height={4} onPress={() => { st.picked = s.label; }} />
             </Entity>
           )}
           {s.locked ? <Entity name="lock" /> : null}
@@ -619,8 +625,8 @@ function Inventory() {
 `;
 
 interface InventoryInstance extends Entity {
-  setGrid(grid: { slots: { id: number; label: string; count: number; locked: boolean }[] }): void;
   readonly picked: string;
+  st: { [field: string]: unknown };
 }
 
 describe("conditions and nested children inside list items", () => {
@@ -654,14 +660,14 @@ describe("conditions and nested children inside list items", () => {
     world.mount(inv);
     world.flush();
     const first = inv.children[0];
-    inv.setGrid({ slots: [{ id: 1, label: "key", count: 3, locked: false }, { id: 2, label: "bell", count: 1, locked: false }] });
+    inv.st.grid = ({ slots: [{ id: 1, label: "key", count: 3, locked: false }, { id: 2, label: "bell", count: 1, locked: false }] });
     world.flush();
     assert.equal(inv.children[0], first);
     assert.deepEqual(summary(inv), [
       ["slot1", ["Shape", "filled"], ["key", "x3"]],
       ["slot2", ["Shape", "filled"], ["bell"]],
     ]);
-    inv.setGrid({ slots: [{ id: 1, label: "key", count: 0, locked: true }, { id: 2, label: "bell", count: 1, locked: false }] });
+    inv.st.grid = ({ slots: [{ id: 1, label: "key", count: 0, locked: true }, { id: 2, label: "bell", count: 1, locked: false }] });
     world.flush();
     assert.deepEqual(summary(inv), [
       ["slot1", ["Shape", "lock"], []],
@@ -674,14 +680,14 @@ describe("conditions and nested children inside list items", () => {
     const inv = new Inventory();
     world.mount(inv);
     world.flush();
-    inv.setGrid({ slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "bell", count: 1, locked: false }] });
+    inv.st.grid = ({ slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "bell", count: 1, locked: false }] });
     world.flush();
-    inv.setGrid({ slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "shears", count: 1, locked: false }] });
+    inv.st.grid = ({ slots: [{ id: 1, label: "key", count: 1, locked: false }, { id: 2, label: "shears", count: 1, locked: false }] });
     world.flush();
     const filled = inv.children[1]!.children.find((c) => (c as Entity).name === "filled")!;
     world.reportPress(filled.children.find((c) => c instanceof Pointer) as Pointer, 1, 1);
     world.flush();
-    assert.equal(inv.picked, "shears");
+    assert.equal(inv.st.picked, "shears");
   });
 
   it("type-checks the generated module", () => {

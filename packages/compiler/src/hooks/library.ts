@@ -1,25 +1,28 @@
 /**
  * Hooks the engine ships, written as ordinary custom hooks (the inliner's input), so they are what an author could have written
- * from `useState` and `useUpdate`, and every rule of a component body applies to them. A component imports one from the
+ * from `useMutable` and `useUpdate`, and every rule of a component body applies to them. A component imports one from the
  * authoring module (`import { useSquash } from "@rge/runtime/jsx"`), where it is declared for TypeScript; the inliner takes its
- * body from here.
+ * body from here. A hook that hands back state returns its `useMutable` (`return s`), and the caller reads and writes its fields.
  */
 export const LIBRARY_FILE = "rge:hooks.tsx";
 
-export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useState, useUpdate } from "@rge/runtime/jsx";
+export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate } from "@rge/runtime/jsx";
 
 /**
  * Squash and stretch: a scale that is set at a moment and springs back to 1 at \`recover\` a second.
- *   const [squash, setSquash] = useSquash();
- *   setSquash({ x: 0.6, y: 1.4 });
+ *   const squash = useSquash();
+ *   squash.x = 0.6;
+ *   squash.y = 1.4;
  *   <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} />
  */
 export function useSquash(recover = 1.75) {
-  const [squash, setSquash] = useState<{ x: number; y: number }>({ x: 1, y: 1 });
+  const squash = useMutable({ x: 1, y: 1 });
   useUpdate((dt) => {
-    setSquash((s) => springBack(s, recover, dt));
+    const next = springBack(squash, recover, dt);
+    squash.x = next.x;
+    squash.y = next.y;
   });
-  return [squash, setSquash];
+  return squash;
 }
 
 /**
@@ -27,11 +30,11 @@ export function useSquash(recover = 1.75) {
  *   const y = useSpring(open ? 0 : -40, { duration: 0.4, bounce: 0.2 });
  */
 export function useSpring(target, options = {}) {
-  const [spring, setSpring] = useState(() => startSpring(target));
+  const s = useMutable({ spring: startSpring(target) });
   useUpdate((dt) => {
-    setSpring((s) => stepSpring(s, target, options, dt));
+    s.spring = stepSpring(s.spring, target, options, dt);
   });
-  return spring.value;
+  return s.spring.value;
 }
 
 /**
@@ -39,25 +42,27 @@ export function useSpring(target, options = {}) {
  *   const opacity = useTween(visible ? 1 : 0, { duration: 0.25, ease: "outCubic" });
  */
 export function useTween(target, options = {}) {
-  const [tween, setTween] = useState(() => startTween(target));
+  const s = useMutable({ tween: startTween(target) });
   useUpdate((dt) => {
-    setTween((s) => stepTween(s, target, options, dt));
+    s.tween = stepTween(s.tween, target, options, dt);
   });
-  return tween.value;
+  return s.tween.value;
 }
 
 /**
- * A shake of the view, as state: set at a moment, it runs down by itself.
- *   const [shake, setShake] = useShake();
- *   setShake({ strength: 3, duration: 0.25 });
+ * A shake of the view, as state: started at a moment, it runs down by itself.
+ *   const shake = useShake();
+ *   shake.strength = 3;
+ *   shake.duration = 0.25;
+ *   shake.elapsed = 0;
  *   <Camera shake={shake}>
  */
 export function useShake() {
-  const [shake, setShake] = useState<{ strength: number; duration: number; elapsed?: number }>({ strength: 0, duration: 0 });
+  const shake = useMutable({ strength: 0, duration: 0, elapsed: 0 });
   useUpdate((dt) => {
-    setShake((s) => shakeOn(s, dt));
+    shake.elapsed = shakeOn(shake, dt).elapsed ?? 0;
   });
-  return [shake, setShake];
+  return shake;
 }
 
 /**
@@ -67,11 +72,11 @@ export function useShake() {
  *   <Label color={time % 1 < 0.66 ? "white" : "black"} />
  */
 export function useTime() {
-  const [time, setTime] = useState(0);
+  const s = useMutable({ time: 0 });
   useUpdate((dt) => {
-    setTime((t) => t + dt);
+    s.time += dt;
   });
-  return time;
+  return s.time;
 }
 
 /**
@@ -81,24 +86,22 @@ export function useTime() {
  *   const { x, y, move, touching } = useBody({ x: 16, y: 32, width: 8, height: 11 });
  */
 export function useBody(options) {
-  const [body] = useState(() => createBody(options));
-  const [x, setX] = useState<number>(options.x);
-  const [y, setY] = useState<number>(options.y);
+  const b = useMutable({ body: createBody(options), x: options.x as number, y: options.y as number });
   const move = (dx: number, dy: number) => {
-    const hit = body.move(dx, dy);
-    setX(body.x);
-    setY(body.y);
+    const hit = b.body.move(dx, dy);
+    b.x = b.body.x;
+    b.y = b.body.y;
     return hit;
   };
-  const touching = (tag: string) => body.touching(tag);
-  const blocked = (dx: number, dy: number) => body.blocked(dx, dy);
-  const overlapping = <Tag extends string>(tag: Tag) => body.overlapping(tag);
+  const touching = (tag: string) => b.body.touching(tag);
+  const blocked = (dx: number, dy: number) => b.body.blocked(dx, dy);
+  const overlapping = <Tag extends string>(tag: Tag) => b.body.overlapping(tag);
   const place = (toX: number, toY: number) => {
-    body.place(toX, toY);
-    setX(body.x);
-    setY(body.y);
+    b.body.place(toX, toY);
+    b.x = b.body.x;
+    b.y = b.body.y;
   };
-  return { x, y, move, touching, blocked, overlapping, place };
+  return { x: b.x, y: b.y, move, touching, blocked, overlapping, place };
 }
 
 /**
@@ -107,9 +110,11 @@ export function useBody(options) {
  *   const values = useStore(settings, settingsView);
  */
 export function useStore(store, read) {
-  const [value, setValue] = useState(() => read());
-  useMount(() => store.subscribe(() => setValue((previous) => keepIfEqual(previous, read()))));
-  return value;
+  const s = useMutable({ value: read() });
+  useMount(() => store.subscribe(() => {
+    s.value = keepIfEqual(s.value, read());
+  }));
+  return s.value;
 }
 `;
 

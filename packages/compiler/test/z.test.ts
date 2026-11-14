@@ -20,12 +20,12 @@ interface CardProps {
 }
 
 function Card({ lift }: CardProps) {
-  const [front, setFront] = useState(false);
-  useUpdate(() => setFront(true));
+  const s = useMutable({ front: false });
+  useUpdate(() => { s.front = true; });
   return (
     <Entity name="Card" transform={{ z: lift }}>
       <Shape kind="rect" width={1} height={1} transform={{ z: 2 }} />
-      <Shape kind="rect" width={2} height={1} transform={{ z: front ? 5 : -5 }} />
+      <Shape kind="rect" width={2} height={1} transform={{ z: s.front ? 5 : -5 }} />
     </Entity>
   );
 }
@@ -61,7 +61,7 @@ describe("z in transform", () => {
     assert.deepEqual(fixed!.transform.map((p) => [p.name, p.kind]), [["z", "StaticProp"]]);
     assert.deepEqual(moving!.transform.map((p) => [p.name, p.kind]), [["z", "DynamicProp"]]);
     assert.match(compiled.code, /this\.shape\.transform\.z = 2;/);
-    assert.match(compiled.code, /const (\$\d+) = this\.front \? 5 : \(-5\);[^]*?this\.shape2\.transform\.z = \1;/);
+    assert.match(compiled.code, /const (\$\d+) = this\.\$s_front \? 5 : \(-5\);[^]*?this\.shape2\.transform\.z = \1;/);
   });
 
   it("places a component with `transform={{ z }}` in its placement, under the component's own", () => {

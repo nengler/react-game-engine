@@ -12,37 +12,31 @@ after(() => {
   cleanOutput();
 });
 
-type Setter<T> = (value: T | ((previous: T) => T)) => void;
-
 interface PlayerInstance extends Entity {
-  health: number;
-  setHealth: Setter<number>;
   readonly sprite: Sprite;
   readonly collider: Collider;
   warningIcon: Entity | null;
+  s: { health: number };
 }
 
 interface LevelInstance extends Entity {
-  wave: number;
-  bossVisible: boolean;
-  setWave: Setter<number>;
-  setBossVisible: Setter<boolean>;
   readonly enemy: Entity;
   readonly enemy2: Entity;
   enemy3: Entity | null;
   entity: Entity | null;
   sprite: Sprite | null;
   collider: Collider | null;
+  s: { wave: number; bossVisible: boolean };
 }
 
 const PLAYER = `
 function Player() {
-  const [health, setHealth] = useState(100);
+  const s = useMutable({ health: 100 });
   return (
     <Entity name="Player">
-      <Sprite image={health > 50 ? "normal.png" : "hurt.png"} />
+      <Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} />
       <Collider width={16} height={24} />
-      {health < 25 && <WarningIcon />}
+      {s.health < 25 && <WarningIcon />}
     </Entity>
   );
 }
@@ -67,16 +61,15 @@ function Enemy() {
 }
 
 function Level() {
-  const [wave, setWave] = useState(1);
-  const [bossVisible, setBossVisible] = useState(false);
+  const s = useMutable({ wave: 1, bossVisible: false });
   return (
     <Entity name="Level">
       <Enemy />
       <Enemy />
-      {wave >= 3 && <Enemy />}
-      {bossVisible && (
+      {s.wave >= 3 && <Enemy />}
+      {s.bossVisible && (
         <Entity name="Boss">
-          <Sprite image={wave > 5 ? "boss-enraged.png" : "boss.png"} />
+          <Sprite image={s.wave > 5 ? "boss-enraged.png" : "boss.png"} />
           <Collider width={64} height={64} />
         </Entity>
       )}
@@ -112,8 +105,8 @@ describe("generated component instances", () => {
 
   it("hold state as persistent instance fields", () => {
     const player = new Player();
-    assert.equal(player.health, 100);
-    assert.ok(Object.hasOwn(player, "health"));
+    assert.equal(player.s.health, 100);
+    assert.ok(Object.hasOwn(player, "$s_health"));
   });
 
   it("instantiate static children once, as persistent fields attached to the instance", () => {
@@ -129,44 +122,36 @@ describe("generated component instances", () => {
   });
 });
 
-describe("state setters", () => {
-  it("mark the object dirty and apply the value at the next render (React's snapshot semantics)", () => {
+describe("writes through a component's view (`player.s.health = 80`, as a test or a tool writes)", () => {
+  it("mark the object dirty, and the view reads the committed value until the next render", () => {
     const { world, player } = mountPlayer();
     assert.equal(player.isDirty, false);
-    player.setHealth(80);
+    player.s.health = (80);
     assert.equal(player.isDirty, true);
-    assert.equal(player.health, 100, "reads keep the value from the last render until it re-renders");
+    assert.equal(player.s.health, 100, "reads keep the value from the last render until it re-renders");
     world.flush();
-    assert.equal(player.health, 80);
+    assert.equal(player.s.health, 80);
   });
 
-  it("accept an updater function, chained on pending updates", () => {
+  it("read the committed value, so two writes of `s.health - 10` from outside give 90 (a handler reads its own writes instead)", () => {
     const { world, player } = mountPlayer();
-    player.setHealth((previous) => previous - 30);
-    player.setHealth((previous) => previous - 30);
+    player.s.health = (player.s.health - 10);
+    player.s.health = (player.s.health - 10);
     world.flush();
-    assert.equal(player.health, 40);
-  });
-
-  it("with a plain value, last write wins, as in React's `setN(n + 1); setN(n + 1)`", () => {
-    const { world, player } = mountPlayer();
-    player.setHealth(player.health - 10);
-    player.setHealth(player.health - 10);
-    world.flush();
-    assert.equal(player.health, 90);
+    assert.equal(player.s.health, 90);
   });
 
   it("do not mark the object dirty when the value is unchanged", () => {
     const player = new Player();
-    player.setHealth(100);
+    player.s.health = (100);
     assert.equal(player.isDirty, false);
   });
 
   it("schedule a single render per flush, however many times state changes", () => {
     const { world, player } = mountPlayer();
-    player.setHealth(90);
-    player.setHealth(60);
-    player.setHealth(40);
+    player.s.health = (90);
+    player.s.health = (60);
+    player.s.health = (40);
     assert.equal(world.flush(), 1);
     assert.equal(player.isDirty, false);
     assert.equal(world.flush(), 0);
@@ -174,48 +159,47 @@ describe("state setters", () => {
 
   it("do not change dependent props until the world renders", () => {
     const { world, player } = mountPlayer();
-    player.setHealth(10);
+    player.s.health = (10);
     assert.equal(player.sprite.image, "normal.png");
     world.flush();
     assert.equal(player.sprite.image, "hurt.png");
   });
 });
 
-describe("updaters written in place", () => {
-  // In a hook, `setN((n) => …)` with one expression is generated as an assignment to the pending value, not a call.
+describe("writes in a handler", () => {
+  // In a handler a field is read as it is now, so each write sees the one before it; a write is a call of the field's setter.
   const COUNTER = `
 interface CounterProps { step: number }
 function Counter({ step }: CounterProps) {
-  const [n, setN] = useState(0);
-  const [still, setStill] = useState(7);
-  const [items, setItems] = useState<number[]>([]);
-  const [big, setBig] = useState(0);
+  const st = useMutable({
+    n: 0,
+    still: 7,
+    items: [] as number[],
+    big: 0,
+  });
   useUpdate((dt) => {
-    const n2 = n;
-    setN((n) => n + step);
-    setN((n) => n + step);
-    setN((dt) => dt + n2 * 0);
-    setStill((s) => s);
-    setBig((b) => { if (b > 2) return 0; return b + 1; });
+    const n2 = st.n;
+    st.n += step;
+    st.n += step;
+    st.n += n2 * 0;
+    st.still = st.still;
+    if (st.big > 2) st.big = 0;
+    else st.big += 1;
   });
   useInput((input) => {
-    if (input.down("A")) setItems((items) => [...items, items.length]);
+    if (input.down("A")) st.items = [...st.items, st.items.length];
   });
-  return <Entity name="Counter"><Pointer width={1} height={1} onPress={() => setN((n) => n + 100)} /></Entity>;
+  return <Entity name="Counter"><Pointer width={1} height={1} onPress={() => { st.n += 100; }} /></Entity>;
 }
 
 function Idle() {
-  const [still, setStill] = useState(7);
-  useUpdate(() => { setStill((s) => s); });
+  const st = useMutable({ still: 7 });
+  useUpdate(() => { st.still = st.still; });
   return <Entity name="Idle" />;
 }
 `;
   interface CounterInstance extends Entity {
-    n: number;
-    still: number;
-    items: number[];
-    big: number;
-    setN: Setter<number>;
+    st: { n: number; still: number; items: number[]; big: number };
   }
   let Counter: new (props: { step: number }) => CounterInstance;
   let Idle: new () => Entity;
@@ -228,36 +212,25 @@ function Idle() {
     ({ Counter, Idle } = await load<{ Counter: typeof Counter; Idle: typeof Idle }>(compiled));
   });
 
-  it("are assignments in a hook, and stay calls in a callback and when the updater has statements", () => {
-    assert.match(code, /const n = this\.#nNext;\n\s+this\.#nNext = n \+ this\.props\.step;\n\s+if \(this\.#nNext !== n\) this\.markDirty\(\);/);
-    assert.equal(code.match(/this\.setN\(/g)?.length, 1, "only the callback calls the setter");
-    assert.match(code, /onPress: \(\) => \{ this\.setN\(\(n: number\) => n \+ 100\); \}/);
-    assert.match(code, /this\.setBig\(\(b: number\) => \{/);
-    assert.doesNotMatch(code, /this\.setStill\(|this\.setItems\(/);
+  it("are setter calls of the value worked out from the field as it is now, in a hook and in a callback", () => {
+    assert.match(code, /this\.\$set_st_n\(this\.#\$st_nNext \+ this\.props\.step\);\n\s+this\.\$set_st_n\(this\.#\$st_nNext \+ this\.props\.step\);/);
+    assert.match(code, /onPress: \(\) => \{ this\.\$set_st_n\(this\.#\$st_nNext \+ 100\); \}/);
+    assert.match(code, /if \(this\.#\$st_bigNext > 2\) \{\n\s+this\.\$set_st_big\(0\);/);
   });
 
-  it("chain on the pending value, show at the next render, and render once", () => {
+  it("each read what the one before wrote, show at the next render, and render once", () => {
     const world = new World();
     const counter = new Counter({ step: 3 });
     world.mount(counter);
-    assert.equal(world.tick(0.5), 1, "one render for the frame's five updates");
-    assert.equal(counter.n, 6, "the second updater saw what the first left; the third added nothing");
-    assert.equal(counter.big, 1);
+    assert.equal(world.tick(0.5), 1, "one render for the frame's writes");
+    assert.equal(counter.st.n, 6, "the second write read what the first left; the third added nothing");
+    assert.equal(counter.st.big, 1);
     world.tick(0.5);
-    assert.equal(counter.n, 12);
-    // A call to the setter and an updater in place work on the same pending value.
-    counter.setN((n) => n + 100);
+    assert.equal(counter.st.n, 12);
+    // A write from outside and the handler's writes work on the same pending value.
+    counter.st.n = counter.st.n + 100;
     world.tick(0.5);
-    assert.equal(counter.n, 118);
-  });
-
-  it("take the updater's parameter over a state, a local or the hook's own parameter of the same name", () => {
-    const world = new World();
-    const counter = new Counter({ step: 1 });
-    world.mount(counter);
-    // `setN((dt) => dt + n2 * 0)` is the previous n, not the frame's dt; `(n) => n + step` reads the pending n, not the rendered one.
-    world.tick(1000);
-    assert.equal(counter.n, 2);
+    assert.equal(counter.st.n, 118);
   });
 
   it("do not ask for a render when the value comes out the same", () => {
@@ -275,7 +248,7 @@ function Idle() {
     world.mount(counter);
     world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, lastPressed: () => undefined, pointerX: 0, pointerY: 0 });
     world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, lastPressed: () => undefined, pointerX: 0, pointerY: 0 });
-    assert.deepEqual(counter.items, [0, 1]);
+    assert.deepEqual(counter.st.items, [0, 1]);
   });
 });
 
@@ -285,23 +258,21 @@ describe("what a render reports", () => {
   const DRIFTER = `
 interface DrifterProps { tint: string }
 function Drifter({ tint }: DrifterProps) {
-  const [x, setX] = useState(0);
-  const [ticks, setTicks] = useState(0);
+  const s = useMutable({ x: 0, ticks: 0 });
   useUpdate(() => {
-    setTicks((t) => t + 1);
-    if (ticks < 3) setX((x) => x + 10);
+    s.ticks += 1;
+    if (s.ticks <= 3) s.x += 10;
   });
   return (
-    <Entity transform={{ x }}>
+    <Entity transform={{ x: s.x }}>
       <Shape kind="rect" width={4} height={4} color={tint} />
-      <Shape kind="rect" width={2} height={2} transform={{ y: ticks > 5 ? 1 : 0 }} />
+      <Shape kind="rect" width={2} height={2} transform={{ y: s.ticks > 5 ? 1 : 0 }} />
     </Entity>
   );
 }
 `;
   interface DrifterInstance extends Entity {
-    x: number;
-    ticks: number;
+    s: { x: number; ticks: number };
     readonly shape: GameObject & { color: string };
     readonly shape2: GameObject;
     updateProps(next: { tint?: string }): void;
@@ -331,7 +302,7 @@ function Drifter({ tint }: DrifterProps) {
     frame(3);
     frame(4);
     frame(5);
-    assert.equal(drifter.ticks, 5, "it still renders every frame");
+    assert.equal(drifter.s.ticks, 5, "it still renders every frame");
     assert.equal(drifter.transform.x, 30);
     assert.deepEqual(stamps(drifter), [3, 3, 0], "but the renders after the third changed nothing that is drawn");
 
@@ -354,15 +325,13 @@ function Drifter({ tint }: DrifterProps) {
   it("writes every value of a group when any one differs, and reports a change of the root's own props", async () => {
     const compiled = compile(`
 function Tag() {
-  const [x, setX] = useState(0);
-  const [y, setY] = useState(0);
-  const [n, setN] = useState(0);
+  const s = useMutable({ x: 0, y: 0, n: 0 });
   useInput((input) => {
-    if (input.pressed("Y")) setY((y) => y + 5);
-    if (input.pressed("X")) setX((x) => x + 5);
-    if (input.pressed("N")) setN((n) => n + 1);
+    if (input.pressed("Y")) s.y += 5;
+    if (input.pressed("X")) s.x += 5;
+    if (input.pressed("N")) s.n += 1;
   });
-  return <Text transform={{ x, y }}>{\`n\${n}\`}</Text>;
+  return <Text transform={{ x: s.x, y: s.y }}>{\`n\${s.n}\`}</Text>;
 }
 `);
     assert.deepEqual(typeCheck(compiled).map((d) => d.message), []);
@@ -391,12 +360,12 @@ describe("dynamic props", () => {
     const sprite = player.sprite;
     const collider = player.collider;
 
-    player.setHealth(40);
+    player.s.health = (40);
     world.flush();
     assert.equal(player.sprite, sprite, "Sprite instance must be the same object after a state update");
     assert.equal(sprite.image, "hurt.png");
 
-    player.setHealth(90);
+    player.s.health = (90);
     world.flush();
     assert.equal(player.sprite, sprite);
     assert.equal(sprite.image, "normal.png");
@@ -410,7 +379,7 @@ describe("dynamic props", () => {
 describe("conditional children", () => {
   it("are created when their condition becomes true", () => {
     const { world, player } = mountPlayer();
-    player.setHealth(20);
+    player.s.health = (20);
     world.flush();
 
     const warning = player.warningIcon;
@@ -424,10 +393,10 @@ describe("conditional children", () => {
 
   it("are not recreated while the condition stays true", () => {
     const { world, player } = mountPlayer();
-    player.setHealth(20);
+    player.s.health = (20);
     world.flush();
     const warning = player.warningIcon;
-    player.setHealth(10);
+    player.s.health = (10);
     world.flush();
     assert.equal(player.warningIcon, warning);
     assert.equal(player.children.filter((c) => c instanceof WarningIcon).length, 1);
@@ -435,12 +404,12 @@ describe("conditional children", () => {
 
   it("are removed when their condition becomes false", () => {
     const { world, player } = mountPlayer();
-    player.setHealth(20);
+    player.s.health = (20);
     world.flush();
     const warning = player.warningIcon;
     assert.ok(warning);
 
-    player.setHealth(30);
+    player.s.health = (30);
     world.flush();
     assert.equal(player.warningIcon, null);
     assert.ok(!player.children.includes(warning));
@@ -454,7 +423,7 @@ describe("conditional children", () => {
     const world = new World();
     const player = new Player();
     world.mount(player);
-    player.setHealth(20);
+    player.s.health = (20);
     player.runRender(); // render without committing structure
     assert.ok(player.warningIcon, "instance is created during render");
     assert.ok(!player.children.includes(player.warningIcon), "...but attached only on commit");
@@ -467,8 +436,8 @@ describe("conditional children", () => {
     const { Low } = await load<{ Low: new () => Entity & { warningIcon: Entity | null } }>(
       compile(`
         function Low() {
-          const [health, setHealth] = useState(5);
-          return <Entity>{health < 25 && <WarningIcon />}</Entity>;
+          const s = useMutable({ health: 5 });
+          return <Entity>{s.health < 25 && <WarningIcon />}</Entity>;
         }
         function WarningIcon() { return <Entity />; }
       `),
@@ -498,31 +467,30 @@ describe("nested components", () => {
     const level = new Level();
     world.mount(level);
 
-    level.setWave(3);
+    level.s.wave = (3);
     world.flush();
     assert.ok(level.enemy3 instanceof Enemy);
     sameOrder(level.children, [level.enemy, level.enemy2, level.enemy3]);
 
-    level.setWave(2);
+    level.s.wave = (2);
     world.flush();
     assert.equal(level.enemy3, null);
     sameOrder(level.children, [level.enemy, level.enemy2]);
   });
 
   it("mount a conditional child between its source siblings, not at the end (draw order)", async () => {
-    const { Ordered } = await load<{ Ordered: new () => Entity & { setShow: Setter<boolean>; setInner: Setter<boolean> } }>(
+    const { Ordered } = await load<{ Ordered: new () => Entity & { s: { [field: string]: unknown } } }>(
       compile(`function Ordered() {
-  const [show, setShow] = useState(false);
-  const [inner, setInner] = useState(false);
+  const s = useMutable({ show: false, inner: false });
   return (
     <Entity>
       <Sprite image="a" />
-      {show && <Sprite image="b" />}
+      {s.show && <Sprite image="b" />}
       <Sprite image="c" />
-      {show && (
+      {s.show && (
         <Entity name="group">
           <Sprite image="d" />
-          {inner && <Sprite image="e" />}
+          {s.inner && <Sprite image="e" />}
           <Sprite image="f" />
         </Entity>
       )}
@@ -537,17 +505,17 @@ describe("nested components", () => {
     world.mount(ordered);
     assert.deepEqual(images(ordered), ["a", "c", "g"]);
 
-    ordered.setShow(true);
-    ordered.setInner(true);
+    ordered.s.show = (true);
+    ordered.s.inner = (true);
     world.flush();
     assert.deepEqual(images(ordered), ["a", "b", "c", "group", "g"]);
     assert.deepEqual(images(ordered.children[3]!), ["d", "e", "f"]);
 
     // Unmount and remount: the slot is reused, not appended.
-    ordered.setShow(false);
+    ordered.s.show = (false);
     world.flush();
     assert.deepEqual(images(ordered), ["a", "c", "g"]);
-    ordered.setShow(true);
+    ordered.s.show = (true);
     world.flush();
     assert.deepEqual(images(ordered), ["a", "b", "c", "group", "g"]);
   });
@@ -557,7 +525,7 @@ describe("nested components", () => {
     const level = new Level();
     world.mount(level);
 
-    level.setBossVisible(true);
+    level.s.bossVisible = (true);
     world.flush();
     const boss = level.entity;
     assert.ok(boss && boss.name === "Boss");
@@ -567,13 +535,13 @@ describe("nested components", () => {
     assert.equal(bossSprite?.image, "boss.png");
 
     // A dynamic prop inside the conditional subtree updates in place.
-    level.setWave(6);
+    level.s.wave = (6);
     world.flush();
     assert.equal(level.sprite, bossSprite);
     assert.equal(bossSprite?.image, "boss-enraged.png");
 
     // Unmounting removes the subtree and releases every field in it.
-    level.setBossVisible(false);
+    level.s.bossVisible = (false);
     world.flush();
     assert.equal(level.entity, null);
     assert.equal(level.sprite, null);

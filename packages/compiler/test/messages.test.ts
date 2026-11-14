@@ -9,7 +9,7 @@ import { closeCompiler, getCompiler } from "./helpers.ts";
 
 after(() => closeCompiler());
 
-const HEADER = `import { Entity, Text, useState, useUpdate, useMount } from "@rge/runtime/jsx";\n`;
+const HEADER = `import { Entity, Text, useMutable, useUpdate, useMount } from "@rge/runtime/jsx";\n`;
 const errors = (source: string): { code: string; message: string }[] =>
   getCompiler()
     .compile("src/A.tsx", HEADER + source)
@@ -25,13 +25,13 @@ function only(source: string): { code: string; message: string } {
 
 describe("one mistake, one error", () => {
   it("does not report a const again at every read once its value was refused", () => {
-    const e = only(`export function A() { const [n] = useState(0); const m = n.toFixedd(2); return <Text>{m} {n} {m}</Text>; }`);
+    const e = only(`export function A() { const s = useMutable({ n: 0 }); const m = s.n.toFixedd(2); return <Text>{m} {s.n} {m}</Text>; }`);
     assert.equal(e.message, "'toFixedd' is not a method the compiler knows: did you mean 'toFixed'?");
   });
 
-  it("does not report a state again when its useState was refused", () => {
+  it("does not report a state again when its value was refused", () => {
     // An empty array inside: its type cannot be worked out from the values.
-    assert.equal(only(`export function A() { const [p] = useState({ x: 0, items: [] }); return <Entity x={p.x} y={p.items.length} />; }`).code, "RGE1104");
+    assert.equal(only(`export function A() { const s = useMutable({ p: { x: 0, items: [] } }); return <Entity x={s.p.x} y={s.p.items.length} />; }`).code, "RGE1104");
   });
 
   it("does not report the props again when the props parameter was refused", () => {
@@ -50,6 +50,20 @@ describe("one mistake, one error", () => {
 });
 
 describe("what to write instead", () => {
+  it("useState: useMutable, in the author's own names, once (not again at the import, nor at each read or setter call)", () => {
+    const source = `export function A() { const [hp, setHp] = useState(3); useUpdate(() => setHp(hp - 1)); return <Text>{hp}</Text>; }`;
+    const found = getCompiler()
+      .compile("src/A.tsx", `import { Text, useState, useUpdate } from "@rge/runtime/jsx";\n${source}`)
+      .diagnostics.filter((d) => d.severity === "error");
+    assert.equal(found.length, 1, found.map((e) => `${e.code} ${e.message}`).join("\n"));
+    assert.match(found[0]!.message, /^`useState` is replaced by `useMutable`, state you write directly: `const s = useMutable\(\{ hp: 3 \}\)`, read as `s\.hp`, and `setHp\(v\)` becomes `s\.hp = v`\./);
+    // Imported and never called: the import says it.
+    const imported = getCompiler().compile("src/B.tsx", `import { Entity, useState } from "@rge/runtime/jsx";\nexport function B() { return <Entity />; }`).diagnostics;
+    assert.equal(imported.length, 1);
+    assert.match(imported[0]!.message, /^`useState` is replaced by `useMutable`/);
+  });
+
+
   it("an early return in a form it does not take: the form it takes, and the condition in what is returned", () => {
     const e = only(`interface P { hp: number }\nexport function A({ hp }: P) { if (hp <= 0) { return null; } else { } return <Text>{hp}</Text>; }`);
     assert.equal(e.code, "RGE1002");
@@ -64,12 +78,12 @@ describe("what to write instead", () => {
   });
 
   it("setTimeout and setInterval: after and every", () => {
-    assert.match(only(`export function A() { const [n, setN] = useState(0); useMount(() => { setTimeout(() => setN(1), 100); }); return <Text>{n}</Text>; }`).message, /^There is no `setTimeout`: .*`after\(seconds, \(\) => …\)`/);
-    assert.match(only(`export function A() { const [n, setN] = useState(0); useMount(() => { setInterval(() => setN(n + 1), 100); }); return <Text>{n}</Text>; }`).message, /^There is no `setInterval`: .*`every\(seconds, \(\) => …\)`/);
+    assert.match(only(`export function A() { const s = useMutable({ n: 0 }); useMount(() => { setTimeout(() => { s.n = 1; }, 100); }); return <Text>{s.n}</Text>; }`).message, /^There is no `setTimeout`: .*`after\(seconds, \(\) => …\)`/);
+    assert.match(only(`export function A() { const s = useMutable({ n: 0 }); useMount(() => { setInterval(() => { s.n += 1; }, 100); }); return <Text>{s.n}</Text>; }`).message, /^There is no `setInterval`: .*`every\(seconds, \(\) => …\)`/);
   });
 
   it("a misspelt function: the nearest one it knows", () => {
-    assert.match(only(`export function A() { const [n] = useState(0); return <Text>{clmap(n, 0, 1)}</Text>; }`).message, /^'clmap' is not a function the compiler knows \(did you mean 'clamp'\?\)\./);
+    assert.match(only(`export function A() { const s = useMutable({ n: 0 }); return <Text>{clmap(s.n, 0, 1)}</Text>; }`).message, /^'clmap' is not a function the compiler knows \(did you mean 'clamp'\?\)\./);
   });
 
   it("await: the game's steps do not wait", () => {

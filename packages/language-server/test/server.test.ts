@@ -83,7 +83,7 @@ import { useGame } from "./GameState.ts";
 // A component written as in React: two things the compiler knows to say.
 export function Coins() {
   const coins = useGame((s) => s.coins);
-  const [shown, setShown] = useState(false);
+  const st = useMutable({ shown: false });
   return <Entity transform={{ x: coins }} />;
 }
 `;
@@ -118,17 +118,17 @@ describe("the language server", () => {
     assert.equal(missing.code, "RGE1005");
     assert.equal(missing.source, "rge");
     assert.equal(missing.severity, 1);
-    assert.deepEqual(missing.range, { start: { line: 6, character: 28 }, end: { line: 6, character: 43 } }, "useState(false), on the line it is on");
+    assert.deepEqual(missing.range, { start: { line: 6, character: 13 }, end: { line: 6, character: 41 } }, "useMutable({ shown: false }), on the line it is on");
 
     const actions = await client.request("textDocument/codeAction", { textDocument: { uri: uri("src/Coins.tsx") }, range: missing.range, context: { diagnostics: [missing] } });
     assert.equal(actions.result.length, 1);
     const [action] = actions.result;
-    assert.equal(action.title, `Import 'useState' from "@rge/runtime/jsx"`);
+    assert.equal(action.title, `Import 'useMutable' from "@rge/runtime/jsx"`);
     assert.equal(action.isPreferred, true);
     const lines = new LineMap(COMPONENT);
     const edits = action.edit.changes[uri("src/Coins.tsx")].map((e: { range: { start: never; end: never }; newText: string }) => ({ start: lines.offset(e.range.start), end: lines.offset(e.range.end), text: e.newText }));
     const fixed = applyEdits(COMPONENT, edits);
-    assert.match(fixed, /^import \{ Entity, useState \} from "@rge\/runtime\/jsx";/);
+    assert.match(fixed, /^import \{ Entity, useMutable \} from "@rge\/runtime\/jsx";/);
 
     client.send({ method: "textDocument/didChange", params: { textDocument: { uri: uri("src/Coins.tsx"), version: 2 }, contentChanges: [{ text: fixed }] } });
     assert.deepEqual((await client.diagnostics(uri("src/Coins.tsx"), 2)).params.diagnostics, []);

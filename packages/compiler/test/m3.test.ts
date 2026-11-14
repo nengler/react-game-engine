@@ -17,24 +17,22 @@ after(() => {
 
 const RUNNER = `
 function Runner() {
-  const [lives, setLives] = useState(3);
-  const [x, setX] = useState(10);
-  const [laps, setLaps] = useState(0);
+  const s = useMutable({ lives: 3, x: 10, laps: 0 });
   const travelled = useRef(0);
   useUpdate((dt) => {
-    setX((x) => x + 60 * dt);
+    s.x += 60 * dt;
     travelled.current += 60 * dt;
     if (travelled.current >= 100) {
       travelled.current -= 100;
-      setLaps((laps) => laps + 1);
+      s.laps += 1;
     }
   });
   return (
-    <Entity name="Runner" transform={{ x, y: -5, rotation: x / 100, scaleX: 2 }}>
-      <Sprite image={x > 100 ? "run.png" : "idle.png"} />
-      <Sprite image={lives > 0 ? "alive.png" : "dead.png"} />
+    <Entity name="Runner" transform={{ x: s.x, y: -5, rotation: s.x / 100, scaleX: 2 }}>
+      <Sprite image={s.x > 100 ? "run.png" : "idle.png"} />
+      <Sprite image={s.lives > 0 ? "alive.png" : "dead.png"} />
       <Entity name="shadow" transform={{ y: 4 }} />
-      <Collider width={4} height={4} onCollisionEnter={() => setLives((n) => n - 1)} />
+      <Collider width={4} height={4} onCollisionEnter={() => { s.lives -= 1; }} />
     </Entity>
   );
 }
@@ -54,11 +52,11 @@ function Timer() {
 
 interface RunnerInstance extends Entity {
   lives: number;
-  x: number;
-  laps: number;
   travelled: number;
   readonly sprite: Sprite;
   readonly entity: Entity;
+  s: { x: number;
+  laps: number };
 }
 interface TimerInstance extends Entity {
   elapsed: number;
@@ -80,7 +78,7 @@ function ir(source: string): ComponentIR {
 function codes(body: string, extra = ""): string[] {
   return compileErrors(`
 function C() {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   ${extra}
   ${body}
   return <Entity name="C"><Sprite image="a.png" /></Entity>;
@@ -96,7 +94,7 @@ describe("M3: IR shape", () => {
     );
     const x = c.root.transform[0]!;
     assert.ok(x.kind === "DynamicProp" && x.value.kind === "StateRead");
-    assert.deepEqual(x.dependencies, [{ kind: "State", state: "Runner.x" }]);
+    assert.deepEqual(x.dependencies, [{ kind: "State", state: "Runner.s.x" }]);
     assert.ok(!c.root.props.some((p) => p.name === "transform"), "transform is not a prop");
     const shadow = elementOf(c.root.children[2]!);
     assert.deepEqual(shadow.transform.map((p) => [p.name, p.kind]), [["y", "StaticProp"]]);
@@ -127,8 +125,8 @@ describe("M3: generated code", () => {
     assert.match(constructor, /this\.transform\.scaleX = 2;/);
     assert.match(constructor, /this\.entity\.transform\.y = 4;\n\s*this\.addChild\(this\.entity\);/, "a child's transform is set before it is attached");
     const render = code.slice(code.indexOf("override render"));
-    assert.match(render, /const (\$\d+) = this\.x;[^]*?this\.transform\.x = \1;/);
-    assert.match(render, /const (\$\d+) = \(?this\.x \/ 100\)?;[^]*?this\.transform\.rotation = \1;/);
+    assert.match(render, /const (\$\d+) = this\.\$s_x;[^]*?this\.transform\.x = \1;/);
+    assert.match(render, /const (\$\d+) = \(?this\.\$s_x \/ 100\)?;[^]*?this\.transform\.rotation = \1;/);
     assert.doesNotMatch(render, /transform\.y/, "static fields are not re-applied");
   });
 
@@ -161,7 +159,7 @@ describe("M3: runtime behaviour", () => {
     world.mount(runner);
     const transform = runner.transform;
     assert.equal(world.tick(1), 1);
-    assert.equal(runner.x, 70);
+    assert.equal(runner.s.x, 70);
     assert.equal(runner.transform.x, 70);
     assert.equal(runner.transform.rotation, 0.7);
     assert.equal(runner.transform.y, -5);
@@ -185,42 +183,40 @@ describe("M3: runtime behaviour", () => {
     const runner = new Runner();
     world.mount(runner);
     world.tick(1); // travelled 60: no lap
-    assert.equal(runner.laps, 0);
+    assert.equal(runner.s.laps, 0);
     world.tick(1); // travelled 120 → a lap, 20 carried over
-    assert.equal(runner.laps, 1);
+    assert.equal(runner.s.laps, 1);
     assert.equal(runner.travelled, 20);
   });
 
   it("a conditional <Entity> gets its transform when it mounts and keeps it in sync", async () => {
-    const { Spawner } = await load<{ Spawner: new () => Entity & { setOn: (v: boolean) => void; setY: (v: number) => void } }>(
+    const { Spawner } = await load<{ Spawner: new () => Entity & { s: { on: boolean; y: number } } }>(
       compile(`function Spawner() {
-  const [on, setOn] = useState(false);
-  const [y, setY] = useState(3);
-  return <Entity name="S">{on && <Entity name="marker" transform={{ x: 7, y }} />}</Entity>;
+  const s = useMutable({ on: false, y: 3 });
+  return <Entity name="S">{s.on && <Entity name="marker" transform={{ x: 7, y: s.y }} />}</Entity>;
 }`),
     );
     const world = new World();
     const spawner = new Spawner();
     world.mount(spawner);
-    spawner.setOn(true);
+    spawner.s.on = (true);
     world.flush();
     const marker = spawner.children[0] as Entity;
     assert.deepEqual([marker.transform.x, marker.transform.y], [7, 3]);
-    spawner.setY(9);
+    spawner.s.y = (9);
     world.flush();
     assert.equal(spawner.children[0], marker);
     assert.equal(marker.transform.y, 9);
   });
 
   it("child transforms are relative to the parent unless `global`", async () => {
-    const { Ship } = await load<{ Ship: new () => Entity & { setX: (v: number) => void; setPinned: (v: boolean) => void; entity: Entity; entity2: Entity } }>(
+    const { Ship } = await load<{ Ship: new () => Entity & { s: { x: number; pinned: boolean }; entity: Entity; entity2: Entity } }>(
       compile(`function Ship() {
-  const [x, setX] = useState(100);
-  const [pinned, setPinned] = useState(true);
+  const s = useMutable({ x: 100, pinned: true });
   return (
-    <Entity name="Ship" transform={{ x, y: 50 }}>
+    <Entity name="Ship" transform={{ x: s.x, y: 50 }}>
       <Entity name="turret" transform={{ x: 10 }} />
-      <Entity name="hud" transform={{ x: 5, y: 5, global: pinned }} />
+      <Entity name="hud" transform={{ x: 5, y: 5, global: s.pinned }} />
     </Entity>
   );
 }`),
@@ -233,34 +229,34 @@ describe("M3: runtime behaviour", () => {
     assert.deepEqual([turret.worldTransform().x, turret.worldTransform().y], [110, 50]);
     assert.deepEqual([hud.worldTransform().x, hud.worldTransform().y], [5, 5]);
 
-    ship.setX(200);
+    ship.s.x = (200);
     world.flush();
     assert.equal(turret.worldTransform().x, 210, "the child follows its parent");
     assert.equal(hud.worldTransform().x, 5, "a global child does not");
 
-    ship.setPinned(false);
+    ship.s.pinned = (false);
     world.flush();
     assert.deepEqual([hud.worldTransform().x, hud.worldTransform().y], [205, 55], "`global` can come from state");
   });
 
   it("places built-in elements too: a Sprite's transform is relative to its parent", async () => {
     const compiled = compile(`function Coin() {
-  const [bob, setBob] = useState(0);
+  const s = useMutable({ bob: 0 });
   return (
     <Entity name="Coin" transform={{ x: 50, y: 20 }}>
-      <Sprite image="coin.png" transform={{ y: bob, rotation: 0.5 }} />
+      <Sprite image="coin.png" transform={{ y: s.bob, rotation: 0.5 }} />
       <Collider width={8} height={8} transform={{ x: -4, y: -4 }} />
     </Entity>
   );
 }`);
     assert.deepEqual(typeCheck(compiled), []);
-    const { Coin } = await load<{ Coin: new () => Entity & { setBob: (v: number) => void; sprite: Sprite; collider: GameObject } }>(compiled);
+    const { Coin } = await load<{ Coin: new () => Entity & { s: { bob: number }; sprite: Sprite; collider: GameObject } }>(compiled);
     const world = new World();
     const coin = new Coin();
     world.mount(coin);
     assert.deepEqual([coin.sprite.worldTransform().x, coin.sprite.worldTransform().y, coin.sprite.worldTransform().rotation], [50, 20, 0.5]);
     assert.deepEqual([coin.collider.worldTransform().x, coin.collider.worldTransform().y], [46, 16]);
-    coin.setBob(3);
+    coin.s.bob = (3);
     world.flush();
     assert.equal(coin.sprite.worldTransform().y, 23);
   });
@@ -276,7 +272,7 @@ describe("M3: diagnostics", () => {
     compileErrors(`
 function Child() { return <Entity name="Child" />; }
 function C() {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   ${extra}
   return <Entity name="C">${jsx}</Entity>;
 }`).map((d) => d.code);
@@ -326,13 +322,13 @@ function C() {
       "const r = useRef(1, 2);",
       "const r = useRef<Sprite>(null);",
       "const r = useRef(null);",
-      "const r = useRef(n);",
+      "const r = useRef(s.n);",
       "let r = useRef(0);",
       "const { current } = useRef(0);",
     ]) {
       assert.ok(codes("", extra).includes(DiagnosticCode.InvalidUseRef), extra);
     }
-    // As with useState, a type argument that disagrees with the initial value fails the type-check.
+    // A type argument that disagrees with the initial value fails the type-check.
     const mismatched = compile(`function C() { const r = useRef<number>("a"); return <Entity name="C" />; }`);
     assert.deepEqual(typeCheck(mismatched).map((d) => d.code), [DiagnosticCode.GeneratedTypeError]);
   });
@@ -347,12 +343,12 @@ function C() {
   ${body}
 }`).map((d) => d.code);
     assert.deepEqual(outside(`return <Entity name="C"><Sprite image={r.current > 0 ? "a" : "b"} /></Entity>;`), [DiagnosticCode.HandleReadOutsideHandler]);
-    assert.deepEqual(outside(`const [n] = useState(r.current); return <Entity name="C" />;`), [DiagnosticCode.HandleReadOutsideHandler]);
+    assert.deepEqual(outside(`const s = useMutable({ n: r.current }); return <Entity name="C" />;`), [DiagnosticCode.HandleReadOutsideHandler]);
     assert.deepEqual(outside(`const big = r.current > 5; return <Entity name="C" />;`), [DiagnosticCode.HandleReadOutsideHandler]);
   });
 
   it("rejects ref names that collide with state", () => {
-    assert.ok(codes("", "const n = useRef(0);").includes(DiagnosticCode.InvalidUseRef));
+    assert.ok(codes("", "const s = useRef(0);").includes(DiagnosticCode.InvalidUseRef));
   });
 
   it("rejects bad uses of a ref, and assignments to anything else", () => {
@@ -361,6 +357,6 @@ function C() {
     assert.deepEqual(codes("useUpdate(() => { r.other = 1; });", r), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes("useUpdate(() => { r = 1; });", r), [DiagnosticCode.UnsupportedStatement]);
     assert.deepEqual(codes("useUpdate(() => { r.current |= 1; });", r), [DiagnosticCode.UnsupportedStatement]);
-    assert.deepEqual(codes("useUpdate(() => { n = 2; });"), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(codes("useUpdate(() => { s = 2; });"), [DiagnosticCode.UnsupportedStatement]);
   });
 });

@@ -1,4 +1,4 @@
-import { Collider, Entity, Shape, Sprite, useState, useUpdate } from "@rge/runtime/jsx";
+import { Collider, Entity, Shape, Sprite, useMutable, useUpdate } from "@rge/runtime/jsx";
 import { fx, sfx } from "./effects.ts";
 
 interface ShotProps {
@@ -23,25 +23,25 @@ interface ShotProps {
  * lands. Every enemy whose collider the blast touches decides whether it was hit (see `Enemy`).
  */
 export function Shot({ id, kind, x, y, tx, ty, flight, target, damage, radius, slow, onLanded }: ShotProps) {
-  const [t, setT] = useState(0);
-  const k = Math.min(t / flight, 1);
+  const s = useMutable({ t: 0 });
+  const k = Math.min(s.t / flight, 1);
   const arc = kind === "mortar" ? -Math.sin(k * Math.PI) * 14 : 0;
-  const landing = kind === "mortar" ? t >= flight : t === 0;
+  const landing = kind === "mortar" ? s.t >= flight : s.t === 0;
   // The blast's box covers its circle, and the box of an enemy whose middle is in it (see `Enemy`'s collider).
   const reach = radius + 6;
 
   useUpdate((dt) => {
-    if (t === 0 && kind === "bolt") fx.burst("hit", tx, ty);
-    if (t >= flight) {
+    if (s.t === 0 && kind === "bolt") fx.burst("hit", tx, ty);
+    if (s.t >= flight) {
       onLanded(id);
       return;
     }
-    const next = Math.min(flight, t + dt);
+    const next = Math.min(flight, s.t + dt);
     if (kind === "mortar" && next >= flight) {
       sfx.play("boom");
       fx.burst("boom", tx, ty);
     }
-    setT(next);
+    s.t = next;
   });
 
   return (

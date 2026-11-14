@@ -1,4 +1,4 @@
-import { Flex, Text, useInput, useState } from "@rge/runtime/jsx";
+import { Flex, Text, useInput, useMutable } from "@rge/runtime/jsx";
 import { type Row, wrap } from "./rules/menu.ts";
 
 interface MenuProps {
@@ -18,11 +18,11 @@ interface MenuProps {
  * on what is chosen. Each row is a label and, from 170 pixels in, its value (a volume, the keys).
  */
 export function Menu({ top, rows, start = 0, onChoose, onAdjust }: MenuProps) {
-  const [cursor, setCursor] = useState(start);
+  const s = useMutable({ cursor: start });
   useInput((input) => {
-    const id = rows[cursor]?.id ?? "";
-    if (input.pressed("up")) setCursor((c) => wrap(c - 1, rows.length));
-    if (input.pressed("down")) setCursor((c) => wrap(c + 1, rows.length));
+    const id = rows[s.cursor]?.id ?? "";
+    if (input.pressed("up")) s.cursor = wrap(s.cursor - 1, rows.length);
+    if (input.pressed("down")) s.cursor = wrap(s.cursor + 1, rows.length);
     if (input.pressed("left")) onAdjust?.(id, -1);
     if (input.pressed("right")) onAdjust?.(id, 1);
     if (input.pressed("confirm")) onChoose(id);
@@ -30,7 +30,7 @@ export function Menu({ top, rows, start = 0, onChoose, onAdjust }: MenuProps) {
   return (
     <Flex direction="column" gap={1} x={10} y={top}>
       {rows.map((row, i) => (
-        <Flex key={row.id} direction="row" width={300} height={12} paddingLeft={4} background={i === cursor ? "#2b3350" : undefined}>
+        <Flex key={row.id} direction="row" width={300} height={12} paddingLeft={4} background={i === s.cursor ? "#2b3350" : undefined}>
           <Text width={166}>{row.label}</Text>
           <Text color="#a7b0c8">{row.value}</Text>
         </Flex>

@@ -31,7 +31,7 @@ after(() => {
 });
 
 const WORLD = `
-import { type Child, Entity, Sprite, useMount, useRef, useState, useUpdate } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite, useMount, useRef, useMutable, useUpdate } from "@rge/runtime/jsx";
 
 interface EnemyProps {
   speed: number;
@@ -72,9 +72,9 @@ interface MoverProps {
 }
 
 export function Mover({ speed = 10 }: MoverProps) {
-  const [x, setX] = useState(0);
-  useUpdate((dt) => setX((x) => x + dt * speed));
-  return <Entity name="Mover" transform={{ x }} />;
+  const s = useMutable({ x: 0 });
+  useUpdate((dt) => { s.x += dt * speed; });
+  return <Entity name="Mover" transform={{ x: s.x }} />;
 }
 
 interface ProbeProps {
@@ -234,7 +234,7 @@ describe("M6: project checks and outputs", () => {
   it("does not follow a condition: only static containment cycles", () => {
     const files = compileProject({
       "CondA.tsx": `import { CondB } from "./CondB.tsx";\nexport function CondA() { return <Entity name="a"><CondB /></Entity>; }`,
-      "CondB.tsx": `import { CondA } from "./CondA.tsx";\nexport function CondB() { const [on, setOn] = useState(false); return <Entity name="b">{on && <CondA />}</Entity>; }`,
+      "CondB.tsx": `import { CondA } from "./CondA.tsx";\nexport function CondB() { const s = useMutable({ on: false }); return <Entity name="b">{s.on && <CondA />}</Entity>; }`,
     });
     assert.deepEqual(checkProject(Object.entries(files).map(([name, m]) => ({ ir: m.ir, generatedName: name.replace(".tsx", ".ts") }))), []);
   });

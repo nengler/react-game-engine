@@ -17,7 +17,7 @@ const check = (imports: string, body: string, extra = "") =>
   getCompiler().typeCheckSources([
     {
       fileName: `${process.cwd()}/.test-output/B${Math.random()}.tsx`,
-      text: `import { Entity, Hud, Camera, Tilemap, Particles, Fade, Music, Text, freeze, useSound, useUpdate, useState, ${imports} } from "@rge/runtime/jsx";\n${extra}\nfunction C() { const [on, setOn] = useState(false); const [n, setN] = useState(0); return <Entity name="C">${body}</Entity>; }`,
+      text: `import { Entity, Hud, Camera, Tilemap, Particles, Fade, Music, Text, freeze, useSound, useUpdate, useMutable, ${imports} } from "@rge/runtime/jsx";\n${extra}\nfunction C() { const s = useMutable({ on: false, n: 0 }); const on = s.on; const n = s.n; return <Entity name="C">${body}</Entity>; }`,
     },
   ]);
 
@@ -43,12 +43,12 @@ describe("authored source of the new built-ins type-checks, and wrong props do n
     assert.deepEqual(check("Screen", `<Music src="theme.ogg" playing={on} volume={0.5} loop={false} fade={0.3} />`), []);
     assert.ok(check("Screen", `<Music />`).length > 0, "src is required");
     assert.ok(check("Screen", `<Music src="a.ogg" volume="loud" />`).length > 0);
-    const code = compile(`function S() { const hit = useSound("hit.wav"); const [n] = useState(1); useUpdate(() => { hit(); hit(0.5); hit(n / 2); }); return <Entity name="S" />; }`, "S.tsx").code;
-    assert.match(code, /\.play\(\);[^]*\.play\(0\.5\);[^]*\.play\(this\.n \/ 2\);/);
+    const code = compile(`function S() { const hit = useSound("hit.wav"); const s = useMutable({ n: 1 }); useUpdate(() => { hit(); hit(0.5); hit(s.n / 2); }); return <Entity name="S" />; }`, "S.tsx").code;
+    assert.match(code, /\.play\(\);[^]*\.play\(0\.5\);[^]*\.play\(this\.#\$s_nNext \/ 2\);/);
   });
 
   it("freeze is a statement in a handler, and nowhere else", () => {
-    const ok = compile(`function F() { const [hit, setHit] = useState(false); useUpdate(() => { if (hit) freeze(3); }); return <Entity name="F" />; }`, "F.tsx");
+    const ok = compile(`function F() { const s = useMutable({ hit: false }); useUpdate(() => { if (s.hit) freeze(3); }); return <Entity name="F" />; }`, "F.tsx");
     assert.match(ok.code, /freeze\(3\)/);
     assert.match(ok.code, /import \{[^}]*freeze[^}]*\} from "@rge\/runtime"/);
   });
@@ -59,29 +59,31 @@ describe("the built-ins in compiled components", () => {
     registerTilemaps({});
     const compiled = compile(
       `function Hero() {
-        const [shake, setShake] = useShake();
-        const [dead, setDead] = useState(false);
+        const shake = useShake();
+        const s = useMutable({ dead: false });
         useInput((input) => {
           if (input.pressed("Z")) {
-            setShake({ strength: 2, duration: 0.2 });
+            shake.strength = 2;
+            shake.duration = 0.2;
+            shake.elapsed = 0;
           }
         });
         return (
           <Entity name="Hero">
-            {dead && <Particles burst={6} lifetime={0.3} speed={50} spread={180} />}
+            {s.dead && <Particles burst={6} lifetime={0.3} speed={50} spread={180} />}
             <Camera shake={shake} bounds={[0, 0, 320, 180]} slide={0.3} />
           </Entity>
         );
       }`,
       "Hero.tsx",
     );
-    const { Hero } = await load<{ Hero: new () => Entity & { setDead(v: boolean): void } }>(compiled);
+    const { Hero } = await load<{ Hero: new () => Entity & { s: { [field: string]: unknown } } }>(compiled);
     const world = new World();
     const hero = new Hero();
     world.mount(hero);
     const emitters = (): Particles[] => hero.children.filter((c): c is Particles => c instanceof Particles);
     assert.equal(emitters().length, 0);
-    hero.setDead(true);
+    hero.s.dead = (true);
     world.tick(1 / 60);
     assert.equal(emitters().length, 1);
     world.tick(1 / 60);
@@ -101,11 +103,11 @@ describe("the built-ins in compiled components", () => {
 
   it("builds a Tilemap and a Fade, and lowers a literal array and a bitmap font to their fields", () => {
     const code = compile(
-      `function L() { const [on] = useState(false); return <Entity name="L"><Tilemap map="m" image="t.png" /><Hud><Fade on={on} color="#000" /><Text font="f.png" size={8}>x</Text></Hud></Entity>; }`,
+      `function L() { const s = useMutable({ on: false }); return <Entity name="L"><Tilemap map="m" image="t.png" /><Hud><Fade on={s.on} color="#000" /><Text font="f.png" size={8}>x</Text></Hud></Entity>; }`,
       "L.tsx",
     ).code;
     assert.match(code, /new Tilemap\(\{ map: "m", image: "t\.png" \}\)/);
-    assert.match(code, /new Fade\(\{ on: this\.on, color: "#000" \}\)/);
+    assert.match(code, /new Fade\(\{ on: this\.\$s_on, color: "#000" \}\)/);
     assert.match(code, /font: "f\.png"/);
     void [Fade, Text, Tilemap];
   });
@@ -126,22 +128,22 @@ describe("the build-time asset check (rge-compile --assets)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   };
-  const SOURCE = `import { Entity, Sprite, AnimatedSprite, Tilemap, Text, useSound, useState } from "@rge/runtime/jsx";
+  const SOURCE = `import { Entity, Sprite, AnimatedSprite, Tilemap, Text, useSound, useMutable } from "@rge/runtime/jsx";
 export function A() {
-  const [on] = useState(false);
+  const s = useMutable({ on: false });
   const jump = useSound("jump.wav");
   useUpdate(() => { jump(); });
   return (
     <Entity name="A">
       <Sprite image="hero.png" />
       <AnimatedSprite sheet="sheet.png" animations="a:0@1" />
-      <AnimatedSprite frames={on ? ["a1.png", "a2.png"] : ["b1.png"]} />
+      <AnimatedSprite frames={s.on ? ["a1.png", "a2.png"] : ["b1.png"]} />
       <Tilemap map="m" image="tiles.png" />
       <Text font="font.png">x</Text>
     </Entity>
   );
 }
-`.replace("useSound, useState", "useSound, useState, useUpdate");
+`.replace("useSound, useMutable", "useSound, useMutable, useUpdate");
 
   it("passes when every named file is there", () => {
     const r = compileProject(SOURCE, ["jump.wav", "hero.png", "sheet.png", "a1.png", "a2.png", "b1.png", "tiles.png", "font.png"]);
@@ -159,10 +161,10 @@ export function A() {
   });
 
   it("checks a Flex's background images like a sprite's: a missing one is named, with the nearest file for a typo", () => {
-    const source = `import { Flex, useState } from "@rge/runtime/jsx";
+    const source = `import { Flex, useMutable } from "@rge/runtime/jsx";
 export function Panel() {
-  const [on] = useState(false);
-  return <Flex backgroundImage="panel.png" hoverBackgroundImage={on ? "panel-hover.png" : "panel-hoer.png"} disabledBackgroundImage="gone.png" slice={8} />;
+  const s = useMutable({ on: false });
+  return <Flex backgroundImage="panel.png" hoverBackgroundImage={s.on ? "panel-hover.png" : "panel-hoer.png"} disabledBackgroundImage="gone.png" slice={8} />;
 }
 `;
     const files = ["panel.png", "panel-hover.png", "panel-hoer.png", "gone.png"];
@@ -179,9 +181,9 @@ describe("useUpdate takes the input, and an action can take it", () => {
   it("a handler gets the same input as useInput, and passes it to a plain function", async () => {
     const compiled = compile(
       `function P() {
-        const [n, setN] = useState(0);
-        useUpdate((dt, input) => { if (input.down("Space")) { setN((n) => n + dt); } });
-        return <Entity name="P" transform={{ x: n }} />;
+        const s = useMutable({ n: 0 });
+        useUpdate((dt, input) => { if (input.down("Space")) { s.n += dt; } });
+        return <Entity name="P" transform={{ x: s.n }} />;
       }`,
       "P.tsx",
     );

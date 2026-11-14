@@ -1,4 +1,4 @@
-import { NodeFlags, SyntaxKind, type ArrowFunction, type BinaryExpression, type Expression, type Node, type Statement } from "typescript/ast";
+import { NodeFlags, SyntaxKind, type ArrowFunction, type BinaryExpression, type Expression, type Node, type PropertyAccessExpression, type Statement } from "typescript/ast";
 import {
   isArrowFunction,
   isBinaryExpression,
@@ -35,6 +35,7 @@ import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import {
   localId,
   type AssignOperator,
+  type BinaryOperator,
   type AssignStmtIR,
   type AssignTargetIR,
   type LocalConstStmtIR,
@@ -61,6 +62,8 @@ export interface LoweringContext {
   /** Resolves `r.current.prop`; reports its own diagnostic and returns null if `node` is not a valid assignment target. */
   lowerAssignTarget(node: Expression): AssignTargetIR | null;
   stateType(state: StateId): TypeIR;
+  /** `s.vx` on a `useMutable` value `s`: its state slot. Undefined if `node` is not on one, "error" after reporting. */
+  mutableField(node: PropertyAccessExpression): StateId | "error" | undefined;
   /** False in a `useUnmount` handler: the component is going away, so a state update could never render. */
   canSetState(): boolean;
   /** In statements of the component body, which run during render (see `LoweringMode.inRenderBlock`). */
@@ -606,6 +609,31 @@ const ASSIGNMENT_TOKENS: ReadonlySet<SyntaxKind> = new Set([
   SyntaxKind.GreaterThanGreaterThanEqualsToken, SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
 ]);
 
+/**
+ * `s.vx = value`, `s.vx += value`, `s.vx++` on a `useMutable` value: a write of that state. The handler reads it back at once (a `live`
+ * read), so `s.vx += 1; if (s.vx > 3) …` sees the sum. Undefined if `target` is not a `useMutable` field (the caller carries on).
+ */
+function lowerMutableWrite(ctx: LoweringContext, target: Expression, operator: AssignOperator, rhs: Expression | null, at: Node): StatementIR | null | undefined {
+  const node = unwrapParens(target);
+  if (!isPropertyAccessExpression(node)) return undefined;
+  const state = ctx.mutableField(node);
+  if (state === undefined) return undefined;
+  if (state === "error") return null;
+  if (ctx.inRenderBlock()) {
+    ctx.error(DiagnosticCode.InvalidComponentBody, "A `useMutable` field cannot be written in the component body: it runs on every render. Write it in a handler (`useUpdate`, `useMount`, a callback prop).", at);
+    return null;
+  }
+  if (!ctx.canSetState()) {
+    ctx.error(DiagnosticCode.UnsupportedStatement, "A `useMutable` field cannot be written in `useUnmount`: the component is going away, so the update could never render. Tell the parent with a callback prop (`onGone?.()`), or write a ref.", at);
+    return null;
+  }
+  const value = rhs === null ? ({ kind: "NumberLiteral", value: 1 } as ExprIR) : ctx.lowerExpression(rhs);
+  if (!value) return null;
+  if (operator === "=") return { kind: "SetState", state, value };
+  const read: ExprIR = { kind: "StateRead", state, live: true };
+  return { kind: "SetState", state, value: { kind: "Binary", operator: operator.slice(0, -1) as BinaryOperator, left: read, right: value } };
+}
+
 /** `target = value` / `target += value` (ref properties). */
 function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): StatementIR | null {
   const operator = ASSIGN_OPERATORS.get(expression.operatorToken.kind);
@@ -613,6 +641,8 @@ function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): St
     ctx.error(DiagnosticCode.UnsupportedStatement, `Supported assignment operators: ${[...ASSIGN_OPERATORS.values()].join(", ")}.`, expression.operatorToken);
     return null;
   }
+  const mutable = lowerMutableWrite(ctx, expression.left, operator, expression.right, expression);
+  if (mutable !== undefined) return mutable;
   const target = ctx.lowerAssignTarget(unwrapParens(expression.left));
   const value = ctx.lowerExpression(expression.right);
   // `best = enemy`: from here on `best` may be state's own object, so it is no longer the handler's to change in place.
@@ -632,6 +662,8 @@ function lowerIncrement(ctx: LoweringContext, expression: Expression): Statement
   const operator = expression.operator === SyntaxKind.PlusPlusToken ? "+=" : expression.operator === SyntaxKind.MinusMinusToken ? "-=" : null;
   if (operator === null) return undefined;
   const operand = unwrapParens(expression.operand);
+  const mutable = lowerMutableWrite(ctx, operand, operator, null, expression);
+  if (mutable !== undefined) return mutable;
   // Only a local, `ref.current` or a member of a handler's own value (`best.hits++`); anything else (`count++` on state) is left to
   // the expression's own diagnostic.
   const object = isPropertyAccessExpression(operand) ? unwrapParens(operand.expression) : null;

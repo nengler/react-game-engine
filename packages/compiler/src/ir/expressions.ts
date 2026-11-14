@@ -120,6 +120,11 @@ export interface NullLiteralIR {
 export interface StateReadIR {
   readonly kind: "StateRead";
   readonly state: StateId;
+  /**
+   * A handler's read of a `useMutable` field: the value as this handler (or an earlier one this step) last wrote it, not the
+   * committed one render sees.
+   */
+  readonly live?: true;
 }
 
 /** A `const` local declared in a function body. */
@@ -203,6 +208,8 @@ export interface ArrayElementIR {
 export interface ObjectLiteralIR {
   readonly kind: "ObjectLiteral";
   readonly properties: readonly ObjectPropertyIR[];
+  /** A `useMutable` read whole (`total(s)`): a copy of its fields, each a `StateRead`. */
+  readonly mutableCopy?: true;
 }
 
 export type ObjectPropertyIR =

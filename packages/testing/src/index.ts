@@ -203,13 +203,22 @@ export class Rendered<Root extends GameObject = GameObject> {
   }
 
   /**
-   * A component's own state and refs by the names its source gives them (`{ health: 3, cooldown: 0.2 }`): what hot reload keeps,
-   * read back. Defaults to the rendered component; pass any compiled component in the tree.
+   * A component's own state and refs by the names its source gives them (`{ health: 3, cooldown: 0.2 }`, and a `useMutable` as an object,
+   * `{ s: { vx: 0 } }`): what hot reload keeps, read back. Defaults to the rendered component; pass any compiled component in the tree.
    */
   state(component: GameObject = this.root): Record<string, unknown> {
     const saved = component.saveHotState() ?? {};
     const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(saved)) out[key.slice(key.indexOf(".") + 1)] = value;
+    for (const [key, value] of Object.entries(saved)) {
+      // `Hero.hp`, or `Hero.s.vx` for a `useMutable` field: a name cannot hold a dot, so a second one always means a field.
+      const [name, field] = key.slice(key.indexOf(".") + 1).split(".") as [string, string | undefined];
+      if (field === undefined) {
+        out[name] = value;
+        continue;
+      }
+      const group = (out[name] ??= {}) as Record<string, unknown>;
+      group[field] = value;
+    }
     return out;
   }
 

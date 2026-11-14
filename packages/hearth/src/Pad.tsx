@@ -1,4 +1,4 @@
-import { Entity, Pointer, Sprite, useState } from "@rge/runtime/jsx";
+import { Entity, Pointer, Sprite, useMutable } from "@rge/runtime/jsx";
 import type { Built, Fired } from "./battle.ts";
 import { useGame } from "./GameState.ts";
 import { Tower } from "./Tower.tsx";
@@ -21,11 +21,11 @@ interface PadProps {
 export function Pad({ id, x, y, seed, tower, onFire }: PadProps) {
   const selected = useGame((s) => s.cursor === id);
   const { point, select } = useGame.actions();
-  const [hovered, setHovered] = useState(false);
+  const st = useMutable({ hovered: false });
 
   return (
     <Entity x={x} y={y}>
-      {tower !== null && <Tower seed={seed} kind={tower.kind} level={tower.level} x={x} y={y} ring={selected || hovered} onFire={onFire} />}
+      {tower !== null && <Tower seed={seed} kind={tower.kind} level={tower.level} x={x} y={y} ring={selected || st.hovered} onFire={onFire} />}
       <Pointer
         width={10}
         height={10}
@@ -35,8 +35,8 @@ export function Pad({ id, x, y, seed, tower, onFire }: PadProps) {
         autoFocus={selected}
         onFocus={() => point(id)}
         onPress={() => select(id)}
-        onPointerEnter={() => setHovered(true)}
-        onPointerLeave={() => setHovered(false)}
+        onPointerEnter={() => { st.hovered = true; }}
+        onPointerLeave={() => { st.hovered = false; }}
       />
       {selected && <Sprite image="cursor.png" originX={7} originY={7} />}
     </Entity>

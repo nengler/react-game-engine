@@ -1,5 +1,5 @@
 // Layer 1 of ComponentGenerator: the handler methods, state setters and updaters, and the statements and callbacks inside them.
-import { assertNever, type FunctionIR, type AssignStmtIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId } from "../ir/types.ts";
+import { assertNever, type FunctionIR, type AssignStmtIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId, type ExprIR } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
 import { walkExpr } from "../ir/walk.ts";
 import { param, annotated, pendingRef, propertyKey } from "./helpers.ts";
@@ -234,6 +234,30 @@ export class HandlerEmitter extends ExpressionEmitter {
   }
 
   /**
+   * `e` as a handler reads it: each read of a `useMutable` field `live`, and each memo that reads one under its `@live` key (the form
+   * the transform gives a derived value read in a handler). The IR is plain data, so this is a copy with those nodes changed.
+   */
+  protected live(e: ExprIR): ExprIR {
+    const mutable = new Set(this.c.state.filter((s) => s.mutable !== undefined).map((s) => s.id));
+    let changed = false;
+    const map = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(map);
+      if (value === null || typeof value !== "object") return value;
+      const node = value as Record<string, unknown>;
+      if (node["kind"] === "StateRead" && mutable.has(node["state"] as StateId)) {
+        changed = true;
+        return { ...node, live: true };
+      }
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(node)) out[k] = map(v);
+      if (node["kind"] === "Memo" && JSON.stringify(out) !== JSON.stringify(node)) out["key"] = `${String(node["key"])}@live`;
+      return out;
+    };
+    const result = map(e) as ExprIR;
+    return changed ? result : e;
+  }
+
+  /**
    * A callback passed to a child, handed to a function (`settings.subscribe(() => …)`) or returned as a cleanup: an arrow
    * with unannotated parameters, typed by where it goes.
    */
@@ -243,7 +267,9 @@ export class HandlerEmitter extends ExpressionEmitter {
       // A callback made under a condition reads state through `this`, which TypeScript does not narrow inside a function, as it
       // narrows the `const` the source's arrow closed over. `$assume` narrows it again; it checks nothing at run time, so a callback
       // still runs as written when the condition no longer holds (a `useUnmount` telling the parent it went).
-      const conditions = this.mode.conditions;
+      // The callback is a handler: it reads `useMutable` fields, and what is worked out from them, as they are when it runs (a
+      // `live` read, a `@live` memo), so the condition is assumed in that form, the one its reads take.
+      const conditions = this.mode.conditions.map((c) => this.live(c));
       if (conditions.length === 0) {
         this.stmts(fn.body);
         return;

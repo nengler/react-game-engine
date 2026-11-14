@@ -18,7 +18,7 @@ interface Item { id: string; name: string; count: number }
 interface Row { id: string; label: string }
 interface InventoryProps { items: Item[] }
 export function Inventory({ items }: InventoryProps) {
-  const [title, setTitle] = useState("Bag");
+  const s = useMutable({ title: "Bag" });
   const rows: Row[] = [];
   let total = 0;
   for (const item of items) {
@@ -26,9 +26,9 @@ export function Inventory({ items }: InventoryProps) {
     rows.push({ id: item.id, label: \`\${item.name} x\${item.count}\` });
     total += item.count;
   }
-  const heading = \`\${title} (\${total})\`;
+  const heading = \`\${s.title} (\${total})\`;
   useInput((input) => {
-    if (input.pressed("Space")) setTitle("Pack");
+    if (input.pressed("Space")) s.title = "Pack";
   });
   return (
     <Entity>
@@ -60,11 +60,11 @@ describe("statements in the component body", () => {
     const compiled = compile(`
 interface P { n: number }
 export function Counter({ n }: P) {
-  const [other, setOther] = useState(0);
+  const s = useMutable({ other: 0 });
   let sum = 0;
   for (let i = 1; i <= n; i++) sum += i;
-  useUpdate(() => setOther((o) => o + 1));
-  return <Text>{\`\${sum} \${other}\`}</Text>;
+  useUpdate(() => { s.other += 1; });
+  return <Text>{\`\${sum} \${s.other}\`}</Text>;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
     const { Counter } = await load<{ Counter: new (p: { n: number }) => Text & { updateProps(p: { n: number }): void } }>(compiled);
@@ -97,7 +97,7 @@ export function Counter({ n }: P) {
 describe("what statements in the body may not do", () => {
   const codes = (body: string) =>
     compileErrors(`function C() {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   const playHit = useSound("hit.wav");
   const r = useRef(0);
   ${body}
@@ -105,12 +105,12 @@ describe("what statements in the body may not do", () => {
 }`).map((d) => d.code);
 
   it("sets no state, plays no sound and reads no ref, since it runs during render", () => {
-    assert.deepEqual(codes("let x = 0; setN(1);"), [DiagnosticCode.InvalidComponentBody]);
+    assert.deepEqual(codes("let x = 0; s.n = 1;"), [DiagnosticCode.InvalidComponentBody]);
     assert.deepEqual(codes("let x = 0; playHit();"), [DiagnosticCode.InvalidComponentBody]);
     assert.ok(codes("let x = r.current;").length > 0);
   });
 
   it("does not return early", () => {
-    assert.deepEqual(codes("if (n > 1) { return; }"), [DiagnosticCode.InvalidComponentBody]);
+    assert.deepEqual(codes("if (s.n > 1) { return; }"), [DiagnosticCode.InvalidComponentBody]);
   });
 });

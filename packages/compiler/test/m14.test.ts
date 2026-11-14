@@ -16,19 +16,18 @@ after(() => {
 
 const MENU = `
 function Menu() {
-  const [open, setOpen] = useState(false);
-  const [taps, setTaps] = useState(0);
+  const s = useMutable({ open: false, taps: 0 });
   return (
     <Entity name="Menu" transform={{ x: 100 }}>
-      <Pointer width={40} height={20} transform={{ x: 10 }} onPress={() => setOpen(!open)} />
-      <Pointer width={taps + 5} height={20} onPress={() => setTaps(taps + 1)} />
+      <Pointer width={40} height={20} transform={{ x: 10 }} onPress={() => { s.open = !s.open; }} />
+      <Pointer width={s.taps + 5} height={20} onPress={() => { s.taps += 1; }} />
     </Entity>
   );
 }
 
 const Button = () => {
-  const [pressed, setPressed] = useState(0);
-  return <Pointer width={30} height={30} onPress={() => setPressed((n) => n + 1)} />;
+  const s = useMutable({ pressed: 0 });
+  return <Pointer width={30} height={30} onPress={() => { s.pressed += 1; }} />;
 };
 `;
 
@@ -37,9 +36,11 @@ interface MenuInstance extends Entity {
   readonly taps: number;
   readonly pointer: Pointer;
   readonly pointer2: Pointer;
+  s: { [field: string]: unknown };
 }
 interface ButtonInstance extends Pointer {
   readonly pressed: number;
+  s: { [field: string]: unknown };
 }
 
 let Menu: new () => MenuInstance;
@@ -98,10 +99,10 @@ describe("M14: runtime behaviour", () => {
     // The first pointer is at x 110..150, y 0..20 in the world.
     assert.equal(world.reportPress(menu.pointer, 120, 10), true);
     world.flush();
-    assert.equal(menu.open, true);
+    assert.equal(menu.s.open, true);
     assert.equal(world.reportPress(menu.pointer, 90, 10), false, "outside");
     world.flush();
-    assert.equal(menu.open, true);
+    assert.equal(menu.s.open, true);
   });
 
   it("follows its parent and its own state-driven size", () => {
@@ -110,7 +111,7 @@ describe("M14: runtime behaviour", () => {
     world.mount(menu);
     assert.equal(world.reportPress(menu.pointer2, 104, 5), true, "100..105 wide at first");
     world.flush();
-    assert.equal(menu.taps, 1);
+    assert.equal(menu.s.taps, 1);
     assert.equal(world.reportPress(menu.pointer2, 105.5, 5), true, "it grew with the state");
   });
 
@@ -121,7 +122,7 @@ describe("M14: runtime behaviour", () => {
     assert.ok(button instanceof Pointer);
     world.reportPress(button, 5, 5);
     world.flush();
-    assert.equal(button.pressed, 1);
+    assert.equal(button.s.pressed, 1);
   });
 });
 
@@ -135,8 +136,8 @@ describe("M14: diagnostics", () => {
     const result = getCompiler().compile("C.tsx", `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Pointer width={1} height={1} /></Entity>; }`);
     assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
-    assert.ok(compile(`function C() { const [width, setWidth] = useState(1); return <Pointer width={width} height={1} />; }`).code.includes("$width: number"));
-    assert.ok(compile(`function C() { const [contains, setContains] = useState(1); return <Pointer width={1} height={1} />; }`).code.includes("$contains: number"));
+    assert.ok(compile(`function C() { const width = useMutable({ n: 1 }); return <Pointer width={width.n} height={1} />; }`).code.includes("get $width()"));
+    assert.ok(compile(`function C() { const contains = useMutable({ n: 1 }); return <Pointer width={1} height={1} />; }`).code.includes("get $contains()"));
   });
 
   it("is placed with transform and is a leaf", () => {

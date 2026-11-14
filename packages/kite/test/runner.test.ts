@@ -7,7 +7,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { parseInputScript } from "@rge/player";
-import { createInputState } from "@rge/runtime";
+import { createInputState, Shape } from "@rge/runtime";
 import { render } from "@rge/testing";
 import { Runner } from "../generated/Runner.ts";
 import { newBody, stepBody, type Body } from "../src/rules/body.ts";
@@ -34,8 +34,9 @@ function byComponent(room: number, script: string): { x: number; y: number }[] {
   for (const frame of parseInputScript(script, { dt: DT, bindings })) {
     t.world.tick(DT, createInputState({ pressed: frame.pressed, down: frame.down, released: frame.released }, controls));
     t.world.flush();
-    const state = t.state() as { x: number; y: number };
-    out.push({ x: state.x, y: state.y });
+    // Where the component draws the character: its body's position, as render saw it after the step.
+    const drawn = t.findAll(Shape)[0]!.transform;
+    out.push({ x: drawn.x, y: drawn.y });
   }
   return out;
 }

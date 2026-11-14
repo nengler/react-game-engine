@@ -16,26 +16,26 @@ after(() => {
 
 const STATUS = `
 function Status() {
-  const [health, setHealth] = useState(100);
-  const hurt = health < 25;
+  const s = useMutable({ health: 100 });
+  const hurt = s.health < 25;
   const image = hurt ? "hurt.png" : "ok.png";
   useUpdate(() => {
-    if (hurt) setHealth((health) => health + 1);
+    if (hurt) s.health += 1;
   });
   return (
     <Entity name="Status">
       <Sprite image={image} />
       {hurt ? <Sprite image="warning.png" /> : <Entity name="fine" />}
-      {health > 90 ? <Sprite image="sparkle.png" /> : null}
-      <Collider width={4} height={4} onCollisionEnter={() => setHealth((health) => health - 50)} />
+      {s.health > 90 ? <Sprite image="sparkle.png" /> : null}
+      <Collider width={4} height={4} onCollisionEnter={() => { s.health -= 50; }} />
     </Entity>
   );
 }
 `;
 
 interface StatusInstance extends Entity {
-  health: number;
   readonly collider: Collider;
+  s: { health: number };
 }
 
 /** A collision with something outside the component: the status collider's callback runs once. */
@@ -49,7 +49,7 @@ describe("React idioms", () => {
     const sprite = elementOf(compiled.ir.components[0]!.root.children[0]!);
     const image = sprite.props[0]!;
     assert.ok(image.kind === "DynamicProp", "a const derived from state is dynamic where it is used");
-    assert.deepEqual(image.dependencies, [{ kind: "State", state: "Status.health" }]);
+    assert.deepEqual(image.dependencies, [{ kind: "State", state: "Status.s.health" }]);
     assert.deepEqual(typeCheck(compiled), []);
 
     const { Status } = await load<{ Status: new () => StatusInstance }>(compiled);
@@ -61,11 +61,11 @@ describe("React idioms", () => {
     hit(world, status);
     hit(world, status);
     world.flush();
-    assert.equal(status.health, 0);
+    assert.equal(status.s.health, 0);
     assert.equal(status.children[0], first, "same instance, updated in place");
     assert.equal(first.image, "hurt.png");
     world.tick(1); // the handler's `hurt` reads current state
-    assert.equal(status.health, 1);
+    assert.equal(status.s.health, 1);
   });
 
   it("lowers `{c ? <A /> : <B />}` and `{c ? <A /> : null}` to conditional children in source order", async () => {
@@ -84,17 +84,17 @@ describe("React idioms", () => {
   it("takes a fragment as a condition's branch or a child: its elements come and go together, in an implicit Entity", async () => {
     const compiled = compile(`
 function Pickup() {
-  const [taken, setTaken] = useState(false);
-  useUpdate(() => setTaken(true));
+  const s = useMutable({ taken: false });
+  useUpdate(() => { s.taken = true; });
   return (
     <Entity name="Pickup">
-      {!taken && (
+      {!s.taken && (
         <>
           <Sprite image="gem.png" />
           <Sprite image="shine.png" />
         </>
       )}
-      {taken ? <><Sprite image="empty.png" /></> : null}
+      {s.taken ? <><Sprite image="empty.png" /></> : null}
       <>
         <Sprite image="base.png" />
       </>
@@ -116,13 +116,13 @@ function Pickup() {
   it("rejects consts that are redeclared, read before declaration, or not plain expressions", () => {
     const codes = (body: string) =>
       compileErrors(`function C() {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   ${body}
   return <Entity name="C" />;
 }`).map((d) => d.code);
     assert.deepEqual(codes("const a = 1; const a = 2;"), [DiagnosticCode.InvalidComponentBody]);
-    assert.deepEqual(codes("const n = 1;"), [DiagnosticCode.InvalidComponentBody]);
-    assert.deepEqual(codes("const a = 1; const [a, setA] = useState(0);"), [DiagnosticCode.InvalidUseState]);
+    assert.deepEqual(codes("const s = 1;"), [DiagnosticCode.InvalidComponentBody]);
+    assert.deepEqual(codes("const a = 1; const a = useMutable({ n: 0 });"), [DiagnosticCode.InvalidUseState]);
     assert.deepEqual(codes("const a = b; const b = 1;"), [DiagnosticCode.UnknownIdentifier]);
     // An arrow in the body is a function of the component since REACT_FEEL_PLAN.md B6 (hooks-as-functions.test.ts).
     assert.ok(compile(`function C() { const f = () => 1; return <Entity />; }`).code.includes("readonly f = () =>"));
@@ -131,19 +131,17 @@ function Pickup() {
     assert.ok(codes("const r = useRef(0); const s = r.current;").includes(DiagnosticCode.HandleReadOutsideHandler));
   });
 
-  it("gives every handler in a frame the same state snapshot, as React does for a render", async () => {
-    const { Snap } = await load<{ Snap: new () => Entity & { n: number; seenBySecond: number; doubled: number } }>(
+  it("gives every handler the latest writes, in the order they run, and renders once (docs/MUTABLE_STATE.md)", async () => {
+    const { Snap } = await load<{ Snap: new () => Entity & { s: { n: number; seenBySecond: number; doubled: number } } }>(
       compile(`function Snap() {
-  const [n, setN] = useState(1);
-  const [seenBySecond, setSeenBySecond] = useState(0);
-  const [doubled, setDoubled] = useState(0);
+  const s = useMutable({ n: 1, seenBySecond: 0, doubled: 0 });
   useUpdate(() => {
-    setN(n + 10);
-    setN(n + 10); // the same snapshot: still 1 + 10, not 21
-    setDoubled(n * 2); // reads 1, not 11
+    s.n += 10;
+    s.n += 10; // reads the write before it: 1 + 10 + 10
+    s.doubled = s.n * 2; // reads 21
   });
   useUpdate(() => {
-    setSeenBySecond(n); // a later handler sees the same snapshot
+    s.seenBySecond = s.n; // a later handler sees the earlier one's writes
   });
   return <Entity name="Snap" />;
 }`),
@@ -151,17 +149,17 @@ function Pickup() {
     const world = new World();
     const snap = new Snap();
     world.mount(snap);
-    assert.equal(world.tick(1), 1);
-    assert.deepEqual([snap.n, snap.doubled, snap.seenBySecond], [11, 2, 1]);
+    assert.equal(world.tick(1), 1, "one render for every write of the frame");
+    assert.deepEqual([snap.s.n, snap.s.doubled, snap.s.seenBySecond], [21, 42, 21]);
     world.tick(1);
-    assert.deepEqual([snap.n, snap.doubled, snap.seenBySecond], [21, 22, 11]);
+    assert.deepEqual([snap.s.n, snap.s.doubled, snap.s.seenBySecond], [41, 82, 41]);
   });
 
   it("renders nothing when every queued update ends where it started", async () => {
     const { Same } = await load<{ Same: new () => Entity & { n: number } }>(
       compile(`function Same() {
-  const [n, setN] = useState(5);
-  useUpdate(() => setN(5));
+  const s = useMutable({ n: 5 });
+  useUpdate(() => { s.n = 5; });
   return <Entity name="Same" />;
 }`),
     );
@@ -172,8 +170,8 @@ function Pickup() {
 
   it("rejects ternary children whose branches are not elements or null", () => {
     const codes = compileErrors(`function C() {
-  const [n, setN] = useState(0);
-  return <Entity name="C">{n > 0 ? <Sprite image="a" /> : 5}</Entity>;
+  const s = useMutable({ n: 0 });
+  return <Entity name="C">{s.n > 0 ? <Sprite image="a" /> : 5}</Entity>;
 }`).map((d) => d.code);
     assert.deepEqual(codes, [DiagnosticCode.UnsupportedJsxChild]);
   });

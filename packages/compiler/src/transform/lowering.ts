@@ -63,6 +63,8 @@ export class LoweringBase {
   /** Component scope; function lowering nests scopes beneath it via `scope`. */
   protected readonly componentScope = new Scope();
   protected readonly stateTypes = new Map<StateId, TypeIR>();
+  /** The state slots that are fields of a `useMutable`: a handler reads them as they are now (a `live` read). */
+  protected readonly mutableStates = new Set<StateId>();
   protected serial = 0;
   scope: Scope = this.componentScope;
   protected readonly usedNames: Set<string>;
@@ -163,6 +165,8 @@ export class LoweringBase {
       case "StringLiteral":
       case "TemplateLiteral": return "string";
       case "BooleanLiteral": return "boolean";
+      /** `Math.PI`, `Math.E`: the constants a component may write. */
+      case "PlainRef": return /^Math\.[A-Z][A-Z0-9_]*$/.test(expr.name) ? "number" : null;
       case "StateRead": {
         const type = this.stateTypes.get(expr.state);
         return type?.kind === "Primitive" ? (type.name as ValueType) : null;
@@ -327,6 +331,20 @@ export class LoweringBase {
     return { name: decl.name, role: decl.role };
   }
 
+  /** Resolves `s.vx` for a `useMutable` value `s` to its state slot. Undefined if `node` is not on one, "error" after reporting. */
+  mutableField(node: PropertyAccessExpression): StateId | "error" | undefined {
+    const object = unwrapParens(node.expression);
+    const binding = isIdentifier(object) ? this.scope.get(object.text) : undefined;
+    if (binding?.kind !== "mutable") return undefined;
+    const id = binding.fields.get(node.name.text);
+    if (id === undefined) {
+      const near = nearest(node.name.text, [...binding.fields.keys()]);
+      this.report(DiagnosticCode.UnknownIdentifier, `'${binding.name}' has no field '${node.name.text}'${near ? ` (did you mean '${near}'?)` : ""}. Its fields: ${[...binding.fields.keys()].join(", ")}.`, node.name);
+      return "error";
+    }
+    return id;
+  }
+
   /** Resolves `r.current` for a ref `r`. Undefined if `node` is not on a ref (the caller carries on), "error" after reporting. */
   protected refAccess(node: PropertyAccessExpression): RefId | "error" | undefined {
     const object = unwrapParens(node.expression);
@@ -346,6 +364,13 @@ export class LoweringBase {
     let type: TypeIR | undefined;
     if (binding?.kind === "param") type = binding.type;
     else if (binding?.kind === "state") type = this.stateTypes.get(binding.id);
+    else if (isPropertyAccessExpression(target)) {
+      // `s.n`: a `useMutable` field.
+      const owner = unwrapParens(target.expression);
+      const mutable = isIdentifier(owner) ? this.scope.get(owner.text) : undefined;
+      const field = mutable?.kind === "mutable" ? mutable.fields.get(target.name.text) : undefined;
+      if (field !== undefined) type = this.stateTypes.get(field);
+    }
     return type?.kind === "Primitive" && type.name !== "void" ? type.name : null;
   }
 

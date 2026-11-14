@@ -20,17 +20,17 @@ export const PlayerAt = createContext(0);
 
 // The player moves one pixel a step and reports where it is; the chaser (by props) and the watcher (through context) record what
 // they saw in each of their updates.
-const SOURCE = `import { Entity, useContext, useState, useUpdate } from "@rge/runtime/jsx";
+const SOURCE = `import { Entity, useContext, useMutable, useUpdate } from "@rge/runtime/jsx";
 import { PlayerAt } from "./level.ts";
 
 interface PlayerProps { onMove: (x: number) => void }
 function Player({ onMove }: PlayerProps) {
-  const [x, setX] = useState(0);
+  const s = useMutable({ x: 0 });
   useUpdate(() => {
-    setX(x + 1);
-    onMove(x + 1);
+    s.x += 1;
+    onMove(s.x);
   });
-  return <Entity transform={{ x }} />;
+  return <Entity transform={{ x: s.x }} />;
 }
 interface ChaserProps { target: number; onSee: (x: number) => void }
 function Chaser({ target, onSee }: ChaserProps) {
@@ -45,12 +45,12 @@ function Watcher({ onSee }: WatcherProps) {
 }
 interface LevelProps { onChaserSees: (x: number) => void; onWatcherSees: (x: number) => void }
 export function Level({ onChaserSees, onWatcherSees }: LevelProps) {
-  const [playerX, setPlayerX] = useState(0);
+  const s = useMutable({ playerX: 0 });
   return (
     <Entity>
-      <Player onMove={(x) => setPlayerX(x)} />
-      <Chaser target={playerX} onSee={onChaserSees} />
-      <PlayerAt.Provider value={playerX}>
+      <Player onMove={(x) => { s.playerX = x; }} />
+      <Chaser target={s.playerX} onSee={onChaserSees} />
+      <PlayerAt.Provider value={s.playerX}>
         <Watcher onSee={onWatcherSees} />
       </PlayerAt.Provider>
     </Entity>
