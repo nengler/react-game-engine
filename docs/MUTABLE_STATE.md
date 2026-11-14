@@ -268,6 +268,18 @@ Still open:
 - **Props read live across components** ("Shared lists: live everywhere", option A). Props and context still carry what the
   parent's last render committed; a child's callback writes the parent's pending value, which the parent's own handlers then read.
   So between components the old one-step lag holds.
+  Two ways in were looked at and not built:
+  - *Render the parent before a child's handler runs, when the parent has pending writes.* It reuses what the engine has (a render
+    already pushes props into the children with `updateProps`), but a child's callback writes the parent again, so the parent
+    renders again before the next child: up to one full render of the parent per child per frame (Hearth's `Play` with its
+    enemies), where today it renders once.
+  - *The parent hands each child a getter for its props, worked out from the parent's live state*, as derived consts are worked out
+    in handlers. No extra renders, and a read costs only what the child reads. It has to be written for every place the generator
+    makes a child: a plain element, a conditional one, a keyed list's items (the item found again by key in the live list, with
+    the list's filter and an alternate element applied), an item's own children, and nested children (the getter reads the
+    child's own props live, recursively). Doing it for some of these and not others gives the two rules depending on where an
+    element sits, which this note calls the worst outcome, so it is one piece of work, in `generator/elements.ts` and
+    `emitList`, and a field on `GameObject` for the getter.
 - **`useRef`** (open question 4) and **game-state actions** (open question 5) are unchanged.
 
 Found while building it:
