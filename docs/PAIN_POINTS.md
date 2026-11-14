@@ -126,12 +126,17 @@ fragment of several roots, `switch` and `let` in the body, a function of the com
   plain `function` in the body says to write it as `const f = (…) => …`. Neither is a handler, and the word is gone from both.
 - ~~`await` was `Unsupported expression (AwaitExpression)`~~: it now says the game's steps do not wait, and what to use.
 
-**React that could be supported** (not planned yet):
+**React that could be supported.** *The first four since 2026-11-14:*
 
-- `useState({ x: 0, y: 0 })` needs its type written (`useState<Point>(…)`, RGE1104), where TypeScript infers it.
-- An inline props type, `({ hp }: { hp: number })`, is refused (RGE1208): the type must be named and declared in the file.
-- An early `return` before the last one, the most common React guard.
-- `import * as K from "./constants.ts"` is refused (RGE1001); Kite's rules use one, and porting them to a component hit it.
+- ~~`useState({ x: 0, y: 0 })` needs its type written~~: a literal of plain values gets the type TypeScript infers; an empty array
+  still needs `useState<Item[]>([])`, as in TypeScript.
+- ~~An inline props type is refused~~: `({ hp }: { hp: number })` is the component's props type, declared as `HeartProps`.
+- ~~An early `return` before the last one~~: each `if (c) return A;` at the top of the body becomes a condition of the last
+  `return` (the inliner's first pass), and what follows it is worked out only in the branch where it did not return. A memo read
+  under a condition starts with `$assume(condition)`, so the generated code narrows what the source did (`hero.name` after
+  `if (!hero) return null;`). An RGE error inside a moved early return points at the last `return`; TypeScript's own errors keep
+  their place.
+- ~~`import * as K from "./constants.ts"` is refused~~: a `.ts` module may be imported whole; Kite's `Runner.tsx` does.
 - `useReducer` does not exist.
 - A list inside a list item (RGE1209): the item has to become a component.
 

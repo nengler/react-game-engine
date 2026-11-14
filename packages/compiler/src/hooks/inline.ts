@@ -28,7 +28,7 @@
  * It is text to text: the replaced file is what the rest of the compiler sees, so positions in later diagnostics are those of the
  * expanded source.
  */
-import { NodeFlags, SyntaxKind, type Block, type CallExpression, type FunctionDeclaration, type Node, type SourceFile, type Statement } from "typescript/ast";
+import { NodeFlags, SyntaxKind, type Block, type CallExpression, type Expression, type FunctionDeclaration, type Node, type SourceFile, type Statement } from "typescript/ast";
 import {
   isArrayBindingPattern,
   isArrayLiteralExpression,
@@ -40,6 +40,7 @@ import {
   isImportDeclaration,
   isJsxAttribute,
   isJsxClosingElement,
+  isJsxElement,
   isJsxOpeningElement,
   isJsxSelfClosingElement,
   isNamedImports,
@@ -51,6 +52,8 @@ import {
   isShorthandPropertyAssignment,
   isStringLiteral,
   isVariableStatement,
+  isIfStatement,
+  isBlock,
 } from "typescript/ast/is";
 import { AUTHORING_HOOKS, HOOK_NAME } from "../analyzer/model.ts";
 import { relativeTsImportNames } from "../analyzer/util.ts";
@@ -137,7 +140,7 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
         // First, once: a destructured selection on the game state becomes one selector per name (it may hold no hook at all).
         if (!split) {
           split = true;
-          const edits = [...storeSelectionEdits(sf, fileName, current, stores, diagnostics), ...providerEdits(sf, current, authoringModule)];
+          const edits = [...storeSelectionEdits(sf, fileName, current, stores, diagnostics), ...providerEdits(sf, current, authoringModule), ...earlyReturnEdits(sf)];
           if (edits.length > 0) {
             current = map.apply(current, edits);
             continue;
@@ -369,6 +372,54 @@ function unwrap(node: Node): Node {
 }
 
 /** The blocks that are component bodies: a capitalised function, or an arrow assigned to a capitalised const, at the top level. */
+/**
+ * React's early return, `if (!hero) return null;` before the component's last `return`, as one return of its JSX: each
+ * `if (c) return A;` at the top of the body goes, and the last `return B;` becomes `return (c) ? (A) : (B);`, the first early
+ * return first. What the body declares is worked out where it is read, so a `const hp = hero.hp;` after the guard runs only in
+ * the branch where the guard did not return, as it does in React.
+ */
+function earlyReturnEdits(sf: SourceFile): Edit[] {
+  const edits: Edit[] = [];
+  for (const statement of sf.statements) {
+    for (const body of componentBodies(statement)) {
+      const statements = body.statements;
+      const last = statements[statements.length - 1];
+      if (last === undefined || !isReturnStatement(last) || last.expression === undefined) continue;
+      const early: { readonly condition: string; readonly value: string; readonly statement: Statement }[] = [];
+      for (const s of statements.slice(0, -1)) {
+        if (!isIfStatement(s) || s.elseStatement !== undefined) continue;
+        let then: Statement = s.thenStatement;
+        if (isBlock(then)) {
+          if (then.statements.length !== 1) continue;
+          then = then.statements[0]!;
+        }
+        if (!isReturnStatement(then) || then.expression === undefined) continue;
+        early.push({ condition: s.expression.getText(sf), value: branch(then.expression, sf), statement: s });
+      }
+      if (early.length === 0) continue;
+      for (const e of early) edits.push({ start: e.statement.getStart(sf), end: e.statement.getEnd(), text: "" });
+      const final = last.expression;
+      // A root takes one condition, whose branches are elements or null; a further one goes in a fragment (`<>{c ? A : B}</>`).
+      let returned = branch(final, sf);
+      for (let i = early.length - 1; i >= 0; i--) {
+        const e = early[i]!;
+        const otherwise = i === early.length - 1 ? returned : `<>{${returned}}</>`;
+        returned = `(${e.condition}) ? (${e.value}) : (${otherwise})`;
+      }
+      edits.push({ start: final.getStart(sf), end: final.getEnd(), text: returned });
+    }
+  }
+  return edits;
+}
+
+/** A returned value as a branch of a root's condition: an element, a fragment or `null` as written; anything else in a fragment. */
+function branch(value: Expression, sf: SourceFile): string {
+  let node: Node = value;
+  while (node.kind === SyntaxKind.ParenthesizedExpression) node = (node as unknown as { expression: Node }).expression;
+  const plain = isJsxElement(node) || isJsxSelfClosingElement(node) || node.kind === SyntaxKind.JsxFragment || node.kind === SyntaxKind.NullKeyword;
+  return plain ? value.getText(sf) : `<>{${value.getText(sf)}}</>`;
+}
+
 function componentBodies(statement: Statement): Block[] {
   if (isFunctionDeclaration(statement) && statement.name && /^[A-Z]/.test(statement.name.text) && statement.body) return [statement.body];
   if (isVariableStatement(statement)) {

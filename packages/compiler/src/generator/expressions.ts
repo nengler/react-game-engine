@@ -279,6 +279,12 @@ export class ExpressionEmitter {
         // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
         const deps = collectDependencies(e.value).map((d) => (d.kind === "State" ? `this.${this.state(d.state).name}` : d.kind === "Prop" ? `this.props.${d.name}` : null));
         if (deps.includes(null)) throw new Error(`A memo of ${this.c.name} reads a list item`);
+        // Read under a condition (`return hero ? <Hp value={hp} /> : null` from `if (!hero) return null;`): TypeScript does not carry
+        // the narrowing into the memo's function, so it starts by assuming the condition again, which holds where it is read.
+        if (this.mode.conditions.length > 0 && !this.mode.inCallback) {
+          this.usesAssume = true;
+          return `this.$memo(${JSON.stringify(e.key)}, [${deps.join(", ")}], () => { $assume(${this.mode.conditions.map((c) => this.expr(c)).join(" && ")}); return ${this.expr(e.value, true)}; })`;
+        }
         return `this.$memo(${JSON.stringify(e.key)}, [${deps.join(", ")}], () => ${this.arrowBody(e.value)})`;
       }
       default: return assertNever(e, "expression");

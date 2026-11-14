@@ -30,11 +30,13 @@ describe("one mistake, one error", () => {
   });
 
   it("does not report a state again when its useState was refused", () => {
-    assert.equal(only(`export function A() { const [p] = useState({ x: 0, y: 0 }); return <Entity x={p.x} y={p.y} />; }`).code, "RGE1104");
+    // An empty array inside: its type cannot be worked out from the values.
+    assert.equal(only(`export function A() { const [p] = useState({ x: 0, items: [] }); return <Entity x={p.x} y={p.items.length} />; }`).code, "RGE1104");
   });
 
   it("does not report the props again when the props parameter was refused", () => {
-    assert.equal(only(`export function A({ hp }: { hp: number }) { return <Text>{hp}</Text>; }`).code, "RGE1208");
+    // Renamed in the destructuring (\`hp: health\`): refused, and \`health\` is not reported again where it is read.
+    assert.equal(only(`interface P { hp: number }\nexport function A({ hp: health }: P) { return <Text>{health}</Text>; }`).code, "RGE1208");
   });
 
   it("does not report a component or a function declared inside another as unknown where it is used", () => {
@@ -48,9 +50,10 @@ describe("one mistake, one error", () => {
 });
 
 describe("what to write instead", () => {
-  it("an early return: the condition goes in what the component returns", () => {
-    const e = only(`interface P { hp: number }\nexport function A({ hp }: P) { if (hp <= 0) return null; return <Text>{hp}</Text>; }`);
+  it("an early return in a form it does not take: the form it takes, and the condition in what is returned", () => {
+    const e = only(`interface P { hp: number }\nexport function A({ hp }: P) { if (hp <= 0) { return null; } else { } return <Text>{hp}</Text>; }`);
     assert.equal(e.code, "RGE1002");
+    assert.match(e.message, /`if \(condition\) return …;`/);
     assert.match(e.message, /`return dead \? null : <Text>…<\/Text>;`/);
   });
 
