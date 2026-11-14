@@ -15,7 +15,7 @@ after(() => {
 
 const counts = globalThis as unknown as { shadeCalls: number; labelCalls: number };
 
-const BADGE = `import { Entity, Shape, Text, useInput, useState } from "@rge/runtime/jsx";
+const BADGE = `import { Entity, Shape, Text, useInput, useMutable } from "@rge/runtime/jsx";
 
 function shade(hp: number): string {
   (globalThis as unknown as { shadeCalls: number }).shadeCalls++;
@@ -31,20 +31,18 @@ interface BadgeProps {
 }
 
 export function Badge({ name }: BadgeProps) {
-  const [x, setX] = useState(0);
-  const [hp, setHp] = useState(10);
-  const [open, setOpen] = useState(false);
+  const s = useMutable({ x: 0, hp: 10, open: false });
   const upper = label(name);
   useInput((input) => {
-    if (input.pressed("Right")) setX(x + 1);
-    if (input.pressed("Down")) setHp(hp - 6);
-    if (input.pressed("Space")) setOpen(!open);
+    if (input.pressed("Right")) s.x += 1;
+    if (input.pressed("Down")) s.hp -= 6;
+    if (input.pressed("Space")) s.open = !s.open;
   });
   return (
-    <Entity x={x}>
-      <Shape kind="rect" width={4} height={4} color={shade(hp)} />
+    <Entity x={s.x}>
+      <Shape kind="rect" width={4} height={4} color={shade(s.hp)} />
       <Text>{upper}</Text>
-      {open && <Shape kind="rect" width={2} height={2} color={shade(hp)} x={x * 2} />}
+      {s.open && <Shape kind="rect" width={2} height={2} color={shade(s.hp)} x={s.x * 2} />}
     </Entity>
   );
 }`;
@@ -107,23 +105,22 @@ describe("dependency-scoped render", () => {
   });
 
   it("leaves a render unguarded when every part reads the same things, as it was", () => {
-    const compiled = compile(`import { Entity, Sprite, useState } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Sprite, useMutable } from "@rge/runtime/jsx";
 export function P() {
-  const [health, setHealth] = useState(100);
-  return <Entity><Sprite image={health > 50 ? "normal.png" : "hurt.png"} /></Entity>;
+  const s = useMutable({ health: 100 });
+  return <Entity><Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} /></Entity>;
 }`);
     assert.doesNotMatch(compiled.code, /\$in|\$d/);
   });
 
   it("never guards a part that reads what the compiler cannot follow: a route's own field", () => {
-    const compiled = compile(`import { Entity, Route, Router, Text, useState } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Route, Router, Text, useMutable } from "@rge/runtime/jsx";
 export function Screens() {
-  const [screen, setScreen] = useState("a");
-  const [n, setN] = useState(0);
+  const s = useMutable({ screen: "a", n: 0 });
   return (
     <Entity>
-      <Text x={n}>{screen}</Text>
-      <Router route={screen}>
+      <Text x={s.n}>{s.screen}</Text>
+      <Router route={s.screen}>
         <Route name="a"><Text>A</Text></Route>
       </Router>
     </Entity>

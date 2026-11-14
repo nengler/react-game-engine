@@ -22,11 +22,11 @@ after(() => {
   rmSync(OUT, { recursive: true, force: true });
 });
 
-const PACK = `import { Entity, Text, useState } from "@rge/runtime/jsx";
+const PACK = `import { Entity, Text, useMutable } from "@rge/runtime/jsx";
 interface EnemyProps { id: string }
 export function Enemy({ id }: EnemyProps) {
-  const [hp, setHp] = useState(3);
-  return <Entity><Text>{\`\${id} \${hp}\`}</Text></Entity>;
+  const s = useMutable({ hp: 3 });
+  return <Entity><Text>{\`\${id} \${s.hp}\`}</Text></Entity>;
 }
 interface PackProps { ids: string[] }
 export function Pack({ ids }: PackProps) {
@@ -50,8 +50,8 @@ describe("a save with its tree", () => {
 
     const first = render(Pack, { ids: ["a", "b", "c"] });
     const [, b, c] = first.findAll("Enemy");
-    (b as unknown as { setHp(v: number): void }).setHp(2);
-    (c as unknown as { setHp(v: number): void }).setHp(1);
+    (b as unknown as { s: { hp: number } }).s.hp = 2;
+    (c as unknown as { s: { hp: number } }).s.hp = 1;
     first.step();
     assert.deepEqual(first.texts(), ["a 3", "b 2", "c 1"]);
     assert.ok(save.write());

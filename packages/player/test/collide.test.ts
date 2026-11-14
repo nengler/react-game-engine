@@ -441,12 +441,12 @@ describe("collisions in the frame loop", () => {
     player.step();
     assert.deepEqual(backend.plays, ["assets/hurt.wav", "assets/hurt.wav"], "each Hero heard it once");
     // The hit takes 10, rendered right after the step that made the contact (so the frame that shows them touching shows it).
-    assert.equal(left.health, 90, "left's health in the step of the hit");
-    assert.equal(right.health, 90, "right's health in the step of the hit");
+    assert.equal(left.s.health, 90, "left's health in the step of the hit");
+    assert.equal(right.s.health, 90, "right's health in the step of the hit");
     player.step();
     // Poisoned by the hit, a Hero no longer regenerates: the next step's update already reads the new state.
-    assert.ok(left.health < 90 && right.health < 90, "poison, not regeneration, in the very next step");
-    close(left.health, 90, "left's health a step after the hit", 0.1);
+    assert.ok(left.s.health < 90 && right.s.health < 90, "poison, not regeneration, in the very next step");
+    close(left.s.health, 90, "left's health a step after the hit", 0.1);
     player.step();
     player.step();
     assert.equal(backend.plays.length, 2, "still overlapping: no new reports");

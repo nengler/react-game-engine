@@ -2,6 +2,8 @@ import type { ExprIR, LocalId, RefId, SoundId, StateId, TypeIR } from "../ir/typ
 
 type Binding =
   | { readonly kind: "state"; readonly id: StateId }
+  /** `const s = useMutable({ vx: 0 })`: each field is a state slot, read and written as `s.vx`. */
+  | { readonly kind: "mutable"; readonly name: string; readonly fields: ReadonlyMap<string, StateId> }
   | { readonly kind: "setter"; readonly state: StateId; readonly name: string }
   | { readonly kind: "ref"; readonly id: RefId; readonly name: string }
   /** A `useSound` function: only called, as a statement in a handler. */
@@ -17,7 +19,11 @@ type Binding =
   /** A function declared in the component body, kept in the field `field`: called in handlers, or passed as a value. */
   | { readonly kind: "function"; readonly name: string; readonly field: string }
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
-  | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR }
+  /**
+   * `relower` works the value out again for a handler that reads it, where it depends on a `useMutable` field: from the fields as they
+   * are now, not from what render saw. Every form of `const` has one: a plain one, a destructured one, and a render block's names.
+   */
+  | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR; readonly relower?: () => ExprIR | null }
   /** A `const` (or, `mutable`, a `let`) declared in a handler body, or a `for…of` item. */
   /**
    * `owned`: the handler made the value (a literal, `new`, a call's result), so it may change it in place. A local that reads

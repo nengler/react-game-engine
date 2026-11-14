@@ -3,7 +3,7 @@ import { SyntaxKind, type Node, type ObjectLiteralExpression, type CallExpressio
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock, isElementAccessExpression, isNonNullExpression, isTypeOfExpression, isNewExpression } from "typescript/ast/is";
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { assertNever, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
+import { assertNever, stateReads, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
 import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
 import { warning } from "../diagnostics/diagnostics.ts";
 
@@ -52,8 +52,16 @@ export class ExpressionLowering extends LoweringBase {
       if (!binding) {
         // Declared, but its declaration was refused above: that error is the one to read.
         if (this.declaredAfterError(node.text)) return null;
-        const near = nearest(node.text, [...new Set([...this.scope.names(), ...this.plainImports])]);
-        this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${near ? ` (did you mean '${near}'?)` : ""}.`, node);
+        // A `useMutable` field is read through its owner (`count` → `s.count`), the slip of someone used to `useState`.
+        const fields = new Map<string, string>();
+        for (const name of this.scope.names()) {
+          const owner = this.scope.get(name);
+          if (owner?.kind === "mutable") for (const field of owner.fields.keys()) if (!fields.has(field)) fields.set(field, `${name}.${field}`);
+        }
+        const names = [...new Set([...this.scope.names(), ...this.plainImports])];
+        const near = nearest(node.text, [...names, ...[...fields.keys()].filter((f) => !names.includes(f))]);
+        const suggestion = near !== null && fields.has(near) && !names.includes(near) ? fields.get(near)! : near;
+        this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${suggestion ? ` (did you mean '${suggestion}'?)` : ""}.`, node);
         return null;
       }
       if (binding.kind === "setter") {
@@ -64,6 +72,14 @@ export class ExpressionLowering extends LoweringBase {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
+        // Read whole (`springBack(s, …)`, `<Camera shake={shake}>`): a plain object of its fields, as they are now in a handler and as
+        // the frame committed them in render. It is a copy: changing it does not change the fields.
+        case "mutable":
+          return {
+            kind: "ObjectLiteral",
+            mutableCopy: true,
+            properties: [...binding.fields].map(([name, state]) => ({ kind: "Property" as const, name, value: { kind: "StateRead" as const, state, ...(this.mode.inHandler ? { live: true as const } : {}) } })),
+          };
         case "propsObject":
           this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`, node);
           return null;
@@ -78,7 +94,20 @@ export class ExpressionLowering extends LoweringBase {
           return { kind: "PropRead", name: binding.name };
         // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
         // in a handler it reads the current state, like recomputing it there.
-        case "derived": return binding.value;
+        case "derived": {
+          // In a handler, a value that depends on a `useMutable` field is worked out from the fields as they are now.
+          // Lowered against the component's scope, so a handler's own locals cannot shadow what the `const` reads.
+          if (this.mode.inHandler && binding.relower !== undefined && stateReads(binding.value).some((id) => this.mutableStates.has(id))) {
+            const outer = this.scope;
+            this.scope = this.componentScope;
+            try {
+              return binding.relower();
+            } finally {
+              this.scope = outer;
+            }
+          }
+          return binding.value;
+        }
         case "sound":
           this.report(DiagnosticCode.SoundOutsideHandler, `'${node.text}' is a sound: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
           return null;
@@ -330,6 +359,9 @@ export class ExpressionLowering extends LoweringBase {
       }
       return { kind: "PropRead", name: propsObject.name };
     }
+    const mutable = this.mutableField(node);
+    if (mutable === "error") return null;
+    if (mutable) return { kind: "StateRead", state: mutable, ...(this.mode.inHandler ? { live: true as const } : {}) };
     const ref = this.refAccess(node);
     if (ref === "error") return null;
     if (ref) {
@@ -535,10 +567,14 @@ export class ExpressionLowering extends LoweringBase {
       if (!args) return null;
       return { kind: "Call", callee: { kind: "ValueMethod", receiver, name, optional: callee.questionDotToken !== undefined || node.questionDotToken !== undefined }, args };
     }
-    // A method of a per-instance object (state a factory made): opaque, like a plain function.
-    if (isIdentifier(callee.expression) && !Object.hasOwn(ARRAY_METHODS, name)) {
-      const binding = this.scope.get(callee.expression.text);
-      if (binding?.kind === "state" && this.handleStates.has(binding.id)) {
+    // A method of a per-instance object (state a factory made, or a `useMutable` field holding one: `b.body.move(dx, dy)`): opaque,
+    // like a plain function.
+    if (!Object.hasOwn(ARRAY_METHODS, name)) {
+      const handleReceiver = unwrapParens(callee.expression);
+      const binding = isIdentifier(handleReceiver) ? this.scope.get(handleReceiver.text) : undefined;
+      const field = isPropertyAccessExpression(handleReceiver) ? this.mutableField(handleReceiver) : undefined;
+      if (field === "error") return null;
+      if ((binding?.kind === "state" && this.handleStates.has(binding.id)) || (field !== undefined && this.handleStates.has(field))) {
         const receiver = this.lowerNode(callee.expression);
         if (!receiver) return null;
         const args = this.lowerAll(node.arguments);
@@ -564,6 +600,31 @@ export class ExpressionLowering extends LoweringBase {
       return null;
     }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
+      // On a `useMutable` field (`s.enemies.push(e)`): the field is assigned a new array, written as the author would write it.
+      const receiver = unwrapParens(callee.expression);
+      const mutable = isPropertyAccessExpression(receiver) ? this.mutableField(receiver) : undefined;
+      if (mutable === "error") return null;
+      if (mutable !== undefined) {
+        const list = receiver.getText(this.sourceFile);
+        const item = node.arguments[0]?.getText(this.sourceFile) ?? "item";
+        const instead: Readonly<Record<string, string>> = {
+          push: `${list} = [...${list}, ${item}]`,
+          unshift: `${list} = [${item}, ...${list}]`,
+          pop: `${list} = ${list}.slice(0, -1)`,
+          shift: `${list} = ${list}.slice(1)`,
+          splice: `${list} = ${list}.toSpliced(…)`,
+          sort: `${list} = ${list}.toSorted(…)`,
+          reverse: `${list} = ${list}.toReversed()`,
+          fill: `${list} = ${list}.map(…)`,
+          copyWithin: `${list} = ${list}.map(…)`,
+        };
+        this.report(
+          code,
+          `\`${name}\` changes \`${list}\` in place, which the component would not see. Give the field a new array: \`${instead[name] ?? `${list} = …`}\`.`,
+          callee.name,
+        );
+        return null;
+      }
       this.report(
         code,
         `\`${name}\` changes the array in place, which never re-renders (a setter only renders when it gets a new array). Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}.`,

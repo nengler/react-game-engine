@@ -20,12 +20,11 @@ interface GaugeProps {
 }
 
 function Gauge({ max }: GaugeProps) {
-  const [value, setValue] = useState(0);
-  const [round, setRound] = useState(false);
+  const s = useMutable({ value: 0, round: false });
   return (
-    <Entity name="Gauge" transform={{ x: value }}>
+    <Entity name="Gauge" transform={{ x: s.value }}>
       <Shape kind="rect" width={max} height={4} color="gray" />
-      <Shape kind={round ? "circle" : "rect"} width={value} height={4} color={value > 5 ? "red" : "green"} transform={{ x: 2 }} />
+      <Shape kind={s.round ? "circle" : "rect"} width={s.value} height={4} color={s.value > 5 ? "red" : "green"} transform={{ x: 2 }} />
     </Entity>
   );
 }
@@ -38,10 +37,9 @@ const Dot = ({ size }: DotProps) => <Shape kind="circle" width={size} height={si
 `;
 
 interface GaugeInstance extends Entity {
-  setValue(value: number): void;
-  setRound(value: boolean): void;
   readonly shape: Shape;
   readonly shape2: Shape;
+  s: { [field: string]: unknown };
 }
 interface DotInstance extends Shape {
   updateProps(next: { size: number }): void;
@@ -69,13 +67,13 @@ describe("M11: IR and generated code", () => {
     assert.deepEqual(prop(fixed!.props, "kind"), { kind: "StaticProp", name: "kind", value: { kind: "StringLiteral", value: "rect" } });
     assert.equal(prop(fixed!.props, "width").kind, "DynamicProp", "a prop read");
     assert.equal(prop(moving!.props, "kind").kind, "DynamicProp", "a conditional of literals is allowed");
-    assert.deepEqual((prop(moving!.props, "kind") as { dependencies: unknown }).dependencies, [{ kind: "State", state: "Gauge.round" }]);
+    assert.deepEqual((prop(moving!.props, "kind") as { dependencies: unknown }).dependencies, [{ kind: "State", state: "Gauge.s.round" }]);
   });
 
   it("builds the shapes and updates the varying fields in place", () => {
     assert.match(compiled.code, /readonly shape: Shape = new Shape\(\{ kind: "rect", width: this\.props\.max, height: 4, color: "gray" \}\);/);
-    assert.match(compiled.code, /const (\$\d+) = this\.round \? "circle" : "rect";[^]*?this\.shape2\.kind = \1;/);
-    assert.match(compiled.code, /const (\$\d+) = \(this\.value > 5\) \? "red" : "green";[^]*?this\.shape2\.color = \1;/);
+    assert.match(compiled.code, /const (\$\d+) = this\.\$s_round \? "circle" : "rect";[^]*?this\.shape2\.kind = \1;/);
+    assert.match(compiled.code, /const (\$\d+) = \(this\.\$s_value > 5\) \? "red" : "green";[^]*?this\.shape2\.color = \1;/);
   });
 
   it("makes a Shape-rooted component a Shape, with the required props as placeholders when they vary", () => {
@@ -117,8 +115,8 @@ describe("M11: runtime behaviour", () => {
     world.mount(gauge);
     const [fixed, moving] = [gauge.shape, gauge.shape2];
     assert.deepEqual([fixed.kind, fixed.width, fixed.color, moving.kind, moving.width, moving.color], ["rect", 20, "gray", "rect", 0, "green"]);
-    gauge.setValue(8);
-    gauge.setRound(true);
+    gauge.s.value = (8);
+    gauge.s.round = (true);
     assert.equal(world.flush(), 1);
     assert.deepEqual([moving.kind, moving.width, moving.color], ["circle", 8, "red"]);
     assert.equal(gauge.shape, fixed);
@@ -130,7 +128,7 @@ describe("M11: runtime behaviour", () => {
     const gauge = new Gauge({ max: 20 });
     world.mount(gauge);
     assert.equal(gauge.shape2.worldTransform().x, 2, "its own x inside a parent at 0");
-    gauge.setValue(50);
+    gauge.s.value = (50);
     world.flush();
     assert.equal(gauge.shape2.worldTransform().x, 52, "the parent moved, the shape followed");
   });
@@ -178,7 +176,7 @@ describe("M11: diagnostics", () => {
   });
 
   it("leaves other expressions to the type-check", () => {
-    const compiled = compile(`function C() { const [big, setBig] = useState(false); return <Entity name="C"><Shape kind={big ? "circle" : "oval"} width={1} height={1} /></Entity>; }`);
+    const compiled = compile(`function C() { const s = useMutable({ big: false }); return <Entity name="C"><Shape kind={s.big ? "circle" : "oval"} width={1} height={1} /></Entity>; }`);
     assert.ok(typeCheck(compiled).some((d) => d.code === DiagnosticCode.GeneratedTypeError), "caught in the generated code");
   });
 
@@ -186,7 +184,7 @@ describe("M11: diagnostics", () => {
     const result = getCompiler().compile("C.tsx", `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Shape kind="rect" width={1} height={1} /></Entity>; }`);
     assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
-    assert.ok(compile(`function C() { const [width, setWidth] = useState(1); return <Shape kind="rect" width={width} height={1} />; }`).code.includes("$width: number"));
+    assert.ok(compile(`function C() { const width = useMutable({ n: 1 }); return <Shape kind="rect" width={width.n} height={1} />; }`).code.includes("get $width()"));
   });
 
   it("is driven by the manifest, not by Shape: any intrinsic prop can be restricted", () => {

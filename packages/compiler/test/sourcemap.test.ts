@@ -14,16 +14,15 @@ after(() => {
 const SOURCE = withAuthoringImports(`interface Item { id: string }
 
 export function Shelf() {
-  const [items, setItems] = useState<Item[]>([{ id: "a" }]);
-  const [n, setN] = useState(0);
+  const s = useMutable({ items: [{ id: "a" }] as Item[], n: 0 });
   useUpdate(() => {
-    setN((n) => n + 1);
-    if (n === 1) setItems([{ id: "b" }, { id: "b" }]);
+    s.n += 1;
+    if (s.n === 1) s.items = [{ id: "b" }, { id: "b" }];
   });
   return (
     <Entity name="Shelf">
-      <Sprite image="shelf.png" transform={{ x: n }} />
-      {items.map((item) => <Sprite key={item.id} image="box.png" />)}
+      <Sprite image="shelf.png" transform={{ x: s.n }} />
+      {s.items.map((item) => <Sprite key={item.id} image="box.png" />)}
     </Entity>
   );
 }
@@ -74,7 +73,7 @@ describe("source maps", () => {
     assert.equal(mapped("override onUpdate("), lineOf(SOURCE, "useUpdate("));
     assert.equal(mapped("readonly sprite: Sprite = new Sprite("), lineOf(SOURCE, `<Sprite image="shelf.png"`));
     assert.equal(mapped("Duplicate key"), lineOf(SOURCE, "items.map("));
-    assert.equal(mapped("setN(value:"), lineOf(SOURCE, "const [n, setN]"));
+    assert.equal(mapped("$set_s_n(value:"), lineOf(SOURCE, "const s = useMutable("));
     assert.equal(mapped("export class Shelf"), lineOf(SOURCE, "export function Shelf"));
   });
 

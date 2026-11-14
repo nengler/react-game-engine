@@ -1,4 +1,4 @@
-import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
 
 interface CoinProps {
   value: number;
@@ -7,11 +7,11 @@ interface CoinProps {
 
 // The component *is* a Sprite: no container around it, and a parent can place it like any other component.
 const Coin = ({ value, spin = 1 }: CoinProps) => {
-  const [angle, setAngle] = useState(0);
+  const s = useMutable({ angle: 0 });
   useUpdate((dt) => {
-    setAngle((angle) => angle + dt * spin);
+    s.angle += dt * spin;
   });
-  return <Sprite image={value >= 5 ? "gold-coin.png" : "coin.png"} rotation={angle} />;
+  return <Sprite image={value >= 5 ? "gold-coin.png" : "coin.png"} rotation={s.angle} />;
 };
 
 export default Coin;

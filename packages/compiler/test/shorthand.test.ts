@@ -18,22 +18,22 @@ const sourceErrors = (body: string): string[] =>
     .typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/S${Math.random()}.tsx`,
-        text: `import { Entity, Shape, Sprite, Music, useState } from "@rge/runtime/jsx";\ninterface DotProps { x: number }\nfunction Dot({ x }: DotProps) { return <Shape kind="rect" width={x} height={1} color="red" />; }\nfunction C() { const [n] = useState(3); return <Entity>${body}</Entity>; }\nvoid C; void Dot;`,
+        text: `import { Entity, Shape, Sprite, Music, useMutable } from "@rge/runtime/jsx";\ninterface DotProps { x: number }\nfunction Dot({ x }: DotProps) { return <Shape kind="rect" width={x} height={1} color="red" />; }\nfunction C() { const s = useMutable({ n: 3 }); const n = s.n; return <Entity>${body}</Entity>; }\nvoid C; void Dot;`,
       },
     ])
     .map((d) => d.message);
 
 describe("transform shorthand props", () => {
   it("places a built-in with x, y, rotation and scale written as props, from state, as transform does", async () => {
-    const compiled = compile(`import { Entity, Shape, useInput, useState } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Shape, useInput, useMutable } from "@rge/runtime/jsx";
 export function Row() {
-  const [at, setAt] = useState(4);
+  const s = useMutable({ at: 4 });
   useInput((input) => {
-    if (input.pressed("Space")) setAt(at + 10);
+    if (input.pressed("Space")) s.at += 10;
   });
   return (
     <Entity x={1} y={2}>
-      <Shape kind="rect" width={2} height={2} color="red" x={at} y={at * 2} rotation={0.5} scaleX={2} scaleY={3} z={7} />
+      <Shape kind="rect" width={2} height={2} color="red" x={s.at} y={s.at * 2} rotation={0.5} scaleX={2} scaleY={3} z={7} />
       <Shape kind="rect" width={2} height={2} color="blue" transform={{ x: 9 }} y={5} />
     </Entity>
   );

@@ -1,5 +1,5 @@
 // Is `rge lsp` working where a game is installed? Starts it, opens one of the game's components with a line added that the
-// compiler refuses (`useState` used without being imported), waits for that RGE diagnostic, and shuts the server down.
+// compiler refuses (`useMutable` used without being imported), waits for that RGE diagnostic, and shuts the server down.
 //
 //   node tools/lsp-smoke.ts <path of the rge command> <game folder>
 import { spawn } from "node:child_process";
@@ -11,7 +11,7 @@ const [rge, game] = process.argv.slice(2).map((arg) => resolve(arg)) as [string,
 const component = readdirSync(join(game, "src")).find((name) => name.endsWith(".tsx") && name !== "Main.tsx") ?? "Main.tsx";
 const path = join(game, "src", component);
 // A statement at the top of the component's body: after the line that declares it.
-const text = readFileSync(path, "utf8").replace(/(export (?:default )?function \w+\([^)]*\)[^{]*\{\n)/, "$1  const [smoke] = useState(0);\n");
+const text = readFileSync(path, "utf8").replace(/(export (?:default )?function \w+\([^)]*\)[^{]*\{\n)/, "$1  const smoke = useMutable({ n: 0 });\n");
 const uri = pathToFileURL(path).href;
 
 const child = spawn(rge, ["lsp"], { cwd: game, stdio: ["pipe", "pipe", "inherit"] });

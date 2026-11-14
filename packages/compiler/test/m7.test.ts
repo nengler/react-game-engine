@@ -30,7 +30,7 @@ function checkSource(source: string): { code: string; message: string }[] {
     .map((d) => ({ code: d.code, message: d.message }));
 }
 
-const IMPORTS = `import { useState, useRef, useUpdate, useInput, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";`;
+const IMPORTS = `import { useMutable, useRef, useUpdate, useInput, clamp, Entity, Sprite, Collider } from "@rge/runtime/jsx";`;
 
 describe("M7: the authoring module", () => {
   it("exports exactly the hooks, built-in elements and functions the compiler accepts, and the engine's own custom hooks", () => {
@@ -43,7 +43,7 @@ describe("M7: the authoring module", () => {
   });
 
   it("is compile-time only: calling a declaration throws", () => {
-    assert.throws(() => authoring.useState(0), /compile-time declaration/);
+    assert.throws(() => authoring.useMutable({ n: 0 }), /compile-time declaration/);
   });
 });
 
@@ -51,23 +51,21 @@ describe("M7: type-checking authored TSX", () => {
   it("accepts a component that uses every hook, built-in and a transform", () => {
     const source = `${IMPORTS}
 function Hero() {
-  const [health, setHealth] = useState(100);
-  const [title, setTitle] = useState("hero");
-  const [alive, setAlive] = useState<boolean>(true);
+  const s = useMutable({ health: 100, title: "hero", alive: (true) as boolean });
   const travelled = useRef(0);
   useUpdate((dt) => {
-    setHealth((health) => clamp(health - dt, 0, 100));
+    s.health = clamp(s.health - dt, 0, 100);
     travelled.current += dt;
   });
   useInput((input) => {
-    if (input.pressed("Space")) setTitle(\`hero \${input.pointerX}\`);
+    if (input.pressed("Space")) s.title = \`hero \${input.pointerX}\`;
   });
-  const hurt = health < 25;
+  const hurt = s.health < 25;
   return (
-    <Entity name={title} transform={{ x: health > 0 ? 1 : 0, y: 2, rotation: 0.5, scaleX: 1, scaleY: 1, global: false }}>
-      <Sprite image={hurt ? "hurt.png" : "ok.png"} transform={{ y: health }} />
-      {alive && <Collider width={16} height={24} onCollisionEnter={(other) => setAlive(false)} />}
-      {alive ? <Sprite image="a.png" /> : null}
+    <Entity name={s.title} transform={{ x: s.health > 0 ? 1 : 0, y: 2, rotation: 0.5, scaleX: 1, scaleY: 1, global: false }}>
+      <Sprite image={hurt ? "hurt.png" : "ok.png"} transform={{ y: s.health }} />
+      {s.alive && <Collider width={16} height={24} onCollisionEnter={(other) => { s.alive = false; }} />}
+      {s.alive ? <Sprite image="a.png" /> : null}
     </Entity>
   );
 }`;
@@ -75,16 +73,15 @@ function Hero() {
     assert.doesNotThrow(() => compile(source));
   });
 
-  it("types useState from its initial value, not as a literal", () => {
+  it("types a useMutable field from its initial value, not as a literal", () => {
     assert.deepEqual(
       checkSource(`${IMPORTS}
 function C() {
-  const [n, setN] = useState(0);
-  const [s, setS] = useState("a");
-  setN(5);
-  setN((n) => n + 1);
-  setS("b");
-  return <Entity name={s} transform={{ x: n }} />;
+  const st = useMutable({ n: 0, s: "a" });
+  st.n = 5;
+  st.n += 1;
+  st.s = "b";
+  return <Entity name={st.s} transform={{ x: st.n }} />;
 }`),
       [],
     );
@@ -119,11 +116,11 @@ function Level() { return <Entity name="level"><Coin value={1} transform={{ x: 1
     assert.ok(checkSource(source.replace("<Coin value={1}", "<Coin value={1} nope={2}")).length > 0, "other unknown props are still reported");
   });
 
-  it("reports setter and ref misuse", () => {
-    for (const body of [`setN("a");`, `setN((n) => n + "a");`, `r.current = "a";`, `useUpdate((dt) => dt.x);`, `useInput((input) => input.nope);`]) {
+  it("reports field and ref misuse", () => {
+    for (const body of [`s.n = "a";`, `s.nope = 1;`, `r.current = "a";`, `useUpdate((dt) => dt.x);`, `useInput((input) => input.nope);`]) {
       const errors = checkSource(`${IMPORTS}
 function C() {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   const r = useRef(0);
   ${body}
   return <Entity />;
@@ -137,8 +134,8 @@ function C() {
     assert.ok(checkSource(wrap(`<Sprite image="a"><Entity /></Sprite>`)).length > 0);
     assert.ok(checkSource(wrap(`<div />`)).length > 0);
     // Not imported: an editor reports it, and so does the checker.
-    const unimported = checkSource(`function C() { const [n] = useState(0); return <Entity />; }`);
-    assert.ok(unimported.some((e) => /useState/.test(e.message)));
+    const unimported = checkSource(`function C() { const s = useMutable({ n: 0 }); return <Entity />; }`);
+    assert.ok(unimported.some((e) => /useMutable/.test(e.message)));
   });
 
   it("accepts a component used from the same file and a component imported from another file", () => {
@@ -158,19 +155,18 @@ describe("M7: imports are mandatory", () => {
 
   it("reports each hook, element and function used without an import, once per name", () => {
     const source = `function C() {
-  const [n, setN] = useState(0);
-  const [m, setM] = useState(0);
-  useUpdate((dt) => setN(clamp(n + dt, 0, 10)));
-  useUpdate((dt) => setM(clamp(m + dt, 0, 10)));
+  const s = useMutable({ n: 0, m: 0 });
+  useUpdate((dt) => { s.n = clamp(s.n + dt, 0, 10); });
+  useUpdate((dt) => { s.m = clamp(s.m + dt, 0, 10); });
   return <Entity name="C"><Sprite image="a.png" /><Sprite image="b.png" /></Entity>;
 }`;
     const result = getCompiler().compile("Raw.tsx", source);
     assert.ok(!result.ok);
     assert.ok(result.diagnostics.every((d) => d.code === DiagnosticCode.MissingImport));
-    // useState and useUpdate are each used twice, Sprite twice: still one report per name, in order of first use.
+    // useUpdate is used twice, Sprite twice: still one report per name, in order of first use.
     assert.deepEqual(
       result.diagnostics.map((d) => /'(\w+)'/.exec(d.message)?.[1]),
-      ["useState", "useUpdate", "clamp", "Entity", "Sprite"],
+      ["useMutable", "useUpdate", "clamp", "Entity", "Sprite"],
     );
   });
 
@@ -185,18 +181,18 @@ describe("M7: imports are mandatory", () => {
   });
 
   it("is satisfied by importing, and does not ask for globals like Math", () => {
-    const source = `import { useState, useUpdate, Entity } from "@rge/runtime/jsx";
+    const source = `import { useMutable, useUpdate, Entity } from "@rge/runtime/jsx";
 function C() {
-  const [n, setN] = useState(0);
-  useUpdate(() => setN(Math.floor(n + 1)));
+  const s = useMutable({ n: 0 });
+  useUpdate(() => { s.n = Math.floor(s.n + 1); });
   return <Entity name="C" />;
 }`;
     assert.deepEqual(codes(source), []);
   });
 
   it("checks every hook kind, including the ones that shaped earlier tests", () => {
-    for (const hook of ["useState", "useRef", "useUpdate", "useInput"]) {
-      const body = hook === "useState" ? `const [a] = useState(0);` : hook === "useRef" ? `const a = useRef(0);` : `${hook}(() => {});`;
+    for (const hook of ["useMutable", "useRef", "useUpdate", "useInput"]) {
+      const body = hook === "useMutable" ? `const a = useMutable({ n: 0 });` : hook === "useRef" ? `const a = useRef(0);` : `${hook}(() => {});`;
       const others = ["Entity", ...AUTHORING_HOOKS.filter((h) => h !== hook)].join(", ");
       const result = codes(`import { ${others} } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`);
       assert.deepEqual(result, [DiagnosticCode.MissingImport], hook);

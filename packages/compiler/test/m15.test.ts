@@ -16,12 +16,12 @@ after(() => {
 
 const HERO = `
 function Hero() {
-  const [hits, setHits] = useState(0);
+  const s = useMutable({ hits: 0 });
   const playHit = useSound("hit.wav");
   const playDing = useSound("ding.wav");
 
   useUpdate((dt) => {
-    if (hits >= 2) {
+    if (s.hits >= 2) {
       playDing();
     }
   });
@@ -33,7 +33,7 @@ function Hero() {
         height={10}
         onCollisionEnter={() => {
           playHit();
-          setHits((n) => n + 1);
+          s.hits += 1;
         }}
       />
     </Entity>
@@ -46,6 +46,7 @@ interface HeroInstance extends Entity {
   readonly playHit: Sound;
   readonly playDing: Sound;
   readonly collider: Collider;
+  s: { [field: string]: unknown };
 }
 let Hero: new () => HeroInstance;
 
@@ -85,7 +86,7 @@ describe("M15: runtime behaviour", () => {
     world.reportCollision(hero.collider, new Collider({ width: 1, height: 1 }));
     assert.equal(hero.playHit.plays, 1, "played at once, before any flush");
     assert.equal(world.flush(), 1, "only the state change renders");
-    assert.equal(hero.hits, 1);
+    assert.equal(hero.s.hits, 1);
   });
 
   it("keeps each sound's plays separate", () => {
@@ -132,11 +133,9 @@ describe("M15: diagnostics", () => {
     assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={play} />`), [DiagnosticCode.SoundOutsideHandler]);
   });
 
-  it("rejects a play inside a state updater, which runs inside the setter", () => {
-    const body = `<Collider width={1} height={1} onCollisionEnter={() => setN((p) => { play(); return p + 1; })} />`;
-    assert.deepEqual(codes(body, `const [n, setN] = useState(0);`), [DiagnosticCode.SoundOutsideHandler]);
-    const fine = compile(`function C() { const play = useSound("a.wav"); const [n, setN] = useState(0); return <Entity name="C"><Collider width={1} height={1} onCollisionEnter={() => { play(); setN((p) => p + 1); }} /></Entity>; }`);
-    assert.deepEqual(typeCheck(fine), [], "next to the setter is fine");
+  it("plays a sound next to a write", () => {
+    const fine = compile(`function C() { const play = useSound("a.wav"); const s = useMutable({ n: 0 }); return <Entity name="C"><Collider width={1} height={1} onCollisionEnter={() => { play(); s.n += 1; }} /></Entity>; }`);
+    assert.deepEqual(typeCheck(fine), []);
   });
 
   it("reports a call with more than the volume as an unsupported statement", () => {
@@ -154,7 +153,7 @@ describe("M15: diagnostics", () => {
   });
 
   it("rejects a name that is taken, and a binding that is not a plain const", () => {
-    assert.deepEqual(compileErrors(`function C() { const [play, setPlay] = useState(0); const play2 = useSound("a.wav"); const play = useSound("b.wav"); return <Entity name="C" />; }`).length > 0, true);
+    assert.deepEqual(compileErrors(`function C() { const play = useMutable({ n: 0 }); const play2 = useSound("a.wav"); const play = useSound("b.wav"); return <Entity name="C" />; }`).length > 0, true);
     assert.deepEqual(compileErrors(`function C() { let play = useSound("a.wav"); return <Entity name="C" />; }`).map((d) => d.code), [DiagnosticCode.InvalidUseSound]);
   });
 

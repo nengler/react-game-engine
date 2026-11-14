@@ -95,13 +95,13 @@ export function Heart({ hp, colour }: { hp: number }) {
 
 describe("an object state without its type written", () => {
   it("takes its literal's type, as TypeScript would", async () => {
-    const compiled = compile(`import { Entity, Text, useInput, useState } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Text, useInput, useMutable } from "@rge/runtime/jsx";
 export function Walker() {
-  const [at, setAt] = useState({ x: 0, y: 0, tags: ["a"], last: { hit: false } });
+  const s = useMutable({ at: { x: 0, y: 0, tags: ["a"], last: { hit: false } } });
   useInput((input) => {
-    if (input.pressed("Right")) setAt({ ...at, x: at.x + 1, tags: [...at.tags, "r"] });
+    if (input.pressed("Right")) s.at = { ...s.at, x: s.at.x + 1, tags: [...s.at.tags, "r"] };
   });
-  return <Entity x={at.x}><Text>{at.tags.join(",")}</Text></Entity>;
+  return <Entity x={s.at.x}><Text>{s.at.tags.join(",")}</Text></Entity>;
 }`);
     assert.match(compiled.code, /at: \{ x: number; y: number; tags: string\[\]; last: \{ hit: boolean \} \} = /);
     assert.deepEqual(typeCheck(compiled), []);
@@ -117,13 +117,13 @@ export function Walker() {
   });
 
   it("still asks for the type of an empty array, which TypeScript would call never[]", () => {
-    const errors = compileErrors(`import { Entity, useState } from "@rge/runtime/jsx";
+    const errors = compileErrors(`import { Entity, useMutable } from "@rge/runtime/jsx";
 export function A() {
-  const [items] = useState([]);
-  return <Entity x={items.length} />;
+  const s = useMutable({ items: [] });
+  return <Entity x={s.items.length} />;
 }`);
     assert.equal(errors.length, 1);
-    assert.match(errors[0]!.message, /^An empty array state needs its type/);
+    assert.match(errors[0]!.message, /^An empty array needs its type/);
   });
 });
 
@@ -136,12 +136,12 @@ describe("a module imported whole", () => {
     writeFileSync(join(dir, "src/constants.ts"), `export const SPEED = 3;\nexport function twice(n: number): number {\n  return n * 2;\n}\n`);
     writeFileSync(
       join(dir, "src/Mover.tsx"),
-      `import { Entity, useState, useUpdate } from "@rge/runtime/jsx";
+      `import { Entity, useMutable, useUpdate } from "@rge/runtime/jsx";
 import * as K from "./constants.ts";
 export function Mover() {
-  const [x, setX] = useState(0);
-  useUpdate((dt) => setX(x + K.SPEED * dt));
-  return <Entity x={K.twice(x)} />;
+  const s = useMutable({ x: 0 });
+  useUpdate((dt) => { s.x += K.SPEED * dt; });
+  return <Entity x={K.twice(s.x)} />;
 }
 `,
     );
@@ -150,6 +150,6 @@ export function Mover() {
     const out = readFileSync(join(dir, "out/Mover.ts"), "utf8");
     assert.match(out, /^import \* as K from "\.\.\/src\/constants\.ts";$/m);
     assert.match(out, /K\.SPEED \* dt/);
-    assert.match(out, /K\.twice\(this\.x\)/);
+    assert.match(out, /K\.twice\(this\.\$s_x\)/);
   });
 });

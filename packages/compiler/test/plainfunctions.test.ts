@@ -39,7 +39,7 @@ describe("plain functions imported from a relative .ts file", () => {
   it("are called in props and derived values, as statements in handlers, and passed as values, with loops and anything else inside them", () => {
     const p = project({
       "helpers.ts": HELPERS,
-      "A.tsx": `import { Entity, Shape, useState, useUpdate } from "@rge/runtime/jsx";
+      "A.tsx": `import { Entity, Shape, useMutable, useUpdate } from "@rge/runtime/jsx";
 import { shade, log, ease } from "./helpers.ts";
 
 interface Props { curve: (t: number) => number }
@@ -49,15 +49,15 @@ export function Child({ curve }: Props) {
 }
 
 export function A() {
-  const [n, setN] = useState(0);
-  const half = ease(n) / 2;
+  const s = useMutable({ n: 0 });
+  const half = ease(s.n) / 2;
   useUpdate(() => {
     log("tick");
-    setN((n) => n + 1);
+    s.n += 1;
   });
   return (
     <Entity name="A" transform={{ x: half }}>
-      <Shape kind="rect" width={4} height={4} color={shade(n, "x")} />
+      <Shape kind="rect" width={4} height={4} color={shade(s.n, "x")} />
       <Child curve={ease} />
     </Entity>
   );
@@ -69,7 +69,7 @@ export function A() {
       assert.equal(r.status, 0, r.stderr);
       const code = p.out("A.ts");
       assert.match(code, /import \{ shade, log, ease \} from "\.\.\/src\/helpers\.ts";/);
-      assert.match(code, /color: shade\(this\.n, "x"\)/);
+      assert.match(code, /color: shade\(this\.\$s_n, "x"\)/);
       assert.match(code, /log\("tick"\);/);
       assert.match(code, /curve: ease/);
     } finally {
@@ -80,15 +80,15 @@ export function A() {
   it("are imported when only a function of the component's own uses them, values and types alike", () => {
     const p = project({
       "helpers.ts": `${HELPERS}export interface Shot { readonly speed: number }\nexport const SPEEDS = { fast: 3 };\n`,
-      "A.tsx": `import { Pointer, useState } from "@rge/runtime/jsx";
+      "A.tsx": `import { Pointer, useMutable } from "@rge/runtime/jsx";
 import { ease, SPEEDS, type Shot } from "./helpers.ts";
 
 export function A() {
-  const [n, setN] = useState(0);
+  const s = useMutable({ n: 0 });
   const fire = (shot: Shot) => {
-    setN(ease(shot.speed) + SPEEDS.fast);
+    s.n = ease(shot.speed) + SPEEDS.fast;
   };
-  return <Pointer width={4} height={4} transform={{ x: n }} onPress={() => fire({ speed: 2 })} />;
+  return <Pointer width={4} height={4} transform={{ x: s.n }} onPress={() => fire({ speed: 2 })} />;
 }
 `,
     });
@@ -109,17 +109,17 @@ export function A() {
 export const ROOMS: readonly RoomData[] = [{ name: "a", index: 0, x: 0 }, { name: "b", index: 1, x: 320 }, { name: "c", index: 2, x: 640 }];
 export const fx = { bursts: 0, burst(name: string, x: number): void { void name; this.bursts += x; } };
 `,
-      "D.tsx": `import { Entity, Shape, useState, useUpdate } from "@rge/runtime/jsx";
+      "D.tsx": `import { Entity, Shape, useMutable, useUpdate } from "@rge/runtime/jsx";
 import { ROOMS, fx } from "./data.ts";
 export function D() {
-  const [room, setRoom] = useState(0);
+  const s = useMutable({ room: 0 });
   useUpdate(() => {
-    fx.burst("dust", room);
-    setRoom((r) => r + 1);
+    fx.burst("dust", s.room);
+    s.room += 1;
   });
   return (
     <Entity name="D">
-      {ROOMS.filter((r) => Math.abs(r.index - room) <= 1).map((r) => <Shape key={r.name} kind="rect" width={4} height={4} color="#fff" transform={{ x: r.x }} />)}
+      {ROOMS.filter((r) => Math.abs(r.index - s.room) <= 1).map((r) => <Shape key={r.name} kind="rect" width={4} height={4} color="#fff" transform={{ x: r.x }} />)}
     </Entity>
   );
 }
@@ -130,8 +130,8 @@ export function D() {
       assert.equal(r.status, 0, r.stderr);
       const code = p.out("D.ts");
       assert.match(code, /import \{ ROOMS, fx \} from "\.\.\/src\/data\.ts";/);
-      assert.match(code, /fx\.burst\("dust", this\.room\);/);
-      assert.match(code, /const \$list = ROOMS\.filter\(\(r\) => \(?Math\.abs\(r\.index - this\.room\)/);
+      assert.match(code, /fx\.burst\("dust", this\.#\$s_roomNext\);/);
+      assert.match(code, /const \$list = ROOMS\.filter\(\(r\) => \(?Math\.abs\(r\.index - this\.\$s_room\)/);
     } finally {
       rmSync(p.dir, { recursive: true, force: true });
     }
@@ -166,12 +166,11 @@ export default function Main() { return <Game controls={controls}><Hero /></Game
   it("re-run only when their arguments change: a dynamic prop depends on the state in its arguments", () => {
     const p = project({
       "helpers.ts": HELPERS,
-      "B.tsx": `import { Entity, Shape, useState } from "@rge/runtime/jsx";
+      "B.tsx": `import { Entity, Shape, useMutable } from "@rge/runtime/jsx";
 import { shade } from "./helpers.ts";
 export function B() {
-  const [n] = useState(0);
-  const [other] = useState(0);
-  return <Entity name="B"><Shape kind="rect" width={1} height={1} color={shade(n, "a")} transform={{ x: other }} /></Entity>;
+  const s = useMutable({ n: 0, other: 0 });
+  return <Entity name="B"><Shape kind="rect" width={1} height={1} color={shade(s.n, "a")} transform={{ x: s.other }} /></Entity>;
 }
 `,
     });
@@ -180,7 +179,7 @@ export function B() {
       const ir = JSON.parse(p.out("B.ir.json")) as { components: { root: { children: { element: { props: { name: string; kind: string; dependencies?: { state: string }[] }[] } }[] } }[] };
       const color = ir.components[0]!.root.children[0]!.element.props.find((x) => x.name === "color")!;
       assert.equal(color.kind, "DynamicProp");
-      assert.deepEqual(color.dependencies?.map((d) => d.state), ["B.n"]);
+      assert.deepEqual(color.dependencies?.map((d) => d.state), ["B.s.n"]);
     } finally {
       rmSync(p.dir, { recursive: true, force: true });
     }
@@ -204,13 +203,13 @@ export function B() {
   it("make a router's transition: a Router takes a function from a .ts file, and its route follows state", () => {
     const p = project({
       "transitions.ts": `import type { TransitionFrame } from "@rge/runtime";\nexport function wipe(t: number): TransitionFrame { return { toX: 320 - 320 * t, cover: 0 }; }\n`,
-      "R.tsx": `import { Entity, Route, Router, useState } from "@rge/runtime/jsx";
+      "R.tsx": `import { Entity, Route, Router, useMutable } from "@rge/runtime/jsx";
 import { wipe } from "./transitions.ts";
 export function R() {
-  const [screen] = useState("a");
+  const s = useMutable({ screen: "a" });
   return (
     <Entity name="R">
-      <Router route={screen} transition={wipe} duration={0.3}>
+      <Router route={s.screen} transition={wipe} duration={0.3}>
         <Route name="a"><Entity name="A" /></Route>
         <Route name="b"><Entity name="B" /></Route>
       </Router>
@@ -223,7 +222,7 @@ export function R() {
       const r = p.run();
       assert.equal(r.status, 0, r.stderr);
       const code = p.out("R.ts");
-      assert.match(code, /new Router\(\{ route: this\.screen, transition: wipe, duration: 0\.3 \}\)/);
+      assert.match(code, /new Router\(\{ route: this\.\$s_screen, transition: wipe, duration: 0\.3 \}\)/);
       assert.match(code, /import \{ wipe \} from "\.\.\/src\/transitions\.ts";/);
       assert.match(code, /new Route\(\{ name: "a" \}\)/);
     } finally {

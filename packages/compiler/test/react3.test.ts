@@ -18,13 +18,13 @@ describe("undefined", () => {
   const SOURCE = `
 interface GateProps { frame?: number; }
 export function Gate({ frame }: GateProps) {
-  const [last, setLast] = useState<string | undefined>(undefined);
+  const s = useMutable({ last: undefined as string | undefined });
   useInput((input) => {
     const key = input.lastPressed();
-    if (key !== undefined) setLast(key);
+    if (key !== undefined) s.last = key;
   });
   return (
-    <Entity name={last === undefined ? "none" : last}>
+    <Entity name={s.last === undefined ? "none" : s.last}>
       {frame !== undefined && <Sprite image="gate.png" frame={frame} />}
       {frame === undefined ? null : <Entity name="shown" />}
     </Entity>
@@ -61,14 +61,16 @@ function onMap(run: Run): Enemy[] {
 }
 
 export function Foes() {
-  const [run, setRun] = useState<Run>({ map: "a", enemies: [{ id: "b1", map: "a", kind: "beetle", x: 1 }, { id: "w1", map: "b", kind: "wisp", x: 2 }] });
+  const st = useMutable({
+    run: { map: "a", enemies: [{ id: "b1", map: "a", kind: "beetle", x: 1 }, { id: "w1", map: "b", kind: "wisp", x: 2 }] } as Run,
+  });
   return (
     <Entity name="Foes">
       <Entity name="byHelper">
-        {onMap(run).map((e) => <Sprite key={e.id} image="things.png" frame={FRAME[e.kind]} transform={{ x: e.x }} />)}
+        {onMap(st.run).map((e) => <Sprite key={e.id} image="things.png" frame={FRAME[e.kind]} transform={{ x: e.x }} />)}
       </Entity>
       <Entity name="byMember">
-        {run.enemies.map((e) => ({ id: e.id, frame: FRAME[e.kind] })).map((s) => <Sprite key={s.id} image="things.png" frame={s.frame} />)}
+        {st.run.enemies.map((e) => ({ id: e.id, frame: FRAME[e.kind] })).map((s) => <Sprite key={s.id} image="things.png" frame={s.frame} />)}
       </Entity>
     </Entity>
   );
@@ -77,7 +79,7 @@ export function Foes() {
   it("type-checks, and follows the state the computation reads", async () => {
     const compiled = compile(SOURCE);
     assert.deepEqual(typeCheck(compiled), []);
-    const { Foes } = await load<{ Foes: new () => Entity & { setRun(r: unknown): void } }>(compiled);
+    const { Foes } = await load<{ Foes: new () => Entity & { st: { [field: string]: unknown } } }>(compiled);
     const world = new World();
     const foes = new Foes();
     world.mount(foes);
@@ -86,7 +88,7 @@ export function Foes() {
     assert.deepEqual(frames("byHelper"), [4]);
     assert.deepEqual(frames("byMember"), [4, 5]);
     const beetle = foes.children[0]!.children[0];
-    foes.setRun({ map: "a", enemies: [{ id: "b1", map: "a", kind: "beetle", x: 9 }, { id: "w1", map: "a", kind: "wisp", x: 2 }] });
+    foes.st.run = ({ map: "a", enemies: [{ id: "b1", map: "a", kind: "beetle", x: 9 }, { id: "w1", map: "a", kind: "wisp", x: 2 }] });
     world.flush();
     assert.deepEqual(frames("byHelper"), [4, 5]);
     assert.equal(foes.children[0]!.children[0], beetle, "an item keeps its instance by key");
@@ -98,13 +100,13 @@ describe("methods of strings and numbers, and more array methods", () => {
   const SOURCE = `
 interface ClockProps { seconds: number; label: string; ids: string[]; }
 export function Clock({ seconds, label, ids }: ClockProps) {
-  const [picked, setPicked] = useState("");
+  const s = useMutable({ picked: "" });
   useInput((input) => {
     const id = ids.at(0) ?? "";
-    if (input.pressed("Enter") && id.startsWith("bind:")) setPicked(id.slice(5).toUpperCase());
+    if (input.pressed("Enter") && id.startsWith("bind:")) s.picked = id.slice(5).toUpperCase();
   });
   return (
-    <Entity name={picked}>
+    <Entity name={s.picked}>
       <Text>{\`\${Math.floor(seconds / 60)}:\${String(seconds % 60).padStart(2, "0")} \${label.trim().toUpperCase()} \${(seconds / 7).toFixed(1)}\`}</Text>
       <Text>{ids.flatMap((id) => [id, id.length]).join(" / ")}</Text>
     </Entity>
@@ -142,12 +144,11 @@ function heroOf(step: number): Hero {
 }
 
 export function Walker() {
-  const [step, setStep] = useState(1);
-  const [blink, setBlink] = useState(false);
-  const { x, y, frame: f } = heroOf(step);
+  const s = useMutable({ step: 1, blink: false });
+  const { x, y, frame: f } = heroOf(s.step);
   const [first, , third] = [x, y, f];
   return (
-    <Entity name={blink ? "on" : "off"}>
+    <Entity name={s.blink ? "on" : "off"}>
       <Sprite image="hero.png" frame={f} transform={{ x, y }} />
       <Text>{\`\${first} \${third}\`}</Text>
     </Entity>
@@ -156,9 +157,9 @@ export function Walker() {
 
   it("reads members of one value, worked out again only when what it reads changes", async () => {
     const compiled = compile(SOURCE);
-    assert.match(compiled.code, /this\.\$memo\("x,y,f", \[this\.step\], \(\) => heroOf\(this\.step\)\)/);
+    assert.match(compiled.code, /this\.\$memo\("x,y,f", \[this\.\$s_step\], \(\) => heroOf\(this\.\$s_step\)\)/);
     assert.deepEqual(typeCheck(compiled), []);
-    const { Walker, CALLS } = await load<{ Walker: new () => Entity & { setStep(n: number): void; setBlink(b: boolean): void }; CALLS: { hero: number } }>(compiled);
+    const { Walker, CALLS } = await load<{ Walker: new () => Entity & { s: { [field: string]: unknown } }; CALLS: { hero: number } }>(compiled);
     const world = new World();
     const walker = new Walker();
     world.mount(walker);
@@ -166,11 +167,11 @@ export function Walker() {
     const sprite = walker.children[0] as Sprite;
     assert.deepEqual([sprite.transform.x, sprite.transform.y, sprite.frame, (walker.children[1] as Text).text], [2, 3, 1, "2 1"]);
     assert.equal(CALLS.hero, 1, "three uses, one call");
-    walker.setBlink(true);
+    walker.s.blink = (true);
     world.flush();
     assert.equal(walker.name, "on");
     assert.equal(CALLS.hero, 1, "a render that changes nothing it reads does not call it again");
-    walker.setStep(2);
+    walker.s.step = (2);
     world.flush();
     assert.deepEqual([sprite.transform.x, sprite.frame], [4, 2]);
     assert.equal(CALLS.hero, 2);

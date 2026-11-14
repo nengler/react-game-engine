@@ -11,12 +11,12 @@ after(() => {
 
 const PANEL = `
 export function Panel() {
-  const [open, setOpen] = useState(false);
-  const y = useSpring(open ? 0 : -40, { duration: 0.4, bounce: 0.2 });
-  const opacity = useTween(open ? 1 : 0, { duration: 0.25, ease: "linear" });
-  const x = useSpring(open ? 10 : 0);
+  const s = useMutable({ open: false });
+  const y = useSpring(s.open ? 0 : -40, { duration: 0.4, bounce: 0.2 });
+  const opacity = useTween(s.open ? 1 : 0, { duration: 0.25, ease: "linear" });
+  const x = useSpring(s.open ? 10 : 0);
   useInput((input) => {
-    if (input.pressed("Space")) setOpen(!open);
+    if (input.pressed("Space")) s.open = !s.open;
   });
   return <Entity transform={{ x, y, opacity }} />;
 }`;
@@ -56,7 +56,8 @@ describe("useSpring and useTween", () => {
     }
     assert.ok(Math.max(...ys) > 0, `bounce 0.2 overshoots: highest ${Math.max(...ys)}`);
     assert.equal(ys.at(-1), 0, "and settles exactly on the target");
-    assert.ok(Math.abs((as[6] as number) - 7 / 15) < 0.02, `linear: ${as[6]} after 8 of 15 steps`);
+    // The press and the tween's step are in the same frame: the tween reads the new target at once, so it moves in that step too.
+    assert.ok(Math.abs((as[6] as number) - 8 / 15) < 0.02, `linear: ${as[6]} after 8 of 15 steps`);
     assert.equal(as.at(-1), 1);
     assert.equal(panel.transform.x, 10, "a spring with the defaults settles too");
   });
@@ -121,14 +122,14 @@ describe("the spring's math", () => {
 
 describe("a file that imports a type beside a shipped hook", () => {
   it("keeps the type import as written when the hook is taken out of it", () => {
-    const compiled = compile(`import { type Child, Entity, useMount, useState, useTween } from "@rge/runtime/jsx";
+    const compiled = compile(`import { type Child, Entity, useMount, useMutable, useTween } from "@rge/runtime/jsx";
 interface FadeProps { children: Child }
 export function FadeIn({ children }: FadeProps) {
-  const [shown, setShown] = useState(false);
+  const s = useMutable({ shown: false });
   useMount(() => {
-    setShown(true);
+    s.shown = true;
   });
-  const opacity = useTween(shown ? 1 : 0);
+  const opacity = useTween(s.shown ? 1 : 0);
   return <Entity transform={{ opacity }}>{children}</Entity>;
 }`);
     assert.deepEqual(typeCheck(compiled), []);

@@ -2,7 +2,7 @@
 import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type RefId, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
 import { collectDependencies, walkExpr } from "../ir/walk.ts";
 import { CodeWriter } from "./writer.ts";
-import { param, escapeTemplate, propertyKey } from "./helpers.ts";
+import { param, escapeTemplate, pendingRef, propertyKey, typeText } from "./helpers.ts";
 
 /** How some IR is written where the emitter is. Each field is set for a stretch of emitting with `within`. */
 export interface EmitMode {
@@ -229,7 +229,7 @@ export class ExpressionEmitter {
       case "StringLiteral": return JSON.stringify(e.value);
       case "BooleanLiteral": return String(e.value);
       case "NullLiteral": return "null";
-      case "StateRead": return `this.${this.state(e.state).name}`;
+      case "StateRead": return e.live ? pendingRef(this.state(e.state)) : `this.${this.state(e.state).name}`;
       case "LocalRead": return e.name;
       case "ParamRead":
         return this.mode.itemLookup !== null && this.mode.inCallback && e.param === this.mode.itemLookup.id ? this.mode.itemLookup.text : e.name;
@@ -245,9 +245,15 @@ export class ExpressionEmitter {
       case "NonNull": return `${this.expr(e.expression)}!`;
       case "IndexRead": return `${this.expr(e.object)}${e.optional ? "?." : ""}[${this.expr(e.index, true)}]`;
       case "ArrayLiteral": return `[${e.elements.map((el) => `${el.spread ? "..." : ""}${this.expr(el.value, true)}`).join(", ")}]`;
-      case "ObjectLiteral":
+      case "ObjectLiteral": {
         if (e.properties.length === 0) return "{}";
-        return `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
+        const literal = `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
+        if (!e.mutableCopy) return literal;
+        // A `useMutable` read whole: typed as its fields, so it is not checked as a fresh literal (`total(s)` with more fields than
+        // `total` takes is fine in the source, where `s` is a variable).
+        const fields = e.properties.map((p) => (p.kind === "Property" && p.value.kind === "StateRead" ? `${propertyKey(p.name)}: ${typeText(this.state(p.value.state).type)}` : ""));
+        return `(${literal} as { ${fields.join("; ")} })`;
+      }
       case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.arrowBody(e.body)}`);
       case "Callback": return this.callback(e.fn);
       case "Block": return `(${this.callback(e.fn)})()`;
@@ -277,7 +283,14 @@ export class ExpressionEmitter {
         const local = this.mode.memoLocals.get(e.key) ?? (this.mode.inCallback ? undefined : this.mode.renderMemos.get(e.key));
         if (local !== undefined) return local;
         // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
-        const deps = collectDependencies(e.value).map((d) => (d.kind === "State" ? `this.${this.state(d.state).name}` : d.kind === "Prop" ? `this.props.${d.name}` : null));
+        // A memo a handler works out from `useMutable` fields as they are now (`spawns@live`) depends on their live values.
+        const live = new Set<StateId>();
+        walkExpr(e.value, (x) => {
+          if (x.kind === "StateRead" && x.live) live.add(x.state);
+        });
+        const deps = collectDependencies(e.value).map((d) =>
+          d.kind === "State" ? (live.has(d.state) ? pendingRef(this.state(d.state)) : `this.${this.state(d.state).name}`) : d.kind === "Prop" ? `this.props.${d.name}` : null,
+        );
         if (deps.includes(null)) throw new Error(`A memo of ${this.c.name} reads a list item`);
         // Read under a condition (`return hero ? <Hp value={hp} /> : null` from `if (!hero) return null;`): TypeScript does not carry
         // the narrowing into the memo's function, so it starts by assuming the condition again, which holds where it is read.

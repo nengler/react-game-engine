@@ -9,11 +9,11 @@ after(closeCompiler);
 
 const PLAYER = `
 function Player() {
-  const [health, setHealth] = useState(100);
+  const s = useMutable({ health: 100 });
   return (
     <Entity>
       <Sprite image="player.png" />
-      {health < 25 && <WarningIcon />}
+      {s.health < 25 && <WarningIcon />}
     </Entity>
   );
 }
@@ -59,10 +59,10 @@ describe("analyzer", () => {
       const player = analysis.components[0]!;
       assert.equal(player.hooks.length, 1);
       const hook = player.hooks[0]!;
-      assert.equal(hook.kind, "useState");
-      assert.equal(hook.valueName, "health");
-      assert.equal(hook.setterName, "setHealth");
-      assert.equal(hook.initializer?.kind, SyntaxKind.NumericLiteral);
+      assert.equal(hook.kind, "useMutable");
+      assert.equal(hook.name, "s");
+      assert.deepEqual(hook.fields.map((f) => f.name), ["health"]);
+      assert.equal(hook.fields[0]!.initializer.kind, SyntaxKind.NumericLiteral);
 
       assert.ok(isJsxElement(player.jsx));
       assert.deepEqual(player.jsxTags, ["Entity", "Sprite", "WarningIcon"]);
@@ -89,8 +89,8 @@ describe("analyzer", () => {
   it("rejects hooks that are not at the top level", () => {
     const diagnostics = compileErrors(`
       function Bad() {
-        const [a, setA] = useState(1);
-        return <Entity>{a > 0 && useState(2) && <Sprite image="x" />}</Entity>;
+        const s = useMutable({ a: 1 });
+        return <Entity>{s.a > 0 && useState(2) && <Sprite image="x" />}</Entity>;
       }
     `);
     assert.ok(diagnostics.some((d) => d.code === DiagnosticCode.HookNotAtTopLevel));
@@ -121,7 +121,7 @@ describe("IR construction", () => {
         {
           kind: "Component",
           name: "Player",
-          hooks: [{ kind: "UseState", state: "Player.health", setterName: "setHealth" }],
+          hooks: [{ kind: "UseState", state: "Player.s.health", setterName: "$set_s_health" }],
           refs: [],
           sounds: [],
           functions: [],
@@ -133,10 +133,11 @@ describe("IR construction", () => {
           state: [
             {
               kind: "State",
-              id: "Player.health",
-              name: "health",
+              id: "Player.s.health",
+              name: "$s_health",
               type: { kind: "Primitive", name: "number" },
               initialValue: { kind: "NumberLiteral", value: 100 },
+              mutable: { name: "s", view: "s", field: "health" },
             },
           ],
           root: {
@@ -162,10 +163,10 @@ describe("IR construction", () => {
                 condition: {
                   kind: "Binary",
                   operator: "<",
-                  left: { kind: "StateRead", state: "Player.health" },
+                  left: { kind: "StateRead", state: "Player.s.health" },
                   right: { kind: "NumberLiteral", value: 25 },
                 },
-                dependencies: [{ kind: "State", state: "Player.health" }],
+                dependencies: [{ kind: "State", state: "Player.s.health" }],
                 element: {
                   kind: "Element",
                   id: "Player/1",
@@ -208,11 +209,10 @@ describe("IR construction", () => {
   it("classifies props as static or dynamic by their state dependencies", () => {
     const { ir } = compile(`
       function P() {
-        const [health, setHealth] = useState(100);
-        const [label, setLabel] = useState("a");
+        const s = useMutable({ health: 100, label: "a" });
         return (
-          <Entity name={label}>
-            <Sprite image={health > 50 ? "normal.png" : "hurt.png"} />
+          <Entity name={s.label}>
+            <Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} />
             <Collider width={8 * 2} height={-(4)} />
           </Entity>
         );
@@ -220,19 +220,19 @@ describe("IR construction", () => {
     `);
     const p = ir.components[0]!;
     assert.deepEqual(stripSpans(p.root.props), [
-      { kind: "DynamicProp", name: "name", value: { kind: "StateRead", state: "P.label" }, dependencies: [{ kind: "State", state: "P.label" }] },
+      { kind: "DynamicProp", name: "name", value: { kind: "StateRead", state: "P.s.label" }, dependencies: [{ kind: "State", state: "P.s.label" }] },
     ]);
     const [sprite, collider] = p.root.children.map((c) => elementOf(c));
     assert.deepEqual(stripSpans(sprite!.props[0]), {
       kind: "DynamicProp",
       name: "image",
-      dependencies: [{ kind: "State", state: "P.health" }],
+      dependencies: [{ kind: "State", state: "P.s.health" }],
       value: {
         kind: "Conditional",
         test: {
           kind: "Binary",
           operator: ">",
-          left: { kind: "StateRead", state: "P.health" },
+          left: { kind: "StateRead", state: "P.s.health" },
           right: { kind: "NumberLiteral", value: 50 },
         },
         whenTrue: { kind: "StringLiteral", value: "normal.png" },
@@ -256,13 +256,13 @@ describe("IR construction", () => {
         );
       }
       function Level() {
-        const [wave, setWave] = useState(1);
+        const s = useMutable({ wave: 1 });
         return (
           <Entity>
             <Enemy />
             <Entity name="Group">
               <Enemy />
-              {wave > 2 && <Enemy />}
+              {s.wave > 2 && <Enemy />}
             </Entity>
           </Entity>
         );
@@ -300,8 +300,8 @@ describe("diagnostics", () => {
     ["text child", DiagnosticCode.UnsupportedJsxChild, `function A() { return <Entity>hello</Entity>; }`],
     ["unknown identifier", DiagnosticCode.UnknownIdentifier, `function A() { return <Entity name={other} />; }`],
     [
-      "setter used as a value",
-      DiagnosticCode.UnsupportedExpression,
+      "useState, replaced by useMutable",
+      DiagnosticCode.UnknownHook,
       `function A() { const [a, setA] = useState(1); return <Entity name={setA} />; }`,
     ],
     [
@@ -310,9 +310,9 @@ describe("diagnostics", () => {
       `function A() { return <Entity>{children}</Entity>; }`,
     ],
     ["static self-reference", DiagnosticCode.ComponentCycle, `function A() { return <Entity><A /></Entity>; }`],
-    ["non-literal state type", DiagnosticCode.UnsupportedStateType, `function A() { const [a, setA] = useState(null); return <Entity />; }`],
+    ["non-literal state type", DiagnosticCode.UnsupportedStateType, `function A() { const s = useMutable({ a: null }); return <Entity />; }`],
     // A state named like a runtime member is fine since REACT_FEEL_PLAN.md B7 (root-name.test.ts); one declared twice is not.
-    ["state declared twice", DiagnosticCode.InvalidUseState, `function A() { const [a, setA] = useState(1); const [a, setB] = useState(2); return <Entity />; }`],
+    ["state declared twice", DiagnosticCode.InvalidUseState, `function A() { const s = useMutable({ a: 1, a: 2 }); return <Entity />; }`],
     ["non-component top level code", DiagnosticCode.UnsupportedSyntax, `let speed = 4; function A() { return <Entity />; }`],
   ];
   for (const [name, code, source] of cases) {

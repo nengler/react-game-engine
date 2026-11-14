@@ -32,9 +32,9 @@ describe("custom hooks", () => {
   it("take a destructured parameter, from an object literal or a value", async () => {
     const source = `interface Options { speed: number; limit: number }
 function useMover({ speed, limit: max }: Options) {
-  const [x, setX] = useState(0);
-  useUpdate((dt) => setX((v) => Math.min(v + speed * dt, max)));
-  return x;
+  const s = useMutable({ x: 0 });
+  useUpdate((dt) => { s.x = Math.min(s.x + speed * dt, max); });
+  return s.x;
 }
 const SLOW: Options = { speed: 1, limit: 100 };
 export function Pair() {
@@ -50,9 +50,9 @@ export function Pair() {
     const counter = await run<Text>(`function useCounter() { const count = useRef(0); return count; }
 export function Counter() {
   const steps = useCounter();
-  const [shown, setShown] = useState(0);
-  useUpdate(() => { steps.current += 1; setShown(steps.current); });
-  return <Text>{shown}</Text>;
+  const s = useMutable({ shown: 0 });
+  useUpdate(() => { steps.current += 1; s.shown = steps.current; });
+  return <Text>{s.shown}</Text>;
 }`, "Counter", 3);
     assert.equal(counter.text, "3");
   });
@@ -69,9 +69,9 @@ export function Counter() {
   });
 }
 export function Ticker() {
-  const [ticks, setTicks] = useState(0);
-  useEvery(1, () => setTicks((t) => t + 1));
-  return <Text>{ticks}</Text>;
+  const s = useMutable({ ticks: 0 });
+  useEvery(1, () => { s.ticks += 1; });
+  return <Text>{s.ticks}</Text>;
 }`, "Ticker", 4);
     assert.equal(ticker.text, "2", "a tick every second: four half-second steps");
   });
@@ -87,15 +87,15 @@ export function C() { const n = useA(); return <Text>{n}</Text>; }`);
 describe("functions declared in the component body", () => {
   it("are handlers: called in handlers and passed to elements and hooks", async () => {
     const compiled = compile(`export function Score() {
-  const [points, setPoints] = useState(0);
+  const s = useMutable({ points: 0 });
   const add = (n: number) => {
-    setPoints((p) => p + n);
+    s.points += n;
   };
   const press = () => add(10);
   useUpdate(() => add(1));
   return (
     <Entity>
-      <Text>{points}</Text>
+      <Text>{s.points}</Text>
       <Pointer width={4} height={4} onPress={press} />
     </Entity>
   );
@@ -116,8 +116,8 @@ describe("functions declared in the component body", () => {
 
   it("are not called while rendering", () => {
     const errors = compileErrors(`export function C() {
-  const [n, setN] = useState(0);
-  const bump = () => setN(n + 1);
+  const s = useMutable({ n: 0 });
+  const bump = () => { s.n += 1; };
   return <Text>{bump()}</Text>;
 }`);
     assert.ok(errors.some((d) => d.code === DiagnosticCode.UnsupportedExpression && /function of this component/.test(d.message)));

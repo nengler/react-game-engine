@@ -13,16 +13,16 @@ architecture, the IR, the ground rules and the design decisions, and
 [docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md) for the player's design, its ABI and its performance baseline. What comes next, including Phase 4 (a real game drives the backlog), is ranked in [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md); the next piece of work, priority 8 with a third game, is planned in [docs/ADVENTURE_PLAN.md](docs/ADVENTURE_PLAN.md). How writing a game should come to feel more like writing React (context, motion, timers, rewind, editor diagnostics, a web backend) is planned in [docs/REACT_FEEL_PLAN.md](docs/REACT_FEEL_PLAN.md).
 
 ```tsx
-import { useState, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { useMutable, Entity, Sprite, Collider } from "@rge/runtime/jsx";
 import { WarningIcon } from "./WarningIcon.tsx";
 
 function Player() {
-  const [health, setHealth] = useState(100);
+  const s = useMutable({ health: 100 });
   return (
     <Entity>
-      <Sprite image={health > 50 ? "normal.png" : "hurt.png"} />
+      <Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} />
       <Collider width={16} height={24} />
-      {health < 25 && <WarningIcon />}
+      {s.health < 25 && <WarningIcon />}
     </Entity>
   );
 }
@@ -31,8 +31,8 @@ function Player() {
 compiles to [`packages/example/generated/Player.ts`](packages/example/generated/Player.ts)
 (the IR is next to it as `Player.ir.json`).
 
-Game code lives in components, as in React: a component keeps its own state (`useState`, or `useBody` for a position that walls
-stop), steps itself in `useUpdate`, takes hits in its collider's `onCollisionEnter`, and tells its parent what happened through
+Game code lives in components, as in React: a component keeps its own state (`useMutable`, written directly as `s.hp -= 1`
+and read back at once in a handler, or `useBody` for a position that walls stop), steps itself in `useUpdate`, takes hits in its collider's `onCollisionEnter`, and tells its parent what happened through
 callback props. [Hearth](packages/hearth) is built that way: its enemies, towers and shots each keep their own state, and each is
 tested alone with [`@rge/testing`](packages/testing), as React Testing Library tests one component. Plain functions in `.ts`
 files are for what you would extract in React too: tables, pure calculations, and code a search runs thousands of times.
@@ -41,14 +41,14 @@ UI is laid out, not placed by hand. A `<Hud>` stays on screen while the camera m
 children in a row or a column (see [docs/UI_PLAN.md](docs/UI_PLAN.md)):
 
 ```tsx
-import { useState, Flex, Hud, Sprite, Text } from "@rge/runtime/jsx";
+import { useMutable, Flex, Hud, Sprite, Text } from "@rge/runtime/jsx";
 
 interface PlayerHudProps {
   coins: number;
 }
 
 function PlayerHud({ coins }: PlayerHudProps) {
-  const [paused, setPaused] = useState(false);
+  const s = useMutable({ paused: false });
   return (
     <Hud>
       <Flex width="grow" height="grow" direction="column" justifyContent="space-between" padding={16}>
@@ -58,8 +58,8 @@ function PlayerHud({ coins }: PlayerHudProps) {
           <Flex width="grow" />
         </Flex>
         <Flex justifyContent="center">
-          <Flex paddingX={16} paddingY={8} background="slategray" onPress={() => setPaused((p) => !p)}>
-            <Text>{paused ? "Resume" : "Pause"}</Text>
+          <Flex paddingX={16} paddingY={8} background="slategray" onPress={() => { s.paused = !s.paused; }}>
+            <Text>{s.paused ? "Resume" : "Pause"}</Text>
           </Flex>
         </Flex>
       </Flex>

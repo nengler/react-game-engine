@@ -61,9 +61,9 @@ describe("a root's name", () => {
 describe("names that the root built-in also has (REACT_FEEL_PLAN.md, B7)", () => {
   it("lets state be called `name` on an <Entity> root, apart from the entity's own name", async () => {
     const compiled = compile(`export function Badge() {
-  const [name, setName] = useState("Ada");
-  useUpdate(() => setName("Bo"));
-  return <Entity><Text>{name}</Text></Entity>;
+  const s = useMutable({ name: "Ada" });
+  useUpdate(() => { s.name = "Bo"; });
+  return <Entity><Text>{s.name}</Text></Entity>;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
     const { Badge } = await load<{ Badge: new () => Entity }>(compiled);
@@ -82,12 +82,12 @@ describe("names that the root built-in also has (REACT_FEEL_PLAN.md, B7)", () =>
   it("lets a ref be called `image` on a <Sprite> root, and state `parent` anywhere", async () => {
     const compiled = compile(`export function Coin() {
   const image = useRef(0);
-  const [parent, setParent] = useState(1);
+  const s = useMutable({ parent: 1 });
   useUpdate(() => {
     image.current += 1;
-    setParent(image.current + 1);
+    s.parent = image.current + 1;
   });
-  return <Sprite image={parent > 1 ? "b.png" : "a.png"} />;
+  return <Sprite image={s.parent > 1 ? "b.png" : "a.png"} />;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
     const { Coin } = await load<{ Coin: new () => Sprite }>(compiled);
@@ -105,6 +105,6 @@ describe("names that the root built-in also has (REACT_FEEL_PLAN.md, B7)", () =>
   });
 
   it("still refuses a name declared twice in the component", () => {
-    assert.ok(compileErrors(`export function A() { const [n, setN] = useState(0); const n = 2; return <Entity />; }`).length > 0);
+    assert.ok(compileErrors(`export function A() { const n = useMutable({ v: 0 }); const n = 2; return <Entity />; }`).length > 0);
   });
 });

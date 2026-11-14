@@ -15,9 +15,9 @@ after(() => {
 
 const GAME = `
 function Arena() {
-  const [wide, setWide] = useState(false);
+  const s = useMutable({ wide: false });
   return (
-    <Screen width={wide ? 640 : 320} height={180} fit="contain" border="navy">
+    <Screen width={s.wide ? 640 : 320} height={180} fit="contain" border="navy">
       <Shape kind="rect" width={8} height={8} transform={{ x: 4, y: 4 }} />
     </Screen>
   );
@@ -33,8 +33,8 @@ function Plain() {
 `;
 
 interface GameInstance extends Screen {
-  setWide(value: boolean): void;
   readonly shape: Shape;
+  s: { [field: string]: unknown };
 }
 
 let Arena: new () => GameInstance;
@@ -59,7 +59,7 @@ describe("Screen: a component rooted at one", () => {
     const world = new World();
     const game = new Arena();
     world.mount(game);
-    game.setWide(true);
+    game.s.wide = (true);
     world.flush();
     assert.equal(game.width, 640);
   });
@@ -98,7 +98,7 @@ describe("Screen: diagnostics", () => {
 
   it("lets state take its own names, kept in `$name` fields", () => {
     for (const name of ["fit", "pixelPerfect", "border"]) {
-      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Screen width={1} height={1} />; }`).code.includes(`$${name}: `), name);
+      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Screen width={1} height={1} />; }`).code.includes(`get $${name}()`), name);
     }
   });
 });
@@ -150,7 +150,7 @@ function Level() {
 describe("the layout offset", () => {
   it("can be a state name, kept apart from the field layout writes into every object", () => {
     for (const name of ["layoutX", "layoutY"]) {
-      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Entity name="C" />; }`).code.includes(`$${name}: `), name);
+      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Entity name="C" />; }`).code.includes(`get $${name}()`), name);
     }
   });
 });

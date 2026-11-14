@@ -10,22 +10,21 @@ afterAll(() => {
   cleanOutput();
 });
 
-const FLASH = `import { Text, after, cancelTimers, every, useInput, useMount, useState } from "@rge/runtime/jsx";
+const FLASH = `import { Text, after, cancelTimers, every, useInput, useMount, useMutable } from "@rge/runtime/jsx";
 
 export function Flash() {
-  const [flash, setFlash] = useState(false);
-  const [ticks, setTicks] = useState(0);
+  const s = useMutable({ flash: false, ticks: 0 });
   useMount(() => {
-    every(0.5, () => setTicks((t) => t + 1));
+    every(0.5, () => { s.ticks += 1; });
   });
   useInput((input) => {
     if (input.pressed("Space")) {
-      setFlash(true);
-      after(0.15, () => setFlash(false));
+      s.flash = true;
+      after(0.15, () => { s.flash = false; });
     }
     if (input.pressed("Escape")) cancelTimers();
   });
-  return <Text>{flash ? "on" : "off"} {ticks}</Text>;
+  return <Text>{s.flash ? "on" : "off"} {s.ticks}</Text>;
 }`;
 
 const key = (name: string): InputState => ({ pressed: (k: string) => k === name, down: () => false, released: () => false }) as unknown as InputState;
@@ -92,18 +91,18 @@ describe("after, every and cancelTimers", () => {
   });
 
   it("are refused while rendering, and must be imported", () => {
-    const rendering = compileErrors(`import { Text, after, useState } from "@rge/runtime/jsx";
+    const rendering = compileErrors(`import { Text, after, useMutable } from "@rge/runtime/jsx";
 export function A() {
-  const [n, setN] = useState(0);
-  const x = after(1, () => setN(1));
-  return <Text>{n}</Text>;
+  const s = useMutable({ n: 0 });
+  const x = after(1, () => { s.n = 1; });
+  return <Text>{s.n}</Text>;
 }`);
     assert.ok(rendering.some((d) => d.code === DiagnosticCode.UnsupportedExpression && /only valid as a statement in a handler/.test(d.message)), JSON.stringify(rendering));
-    const missing = compileErrors(`import { Text, useMount, useState } from "@rge/runtime/jsx";
+    const missing = compileErrors(`import { Text, useMount, useMutable } from "@rge/runtime/jsx";
 export function A() {
-  const [n, setN] = useState(0);
-  useMount(() => { after(1, () => setN(1)); });
-  return <Text>{n}</Text>;
+  const s = useMutable({ n: 0 });
+  useMount(() => { after(1, () => { s.n = 1; }); });
+  return <Text>{s.n}</Text>;
 }`);
     assert.ok(missing.some((d) => /'after' is not imported/.test(d.message)), JSON.stringify(missing));
   });

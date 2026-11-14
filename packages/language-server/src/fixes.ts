@@ -21,8 +21,16 @@ export interface Fix {
   readonly preferred?: boolean;
 }
 
-/** The fixes for one diagnostic in `source`. */
-export function fixesFor(source: string, diagnostic: CompilerDiagnostic): Fix[] {
+/** What moves a file from `useState` to `useMutable`: the compiler (`Compiler.convertToMutable`), which parses it. */
+export interface MutableConverter {
+  convertToMutable(fileName: string, text: string): { readonly text: string; readonly changed: boolean };
+}
+
+/**
+ * The fixes for one diagnostic in `source`. With `converter`, a `useState` is offered its move to `useMutable`: the whole file
+ * at once, since every read and every setter call of the state changes with it.
+ */
+export function fixesFor(source: string, diagnostic: CompilerDiagnostic, converter?: MutableConverter): Fix[] {
   const span = diagnostic.span;
   if (span === null) return [];
   switch (diagnostic.code) {
@@ -34,7 +42,9 @@ export function fixesFor(source: string, diagnostic: CompilerDiagnostic): Fix[] 
     case "RGE1001":
       return fromReact(source, span.start, span.end);
     case "RGE1004": {
-      const name = /^'([A-Za-z_$][\w$]*)' is not exported by/.exec(diagnostic.message)?.[1];
+      // A name the module does not export, or a hook it no longer has (`useLayoutEffect`), imported and never called: the span is the name.
+      const spanned = source.slice(span.start, span.end);
+      const name = /^'([A-Za-z_$][\w$]*)' is not exported by/.exec(diagnostic.message)?.[1] ?? (/^[A-Za-z_$][\w$]*$/.test(spanned) ? spanned : undefined);
       if (name === undefined) return [];
       const edits = removeImport(source, name);
       return edits.length === 0 ? [] : [{ title: `Remove '${name}' from the import`, edits }];
@@ -43,8 +53,14 @@ export function fixesFor(source: string, diagnostic: CompilerDiagnostic): Fix[] 
       return /^Write the text as the children of <Text>/.test(diagnostic.message) ? textToChildren(source, span.start, span.end) : [];
     case "RGE1108":
       return /^Take actions with/.test(diagnostic.message) ? wholeStateToActions(source, span.start, span.end) : [];
-    case "RGE1102":
+    case "RGE1102": {
+      if (/^`useState` is replaced by `useMutable`/.test(diagnostic.message)) {
+        if (converter === undefined) return [];
+        const converted = converter.convertToMutable(span.fileName, source);
+        return converted.changed ? [{ title: "Move this file's useState to useMutable", edits: [{ start: 0, end: source.length, text: converted.text }], preferred: true }] : [];
+      }
       return replaceReactHook(source, span.start, span.end);
+    }
     default:
       return [];
   }

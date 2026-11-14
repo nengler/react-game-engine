@@ -12,14 +12,13 @@ after(() => {
 
 const PURSE = `
 export function Purse() {
-  const [coins, setCoins] = useState(0);
-  const [hurt, setHurt] = useState(0);
+  const s = useMutable({ coins: 0, hurt: 0 });
   return (
     <Entity>
-      <Text>{\`\${coins} \${hurt}\`}</Text>
+      <Text>{\`\${s.coins} \${s.hurt}\`}</Text>
       <Collider width={4} height={4} tag="player" onCollisionEnter={(other) => {
-        if (other.tag === "coin") setCoins((c) => c + other.data.value);
-        else if (other.tag === "enemy") setHurt((h) => h + other.data.damage);
+        if (other.tag === "coin") s.coins += other.data.value;
+        else if (other.tag === "enemy") s.hurt += other.data.damage;
       }} />
     </Entity>
   );

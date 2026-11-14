@@ -48,21 +48,23 @@ export function Prompt({ onKey }: PromptProps) {
 `;
 
 describe("narrowing in the generated code", () => {
-  it("a callback under a condition reads state the condition narrowed", () => {
+  it("a callback under a condition reads state the condition narrowed (through a const, as TypeScript narrows only a const in a closure)", () => {
     const r = compileProject({
       "keys.ts": KEYS,
       "Prompt.tsx": PROMPT,
-      "Settings.tsx": `import { Entity, useState } from "@rge/runtime/jsx";
+      "Settings.tsx": `import { Entity, useMutable } from "@rge/runtime/jsx";
 import { Prompt } from "./Prompt.tsx";
 import { bind } from "./keys.ts";
 export function Settings() {
-  const [waiting, setWaiting] = useState<string | null>(null);
+  const s = useMutable({ waiting: null as string | null });
+  const waiting = s.waiting;
   return <Entity name="Settings">{waiting !== null && <Prompt onKey={(key) => bind(waiting, key)} />}</Entity>;
 }
 `,
     });
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.out("Settings.ts"), /\$assume\(\(?this\.waiting !== null\)?\);\n\s+bind\(this\.waiting, key\);/);
+    // The callback is a handler: it reads the field as it is when it runs, and the condition is assumed of that same read.
+    assert.match(r.out("Settings.ts"), /\$assume\(\(?this\.#\$s_waitingNext !== null\)?\);\n\s+bind\(this\.#\$s_waitingNext, key\);/);
     assert.match(r.out("Settings.ts"), /function \$assume\(_condition: unknown\): asserts _condition \{\}/);
   });
 
@@ -70,18 +72,18 @@ export function Settings() {
     const r = compileProject({
       "keys.ts": KEYS,
       "Prompt.tsx": PROMPT,
-      "Settings.tsx": `import { Entity, useState } from "@rge/runtime/jsx";
+      "Settings.tsx": `import { Entity, useMutable } from "@rge/runtime/jsx";
 import { Prompt } from "./Prompt.tsx";
 import { bind, pick } from "./keys.ts";
 export function Settings() {
-  const [id, setId] = useState("");
-  const waiting = pick(id);
+  const s = useMutable({ id: "" });
+  const waiting = pick(s.id);
   return <Entity name="Settings">{waiting !== null && <Prompt onKey={(key) => bind(waiting, key)} />}</Entity>;
 }
 `,
     });
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.out("Settings.ts"), /const \$m0 = this\.\$memo\("waiting", .*\);\n\s+\$assume\(\(?\$m0 !== null\)?\);\n\s+bind\(\$m0, key\);/);
+    assert.match(r.out("Settings.ts"), /const \$m0 = this\.\$memo\("waiting@live", .*\);\n\s+\$assume\(\(?\$m0 !== null\)?\);\n\s+bind\(\$m0, key\);/);
   });
 
   it("a list item under `&&` is narrowed by its condition, as the filter guarantees", () => {
@@ -111,15 +113,15 @@ function Badge({ onGone }: BadgeProps) {
 }
 interface HostProps { onLog: (line: string) => void }
 function Host({ onLog }: HostProps) {
-  const [label, setLabel] = useState<string | null>("a");
-  return <Entity name="Host">{label !== null && <Badge onGone={() => onLog(\`gone \${label}\`)} />}</Entity>;
+  const s = useMutable({ label: "a" as string | null });
+  return <Entity name="Host">{s.label !== null && <Badge onGone={() => onLog(\`gone \${s.label}\`)} />}</Entity>;
 }`, "Host.tsx"));
     const log: string[] = [];
     const host = new Host({ onLog: (line: string) => log.push(line) });
     const world = new World();
     world.mount(host);
     world.flush();
-    host.setLabel(null);
+    host.s.label = (null);
     world.flush();
     assert.deepEqual(log, ["gone null"], "the callback ran, reading the state as it is now");
   });

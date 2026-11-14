@@ -22,13 +22,11 @@ interface Row {
 }
 
 function Shelf() {
-  const [open, setOpen] = useState(false);
-  const [spacing, setSpacing] = useState(2);
-  const [rows, setRows] = useState<Row[]>([{ id: "a", width: 10 }, { id: "b", width: 20 }]);
+  const s = useMutable({ open: false, spacing: 2, rows: [{ id: "a", width: 10 }, { id: "b", width: 20 }] as Row[] });
   return (
-    <Flex gap={spacing} padding={1} background="purple" direction="row" alignItems="center" justifyContent="start">
-      {open && <Shape kind="rect" width={5} height={5} />}
-      {rows.map((r) => (
+    <Flex gap={s.spacing} padding={1} background="purple" direction="row" alignItems="center" justifyContent="start">
+      {s.open && <Shape kind="rect" width={5} height={5} />}
+      {s.rows.map((r) => (
         <Shape key={r.id} kind="rect" width={r.width} height={4} />
       ))}
     </Flex>
@@ -56,9 +54,7 @@ function Menu() {
 `;
 
 interface ShelfInstance extends Flex {
-  setOpen(value: boolean): void;
-  setSpacing(value: number): void;
-  setRows(value: { id: string; width: number }[]): void;
+  s: { [field: string]: unknown };
 }
 
 let Shelf: new () => ShelfInstance;
@@ -89,7 +85,7 @@ describe("Flex: a compiled component", () => {
     const [a, b] = shelf.children as [Shape, Shape];
     assert.deepEqual([a.layoutX, b.layoutX], [1, 1 + 10 + 2]);
     assert.deepEqual([a.layoutY, b.layoutY], [1, 1], "centred: the tallest child (4) fills the inner height");
-    shelf.setSpacing(10);
+    shelf.s.spacing = (10);
     world.flush();
     layOut(shelf, builder);
     assert.deepEqual([a.layoutX, b.layoutX], [1, 21]);
@@ -101,14 +97,14 @@ describe("Flex: a compiled component", () => {
     world.mount(shelf);
     const builder = layOut(shelf);
     assert.equal(shelf.children.length, 2);
-    shelf.setOpen(true);
+    shelf.s.open = (true);
     world.flush();
     layOut(shelf, builder);
     const [extra, a, b] = shelf.children as [Shape, Shape, Shape];
     assert.equal(extra.width, 5);
     assert.deepEqual([extra.layoutX, a.layoutX, b.layoutX], [1, 1 + 5 + 2, 1 + 5 + 2 + 10 + 2]);
     assert.equal(shelf.box.size[0], 1 + 5 + 2 + 10 + 2 + 20 + 1);
-    shelf.setOpen(false);
+    shelf.s.open = (false);
     world.flush();
     layOut(shelf, builder);
     assert.deepEqual([a.layoutX, b.layoutX], [1, 13], "the ones after it close up");
@@ -119,7 +115,7 @@ describe("Flex: a compiled component", () => {
     const shelf = new Shelf();
     world.mount(shelf);
     const builder = layOut(shelf);
-    shelf.setRows([{ id: "b", width: 20 }, { id: "c", width: 7 }, { id: "a", width: 10 }]);
+    shelf.s.rows = ([{ id: "b", width: 20 }, { id: "c", width: 7 }, { id: "a", width: 10 }]);
     world.flush();
     layOut(shelf, builder);
     assert.deepEqual((shelf.children as Shape[]).map((s) => [s.width, s.layoutX]), [[20, 1], [7, 1 + 20 + 2], [10, 1 + 20 + 2 + 7 + 2]]);
@@ -177,11 +173,11 @@ describe("Flex: the video's context menu", () => {
 
 const PRESS = `
 function Counter() {
-  const [count, setCount] = useState(0);
+  const s = useMutable({ count: 0 });
   return (
-    <Flex width={96} height={32} alignItems="center" justifyContent="center" onPress={() => setCount((c) => c + 1)}>
+    <Flex width={96} height={32} alignItems="center" justifyContent="center" onPress={() => { s.count += 1; }}>
       <Text size={16} width={80} align="center">
-        Count: {count}
+        Count: {s.count}
       </Text>
     </Flex>
   );
@@ -221,13 +217,13 @@ describe("Flex onPress and Text align", () => {
     assert.deepEqual(check(`<Text shadow="black" shadowX={big ? 2 : 1} shadowY={1} outline="white" outlineWidth={big ? 2 : 1}>Hi</Text>`), []);
     assert.ok(check(`<Text shadow={3}>Hi</Text>`).length > 0, "a shadow is a colour");
     assert.ok(check(`<Text outlineWidth="thick">Hi</Text>`).length > 0, "an outline width is a number");
-    const { Label } = await load<{ Label: new () => Text & { setOn(v: boolean): void } }>(
-      compile(`function Label() { const [on, setOn] = useState(false); return <Text shadow="black" shadowX={on ? 3 : 1} outline={on ? "red" : "blue"} outlineWidth={2}>Hi</Text>; }`, "TextFx.tsx"),
+    const { Label } = await load<{ Label: new () => Text & { s: { [field: string]: unknown } } }>(
+      compile(`function Label() { const s = useMutable({ on: false }); return <Text shadow="black" shadowX={s.on ? 3 : 1} outline={s.on ? "red" : "blue"} outlineWidth={2}>Hi</Text>; }`, "TextFx.tsx"),
     );
     const label = new Label();
     new World().mount(label);
     assert.deepEqual([label.shadow, label.shadowX, label.shadowY, label.outline, label.outlineWidth], ["black", 1, 1, "blue", 2]);
-    label.setOn(true);
+    label.s.on = (true);
     label.world!.flush();
     assert.deepEqual([label.shadowX, label.outline], [3, "red"]);
   });
@@ -235,14 +231,12 @@ describe("Flex onPress and Text align", () => {
   it("compiles a Slider and a Toggle whose onChange takes a number and a flag, and runs them against the component's state", async () => {
     const source = `
 function Settings() {
-  const [volume, setVolume] = useState(3);
-  const [sound, setSound] = useState(true);
-  const [label, setLabel] = useState("");
+  const s = useMutable({ volume: 3, sound: true, label: "" });
   return (
     <Flex direction="column" gap={4}>
-      <Slider width={100} min={0} max={10} step={1} value={volume} onChange={(v) => { setVolume(Math.round(v)); setLabel(v > 5 ? "loud" : "quiet"); }} />
-      <Toggle checked={sound} onChange={(on) => setSound(on)} />
-      <Text>{label}{sound ? " on" : " off"}</Text>
+      <Slider width={100} min={0} max={10} step={1} value={s.volume} onChange={(v) => { s.volume = Math.round(v); s.label = v > 5 ? "loud" : "quiet"; }} />
+      <Toggle checked={s.sound} onChange={(on) => { s.sound = on; }} />
+      <Text>{s.label}{s.sound ? " on" : " off"}</Text>
     </Flex>
   );
 }`;
@@ -268,7 +262,7 @@ function Settings() {
   });
 
   it("type-checks a Slider's and a Toggle's props and the parameter of onChange, in the source and the generated module", () => {
-    assert.deepEqual(typeCheck(compile(`function C() { const [v, setV] = useState(1); return <Slider value={v} onChange={(x) => setV(x)} />; }`, "SliderOk.tsx")), []);
+    assert.deepEqual(typeCheck(compile(`function C() { const s = useMutable({ v: 1 }); return <Slider value={s.v} onChange={(x) => { s.v = x; }} />; }`, "SliderOk.tsx")), []);
     const check = (element: string) =>
       getCompiler().typeCheckSources([
         { fileName: `${process.cwd()}/.test-output/Widget${Math.random()}.tsx`, text: `import { Slider, Toggle } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }` },
@@ -285,7 +279,7 @@ function Settings() {
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     for (const [tag, names] of [["Slider", ["value", "min", "max", "step", "fillColor", "thumbColor", "thumbWidth", "moveTo", "fraction"]], ["Toggle", ["checked", "onColor", "offColor", "thumbColor", "flip"]]] as const) {
       for (const name of names) {
-        assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <${tag} />; }`).code.includes(`$${name}: `), `${tag} ${name}`);
+        assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <${tag} />; }`).code.includes(`get $${name}()`), `${tag} ${name}`);
       }
     }
   });
@@ -300,10 +294,10 @@ function Settings() {
   it("lets state take the new names, kept in `$name` fields", () => {
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     for (const name of ["onPress", "contains"]) {
-      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).code.includes(`$${name}: `), `Flex ${name}`);
+      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`), `Flex ${name}`);
     }
     for (const name of ["align", "width"]) {
-      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Text>x</Text>; }`).code.includes(`$${name}: `), `Text ${name}`);
+      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Text>x</Text>; }`).code.includes(`get $${name}()`), `Text ${name}`);
     }
   });
 });
@@ -355,7 +349,7 @@ describe("Flex: diagnostics", () => {
 
   it("lets state take its names, kept in `$name` fields", () => {
     for (const name of ["direction", "gap", "padding", "width", "minWidth", "background", "box"]) {
-      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).code.includes(`$${name}: `), name);
+      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`), name);
     }
   });
 
@@ -375,16 +369,15 @@ describe("Flex: floating props", () => {
 describe("Flex: border, rounded corners, and hover and focus colours", () => {
   const STYLED = `
 function Tile() {
-  const [accent, setAccent] = useState("gold");
-  const [round, setRound] = useState(4);
+  const s = useMutable({ accent: "gold", round: 4 });
   return (
     <Flex
       width={40}
       height={20}
       background="navy"
       borderWidth={2}
-      borderColor={accent}
-      borderRadius={round}
+      borderColor={s.accent}
+      borderRadius={s.round}
       hoverBackground="#334"
       hoverBorderColor="white"
       focusable
@@ -392,19 +385,19 @@ function Tile() {
       focusBorderColor="yellow"
       pressedBackground="#112"
       pressedBorderColor="orange"
-      disabled={round > 100}
+      disabled={s.round > 100}
       disabledBackground="gray"
       disabledBorderColor="silver"
       transition={0.15}
-      overflow={round > 100 ? "scroll" : "hidden"}
-      scrollY={round}
-      opacity={round > 100 ? 0.5 : 1}
-      wrap={round < 100}
-      rowGap={round}
+      overflow={s.round > 100 ? "scroll" : "hidden"}
+      scrollY={s.round}
+      opacity={s.round > 100 ? 0.5 : 1}
+      wrap={s.round < 100}
+      rowGap={s.round}
       columnGap={2}
       backgroundImage="skin.png"
       slice={8}
-      sliceBottom={round}
+      sliceBottom={s.round}
       hoverBackgroundImage="skin-hover.png"
       focusBackgroundImage="skin-focus.png"
       pressedBackgroundImage="skin-down.png"
@@ -415,7 +408,7 @@ function Tile() {
 `;
 
   it("takes every prop from the element, static or from state, and updates them when state changes", async () => {
-    const { Tile } = await load<{ Tile: new () => Flex & { setAccent(v: string): void; setRound(v: number): void } }>(compile(STYLED, "FlexStyled.tsx"));
+    const { Tile } = await load<{ Tile: new () => Flex & { s: { [field: string]: unknown } } }>(compile(STYLED, "FlexStyled.tsx"));
     const world = new World();
     const tile = new Tile();
     world.mount(tile);
@@ -430,8 +423,8 @@ function Tile() {
     assert.deepEqual([tile.wrap, tile.rowGap, tile.columnGap], [true, 4, 2]);
     assert.deepEqual([tile.backgroundImage, tile.slice, tile.sliceBottom, tile.sliceTop], ["skin.png", 8, 4, undefined]);
     assert.deepEqual([tile.hoverBackgroundImage, tile.focusBackgroundImage, tile.pressedBackgroundImage, tile.disabledBackgroundImage], ["skin-hover.png", "skin-focus.png", "skin-down.png", "skin-off.png"]);
-    tile.setAccent("red");
-    tile.setRound(800);
+    tile.s.accent = ("red");
+    tile.s.round = (800);
     world.flush();
     assert.deepEqual([tile.borderColor, tile.borderRadius, tile.disabled], ["red", 800, true], "disabled follows state");
     assert.deepEqual([tile.overflow, tile.scrollY, tile.opacity], ["scroll", 800, 0.5], "and overflow, the scroll offset and the opacity");
@@ -464,7 +457,7 @@ function Tile() {
 
   it("lets state take the new names too, kept in `$name` fields", () => {
     for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "transition", "transitionState", "overflow", "scrollX", "scrollY", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "opacity", "drawnAlpha", "wrap", "rowGap", "columnGap"]) {
-      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Flex />; }`).code.includes(`$${name}: `), name);
+      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`), name);
     }
   });
 });

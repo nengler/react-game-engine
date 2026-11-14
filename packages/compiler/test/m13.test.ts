@@ -16,11 +16,10 @@ after(() => {
 
 const SOURCE = `
 function Walker() {
-  const [running, setRunning] = useState(true);
-  const [n, setN] = useState(0);
+  const s = useMutable({ running: true, n: 0 });
   return (
-    <Entity name={\`Walker \${n}\`}>
-      <AnimatedSprite frames={running ? ["run1.png", "run2.png", "run3.png"] : ["idle1.png", "idle2.png"]} fps={8} playing={running} />
+    <Entity name={\`Walker \${s.n}\`}>
+      <AnimatedSprite frames={s.running ? ["run1.png", "run2.png", "run3.png"] : ["idle1.png", "idle2.png"]} fps={8} playing={s.running} />
       <AnimatedSprite frames={["blink1.png", "blink2.png"]} />
     </Entity>
   );
@@ -58,10 +57,9 @@ function Twice() {
 `;
 
 interface WalkerInstance extends Entity {
-  setRunning(value: boolean): void;
-  setN(value: number): void;
   readonly animatedSprite: AnimatedSprite;
   readonly animatedSprite2: AnimatedSprite;
+  s: { [field: string]: unknown };
 }
 interface FlameInstance extends AnimatedSprite {
   ticks: number;
@@ -91,17 +89,17 @@ describe("M13: IR and generated code", () => {
   it("makes frames that depend on state a dynamic prop, and a fixed list a static one", () => {
     const frames = moving!.props.find((p) => p.name === "frames")!;
     assert.equal(frames.kind, "DynamicProp");
-    assert.deepEqual(frames.kind === "DynamicProp" && frames.dependencies, [{ kind: "State", state: "Walker.running" }]);
+    assert.deepEqual(frames.kind === "DynamicProp" && frames.dependencies, [{ kind: "State", state: "Walker.s.running" }]);
     assert.equal(frames.kind === "DynamicProp" && frames.value.kind, "Conditional");
     assert.equal(still!.props.find((p) => p.name === "frames")!.kind, "StaticProp");
     assert.equal(moving!.props.find((p) => p.name === "fps")!.kind, "StaticProp");
   });
 
   it("builds the sprite with its frames, and re-assigns only what varies", () => {
-    assert.match(compiled.code, /readonly animatedSprite: AnimatedSprite = new AnimatedSprite\(\{ frames: this\.running \? \["run1\.png", "run2\.png", "run3\.png"\] : \["idle1\.png", "idle2\.png"\], fps: 8, playing: this\.running \}\);/);
+    assert.match(compiled.code, /readonly animatedSprite: AnimatedSprite = new AnimatedSprite\(\{ frames: this\.\$s_running \? \["run1\.png", "run2\.png", "run3\.png"\] : \["idle1\.png", "idle2\.png"\], fps: 8, playing: this\.\$s_running \}\);/);
     assert.match(compiled.code, /readonly animatedSprite2: AnimatedSprite = new AnimatedSprite\(\{ frames: \["blink1\.png", "blink2\.png"\] \}\);/);
-    assert.match(compiled.code, /const (\$\d+) = this\.running \? \[[^]*?this\.animatedSprite\.frames = \1;/);
-    assert.match(compiled.code, /const (\$\d+) = this\.running;[^]*?this\.animatedSprite\.playing = \1;/);
+    assert.match(compiled.code, /const (\$\d+) = this\.\$s_running \? \[[^]*?this\.animatedSprite\.frames = \1;/);
+    assert.match(compiled.code, /const (\$\d+) = this\.\$s_running;[^]*?this\.animatedSprite\.playing = \1;/);
     assert.doesNotMatch(compiled.code, /this\.animatedSprite2\./, "a fixed sprite is never touched by render");
   });
 
@@ -172,12 +170,12 @@ describe("M13: runtime behaviour", () => {
     const sprite = walker.animatedSprite;
     world.tick(0.125);
     assert.equal(sprite.image, "run2.png");
-    walker.setRunning(false);
+    walker.s.running = (false);
     world.flush();
     assert.deepEqual([sprite.playing, sprite.image, sprite.frame], [false, "idle1.png", 0], "different frames restart at the first");
     world.tick(1);
     assert.equal(sprite.frame, 0, "frozen");
-    walker.setRunning(true);
+    walker.s.running = (true);
     world.flush();
     assert.deepEqual([sprite.playing, sprite.image], [true, "run1.png"], "restarted again");
     world.tick(0.125);
@@ -192,7 +190,7 @@ describe("M13: runtime behaviour", () => {
     world.tick(0.125);
     world.tick(0.0625);
     assert.deepEqual([sprite.frame, sprite.elapsed], [1, 0.0625]);
-    walker.setN(1); // the component renders and assigns a fresh, equal array
+    walker.s.n = (1); // the component renders and assigns a fresh, equal array
     assert.equal(world.flush(), 1);
     assert.deepEqual([sprite.frame, sprite.elapsed], [1, 0.0625], "the animation carried on");
   });
@@ -204,7 +202,7 @@ describe("M13: runtime behaviour", () => {
     const blink = walker.animatedSprite2;
     world.tick(0.1);
     assert.equal(blink.image, "blink2.png");
-    walker.setRunning(false);
+    walker.s.running = (false);
     world.flush();
     assert.equal(blink.image, "blink2.png", "its frames never changed, so it did not restart");
   });
@@ -291,8 +289,8 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
   it("keeps the sprite's own names apart from the state of a component rooted at it", () => {
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     for (const name of ["frames", "fps", "playing", "frame", "elapsed", "image"]) {
-      const result = getCompiler().compile("C.tsx", `import { AnimatedSprite, useState } from "@rge/runtime/jsx";\nfunction C() { const [${name}, set] = useState(1); return <AnimatedSprite frames={["a.png"]} />; }`);
-      assert.ok(result.ok && result.code.includes(`$${name}: number`), name);
+      const result = getCompiler().compile("C.tsx", `import { AnimatedSprite, useMutable } from "@rge/runtime/jsx";\nfunction C() { const ${name} = useMutable({ n: 1 }); return <AnimatedSprite frames={["a.png"]} />; }`);
+      assert.ok(result.ok && result.code.includes(`get $${name}()`), name);
     }
   });
 });
@@ -302,7 +300,7 @@ describe("sprite sheets and sprite options", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M13s${Math.random()}.tsx`,
-        text: `import { Entity, Sprite, AnimatedSprite, useState } from "@rge/runtime/jsx";\nfunction C() { const [n] = useState(0); const [left] = useState(false); const [anim] = useState("idle"); return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, Sprite, AnimatedSprite, useMutable } from "@rge/runtime/jsx";\nfunction C() { const s = useMutable({ n: 0, left: false, anim: "idle" }); const n = s.n; const left = s.left; const anim = s.anim; return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 
@@ -319,22 +317,22 @@ describe("sprite sheets and sprite options", () => {
 
   it("builds a sprite that follows state: the options are set in render, and only when they change", async () => {
     const compiled = compile(
-      `function Hero() { const [left, setLeft] = useState(false); const [anim, setAnim] = useState("idle");
-        return <AnimatedSprite sheet="hero.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={anim} flipX={left} />; }`,
+      `function Hero() { const s = useMutable({ left: false, anim: "idle" });
+        return <AnimatedSprite sheet="hero.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={s.anim} flipX={s.left} />; }`,
       "Hero.tsx",
     );
     assert.match(compiled.code, /super\(\{ sheet: "hero\.png", frameWidth: 12, frameHeight: 12, animations: "idle:0-1@4, run:2-7@12" \}\);/);
     assert.match(compiled.code, /if \(this\.animation !== \$1 \|\| this\.flipX !== \$2\) \{\s+this\.animation = \$1;\s+this\.flipX = \$2;/);
-    const { Hero } = await load<{ Hero: new () => AnimatedSprite & { setAnim(v: string): void; setLeft(v: boolean): void } }>(compiled);
+    const { Hero } = await load<{ Hero: new () => AnimatedSprite & { s: { [field: string]: unknown } } }>(compiled);
     const world = new World();
     const hero = new Hero();
     world.mount(hero);
     assert.equal(hero.sheetFrame, 0);
-    hero.setAnim("run");
+    hero.s.anim = ("run");
     world.flush();
     assert.equal(hero.current?.name, "run");
     assert.equal(hero.sheetFrame, 2);
-    hero.setLeft(true);
+    hero.s.left = (true);
     world.flush();
     assert.equal(hero.flipX, true);
   });

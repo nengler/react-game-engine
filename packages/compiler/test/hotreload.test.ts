@@ -13,61 +13,56 @@ after(() => {
   cleanOutput();
 });
 
-type Setter<T> = (value: T | ((previous: T) => T)) => void;
-
 interface Panel extends Entity {
-  open: boolean;
-  setOpen: Setter<boolean>;
+  s: { open: boolean; label: number };
 }
 
 interface Counter extends Entity {
-  count: number;
-  setCount: Setter<number>;
   ticks: number;
+  s: { count: number };
 }
 
 const V1 = `
 export function Panel() {
-  const [open, setOpen] = useState(false);
+  const s = useMutable({ open: false });
   return (
     <Entity name="Panel">
       <Sprite image="frame.png" />
-      {open && <Counter />}
+      {s.open && <Counter />}
     </Entity>
   );
 }
 
 export function Counter() {
-  const [count, setCount] = useState(0);
+  const s = useMutable({ count: 0 });
   const ticks = useRef(0);
   useUpdate(() => {
     ticks.current = ticks.current + 1;
   });
-  return <Text>{count}</Text>;
+  return <Text>{s.count}</Text>;
 }
 `;
 
 /** The same components after an edit: the panel draws more and its counter is now the second child, the counter's text changed, and the label became a number. */
 const V2 = `
 export function Panel() {
-  const [open, setOpen] = useState(false);
-  const [label, setLabel] = useState(5);
+  const s = useMutable({ open: false, label: 5 });
   return (
     <Entity name="Panel">
       <Sprite image="frame.png" />
       <Shape kind="rect" width={4} height={4} color="red" />
-      {open && <Counter />}
+      {s.open && <Counter />}
     </Entity>
   );
 }
 
 export function Counter() {
-  const [count, setCount] = useState(0);
+  const s = useMutable({ count: 0 });
   const ticks = useRef(0);
   useUpdate(() => {
     ticks.current = ticks.current + 2;
   });
-  return <Text>Count: {count}</Text>;
+  return <Text>Count: {s.count}</Text>;
 }
 `;
 
@@ -92,14 +87,14 @@ describe("hot reload", () => {
     const before = new World();
     const old = new v1.Panel();
     before.mount(old);
-    old.setOpen(true);
+    old.s.open = (true);
     before.flush();
     const oldCounter = find<Counter>(old, "Counter");
     assert.ok(oldCounter);
-    oldCounter.setCount(7);
+    oldCounter.s.count = (7);
     before.tick(1 / 60);
     before.tick(1 / 60);
-    assert.equal(oldCounter.count, 7);
+    assert.equal(oldCounter.s.count, 7);
     assert.equal(oldCounter.ticks, 2);
 
     const saved = captureHotState(old);
@@ -110,11 +105,11 @@ describe("hot reload", () => {
     const restored = restoreHotState(after, fresh, saved);
 
     assert.equal(restored, 2);
-    assert.equal(fresh.open, true);
+    assert.equal(fresh.s.open, true);
     const counter = find<Counter>(fresh, "Counter");
     assert.ok(counter, "the panel's restored state built its counter, which then took its own state");
     assert.notEqual(counter, oldCounter);
-    assert.equal(counter.count, 7);
+    assert.equal(counter.s.count, 7);
     assert.equal(counter.ticks, 2);
     // The new build's code runs on the old state.
     after.tick(1 / 60);
@@ -123,14 +118,14 @@ describe("hot reload", () => {
 
   it("keeps the new initial value for state the old build did not have", async () => {
     const v1 = await load<{ Panel: new () => Panel }>(compile(V1, "Hot.tsx"));
-    const v2 = await load<{ Panel: new () => Panel & { label: number } }>(compile(V2, "Hot.tsx"));
+    const v2 = await load<{ Panel: new () => Panel & { s: { label: number } } }>(compile(V2, "Hot.tsx"));
     const old = new v1.Panel();
     new World().mount(old);
     const fresh = new v2.Panel();
     const world = new World();
     world.mount(fresh);
     restoreHotState(world, fresh, captureHotState(old));
-    assert.equal(fresh.label, 5);
+    assert.equal(fresh.s.label, 5);
   });
 
   it("skips a saved value whose type no longer matches", async () => {
@@ -138,8 +133,8 @@ describe("hot reload", () => {
     const fresh = new v2.Panel();
     const world = new World();
     world.mount(fresh);
-    restoreHotState(world, fresh, new Map([["Panel", { "Panel.open": "yes", "Panel.label": 9 }]]));
-    assert.equal(fresh.open, false);
-    assert.equal(fresh.label, 9);
+    restoreHotState(world, fresh, new Map([["Panel", { "Panel.s.open": "yes", "Panel.s.label": 9 }]]));
+    assert.equal(fresh.s.open, false);
+    assert.equal(fresh.s.label, 9);
   });
 });

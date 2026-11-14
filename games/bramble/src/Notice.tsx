@@ -1,4 +1,4 @@
-import { Entity, Shape, Text, useMount, useSpring, useState, useTween } from "@rge/runtime/jsx";
+import { Entity, Shape, Text, useMount, useSpring, useMutable, useTween } from "@rge/runtime/jsx";
 
 interface NoticeProps {
   text: string;
@@ -9,12 +9,12 @@ interface NoticeProps {
  * appears: `shown` turns on once it is mounted, and a spring and a tween follow it.
  */
 export function Notice({ text }: NoticeProps) {
-  const [shown, setShown] = useState(false);
+  const s = useMutable({ shown: false });
   useMount(() => {
-    setShown(true);
+    s.shown = true;
   });
-  const y = useSpring(shown ? 18 : 4, { duration: 0.35, bounce: 0.3 });
-  const opacity = useTween(shown ? 1 : 0, { duration: 0.2 });
+  const y = useSpring(s.shown ? 18 : 4, { duration: 0.35, bounce: 0.3 });
+  const opacity = useTween(s.shown ? 1 : 0, { duration: 0.2 });
 
   return (
     <Entity transform={{ y, opacity }}>

@@ -15,7 +15,7 @@ import { fadeThrough } from "./transitions.ts";
 function Play() {
   const { originX, originY, room, deaths, dead } = useGame((s) => s.run);
   const gems = useGame((s) => s.gems);
-  const [shake, setShake] = useShake();
+  const shake = useShake();
 
   return (
     <Entity>
@@ -42,7 +42,11 @@ function Play() {
       <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />
       {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it. */}
       <Camera bounds={[originX, originY, 320, 180]} slide={0.4} shake={shake}>
-        <Player onDie={() => setShake({ strength: 3, duration: 0.25 })} />
+        <Player onDie={() => {
+          shake.strength = 3;
+          shake.duration = 0.25;
+          shake.elapsed = 0;
+        }} />
       </Camera>
       {/* Where dust and sparks are drawn, in the world, over the character: effects.ts makes them. */}
       <ParticleLayer particles={fx} />

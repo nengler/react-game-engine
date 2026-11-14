@@ -60,8 +60,8 @@ describe("playWithReload", () => {
     const steps: ((player: Player) => void)[] = [
       // Started: change some state, then edit the counter's text.
       (player) => {
-        const main = find(player.world.root, "Main") as GameObject & { setClicks(n: number): void };
-        main.setClicks(2);
+        const main = find(player.world.root, "Main") as GameObject & { s: { clicks: number } };
+        main.s.clicks = 2;
         const counter = find(player.world.root, "CoinCounter") as GameObject & { gameStateStore: { setState(s: object): void } };
         counter.gameStateStore.setState({ stats: { coins: 3, hits: 1 } });
         player.world.flush();
@@ -70,7 +70,7 @@ describe("playWithReload", () => {
       // Reloaded: the new text, with the old state. Then break the file.
       (player) => {
         assert.ok(texts(player.world.root).includes("Gold: 3"), texts(player.world.root).join(" | "));
-        assert.equal((find(player.world.root, "Main") as GameObject & { clicks: number }).clicks, 2);
+        assert.equal((find(player.world.root, "Main") as GameObject & { s: { clicks: number } }).s.clicks, 2);
         writeFileSync(counterFile, original.replace("Coins: {coins}", "Gold: {coinz}"));
       },
       // The compile error is shown in the window. Fix it.

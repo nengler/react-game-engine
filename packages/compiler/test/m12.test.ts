@@ -15,32 +15,32 @@ after(() => {
 
 const SOURCE = `
 function Level() {
-  const [wave, setWave] = useState(1);
+  const s = useMutable({ wave: 1 });
   return (
     <Entity name="Level">
-      <Camera zoom={wave > 5 ? 2 : 1} transform={{ x: 160, y: 120 }} />
+      <Camera zoom={s.wave > 5 ? 2 : 1} transform={{ x: 160, y: 120 }} />
       <Sprite image="bg.png" />
     </Entity>
   );
 }
 
 function Player() {
-  const [x, setX] = useState(0);
-  useUpdate((dt) => setX((x) => x + dt * 10));
+  const s = useMutable({ x: 0 });
+  useUpdate((dt) => { s.x += dt * 10; });
   return (
-    <Entity name="Player" transform={{ x }}>
+    <Entity name="Player" transform={{ x: s.x }}>
       <Sprite image="player.png" />
     </Entity>
   );
 }
 
 function Stage() {
-  const [pet, setPet] = useState(false);
+  const s = useMutable({ pet: false });
   return (
     <Entity name="Stage">
       <Camera zoom={2}>
         <Player />
-        {pet && <Sprite image="pet.png" transform={{ x: 100 }} />}
+        {s.pet && <Sprite image="pet.png" transform={{ x: 100 }} />}
       </Camera>
     </Entity>
   );
@@ -52,11 +52,11 @@ interface Unit {
 }
 
 function Swarm() {
-  const [units, setUnits] = useState<Unit[]>([]);
+  const s = useMutable({ units: [] as Unit[] });
   return (
     <Entity name="Swarm">
       <Camera>
-        {units.map((u) => (
+        {s.units.map((u) => (
           <Entity key={u.id} name={u.id} transform={{ x: u.x }} />
         ))}
       </Camera>
@@ -65,10 +65,10 @@ function Swarm() {
 }
 
 function Hero() {
-  const [x, setX] = useState(0);
-  useUpdate((dt) => setX((x) => x + dt * 10));
+  const s = useMutable({ x: 0 });
+  useUpdate((dt) => { s.x += dt * 10; });
   return (
-    <Entity name="Hero" transform={{ x }}>
+    <Entity name="Hero" transform={{ x: s.x }}>
       <Sprite image="hero.png" />
       <Camera zoom={2} />
     </Entity>
@@ -83,20 +83,20 @@ const View = ({ zoom }: ViewProps) => <Camera zoom={zoom} />;
 `;
 
 interface LevelInstance extends Entity {
-  setWave(value: number): void;
   readonly camera: Camera;
   readonly sprite: Sprite;
+  s: { [field: string]: unknown };
 }
 interface PlayerInstance extends Entity {}
 interface GameInstance extends Entity {
-  setPet(value: boolean): void;
   readonly camera: Camera;
   readonly player: PlayerInstance;
   sprite: Sprite | null;
+  s: { [field: string]: unknown };
 }
 interface SwarmInstance extends Entity {
-  setUnits(value: { id: string; x: number }[]): void;
   readonly camera: Camera;
+  s: { [field: string]: unknown };
 }
 interface HeroInstance extends Entity {
   readonly camera: Camera;
@@ -127,7 +127,7 @@ describe("M12: IR and generated code", () => {
   it("makes zoom a dynamic prop over the state it reads, and the view's placement a static transform", () => {
     const zoom = camera.props.find((p) => p.name === "zoom")!;
     assert.equal(zoom.kind, "DynamicProp");
-    assert.deepEqual(zoom.kind === "DynamicProp" && zoom.dependencies, [{ kind: "State", state: "Level.wave" }]);
+    assert.deepEqual(zoom.kind === "DynamicProp" && zoom.dependencies, [{ kind: "State", state: "Level.s.wave" }]);
     assert.deepEqual(camera.transform.map((t) => [t.name, t.kind]), [["x", "StaticProp"], ["y", "StaticProp"]]);
   });
 
@@ -137,8 +137,8 @@ describe("M12: IR and generated code", () => {
   });
 
   it("builds the camera and updates zoom in place", () => {
-    assert.match(compiled.code, /readonly camera: Camera = new Camera\(\{ zoom: \(this\.wave > 5\) \? 2 : 1 \}\);/);
-    assert.match(compiled.code, /const (\$\d+) = \(this\.wave > 5\) \? 2 : 1;[^]*?this\.camera\.zoom = \1;/);
+    assert.match(compiled.code, /readonly camera: Camera = new Camera\(\{ zoom: \(this\.\$s_wave > 5\) \? 2 : 1 \}\);/);
+    assert.match(compiled.code, /const (\$\d+) = \(this\.\$s_wave > 5\) \? 2 : 1;[^]*?this\.camera\.zoom = \1;/);
     assert.match(compiled.code, /this\.camera\.transform\.x = 160;/);
   });
 
@@ -192,7 +192,7 @@ describe("M12: runtime behaviour", () => {
     world.mount(level);
     const camera = level.camera;
     assert.equal(camera.zoom, 1);
-    level.setWave(6);
+    level.s.wave = (6);
     assert.equal(world.flush(), 1);
     assert.equal(camera.zoom, 2);
     assert.equal(level.camera, camera);
@@ -225,13 +225,13 @@ describe("M12: runtime behaviour", () => {
     const game = new Stage();
     world.mount(game);
     world.tick(1); // the player is at 10
-    game.setPet(true);
+    game.s.pet = (true);
     world.flush();
     assert.equal(game.camera.children.length, 2, "the pet is a child of the camera");
     assert.equal(game.sprite!.worldTransform().x, 100, "placed in the camera's parent's space");
     const view = game.camera.worldToView(55, 0); // (10 + 100) / 2
     assert.ok(Math.abs(view.x) < 1e-9 && Math.abs(view.y) < 1e-9, `${JSON.stringify(view)}`);
-    game.setPet(false);
+    game.s.pet = (false);
     world.flush();
     assert.deepEqual(game.camera.worldToView(10, 0), { x: 0, y: 0 }, "back on the player");
   });
@@ -241,10 +241,10 @@ describe("M12: runtime behaviour", () => {
     const swarm = new Swarm();
     world.mount(swarm);
     assert.deepEqual(swarm.camera.worldToView(0, 0), { x: 0, y: 0 }, "no children: where it is");
-    swarm.setUnits([{ id: "a", x: 0 }, { id: "b", x: 100 }]);
+    swarm.s.units = ([{ id: "a", x: 0 }, { id: "b", x: 100 }]);
     world.flush();
     assert.deepEqual(swarm.camera.worldToView(50, 0), { x: 0, y: 0 });
-    swarm.setUnits([{ id: "b", x: 100 }, { id: "c", x: 300 }]);
+    swarm.s.units = ([{ id: "b", x: 100 }, { id: "c", x: 300 }]);
     world.flush();
     assert.deepEqual(swarm.camera.worldToView(200, 0), { x: 0, y: 0 });
   });
@@ -278,7 +278,7 @@ describe("M12: runtime behaviour", () => {
 
 describe("M12: a camera rig passes what it follows through {children}", () => {
   const RIG = `
-import { type Child, Camera, Entity, Sprite, useState, useUpdate } from "@rge/runtime/jsx";
+import { type Child, Camera, Entity, Sprite, useMutable, useUpdate } from "@rge/runtime/jsx";
 
 interface RigProps {
   children: Child;
@@ -289,9 +289,9 @@ function Rig({ children }: RigProps) {
 }
 
 function Runner() {
-  const [x, setX] = useState(0);
-  useUpdate((dt) => setX((x) => x + dt * 4));
-  return <Entity name="Runner" transform={{ x }}><Sprite image="runner.png" /></Entity>;
+  const s = useMutable({ x: 0 });
+  useUpdate((dt) => { s.x += dt * 4; });
+  return <Entity name="Runner" transform={{ x: s.x }}><Sprite image="runner.png" /></Entity>;
 }
 
 function Stage() {
@@ -332,7 +332,7 @@ function Stage() {
 describe("M12: diagnostics", () => {
   it("lets state take the camera's own names, kept in `$name` fields", () => {
     for (const name of ["zoom", "viewTransform", "worldToView", "viewToWorld", "childSpace"]) {
-      assert.ok(compile(`function C() { const [${name}, set] = useState(1); return <Camera />; }`).code.includes(`$${name}: `), name);
+      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Camera />; }`).code.includes(`get $${name}()`), name);
     }
   });
 

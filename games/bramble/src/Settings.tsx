@@ -1,4 +1,4 @@
-import { Entity, Text, useState, useStore } from "@rge/runtime/jsx";
+import { Entity, Text, useMutable, useStore } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { KeyPrompt } from "./KeyPrompt.tsx";
 import { Menu } from "./Menu.tsx";
@@ -11,17 +11,21 @@ export function Settings() {
   const values = useStore(settings, settingsView);
   const bindings = useStore(settings, bindingsView);
   const { adjust, bindKey, resetSettings, closeSettings } = useGame.actions();
-  /** The action whose row waits for a key, if any. */
-  const [capturing, setCapturing] = useState<string | null>(null);
+  const s = useMutable({
+    /** The action whose row waits for a key, if any. */
+    capturing: null as string | null,
+  });
+  // A const, so a callback under `capturing !== null` keeps that narrowing (TypeScript does not keep it for `s.capturing`).
+  const capturing = s.capturing;
   return (
     <Entity>
       <Text x={0} y={6} width={320} align="center">SETTINGS</Text>
       <Menu
         top={22}
-        rows={settingsRows(values, bindings, capturing)}
+        rows={settingsRows(values, bindings, s.capturing)}
         onAdjust={adjust}
         onChoose={(id) => {
-          if (id.startsWith("bind:")) setCapturing(id.slice(5));
+          if (id.startsWith("bind:")) s.capturing = id.slice(5);
           else if (id === "back") closeSettings();
           else if (id === "reset") resetSettings();
           else adjust(id, 1);
@@ -32,9 +36,9 @@ export function Settings() {
         <KeyPrompt
           onKey={(key) => {
             bindKey(capturing, key);
-            setCapturing(null);
+            s.capturing = null;
           }}
-          onCancel={() => setCapturing(null)}
+          onCancel={() => { s.capturing = null; }}
         />
       )}
     </Entity>

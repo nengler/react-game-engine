@@ -1,15 +1,15 @@
-import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
 
 function Mover() {
-  const [x, setX] = useState(0);
+  const s = useMutable({ x: 0 });
 
   useUpdate((dt) => {
-    setX((previous) => previous + 60 * dt);
+    s.x += 60 * dt;
   });
 
   return (
-    <Entity x={x} y={0}>
-      <Sprite image={x > 100 ? "run.png" : "idle.png"} />
+    <Entity x={s.x} y={0}>
+      <Sprite image={s.x > 100 ? "run.png" : "idle.png"} />
     </Entity>
   );
 }

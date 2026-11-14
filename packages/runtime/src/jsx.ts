@@ -1,7 +1,7 @@
 /**
  * The authoring entry point: what component source imports.
  *
- *   import { useState, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+ *   import { useMutable, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
  *
  * Source TSX is compiled, never run, so everything here is a declaration that
  * exists for the type-checker (the functions throw if called). Prop types are
@@ -9,7 +9,7 @@
  * test checks that this module exports exactly what the compiler accepts.
  */
 import type { InputState } from "./input.ts";
-import type { ShakeState, SpringOptions, TweenOptions, Vector2 } from "./math.ts";
+import type { SpringOptions, TweenOptions } from "./math.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { HudProps } from "./components/Hud.ts";
 import type { GameProps } from "./components/Game.ts";
@@ -44,7 +44,7 @@ import type { BodyHit, BodyOptions } from "./body.ts";
 
 // -- state and refs -----------------------------------------------------------
 
-/** `useState(100)` infers `number`, not the literal `100`. Arrays and records are kept as written. */
+/** `useRef(100)` infers `number`, not the literal `100`. Arrays and records are kept as written. */
 type Widen<T> = T extends number ? number : T extends string ? string : T extends boolean ? boolean : T;
 
 /** Primitive values, the only thing a ref holds. */
@@ -57,29 +57,16 @@ function compileTimeOnly(name: string): never {
 }
 
 /**
- * State: reads are a snapshot of the last render, as in React; setters batch
- * into one render per frame. Arrays and records need their type
- * (`useState<EnemyData[]>([])`) and are updated immutably: a setter only
- * renders when it is given a new value, so `setItems([...items, item])`, never
- * a mutation of `items`.
- */
-export function useState<T>(_initial: () => T): [Widen<T>, Setter<Widen<T>>];
-export function useState<T>(_initial: T): [Widen<T>, Setter<Widen<T>>];
-/** `useState(() => makeThing())`: React's lazy initial value, made once per instance (an object with methods, such as an effect). */
-export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>>] {
-  return compileTimeOnly("useState");
-}
-
-/**
- * Squash and stretch: a scale set at a moment that springs back to 1 at \`recover\` a second (default 1.75), as state.
+ * Squash and stretch: a scale set at a moment that springs back to 1 at \`recover\` a second (default 1.75), as state you write.
  *
- *     const [squash, setSquash] = useSquash();
- *     setSquash({ x: 0.6, y: 1.4 });                 // in a handler: thin and tall
+ *     const squash = useSquash();
+ *     squash.x = 0.6;                                 // in a handler: thin and tall
+ *     squash.y = 1.4;
  *     <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} … />   // scales about the sprite's origin
  *
- * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
-export function useSquash(_recover?: number): [Vector2, Setter<Vector2>] {
+export function useSquash(_recover?: number): { x: number; y: number } {
   return compileTimeOnly("useSquash");
 }
 
@@ -92,7 +79,7 @@ export function useSquash(_recover?: number): [Vector2, Setter<Vector2>] {
  *     <Entity transform={{ y }}>…</Entity>
  *
  * It steps in this component's update, so it follows the fixed step, `freeze` and replays, and renders only while it moves. It
- * starts at its first target. An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ * starts at its first target. An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
 export function useSpring(_target: number, _options?: SpringOptions): number {
   return compileTimeOnly("useSpring");
@@ -112,12 +99,12 @@ export function useTween(_target: number, _options?: TweenOptions): number {
 }
 
 /**
- * A shake of the view, as state: `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, and it runs down by
- * itself in this component's update. Give it to the camera: `<Camera shake={shake}>`.
+ * A shake of the view, as state you write: in a handler, `shake.strength = 3; shake.duration = 0.25; shake.elapsed = 0;` starts one,
+ * and it runs down by itself in this component's update. Give it to the camera: `<Camera shake={shake}>`.
  *
- * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
-export function useShake(): [ShakeState, Setter<ShakeState>] {
+export function useShake(): { strength: number; duration: number; elapsed: number } {
   return compileTimeOnly("useShake");
 }
 
@@ -125,7 +112,7 @@ export function useShake(): [ShakeState, Setter<ShakeState>] {
  * Seconds since the component mounted, growing with each update: `const time = useTime();`, then
  * `color={time % 1 < 0.66 ? "white" : "black"}` to blink. The component renders every update while it is mounted.
  *
- * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
 export function useTime(): number {
   return compileTimeOnly("useTime");
@@ -152,7 +139,7 @@ export interface Subscribable {
  * returns what to show; it runs when the component mounts and each time the store notifies, and the component renders only when
  * what it returns holds different data. The subscription ends when the component leaves.
  *
- * An ordinary hook the engine ships (\`useState\` and \`useMount\`, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and \`useMount\`, inlined like any custom hook).
  */
 export function useStore<T>(_store: Subscribable, _read: () => T): T {
   return compileTimeOnly("useStore");
@@ -187,7 +174,7 @@ export interface BodyHandle {
  *     return <Entity transform={{ x, y }}>…</Entity>;
  *
  * Position is in the component's parent's space, as `transform` is. `x` and `y` are state: they render where the body is.
- * An ordinary hook the engine ships (\`useState\` and functions of the component, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and functions of the component, inlined like any custom hook).
  */
 export function useBody(_options: BodyOptions): BodyHandle {
   return compileTimeOnly("useBody");
@@ -208,6 +195,16 @@ export function useContext<T>(_context: Context<T>): T {
  */
 export function Provider<T>(_props: { context: Context<T>; value: T; children?: Child }): JSX.Element {
   return compileTimeOnly("Provider");
+}
+
+/**
+ * A component's state, written directly: `const s = useMutable({ vx: 0, vy: 0 })`, then `s.vx += 1` in a handler. Each field
+ * renders when it changes, is saved, and is kept by hot reload and rewind. A handler reads its own writes at once (and every
+ * earlier handler's in the step); render, and the props and context it hands down, see what the frame committed. Fields are
+ * written in handlers only, and a list or record is replaced, not changed in place. It replaces React's `useState`.
+ */
+export function useMutable<T extends Record<string, unknown>>(_initial: T): T {
+  return compileTimeOnly("useMutable");
 }
 
 /** A value that persists across frames but never renders. Read and write `.current` in handlers only. */

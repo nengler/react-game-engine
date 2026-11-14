@@ -41,20 +41,20 @@ interface WatchProps {
 
 /** The expression form: what the call returns is the cleanup. */
 function Watch({ listen, onLog }: WatchProps) {
-  const [last, setLast] = useState(0);
-  useMount(() => listen((n) => setLast(n)));
+  const s = useMutable({ last: 0 });
+  useMount(() => listen((n) => { s.last = n; }));
   useUnmount(() => onLog("unmount"));
-  return <Entity name={\`watch:\${last}\`} />;
+  return <Entity name={\`watch:\${s.last}\`} />;
 }
 
 /** The block form: a returned arrow, a local function called in it, and an early \`return;\` with no cleanup. */
 function Counted({ listen, onLog }: WatchProps) {
-  const [total, setTotal] = useState(0);
+  const s = useMutable({ total: 0 });
   const skip = useRef(false);
   useMount(() => {
     if (skip.current) return;
     const stop = listen((n) => {
-      setTotal((t) => t + n);
+      s.total += n;
     });
     return () => {
       stop();
@@ -62,7 +62,7 @@ function Counted({ listen, onLog }: WatchProps) {
     };
   });
   useMount(() => onLog("mounted"));
-  return <Entity name={\`counted:\${total}\`} />;
+  return <Entity name={\`counted:\${s.total}\`} />;
 }
 
 interface HostProps {
@@ -71,11 +71,11 @@ interface HostProps {
 }
 
 function Host({ listen, onLog }: HostProps) {
-  const [open, setOpen] = useState(true);
+  const s = useMutable({ open: true });
   return (
     <Entity name="Host">
-      {open && <Watch listen={listen} onLog={onLog} />}
-      {open && <Counted listen={listen} onLog={onLog} />}
+      {s.open && <Watch listen={listen} onLog={onLog} />}
+      {s.open && <Counted listen={listen} onLog={onLog} />}
     </Entity>
   );
 }
@@ -85,7 +85,7 @@ describe("useMount returning a cleanup", () => {
   it("keeps what a mount handler returns and inlines one that returns nothing", () => {
     const { code } = compile(WATCHERS, "Watchers.tsx");
     assert.match(code, /override onMount\(\): void \{\n\s+this\.keepCleanup\(this\.#onMount0\(\)\);\n\s+\}/, "Watch keeps its one cleanup");
-    assert.match(code, /#onMount0\(\): \(\(\) => void\) \| void \{\n\s+return this\.props\.listen\(\(n\) => \{ this\.setLast\(n\); \}\);/);
+    assert.match(code, /#onMount0\(\): \(\(\) => void\) \| void \{\n\s+return this\.props\.listen\(\(n\) => \{ this\.\$set_s_last\(n\); \}\);/);
     assert.match(code, /this\.keepCleanup\(this\.#onMount0\(\)\);\n\s+this\.keepCleanup\(this\.#onMount1\(\)\);/, "Counted keeps both: an expression body's call is returned, as in React");
     assert.match(code, /const stop = this\.props\.listen\(/);
     assert.match(code, /return \(\) => \{\n\s+stop\(\);/);
@@ -110,13 +110,13 @@ describe("useMount returning a cleanup", () => {
     channel.send(4);
     world.flush();
     assert.deepEqual(host.children.map((c: { name: string }) => c.name), ["watch:4", "counted:7"]);
-    host.setOpen(false);
+    host.s.open = (false);
     world.flush();
     assert.deepEqual(channel.log, ["listen", "listen", "mounted", "unmount", "stop", "stop", "cleanup"], "useUnmount first, then each cleanup, once");
     assert.equal(channel.listeners.length, 0);
-    host.setOpen(true);
+    host.s.open = (true);
     world.flush();
-    host.setOpen(false);
+    host.s.open = (false);
     world.flush();
     assert.equal(channel.listeners.length, 0, "a second stay keeps and runs its own cleanups");
     assert.equal(channel.log.filter((l) => l === "stop").length, 4);
@@ -150,7 +150,7 @@ describe("useMount returning a cleanup", () => {
 
   it("allows an arrow handed to a function only in a handler, and a returned value only from useMount", () => {
     const fn = `interface P { listen: (fn: () => void) => () => void }`;
-    assert.deepEqual(codes(`${fn} function A({ listen }: P) { const [n, setN] = useState(0); useUpdate(() => { setN((x) => { listen(() => {}); return x; }); }); return <Entity name="A" />; }`), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(`${fn} function A({ listen }: P) { const s = useMutable({ n: 0 }); useUpdate(() => { setN((x) => { listen(() => {}); return x; }); }); return <Entity name="A" />; }`), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes(`${fn} function A({ listen }: P) { const s = listen(() => {}); return <Entity name="A" />; }`), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes(`${fn} function A({ listen }: P) { useUpdate(() => { return listen(() => {}); }); return <Entity name="A" />; }`), [DiagnosticCode.InvalidHandler]);
     assert.deepEqual(codes(`${fn} function A({ listen }: P) { useUnmount(() => { return () => {}; }); return <Entity name="A" />; }`), [DiagnosticCode.InvalidHandler]);
@@ -165,11 +165,11 @@ interface PageProps {
 }
 
 function Page({ label, onLog }: PageProps) {
-  const [turns, setTurns] = useState(0);
+  const s = useMutable({ turns: 0 });
   useMount(() => onLog(\`mount \${label}\`));
   useUnmount(() => onLog(\`unmount \${label}\`));
-  useUpdate(() => setTurns((t) => t + 1));
-  return <Entity name={\`\${label}:\${turns}\`} />;
+  useUpdate(() => { s.turns += 1; });
+  return <Entity name={\`\${label}:\${s.turns}\`} />;
 }
 
 interface BookProps {
@@ -177,15 +177,17 @@ interface BookProps {
 }
 
 function Book({ onLog }: BookProps) {
-  const [page, setPage] = useState("a");
-  const [title, setTitle] = useState("T");
-  const [open, setOpen] = useState(true);
-  const [left, setLeft] = useState(true);
+  const s = useMutable({
+    page: "a",
+    title: "T",
+    open: true,
+    left: true,
+  });
   return (
     <Entity name="Book">
-      <Page key={page} label={\`\${title}\${page}\`} onLog={onLog} />
-      {open && <Page key={page} label={\`open\${page}\`} onLog={onLog} />}
-      {left ? <Sprite key={page} image="left.png" /> : <Sprite key={page} image="right.png" />}
+      <Page key={s.page} label={\`\${s.title}\${s.page}\`} onLog={onLog} />
+      {s.open && <Page key={s.page} label={\`open\${s.page}\`} onLog={onLog} />}
+      {s.left ? <Sprite key={s.page} image="left.png" /> : <Sprite key={s.page} image="right.png" />}
     </Entity>
   );
 }
@@ -194,8 +196,8 @@ function Book({ onLog }: BookProps) {
 describe("key on any element", () => {
   it("compiles to a list of one, the key itself", () => {
     const { code } = compile(BOOK, "Book.tsx");
-    assert.match(code, /\$page\d*List\(\) \{ return \[this\.page\]; \}/);
-    assert.match(code, /\.filter\(\(\$keyed\) => this\.open\)/, "a condition filters the list of one");
+    assert.match(code, /\$page\d*List\(\) \{ return \[this\.\$s_page\]; \}/);
+    assert.match(code, /\.filter\(\(\$keyed\) => this\.\$s_open\)/, "a condition filters the list of one");
   });
 
   it("type-checks the generated module", () => {
@@ -212,16 +214,16 @@ describe("key on any element", () => {
     const names = (): string[] => book.children.map((c: { name: string }) => c.name);
     world.tick(0.016);
     world.tick(0.016);
-    book.setTitle("U");
+    book.s.title = ("U");
     world.flush();
     assert.deepEqual(names().slice(0, 2), ["Ua:2", "opena:2"], "same key: the props change, the state stays");
     assert.deepEqual(log, ["mount Ta", "mount opena"]);
-    book.setPage("b");
+    book.s.page = ("b");
     world.flush();
     assert.deepEqual(names().slice(0, 2), ["Ub:0", "openb:0"], "new key: fresh state");
     // As with list items, the new instance is added before the old one is removed.
     assert.deepEqual(log.slice(2), ["mount Ub", "unmount Ua", "mount openb", "unmount opena"]);
-    book.setOpen(false);
+    book.s.open = (false);
     world.flush();
     assert.deepEqual(names().slice(0, 1), ["Ub:0"]);
     assert.equal(log.at(-1), "unmount openb");
@@ -235,12 +237,12 @@ describe("key on any element", () => {
     world.flush();
     const images = (): string[] => book.children.filter((c: { image?: string }) => c.image !== undefined).map((c: { image: string }) => c.image);
     assert.deepEqual(images(), ["left.png"]);
-    book.setLeft(false);
+    book.s.left = (false);
     world.flush();
     assert.deepEqual(images(), ["right.png"]);
-    book.setOpen(false);
-    book.setOpen(true);
-    book.setPage("c");
+    book.s.open = (false);
+    book.s.open = (true);
+    book.s.page = ("c");
     world.flush();
     assert.deepEqual(book.children.map((c: { name: string; image?: string }) => c.image ?? c.name.split(":")[0]), ["Tc", "openc", "right.png"]);
   });
@@ -249,15 +251,15 @@ describe("key on any element", () => {
     const root = compileErrors(`function A() { return <Entity name="A" key="x" />; }`);
     assert.deepEqual(root.map((d) => d.code), [DiagnosticCode.UnsupportedAttribute]);
     assert.match(root[0]!.message, /where the component is used, not on its root/);
-    const passed = compileErrors(`import { type Child, Entity, Sprite, useState } from "@rge/runtime/jsx";
+    const passed = compileErrors(`import { type Child, Entity, Sprite, useMutable } from "@rge/runtime/jsx";
 interface PanelProps { children: Child }
 function Panel({ children }: PanelProps) { return <Entity name="P">{children}</Entity>; }
-function A() { const [k, setK] = useState(1); return <Panel><Sprite key={k} image="a.png" /><Sprite image="b.png" /></Panel>; }`);
+function A() { const s = useMutable({ k: 1 }); return <Panel><Sprite key={s.k} image="a.png" /><Sprite image="b.png" /></Panel>; }`);
     assert.deepEqual(passed.map((d) => d.code), [DiagnosticCode.InvalidList]);
     assert.match(passed[0]!.message, /A keyed element passed to <Panel> must be its only child/);
     const nested = compileErrors(`interface Item { id: string }
-function A() { const [items, setItems] = useState<Item[]>([]); const [k, setK] = useState(1);
-  return <Entity name="A">{items.map((i) => <Entity key={i.id}><Sprite key={k} image="a.png" /></Entity>)}</Entity>; }`);
+function A() { const s = useMutable({ items: [] as Item[], k: 1 });
+  return <Entity name="A">{s.items.map((i) => <Entity key={i.id}><Sprite key={s.k} image="a.png" /></Entity>)}</Entity>; }`);
     assert.deepEqual(nested.map((d) => d.code), [DiagnosticCode.InvalidList]);
     assert.match(nested[0]!.message, /A list item cannot hold a keyed element among its children yet/);
   });

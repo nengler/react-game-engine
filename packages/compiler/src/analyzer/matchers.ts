@@ -1,8 +1,8 @@
 // Recognisers for the statements of a component body: state, render constants, stores, refs, sounds and handlers.
-import { NodeFlags, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
-import { isArrayBindingPattern, isObjectBindingPattern, isOmittedExpression, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isPropertyAccessExpression, isVariableStatement } from "typescript/ast/is";
+import { NodeFlags, SyntaxKind, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
+import { isAsExpression, isTypeReferenceNode, isArrayBindingPattern, isBindingElement, isObjectBindingPattern, isOmittedExpression, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isObjectLiteralExpression, isPropertyAccessExpression, isPropertyAssignment, isTypeLiteralNode, isVariableStatement } from "typescript/ast/is";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type HookCallAnalysis, type UseStateCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
+import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type HookCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
 import { unwrapParens } from "./util.ts";
 
 
@@ -16,7 +16,10 @@ export type StatementMatch =
   | { readonly kind: "ok"; readonly hooks: readonly HookCallAnalysis[] }
   | { readonly kind: "invalid"; readonly code: DiagnosticCode; readonly message: string; readonly call: CallExpression | null };
 
-/** Recognises `const [value, setValue] = useState(init)`; returns null if the statement is not a useState call at all. */
+/**
+ * `const [hp, setHp] = useState(3)`: `useState` is replaced by `useMutable` (docs/MUTABLE_STATE.md). Reported with the conversion
+ * written out in the author's names; null if the statement is not a `useState` call at all.
+ */
 export function matchUseStateStatement(statement: Statement): StatementMatch | null {
   if (!isVariableStatement(statement)) return null;
   const list = statement.declarationList;
@@ -24,41 +27,17 @@ export function matchUseStateStatement(statement: Statement): StatementMatch | n
   const declaration = list.declarations[0]!;
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useState") return null;
-
-  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
-  if ((list.flags & NodeFlags.Const) === 0) return invalid("useState must be bound with `const`.");
-  if (!isArrayBindingPattern(declaration.name)) {
-    return invalid("useState must be destructured: `const [value, setValue] = useState(initial)`.");
-  }
-  const elements = declaration.name.elements;
-  if (elements.length < 1 || elements.length > 2) {
-    return invalid("useState destructuring must bind one or two names: `[value, setValue]`.");
-  }
-  const names: (string | null)[] = [];
-  for (const element of elements) {
-    if (!element.name && !element.dotDotDotToken && !element.initializer) {
-      names.push(null); // hole: `const [, setValue] = ...`
-      continue;
-    }
-    if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) {
-      return invalid("useState destructuring must bind plain identifiers.");
-    }
-    names.push(element.name.text);
-  }
-  const valueName = names[0];
-  if (!valueName) return invalid("useState must bind the state value.");
-  if (init.arguments.length > 1) return invalid("useState takes at most one argument.");
-
-  const hook: UseStateCallAnalysis = {
-    kind: "useState",
-    valueName,
-    setterName: names[1] ?? null,
-    initializer: init.arguments[0] ?? null,
-    typeArgument: init.typeArguments?.[0] ?? null,
-    call: init,
-    declaration,
-  };
-  return { kind: "ok", hooks: [hook] };
+  const names = isArrayBindingPattern(declaration.name)
+    ? declaration.name.elements.map((e) => (isBindingElement(e) && e.name !== undefined && isIdentifier(e.name) ? e.name.text : null))
+    : [];
+  const value = names[0] ?? "value";
+  const setter = names[1] ?? null;
+  const initial = init.arguments[0]?.getText() ?? "…";
+  const message =
+    `\`useState\` is replaced by \`useMutable\`, state you write directly: \`const s = useMutable({ ${value}: ${initial} })\`, read as \`s.${value}\`` +
+    (setter !== null ? `, and \`${setter}(v)\` becomes \`s.${value} = v\`` : "") +
+    ". A handler reads its own writes at once. `node tools/codemod-mutable.ts <file>` converts a file.";
+  return { kind: "invalid", code: DiagnosticCode.UnknownHook, message, call: init };
 }
 
 /** `const name = expression;` that is not a hook call (hooks are matched first). */
@@ -159,6 +138,34 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   if (!isIdentifier(declaration.name)) return invalid(`${storeName}(…) binds one plain name: \`${example}\``);
   const one = read(declaration.name.text, body, selector);
   return typeof one === "string" ? invalid(one) : { kind: "ok", hooks: [one] };
+}
+
+/** Recognises `const s = useMutable({ a: 0, b: 0 })` (optionally `useMutable<{ a: number; b: number }>({ … })`); null if the statement is not one. */
+export function matchMutableStatement(statement: Statement): StatementMatch | null {
+  if (!isVariableStatement(statement)) return null;
+  const list = statement.declarationList;
+  if (list.declarations.length !== 1) return null;
+  const declaration = list.declarations[0]!;
+  const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
+  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useMutable") return null;
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
+  if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) return invalid("useMutable must be bound with a plain `const` name: `const s = useMutable({ x: 0 })`.");
+  const arg = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
+  if (init.arguments.length !== 1 || !arg || !isObjectLiteralExpression(arg)) return invalid("useMutable takes one object literal of initial values: `const s = useMutable({ x: 0, y: 0 })`.");
+  const typeArgument = init.typeArguments?.[0];
+  const typed = typeArgument && isTypeLiteralNode(typeArgument) ? typeArgument : null;
+  const fields: { name: string; initializer: Expression; typeNode: Node | null }[] = [];
+  for (const property of arg.properties) {
+    if (!isPropertyAssignment(property) || !isIdentifier(property.name)) return invalid("useMutable's fields are written `name: value`, with plain names (no shorthand, spreads or computed keys).");
+    const key = property.name.text;
+    const member = typed?.members.map((m) => m as unknown as { kind: SyntaxKind; name?: Node; type?: Node }).find((m) => m.kind === SyntaxKind.PropertySignature && m.name !== undefined && isIdentifier(m.name) && m.name.text === key);
+    // `enemies: [] as readonly Foe[]`: the field's type, where the value alone does not say it.
+    const written = unwrapParens(property.initializer);
+    const asserted = isAsExpression(written) && !(isTypeReferenceNode(written.type) && isIdentifier(written.type.typeName) && written.type.typeName.text === "const");
+    fields.push({ name: key, initializer: asserted ? written.expression : property.initializer, typeNode: member?.type ?? (asserted ? written.type : null) });
+  }
+  if (fields.length === 0) return invalid("useMutable needs at least one field.");
+  return { kind: "ok", hooks: [{ kind: "useMutable", name: declaration.name.text, fields, call: init, declaration }] };
 }
 
 /** Recognises `const r = useRef<T>()` and `const play = useSound("a.wav")`; null if the statement is not one. */

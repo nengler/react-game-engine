@@ -1,4 +1,4 @@
-import { useSound, useState, Camera, Flex, Game, Hud, Screen, Text } from "@rge/runtime/jsx";
+import { useSound, useMutable, Camera, Flex, Game, Hud, Screen, Text } from "@rge/runtime/jsx";
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
 import { CoinCounter } from "./CoinCounter.tsx";
@@ -14,7 +14,7 @@ import { Spikes } from "./Spikes.tsx";
  * up, and onto the red spikes to turn red while you stand on them.
  */
 export default function Main() {
-  const [clicks, setClicks] = useState(0);
+  const s = useMutable({ clicks: 0 });
   const playClick = useSound("click.wav");
 
   return (
@@ -35,14 +35,14 @@ export default function Main() {
               height={32}
               alignItems="center"
               justifyContent="center"
-              background={clicks >= 3 ? "seagreen" : "slategray"}
+              background={s.clicks >= 3 ? "seagreen" : "slategray"}
               onPress={() => {
                 playClick();
-                setClicks((clicks) => clicks + 1);
+                s.clicks += 1;
               }}
             >
               <Text size={16} color="white">
-                Clicks: {clicks}
+                Clicks: {s.clicks}
               </Text>
             </Flex>
           </Flex>

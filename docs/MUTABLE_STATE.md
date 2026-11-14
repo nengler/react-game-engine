@@ -1,6 +1,8 @@
 # State you write directly: a design note
 
-As of 2026-11-14. **Status: proposed.** Written while reviewing #121 (`useSim`), which adds a second state hook whose fields are
+As of 2026-11-14. **Status: decided and built in #121 for a component's own state** (the hook is `useMutable`, and `useState` is
+removed); changing lists in place, and props read live, are still open. "What #121 built" at the end says what was settled and
+what building it found. Written while reviewing #121 (`useSim`), which adds a second state hook whose fields are
 written directly (`s.vx += 1`) and read back at once in handlers. This note asks the larger question that PR raises: should that be
 the engine's state model, not an extra hook beside `useState`? It changes two settled decisions in [DESIGN.md](DESIGN.md) ("State
 reads in handlers" and "Mutating state in place"), which is why it is a note first.
@@ -224,3 +226,48 @@ field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games 
 4. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
    "state that never renders", which may be better said as an option than a second hook.
 5. Whether a game-state action (`useGame`) gets the same direct form, so a store reads like component state.
+
+## What #121 built (2026-11-14)
+
+Settled:
+
+- **One hook, `useMutable`, and no `useState`** (open question 1). A `useState` is `RGE1102`, whose message writes the conversion
+  out in the author's names (`const s = useMutable({ hp: 3 })`, read as `s.hp`, and `setHp(v)` becomes `s.hp = v`), once: not
+  again at the import, nor at each read or setter call. The editor's quick fix converts the whole file, and so does
+  `node tools/codemod-mutable.ts <files or folders>`; both are `convertToMutable` (`packages/compiler/src/codemod/mutable.ts`). The
+  games, the examples, Bramble and the compiler's tests moved with it.
+- **Rule 1 and the handler half of rule 2.** A handler reads its own writes and every earlier handler's, in the order handlers run;
+  render sees the frame's committed values. A derived `const` (plain, destructured, or a render block's names) read in a handler
+  is worked out from the fields as they are now, under a memo of its own (`spawns@live`) keyed on their pending values, so once
+  until a field it reads is written. A callback created under a condition assumes the condition in that same live form, so
+  TypeScript narrows what the callback reads.
+- **A hook hands its state back as the object** (`return s`): `const counter = useCounter(2)` makes `counter` the hook's fields, and
+  the shipped hooks do this (`squash.x = 0.6`; a shake is `strength`, `duration` and `elapsed`). `const t = s` is another name for
+  the same fields; `s` read whole anywhere else (`total(s)`, `<Camera shake={shake}>`) is a copy of its fields.
+- **From outside**, a compiled component's `component.s.vx` reads the committed value and `component.s.vx = 1` writes through the
+  setter, so tests and tools write state the way handlers do. `@rge/testing`'s `state()` shows a mutable as `{ s: { vx } }`.
+
+Still open:
+
+- **In-place writes to lists and objects** (open question 2). `s.list.push(x)` is refused, with the assignment to write instead.
+- **Props read live across components** ("Shared lists: live everywhere", option A). Props and context still carry what the
+  parent's last render committed; a child's callback writes the parent's pending value, which the parent's own handlers then read.
+  So between components the old one-step lag holds.
+- **`useRef`** (open question 4) and **game-state actions** (open question 5) are unchanged.
+
+Found while building it:
+
+- **TypeScript does not narrow a field in a closure.** `{s.waiting !== null && <Prompt onKey={() => bind(s.waiting)} />}` is a
+  type error in the author's editor, where `const waiting = s.waiting` above it is not. It is also a real hazard: the callback
+  runs later, as a handler, and the field may have changed by then. The guide teaches the `const`; Bramble's settings needed it.
+- **Timing moved by a step in a few places**, as rule 2 says it should: a component that writes a value and then checks it in the
+  same handler now acts in that step (an enemy defeated in the step its hp reached 0; a tween started in the step its target
+  changed, not the next). The tests that pinned the old timing were updated to the new one, with the reason written beside them.
+- **The codemod is mechanical, and `setX(x + 1); use(x + 1)` is the pattern to check after it.** With a snapshot, `use(x + 1)` read
+  the old `x`; converted to `s.x += 1; use(s.x + 1)` it adds one twice. One test hit exactly this (`sharing.test.ts`).
+- **A hook's internal mutable keeps a call-specific name** where the hook returns fields rather than the object (`useBody` returns
+  `{ x, y, move, … }` from `b`): its state is saved as `_useBody1_b.x`. Tests that read a body's position read where the component
+  draws instead. Naming it after the hook (`body.x`) would make it readable; not done.
+- **The updater paths in the compiler are unreachable now** (`SetState` with an `updater`, `lowerSetState`, `updaterInPlace`), as
+  nothing declares a setter binding. Removing them is a cleanup for a later change.
+

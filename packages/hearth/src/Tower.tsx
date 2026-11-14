@@ -1,4 +1,4 @@
-import { Entity, Sprite, useBody, useState, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Sprite, useBody, useMutable, useUpdate } from "@rge/runtime/jsx";
 import type { Fired } from "./battle.ts";
 import { Barrel } from "./Barrel.tsx";
 import { sfx } from "./effects.ts";
@@ -33,30 +33,21 @@ interface TowerProps {
  * each one is from its collider's data. It draws the base, the barrel, the pips, the flash of a shot, and its range.
  */
 export function Tower({ seed, kind, level, x, y, ring, onFire }: TowerProps) {
-  const [cooldown, setCooldown] = useState(0.2);
-  const [angle, setAngle] = useState<number>(-Math.PI / 2);
-  const [flash, setFlash] = useState(0);
-  const [scatter, setScatter] = useState(seed);
+  const s = useMutable({ cooldown: 0.2, angle: -Math.PI / 2, flash: 0, scatter: seed });
   const stats = statsOf(kind, level);
   const reach = statsOf(kind, MAX_LEVEL).range;
   const { overlapping } = useBody({ x: -reach, y: -reach, width: reach * 2, height: reach * 2 });
   const frame = ROW[kind] * 3 + level;
 
   useUpdate((dt) => {
-    if (flash > 0) setFlash(Math.max(0, flash - dt));
-    const left = Math.max(0, cooldown - dt);
+    if (s.flash > 0) s.flash = Math.max(0, s.flash - dt);
+    s.cooldown = Math.max(0, s.cooldown - dt);
     const target = pickTarget(x, y, stats.range, overlapping("enemy").map((enemy) => enemy.data));
-    if (target === null) {
-      setCooldown(left);
-      return;
-    }
-    setAngle(Math.atan2(target.y - y, target.x - x));
-    if (left > 0) {
-      setCooldown(left);
-      return;
-    }
-    setCooldown(TOWERS[kind].rate);
-    setFlash(MUZZLE);
+    if (target === null) return;
+    s.angle = Math.atan2(target.y - y, target.x - x);
+    if (s.cooldown > 0) return;
+    s.cooldown = TOWERS[kind].rate;
+    s.flash = MUZZLE;
     sfx.play(kind);
     if (kind === "bolt") {
       onFire({ kind, x, y, tx: target.x, ty: target.y, flight: TRACER, target: target.id, damage: stats.damage, radius: 0, slow: 0 });
@@ -64,9 +55,9 @@ export function Tower({ seed, kind, level, x, y, ring, onFire }: TowerProps) {
       onFire({ kind, x, y, tx: x, ty: y, flight: TRACER, target: -1, damage: stats.damage, radius: stats.radius, slow: TOWERS.frost.slowFor });
     } else {
       // The shell lands where the target is now, a little off.
-      const rx = rollSigned(scatter);
+      const rx = rollSigned(s.scatter);
       const ry = rollSigned(rx.seed);
-      setScatter(ry.seed);
+      s.scatter = ry.seed;
       onFire({ kind, x, y, tx: target.x + rx.value * 3, ty: target.y + ry.value * 3, flight: TOWERS.mortar.flight, target: -1, damage: stats.damage, radius: stats.radius, slow: 0 });
     }
   });
@@ -75,9 +66,9 @@ export function Tower({ seed, kind, level, x, y, ring, onFire }: TowerProps) {
     <Entity>
       {ring && <RangeRing range={stats.range} />}
       <Sprite image="tower_bases.png" frameWidth={12} frameHeight={12} frame={frame} originX={6} originY={6} />
-      <Barrel frame={frame} angle={angle} />
+      <Barrel frame={frame} angle={s.angle} />
       <LevelPips level={level} />
-      <MuzzleFlash on={flash > 0} angle={angle} />
+      <MuzzleFlash on={s.flash > 0} angle={s.angle} />
     </Entity>
   );
 }

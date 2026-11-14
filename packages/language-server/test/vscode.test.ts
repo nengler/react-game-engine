@@ -118,7 +118,7 @@ const fake = {
   commands: { registerCommand: () => ({ dispose() {} }) },
 };
 
-const SOURCE = `import { Entity } from "@rge/runtime/jsx";\n\nexport function Lamp() {\n  const [on] = useState(true);\n  return <Entity />;\n}\n`;
+const SOURCE = `import { Entity } from "@rge/runtime/jsx";\n\nexport function Lamp() {\n  const s = useMutable({ on: true });\n  return <Entity />;\n}\n`;
 
 describe("the VS Code extension", () => {
   it("starts the game's rge lsp, shows its diagnostics, and offers its quick fixes as edits", async () => {
@@ -150,17 +150,17 @@ describe("the VS Code extension", () => {
     assert.equal(shown.uri, pathToFileURL(file).href);
     assert.deepEqual(
       shown.diagnostics.map((d) => [d.code, d.source, d.range.start.line, d.range.start.character]),
-      [["RGE1005", "rge", 3, 15]],
+      [["RGE1005", "rge", 3, 12]],
     );
 
     const actions = await provider!.provideCodeActions(document, shown.diagnostics[0]!.range, { diagnostics: shown.diagnostics });
     assert.equal(actions.length, 1);
-    assert.equal(actions[0].title, `Import 'useState' from "@rge/runtime/jsx"`);
+    assert.equal(actions[0].title, `Import 'useMutable' from "@rge/runtime/jsx"`);
     assert.equal(actions[0].isPreferred, true);
     assert.equal(actions[0].diagnostics.length, 1);
     assert.deepEqual(
       actions[0].edit.replaced.map((r: { range: Range; text: string }) => [r.range.start.line, r.range.start.character, r.range.end.character, r.text]),
-      [[0, 8, 16, " Entity, useState "]],
+      [[0, 8, 16, " Entity, useMutable "]],
     );
   });
 });
