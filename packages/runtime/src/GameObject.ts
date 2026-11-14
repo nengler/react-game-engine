@@ -222,7 +222,10 @@ export class GameObject<P extends object = {}> {
       this.children.splice(index, 0, child);
     }
     this.markChanged();
-    if (this.world !== null) child.attachToWorld(this.world);
+    if (this.world !== null) {
+      this.world.orderChanged();
+      child.attachToWorld(this.world);
+    }
   }
 
   /** Immediately detach a child. */
@@ -231,6 +234,7 @@ export class GameObject<P extends object = {}> {
     if (index === -1) throw new Error("GameObject is not a child of this object");
     this.markChanged();
     this.children.splice(index, 1);
+    this.world?.orderChanged();
     child.parent = null;
     child.drawCache = null;
     child.#slot = Infinity;
@@ -286,6 +290,7 @@ export class GameObject<P extends object = {}> {
     this.markChanged();
     // Children are kept sorted by (slot, order), and the sort is stable, so only this slot's range can move.
     this.children.sort((a, b) => (a.#slot === b.#slot ? a.#order - b.#order : a.#slot < b.#slot ? -1 : 1));
+    this.world?.orderChanged();
   }
 
   /**

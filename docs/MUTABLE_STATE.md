@@ -222,7 +222,7 @@ field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games 
 
 1. The hook's name: `useMutable` is the lean.
 2. In-place writes to lists and objects: settled as option 2 (copies), see "What #121 built". Revisit if the copy per write is measured to matter.
-3. The update order within a frame (needed by "live everywhere"): tree order with parents first is the lean.
+3. The update order within a frame (needed by "live everywhere"): settled as tree order, depth first, a parent before its children and siblings in their order (`World.tick`, pinned by `packages/runtime/test/update-order.test.ts`). It was registration order before, which put a child mounted later after its parent's later siblings and ignored a reorder.
 4. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
    "state that never renders", which may be better said as an option than a second hook.
 5. Whether a game-state action (`useGame`) gets the same direct form, so a store reads like component state.
