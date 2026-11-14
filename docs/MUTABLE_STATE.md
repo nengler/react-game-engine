@@ -262,6 +262,9 @@ export const useGame = createGameState(
 
 ## Open questions
 
+Since written: question 4 is decided (`useRef` is removed), and what is left, with the rough edges found building #121, is in
+[MUTABLE_STATE_FOLLOWUPS.md](MUTABLE_STATE_FOLLOWUPS.md).
+
 1. The hook's name: `useMutable` is the lean.
 2. In-place writes to lists and objects: option 3 (versions) is the lean, pending a measure of its speed.
 3. The update order within a frame (needed by "live everywhere"): tree order with parents first is the lean.
