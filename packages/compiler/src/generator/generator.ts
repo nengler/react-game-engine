@@ -1,4 +1,4 @@
-import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type TypeIR, walkExpr, walkFunction } from "../ir/types.ts";
+import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type StateIR, type TypeIR, walkExpr, walkFunction } from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
 import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
 import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
@@ -352,18 +352,16 @@ class ComponentGenerator extends ElementEmitter {
         // The value setters write; it becomes `s.name` when the component next renders.
         if (this.hasSetter(s.id)) w.line(`${pending(s)}: ${typeText(s.type)} = this.${s.name};`);
       }
-      // A `useSim` is stored a field at a time (`s$vx`); `s` reads them back as the source writes them: `component.s.vx`, the
-      // committed values (what render saw), for tests, tools and the inspector. Made when asked for, so it costs nothing otherwise.
-      const sims = new Map<string, { field: string; type: string }[]>();
+      // A `useSim` is stored a field at a time (`$s_vx`); its getter reads them back as the source writes them, `component.s.vx`:
+      // the committed values (what render saw), for tests and tools. Made when asked for, so it costs nothing otherwise.
+      const sims = new Map<string, StateIR[]>();
       for (const s of c.state) {
-        const m = /^([A-Za-z_][A-Za-z0-9_]*)\$([A-Za-z0-9_]+)$/.exec(s.name);
-        if (m === null || s.globalKey !== undefined) continue;
-        const group = sims.get(m[1]!) ?? [];
-        group.push({ field: m[2]!, type: typeText(s.type) });
-        sims.set(m[1]!, group);
+        if (s.sim === undefined) continue;
+        sims.set(s.sim.view, [...(sims.get(s.sim.view) ?? []), s]);
       }
-      for (const [sim, fields] of sims) {
-        w.line(`get ${sim}(): { readonly ${fields.map((f) => `${f.field}: ${f.type}`).join("; readonly ")} } { return { ${fields.map((f) => `${f.field}: this.${sim}$${f.field}`).join(", ")} }; }`);
+      for (const [view, fields] of sims) {
+        const type = fields.map((f) => `readonly ${f.sim!.field}: ${typeText(f.type)}`).join("; ");
+        w.line(`get ${view}(): { ${type} } { return { ${fields.map((f) => `${f.sim!.field}: this.${f.name}`).join(", ")} }; }`);
       }
       // The paths it reads: the runtime tells it when one changes (see `GameObject.gameStateKeys`).
       const globals = c.state.filter((s) => s.globalKey !== undefined);

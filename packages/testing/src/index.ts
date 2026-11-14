@@ -210,15 +210,14 @@ export class Rendered<Root extends GameObject = GameObject> {
     const saved = component.saveHotState() ?? {};
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(saved)) {
-      const name = key.slice(key.indexOf(".") + 1);
-      // A `useSim` field is kept as `s$vx`; it reads back as the source writes it, `state().s.vx`.
-      const sim = name.indexOf("$");
-      if (sim <= 0) {
+      // `Hero.hp`, or `Hero.s.vx` for a `useSim` field: a name cannot hold a dot, so a second one always means a field.
+      const [name, field] = key.slice(key.indexOf(".") + 1).split(".") as [string, string | undefined];
+      if (field === undefined) {
         out[name] = value;
         continue;
       }
-      const group = (out[name.slice(0, sim)] ??= {}) as Record<string, unknown>;
-      group[name.slice(sim + 1)] = value;
+      const group = (out[name] ??= {}) as Record<string, unknown>;
+      group[field] = value;
     }
     return out;
   }

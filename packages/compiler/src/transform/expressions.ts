@@ -83,11 +83,12 @@ export class ExpressionLowering extends LoweringBase {
         // in a handler it reads the current state, like recomputing it there.
         case "derived": {
           // In a handler, a value that depends on a `useSim` field is worked out from the fields as they are now.
-          if (this.mode.inHandler && binding.node !== undefined && stateReads(binding.value).some((id) => this.simStates.has(id))) {
+          // Lowered against the component's scope, so a handler's own locals cannot shadow what the `const` reads.
+          if (this.mode.inHandler && binding.relower !== undefined && stateReads(binding.value).some((id) => this.simStates.has(id))) {
             const outer = this.scope;
             this.scope = this.componentScope;
             try {
-              return this.lowerNode(binding.node);
+              return binding.relower();
             } finally {
               this.scope = outer;
             }
@@ -582,6 +583,31 @@ export class ExpressionLowering extends LoweringBase {
       return null;
     }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
+      // On a `useSim` field (`s.enemies.push(e)`): the field is assigned a new array, written as the author would write it.
+      const receiver = unwrapParens(callee.expression);
+      const sim = isPropertyAccessExpression(receiver) ? this.simField(receiver) : undefined;
+      if (sim === "error") return null;
+      if (sim !== undefined) {
+        const list = receiver.getText(this.sourceFile);
+        const item = node.arguments[0]?.getText(this.sourceFile) ?? "item";
+        const instead: Readonly<Record<string, string>> = {
+          push: `${list} = [...${list}, ${item}]`,
+          unshift: `${list} = [${item}, ...${list}]`,
+          pop: `${list} = ${list}.slice(0, -1)`,
+          shift: `${list} = ${list}.slice(1)`,
+          splice: `${list} = ${list}.toSpliced(…)`,
+          sort: `${list} = ${list}.toSorted(…)`,
+          reverse: `${list} = ${list}.toReversed()`,
+          fill: `${list} = ${list}.map(…)`,
+          copyWithin: `${list} = ${list}.map(…)`,
+        };
+        this.report(
+          code,
+          `\`${name}\` changes \`${list}\` in place, which the component would not see. Give the field a new array: \`${instead[name] ?? `${list} = …`}\`.`,
+          callee.name,
+        );
+        return null;
+      }
       this.report(
         code,
         `\`${name}\` changes the array in place, which never re-renders (a setter only renders when it gets a new array). Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}.`,

@@ -277,7 +277,14 @@ export class ExpressionEmitter {
         const local = this.mode.memoLocals.get(e.key) ?? (this.mode.inCallback ? undefined : this.mode.renderMemos.get(e.key));
         if (local !== undefined) return local;
         // Worked out again only when a state or prop it reads is a different value (`===`), as React's useMemo.
-        const deps = collectDependencies(e.value).map((d) => (d.kind === "State" ? `this.${this.state(d.state).name}` : d.kind === "Prop" ? `this.props.${d.name}` : null));
+        // A memo a handler works out from `useSim` fields as they are now (`spawns@live`) depends on their live values.
+        const live = new Set<StateId>();
+        walkExpr(e.value, (x) => {
+          if (x.kind === "StateRead" && x.live) live.add(x.state);
+        });
+        const deps = collectDependencies(e.value).map((d) =>
+          d.kind === "State" ? (live.has(d.state) ? pendingRef(this.state(d.state)) : `this.${this.state(d.state).name}`) : d.kind === "Prop" ? `this.props.${d.name}` : null,
+        );
         if (deps.includes(null)) throw new Error(`A memo of ${this.c.name} reads a list item`);
         // Read under a condition (`return hero ? <Hp value={hp} /> : null` from `if (!hero) return null;`): TypeScript does not carry
         // the narrowing into the memo's function, so it starts by assuming the condition again, which holds where it is read.

@@ -213,4 +213,15 @@ export interface StateIR {
   readonly transient?: true;
   /** Worked out again in `commitState` each time the component renders: a context's value, read from its reader. */
   readonly refresh?: ExprIR;
+  /** A field of a `useSim` (`s.vx`): which one, and the getter that shows them all (`component.s`). */
+  readonly sim?: SimFieldIR;
+}
+
+/** Where a `useSim` field belongs: `s.vx` is `{ name: "s", view: "s", field: "vx" }`; `view` is `$s` where the root has an `s`. */
+export interface SimFieldIR {
+  /** The name in the source. */
+  readonly name: string;
+  /** The generated getter's name. */
+  readonly view: string;
+  readonly field: string;
 }

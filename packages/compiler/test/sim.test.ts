@@ -77,6 +77,70 @@ describe("useSim: what a handler reads", () => {
     assert.deepEqual(hero.s, { n: 10, out: 20 });
   });
 
+  it("works out a destructured derived value live, from an object or an array", async () => {
+    const hero = await run(
+      `function split(n: number) { return { half: n / 2, twice: n * 2 }; }
+       function pair(n: number): [number, number] { return [n + 1, n - 1]; }
+       export function Hero() {
+         const s = useSim({ n: 2, half: 0, twice: 0, up: 0, down: 0 });
+         const { half, twice } = split(s.n);
+         const [up, down] = pair(s.n);
+         useUpdate(() => {
+           s.n = 10;
+           s.half = half;
+           s.twice = twice;
+           s.up = up;
+           s.down = down;
+         });
+         return <Entity />;
+       }`,
+      "Hero",
+    );
+    assert.deepEqual(hero.s, { n: 10, half: 5, twice: 20, up: 11, down: 9 });
+  });
+
+  it("works out a render block's names live", async () => {
+    const hero = await run(
+      `export function Hero() {
+         const s = useSim({ n: 2, big: false, total: 0 });
+         let big = false;
+         let total = 0;
+         for (let i = 1; i <= s.n; i++) total += i;
+         if (s.n > 5) big = true;
+         useUpdate(() => {
+           s.n = 10;
+           s.big = big;
+           s.total = total;
+         });
+         return <Entity />;
+       }`,
+      "Hero",
+    );
+    assert.deepEqual(hero.s, { n: 10, big: true, total: 55 });
+  });
+
+  it("works a derived value out once until a field it reads is written, then again", async () => {
+    const source = `function doubled(n: number) { return n * 2; }
+       export function Hero() {
+         const s = useSim({ n: 1, a: 0, b: 0, c: 0 });
+         const d = doubled(s.n);
+         useUpdate(() => {
+           s.a = d + d;
+           s.n = 3;
+           s.b = d;
+           s.c = d;
+         });
+         return <Entity><Text>{d}</Text></Entity>;
+       }`;
+    const compiled = compile(source);
+    // One memo of its own for handlers, keyed on the field's live value; render keeps its own, on the committed value.
+    assert.match(compiled.code, /\$memo\("d@live", \[this\.#\$s_nNext\]/);
+    assert.match(compiled.code, /\$memo\("d", \[this\.\$s_n\]/);
+    const hero = await run(source, "Hero");
+    assert.deepEqual(hero.s, { n: 3, a: 4, b: 6, c: 6 });
+    assert.equal((hero.children[0] as Text).text, "6", "render works it out from the committed value");
+  });
+
   it("shows render the committed value, after the step", async () => {
     const hero = await run(
       `export function Hero() {
@@ -129,9 +193,51 @@ describe("useSim: what a handler reads", () => {
     assert.deepEqual(hero.s, { foes: [{ id: 1 }, { id: 3 }], next: 4 });
   });
 
-  it("keeps the fields in hot state, by name, as any state is", async () => {
+  it("keeps the fields in hot state as `s.n`, which no state's own name can be", async () => {
     const hero = await run(`export function Hero() { const s = useSim({ n: 0 }); useUpdate(() => { s.n += 1; }); return <Entity />; }`, "Hero", 2);
-    assert.deepEqual(hero.saveHotState(), { "Hero.s$n": 2 });
+    assert.deepEqual(hero.saveHotState(), { "Hero.s.n": 2 });
+  });
+});
+
+describe("useSim: its name", () => {
+  it("is kept apart from a member the root already has: `name` on an <Entity> root is read as the source writes it", async () => {
+    const hero = await run(
+      `export function Hero() {
+         const name = useSim({ n: 0 });
+         useUpdate(() => { name.n += 1; });
+         return <Entity />;
+       }`,
+      "Hero",
+    );
+    assert.equal(hero.name, "Hero", "the entity's own name is untouched");
+    assert.deepEqual((hero as unknown as { $name: unknown }).$name, { n: 1 });
+    assert.deepEqual(hero.saveHotState(), { "Hero.name.n": 1 });
+  });
+
+  it("is claimed before the elements are named: `enemy` beside an <Enemy> child leaves the child its own field", async () => {
+    const compiled = compile(`
+      function Enemy() { return <Entity />; }
+      export function Wave() {
+        const enemy = useSim({ hp: 3 });
+        useUpdate(() => { enemy.hp -= 1; });
+        return <Entity><Enemy /></Entity>;
+      }`);
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.match(compiled.code, /get enemy\(\)/);
+    assert.match(compiled.code, /readonly enemy2: Enemy/);
+  });
+
+  it("is not guessed from a `$` in a name: a useState called `a$b` stays a state of its own", async () => {
+    const compiled = compile(`
+      export function Hero() {
+        const [a$b, setAB] = useState(1);
+        const s = useSim({ n: 0 });
+        useUpdate(() => { setAB(a$b + 1); s.n = a$b; });
+        return <Entity />;
+      }`);
+    assert.deepEqual(typeCheck(compiled), []);
+    assert.doesNotMatch(compiled.code, /get a\(\)/);
+    assert.match(compiled.code, /get s\(\): \{ readonly n: number \}/);
   });
 });
 
@@ -163,6 +269,16 @@ describe("useSim: what it refuses", () => {
     assert.match(errors("const init = { n: 0 }; const s = useSim(init);")[0] ?? "", /one object literal/);
     assert.match(errors("const n = 1; const s = useSim({ n });")[0] ?? "", /name: value/);
     assert.match(errors("const s = useSim({});")[0] ?? "", /at least one field/);
+  });
+
+  it("a list changed in place, with the assignment to write instead", () => {
+    const header = "interface Foe { id: number }\n";
+    const push = errors("const s = useSim({ enemies: [] as readonly Foe[] }); useUpdate(() => { s.enemies.push({ id: 1 }); });", header);
+    assert.equal(push.length, 1);
+    assert.match(push[0]!, /`push` changes `s\.enemies` in place/);
+    assert.match(push[0]!, /`s\.enemies = \[\.\.\.s\.enemies, \{ id: 1 \}\]`/);
+    const sort = errors("const s = useSim({ enemies: [] as readonly Foe[] }); useUpdate(() => { s.enemies.sort((a, b) => a.id - b.id); });", header);
+    assert.match(sort[0] ?? "", /`s\.enemies = s\.enemies\.toSorted\(…\)`/);
   });
 
   it("an array field with no type", () => {

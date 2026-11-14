@@ -1,4 +1,3 @@
-import type { Expression } from "typescript/ast";
 import type { ExprIR, LocalId, RefId, SoundId, StateId, TypeIR } from "../ir/types.ts";
 
 type Binding =
@@ -21,10 +20,10 @@ type Binding =
   | { readonly kind: "function"; readonly name: string; readonly field: string }
   /** A component-body `const`: its (already lowered) expression is inlined wherever it is read. */
   /**
-   * `node` is the expression as written, for a handler that reads it: where it depends on a `useSim` field, a handler works it out
-   * again from the fields as they are now, not from what render saw.
+   * `relower` works the value out again for a handler that reads it, where it depends on a `useSim` field: from the fields as they
+   * are now, not from what render saw. Every form of `const` has one: a plain one, a destructured one, and a render block's names.
    */
-  | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR; readonly node?: Expression }
+  | { readonly kind: "derived"; readonly name: string; readonly value: ExprIR; readonly relower?: () => ExprIR | null }
   /** A `const` (or, `mutable`, a `let`) declared in a handler body, or a `for…of` item. */
   /**
    * `owned`: the handler made the value (a literal, `new`, a call's result), so it may change it in place. A local that reads
