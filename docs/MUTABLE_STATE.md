@@ -208,6 +208,48 @@ says plainly that this is not React's hook.
 `useState` becomes a diagnostic that names the replacement and shows the conversion (`const [hp, setHp] = useState(3)` becomes a
 field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games move with a codemod.
 
+## The game state: actions write, readers read
+
+The same direct form for the store (`createGameState`, DESIGN.md "Global state"), with one difference from component state: **only
+actions written in `GameState.ts` change it.** A component reads with a selector and calls actions; writing to the store from a
+component (`game.cursor = 3`) is a compile error that points to the action form.
+
+```ts
+export const useGame = createGameState(
+  { screen: "title" as Screen, cursor: 0, open: false, speed: 1 as 1 | 2, run: newRun(), gems: 0 },
+  {
+    select(s, pad: number) { s.cursor = pad; s.open = true; },
+    toggleSpeed(s)         { s.speed = s.speed === 1 ? 2 : 1; },
+    tick(s, dt: number)    { if (!s.run.finished) s.run.time += dt; },
+    begin(s)               { sfx.play("start"); Object.assign(s, fresh, { screen: "play" }); },
+  },
+);
+// component, unchanged:  const { select } = useGame.actions();  const cursor = useGame((s) => s.cursor);
+```
+
+- **Data and actions are separate.** The state is a plain object (no functions in it), so saves, `structuredClone` for rewind and the
+  compiler's schema reading get simpler, and arrays stop being a "not yet". Each action gets the live state as its first argument;
+  the bound action drops it (`select(3)`). `set`, `get` and the `{ ...s.run, time }` copies go away.
+- **Why not direct writes from components.** The store is owned by the game, as a parent owns its state (rule 3): its owner defines
+  how it changes. An action keeps an invariant and its side effects together (`finish` sets the screen, the results and the speed,
+  and plays a sound; a bare `screen = "won"` skips all that), gives replays and debugging a named event, and keeps one place to
+  answer "what can change `run`?". Svelte 5 allows any importer to write a `$state` module's fields and relies on convention; the
+  compiler here can refuse it. Closed is easy to open later; the other way breaks games that came to rely on it.
+- **How the store notices writes.** An action's body is plain TypeScript the compiler does not lower, so it cannot see each write. It
+  does not need to: calling an action marks the store dirty (option 3's "assume changed after a call it cannot see"), and at the
+  frame's flush the store compares its live state with the last committed state leaf by leaf, as `set` does today, and tells only
+  the readers whose leaves changed. The cost is one comparison on frames where an action ran. No proxies, nothing on the read path.
+- **Timing is rule 2.** A handler reads the live store (`select(3)` then reading `cursor` gives `3`; today it gives the old value),
+  and render reads what the frame committed.
+- **Selected values are read-only** (`Readonly<…>` types, and a compile error on a write), as props are.
+- **Boilerplate is the cost**: a one-line action for `cursor` or `open`. Hearth and Kite have 8 to 11 actions each, mostly one line.
+  If that proves painful after the games move, the first thing to try is an explicit opt-in list of fields components may write
+  (`free: ["cursor", "open"]`), so the exceptions are visible in the store file. Not a generated setter per field, which brings back
+  `setX` and makes bypassing actions easy, and not an `update((s) => …)` passed in from a component, which is direct writes with one
+  extra layer.
+- **Lean, not decided:** the `createGameState(data, actions)` shape over Zustand's Immer-style `set((s) => { s.gems++ })`, which is
+  the smaller migration but keeps the `set(…)` wrapper, for the same reason `useState` is not kept.
+
 ## What changes
 
 - DESIGN.md's decisions table: "State reads in handlers" and "Mutating state in place" are replaced by rules 1, 2 and the list decision;
@@ -225,7 +267,7 @@ field of `useMutable({ hp: 3 })`, and `setHp(v)` becomes `s.hp = v`). The games 
 3. The update order within a frame (needed by "live everywhere"): settled as tree order, depth first, a parent before its children and siblings in their order (`World.tick`, pinned by `packages/runtime/test/update-order.test.ts`). It was registration order before, which put a child mounted later after its parent's later siblings and ignored a reorder.
 4. Whether `useRef` stays separate. Kite's `Runner` renders none of its `useSim` fields, so refs would have done there; a ref is now
    "state that never renders", which may be better said as an option than a second hook.
-5. Whether a game-state action (`useGame`) gets the same direct form, so a store reads like component state.
+5. The game state's shape: `createGameState(data, actions)` with actions writing directly and components never writing (lean, see "The game state"), and whether a `free` list is ever needed.
 
 ## What #121 built (2026-11-14)
 
@@ -292,7 +334,7 @@ Still open:
     the list's filter and an alternate element applied), an item's own children, and nested children (the getter reads the
     child's own props live, recursively). Doing it for some of these and not others gives the two rules depending on where an
     element sits, which this note calls the worst outcome. It was built in steps: the direct case, then list items and keys; the cases above still read the last render: `generator/elements.ts` (`propGetters`, `emitList`) and `GameObject.liveProp`.
-- **`useRef`** (open question 4) and **game-state actions** (open question 5) are unchanged.
+- **`useRef`** (open question 4) is unchanged; **game-state actions** (open question 5) are proposed in "The game state: actions write, readers read", not built.
 
 Found while building it:
 
