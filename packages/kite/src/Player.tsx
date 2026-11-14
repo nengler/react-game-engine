@@ -21,7 +21,7 @@ export function Player({ onDie }: PlayerProps) {
   const { died, respawned, enteredRoom, finished: reachedEnd, tick } = useGame.actions();
   // Every run starts at the first room's start: the play screen is made fresh for each run, and this with it.
   const [me, setMe] = useState(() => spawnIn(0));
-  const [squash, setSquash] = useSquash(1.75);
+  const squash = useSquash(1.75);
   const body = me.body;
   const dead = me.deadFor > 0;
   const height = heightOf(body);
@@ -38,7 +38,8 @@ export function Player({ onDie }: PlayerProps) {
     playEvents(step.events, originX, originY);
     const nextSquash = squashFor(step.events);
     if (nextSquash !== null) {
-      setSquash(nextSquash);
+      squash.x = nextSquash.x;
+      squash.y = nextSquash.y;
     }
 
     if (step.outcome === "died") {

@@ -59,11 +59,13 @@ describe("the built-ins in compiled components", () => {
     registerTilemaps({});
     const compiled = compile(
       `function Hero() {
-        const [shake, setShake] = useShake();
+        const shake = useShake();
         const [dead, setDead] = useState(false);
         useInput((input) => {
           if (input.pressed("Z")) {
-            setShake({ strength: 2, duration: 0.2 });
+            shake.strength = 2;
+            shake.duration = 0.2;
+            shake.elapsed = 0;
           }
         });
         return (

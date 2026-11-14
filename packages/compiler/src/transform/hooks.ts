@@ -185,6 +185,18 @@ export class HookLowering extends ExpressionLowering {
             this.lowerOwnFunction(hook.name, unwrapParens(hook.initializer) as ArrowFunction, hook.declaration);
             break;
           }
+          // `const squash = s`: another name for the same fields, read and written as `squash.x`. This is how a custom hook hands its
+          // `useMutable` back: its `return s` is inlined as `const squash = <the hook's s>`.
+          const aliased = unwrapParens(hook.initializer);
+          const target = hook.pattern === null && isIdentifier(aliased) ? this.componentScope.get(aliased.text) : undefined;
+          if (target?.kind === "mutable") {
+            if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
+              this.report(DiagnosticCode.InvalidComponentBody, `'${hook.name}' is already declared in this component (or reserved).`, hook.declaration.name);
+              break;
+            }
+            this.componentScope.declare(hook.name, { ...target, name: hook.name });
+            break;
+          }
           // Lowered now, against what is declared above it (state, refs, earlier consts), outside any handler.
           const lowered = this.lowerNode(hook.initializer);
           if (!lowered) break;

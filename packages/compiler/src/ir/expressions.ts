@@ -208,6 +208,8 @@ export interface ArrayElementIR {
 export interface ObjectLiteralIR {
   readonly kind: "ObjectLiteral";
   readonly properties: readonly ObjectPropertyIR[];
+  /** A `useMutable` read whole (`total(s)`): a copy of its fields, each a `StateRead`. */
+  readonly mutableCopy?: true;
 }
 
 export type ObjectPropertyIR =

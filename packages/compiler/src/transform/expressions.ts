@@ -64,9 +64,14 @@ export class ExpressionLowering extends LoweringBase {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
+        // Read whole (`springBack(s, …)`, `<Camera shake={shake}>`): a plain object of its fields, as they are now in a handler and as
+        // the frame committed them in render. It is a copy: changing it does not change the fields.
         case "mutable":
-          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a useMutable value: read a field (\`${node.text}.${[...binding.fields.keys()][0]}\`). It cannot be passed or read whole.`, node);
-          return null;
+          return {
+            kind: "ObjectLiteral",
+            mutableCopy: true,
+            properties: [...binding.fields].map(([name, state]) => ({ kind: "Property" as const, name, value: { kind: "StateRead" as const, state, ...(this.mode.inHandler ? { live: true as const } : {}) } })),
+          };
         case "propsObject":
           this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`, node);
           return null;
@@ -554,10 +559,14 @@ export class ExpressionLowering extends LoweringBase {
       if (!args) return null;
       return { kind: "Call", callee: { kind: "ValueMethod", receiver, name, optional: callee.questionDotToken !== undefined || node.questionDotToken !== undefined }, args };
     }
-    // A method of a per-instance object (state a factory made): opaque, like a plain function.
-    if (isIdentifier(callee.expression) && !Object.hasOwn(ARRAY_METHODS, name)) {
-      const binding = this.scope.get(callee.expression.text);
-      if (binding?.kind === "state" && this.handleStates.has(binding.id)) {
+    // A method of a per-instance object (state a factory made, or a `useMutable` field holding one: `b.body.move(dx, dy)`): opaque,
+    // like a plain function.
+    if (!Object.hasOwn(ARRAY_METHODS, name)) {
+      const handleReceiver = unwrapParens(callee.expression);
+      const binding = isIdentifier(handleReceiver) ? this.scope.get(handleReceiver.text) : undefined;
+      const field = isPropertyAccessExpression(handleReceiver) ? this.mutableField(handleReceiver) : undefined;
+      if (field === "error") return null;
+      if ((binding?.kind === "state" && this.handleStates.has(binding.id)) || (field !== undefined && this.handleStates.has(field))) {
         const receiver = this.lowerNode(callee.expression);
         if (!receiver) return null;
         const args = this.lowerAll(node.arguments);

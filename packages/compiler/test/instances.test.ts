@@ -47,15 +47,18 @@ interface Props { power: number }
 export function Enemy({ power }: Props) {
   const strike = useGame((s) => s.strike);
   const [tally] = useState(() => makeTally());
-  const [shake, setShake] = useShake();
-  const [squash, setSquash] = useSquash(2);
+  const shake = useShake();
+  const squash = useSquash(2);
   const [hp, setHp] = useState(3);
   useInput((input) => {
     if (input.pressed("Z")) {
       const blow = strike(power);
       tally.add(blow.power);
-      setShake({ strength: blow.crit ? 4 : 1, duration: 0.2 });
-      setSquash({ x: 1 + blow.power * 0.1, y: 1 - blow.power * 0.1 });
+      shake.strength = blow.crit ? 4 : 1;
+      shake.duration = 0.2;
+      shake.elapsed = 0;
+      squash.x = 1 + blow.power * 0.1;
+      squash.y = 1 - blow.power * 0.1;
       setHp((h) => h - blow.power);
     }
   });

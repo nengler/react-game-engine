@@ -124,7 +124,7 @@ function C() {
 }`,
       );
       assert.ok(result.ok, result.diagnostics.map((d) => d.message).join("\n"));
-      assert.match(result.code, /this\.setTime|#timeNext|_useTime1_time/);
+      assert.match(result.code, /_useTime1_s_time/);
     } finally {
       compiler.close();
     }

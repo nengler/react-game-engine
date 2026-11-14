@@ -2,7 +2,7 @@
 import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type RefId, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
 import { collectDependencies, walkExpr } from "../ir/walk.ts";
 import { CodeWriter } from "./writer.ts";
-import { param, escapeTemplate, pendingRef, propertyKey } from "./helpers.ts";
+import { param, escapeTemplate, pendingRef, propertyKey, typeText } from "./helpers.ts";
 
 /** How some IR is written where the emitter is. Each field is set for a stretch of emitting with `within`. */
 export interface EmitMode {
@@ -245,9 +245,15 @@ export class ExpressionEmitter {
       case "NonNull": return `${this.expr(e.expression)}!`;
       case "IndexRead": return `${this.expr(e.object)}${e.optional ? "?." : ""}[${this.expr(e.index, true)}]`;
       case "ArrayLiteral": return `[${e.elements.map((el) => `${el.spread ? "..." : ""}${this.expr(el.value, true)}`).join(", ")}]`;
-      case "ObjectLiteral":
+      case "ObjectLiteral": {
         if (e.properties.length === 0) return "{}";
-        return `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
+        const literal = `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
+        if (!e.mutableCopy) return literal;
+        // A `useMutable` read whole: typed as its fields, so it is not checked as a fresh literal (`total(s)` with more fields than
+        // `total` takes is fine in the source, where `s` is a variable).
+        const fields = e.properties.map((p) => (p.kind === "Property" && p.value.kind === "StateRead" ? `${propertyKey(p.name)}: ${typeText(this.state(p.value.state).type)}` : ""));
+        return `(${literal} as { ${fields.join("; ")} })`;
+      }
       case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.arrowBody(e.body)}`);
       case "Callback": return this.callback(e.fn);
       case "Block": return `(${this.callback(e.fn)})()`;

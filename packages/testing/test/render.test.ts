@@ -108,7 +108,8 @@ export function Faller() {
 }`);
     const t = render(Faller, undefined, { tilemaps: { "testing-floor": FLOOR } });
     t.step(30);
-    assert.equal(t.state().y, 4, "stands on the floor's top (8) minus its height (4)");
+    const drawn = (t.root.children[1] as GameObject).transform;
+    assert.equal(drawn.y, 4, "stands on the floor's top (8) minus its height (4)");
   });
 
   it("finds collisions by itself with collisions on, and places other things in the world", async () => {

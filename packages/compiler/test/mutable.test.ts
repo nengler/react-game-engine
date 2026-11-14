@@ -199,6 +199,64 @@ describe("useMutable: what a handler reads", () => {
   });
 });
 
+describe("useMutable: read whole, and handed back by a hook", () => {
+  it("reads whole as a copy of its fields: live in a handler, and changing the copy leaves the fields alone", async () => {
+    const hero = await run(
+      `function total(p: { a: number; b: number }) { return p.a + p.b; }
+       export function Hero() {
+         const s = useMutable({ a: 1, b: 2, sum: 0 });
+         useUpdate(() => {
+           s.a = 10;
+           s.sum = total(s);
+           const copy = s;
+           copy.b = 99;
+         });
+         return <Entity />;
+       }`,
+      "Hero",
+    );
+    assert.deepEqual(hero.s, { a: 10, b: 2, sum: 12 });
+  });
+
+  it("is handed back by a custom hook's `return s`, and the caller reads and writes its fields under its own name", async () => {
+    const source = `function useCounter(step: number) {
+         const s = useMutable({ n: 0, ticks: 0 });
+         useUpdate(() => {
+           s.n += step;
+           s.ticks++;
+         });
+         return s;
+       }
+       export function Hero() {
+         const counter = useCounter(2);
+         useUpdate(() => {
+           if (counter.n > 3) counter.n = 0;
+         });
+         return <Entity><Text>{counter.n}</Text></Entity>;
+       }`;
+    const hero = await run(source, "Hero", 3);
+    // 2, 4 (then back to 0 in the same step, the caller's update running after the hook's), 2.
+    assert.deepEqual((hero as unknown as { counter: unknown }).counter, { n: 2, ticks: 3 });
+    assert.deepEqual(hero.saveHotState(), { "Hero.counter.n": 2, "Hero.counter.ticks": 3 });
+    assert.equal((hero.children[0] as Text).text, "2");
+  });
+
+  it("is what the shipped hooks hand back: a squash and a shake are written field by field", async () => {
+    const compiled = compile(`export function Hero() {
+      const squash = useSquash();
+      const shake = useShake();
+      useInput(() => {
+        squash.x = 0.6;
+        shake.strength = 3;
+        shake.duration = 0.25;
+        shake.elapsed = 0;
+      });
+      return <Camera shake={shake}><Sprite image="a.png" transform={{ scaleX: squash.x, scaleY: squash.y }} /></Camera>;
+    }`);
+    assert.deepEqual(typeCheck(compiled), []);
+  });
+});
+
 describe("useMutable: its name", () => {
   it("is kept apart from a member the root already has: `name` on an <Entity> root is read as the source writes it", async () => {
     const hero = await run(
@@ -248,11 +306,6 @@ describe("useMutable: what it refuses", () => {
   it("a write in the component body, which runs on every render", () => {
     const [first] = errors("const s = useMutable({ n: 0 }); const m = s.n + 1; s.n = m;");
     assert.match(first ?? "", /cannot be written in the component body/);
-  });
-
-  it("the value read whole, which would hand out a view the compiler cannot follow", () => {
-    const [first] = errors("const s = useMutable({ n: 0 }); useUpdate(() => { console.log(s); });");
-    assert.match(first ?? "", /read a field/);
   });
 
   it("a field it does not have, with the ones it does", () => {

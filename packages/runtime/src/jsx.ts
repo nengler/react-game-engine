@@ -9,7 +9,7 @@
  * test checks that this module exports exactly what the compiler accepts.
  */
 import type { InputState } from "./input.ts";
-import type { ShakeState, SpringOptions, TweenOptions, Vector2 } from "./math.ts";
+import type { SpringOptions, TweenOptions } from "./math.ts";
 import type { EntityProps } from "./components/Entity.ts";
 import type { HudProps } from "./components/Hud.ts";
 import type { GameProps } from "./components/Game.ts";
@@ -71,15 +71,16 @@ export function useState<T>(_initial: T | (() => T)): [Widen<T>, Setter<Widen<T>
 }
 
 /**
- * Squash and stretch: a scale set at a moment that springs back to 1 at \`recover\` a second (default 1.75), as state.
+ * Squash and stretch: a scale set at a moment that springs back to 1 at \`recover\` a second (default 1.75), as state you write.
  *
- *     const [squash, setSquash] = useSquash();
- *     setSquash({ x: 0.6, y: 1.4 });                 // in a handler: thin and tall
+ *     const squash = useSquash();
+ *     squash.x = 0.6;                                 // in a handler: thin and tall
+ *     squash.y = 1.4;
  *     <Sprite transform={{ scaleX: squash.x, scaleY: squash.y }} … />   // scales about the sprite's origin
  *
- * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
-export function useSquash(_recover?: number): [Vector2, Setter<Vector2>] {
+export function useSquash(_recover?: number): { x: number; y: number } {
   return compileTimeOnly("useSquash");
 }
 
@@ -92,7 +93,7 @@ export function useSquash(_recover?: number): [Vector2, Setter<Vector2>] {
  *     <Entity transform={{ y }}>…</Entity>
  *
  * It steps in this component's update, so it follows the fixed step, `freeze` and replays, and renders only while it moves. It
- * starts at its first target. An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ * starts at its first target. An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
 export function useSpring(_target: number, _options?: SpringOptions): number {
   return compileTimeOnly("useSpring");
@@ -112,12 +113,12 @@ export function useTween(_target: number, _options?: TweenOptions): number {
 }
 
 /**
- * A shake of the view, as state: `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, and it runs down by
- * itself in this component's update. Give it to the camera: `<Camera shake={shake}>`.
+ * A shake of the view, as state you write: in a handler, `shake.strength = 3; shake.duration = 0.25; shake.elapsed = 0;` starts one,
+ * and it runs down by itself in this component's update. Give it to the camera: `<Camera shake={shake}>`.
  *
- * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
-export function useShake(): [ShakeState, Setter<ShakeState>] {
+export function useShake(): { strength: number; duration: number; elapsed: number } {
   return compileTimeOnly("useShake");
 }
 
@@ -125,7 +126,7 @@ export function useShake(): [ShakeState, Setter<ShakeState>] {
  * Seconds since the component mounted, growing with each update: `const time = useTime();`, then
  * `color={time % 1 < 0.66 ? "white" : "black"}` to blink. The component renders every update while it is mounted.
  *
- * An ordinary hook the engine ships (\`useState\` and \`useUpdate\`, inlined like any custom hook).
+ * An ordinary hook the engine ships (\`useMutable\` and \`useUpdate\`, inlined like any custom hook).
  */
 export function useTime(): number {
   return compileTimeOnly("useTime");
