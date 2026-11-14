@@ -63,25 +63,25 @@ export function runOrder(order: Order, seed = 1): (number | null)[] {
         // Upgrade the towers in the order they were built, round and round.
         const pad = placed[upgradeAt % Math.max(1, placed.length)];
         if (pad === undefined) return false;
-        const tower = play.towers[pad] ?? null;
+        const tower = play.s.towers[pad] ?? null;
         const cost = tower === null ? null : upgradeCost(tower.kind, tower.level);
         if (cost === null) {
           next += 1;
           upgradeAt += 1;
           continue;
         }
-        if (play.gold < cost) return false;
+        if (play.s.gold < cost) return false;
         press(pad, "upgrade");
         upgradeAt += 1;
         next += 1;
         return true;
       }
-      const pad = BEST.find((id) => play.towers[id] === null && !placed.includes(id));
+      const pad = BEST.find((id) => play.s.towers[id] === null && !placed.includes(id));
       if (pad === undefined) {
         next += 1;
         continue;
       }
-      if (play.gold < TOWERS[s.build].cost) return false;
+      if (play.s.gold < TOWERS[s.build].cost) return false;
       placed.push(pad);
       press(pad, KEY[s.build]);
       next += 1;
@@ -91,12 +91,12 @@ export function runOrder(order: Order, seed = 1): (number | null)[] {
   };
   let wave = 0;
   for (let i = 0; i < 60 * 60 * 30 && useGame.getState().screen === "play"; i++) {
-    const wasActive = play.active;
+    const wasActive = play.s.active;
     if (buyNext()) {
       // pressed: that was this step
-    } else if (!play.active) t.input("wave");
+    } else if (!play.s.active) t.input("wave");
     else t.step();
-    if (wasActive && !play.active && useGame.getState().screen === "play") out[wave++] = play.lives;
+    if (wasActive && !play.s.active && useGame.getState().screen === "play") out[wave++] = play.s.lives;
   }
   const end = useGame.getState();
   if (end.screen === "lost") out[Math.max(0, end.endWave - 1)] = 0;

@@ -1,7 +1,7 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useState, useRef, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type ArrowFunction, type Node } from "typescript/ast";
 import { isArrowFunction, isBlock, isIdentifier, isTypeReferenceNode, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
-import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis, type UseContextCallAnalysis } from "../analyzer/analyzer.ts";
+import { unwrapParens, visit, type TypeDeclarationAnalysis, type UseStateCallAnalysis, type UseSimCallAnalysis, type UseRefCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis, type UseContextCallAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { type StateId, type TypeIR, collectDependencies, stateReads, childExpressions, refId, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
@@ -186,7 +186,7 @@ export class HookLowering extends ExpressionLowering {
               this.report(DiagnosticCode.InvalidComponentBody, `'${hook.name}' is already declared in this component (or reserved).`, hook.declaration.name);
               break;
             }
-            this.componentScope.declare(hook.name, { kind: "derived", name: hook.name, value });
+            this.componentScope.declare(hook.name, { kind: "derived", name: hook.name, value, node: hook.initializer });
             break;
           }
           // `const { x, y } = heroOf(run)`: each name is a member of the one value, which is worked out once (a memo) when it calls something.
@@ -202,21 +202,59 @@ export class HookLowering extends ExpressionLowering {
           }
           break;
         }
-        case "useState": {
+        case "useState":
+          this.lowerUseState(hook, state, hooks);
+          break;
+        case "useSim":
+          this.lowerUseSim(hook, state, hooks);
+          break;
+      }
+    }
+    return { hooks, state };
+  }
+
+  /**
+   * `const s = useSim({ vx: 0, vy: 0 })`: each field is a state slot of its own, as if declared with `useState`; `s.vx` reads it
+   * and `s.vx = …` writes it. What differs is the handler's view: it reads its own writes at once (a `live` read), while render
+   * and everything else sees the committed value, as with any state.
+   */
+  protected lowerUseSim(hook: UseSimCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
+    if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
+      this.report(DiagnosticCode.InvalidUseState, `'${hook.name}' is already declared in this component.`, hook.declaration);
+      return;
+    }
+    const fields = new Map<string, StateId>();
+    for (const field of hook.fields) {
+      if (fields.has(field.name)) {
+        this.report(DiagnosticCode.InvalidUseState, `useSim has '${field.name}' twice.`, hook.declaration);
+        return;
+      }
+      const slot = `${hook.name}$${field.name}`;
+      this.lowerUseState({ kind: "useState", valueName: slot, setterName: `$set_${slot}`, initializer: field.initializer, typeArgument: field.typeNode, call: hook.call, declaration: hook.declaration }, state, hooks);
+      const id = stateId(this.component.name, slot);
+      this.simStates.add(id);
+      fields.set(field.name, id);
+    }
+    this.componentScope.declare(hook.name, { kind: "sim", name: hook.name, fields });
+  }
+
+  /** One `useState` (or one field of a `useSim`): its state slot, its field and its setter. */
+  protected lowerUseState(hook: UseStateCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
+    {
           const taken = [hook.valueName, hook.setterName].find((n) => n !== null && this.componentScope.hasOwn(n));
           if (taken) {
             this.report(DiagnosticCode.InvalidUseState, `'${taken}' is already declared in this component.`, hook.declaration);
-            continue;
+            return;
           }
           // The fields and the setter take the author's names, or `$name` where the root built-in already has that member.
           const field = this.claimField(hook.valueName, hook.declaration);
-          if (field === null) continue;
+          if (field === null) return;
           const setterMethod = hook.setterName === null ? null : this.claimField(hook.setterName, hook.declaration);
-          if (hook.setterName !== null && setterMethod === null) continue;
+          if (hook.setterName !== null && setterMethod === null) return;
           const id = stateId(this.component.name, hook.valueName);
           if (!hook.initializer) {
             this.report(DiagnosticCode.InvalidUseState, "useState requires an initial value.", hook.call);
-            continue;
+            return;
           }
           // Initial values are evaluated before any state exists: lower with the scope as it is so far,
           // then reject any state reads. `useState(() => make())` is React's lazy initializer: the generated field is evaluated
@@ -226,17 +264,17 @@ export class HookLowering extends ExpressionLowering {
           if (isArrowFunction(lazy)) {
             if (lazy.parameters.length > 0 || isBlock(lazy.body)) {
               this.report(DiagnosticCode.InvalidUseState, "A lazy initial value is an arrow with no parameters returning the value: `useState(() => createSquash())`.", lazy);
-              continue;
+              return;
             }
             initializer = lazy.body as typeof initializer;
           }
           const initialValue = this.lowerNode(initializer);
-          if (!initialValue) continue;
+          if (!initialValue) return;
           // It may read props, the game state (`useState(start)` with `const start = useGame((s) => s.titleCursor)`) and the
           // component's state declared above it (`useState(() => startSpring(target))`): all are there when the component is made,
           // which is when the initial value is taken, as in a React first render. (The scope holds only what is declared above.)
           const type = this.hookStateType(hook.typeArgument, initialValue, hook.call);
-          if (!type) continue;
+          if (!type) return;
           const handle = type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain");
           if (handle) this.handleStates.add(id);
           state.push({ kind: "State", id, name: field, type, initialValue, ...(handle ? { handle: true as const } : {}) });
@@ -244,11 +282,7 @@ export class HookLowering extends ExpressionLowering {
           hooks.push({ kind: "UseState", state: id, setterName: setterMethod, span: this.span(hook.declaration) });
           this.componentScope.declare(hook.valueName, { kind: "state", id });
           if (hook.setterName !== null) this.componentScope.declare(hook.setterName, { kind: "setter", state: id, name: hook.setterName });
-          break;
-        }
-      }
     }
-    return { hooks, state };
   }
 
   /**

@@ -2,7 +2,7 @@
 import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type RefId, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
 import { collectDependencies, walkExpr } from "../ir/walk.ts";
 import { CodeWriter } from "./writer.ts";
-import { param, escapeTemplate, propertyKey } from "./helpers.ts";
+import { param, escapeTemplate, pendingRef, propertyKey } from "./helpers.ts";
 
 /** How some IR is written where the emitter is. Each field is set for a stretch of emitting with `within`. */
 export interface EmitMode {
@@ -229,7 +229,7 @@ export class ExpressionEmitter {
       case "StringLiteral": return JSON.stringify(e.value);
       case "BooleanLiteral": return String(e.value);
       case "NullLiteral": return "null";
-      case "StateRead": return `this.${this.state(e.state).name}`;
+      case "StateRead": return e.live ? pendingRef(this.state(e.state)) : `this.${this.state(e.state).name}`;
       case "LocalRead": return e.name;
       case "ParamRead":
         return this.mode.itemLookup !== null && this.mode.inCallback && e.param === this.mode.itemLookup.id ? this.mode.itemLookup.text : e.name;

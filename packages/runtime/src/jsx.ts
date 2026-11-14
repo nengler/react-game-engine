@@ -210,6 +210,16 @@ export function Provider<T>(_props: { context: Context<T>; value: T; children?: 
   return compileTimeOnly("Provider");
 }
 
+/**
+ * State written directly: `const s = useSim({ vx: 0, vy: 0 })`, then `s.vx += 1` in a handler. Each field is a state value as
+ * `useState` makes (it renders, it is saved, hot reload and rewind keep it); what differs is that a handler reads its own writes
+ * at once, so a step can work on `s.vx` where `useState` would need a local copy and a setter. Render, the component's children and
+ * other components see the value as the step began until the next render, as with any state. Fields are written in handlers only.
+ */
+export function useSim<T extends Record<string, unknown>>(_initial: T): T {
+  return compileTimeOnly("useSim");
+}
+
 /** A value that persists across frames but never renders. Read and write `.current` in handlers only. */
 export function useRef<T extends Primitive>(_initial: T): { current: Widen<T> } {
   return compileTimeOnly("useRef");

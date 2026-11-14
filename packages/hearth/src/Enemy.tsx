@@ -1,4 +1,4 @@
-import { AnimatedSprite, Collider, Entity, after, cancelTimers, useState, useUpdate } from "@rge/runtime/jsx";
+import { AnimatedSprite, Collider, Entity, after, cancelTimers, useSim, useUpdate } from "@rge/runtime/jsx";
 import { HealthBar } from "./HealthBar.tsx";
 import { FLASH } from "./rules/constants.ts";
 import { ENEMIES } from "./rules/enemies.ts";
@@ -27,26 +27,23 @@ interface EnemyProps {
  * hit, blue while slowed, a health bar once hurt. Towers find it by its collider, whose data says where it is.
  */
 export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps) {
-  const [dist, setDist] = useState(0);
-  const [hp, setHp] = useState(maxHp);
-  const [slow, setSlow] = useState(0);
-  const [flash, setFlash] = useState(false);
-  const at = pathAt(MAP.path, dist);
+  const s = useSim({ dist: 0, hp: maxHp, slow: 0, flash: false });
+  const at = pathAt(MAP.path, s.dist);
   const x = at.x - at.dy * lane;
   const y = at.y + at.dx * lane;
 
   useUpdate((dt) => {
-    if (hp <= 0) {
+    if (s.hp <= 0) {
       onKilled(id, kind, x, y);
       return;
     }
-    const next = dist + ENEMIES[kind].speed * (slow > 0 ? 1 - TOWERS.frost.slow : 1) * dt;
+    const next = s.dist + ENEMIES[kind].speed * (s.slow > 0 ? 1 - TOWERS.frost.slow : 1) * dt;
     if (next >= MAP.path.length) {
       onLeaked(id, kind);
       return;
     }
-    setDist(next);
-    if (slow > 0) setSlow(Math.max(0, slow - dt));
+    s.dist = next;
+    if (s.slow > 0) s.slow = Math.max(0, s.slow - dt);
   });
 
   return (
@@ -60,9 +57,9 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
         flipX={at.dx < 0}
         originX={7}
         originY={7}
-        tint={flash ? "#ffffff" : slow > 0 ? "#9ee7ff" : "#dcdcdc"}
+        tint={s.flash ? "#ffffff" : s.slow > 0 ? "#9ee7ff" : "#dcdcdc"}
       />
-      {hp < maxHp && <HealthBar hp={hp} maxHp={maxHp} />}
+      {s.hp < maxHp && <HealthBar hp={s.hp} maxHp={maxHp} />}
       <Collider
         width={10}
         height={10}
@@ -70,18 +67,20 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
         tag="enemy"
         layer="enemy"
         hits={["blast"]}
-        data={{ id, dist, x, y, hp }}
+        data={{ id, dist: s.dist, x, y, hp: s.hp }}
         onCollisionEnter={(other) => {
           if (other.tag !== "blast") return;
           const blast = other.data;
           // A bolt hits its target only; a shell or a frost pulse everything within its radius.
           if (blast.target >= 0 ? blast.target !== id : Math.hypot(blast.x - x, blast.y - y) > blast.radius) return;
-          setHp((left) => left - blast.damage);
+          s.hp -= blast.damage;
           // White for a moment: a timer, as the flash is only for the eye (a slow is gameplay, so it is state that counts down).
           cancelTimers();
-          setFlash(true);
-          after(FLASH, () => setFlash(false));
-          if (blast.slow > 0) setSlow((s) => Math.max(s, blast.slow));
+          s.flash = true;
+          after(FLASH, () => {
+            s.flash = false;
+          });
+          if (blast.slow > 0) s.slow = Math.max(s.slow, blast.slow);
         }}
       />
     </Entity>

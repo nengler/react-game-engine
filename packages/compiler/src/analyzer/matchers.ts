@@ -1,6 +1,6 @@
 // Recognisers for the statements of a component body: state, render constants, stores, refs, sounds and handlers.
-import { NodeFlags, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
-import { isArrayBindingPattern, isObjectBindingPattern, isOmittedExpression, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isPropertyAccessExpression, isVariableStatement } from "typescript/ast/is";
+import { NodeFlags, SyntaxKind, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
+import { isAsExpression, isTypeReferenceNode, isArrayBindingPattern, isObjectBindingPattern, isOmittedExpression, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isObjectLiteralExpression, isPropertyAccessExpression, isPropertyAssignment, isTypeLiteralNode, isVariableStatement } from "typescript/ast/is";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseRefCallAnalysis, type UseSoundCallAnalysis, type HandlerCallAnalysis, type HookCallAnalysis, type UseStateCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
 import { unwrapParens } from "./util.ts";
@@ -159,6 +159,34 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   if (!isIdentifier(declaration.name)) return invalid(`${storeName}(…) binds one plain name: \`${example}\``);
   const one = read(declaration.name.text, body, selector);
   return typeof one === "string" ? invalid(one) : { kind: "ok", hooks: [one] };
+}
+
+/** Recognises `const s = useSim({ a: 0, b: 0 })` (optionally `useSim<{ a: number; b: number }>({ … })`); null if the statement is not one. */
+export function matchSimStatement(statement: Statement): StatementMatch | null {
+  if (!isVariableStatement(statement)) return null;
+  const list = statement.declarationList;
+  if (list.declarations.length !== 1) return null;
+  const declaration = list.declarations[0]!;
+  const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
+  if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useSim") return null;
+  const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
+  if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) return invalid("useSim must be bound with a plain `const` name: `const s = useSim({ x: 0 })`.");
+  const arg = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
+  if (init.arguments.length !== 1 || !arg || !isObjectLiteralExpression(arg)) return invalid("useSim takes one object literal of initial values: `const s = useSim({ x: 0, y: 0 })`.");
+  const typeArgument = init.typeArguments?.[0];
+  const typed = typeArgument && isTypeLiteralNode(typeArgument) ? typeArgument : null;
+  const fields: { name: string; initializer: Expression; typeNode: Node | null }[] = [];
+  for (const property of arg.properties) {
+    if (!isPropertyAssignment(property) || !isIdentifier(property.name)) return invalid("useSim's fields are written `name: value`, with plain names (no shorthand, spreads or computed keys).");
+    const key = property.name.text;
+    const member = typed?.members.map((m) => m as unknown as { kind: SyntaxKind; name?: Node; type?: Node }).find((m) => m.kind === SyntaxKind.PropertySignature && m.name !== undefined && isIdentifier(m.name) && m.name.text === key);
+    // `enemies: [] as readonly Foe[]`: the field's type, where the value alone does not say it.
+    const written = unwrapParens(property.initializer);
+    const asserted = isAsExpression(written) && !(isTypeReferenceNode(written.type) && isIdentifier(written.type.typeName) && written.type.typeName.text === "const");
+    fields.push({ name: key, initializer: asserted ? written.expression : property.initializer, typeNode: member?.type ?? (asserted ? written.type : null) });
+  }
+  if (fields.length === 0) return invalid("useSim needs at least one field.");
+  return { kind: "ok", hooks: [{ kind: "useSim", name: declaration.name.text, fields, call: init, declaration }] };
 }
 
 /** Recognises `const r = useRef<T>()` and `const play = useSound("a.wav")`; null if the statement is not one. */

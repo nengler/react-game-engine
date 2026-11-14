@@ -3,7 +3,7 @@ import { SyntaxKind, type Node, type ObjectLiteralExpression, type CallExpressio
 import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock, isElementAccessExpression, isNonNullExpression, isTypeOfExpression, isNewExpression } from "typescript/ast/is";
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { assertNever, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
+import { assertNever, stateReads, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
 import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
 import { warning } from "../diagnostics/diagnostics.ts";
 
@@ -64,6 +64,9 @@ export class ExpressionLowering extends LoweringBase {
         case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state": return { kind: "StateRead", state: binding.id };
+        case "sim":
+          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a useSim value: read a field (\`${node.text}.${[...binding.fields.keys()][0]}\`). It cannot be passed or read whole.`, node);
+          return null;
         case "propsObject":
           this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`, node);
           return null;
@@ -78,7 +81,19 @@ export class ExpressionLowering extends LoweringBase {
           return { kind: "PropRead", name: binding.name };
         // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
         // in a handler it reads the current state, like recomputing it there.
-        case "derived": return binding.value;
+        case "derived": {
+          // In a handler, a value that depends on a `useSim` field is worked out from the fields as they are now.
+          if (this.mode.inHandler && binding.node !== undefined && stateReads(binding.value).some((id) => this.simStates.has(id))) {
+            const outer = this.scope;
+            this.scope = this.componentScope;
+            try {
+              return this.lowerNode(binding.node);
+            } finally {
+              this.scope = outer;
+            }
+          }
+          return binding.value;
+        }
         case "sound":
           this.report(DiagnosticCode.SoundOutsideHandler, `'${node.text}' is a sound: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
           return null;
@@ -330,6 +345,9 @@ export class ExpressionLowering extends LoweringBase {
       }
       return { kind: "PropRead", name: propsObject.name };
     }
+    const sim = this.simField(node);
+    if (sim === "error") return null;
+    if (sim) return { kind: "StateRead", state: sim, ...(this.mode.inHandler ? { live: true as const } : {}) };
     const ref = this.refAccess(node);
     if (ref === "error") return null;
     if (ref) {

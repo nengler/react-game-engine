@@ -18,5 +18,5 @@ export function findPlay(): Play | null {
 
 /** The battle's numbers as `Play` keeps them, and how many enemies, towers and shots there are. */
 export function battleOf(play: Play): { gold: number; lives: number; wave: number; active: boolean; enemies: number; towers: number; shots: number } {
-  return { gold: play.gold, lives: play.lives, wave: play.wave, active: play.active, enemies: play.enemies.length, towers: play.towers.filter((t) => t !== null).length, shots: play.shots.length };
+  return { gold: play.s.gold, lives: play.s.lives, wave: play.s.wave, active: play.s.active, enemies: play.s.enemies.length, towers: play.s.towers.filter((t) => t !== null).length, shots: play.s.shots.length };
 }

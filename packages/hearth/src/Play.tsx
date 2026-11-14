@@ -1,4 +1,4 @@
-import { Entity, Hud, ParticleLayer, useInput, useRef, useState, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Hud, ParticleLayer, useInput, useRef, useSim, useUpdate } from "@rge/runtime/jsx";
 import { hpOf, type Built, type Fired, type Foe, type InFlight } from "./battle.ts";
 import { Enemy } from "./Enemy.tsx";
 import { fx, sfx } from "./effects.ts";
@@ -38,52 +38,45 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
   const paused = useGame((s) => s.paused);
   const { close, resume, toTitle, finish } = useGame.actions();
 
-  const [gold, setGold] = useState(startGold);
-  const [lives, setLives] = useState<number>(START_LIVES);
-  /** Waves started so far, and whether one is on (enemies are coming or alive). */
-  const [wave, setWave] = useState(0);
-  const [active, setActive] = useState(false);
-  /** Seconds since the wave started, how many of its enemies have come, and the seed their lanes are rolled from. */
-  const [clock, setClock] = useState(0);
-  const [spawned, setSpawned] = useState(0);
-  const [laneSeed, setLaneSeed] = useState(seed);
-  const [towers, setTowers] = useState<readonly (Built | null)[]>(NO_TOWERS);
-  const [enemies, setEnemies] = useState<readonly Foe[]>([]);
-  const [shots, setShots] = useState<readonly InFlight[]>([]);
+  const s = useSim({
+    gold: startGold,
+    lives: START_LIVES as number,
+    /** Waves started so far, and whether one is on (enemies are coming or alive). */
+    wave: 0,
+    active: false,
+    /** Seconds since the wave started, how many of its enemies have come, and the seed their lanes are rolled from. */
+    clock: 0,
+    spawned: 0,
+    laneSeed: seed,
+    towers: NO_TOWERS as readonly (Built | null)[],
+    enemies: [] as readonly Foe[],
+    shots: [] as readonly InFlight[],
+  });
   /** The next id for an enemy or a shot (a list's key). */
   const nextId = useRef(1);
-  const spawns = spawnsOf(wave - 1);
+  const spawns = spawnsOf(s.wave - 1);
 
   useUpdate((dt) => {
-    if (lives <= 0) {
-      finish(false, 0, wave);
+    if (s.lives <= 0) {
+      finish(false, 0, s.wave);
       return;
     }
-    if (!active) return;
-    if (spawned >= spawns.length && enemies.length === 0) {
-      setActive(false);
-      setGold((g) => g + WAVE_BONUS);
-      if (wave >= WAVE_COUNT) finish(true, lives, wave);
+    if (!s.active) return;
+    if (s.spawned >= spawns.length && s.enemies.length === 0) {
+      s.active = false;
+      s.gold += WAVE_BONUS;
+      if (s.wave >= WAVE_COUNT) finish(true, s.lives, s.wave);
       return;
     }
     // The enemies whose time has come.
-    const now = clock + dt;
-    const fresh: Foe[] = [];
-    let next = spawned;
-    let rolled = laneSeed;
-    while (next < spawns.length && spawns[next]!.at <= now) {
-      const kind = spawns[next]!.kind;
-      const r = rollSigned(rolled);
-      rolled = r.seed;
-      fresh.push({ id: nextId.current, kind, lane: r.value * LANE_SPREAD, maxHp: hpOf(kind, wave - 1) });
-      next += 1;
+    s.clock += dt;
+    while (s.spawned < spawns.length && spawns[s.spawned]!.at <= s.clock) {
+      const kind = spawns[s.spawned]!.kind;
+      const r = rollSigned(s.laneSeed);
+      s.laneSeed = r.seed;
+      s.enemies = [...s.enemies, { id: nextId.current, kind, lane: r.value * LANE_SPREAD, maxHp: hpOf(kind, s.wave - 1) }];
+      s.spawned += 1;
       nextId.current += 1;
-    }
-    setClock(now);
-    if (fresh.length > 0) {
-      setSpawned(next);
-      setLaneSeed(rolled);
-      setEnemies((list) => [...list, ...fresh]);
     }
   });
   useInput((input) => {
@@ -91,26 +84,26 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
   });
 
   const startWave = () => {
-    if (active || wave >= WAVE_COUNT) {
+    if (s.active || s.wave >= WAVE_COUNT) {
       sfx.play("deny");
       return;
     }
-    setWave(wave + 1);
-    setActive(true);
-    setClock(0);
-    setSpawned(0);
+    s.wave += 1;
+    s.active = true;
+    s.clock = 0;
+    s.spawned = 0;
     sfx.play("wave");
   };
   /** Set the cursor's pad's tower, for `cost` gold (a sale's is negative). */
   const trade = (tower: Built | null, cost: number) => {
     const pad = MAP.pads[cursor]!;
-    setGold((g) => g - cost);
-    setTowers(towers.map((t, i) => (i === cursor ? tower : t)));
+    s.gold -= cost;
+    s.towers = s.towers.map((t, i) => (i === cursor ? tower : t));
     fx.burst("dust", pad.x, pad.y);
   };
   const build = (kind: TowerKind) => {
     const cost = TOWERS[kind].cost;
-    if (towers[cursor] !== null || gold < cost) {
+    if (s.towers[cursor] !== null || s.gold < cost) {
       sfx.play("deny");
       return;
     }
@@ -118,9 +111,9 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
     sfx.play("build");
   };
   const upgrade = () => {
-    const tower = towers[cursor] ?? null;
+    const tower = s.towers[cursor] ?? null;
     const cost = tower === null ? null : upgradeCost(tower.kind, tower.level);
-    if (tower === null || cost === null || gold < cost) {
+    if (tower === null || cost === null || s.gold < cost) {
       sfx.play("deny");
       return;
     }
@@ -128,7 +121,7 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
     sfx.play("upgrade");
   };
   const sell = () => {
-    const tower = towers[cursor] ?? null;
+    const tower = s.towers[cursor] ?? null;
     if (tower === null) {
       sfx.play("deny");
       return;
@@ -137,40 +130,39 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
     sfx.play("sell");
   };
   const killed = (id: number, kind: "runner" | "grunt" | "brute", x: number, y: number) => {
-    setEnemies((list) => list.filter((e) => e.id !== id));
-    setGold((g) => g + ENEMIES[kind].gold);
+    s.enemies = s.enemies.filter((e) => e.id !== id);
+    s.gold += ENEMIES[kind].gold;
     sfx.play("death");
     fx.burst("die", x, y);
   };
   const leaked = (id: number, kind: "runner" | "grunt" | "brute") => {
-    setEnemies((list) => list.filter((e) => e.id !== id));
-    setLives((l) => Math.max(0, l - ENEMIES[kind].lives));
+    s.enemies = s.enemies.filter((e) => e.id !== id);
+    s.lives = Math.max(0, s.lives - ENEMIES[kind].lives);
     sfx.play("leak");
   };
   const fire = (shot: Fired) => {
-    const id = nextId.current;
+    s.shots = [...s.shots, { ...shot, id: nextId.current }];
     nextId.current += 1;
-    setShots((list) => [...list, { ...shot, id }]);
   };
   const landed = (id: number) => {
-    setShots((list) => list.filter((s) => s.id !== id));
+    s.shots = s.shots.filter((shot) => shot.id !== id);
   };
 
   return (
     <Entity>
       <Field />
       {MAP.pads.map((p) => (
-        <Pad key={p.id} id={p.id} x={p.x} y={p.y} seed={seed * 101 + p.id} tower={towers[p.id] ?? null} onFire={fire} />
+        <Pad key={p.id} id={p.id} x={p.x} y={p.y} seed={seed * 101 + p.id} tower={s.towers[p.id] ?? null} onFire={fire} />
       ))}
-      {enemies.map((e) => (
+      {s.enemies.map((e) => (
         <Enemy key={e.id} {...e} onKilled={killed} onLeaked={leaked} />
       ))}
-      {shots.map((s) => (
-        <Shot key={s.id} {...s} onLanded={landed} />
+      {s.shots.map((shot) => (
+        <Shot key={shot.id} {...shot} onLanded={landed} />
       ))}
       <ParticleLayer particles={fx} />
       <Hud>
-        <SidePanel gold={gold} lives={lives} wave={wave} active={active} tower={towers[cursor] ?? null} onStartWave={startWave} onBuild={build} onUpgrade={upgrade} onSell={sell} />
+        <SidePanel gold={s.gold} lives={s.lives} wave={s.wave} active={s.active} tower={s.towers[cursor] ?? null} onStartWave={startWave} onBuild={build} onUpgrade={upgrade} onSell={sell} />
         {paused && (
           <Modal title="PAUSED">
             <MenuButton onPress={resume}>
