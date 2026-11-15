@@ -6,8 +6,8 @@ import { after, before, describe, it } from "node:test";
 
 import { Entity, Game } from "@tsengine/runtime";
 
-import { Compiler, DiagnosticCode, formatDiagnostic } from "../src/index.ts";
-import { OUTPUT_ROOT, cleanOutput, closeCompiler, load, withAuthoringImports, type CompiledModule } from "./helpers.ts";
+import { Compiler, DiagnosticCode, formatDiagnostic, checkAssets } from "../src/index.ts";
+import { OUTPUT_ROOT, cleanOutput, closeCompiler, load, withAuthoringImports, type CompiledModule, compile, typeCheck } from "./helpers.ts";
 
 const ROOT = join(OUTPUT_ROOT, String(process.pid), "game");
 const STATE_FILE = join(ROOT, "GameState.ts");
@@ -192,5 +192,18 @@ describe("<Game> as a component's root", () => {
     );
     assert.ok(compiler.typeCheckSources(file(good.replace("width={320}", 'width="320"'))).length > 0, "width is a number");
     assert.ok(compiler.typeCheckSources(file(good.replace('title="t"', "title={5}"))).length > 0, "title is a string");
+  });
+});
+
+describe("<Game font>", () => {
+  it("<Game font> is a literal setting, checked against the assets folder", () => {
+    const compiled = compile(`export function Main() { return <Game font="font.png"><Text size={8}>hi</Text></Game>; }`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const found = checkAssets([compiled.ir], { folder: "assets", exists: (name) => name === "fonts.png", list: () => ["fonts.png"] });
+    assert.deepEqual(
+      found.map((d) => d.code),
+      [DiagnosticCode.MissingAsset]
+    );
+    assert.match(found[0]!.message, /font 'font.png'.*did you mean 'fonts.png'/);
   });
 });

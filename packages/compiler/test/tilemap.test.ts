@@ -3,11 +3,13 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-/** Tiled tile layers → `<Tilemap>` data, and the importer's `visible` handling for objects. */
-import { describe, it } from "node:test";
+/** Tiled tile layers → `<Tilemap>` data, and the Tiled importer (`importTiled`): object layers → a scene, and its `visible` handling. */
+import { describe, it, after, before } from "node:test";
 import { deflateSync, gzipSync } from "node:zlib";
 
-import { importTiled, importTilemap, readTsx, tilemapsSource } from "../src/index.ts";
+import { importTiled, importTilemap, readTsx, tilemapsSource, DiagnosticCode, projectSchemas, type ProjectModule } from "../src/index.ts";
+import { cleanOutput, closeCompiler, compile, getCompiler, type CompiledModule } from "./helpers.ts";
+import { WORLD } from "./scene-fixture.ts";
 
 const H = 0x80000000;
 const V = 0x40000000;
@@ -472,5 +474,192 @@ string</property>
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+after(() => {
+  closeCompiler();
+  cleanOutput();
+});
+
+/** The prefabs a Tiled map's objects are validated against. */
+let compiled: CompiledModule;
+before(() => {
+  compiled = compile(WORLD, "World.tsx");
+});
+const project = (): ProjectModule[] => [{ ir: compiled.ir, generatedName: "World.ts" }];
+
+describe("the Tiled importer", () => {
+  const map = (layers: unknown[]): string => JSON.stringify({ type: "map", layers });
+  const objects = (...list: Record<string, unknown>[]) => ({ type: "objectgroup", name: "Things", objects: list });
+
+  it("turns object layers into entities: class or type, ids, position, properties of each type", () => {
+    const { scene, diagnostics } = importTiled(
+      "m.tmj",
+      map([
+        { type: "tilelayer", name: "Ground", data: [] },
+        objects(
+          {
+            id: 7,
+            class: "Enemy",
+            x: 32,
+            y: 48,
+            properties: [
+              { name: "speed", type: "float", value: 1.5 },
+              { name: "n", type: "int", value: 2 },
+              { name: "ok", type: "bool", value: false },
+              { name: "tint", type: "string", value: "blue" },
+              { name: "sprite", type: "file", value: "a.png" },
+              { name: "c", type: "color", value: "#ff0000" },
+            ],
+          },
+          { id: 8, type: "Marker", x: 1, y: 2 }
+        ),
+      ])
+    );
+    assert.deepEqual(diagnostics, []);
+    assert.deepEqual(scene, {
+      version: 1,
+      entities: [
+        {
+          id: "Things/7",
+          prefab: "Enemy",
+          props: { speed: 1.5, n: 2, ok: false, tint: "blue", sprite: "a.png", c: "#ff0000" },
+          transform: { x: 32, y: 48 },
+        },
+        { id: "Things/8", prefab: "Marker", transform: { x: 1, y: 2 } },
+      ],
+    });
+  });
+
+  it("converts rotation to radians, and flattens groups", () => {
+    const { scene } = importTiled(
+      "m.tmj",
+      map([
+        {
+          type: "group",
+          name: "G",
+          layers: [{ type: "group", name: "Inner", layers: [objects({ id: 1, class: "Marker", x: 0, y: 0, rotation: 180 })] }],
+        },
+      ])
+    );
+    assert.deepEqual(
+      scene.entities.map((e) => [e.id, e.transform.rotation]),
+      [["Things/1", Math.PI]].map(([id, r]) => [id, Math.round((r as number) * 1e6) / 1e6])
+    );
+  });
+
+  it("moves a tile object from its bottom-left anchor to its top-left, along its rotated up axis", () => {
+    const flat = importTiled("m.tmj", map([objects({ id: 1, class: "Marker", gid: 5, x: 100, y: 100, height: 16, rotation: 0 })])).scene
+      .entities[0]!;
+    assert.deepEqual(flat.transform, { x: 100, y: 84 });
+    const turned = importTiled("m.tmj", map([objects({ id: 1, class: "Marker", gid: 5, x: 100, y: 100, height: 16, rotation: 90 })])).scene
+      .entities[0]!;
+    assert.deepEqual([turned.transform.x, turned.transform.y], [116, 100]);
+  });
+
+  it("shifts objects by their layer's offset, and by every enclosing group's", () => {
+    const { scene } = importTiled(
+      "m.tmj",
+      map([
+        {
+          type: "group",
+          name: "Outer",
+          offsetx: 100,
+          offsety: 10,
+          layers: [
+            {
+              type: "group",
+              name: "Inner",
+              offsetx: 20,
+              layers: [{ type: "objectgroup", name: "Deep", offsetx: 3, offsety: 4, objects: [{ id: 1, class: "Marker", x: 1, y: 2 }] }],
+            },
+            { type: "objectgroup", name: "Sibling", objects: [{ id: 2, class: "Marker", x: 1, y: 2 }] },
+          ],
+        },
+        { type: "objectgroup", name: "Plain", objects: [{ id: 3, class: "Marker", x: 1, y: 2 }] },
+      ])
+    );
+    const at = (id: string) => scene.entities.find((e) => e.id === id)!.transform;
+    assert.deepEqual(at("Deep/1"), { x: 1 + 100 + 20 + 3, y: 2 + 10 + 0 + 4 });
+    assert.deepEqual(at("Sibling/2"), { x: 1 + 100, y: 2 + 10 }, "the group's offset, not its sibling's");
+    assert.deepEqual(at("Plain/3"), { x: 1, y: 2 }, "nothing outside the group is shifted");
+  });
+
+  it("applies an offset to a tile object's anchor too", () => {
+    const { scene } = importTiled(
+      "m.tmj",
+      map([
+        {
+          type: "objectgroup",
+          name: "T",
+          offsetx: 50,
+          offsety: 50,
+          objects: [{ id: 1, class: "Marker", gid: 5, x: 100, y: 100, height: 16 }],
+        },
+      ])
+    );
+    assert.deepEqual(scene.entities[0]!.transform, { x: 150, y: 134 });
+  });
+
+  it("skips an object with no class, with a warning, and reports property types it cannot hold", () => {
+    const { scene, diagnostics } = importTiled(
+      "m.tmj",
+      map([
+        objects(
+          { id: 1, name: "spawn", x: 0, y: 0 },
+          {
+            id: 2,
+            class: "Enemy",
+            x: 0,
+            y: 0,
+            properties: [
+              { name: "target", type: "object", value: 3 },
+              { name: "speed", type: "float", value: "fast" },
+            ],
+          }
+        ),
+      ])
+    );
+    assert.deepEqual(
+      scene.entities.map((e) => e.id),
+      ["Things/2"],
+      "the skipped object is not an entity"
+    );
+    assert.deepEqual(
+      diagnostics.map((d) => [d.code, d.severity]),
+      [
+        [DiagnosticCode.TiledImport, "warning"],
+        [DiagnosticCode.TiledImport, "error"],
+        [DiagnosticCode.TiledImport, "error"],
+      ]
+    );
+    assert.match(diagnostics[0]!.message, /m\.tmj: layer 'Things', object 1 \('spawn'\) has no type/);
+    assert.match(diagnostics[1]!.message, /property 'target' has the type 'object'/);
+    assert.match(diagnostics[2]!.message, /property 'speed' is not a number/);
+  });
+
+  it("rejects what is not a Tiled map", () => {
+    assert.match(importTiled("m.tmj", "{").diagnostics[0]!.message, /not valid JSON/);
+    assert.match(importTiled("m.tmj", "{}").diagnostics[0]!.message, /not a Tiled map/);
+    assert.deepEqual(importTiled("m.tmj", "{}").scene.entities, []);
+  });
+
+  it("produces a scene that validates against the prefabs", () => {
+    const { scene } = importTiled(
+      "m.tmj",
+      map([
+        objects(
+          { id: 1, class: "Enemy", x: 4, y: 5, properties: [{ name: "speed", type: "int", value: 2 }] },
+          { id: 2, class: "Enemy", x: 4, y: 5 }
+        ),
+      ])
+    );
+    const diagnostics = getCompiler().validateScene("m.scene.json", JSON.stringify(scene, null, 2), projectSchemas(project()));
+    assert.deepEqual(
+      diagnostics.map((d) => d.code),
+      [DiagnosticCode.MissingPrefabProp],
+      "the second object forgot its required speed"
+    );
   });
 });

@@ -1,9 +1,9 @@
-import assert from "node:assert/strict";
 /**
- * M15: `useSound`. `const playHit = useSound("hit.wav")` binds a sound, and
- * calling `playHit()` in a handler plays it. Playing is an effect, not state:
- * it happens at once and never renders. The mock `Sound` records plays.
+ * `useSound`. `const playHit = useSound("hit.wav")` binds a sound, and calling `playHit()` in a handler plays it. Playing is an
+ * effect, not state: it happens at once and never renders. The mock `Sound` records plays. Sound stores (`createSounds`) are
+ * in soundstores.test.ts.
  */
+import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
 import { Collider, Entity, Sound, World } from "@tsengine/runtime";
@@ -56,7 +56,7 @@ before(async () => {
   ({ Hero } = await load<{ Hero: typeof Hero }>(compile(HERO, "Hero.tsx")));
 });
 
-describe("M15: IR and generated code", () => {
+describe("useSound: IR and generated code", () => {
   const compiled = compile(HERO, "Hero.tsx");
 
   it("records each sound with its path, and the plays as statements", () => {
@@ -86,7 +86,7 @@ describe("M15: IR and generated code", () => {
   });
 });
 
-describe("M15: runtime behaviour", () => {
+describe("useSound: runtime behaviour", () => {
   it("records a play for a call in a handler, immediately and without a render", () => {
     const world = new World();
     const hero = new Hero();
@@ -133,7 +133,7 @@ before(async () => {
   );
 });
 
-describe("M15: diagnostics", () => {
+describe("useSound: diagnostics", () => {
   const codes = (body: string, extra = "") =>
     compileErrors(`function C() { const play = useSound("a.wav"); ${extra} return <Entity name="C">${body}</Entity>; }`).map((d) => d.code);
 
@@ -209,7 +209,7 @@ describe("M15: diagnostics", () => {
   });
 });
 
-describe("M15: authored source type-checks", () => {
+describe("useSound: authored source type-checks", () => {
   const check = (body: string) =>
     getCompiler().typeCheckSources([
       {

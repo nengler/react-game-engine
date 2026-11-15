@@ -11,6 +11,7 @@ import {
   Compiler,
   formatDiagnostic,
   type ChildIR,
+  type ComponentIR,
   type CompilerDiagnostic,
   type ElementIR,
   type IRModule,
@@ -151,4 +152,16 @@ export function elementOf(child: ChildIR): ElementIR {
 export function sameOrder(actual: readonly unknown[], expected: readonly unknown[], message = ""): void {
   assert.equal(actual.length, expected.length, `${message} length`);
   actual.forEach((item, i) => assert.equal(item, expected[i], `${message} position ${i}`));
+}
+
+/** The IR of the component called `name` in `source`. */
+export function component(source: string, name: string): ComponentIR {
+  const found = compile(source).ir.components.find((c) => c.name === name);
+  assert.ok(found, name);
+  return found;
+}
+
+/** The codes of the diagnostics `source` fails with. */
+export function codes(source: string): string[] {
+  return compileErrors(source).map((d) => d.code);
 }

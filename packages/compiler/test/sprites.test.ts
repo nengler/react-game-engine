@@ -1,13 +1,12 @@
-import assert from "node:assert/strict";
 /**
- * M13: `<AnimatedSprite>`. Cycles through `frames` at `fps`; `playing={false}`
- * freezes it; different `frames` restart it. Advancing is not state, so it
- * costs no renders. A component rooted at one that writes its own `useUpdate`
- * must still animate, so the generated override calls `super` first.
+ * `<AnimatedSprite>`. Cycles through `frames` at `fps`; `playing={false}` freezes it; different `frames` restart it. Advancing is
+ * not state, so it costs no renders. A component rooted at one that writes its own `useUpdate` must still animate, so the
+ * generated override calls `super` first. Also sprite sheets and the sprite options.
  */
+import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
-import { AnimatedSprite, Entity, World, runtimeManifest } from "@tsengine/runtime";
+import { AnimatedSprite, Entity, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -85,7 +84,7 @@ before(async () => {
   ));
 });
 
-describe("M13: IR and generated code", () => {
+describe("<AnimatedSprite>: IR and generated code", () => {
   const compiled = compile(SOURCE, "Anim.tsx");
   const walker = compiled.ir.components.find((c) => c.name === "Walker")!;
   const [moving, still] = walker.root.children.map((c) => elementOf(c));
@@ -135,7 +134,7 @@ describe("M13: IR and generated code", () => {
   });
 });
 
-describe("M13: authored source type-checks", () => {
+describe("<AnimatedSprite>: authored source type-checks", () => {
   const check = (body: string) =>
     getCompiler().typeCheckSources([
       {
@@ -163,7 +162,7 @@ describe("M13: authored source type-checks", () => {
   });
 });
 
-describe("M13: runtime behaviour", () => {
+describe("<AnimatedSprite>: runtime behaviour", () => {
   it("advances at fps from the world's tick, without rendering", () => {
     const world = new World();
     const walker = new Walker();
@@ -269,41 +268,6 @@ describe("M13: runtime behaviour", () => {
     world.tick(0.25);
     assert.equal(twice.s.ticks, 11, "both handlers ran");
     assert.equal(twice.image, "t2.png", "and the sprite advanced");
-  });
-});
-
-describe("M13: the manifest says which hooks a built-in implements", () => {
-  it("lists onUpdate for the built-ins that advance themselves (AnimatedSprite, Camera, Particles, Fade, Music, Router), and ParticleLayer's mount hooks", () => {
-    assert.deepEqual(runtimeManifest.intrinsicHooks, {
-      AnimatedSprite: ["onUpdate"],
-      Camera: ["onUpdate"],
-      Particles: ["onUpdate"],
-      ParticleLayer: ["onMount", "onUnmount"],
-      Fade: ["onUpdate"],
-      Music: ["onUpdate"],
-      Router: ["onUpdate"],
-    });
-  });
-
-  it("is driven by the manifest, not by AnimatedSprite: any intrinsic can be marked", () => {
-    const withSuper = (manifest: typeof runtimeManifest) => {
-      const compiler = new (getCompiler().constructor as new (config: object) => ReturnType<typeof getCompiler>)({ manifest });
-      try {
-        const result = compiler.compile(
-          "C.tsx",
-          `import { Shape, useUpdate, useMutable } from "@tsengine/runtime/jsx";\nfunction C() { const s = useMutable({ r: 0 }); useUpdate((dt) => { s.r += dt; }); return <Shape kind="rect" width={1} height={1} />; }`
-        );
-        assert.ok(result.ok, JSON.stringify(result.diagnostics));
-        return result.code;
-      } finally {
-        compiler.close();
-      }
-    };
-    assert.doesNotMatch(withSuper(runtimeManifest), /super\.onUpdate/);
-    assert.match(
-      withSuper({ ...runtimeManifest, intrinsicHooks: { Shape: ["onUpdate"] } }),
-      /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/
-    );
   });
 });
 

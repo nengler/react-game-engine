@@ -1,13 +1,12 @@
-import assert from "node:assert/strict";
 /**
- * M3: the `transform` attribute and value refs: lowering, diagnostics,
- * type-checking of generated code, and runtime behaviour. Position is ordinary
- * state written to `transform={{ ... }}`; refs hold values that never render.
+ * The `transform` attribute and value refs: lowering, diagnostics, type-checking of generated code, and runtime behaviour.
+ * Position is ordinary state written to `transform={{ ... }}`; refs hold values that never render. Also `transform` on a
+ * component element, which places the component under its own transform.
  */
+import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
-import { Entity, GameObject, Sprite, Transform, World } from "@tsengine/runtime";
-import { runtimeManifest } from "@tsengine/runtime";
+import { Entity, GameObject, Sprite, Transform, World, runtimeManifest } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode, type ComponentIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, withAuthoringImports, elementOf } from "./helpers.ts";
@@ -71,7 +70,7 @@ function ir(source: string): ComponentIR {
   return compile(source).ir.components[0]!;
 }
 
-describe("M3: IR shape", () => {
+describe("transform: IR shape", () => {
   it("lowers the transform attribute to static and dynamic transform props", () => {
     const c = ir(RUNNER);
     assert.deepEqual(
@@ -95,7 +94,7 @@ describe("M3: IR shape", () => {
   });
 });
 
-describe("M3: generated code", () => {
+describe("transform: generated code", () => {
   it("sets static transform fields once and dynamic ones in render", () => {
     const { code } = compile(RUNNER);
     const constructor = code.slice(code.indexOf("constructor()"), code.indexOf("override render"));
@@ -118,7 +117,7 @@ describe("M3: generated code", () => {
   });
 });
 
-describe("M3: runtime behaviour", () => {
+describe("transform: runtime behaviour", () => {
   it("applies the transform at construction and leaves unset fields at the defaults", () => {
     const runner = new Runner();
     assert.ok(runner.transform instanceof Transform);
@@ -236,7 +235,7 @@ describe("M3: runtime behaviour", () => {
   });
 });
 
-describe("M3: diagnostics", () => {
+describe("transform: diagnostics", () => {
   const jsxCodes = (jsx: string, extra = "") =>
     compileErrors(`
 function Child() { return <Entity name="Child" />; }
@@ -299,5 +298,49 @@ function C() {
       typeCheck(mismatched).map((d) => d.code),
       [DiagnosticCode.GeneratedTypeError]
     );
+  });
+});
+
+describe("placing a component with transform", () => {
+  const SCENE = `
+function Mover() {
+  const s = useMutable({ x: 0 });
+  return <Entity name="Mover" transform={{ x: s.x }} />;
+}
+function Scene() {
+  const s = useMutable({ spawn: 50, pinned: false });
+  return (
+    <Entity name="Scene" transform={{ x: 100 }}>
+      <Mover transform={{ x: s.spawn, y: 5, global: s.pinned }} />
+    </Entity>
+  );
+}`;
+
+  it("composes the parent's placement under the child's own transform", async () => {
+    const { Scene } = await load<{
+      Scene: new () => Entity & { mover: Entity & { s: { x: number } }; s: { spawn: number; pinned: boolean } };
+    }>(compile(SCENE));
+    const world = new World();
+    const scene = new Scene();
+    world.mount(scene);
+    const mover = scene.mover;
+    assert.deepEqual([mover.placement.x, mover.placement.y, mover.transform.x], [50, 5, 0]);
+    assert.deepEqual([mover.worldTransform().x, mover.worldTransform().y], [150, 5], "scene 100 + placement 50, own transform 0");
+
+    mover.s.x = 7;
+    world.flush();
+    assert.equal(mover.worldTransform().x, 157, "the child moves relative to where it was placed");
+
+    scene.s.spawn = 80;
+    world.flush();
+    assert.equal(mover.worldTransform().x, 187, "placement follows the parent's state");
+
+    scene.s.pinned = true;
+    world.flush();
+    assert.equal(mover.worldTransform().x, 87, "a global placement ignores the scene's transform; the child's own still applies");
+  });
+
+  it("type-checks", () => {
+    assert.deepEqual(typeCheck(compile(SCENE)), []);
   });
 });

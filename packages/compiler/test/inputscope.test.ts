@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** `inert` and `modal` written in components: a menu made inert from a prop, and a modal overlay that takes the keys while shown. */
 import { after, describe, it } from "node:test";
 
-import { World, createInputState } from "@tsengine/runtime";
+import { World, createInputState, Entity, Pointer, Text } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
@@ -64,5 +64,37 @@ describe("inert and modal in components", () => {
     root.s.paused = false;
     world.flush();
     assert.deepEqual(press(), ["world", "menu"]);
+  });
+});
+
+describe("keys that press things, from TSX", () => {
+  it("pressKey, focusable, autoFocus, onFocus / onBlur and a Pointer's origin compile and run", async () => {
+    const compiled = compile(`
+interface PadsProps { onWave: () => void; }
+export function Pads({ onWave }: PadsProps) {
+  const s = useMutable({ focused: -1 });
+  return (
+    <Entity>
+      <Flex pressKey="Space" onPress={onWave} />
+      <Pointer width={10} height={10} originX={5} originY={5} focusable autoFocus onFocus={() => { s.focused = 0; }} />
+      <Pointer width={10} height={10} originX={5} originY={5} transform={{ x: 30 }} focusable onFocus={() => { s.focused = 1; }} onBlur={() => { s.focused = -1; }} />
+      <Text size={8}>{\`\${s.focused}\`}</Text>
+    </Entity>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    let waves = 0;
+    const { Pads } = await load<{ Pads: new (p: { onWave: () => void }) => Entity }>(compiled);
+    const world = new World();
+    const pads = new Pads({ onWave: () => waves++ });
+    world.mount(pads);
+    world.flush();
+    const text = pads.children[3] as Text;
+    world.tick(1 / 60, createInputState({ pressed: ["Space"] }));
+    assert.equal(text.text, "0");
+    world.tick(1 / 60, createInputState({ pressed: ["ArrowRight"] }));
+    assert.equal(text.text, "1");
+    assert.equal(waves, 1);
+    assert.equal((pads.children[1] as Pointer).contains(-4, -4), true);
   });
 });

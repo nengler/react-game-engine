@@ -1,9 +1,9 @@
-import assert from "node:assert/strict";
 /**
- * M9: `useMount` and `useUnmount`. A component runs `useMount` once when it
- * joins a World (children first) and `useUnmount` once when it leaves (parent
- * first). Unmount cannot set state: the component is going away.
+ * `useMount` and `useUnmount`. A component runs `useMount` once when it joins a World (children first) and `useUnmount` once
+ * when it leaves (parent first). Unmount cannot set state: the component is going away. A cleanup returned from `useMount` is
+ * in cleanup-keys.test.ts.
  */
+import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
 import { Entity, Sprite, World } from "@tsengine/runtime";
@@ -77,7 +77,7 @@ function hooks(source: string, name: string) {
   return c.hooks;
 }
 
-describe("M9: IR and generated code", () => {
+describe("useMount and useUnmount: IR and generated code", () => {
   it("lowers the hooks to handlers with no parameters", () => {
     const kinds = hooks(BOARD, "Badge").map((h) => h.kind);
     assert.deepEqual(kinds, ["UseState", "UseState", "OnMount", "OnUnmount"]);
@@ -121,7 +121,7 @@ describe("M9: IR and generated code", () => {
   });
 });
 
-describe("M9: runtime behaviour", () => {
+describe("useMount and useUnmount: runtime behaviour", () => {
   it("mounts a component when it joins the world, and renders what mount set in the same flush", () => {
     const world = new World();
     const board = new Board();
@@ -203,7 +203,7 @@ function Parent() {
   });
 });
 
-describe("M9: diagnostics", () => {
+describe("useMount and useUnmount: diagnostics", () => {
   const unmount = (body: string) => `function C() {
   const s = useMutable({ n: 0, r: 0 });
   useUnmount(() => { ${body} });
