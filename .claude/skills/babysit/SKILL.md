@@ -55,9 +55,13 @@ from a clean checkout of the PR's head:
 
 `tools/ci-local.ts` runs the `run:` steps of `.github/workflows/ci.yml` itself, so it cannot drift from CI. It skips
 `uses:` steps and the step that installs system packages: `native-desktop` needs X11, GL and Xvfb on the machine, and
-says so when they are missing. Post its summary on the PR, naming any job that did not pass locally and why. Local
-results stand in for CI only when the user accepts them: a merge on them is the user's call, and the merge commit says
-which jobs ran locally.
+says so when they are missing. Post its summary on the PR, naming any job that did not pass locally and why.
+
+When the local run passes, do not wait for Actions: merge, and say in the merge commit that CI ran locally (which
+jobs, at which commit) because Actions could not. A job that fails locally counts as passing only when it fails the
+same way on the base branch in the same environment (a machine that cannot do what the job needs, such as
+`native-desktop`'s pixel checks without working GL); say so on the PR and in the merge commit. Any other local failure
+is a failure: fix it before merging.
 
 ## When CI fails
 
