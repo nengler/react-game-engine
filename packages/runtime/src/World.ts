@@ -105,6 +105,7 @@ export class World implements BodySpace {
   tick(dt: number, input: InputState = NO_INPUT, beforeUpdate?: () => void): number {
     countStep();
     this.#boxes = null;
+    this.#indexes = null;
     const anyInert = this.#hasInert();
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
     const order = (this.#order ??= this.#treeOrder());
@@ -366,6 +367,8 @@ export class World implements BodySpace {
    * step's updates began, as the step's state is a snapshot.
    */
   #boxes: Map<Collider, Box> | null = null;
+  /** The colliders by tag on a grid, for queries (`#indexOf`): dropped whenever the boxes are, and when a collider joins or leaves. */
+  #indexes: Map<string, ColliderIndex> | null = null;
   readonly #tilemaps = new Set<Tilemap>();
 
   /** `BodySpace`: the tag of something solid in `box` (`"tile"` for a solid tile), or null. */
@@ -382,30 +385,42 @@ export class World implements BodySpace {
       const bottom = Math.floor((box.y + box.height - 1 - at.y) / tileHeight);
       for (let row = top; row <= bottom; row++) for (let col = left; col <= right; col++) if (grid.solidAt(col, row)) return "tile";
     }
-    for (const collider of this.#colliders) {
-      if (!collider.solid || isUnder(collider, ignore)) continue;
-      if (boxesOverlap(box, this.#boxOf(collider))) return collider.tag;
-    }
+    for (const entry of this.#indexOf(SOLID).query(box)) if (!isUnder(entry.collider, ignore)) return entry.collider.tag;
     return null;
   }
 
   /** `BodySpace`: whether a collider with this tag overlaps `box`. */
   tagIn(box: Box, tag: string, ignore: GameObject): boolean {
-    for (const collider of this.#colliders) {
-      if (collider.tag !== tag || isUnder(collider, ignore)) continue;
-      if (boxesOverlap(box, this.#boxOf(collider))) return true;
-    }
+    for (const entry of this.#indexOf(tag).query(box)) if (!isUnder(entry.collider, ignore)) return true;
     return false;
   }
 
-  /** `BodySpace`: every collider with this tag that overlaps `box`. */
+  /** `BodySpace`: every collider with this tag that overlaps `box`, in the order the colliders joined the world. */
   collidersIn(box: Box, tag: string, ignore: GameObject): Contact[] {
     const out: Contact[] = [];
-    for (const collider of this.#colliders) {
-      if (collider.tag !== tag || isUnder(collider, ignore)) continue;
-      if (boxesOverlap(box, this.#boxOf(collider))) out.push(collider as unknown as Contact);
-    }
+    for (const entry of this.#indexOf(tag).query(box)) if (!isUnder(entry.collider, ignore)) out.push(entry.collider as unknown as Contact);
     return out;
+  }
+
+  /**
+   * The colliders with a tag (or, for `SOLID`, the solid ones), with their boxes, on a grid: made on the first query for that tag
+   * in an update phase and dropped with the boxes, so twenty towers asking about a hundred enemies look at the few near each, not
+   * every collider in the world. What a query returns is in the order of `#colliders`, as a plain scan would give it.
+   */
+  #indexOf(tag: string): ColliderIndex {
+    const indexes = (this.#indexes ??= new Map());
+    let index = indexes.get(tag);
+    if (index === undefined) {
+      const entries: IndexEntry[] = [];
+      let order = 0;
+      for (const collider of this.#colliders) {
+        if (tag === SOLID ? collider.solid : collider.tag === tag) entries.push({ collider, box: this.#boxOf(collider), order, seen: 0 });
+        order++;
+      }
+      index = new ColliderIndex(entries);
+      indexes.set(tag, index);
+    }
+    return index;
   }
 
   #boxOf(collider: Collider): Box {
@@ -442,7 +457,10 @@ export class World implements BodySpace {
   }
 
   registerObject(object: GameObject): void {
-    if (object instanceof Collider) this.#colliders.add(object);
+    if (object instanceof Collider) {
+      this.#colliders.add(object);
+      this.#indexes = null;
+    }
     else if (object instanceof Tilemap) this.#tilemaps.add(object);
     if ("pressKey" in object && "focusable" in object) this.#pressables.add(object as GameObject & Pressable);
     if (object.onInput !== GameObject.prototype.onInput) this.#onInput.add(object);
@@ -452,7 +470,10 @@ export class World implements BodySpace {
 
   unregisterObject(object: GameObject): void {
     this.#timed.delete(object);
-    if (object instanceof Collider) this.#colliders.delete(object);
+    if (object instanceof Collider) {
+      this.#colliders.delete(object);
+      this.#indexes = null;
+    }
     else if (object instanceof Tilemap) this.#tilemaps.delete(object);
     this.#pressables.delete(object as GameObject & Pressable);
     if (this.#focused === object) this.#focused = null;
@@ -490,6 +511,7 @@ export class World implements BodySpace {
     const restore = takeTreeRestore(this);
     if (restore !== null) restoreHotState(this, restore.root, restore.state);
     this.#boxes = null;
+    this.#indexes = null;
     return renders;
   }
 }
@@ -553,4 +575,93 @@ function isUnder(object: GameObject, root: GameObject): boolean {
 function colliderBox(collider: Collider): Box {
   const at = collider.worldTransform();
   return { x: at.x, y: at.y, width: collider.width, height: collider.height };
+}
+
+/** The key of the index of the solid colliders, whatever their tags (`solidIn`): not a tag a game can write. */
+const SOLID = "\u0000solid";
+/** The side of a cell of a collider index, in pixels. */
+const CELL = 32;
+/** A collider whose box covers more cells than this is kept out of the cells and looked at by every query. */
+const MAX_CELLS = 64;
+/** Fewer entries than this, and a query looks at them all: a grid costs more than it saves. */
+const SMALL = 16;
+
+interface IndexEntry {
+  readonly collider: Collider;
+  readonly box: Box;
+  /** Its place in the world's colliders: queries answer in this order. */
+  readonly order: number;
+  /** The query that last looked at it, so an entry in several cells is taken once. */
+  seen: number;
+}
+
+let queries = 0;
+
+/** The entries of one tag, on a grid of `CELL`-pixel cells. */
+class ColliderIndex {
+  readonly #entries: readonly IndexEntry[];
+  readonly #cells = new Map<number, IndexEntry[]>();
+  /** Entries too big (or not finite) to put in cells. */
+  readonly #wide: IndexEntry[] = [];
+  readonly #out: IndexEntry[] = [];
+
+  constructor(entries: readonly IndexEntry[]) {
+    this.#entries = entries;
+    if (entries.length < SMALL) return;
+    for (const entry of entries) {
+      const { box } = entry;
+      const left = Math.floor(box.x / CELL);
+      const right = Math.floor((box.x + box.width) / CELL);
+      const top = Math.floor(box.y / CELL);
+      const bottom = Math.floor((box.y + box.height) / CELL);
+      if (!Number.isFinite(left + right + top + bottom) || (right - left + 1) * (bottom - top + 1) > MAX_CELLS) {
+        this.#wide.push(entry);
+        continue;
+      }
+      for (let cy = top; cy <= bottom; cy++) {
+        for (let cx = left; cx <= right; cx++) {
+          const key = cellKey(cx, cy);
+          const cell = this.#cells.get(key);
+          if (cell === undefined) this.#cells.set(key, [entry]);
+          else cell.push(entry);
+        }
+      }
+    }
+  }
+
+  /** The entries whose boxes overlap `box`, in the world's order. The array is reused by the next query. */
+  query(box: Box): readonly IndexEntry[] {
+    const out = this.#out;
+    out.length = 0;
+    const entries = this.#entries;
+    const left = Math.floor(box.x / CELL);
+    const right = Math.floor((box.x + box.width) / CELL);
+    const top = Math.floor(box.y / CELL);
+    const bottom = Math.floor((box.y + box.height) / CELL);
+    const cells = (right - left + 1) * (bottom - top + 1);
+    if (entries.length < SMALL || !Number.isFinite(cells) || cells > entries.length) {
+      for (const entry of entries) if (boxesOverlap(box, entry.box)) out.push(entry);
+      return out;
+    }
+    const stamp = ++queries;
+    for (let cy = top; cy <= bottom; cy++) {
+      for (let cx = left; cx <= right; cx++) {
+        const cell = this.#cells.get(cellKey(cx, cy));
+        if (cell === undefined) continue;
+        for (const entry of cell) {
+          if (entry.seen === stamp) continue;
+          entry.seen = stamp;
+          if (boxesOverlap(box, entry.box)) out.push(entry);
+        }
+      }
+    }
+    for (const entry of this.#wide) if (boxesOverlap(box, entry.box)) out.push(entry);
+    if (out.length > 1) out.sort((a, b) => a.order - b.order);
+    return out;
+  }
+}
+
+/** One number for a cell: distinct for any cell a game reaches (±32,768 cells, a million pixels each way); a clash would only cost a check. */
+function cellKey(cx: number, cy: number): number {
+  return (cx + 0x8000) * 0x10000 + (cy + 0x8000);
 }

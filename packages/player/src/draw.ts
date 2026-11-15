@@ -468,6 +468,13 @@ export class DrawList {
     return at;
   }
 
+  /** Append records made earlier (a copy of a run of `records`), as they are: what a cached tilemap writes. */
+  appendRecords(block: Float64Array): void {
+    this.grow(block.length);
+    this.records.set(block, this.length);
+    this.length += block.length;
+  }
+
   /** Make room for `count` more doubles after `length`, for a caller that writes a record into `records` itself and then moves `length` on. */
   grow(count: number): void {
     const at = this.length;
@@ -2341,6 +2348,10 @@ export class FrameBuilder {
     return rect;
   }
 
+  /** Each tilemap's records from the last time it was drawn, and what they were made from (see `#tilemap`). */
+  readonly #tileCache = new WeakMap<Tilemap, { grid: object; layer: string | undefined; handles: string; key: Float64Array; records: Float64Array }>();
+  readonly #tileKey = new Float64Array(11);
+
   /**
    * A `<Tilemap>`: one sprite-region record for each filled cell of each visible layer. A map that is not turned or scaled, in the
    * world, writes only the cells the view shows (and one more cell round them), so a map of any size costs what its view does.
@@ -2386,6 +2397,30 @@ export class FrameBuilder {
         row1 = Math.min(height - 1, Math.floor((visible.y1 - at.y) / th) + 1 + extraRows);
       }
     }
+    // The records depend on nothing else: the same as last frame (a map that has not moved, under a view that has not), they are
+    // copied as one block. Under QuickJS that is most of a tilemap's cost in a busy frame. Only when the builder reuses work
+    // (`retain`), so `retain: "check"`'s reference build draws every cell afresh and catches a stale copy.
+    const list = this.#list;
+    let handles = "";
+    for (const sheet of sheets) handles += `${sheet.handle},`;
+    const key = this.#tileKey;
+    key[0] = at.x;
+    key[1] = at.y;
+    key[2] = at.rotation;
+    key[3] = sx;
+    key[4] = sy;
+    key[5] = col0;
+    key[6] = col1;
+    key[7] = row0;
+    key[8] = row1;
+    key[9] = tint;
+    key[10] = list.alpha;
+    const cached = this.#tileCache.get(node);
+    if (this.#retain && cached !== undefined && cached.grid === grid && cached.layer === node.layer && cached.handles === handles && sameNumbers(cached.key, key)) {
+      list.appendRecords(cached.records);
+      return;
+    }
+    const start = list.length;
     const single = sheets.length === 1 ? sheets[0]! : null;
     for (const layer of grid.data.layers) {
       if (!layer.visible || (node.layer !== undefined && layer.name !== node.layer)) continue;
@@ -2446,6 +2481,7 @@ export class FrameBuilder {
         }
       }
     }
+    if (this.#retain) this.#tileCache.set(node, { grid, layer: node.layer, handles, key: Float64Array.from(key), records: list.records.slice(start, list.length) });
   }
 
   /**
@@ -2545,3 +2581,9 @@ export class FrameBuilder {
   }
 }
 
+/** Whether two arrays of numbers are equal, element by element (NaN never is: it is not drawn the same way twice). */
+function sameNumbers(a: Float64Array, b: Float64Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}

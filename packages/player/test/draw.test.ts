@@ -818,6 +818,16 @@ describe("FrameBuilder: a large <Tilemap>", () => {
     for (const t of some) assert.equal(t.srcX, ((t.x / 16) % 4) * 16, `cell at ${t.x},${t.y}`);
   });
 
+  it("copies last frame's cells while the map and the view stay where they are, and draws them again when either moves", () => {
+    const { frame } = scene();
+    const first = tilesOf(frame(500, 300).records);
+    const again = tilesOf(frame(500, 300).records);
+    assert.deepEqual(again, first, "the same records (retain: \"check\" also compares them with a full draw)");
+    const moved = tilesOf(frame(520, 300).records);
+    assert.notDeepEqual(moved, first);
+    assert.ok(Math.min(...moved.map((t) => t.x)) > Math.min(...first.map((t) => t.x)) - 1);
+  });
+
   it("without a camera it draws the window's part of the map, and a camera that appears later is followed from its first frame", () => {
     const none = scene({ camera: false });
     const tiles = tilesOf(none.frame(0, 0).records);

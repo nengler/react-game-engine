@@ -186,7 +186,7 @@ jobs:
           cd /tmp
           xvfb-run -a timeout 5 "$GITHUB_WORKSPACE/packages/demo/dist/demo/demo" || test $? -eq 124
 
-  # The shipping host: Rust + QuickJS-ng, linked statically against librge on raylib's software renderer.
+  # The small host (`--engine quickjs`; V8 is the default): Rust + QuickJS-ng, linked statically against librge on raylib's software renderer.
   # The parity test plays the demo for 60 scripted frames under Node and under the host and requires
   # byte-identical output.
   host:
