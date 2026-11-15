@@ -26,9 +26,13 @@ export function Title() {
           HEARTH
         </Text>
         <Label color={COLOR.dim}>HOLD THE ROAD TEN WAVES</Label>
-        <Label>CLICK A PAD TO BUILD {keyLabel("wave")} STARTS A WAVE</Label>
         <Label>
-          ARROWS MOVE {keyLabel("one")} {keyLabel("two")} {keyLabel("three")} TOWERS
+          CLICK A PAD TO BUILD{"  "}
+          {keyLabel("wave")} STARTS A WAVE
+        </Label>
+        <Label>
+          ARROWS MOVE{"  "}
+          {keyLabel("one")} {keyLabel("two")} {keyLabel("three")} TOWERS
         </Label>
         <Label color={time % 1 < 0.66 ? COLOR.prompt : COLOR.background}>PRESS {keyLabel("confirm")} OR CLICK TO START</Label>
       </Flex>
