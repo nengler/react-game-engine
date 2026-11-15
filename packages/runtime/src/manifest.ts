@@ -1,4 +1,5 @@
 import { FLEX_ALIGN_ITEMS, FLEX_ANCHORS, FLEX_DIRECTIONS, FLEX_JUSTIFY_CONTENT, FLEX_OVERFLOW } from "./components/Flex.ts";
+import { BLEND_MODES } from "./components/Layer.ts";
 import { PARTICLE_SPACES } from "./components/Particles.ts";
 import { SCREEN_FITS } from "./components/Screen.ts";
 import { SHAPE_KINDS } from "./components/Shape.ts";
@@ -205,9 +206,24 @@ export const runtimeManifest: RuntimeManifest = {
     "Router",
     "Route",
     "Provider",
+    "Layer",
   ],
   hostIntrinsic: "Entity",
-  containerIntrinsics: ["Entity", "Game", "Camera", "Screen", "Hud", "Flex", "Button", "Menu", "Tooltip", "Router", "Route", "Provider"],
+  containerIntrinsics: [
+    "Entity",
+    "Game",
+    "Camera",
+    "Screen",
+    "Hud",
+    "Flex",
+    "Button",
+    "Menu",
+    "Tooltip",
+    "Router",
+    "Route",
+    "Provider",
+    "Layer",
+  ],
   textContent: { Text: "text" },
   intrinsicMembers: {
     Entity: ["name"],
@@ -348,6 +364,7 @@ export const runtimeManifest: RuntimeManifest = {
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
     Route: ["name", "keepAlive", "visible", "active"],
     Provider: ["name", "context", "value", "addReader", "removeReader"],
+    Layer: ["name", "blend", "childBlend", "clear", "opacity"],
     Flex: [...FLEX_FIELDS, "contains", "boxPoint", "focusPoint", "onNavigate"],
     // A widget is a Flex with more: its members are Flex's fields, and what it adds (the methods Flex has are its prototype's, not its own).
     Slider: [
@@ -417,6 +434,7 @@ export const runtimeManifest: RuntimeManifest = {
     Router: ["route"],
     Route: ["name"],
     Provider: ["context", "value"],
+    Layer: [],
   },
   intrinsicHooks: {
     AnimatedSprite: ["onUpdate"],
@@ -433,6 +451,7 @@ export const runtimeManifest: RuntimeManifest = {
     Text: { align: TEXT_ALIGNS },
     Game: { upscale: ["nearest", "sharp"] },
     Particles: { space: PARTICLE_SPACES },
+    Layer: { blend: BLEND_MODES, childBlend: BLEND_MODES },
     Flex: {
       direction: FLEX_DIRECTIONS,
       alignItems: FLEX_ALIGN_ITEMS,
@@ -651,6 +670,7 @@ export const runtimeManifest: RuntimeManifest = {
   ],
   transformIntrinsics: [
     "Entity",
+    "Layer",
     "Sprite",
     "Collider",
     "Text",

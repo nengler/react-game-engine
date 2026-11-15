@@ -20,6 +20,8 @@ import {
   Tilemap,
   Particles,
   Fade,
+  Layer,
+  type BlendMode,
   Route,
   Router,
   findTilemap,
@@ -42,6 +44,14 @@ import {
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
 import { borderRoom, Layouter, type MeasuredSize } from "./layout.ts";
 import {
+  RGE_BLEND_ADD,
+  RGE_BLEND_MULTIPLY,
+  RGE_BLEND_NORMAL,
+  RGE_BLEND_SCREEN,
+  RGE_OP_LAYER_BEGIN,
+  RGE_OP_LAYER_BEGIN_LEN,
+  RGE_OP_LAYER_END,
+  RGE_OP_LAYER_END_LEN,
   RGE_OP_BOX,
   RGE_OP_BOX_LEN,
   RGE_OP_ELLIPSE,
@@ -183,9 +193,24 @@ function recordLength(op: number): number {
       return RGE_OP_SCISSOR_END_LEN;
     case RGE_OP_CANVAS:
       return RGE_OP_CANVAS_LEN;
+    case RGE_OP_LAYER_BEGIN:
+      return RGE_OP_LAYER_BEGIN_LEN;
+    case RGE_OP_LAYER_END:
+      return RGE_OP_LAYER_END_LEN;
     default:
       throw new Error(`Unknown draw op ${op}.`);
   }
+}
+
+/** A `<Layer>`'s blend mode as the native side takes it. */
+function blendCode(mode: BlendMode): number {
+  return mode === "add"
+    ? RGE_BLEND_ADD
+    : mode === "multiply"
+      ? RGE_BLEND_MULTIPLY
+      : mode === "screen"
+        ? RGE_BLEND_SCREEN
+        : RGE_BLEND_NORMAL;
 }
 
 /**
@@ -260,6 +285,8 @@ export class DrawList {
    */
   alpha = 1;
   readonly #alphas: number[] = [];
+  /** Layers open (`layerBegin`): inside one, `setZ` changes nothing, so a layer's records stay together, at its own z. */
+  #layerDepth = 0;
 
   /** Draw what is written from now on, until the matching `popAlpha`, at `alpha` times the opacity it is at: a faded box and all that is in it. */
   pushAlpha(alpha: number): void {
@@ -275,6 +302,7 @@ export class DrawList {
   reset(): void {
     this.alpha = 1;
     this.#alphas.length = 0;
+    this.#layerDepth = 0;
     this.length = 0;
     this.texts.length = 0;
     this.#zRuns.length = 0;
@@ -305,9 +333,9 @@ export class DrawList {
     this.#clipRuns.push(this.length, this.#clip);
   }
 
-  /** The draw order of the records written from now on. Only a change is kept. */
+  /** The draw order of the records written from now on. Only a change is kept, and none inside a layer. */
   setZ(z: number): void {
-    if (z === this.#z) return;
+    if (z === this.#z || this.#layerDepth > 0) return;
     this.#z = z;
     this.#zRuns.push(this.length, z);
   }
@@ -672,6 +700,30 @@ export class DrawList {
     this.records[at + 2] = color;
   }
 
+  /**
+   * Draw what is written from now on into a layer, until the matching `layerEnd`: cleared to `clear`, each drawable blended with
+   * `childBlend` (an `RGE_BLEND_*`). What is inside is drawn at full opacity; the opacity it is at goes on the layer as a whole.
+   */
+  layerBegin(clear: PackedColor, childBlend: number): void {
+    const at = this.#reserve(RGE_OP_LAYER_BEGIN_LEN);
+    this.records[at] = RGE_OP_LAYER_BEGIN;
+    this.records[at + 1] = clear;
+    this.records[at + 2] = childBlend;
+    this.#alphas.push(this.alpha);
+    this.alpha = 1;
+    this.#layerDepth++;
+  }
+
+  /** Close the innermost layer and lay it over what is under it with `blend`, at `opacity` times the opacity it is at. */
+  layerEnd(blend: number, opacity: number): void {
+    this.#layerDepth--;
+    this.alpha = this.#alphas.pop() as number;
+    const at = this.#reserve(RGE_OP_LAYER_END_LEN);
+    this.records[at] = RGE_OP_LAYER_END;
+    this.records[at + 1] = blend;
+    this.records[at + 2] = fadeColor(0xffffffff, Math.min(1, Math.max(0, opacity)) * this.alpha);
+  }
+
   /** A box with a border inside its edge and rounded corners: the record `RGE_OP_BOX`. A fill or border colour of 0 (no alpha) draws nothing. */
   box(
     world: WorldTransform,
@@ -843,6 +895,8 @@ const KIND_PARTICLES = 11;
 const KIND_FADE = 12;
 const KIND_ROUTE = 13;
 const KIND_ROUTER = 14;
+/** A `<Layer>`: its children go between a layer-begin and a layer-end record. */
+const KIND_LAYER = 15;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
@@ -892,7 +946,9 @@ function classCode(object: GameObject): number {
                                 ? KIND_ROUTE
                                 : object instanceof Router
                                   ? KIND_ROUTER
-                                  : KIND_NONE;
+                                  : object instanceof Layer
+                                    ? KIND_LAYER
+                                    : KIND_NONE;
     code = kind;
     // A tilemap writes only the cells the view shows, so its records change when the camera moves without anything stamping it.
     if (
@@ -904,7 +960,9 @@ function classCode(object: GameObject): number {
       kind === KIND_TILEMAP
     )
       code |= FLAG_VOLATILE;
-    if (kind === KIND_FLEX) code |= FLAG_OPAQUE;
+    // A layer's records are its children's between two records of its own, with its opacity on the closing one: never copied.
+    if (kind === KIND_FLEX || kind === KIND_LAYER) code |= FLAG_OPAQUE;
+    if (kind === KIND_LAYER) code |= FLAG_VOLATILE;
     // A class that overrides a per-tick hook may write its own transform or colour from it, which nothing reports, unless it is
     // a built-in or a compiled component (the compiler marks those `managed`; the marker is an own property, so a hand-written subclass of one is not).
     const ownProperty = (name: string): boolean => Object.prototype.hasOwnProperty.call(object.constructor, name);
@@ -1399,6 +1457,13 @@ export class FrameBuilder {
         case KIND_ROUTER:
           if ((node as Router).cover > 0) covers.push(node as Router);
           break;
+        case KIND_LAYER:
+          // An empty layer draws nothing; one with children opens here and closes after them, below.
+          if (count > 0) {
+            if (drawZ !== listZ) list.setZ((listZ = drawZ));
+            list.layerBegin(this.#color((node as Layer).clear), blendCode((node as Layer).childBlend));
+          }
+          break;
         case KIND_FADE:
           this.#warner.once("fade-world", "A <Fade> only draws inside a <Hud>: this one, in the world, does nothing.");
           break;
@@ -1579,6 +1644,11 @@ export class FrameBuilder {
         }
       }
       flatWalk = flat && !faded;
+      if (kind === KIND_LAYER) {
+        list.layerEnd(blendCode((node as Layer).blend), (node as Layer).opacity);
+        // Inside the layer `setZ` did nothing, whatever the children asked: the list is still at the layer's z.
+        listZ = drawZ;
+      }
       if (kind === KIND_FLEX) {
         if ((node as Flex).overflow !== "visible") list.popClip();
         // The scroll bars go over the content, outside the box's own clip (but inside any around it), at the box's opacity.
@@ -1766,6 +1836,8 @@ export class FrameBuilder {
         let hudAnyZ = false;
         const hudPointerZs: number[] = [];
         const hudPointers: Pressable[] = [];
+        /** The z of each layer open in this HUD, to go back to when it closes. */
+        const hudLayerZs: number[] = [];
         listZ = 0;
         for (const child of hud.children) {
           walkTree(
@@ -1836,12 +1908,23 @@ export class FrameBuilder {
                 case KIND_CAMERA:
                   this.#warner.once("hud-camera", "A <Camera> inside a <Hud> does nothing: the HUD is drawn through no camera.");
                   break;
+                case KIND_LAYER:
+                  if (object.children.length > 0) {
+                    if (z !== listZ) list.setZ((listZ = z));
+                    list.layerBegin(this.#color((object as Layer).clear), blendCode((object as Layer).childBlend));
+                    hudLayerZs.push(z);
+                  }
+                  break;
               }
             },
             hudWorld,
             0,
             true,
             (object, kind) => {
+              if (kind === KIND_LAYER && object.children.length > 0) {
+                list.layerEnd(blendCode((object as Layer).blend), (object as Layer).opacity);
+                listZ = hudLayerZs.pop() as number;
+              }
               if (kind === KIND_FLEX) {
                 if ((object as Flex).overflow !== "visible") list.popClip();
                 const bars = (object as Flex).overflow === "scroll" ? this.#scrollbarAt.get(object as Flex) : undefined;

@@ -2011,6 +2011,24 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
 - **Rules stay pure.** Kite's `stepRun` reports events and never calls a store, so the solver and the tests step it with no
   side effects; the game state turns events into effects (`effects.ts`, `playEvents`).
 
+## Layers (2026-11-15)
+
+`<Layer blend clear childBlend opacity>` is a built-in container whose children are drawn off screen and then laid over what is under
+it with a blend mode (ABI v10, NATIVE_PLAN.md). It is the first piece of lighting and of shaders (NEXT_PRIORITIES.md, "Now"): a light map
+is a `multiply` layer cleared to the darkness, with the lights in it drawn with `childBlend="add"`; a shader will take a layer as its input.
+
+- **A container, not a prop on each drawable.** A blend mode on a sprite would be a state change in the record stream, and the frame is
+  sorted by `z` after it is written, which would move a sprite away from the state it needs. A layer's records are one block between a
+  begin and an end, so they move together. Inside one, `z` is ignored (`DrawList.setZ` does nothing while a layer is open) and children
+  draw in tree order; the layer as a whole has its own `z`.
+- **The layer covers the target** (the screen, or the canvas under a `<Screen>`): its children are placed through the same view as
+  anything else, so a light follows the world under the camera. A layer in a `<Hud>` works the same way through the HUD's view.
+- **Opacity applies once.** What is drawn inside a layer is drawn at full opacity; the opacity it is under, and its own, go on the end
+  record, so a faded layer is not faded twice.
+- **Never reused from the last frame** (`FLAG_OPAQUE | FLAG_VOLATILE` in `draw.ts`): its records are rewritten each frame, as a
+  `<Flex>`'s are. An empty layer writes nothing.
+- The compiler knows it from the manifest: a container, its `blend` and `childBlend` checked as literals, its props following state.
+
 ## Custom hooks (priority 7)
 
 "Hooks are compiler intrinsics" extends to the ones an author writes. A function named `use…` (not a built-in hook, not the
