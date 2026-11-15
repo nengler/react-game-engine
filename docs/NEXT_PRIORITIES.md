@@ -41,13 +41,20 @@ Decided 2026-11-10. Once priority 5 lands, every ranked item above is done or de
 
 This finishes priority 1. Most useful now that the HUD, `<Flex>`, the fixed resolution and full screen are in.
 
+**The target is macOS (decided 2026-11-15 by the owner).** The owner will make games on a Mac, so the real machine to play on is a
+Mac first. Nothing has been built or run on macOS yet: `librge`'s CMake build, `rge dev`, and `rge package` (the Node single
+executable and the Rust host) are written for it but unverified, and CI runs on Linux only. A Linux desktop stays useful, second.
+
 **Work**
 
+- Build and run on macOS first (`npm run native:build`, `npm run play:demo`, `npm run package`), and file what breaks; then the
+  checks below on a Mac, and a macOS runner in CI if it builds.
 - Run `npm run play:demo` on a Linux desktop: the window and resizing, the 3× default and `fit="expand"`, full screen, arrow keys and WASD, both Shift keys, a press on the HUD button while the camera moves, and the click sound.
 - Run the packaged build (`npm run package`) the same way, under both the default V8 build and `--engine quickjs`.
 
 **Done when**
 
+- [ ] The demo builds, plays and packages on macOS, with any findings filed or fixed
 - [ ] The demo has been played on a Linux desktop, under Node and as a packaged build, with any findings filed or fixed
 - [x] Sound plays (the author, playing Kite on a Linux desktop, 2026-11-11)
 - [ ] Whether `native-desktop` in CI builds raylib once is checked (the open item from priority 1)

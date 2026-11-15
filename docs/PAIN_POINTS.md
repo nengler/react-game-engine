@@ -139,7 +139,21 @@ fragment of several roots, `switch` and `let` in the body, a function of the com
   `if (!hero) return null;`). An RGE error inside a moved early return points at the last `return`; TypeScript's own errors keep
   their place.
 - ~~`import * as K from "./constants.ts"` is refused~~: a `.ts` module may be imported whole; Kite's `Runner.tsx` does.
-- `useReducer` does not exist.
+- `useReducer` does not exist. *Kept out (2026-11-15):* `useMutable` and plain functions do its job, and the game state is data and
+  actions already.
+
+**Compiled one by one again, 2026-11-15** (eight everyday components in the `useMutable` style). Fixed then:
+
+- ~~`useMutable({ gold: START_GOLD })` could not infer an imported constant~~ (and every later write to `s` had an error of its own):
+  an imported constant has its declared type, widened; a call of an imported function, the type it returns. `s.hero.hp -= 1` on an
+  object one of the game's own functions made is a write, as on any field (a runtime handle, `createBody()`, still is not).
+- ~~`const cost = k === null ? null : PRICES[k]` did not narrow at `cost !== null && gold >= cost`~~ (TS2531 in the generated file):
+  a derived conditional or `??` is one memo `const`.
+- ~~`{boss && <Text>{boss.hp}</Text>}`, `boss` from `.find()`, crashed the compiler~~ (a memo assumed the condition that was itself);
+  a memo read in a condition or a list's source is hoisted, so the branch reads the narrowed `const`.
+- ~~`reduce`; `[...list].sort(f)`~~: allowed (the sort of a copy made there is `toSorted`).
+- ~~`for (const foe of s.foes) { foe.hp -= 1; }`~~: lowered to a loop over the index (MUTABLE_STATE_FOLLOWUPS.md, item 3).
+- ~~`let msg: string;` assigned by a `switch` after it~~: declared the same way in the generated code.
 - A list inside a list item (RGE1209): the item has to become a component.
 
 **Different on purpose** (said in the guide, or to be):
