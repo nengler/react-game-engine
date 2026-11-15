@@ -503,7 +503,7 @@ updated.
 - [ ] Each engine addition has its design notes, tests, and a guide entry; the parity test passes; `npm run bench:check` stays
       within budget
 - [ ] The getting-started guide takes a new reader from an empty folder to a packaged game, checked by following it
-- [ ] A license is chosen
+- [x] A license is chosen (MIT, 2026-11-15)
 - [ ] A "Findings from the third game" section is added to `NEXT_PRIORITIES.md`, including which of Kite's and Hearth's findings
       held a third time
 - [ ] A person has played it in a window (priority 6), and what they found is filed or fixed

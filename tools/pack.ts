@@ -255,6 +255,7 @@ export function stagePackage(name: string, staging: string, version?: string): s
   const built: Json = {
     name: pkg.name,
     version: pkg.version,
+    license: pkg.license,
     type: "module",
     exports: mapExports(pkg.exports),
     dependencies: pkg.dependencies,
@@ -268,6 +269,8 @@ export function stagePackage(name: string, staging: string, version?: string): s
     cpSync(join(source, "templates"), join(stage, "templates"), { recursive: true });
   }
   writeFileSync(join(stage, "package.json"), `${JSON.stringify(built, null, 2)}\n`);
+  // The engine's license goes with every pack (npm includes a LICENSE file at a package's root).
+  cpSync(join(ROOT, "LICENSE"), join(stage, "LICENSE"));
   return stage;
 }
 
