@@ -159,3 +159,7 @@ try {
 
 Compiler output (`packages/*/generated`) is not committed: `npm run generate` makes it, and `npm test` and
 `npm run typecheck` run it first. CI does the same.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

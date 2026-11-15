@@ -287,7 +287,7 @@ Today a game is a workspace in this monorepo, compiled by a path into `packages/
 - [ ] A new game made from the template, in a folder outside this repository, compiles, plays and packages with the one command line
 - [ ] The guide takes a new reader from nothing to a packaged game, checked by following it from scratch
 - [ ] Every built-in and hook has a reference entry with an example
-- [ ] A license is chosen
+- [x] A license is chosen (MIT, 2026-11-15)
 - [ ] Everything in [ADVENTURE_PLAN.md](ADVENTURE_PLAN.md)'s "Done when"
 
 ### Findings from the third game

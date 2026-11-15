@@ -1,6 +1,7 @@
 {
   "name": "@rge/player-node",
   "version": "0.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "exports": {
