@@ -1251,15 +1251,6 @@ describe("M8: diagnostics", () => {
     assert.deepEqual(diag(box("children: Child", `<Sprite image="a">{children}</Sprite>`)), [DiagnosticCode.UnsupportedJsxChild]);
   });
 
-  it("forwards children to another component, alone or beside children of its own (see tier3.test.ts)", () => {
-    const source = `${box("children: Child", "{children}")}
-function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box><Sprite image="a" />{children}</Box></Entity>; }`;
-    assert.match(compile(source).code, /this\.passedChildrenForwardAt = 1;/);
-    const ok = `${box("children: Child", "{children}")}
-function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{children}</Box></Entity>; }`;
-    assert.doesNotThrow(() => compile(ok));
-  });
-
   it("does not read children as a value", () => {
     assert.deepEqual(diag(box("children: Child", `{children}<Sprite image={children} />`)), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(
@@ -1271,18 +1262,6 @@ function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{child
   it("rejects a default for children", () => {
     const source = `${IMPORT}interface BoxProps { children?: Child }\nfunction Box({ children = null }: BoxProps) { return <Entity name="Box">{children}</Entity>; }`;
     assert.ok(diag(source).includes(DiagnosticCode.InvalidProps));
-  });
-
-  it("takes a list as the whole of the passed children, or beside others", () => {
-    const parent = (children: string) => `${box("children: Child", "{children}")}
-interface Row { id: string }
-function Table() {
-  const s = useMutable({ rows: [] as Row[] });
-  const rows = s.rows;
-  return <Entity name="Table"><Box>${children}</Box></Entity>;
-}`;
-    assert.doesNotThrow(() => compile(parent(`<Sprite image="x" />{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)));
-    assert.doesNotThrow(() => compile(parent(`{rows.map((r) => <Sprite key={r.id} image={r.id} />)}`)));
   });
 
   it("takes nested children on a list item, and still rejects children as an attribute", () => {

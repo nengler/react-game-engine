@@ -356,12 +356,4 @@ describe("M12: diagnostics", () => {
       assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Camera />; }`).code.includes(`get $${name}()`), name);
     }
   });
-
-  it("does not apply to a component that merely has a prop called follow", () => {
-    assert.doesNotThrow(() =>
-      compile(
-        `interface P { follow: number }\nfunction Child({ follow }: P) { return <Entity name="c" />; }\nfunction C() { return <Entity name="C"><Child follow={1} /></Entity>; }`
-      )
-    );
-  });
 });

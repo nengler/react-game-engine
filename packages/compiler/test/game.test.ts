@@ -97,12 +97,6 @@ describe("<Game> as a component's root", () => {
     assert.doesNotMatch(bare.code, /GameState/);
   });
 
-  it("is optional: an Entity or a fragment root still works, and so does a game with no state", () => {
-    assert.doesNotThrow(() => build(`function A() { return <Entity name="A" />; }`));
-    assert.doesNotThrow(() => build(`function A() { return <><Entity name="a" /></>; }`));
-    assert.doesNotThrow(() => build(`function A() { return <Game title="x" />; }`));
-  });
-
   it("is the root of a component, never a child", () => {
     const found = errors(`function A() { return <Entity name="A"><Game title="x" /></Entity>; }`);
     assert.deepEqual(

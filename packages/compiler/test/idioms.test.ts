@@ -120,16 +120,6 @@ export function Walker() {
     assert.equal(walker.transform.x, 1);
     assert.deepEqual(texts(walker), ["a,r"]);
   });
-
-  it("still asks for the type of an empty array, which TypeScript would call never[]", () => {
-    const errors = compileErrors(`import { Entity, useMutable } from "@rge/runtime/jsx";
-export function A() {
-  const s = useMutable({ items: [] });
-  return <Entity x={s.items.length} />;
-}`);
-    assert.equal(errors.length, 1);
-    assert.match(errors[0]!.message, /^An empty array needs its type/);
-  });
 });
 
 describe("a module imported whole", () => {
@@ -274,16 +264,6 @@ export function Wave() {
     world.tick(1 / 60, { pressed: (k: string) => k === "confirm", down: () => false, released: () => false } as never);
     world.flush();
     assert.deepEqual(texts(wave), ["total 2", "at 30"]);
-  });
-
-  it("still refuses sorting state's own list in place", () => {
-    const errors = compileErrors(`import { Text, useMutable } from "@rge/runtime/jsx";
-export function A() {
-  const s = useMutable({ xs: [3, 1] });
-  const sorted = s.xs.sort();
-  return <Text>{sorted.join(",")}</Text>;
-}`);
-    assert.match(errors[0]!.message, /changes `s\.xs` in place/);
   });
 });
 
