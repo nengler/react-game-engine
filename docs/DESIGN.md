@@ -2011,6 +2011,46 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
 - **Rules stay pure.** Kite's `stepRun` reports events and never calls a store, so the solver and the tests step it with no
   side effects; the game state turns events into effects (`effects.ts`, `playEvents`).
 
+## Layers (2026-11-15)
+
+`<Layer blend clear childBlend opacity>` is a built-in container whose children are drawn off screen and then laid over what is under
+it with a blend mode (ABI v10, NATIVE_PLAN.md). It is the first piece of lighting and of shaders (NEXT_PRIORITIES.md, "Now"): a light map
+is a `multiply` layer cleared to the darkness, with the lights in it drawn with `childBlend="add"`; a shader will take a layer as its input.
+
+- **A container, not a prop on each drawable.** A blend mode on a sprite would be a state change in the record stream, and the frame is
+  sorted by `z` after it is written, which would move a sprite away from the state it needs. A layer's records are one block between a
+  begin and an end, so they move together. Inside one, `z` is ignored (`DrawList.setZ` does nothing while a layer is open) and children
+  draw in tree order; the layer as a whole has its own `z`.
+- **The layer covers the target** (the screen, or the canvas under a `<Screen>`): its children are placed through the same view as
+  anything else, so a light follows the world under the camera. A layer in a `<Hud>` works the same way through the HUD's view.
+- **Opacity applies once.** What is drawn inside a layer is drawn at full opacity; the opacity it is under, and its own, go on the end
+  record, so a faded layer is not faded twice.
+- **Never reused from the last frame** (`FLAG_OPAQUE | FLAG_VOLATILE` in `draw.ts`): its records are rewritten each frame, as a
+  `<Flex>`'s are. An empty layer writes nothing.
+- The compiler knows it from the manifest: a container, its `blend` and `childBlend` checked as literals, its props following state.
+- **Shaders** (2026-11-15, ABI v11) go on a layer, run as it is laid over: `<Layer shader="cave.glsl" params={[0.12]}>`. A shader is an
+  asset like an image, one GLSL function `vec4 effect(vec2 uv)` that the engine wraps for its platform, so a game's shaders are not
+  tied to desktop GLSL. Not a shader on each sprite: a layer is already the off-screen picture a post-process needs, and a sprite with
+  an effect is a layer with one child. The software renderer runs none and says so (NATIVE_PLAN.md, "ABI v11").
+- **Lights** (2026-11-15, ABI v12): `<Lighting ambient>` is a `Layer` subclass fixed to `multiply` over the world and `add` among its
+  children, cleared to the ambient colour; `<Light radius color intensity>` is a leaf drawn as a native falloff (`RGE_OP_LIGHT`), so a
+  light needs no image and looks the same in tests. No shadows: walls do not block light. A light outside a `<Lighting>` is drawn as a
+  glow over what is under it, with normal blending (black at its edge, so it is meant for a lighting layer).
+
+## Collider shapes (2026-11-15)
+
+`<Collider shape="circle">` is the circle inside its box; `shape="polygon" points={[…]}` a convex polygon in its own pixels, inside
+its box. Decided as the smaller of two scopes (NEXT_PRIORITIES.md, "Now", step 8): shapes change what **touches**, not what **stops**.
+
+- **Boxes first, then the shape.** The tracker's sweep, its bands, the native broad phase and the incremental update all still find
+  pairs by box; a pair in which either collider has a shape is then tested exactly (`shapesTouch` in `collide.ts`, the separating
+  axis test in `runtime/src/shapes.ts`), with each collider turned and scaled with its object. Two plain boxes skip it, so a game that
+  uses no shapes pays one property read per pair, and a box is still upright against a box (its rotated bounds), as before. Against a
+  shape, a turned box is exact.
+- **Body queries** (`touching`, `overlapping`) filter by shape the same way (`World.tagIn`, `collidersIn`), against the body's box.
+- **Not built:** solid shapes (a body still stops at a solid collider's box: no slopes, no round pillars), concave polygons, and
+  drawing shapes in the debug overlay (it draws boxes).
+
 ## Custom hooks (priority 7)
 
 "Hooks are compiler intrinsics" extends to the ones an author writes. A function named `use…` (not a built-in hook, not the

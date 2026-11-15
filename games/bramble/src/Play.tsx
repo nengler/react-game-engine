@@ -1,4 +1,4 @@
-import { Camera, Entity, Hud, ParticleLayer, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Hud, Light, Lighting, ParticleLayer, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
 
 import { Dialogue } from "./Dialogue.tsx";
 import { fx } from "./effects.ts";
@@ -8,7 +8,7 @@ import { Pause } from "./Pause.tsx";
 import { BELLS_NEEDED, MAX_HEARTS } from "./rules/constants.ts";
 import { readInput } from "./rules/controls.ts";
 import { mapPixels } from "./rules/maps.ts";
-import { heroOf } from "./rules/view.ts";
+import { glowsOf, heroOf } from "./rules/view.ts";
 import { World } from "./World.tsx";
 
 /** The play screen: the map, the character in a camera that stays inside it, and the HUD. The one place the world is stepped. */
@@ -44,6 +44,16 @@ export function Play() {
         />
       </Camera>
       <ParticleLayer particles={fx} />
+      {/* The cave is dark: lit only by the lantern, by the items still lying there and by the wisps, through a shader that makes the
+          light flicker and the edges darker (the software renderer, in tests, draws it without). */}
+      {run.map === "cave" && (
+        <Lighting ambient="#16162c" shader="cave.glsl" params={[0.12]}>
+          <Light radius={56} color="#ffe2b0" x={x + 8} y={y + 8} />
+          {glowsOf(run).map((g) => (
+            <Light key={g.id} radius={g.radius} color={g.color} intensity={g.intensity} x={g.x} y={g.y} />
+          ))}
+        </Lighting>
+      )}
       <Hud>
         <Text x={4} y={3} color="#ff6b6b">{`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`}</Text>
         {run.notice !== null && <Notice text={run.notice} />}

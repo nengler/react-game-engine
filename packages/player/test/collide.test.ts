@@ -1140,3 +1140,62 @@ describe("CollisionTracker: a host's broad phase", () => {
     }
   });
 });
+
+describe("CollisionTracker with shaped colliders", () => {
+  /** `collidersOf`, keeping the entry of a collider that has not moved, as the frame builder does, so the tracker sees what moved. */
+  function stableColliders(): (world: World) => ColliderEntry[] {
+    const last = new Map<Collider, ColliderEntry>();
+    return (world) =>
+      collidersOf(world).map((entry) => {
+        const before = last.get(entry.collider);
+        const same = before !== undefined && before.world.x === entry.world.x && before.world.y === entry.world.y;
+        const kept = same ? before : entry;
+        last.set(entry.collider, kept);
+        return kept;
+      });
+  }
+
+  function shaped(name: string, x: number, y: number, log: string[], shape: "box" | "circle"): Entity {
+    const entity = new Entity({ name });
+    entity.transform.x = x;
+    entity.transform.y = y;
+    entity.addChild(new Collider({ width: 10, height: 10, shape, onCollisionEnter: (other) => log.push(`${name} met ${other.owner}`) }));
+    return entity;
+  }
+
+  for (const [path, tracker] of [
+    ["the sweep", () => new CollisionTracker(undefined, false)],
+    ["the incremental update", () => new CollisionTracker()],
+  ] as const) {
+    it(`reports two circles only once they overlap, not when their boxes meet at the corners (${path})`, () => {
+      const world = new World();
+      const log: string[] = [];
+      const a = shaped("a", 0, 0, log, "circle");
+      const b = shaped("b", 100, 100, log, "circle");
+      world.mount(a);
+      world.mount(b);
+      // Colliders far away, so one that moves is few enough for the incremental update to take it.
+      for (let i = 0; i < 16; i++) world.mount(shaped(`far${i}`, 1000 + i * 20, 1000, log, "box"));
+      const t = tracker();
+      const entries = stableColliders();
+      t.update(world, entries(world));
+      b.transform.x = 8;
+      b.transform.y = 8;
+      assert.equal(t.update(world, entries(world)), 0, "boxes overlap at a corner; circles do not");
+      b.transform.x = 6;
+      b.transform.y = 6;
+      assert.equal(t.update(world, entries(world)), 1);
+      assert.deepEqual(log, ["a met b", "b met a"]);
+      if (path === "the incremental update") assert.ok(t.incrementalFrames >= 2, "the moves were taken incrementally");
+      else assert.equal(t.incrementalFrames, 0);
+    });
+  }
+
+  it("leaves a pair of plain boxes as it was: their boxes are what touches", () => {
+    const world = new World();
+    const log: string[] = [];
+    world.mount(shaped("a", 0, 0, log, "box"));
+    world.mount(shaped("b", 8, 8, log, "box"));
+    assert.equal(new CollisionTracker().update(world, collidersOf(world)), 1);
+  });
+});

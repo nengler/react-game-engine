@@ -19,6 +19,16 @@ import {
   RGE_OP_CANVAS_LEN,
   RGE_OP_BOX,
   RGE_OP_BOX_LEN,
+  RGE_OP_LAYER_BEGIN,
+  RGE_OP_LAYER_BEGIN_LEN,
+  RGE_OP_LAYER_END,
+  RGE_OP_LAYER_END_LEN,
+  RGE_OP_LIGHT,
+  RGE_OP_LIGHT_LEN,
+  RGE_LAYER_MAX,
+  RGE_BLEND_ADD,
+  RGE_BLEND_MULTIPLY,
+  RGE_BLEND_SCREEN,
   RGE_OP_ELLIPSE,
   RGE_OP_ELLIPSE_LEN,
   RGE_OP_RECT,
@@ -48,6 +58,13 @@ interface Placed {
 }
 
 /** A draw record in readable form; colours are `#rrggbbaa` and textures are the path they were loaded from. */
+/** A blend mode by name, as `<Layer blend>` takes it. */
+export type BlendName = "normal" | "add" | "multiply" | "screen";
+
+function blendName(code: number): BlendName {
+  return code === RGE_BLEND_ADD ? "add" : code === RGE_BLEND_MULTIPLY ? "multiply" : code === RGE_BLEND_SCREEN ? "screen" : "normal";
+}
+
 export type DecodedRecord =
   | {
       readonly op: "canvas";
@@ -61,6 +78,31 @@ export type DecodedRecord =
     }
   | { readonly op: "scissor"; readonly x: number; readonly y: number; readonly width: number; readonly height: number }
   | { readonly op: "scissorEnd" }
+  /** A light (ABI v12): `color` at the middle (its alpha the strength) falling off to black at `radius`. */
+  | {
+      readonly op: "light";
+      readonly x: number;
+      readonly y: number;
+      readonly rotation: number;
+      readonly scaleX: number;
+      readonly scaleY: number;
+      readonly radius: number;
+      readonly color: string;
+    }
+  /** A layer opens (ABI v10): what follows is drawn into it, cleared to `clear`, each drawable blended with `childBlend`. */
+  | { readonly op: "layerBegin"; readonly clear: string; readonly childBlend: BlendName }
+  /**
+   * The innermost layer closes and is laid over what is below it with `blend`, its colours multiplied by `tint`, through `shader` (the
+   * path it was loaded from, or null) with `time` and its eight `params` (ABI v11).
+   */
+  | {
+      readonly op: "layerEnd";
+      readonly blend: BlendName;
+      readonly tint: string;
+      readonly shader: string | null;
+      readonly time: number;
+      readonly params: readonly number[];
+    }
   | {
       readonly op: "view";
       readonly a: number;
@@ -127,6 +169,8 @@ export interface RecordingOptions {
   readonly missingSounds?: Iterable<string>;
   /** Music paths that fail to load (handle -1). */
   readonly missingMusic?: Iterable<string>;
+  /** Shader paths that fail to load (handle -1), as a missing file or one that does not compile would. */
+  readonly missingShaders?: Iterable<string>;
   /** Entries the backend's saved data starts with (name to text): a replay can start from a save. */
   readonly storage?: Readonly<Record<string, string>>;
   /** The size `textureSize` reports for a texture path. Default 16 × 16. */
@@ -147,6 +191,10 @@ export class RecordingBackend implements Backend {
   readonly frames: RecordedFrame[] = [];
   /** Every `loadTexture` call, repeats included: the player should load a path once. */
   readonly textureLoads: string[] = [];
+  /** Every `loadShader` call, repeats included. */
+  readonly shaderLoads: string[] = [];
+  readonly #shaders: string[] = [];
+  readonly #missingShaders: Set<string>;
   readonly soundLoads: string[] = [];
   /** The path of each sound played, in order. */
   readonly plays: string[] = [];
@@ -185,6 +233,7 @@ export class RecordingBackend implements Backend {
     this.#missing = new Set(options.missingTextures);
     this.#missingSounds = new Set(options.missingSounds);
     this.#missingMusic = new Set(options.missingMusic);
+    this.#missingShaders = new Set(options.missingShaders);
     this.#textureSizes = options.textureSizes ?? {};
     this.stored = new Map(Object.entries(options.storage ?? {}));
   }
@@ -227,6 +276,12 @@ export class RecordingBackend implements Backend {
     this.textureLoads.push(path);
     if (this.#missing.has(path)) return -1;
     return handleFor(this.#textures, path);
+  }
+
+  loadShader(path: string): number {
+    this.shaderLoads.push(path);
+    if (this.#missingShaders.has(path)) return -1;
+    return handleFor(this.#shaders, path);
   }
 
   loadSound(path: string): number {
@@ -312,6 +367,7 @@ export class RecordingBackend implements Backend {
 
   /** Check the frame's records, and when `out` is given, read them into it. */
   #decode(records: Float64Array, length: number, texts: readonly string[], out: DecodedRecord[] | null): void {
+    let depth = 0;
     for (let at = 0; at < length;) {
       const op = records[at] as number;
       const placed = (): Placed => ({
@@ -362,6 +418,35 @@ export class RecordingBackend implements Backend {
           need(RGE_OP_SCISSOR_END_LEN);
           out?.push({ op: "scissorEnd" });
           at += RGE_OP_SCISSOR_END_LEN;
+          break;
+        case RGE_OP_LIGHT:
+          need(RGE_OP_LIGHT_LEN);
+          out?.push({ op: "light", ...placed(), radius: records[at + 6]!, color: colorToHex(records[at + 7]!) });
+          at += RGE_OP_LIGHT_LEN;
+          break;
+        case RGE_OP_LAYER_BEGIN:
+          need(RGE_OP_LAYER_BEGIN_LEN);
+          if (++depth > RGE_LAYER_MAX) throw new Error(`Layers nested deeper than ${RGE_LAYER_MAX} at ${at}.`);
+          out?.push({ op: "layerBegin", clear: colorToHex(records[at + 1]!), childBlend: blendName(records[at + 2]!) });
+          at += RGE_OP_LAYER_BEGIN_LEN;
+          break;
+        case RGE_OP_LAYER_END:
+          need(RGE_OP_LAYER_END_LEN);
+          if (--depth < 0) throw new Error(`A layer end with no layer open at ${at}.`);
+          {
+            const handle = records[at + 3]!;
+            const shader = handle >= 0 ? this.#shaders[handle] : null;
+            if (shader === undefined) throw new Error(`Layer end record uses shader handle ${handle}, which was never loaded.`);
+            out?.push({
+              op: "layerEnd",
+              blend: blendName(records[at + 1]!),
+              tint: colorToHex(records[at + 2]!),
+              shader,
+              time: records[at + 4]!,
+              params: Array.from(records.subarray(at + 5, at + 13)),
+            });
+          }
+          at += RGE_OP_LAYER_END_LEN;
           break;
         case RGE_OP_SPRITE: {
           need(RGE_OP_SPRITE_LEN);

@@ -7,6 +7,9 @@ import {
   Fade,
   Music,
   Provider,
+  Layer,
+  Light,
+  Lighting,
   Route,
   Router,
   createContext,
@@ -97,6 +100,9 @@ describe("runtime manifest", () => {
       Router: new Router({ route: "a" }),
       Route: new Route({ name: "a" }),
       Provider: new Provider({ context: createContext(0), value: 0 }),
+      Layer: new Layer(),
+      Light: new Light({ radius: 10 }),
+      Lighting: new Lighting(),
     };
     const base = new Entity();
     for (const tag of runtimeManifest.intrinsics) {
@@ -188,6 +194,9 @@ describe("runtime manifest", () => {
       Router,
       Route,
       Provider,
+      Layer,
+      Light,
+      Lighting,
     };
     for (const tag of runtimeManifest.intrinsics) {
       const overridden = hooks.filter((hook) => Object.hasOwn(classes[tag]!.prototype, hook)).sort();
@@ -242,6 +251,9 @@ describe("runtime manifest", () => {
       Router,
       Route,
       Provider,
+      Layer,
+      Light,
+      Lighting,
     };
     for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
   });

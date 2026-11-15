@@ -24,6 +24,7 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     backend.set("close", Function::new(ctx.clone(), close)?.with_name("close")?)?;
     backend.set("setFullscreen", Function::new(ctx.clone(), set_fullscreen)?.with_name("setFullscreen")?)?;
     backend.set("loadTexture", Function::new(ctx.clone(), load_texture)?.with_name("loadTexture")?)?;
+    backend.set("loadShader", Function::new(ctx.clone(), load_shader)?.with_name("loadShader")?)?;
     backend.set("loadSound", Function::new(ctx.clone(), load_sound)?.with_name("loadSound")?)?;
     backend.set("playSound", Function::new(ctx.clone(), play_sound)?.with_name("playSound")?)?;
     backend.set("loadMusic", Function::new(ctx.clone(), load_music)?.with_name("loadMusic")?)?;
@@ -82,6 +83,12 @@ fn set_fullscreen(on: bool) -> bool {
 fn load_texture(path: String) -> i32 {
     let path = c_string(&path);
     unsafe { ffi::rge_load_texture(path.as_ptr()) }
+}
+
+/// A layer's shader (ABI v11): a handle, -1 when it could not be loaded, -2 where this build runs none.
+fn load_shader(path: String) -> i32 {
+    let path = c_string(&path);
+    unsafe { ffi::rge_load_shader(path.as_ptr()) }
 }
 
 fn load_sound(path: String) -> i32 {

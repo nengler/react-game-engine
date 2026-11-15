@@ -8,6 +8,7 @@ import { takeTreeRestore } from "./gameTree.ts";
 import { restoreHotState } from "./hot.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 import { activeProfiler, PROFILE_INPUT, PROFILE_RENDER, PROFILE_UPDATE } from "./profile.ts";
+import { geometryOf, geometryOverlapsBox } from "./shapes.ts";
 import { countStep } from "./Sound.ts";
 import { findTilemap } from "./tilemap.ts";
 
@@ -413,16 +414,18 @@ export class World implements BodySpace {
     return null;
   }
 
-  /** `BodySpace`: whether a collider with this tag overlaps `box`. */
+  /** `BodySpace`: whether a collider with this tag overlaps `box` (a shaped one, by its shape). */
   tagIn(box: Box, tag: string, ignore: GameObject): boolean {
-    for (const entry of this.#indexOf(tag).query(box)) if (!isUnder(entry.collider, ignore)) return true;
+    for (const entry of this.#indexOf(tag).query(box))
+      if (!isUnder(entry.collider, ignore) && shapeOverlaps(entry.collider, box)) return true;
     return false;
   }
 
-  /** `BodySpace`: every collider with this tag that overlaps `box`, in the order the colliders joined the world. */
+  /** `BodySpace`: every collider with this tag that overlaps `box` (a shaped one, by its shape), in the order the colliders joined the world. */
   collidersIn(box: Box, tag: string, ignore: GameObject): Contact[] {
     const out: Contact[] = [];
-    for (const entry of this.#indexOf(tag).query(box)) if (!isUnder(entry.collider, ignore)) out.push(entry.collider as unknown as Contact);
+    for (const entry of this.#indexOf(tag).query(box))
+      if (!isUnder(entry.collider, ignore) && shapeOverlaps(entry.collider, box)) out.push(entry.collider as unknown as Contact);
     return out;
   }
 
@@ -601,6 +604,13 @@ function menuOf(object: Pressable): Menu | null {
 function isUnder(object: GameObject, root: GameObject): boolean {
   for (let at: GameObject | null = object; at !== null; at = at.parent) if (at === root) return true;
   return false;
+}
+
+/** Whether a collider found by its box overlaps `box` by its shape: always for a plain box, which the box already answers. */
+function shapeOverlaps(collider: Collider, box: Box): boolean {
+  if (collider.shape === "box") return true;
+  const g = geometryOf(collider, collider.worldTransform());
+  return g !== null && geometryOverlapsBox(g, box.x, box.y, box.width, box.height);
 }
 
 /** A collider's box in world space: its top left at its world position, not scaled or turned (bodies are boxes on the grid). */

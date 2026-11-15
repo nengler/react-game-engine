@@ -20,6 +20,7 @@ export interface Native {
   /** Full screen on or off; false when librge cannot (no window, or a hidden one). */
   setFullscreen(on: boolean): boolean;
   loadTexture(path: string): number;
+  loadShader(path: string): number;
   loadSound(path: string): number;
   playSound(handle: number, volume: number): void;
   loadMusic(path: string): number;
@@ -126,6 +127,7 @@ export function loadNative(path: string): Native {
   const close = lib.func("void rge_close(void)");
   const setFullscreen = lib.func("int32_t rge_set_fullscreen(int32_t on)");
   const loadTexture = lib.func("int32_t rge_load_texture(const char *path)");
+  const loadShader = lib.func("int32_t rge_load_shader(const char *path)");
   const loadSound = lib.func("int32_t rge_load_sound(const char *path)");
   const playSound = lib.func("void rge_play_sound_ex(int32_t handle, double volume)");
   const loadMusic = lib.func("int32_t rge_load_music(const char *path)");
@@ -155,6 +157,7 @@ export function loadNative(path: string): Native {
     close: () => void close(),
     setFullscreen: (on) => (setFullscreen(on ? 1 : 0) as number) === 0,
     loadTexture: (path) => loadTexture(path) as number,
+    loadShader: (path) => loadShader(path) as number,
     loadSound: (path) => loadSound(path) as number,
     playSound: (handle, volume) => void playSound(handle, volume),
     loadMusic: (path) => loadMusic(path) as number,

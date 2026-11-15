@@ -127,7 +127,8 @@ npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host 
 
 ### Releases
 
-Pushing a tag `vX.Y.Z` runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the packs (as
+Pushing a tag `vX.Y.Z`, or running the Release workflow from the Actions tab with a version (it tags the branch it runs on),
+runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the packs (as
 `npm run dist`, stamped with that version) and attaches them to a GitHub release. A game outside this repository can depend
 on them by URL instead of building the engine itself (Linux x64 only, as the native binaries are built there):
 

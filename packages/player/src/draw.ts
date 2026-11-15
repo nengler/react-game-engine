@@ -20,6 +20,9 @@ import {
   Tilemap,
   Particles,
   Fade,
+  Layer,
+  Light,
+  type BlendMode,
   Route,
   Router,
   findTilemap,
@@ -42,6 +45,16 @@ import {
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
 import { borderRoom, Layouter, type MeasuredSize } from "./layout.ts";
 import {
+  RGE_BLEND_ADD,
+  RGE_BLEND_MULTIPLY,
+  RGE_BLEND_NORMAL,
+  RGE_BLEND_SCREEN,
+  RGE_OP_LAYER_BEGIN,
+  RGE_OP_LAYER_BEGIN_LEN,
+  RGE_OP_LAYER_END,
+  RGE_OP_LAYER_END_LEN,
+  RGE_OP_LIGHT,
+  RGE_OP_LIGHT_LEN,
   RGE_OP_BOX,
   RGE_OP_BOX_LEN,
   RGE_OP_ELLIPSE,
@@ -183,9 +196,28 @@ function recordLength(op: number): number {
       return RGE_OP_SCISSOR_END_LEN;
     case RGE_OP_CANVAS:
       return RGE_OP_CANVAS_LEN;
+    case RGE_OP_LAYER_BEGIN:
+      return RGE_OP_LAYER_BEGIN_LEN;
+    case RGE_OP_LAYER_END:
+      return RGE_OP_LAYER_END_LEN;
+    case RGE_OP_LIGHT:
+      return RGE_OP_LIGHT_LEN;
     default:
       throw new Error(`Unknown draw op ${op}.`);
   }
+}
+
+const NO_PARAMS: readonly number[] = [];
+
+/** A `<Layer>`'s blend mode as the native side takes it. */
+function blendCode(mode: BlendMode): number {
+  return mode === "add"
+    ? RGE_BLEND_ADD
+    : mode === "multiply"
+      ? RGE_BLEND_MULTIPLY
+      : mode === "screen"
+        ? RGE_BLEND_SCREEN
+        : RGE_BLEND_NORMAL;
 }
 
 /**
@@ -260,6 +292,8 @@ export class DrawList {
    */
   alpha = 1;
   readonly #alphas: number[] = [];
+  /** Layers open (`layerBegin`): inside one, `setZ` changes nothing, so a layer's records stay together, at its own z. */
+  #layerDepth = 0;
 
   /** Draw what is written from now on, until the matching `popAlpha`, at `alpha` times the opacity it is at: a faded box and all that is in it. */
   pushAlpha(alpha: number): void {
@@ -275,6 +309,7 @@ export class DrawList {
   reset(): void {
     this.alpha = 1;
     this.#alphas.length = 0;
+    this.#layerDepth = 0;
     this.length = 0;
     this.texts.length = 0;
     this.#zRuns.length = 0;
@@ -305,9 +340,9 @@ export class DrawList {
     this.#clipRuns.push(this.length, this.#clip);
   }
 
-  /** The draw order of the records written from now on. Only a change is kept. */
+  /** The draw order of the records written from now on. Only a change is kept, and none inside a layer. */
   setZ(z: number): void {
-    if (z === this.#z) return;
+    if (z === this.#z || this.#layerDepth > 0) return;
     this.#z = z;
     this.#zRuns.push(this.length, z);
   }
@@ -672,6 +707,48 @@ export class DrawList {
     this.records[at + 2] = color;
   }
 
+  /** A light (`RGE_OP_LIGHT`): `color` (its alpha the strength) at `world`, falling off to black at `radius`. */
+  light(world: WorldTransform, radius: number, color: PackedColor): void {
+    if (this.alpha === 0) return;
+    const at = this.#header(RGE_OP_LIGHT, RGE_OP_LIGHT_LEN, world);
+    this.records[at] = radius;
+    this.records[at + 1] = this.alpha === 1 ? color : fadeColor(color, this.alpha);
+  }
+
+  /**
+   * Draw what is written from now on into a layer, until the matching `layerEnd`: cleared to `clear`, each drawable blended with
+   * `childBlend` (an `RGE_BLEND_*`). What is inside is drawn at full opacity; the opacity it is at goes on the layer as a whole.
+   */
+  layerBegin(clear: PackedColor, childBlend: number): void {
+    const at = this.#reserve(RGE_OP_LAYER_BEGIN_LEN);
+    this.records[at] = RGE_OP_LAYER_BEGIN;
+    this.records[at + 1] = clear;
+    this.records[at + 2] = childBlend;
+    this.#alphas.push(this.alpha);
+    this.alpha = 1;
+    this.#layerDepth++;
+  }
+
+  /**
+   * Close the innermost layer and lay it over what is under it with `blend`, at `opacity` times the opacity it is at, through `shader`
+   * (a handle, or -1 for none) given `time` and up to eight `params` (the rest 0).
+   */
+  layerEnd(blend: number, opacity: number, shader = -1, time = 0, params: readonly number[] = NO_PARAMS): void {
+    this.#layerDepth--;
+    this.alpha = this.#alphas.pop() as number;
+    const at = this.#reserve(RGE_OP_LAYER_END_LEN);
+    const r = this.records;
+    r[at] = RGE_OP_LAYER_END;
+    r[at + 1] = blend;
+    r[at + 2] = fadeColor(0xffffffff, Math.min(1, Math.max(0, opacity)) * this.alpha);
+    r[at + 3] = shader;
+    r[at + 4] = time;
+    for (let i = 0; i < 8; i++) {
+      const p = params[i];
+      r[at + 5 + i] = typeof p === "number" && Number.isFinite(p) ? p : 0;
+    }
+  }
+
   /** A box with a border inside its edge and rounded corners: the record `RGE_OP_BOX`. A fill or border colour of 0 (no alpha) draws nothing. */
   box(
     world: WorldTransform,
@@ -773,6 +850,8 @@ function usableOpacity(a: number): number {
 export interface FrameBuilderOptions {
   /** Load a texture through the backend: a handle, or -1 if it could not be loaded. */
   loadTexture(path: string): number;
+  /** Load a layer's shader through the backend: a handle, -1 if it could not be loaded, -2 where shaders cannot run. Without it, none run. */
+  loadShader?: (path: string) => number;
   /** The width and line height in pixels of `text` drawn at `size`, from the backend. Without it, they are estimated (`estimateTextWidth`, and a line as tall as `size`). */
   measureText?: (text: string, size: number) => Size;
   /** The size in pixels of a loaded texture, from the backend. Without it, every texture measures 0 × 0. */
@@ -843,15 +922,21 @@ const KIND_PARTICLES = 11;
 const KIND_FADE = 12;
 const KIND_ROUTE = 13;
 const KIND_ROUTER = 14;
+/** A `<Layer>`: its children go between a layer-begin and a layer-end record. */
+const KIND_LAYER = 15;
+/** A `<Light>`: one light record. */
+const KIND_LIGHT = 16;
 /**
  * What each class is to the frame, found once per class: `instanceof` walks the prototype chain, and the walk asked up to seven
  * times per object. The low four bits are the kind (`KIND_*`); two flags say how the class affects reusing draw records.
  */
 const KINDS = new Map<Function, number>();
 /** The draw records of a subtree with this object in it are never reused: it is found by the walk each frame (it feeds a list besides the draw records, or is not drawn where it is). */
-const FLAG_VOLATILE = 16;
+const FLAG_VOLATILE = 32;
 /** Nothing below this object is reused either: what it does to its children is not reported (layout), or it may change itself at any time (a hook of a hand-written class). */
-const FLAG_OPAQUE = 32;
+const FLAG_OPAQUE = 64;
+/** The bits of a kind code that say what kind of object it is (`KIND_*`); the flags are above them. */
+const KIND_MASK = 31;
 
 function kindCode(object: GameObject): number {
   let code = object.drawKind;
@@ -892,7 +977,11 @@ function classCode(object: GameObject): number {
                                 ? KIND_ROUTE
                                 : object instanceof Router
                                   ? KIND_ROUTER
-                                  : KIND_NONE;
+                                  : object instanceof Layer
+                                    ? KIND_LAYER
+                                    : object instanceof Light
+                                      ? KIND_LIGHT
+                                      : KIND_NONE;
     code = kind;
     // A tilemap writes only the cells the view shows, so its records change when the camera moves without anything stamping it.
     if (
@@ -904,7 +993,9 @@ function classCode(object: GameObject): number {
       kind === KIND_TILEMAP
     )
       code |= FLAG_VOLATILE;
-    if (kind === KIND_FLEX) code |= FLAG_OPAQUE;
+    // A layer's records are its children's between two records of its own, with its opacity on the closing one: never copied.
+    if (kind === KIND_FLEX || kind === KIND_LAYER) code |= FLAG_OPAQUE;
+    if (kind === KIND_LAYER) code |= FLAG_VOLATILE;
     // A class that overrides a per-tick hook may write its own transform or colour from it, which nothing reports, unless it is
     // a built-in or a compiled component (the compiler marks those `managed`; the marker is an own property, so a hand-written subclass of one is not).
     const ownProperty = (name: string): boolean => Object.prototype.hasOwnProperty.call(object.constructor, name);
@@ -955,7 +1046,7 @@ const WALK_VOLATILE = 1;
 const WALK_OPAQUE = 2;
 
 function kindOf(object: GameObject): number {
-  return kindCode(object) & 15;
+  return kindCode(object) & KIND_MASK;
 }
 
 /**
@@ -1092,6 +1183,9 @@ export class FrameBuilder {
   readonly #textureSizes = new Map<number, Size>();
   readonly #textSizes = new Map<string, Size>();
   readonly #loadTexture: (path: string) => number;
+  readonly #loadShader: ((path: string) => number) | undefined;
+  /** Each layer shader's handle by its name under the assets folder: -1 for one that failed, -2 where none can run. */
+  readonly #shaders = new Map<string, number>();
   readonly #measureText: ((text: string, size: number) => Size) | undefined;
   readonly #textureSize: ((handle: number) => Size) | undefined;
   readonly #assets: string;
@@ -1145,6 +1239,7 @@ export class FrameBuilder {
     this.#options = options;
     this.#retain = options.retain !== false;
     this.#loadTexture = options.loadTexture;
+    this.#loadShader = options.loadShader;
     this.#measureText = options.measureText;
     this.#textureSize = options.textureSize;
     this.#assets = options.assets ?? "assets";
@@ -1347,7 +1442,7 @@ export class FrameBuilder {
               ? placement.z + transform.z
               : parentZ + placement.z + transform.z;
       const code = node.drawKind >= 0 ? node.drawKind : kindCode(node);
-      const kind = code & 15;
+      const kind = code & KIND_MASK;
       const children = node.children;
       const count = children.length;
       // `transform={{ opacity }}`: this object and all under it are drawn at it, pushed here and popped where the walk leaves it.
@@ -1389,6 +1484,10 @@ export class FrameBuilder {
           if (drawZ !== listZ) list.setZ((listZ = drawZ));
           this.#particles(node as Particles, at);
           break;
+        case KIND_LIGHT:
+          if (drawZ !== listZ) list.setZ((listZ = drawZ));
+          this.#light(node as Light, at);
+          break;
         case KIND_ROUTE:
           // A screen a transition has hidden is not drawn, pressed or collided with: its children are not walked at all.
           if (!(node as Route).visible) {
@@ -1398,6 +1497,13 @@ export class FrameBuilder {
           break;
         case KIND_ROUTER:
           if ((node as Router).cover > 0) covers.push(node as Router);
+          break;
+        case KIND_LAYER:
+          // An empty layer draws nothing; one with children opens here and closes after them, below.
+          if (count > 0) {
+            if (drawZ !== listZ) list.setZ((listZ = drawZ));
+            list.layerBegin(this.#color((node as Layer).clear), blendCode((node as Layer).childBlend));
+          }
           break;
         case KIND_FADE:
           this.#warner.once("fade-world", "A <Fade> only draws inside a <Hud>: this one, in the world, does nothing.");
@@ -1579,6 +1685,11 @@ export class FrameBuilder {
         }
       }
       flatWalk = flat && !faded;
+      if (kind === KIND_LAYER) {
+        this.#layerEnd(node as Layer);
+        // Inside the layer `setZ` did nothing, whatever the children asked: the list is still at the layer's z.
+        listZ = drawZ;
+      }
       if (kind === KIND_FLEX) {
         if ((node as Flex).overflow !== "visible") list.popClip();
         // The scroll bars go over the content, outside the box's own clip (but inside any around it), at the box's opacity.
@@ -1766,6 +1877,8 @@ export class FrameBuilder {
         let hudAnyZ = false;
         const hudPointerZs: number[] = [];
         const hudPointers: Pressable[] = [];
+        /** The z of each layer open in this HUD, to go back to when it closes. */
+        const hudLayerZs: number[] = [];
         listZ = 0;
         for (const child of hud.children) {
           walkTree(
@@ -1794,6 +1907,10 @@ export class FrameBuilder {
                 case KIND_PARTICLES:
                   if (z !== listZ) list.setZ((listZ = z));
                   this.#particles(object as Particles, world);
+                  break;
+                case KIND_LIGHT:
+                  if (z !== listZ) list.setZ((listZ = z));
+                  this.#light(object as Light, world);
                   break;
                 case KIND_FADE:
                   if (z !== listZ) list.setZ((listZ = z));
@@ -1836,12 +1953,23 @@ export class FrameBuilder {
                 case KIND_CAMERA:
                   this.#warner.once("hud-camera", "A <Camera> inside a <Hud> does nothing: the HUD is drawn through no camera.");
                   break;
+                case KIND_LAYER:
+                  if (object.children.length > 0) {
+                    if (z !== listZ) list.setZ((listZ = z));
+                    list.layerBegin(this.#color((object as Layer).clear), blendCode((object as Layer).childBlend));
+                    hudLayerZs.push(z);
+                  }
+                  break;
               }
             },
             hudWorld,
             0,
             true,
             (object, kind) => {
+              if (kind === KIND_LAYER && object.children.length > 0) {
+                this.#layerEnd(object as Layer);
+                listZ = hudLayerZs.pop() as number;
+              }
               if (kind === KIND_FLEX) {
                 if ((object as Flex).overflow !== "visible") list.popClip();
                 const bars = (object as Flex).overflow === "scroll" ? this.#scrollbarAt.get(object as Flex) : undefined;
@@ -2671,6 +2799,38 @@ export class FrameBuilder {
   }
 
   /** The texture handle for an image name, loading it the first time (-1, warned about once, if it cannot be loaded). */
+  /** A `<Light>`: its colour at its intensity (0 to 1) as the record's alpha. Nothing for no radius or no intensity. */
+  #light(node: Light, at: WorldTransform): void {
+    const intensity = node.intensity >= 1 ? 1 : node.intensity > 0 ? node.intensity : 0;
+    if (!(node.radius > 0) || intensity === 0) return;
+    this.#list.light(at, node.radius, fadeColor(this.#color(node.color), intensity));
+  }
+
+  /** The handle of a layer's shader, loaded the first time it is named: -1 for none (or one that failed), with a warning once. */
+  #shader(name: string): number {
+    if (name === "") return -1;
+    let handle = this.#shaders.get(name);
+    if (handle === undefined) {
+      const path = `${this.#assets}/${name}`;
+      handle = this.#loadShader ? this.#loadShader(path) : -2;
+      this.#shaders.set(name, handle);
+      if (handle === -1)
+        this.#warner.once(
+          `shader:${name}`,
+          `The shader '${path}' could not be loaded (a missing file, or GLSL that does not compile): its layer is drawn without it.`
+        );
+      else if (handle === -2)
+        this.#warner.once("shaders-unsupported", "This renderer runs no shaders (the software renderer): layers are drawn without them.");
+    }
+    return handle < 0 ? -1 : handle;
+  }
+
+  /** Close a `<Layer>`: its blend, its opacity and its shader. */
+  #layerEnd(layer: Layer): void {
+    const shader = this.#shader(layer.shader);
+    this.#list.layerEnd(blendCode(layer.blend), layer.opacity, shader, shader < 0 ? 0 : (this.#time ?? 0), layer.params);
+  }
+
   #texture(image: string): number {
     // By image name, not by path: the path would be put together again for every sprite of every frame.
     let handle = this.#textures.get(image);

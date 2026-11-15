@@ -11,6 +11,12 @@ void assets_init(bool smooth, bool audio);
 void assets_shutdown(void);
 /* Handles are indices; an invalid handle returns false / does nothing. */
 bool assets_texture(int32_t handle, Texture2D *out);
+/* A shader from rge_load_shader, with the locations of its uniforms (-1 where the shader does not use one). */
+typedef struct {
+  Shader shader;
+  int resolution, time, params;
+} RgeShader;
+bool assets_shader(int32_t handle, RgeShader *out);
 void assets_play(int32_t handle, double volume);
 /* Feeds every playing music stream: called once a frame. */
 void assets_update_music(void);

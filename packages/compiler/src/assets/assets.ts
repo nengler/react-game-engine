@@ -33,6 +33,7 @@ export const ASSET_PROPS: Readonly<Record<string, readonly string[]>> = {
   Text: ["font"],
   Game: ["font"],
   Music: ["src"],
+  Layer: ["shader"],
 };
 
 export interface AssetCheckOptions {
@@ -127,7 +128,11 @@ export function checkAssets(modules: readonly IRModule[], options: AssetCheckOpt
       if ((prop.kind !== "StaticProp" && prop.kind !== "DynamicProp") || !names.includes(prop.name)) continue;
       walkExpr(prop.value, (e) => {
         if (e.kind === "StringLiteral" && e.value !== "")
-          report(tag === "Text" || tag === "Game" ? "font" : tag === "Music" ? "music file" : "image", e.value, span);
+          report(
+            tag === "Text" || tag === "Game" ? "font" : tag === "Music" ? "music file" : tag === "Layer" ? "shader" : "image",
+            e.value,
+            span
+          );
       });
     }
   };

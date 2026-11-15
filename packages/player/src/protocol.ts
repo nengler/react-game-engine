@@ -5,7 +5,7 @@
  */
 import { KEY_NAMES, type KeyName } from "@rge/runtime";
 
-export const RGE_ABI_VERSION = 9;
+export const RGE_ABI_VERSION = 12;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const RGE_OP_VIEW = 1;
@@ -18,6 +18,9 @@ export const RGE_OP_SCISSOR_END = 7;
 export const RGE_OP_CANVAS = 8;
 export const RGE_OP_SPRITE_REGION = 9;
 export const RGE_OP_BOX = 10;
+export const RGE_OP_LAYER_BEGIN = 11;
+export const RGE_OP_LAYER_END = 12;
+export const RGE_OP_LIGHT = 13;
 
 // Record lengths in doubles, op included.
 export const RGE_OP_VIEW_LEN = 7;
@@ -30,6 +33,21 @@ export const RGE_OP_SCISSOR_END_LEN = 1;
 export const RGE_OP_CANVAS_LEN = 8;
 export const RGE_OP_SPRITE_REGION_LEN = 15;
 export const RGE_OP_BOX_LEN = 12;
+export const RGE_OP_LAYER_BEGIN_LEN = 3;
+export const RGE_OP_LAYER_END_LEN = 13;
+export const RGE_OP_LIGHT_LEN = 8;
+
+/** What `rge_load_shader` gives in a build that cannot run shaders (the software renderer). Not in `PROTOCOL`: the header writes it in parentheses. */
+export const RGE_SHADER_UNSUPPORTED = -2;
+
+// Blend modes of a layer (ABI v10): how what is drawn meets what is under it.
+export const RGE_BLEND_NORMAL = 0;
+export const RGE_BLEND_ADD = 1;
+export const RGE_BLEND_MULTIPLY = 2;
+export const RGE_BLEND_SCREEN = 3;
+
+/** How deep layers nest. */
+export const RGE_LAYER_MAX = 4;
 
 // Flags of a sprite region record.
 export const RGE_SPRITE_FLIP_X = 1;
@@ -78,6 +96,9 @@ export const PROTOCOL = {
   RGE_OP_CANVAS,
   RGE_OP_SPRITE_REGION,
   RGE_OP_BOX,
+  RGE_OP_LAYER_BEGIN,
+  RGE_OP_LAYER_END,
+  RGE_OP_LIGHT,
   RGE_OP_VIEW_LEN,
   RGE_OP_SPRITE_LEN,
   RGE_OP_RECT_LEN,
@@ -88,6 +109,14 @@ export const PROTOCOL = {
   RGE_OP_CANVAS_LEN,
   RGE_OP_SPRITE_REGION_LEN,
   RGE_OP_BOX_LEN,
+  RGE_OP_LAYER_BEGIN_LEN,
+  RGE_OP_LAYER_END_LEN,
+  RGE_OP_LIGHT_LEN,
+  RGE_BLEND_NORMAL,
+  RGE_BLEND_ADD,
+  RGE_BLEND_MULTIPLY,
+  RGE_BLEND_SCREEN,
+  RGE_LAYER_MAX,
   RGE_SPRITE_FLIP_X,
   RGE_SPRITE_FLIP_Y,
   RGE_SOUND_VOICES,

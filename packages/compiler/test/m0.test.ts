@@ -71,11 +71,11 @@ function Nested() {
 });
 
 describe("M0: runtime manifest as compiler config", () => {
-  const LIGHT = `
+  const TORCH = `
 function Lamp() {
   return (
     <Entity name="Lamp">
-      <Light radius={4} />
+      <Torch radius={4} />
     </Entity>
   );
 }`;
@@ -83,7 +83,7 @@ function Lamp() {
   it("rejects an intrinsic the manifest does not list", () => {
     const compiler = new Compiler();
     try {
-      const result = compiler.compile("Lamp.tsx", withAuthoringImports(LIGHT));
+      const result = compiler.compile("Lamp.tsx", withAuthoringImports(TORCH));
       assert.deepEqual(
         result.diagnostics.map((d) => d.code),
         [DiagnosticCode.UnknownComponent]
@@ -94,13 +94,13 @@ function Lamp() {
   });
 
   it("accepts a new intrinsic with no compiler edit", () => {
-    const manifest = { ...runtimeManifest, intrinsics: [...runtimeManifest.intrinsics, "Light"] };
+    const manifest = { ...runtimeManifest, intrinsics: [...runtimeManifest.intrinsics, "Torch"] };
     const compiler = new Compiler({ manifest });
     try {
-      const result = compiler.compile("Lamp.tsx", withAuthoringImports(LIGHT, manifest));
+      const result = compiler.compile("Lamp.tsx", withAuthoringImports(TORCH, manifest));
       assert.ok(result.ok);
-      assert.match(result.code, /import \{ Entity, Light \} from "@rge\/runtime";/);
-      assert.match(result.code, /new Light\(\{ radius: 4 \}\)/);
+      assert.match(result.code, /import \{ Entity, Torch \} from "@rge\/runtime";/);
+      assert.match(result.code, /new Torch\(\{ radius: 4 \}\)/);
     } finally {
       compiler.close();
     }

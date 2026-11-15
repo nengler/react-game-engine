@@ -804,6 +804,67 @@ The border is built from exact pieces rather than raylib's rounded outline (in r
 
 `int32_t rge_typed(uint32_t *out, int32_t capacity)` gives the characters typed during the last `rge_frame`: raylib's `GetCharPressed` queue (Unicode code points, as the keyboard layout and the system's key repeat make them), and `RGE_TYPED_BACKSPACE` (8) for each press or repeat of Backspace (`IsKeyPressedRepeat`), after them. At most `RGE_TYPED_MAX` (64) a frame. It is a function of its own, not part of `rge_frame`'s input buffer, so that buffer keeps its fixed size. Both hosts expose it as `Backend.typed()`, a string with `"\b"` for Backspace; the player hands a frame's typing to the next frame's first step as `InputState.typed`, and a focused `<TextInput>` takes it.
 
+### ABI v10: layers and blend modes
+
+Two records, built for lighting and for the shaders that come next (NEXT_PRIORITIES.md, "Now", steps 5 to 7):
+
+- `RGE_OP_LAYER_BEGIN` (op 11, 3 doubles): `op, clearColor, childBlend`. What follows is drawn into an off-screen target the size of
+  the current one (the canvas, the window, or the layer it is in), cleared to `clearColor`, each drawable blended with `childBlend`.
+- `RGE_OP_LAYER_END` (op 12, 3 doubles): `op, blend, tint`. The innermost layer is laid over the target it is in, covering it
+  exactly, blended with `blend`, its colours multiplied by `tint` (whose alpha is the layer's opacity).
+
+Blend modes `RGE_BLEND_NORMAL` (0), `ADD` (1), `MULTIPLY` (2) and `SCREEN` (3) are raylib's alpha, additive and multiplied modes and a
+custom `(ONE, ONE_MINUS_SRC_COLOR)` for screen. Layers nest `RGE_LAYER_MAX` (4) deep; one more, or an end with none open, stops the frame
+as a malformed record does, and a layer left open is closed at the end of the frame. Each depth keeps one target between frames
+(`state.layers`), remade when the size changes. **librge keeps the view and the scissor itself** (`target` in `rge.c`), because raylib's
+`BeginTextureMode` and `EndTextureMode` reset its matrices and its scissor: they are put back after every change of target, and a layer is
+composited in target pixels with no view. **Making or unloading a texture binds the window's framebuffer**, which once sent what was
+still batched for a canvas to the window: a layer's target is made only after the current target is left.
+
+**The software renderer** (`RGE_PLATFORM=Memory`, rlsw) needed two things raylib does not do there. `rlSetBlendMode` does nothing on
+it, so librge sets rlsw's `swBlendFunc` itself. And rlsw switches blending off for a primitive whose colour is opaque and whose texture
+has no alpha when the blend function reads alpha, which is right only for normal blending: an opaque light added with
+`(SRC_ALPHA, ONE)` replaced what was under it. With nothing translucent drawn, add and multiply use `(ONE, ONE)` and
+`(DST_COLOR, ZERO)` there, which give the same result without reading alpha; a layer laid over at an opacity below 1 keeps the
+alpha-aware factors. A translucent sprite drawn in an add layer is therefore added at full strength by the software renderer, not on
+the GPU. The software capture also sets every alpha to 255, as `LoadImageFromScreen` does on the GPU: a window has none, and two of
+Hearth's and seven of Bramble's stored story screenshots changed in alpha only.
+
+On the TypeScript side `<Layer blend childBlend clear opacity>` is a built-in container (DESIGN.md, "Layers"); the frame builder
+writes a begin before its children and an end after them, and `DrawList.setZ` does nothing while a layer is open, so a layer's records
+stay one run at its own `z` when the frame is sorted. The pixel tests in `native/test/smoke.c` check each blend mode, a half-opaque
+layer, a view and a nest carried through, a layer in a canvas, an opaque texture added into a layer, and the malformed cases, on both
+renderers.
+
+### ABI v11: shaders
+
+`int32_t rge_load_shader(const char *path)` loads a file holding one GLSL function, `vec4 effect(vec2 uv)`, and `RGE_OP_LAYER_END` grows to 13
+doubles: `op, blend, tint, shader, time, p0..p7`. librge wraps the function (`SHADER_HEAD` and `SHADER_TAIL` in `assets.c`) in GLSL 3.30
+with the inputs it is given: `image` (the layer's texture), `pixel` (from the top left of the target, worked out from `gl_FragCoord`, whose
+origin is the bottom left), `resolution`, `time` and `params[8]`, and a `main` that multiplies its result by raylib's tint and vertex
+colour. `#line 1` before the author's text makes the compiler's messages count lines in their file. Only the function is the author's,
+so a WebGL build can wrap the same file in GLSL ES 3.00 (a different version line and a precision qualifier). The shader runs while the
+layer is laid over its target (`end_layer`), with its uniforms set each time; the locations are looked up once, at load.
+
+It returns -1 for a missing file or GLSL that does not compile (raylib then falls back to its default shader, which counts as a
+failure; its compiler message is in the log), and `RGE_SHADER_UNSUPPORTED` (-2) in the software build, which has no shaders: a layer
+with that handle is laid over without one. The player asks once per name and warns once for -1 and once for -2 (the warning step 4
+deferred). The `time` is the player's animation clock, so a replay draws the same frames, and the records stay byte-identical between
+Node and the Rust host. `<Layer shader params>` is checked against the assets folder by `rge build` like an image. The smoke test runs a
+shader on the GPU (a pixel-position split, `params` and `time`, in the window and in a canvas, a bad handle, a shader that does not
+compile) and checks the software build's -2 and fallback.
+
+### ABI v12: lights
+
+`RGE_OP_LIGHT` (op 13, 8 doubles): `op, x, y, rot, sx, sy, radius, color`. A disc at the local origin, `color` at the middle falling off as
+(1 − d)² to black at `radius`, drawn with rlgl's immediate mode as six rings of 48 segments with the colour at each ring, so it needs no
+texture and draws the same on the GPU and in the software renderer. The colour is premultiplied by its alpha (the light's strength) and
+the vertices are opaque: in an add layer black adds nothing, and the rlsw shortcut of ABI v10 does not apply. The smoke test checks the
+middle, a quarter at half the radius and black past it (within a tolerance: colours are interpolated between rings and a pixel's centre
+is off the light's), two half lights adding to one, and a radius of 0 or NaN drawing nothing. `<Light radius color intensity>` writes
+one; `<Lighting ambient>` is a `Layer` set to `multiply`, `add` and the ambient colour. The player's kind codes grew a bit for it (five
+bits of kind, `KIND_MASK`, then the flags).
+
 ### Router and Route
 
 `<Router route={screen} transition={fadeThrough} duration={0.5} coverColor="#12151f"><Route name="title">…</Route>…</Router>`. A `Route` is a container that is **in the world only while the router shows it**: the router keeps the routes by name, attaches the one `route` names, and swaps them with `queueAddChild` / `queueRemoveChild`, so only the shown screen updates, draws, collides and is pressed, and `useMount` / `useUnmount` inside a screen mean "the screen came" and "the screen went". **A route's components are made when it comes and dropped once it has gone** (decided 2026-11-11, as React Router does): the compiler shows a `<Route>`'s children only while the route is `active` (a conditional child on `this.<route>.active`, `ExprIR` `ElementRead`), and the router sets `active` when a route is entered and clears it when the leave transition ends, marking the compiled components above it dirty so they render and make or drop the children. So each visit starts fresh: initial state, `useState(() => …)`, `useMount`. **`<Route keepAlive>`** keeps a screen's components and their state between visits (Vue's `<KeepAlive>`), as all routes did before. Kite found why fresh is the default: its character's body is the `Player`'s own state, and a second run started where the first had ended. A route that does not exist is an error naming the ones that do.

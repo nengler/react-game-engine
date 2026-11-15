@@ -1,5 +1,8 @@
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "internal.h"
+#include "rlgl.h"
 #include "rge.h"
 
 /* Textures and sounds are kept in growable tables; a handle is an index and is never reused. The
@@ -28,7 +31,14 @@ typedef struct {
   int32_t capacity;
 } MusicTable;
 
+typedef struct {
+  RgeShader *items;
+  int32_t count;
+  int32_t capacity;
+} ShaderTable;
+
 static TextureTable textures;
+static ShaderTable shaders;
 static SoundTable sounds;
 static MusicTable musics;
 static bool smooth_filter;
@@ -49,6 +59,9 @@ bool assets_audio_ready(void) {
 
 void assets_shutdown(void) {
   for (int32_t i = 0; i < textures.count; i++) UnloadTexture(textures.items[i]);
+  for (int32_t i = 0; i < shaders.count; i++) UnloadShader(shaders.items[i].shader);
+  free(shaders.items);
+  shaders = (ShaderTable){0};
   for (int32_t i = 0; i < sounds.count; i++) {
     if (!sounds.loaded[i]) continue;
     for (int32_t v = 0; v < sounds.voice_count[i]; v++) UnloadSoundAlias(sounds.voices[i][v]);
@@ -75,6 +88,77 @@ bool assets_texture(int32_t handle, Texture2D *out) {
   if (handle < 0 || handle >= textures.count) return false;
   *out = textures.items[handle];
   return true;
+}
+
+bool assets_shader(int32_t handle, RgeShader *out) {
+  if (handle < 0 || handle >= shaders.count) return false;
+  *out = shaders.items[handle];
+  return true;
+}
+
+#if !defined(GRAPHICS_API_OPENGL_SOFTWARE)
+/* What wraps an author's `effect` function: the inputs it is given, and the main function that calls it. GLSL 3.30, as raylib's
+ * desktop build speaks; `#line 1` makes the compiler's messages count lines in the author's file. */
+static const char *SHADER_HEAD =
+  "#version 330\n"
+  "in vec2 fragTexCoord;\n"
+  "in vec4 fragColor;\n"
+  "uniform sampler2D texture0;\n"
+  "uniform vec4 colDiffuse;\n"
+  "uniform vec2 resolution;\n"
+  "uniform float time;\n"
+  "uniform float params[8];\n"
+  "out vec4 finalColor;\n"
+  "vec2 pixel;\n"
+  "#define image texture0\n"
+  "#line 1\n";
+static const char *SHADER_TAIL =
+  "\nvoid main() {\n"
+  "  pixel = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y);\n"
+  "  finalColor = effect(fragTexCoord) * colDiffuse * fragColor;\n"
+  "}\n";
+#endif
+
+int32_t rge_load_shader(const char *path) {
+  if (path == NULL || !FileExists(path)) return -1;
+#if defined(GRAPHICS_API_OPENGL_SOFTWARE)
+  return RGE_SHADER_UNSUPPORTED;
+#else
+  char *body = LoadFileText(path);
+  if (body == NULL) return -1;
+  size_t size = strlen(SHADER_HEAD) + strlen(body) + strlen(SHADER_TAIL) + 1;
+  char *source = malloc(size);
+  if (source == NULL) {
+    UnloadFileText(body);
+    return -1;
+  }
+  snprintf(source, size, "%s%s%s", SHADER_HEAD, body, SHADER_TAIL);
+  UnloadFileText(body);
+  Shader shader = LoadShaderFromMemory(NULL, source);
+  free(source);
+  /* raylib falls back to its default shader when compiling fails: that is a failure here. */
+  if (shader.id == 0 || shader.id == rlGetShaderIdDefault()) {
+    TraceLog(LOG_WARNING, "RGE: the shader %s did not compile (the message above says why): its layers are drawn without it", path);
+    return -1;
+  }
+  if (shaders.count == shaders.capacity) {
+    int32_t capacity = shaders.capacity ? shaders.capacity * 2 : 8;
+    RgeShader *grown = realloc(shaders.items, (size_t)capacity * sizeof(RgeShader));
+    if (grown == NULL) {
+      UnloadShader(shader);
+      return -1;
+    }
+    shaders.items = grown;
+    shaders.capacity = capacity;
+  }
+  shaders.items[shaders.count] = (RgeShader){
+    .shader = shader,
+    .resolution = GetShaderLocation(shader, "resolution"),
+    .time = GetShaderLocation(shader, "time"),
+    .params = GetShaderLocation(shader, "params"),
+  };
+  return shaders.count++;
+#endif
 }
 
 static double clamp_volume(double volume) {

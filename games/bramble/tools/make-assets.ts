@@ -180,6 +180,7 @@ for (let i = 3; i < 13; i++) {
   px(15, 13, i, "#ffffff");
 }
 writeFileSync(join(assets, "things.png"), rgbaPng(FRAMES * TILE, TILE, sheet));
+
 console.log("wrote assets/things.png");
 
 // ---- Sound: short synthesised effects and a looping theme (16-bit mono PCM WAVs). ----
