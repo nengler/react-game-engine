@@ -4,6 +4,7 @@ import { PARTICLE_SPACES } from "./components/Particles.ts";
 import { SCREEN_FITS } from "./components/Screen.ts";
 import { SHAPE_KINDS } from "./components/Shape.ts";
 import { TEXT_ALIGNS } from "./components/Text.ts";
+import { COLLIDER_SHAPES } from "./shapes.ts";
 
 /**
  * Everything the compiler needs to know about this runtime, in one place.
@@ -256,7 +257,21 @@ export const runtimeManifest: RuntimeManifest = {
       "overlayKey",
     ],
     Sprite: ["image", "frameWidth", "frameHeight", "frame", "flipX", "flipY", "originX", "originY", "tint", "opacity"],
-    Collider: ["width", "height", "tag", "layer", "hits", "solid", "data", "onCollisionEnter", "onCollisionExit", "owner", "hitsLayer"],
+    Collider: [
+      "width",
+      "height",
+      "tag",
+      "layer",
+      "hits",
+      "solid",
+      "shape",
+      "points",
+      "data",
+      "onCollisionEnter",
+      "onCollisionExit",
+      "owner",
+      "hitsLayer",
+    ],
     Pointer: [
       "width",
       "height",
@@ -459,6 +474,7 @@ export const runtimeManifest: RuntimeManifest = {
     Game: { upscale: ["nearest", "sharp"] },
     Particles: { space: PARTICLE_SPACES },
     Layer: { blend: BLEND_MODES, childBlend: BLEND_MODES },
+    Collider: { shape: COLLIDER_SHAPES },
     Flex: {
       direction: FLEX_DIRECTIONS,
       alignItems: FLEX_ALIGN_ITEMS,

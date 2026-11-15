@@ -1,4 +1,4 @@
-import type { Collider, GameObject, World, WorldTransform } from "@rge/runtime";
+import { geometriesOverlap, geometryOf, type Collider, type GameObject, type World, type WorldTransform } from "@rge/runtime";
 
 import type { ColliderEntry } from "./draw.ts";
 
@@ -67,6 +67,17 @@ function writeBounds(width: number, height: number, world: WorldTransform, out: 
   out[at + 2] = maxX;
   out[at + 3] = maxY;
   return true;
+}
+
+/**
+ * Whether two colliders whose boxes overlap touch by their shapes (`Collider.shape`): two plain boxes always do (their boxes are
+ * what they are), and a pair in which either has another shape is tested exactly, turned and scaled with its object.
+ */
+export function shapesTouch(a: Collider, worldA: WorldTransform, b: Collider, worldB: WorldTransform): boolean {
+  if (a.shape === "box" && b.shape === "box") return true;
+  const ga = geometryOf(a, worldA);
+  const gb = geometryOf(b, worldB);
+  return ga !== null && gb !== null && geometriesOverlap(ga, gb);
 }
 
 /** Whether two boxes overlap. Boxes that only share an edge do not: touching is not colliding. */
@@ -238,6 +249,8 @@ export class CollisionTracker {
   // Each box's layer and hits, read once per frame so the pair loop does no method calls (a pile tests thousands of pairs).
   #layers: string[] = [];
   #hits: (readonly string[] | undefined)[] = [];
+  /** Each box's world transform, by box index: what a shaped collider's exact test needs. */
+  readonly #worlds: WorldTransform[] = [];
   /** The boxes by left edge (see `sortByLeftEdge`), and how many entries of it are in order: last full sweep's count, or 0. */
   #order = new Int32Array(64);
   #ordered = 0;
@@ -336,6 +349,7 @@ export class CollisionTracker {
     const ids = this.#boxIds;
     const layers = this.#layers;
     const hitsOf = this.#hits;
+    const worlds = this.#worlds;
     const byIdNow = this.#byIdNow;
     const overlaps = this.#overlaps;
     const banded = overlaps === undefined && this.#banded;
@@ -405,6 +419,7 @@ export class CollisionTracker {
       }
       layers[count] = collider.layer;
       hitsOf[count] = collider.hits;
+      worlds[count] = transform;
       if (banded) {
         if (minY < top) top = minY;
         if (maxY > bottom) bottom = maxY;
@@ -422,6 +437,7 @@ export class CollisionTracker {
     ids.length = count;
     layers.length = count;
     hitsOf.length = count;
+    worlds.length = count;
 
     if (this.#order.length < count) {
       this.#order = new Int32Array(count * 2);
@@ -471,6 +487,11 @@ export class CollisionTracker {
         if (parent === other.parent) continue;
         const hitsQ = hitsOf[q];
         if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
+        if (
+          ((boxColliders[p] as Collider).shape !== "box" || other.shape !== "box") &&
+          !shapesTouch(boxColliders[p] as Collider, worlds[p] as WorldTransform, other, worlds[q] as WorldTransform)
+        )
+          continue;
         if (same && (n >= lastLength || last[n] !== p || last[n + 1] !== q)) {
           same = false;
           now.clear();
@@ -539,6 +560,11 @@ export class CollisionTracker {
             if (parent === other.parent) continue;
             const hitsQ = hitsOf[q];
             if ((hitsP !== undefined && !hitsP.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerP))) continue;
+            if (
+              ((boxColliders[p] as Collider).shape !== "box" || other.shape !== "box") &&
+              !shapesTouch(boxColliders[p] as Collider, worlds[p] as WorldTransform, other, worlds[q] as WorldTransform)
+            )
+              continue;
             if (same && (n >= lastLength || last[n] !== p || last[n + 1] !== q)) {
               same = false;
               now.clear();
@@ -890,6 +916,13 @@ export class CollisionTracker {
         if (parent === (boxColliders[q] as Collider).parent) continue;
         const hitsQ = hitsOf[q];
         if ((hitsM !== undefined && !hitsM.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerM))) continue;
+        const self = boxColliders[m] as Collider;
+        const other = boxColliders[q] as Collider;
+        if (
+          (self.shape !== "box" || other.shape !== "box") &&
+          !shapesTouch(self, (colliders[m] as ColliderEntry).world, other, (colliders[q] as ColliderEntry).world)
+        )
+          continue;
         now.push(q);
       }
       const before = oldFlat.slice(oldAt[k] as number, oldAt[k + 1] as number);
