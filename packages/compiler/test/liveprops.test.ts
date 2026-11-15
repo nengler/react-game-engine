@@ -4,11 +4,13 @@ import assert from "node:assert/strict";
  * wrote to the parent's state in this step, where `props` holds what the parent's last render copied (docs/MUTABLE_STATE.md,
  * "Shared lists: live everywhere"). Render reads what the frame committed, as before.
  */
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { after, describe, it } from "node:test";
 
 import { Entity, World } from "@rge/runtime";
 
-import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -148,5 +150,89 @@ export function Parent({ onLog }: { onLog: (line: string) => void }) {
     world.flush();
     // The parent set the page to "b" first (tree order); the old "a" page runs next in the same step and still reads "a".
     assert.deepEqual(log, ["saw a"]);
+  });
+});
+
+describe("props read live: what #124 left", () => {
+  const ITEMS = `${HURT}
+interface Foe { id: number; hp: number; boss: boolean }
+export function Watch({ id, hp }: { id: number; hp: number }) { const s = useMutable({ saw: -1 }); useUpdate(() => { s.saw = hp; }); return <Entity name={"w" + id} />; }
+export function Boss({ id, hp }: { id: number; hp: number }) { const s = useMutable({ saw: -1 }); useUpdate(() => { s.saw = hp; }); return <Entity name={"b" + id} />; }
+`;
+
+  it("a component below a list item finds its item again by key, under the item's own condition", async () => {
+    const { find } = await run(`${ITEMS}
+export function Parent() {
+  const s = useMutable({ foes: [{ id: 1, hp: 10, boss: false }, { id: 2, hp: 10, boss: false }] as Foe[] });
+  const hit = (n: number) => { s.foes[1]!.hp -= n; };
+  return (
+    <Entity>
+      <Hurt onHit={hit} />
+      {s.foes.map((f) => (
+        <Entity key={f.id}>
+          <Watch id={f.id} hp={f.hp} />
+          {f.hp > 0 && <Boss id={f.id} hp={f.hp * 2} />}
+        </Entity>
+      ))}
+    </Entity>
+  );
+}`);
+    assert.equal(find("w2").s.saw, -10, "the item as the parent has it now, not the 10 its record held");
+    assert.equal(find("w1").s.saw, 10);
+    assert.equal(find("b1").s.saw, 20);
+    assert.equal(find("b2"), null, "foe 2's condition no longer holds: its Boss read its last props, then went");
+  });
+
+  it("an item that switches between two elements reads live while it is in its branch", async () => {
+    const { find } = await run(`${ITEMS}
+export function Parent() {
+  const s = useMutable({ foes: [{ id: 1, hp: 10, boss: true }, { id: 2, hp: 10, boss: false }] as Foe[] });
+  const hit = (n: number) => { s.foes[0]!.hp -= n; s.foes[1]!.hp -= n; };
+  return <Entity><Hurt onHit={hit} />{s.foes.map((f) => (f.boss ? <Boss key={f.id} id={f.id} hp={f.hp} /> : <Watch key={f.id} id={f.id} hp={f.hp} />))}</Entity>;
+}`);
+    assert.equal(find("b1").s.saw, -10);
+    assert.equal(find("w2").s.saw, -10);
+  });
+
+  it("a context's value: a reader's handler sees what the provider's parent wrote earlier in the step", async () => {
+    const compiled = compile(`${HURT}
+import { Hp } from "./hp.ts";
+export function Reader() { const hp = useContext(Hp); const s = useMutable({ saw: -1 }); useUpdate(() => { s.saw = hp; }); return <Entity name="reader" />; }
+export function Parent() {
+  const s = useMutable({ health: 100 });
+  const hit = (n: number) => { s.health -= n; };
+  return <Entity><Hurt onHit={hit} /><Hp.Provider value={s.health}><Entity><Reader /></Entity></Hp.Provider></Entity>;
+}`);
+    const hp = `import { createContext } from "@rge/runtime";\nexport const Hp = createContext(0);\n`;
+    const hpFile = join(dirname(compiled.fileName), "..", "hp.ts");
+    mkdirSync(dirname(hpFile), { recursive: true });
+    writeFileSync(hpFile, hp);
+    assert.deepEqual(
+      getCompiler().typeCheck([
+        { fileName: compiled.fileName, text: compiled.code },
+        { fileName: hpFile, text: hp },
+      ]),
+      []
+    );
+    const module = await load<Record<string, new () => Entity>>(compiled);
+    const world = new World();
+    const root = new module["Parent"]!();
+    world.mount(root);
+    world.flush();
+    world.tick(1 / 60);
+    world.flush();
+    const reader = root.children[1]!.children[0]!.children[0] as unknown as { s: { saw: number } };
+    assert.equal(reader.s.saw, 80, "not the 100 the provider was last given");
+  });
+
+  it("an object literal passed as a prop is read live, not as a block that returns nothing", async () => {
+    const { find } = await run(`${HURT}
+export function Watch({ at }: { at: { hp: number } }) { const s = useMutable({ saw: -1 }); useUpdate(() => { s.saw = at.hp; }); return <Entity name="watch" />; }
+export function Parent() {
+  const s = useMutable({ health: 100 });
+  const hit = (n: number) => { s.health -= n; };
+  return <Entity><Hurt onHit={hit} /><Watch at={{ hp: s.health }} /></Entity>;
+}`);
+    assert.equal(find("watch").s.saw, 80);
   });
 });

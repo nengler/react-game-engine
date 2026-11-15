@@ -1,3 +1,11 @@
+/**
+ * A `{value}` between a `<Text>`'s tags, as it is drawn: `null`, `undefined` and booleans are no text, as in React. The compiler
+ * wraps each such value in it (`Score: ${textOf(score)}`).
+ */
+export function textOf(value: unknown): string | number {
+  return value === null || value === undefined || typeof value === "boolean" ? "" : (value as string | number);
+}
+
 /** Allowlisted helper available to handler code (`clamp(value, min, max)`). */
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);

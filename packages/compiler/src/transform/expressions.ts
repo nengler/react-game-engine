@@ -137,7 +137,11 @@ export class ExpressionLowering extends LoweringBase {
         case "param":
           return { kind: "ParamRead", param: binding.id, name: binding.name };
         case "state":
-          return { kind: "StateRead", state: binding.id };
+          return {
+            kind: "StateRead",
+            state: binding.id,
+            ...(this.mode.inHandler && this.contextValues.has(binding.id) ? { live: true as const } : {}),
+          };
         // Read whole (`takeHit(s)`, `<Camera shake={shake}>`). In a handler it is the component's own object for this `useMutable`,
         // whose fields read and write the component's (`takeHit(s)` changes them, as `s.hp -= 1` would). In render, where nothing
         // writes, it is a copy of the fields as the frame committed them, typed `Readonly`. The properties say which fields it reads.
@@ -185,7 +189,11 @@ export class ExpressionLowering extends LoweringBase {
         case "derived": {
           // In a handler, a value that depends on a `useMutable` field is worked out from the fields as they are now.
           // Lowered against the component's scope, so a handler's own locals cannot shadow what the `const` reads.
-          if (this.mode.inHandler && binding.relower !== undefined && stateReads(binding.value).some((id) => this.mutableStates.has(id))) {
+          if (
+            this.mode.inHandler &&
+            binding.relower !== undefined &&
+            stateReads(binding.value).some((id) => this.mutableStates.has(id) || this.contextValues.has(id))
+          ) {
             const outer = this.scope;
             this.scope = this.componentScope;
             try {
@@ -369,12 +377,6 @@ export class ExpressionLowering extends LoweringBase {
     if (!this.computes() || !isIdentifier(at)) return false;
     const binding = this.scope.get(at.text);
     return binding?.kind === "local" && binding.owned === true;
-  }
-
-  /** The functions a call may name, for diagnostics: `Math.*`, the global conversions and the runtime's functions. */
-  protected allowlistedCalls(): string {
-    const math = Object.keys(MATH_FUNCTIONS).map((n) => n.slice("Math.".length));
-    return `Math.${math.join("/")}, ${Object.keys(GLOBAL_FUNCTIONS).join("/")}, ${Object.keys(this.manifest.functions).join("/")}`;
   }
 
   /** Lowers each expression in order; null (after reporting) at the first that fails. */
@@ -743,14 +745,14 @@ export class ExpressionLowering extends LoweringBase {
         ]);
         this.report(
           DiagnosticCode.UnsupportedExpression,
-          `'${callee.text}' is not a function the compiler knows${near !== null ? ` (did you mean '${near}'?)` : ""}. A component calls functions imported from a \`.ts\` file (\`import { ${callee.text} } from "./rules.ts"\`), its own functions, and ${this.allowlistedCalls()}.`,
+          `'${callee.text}' is not a function the compiler knows${near !== null ? ` (did you mean '${near}'?)` : ""}. A component calls functions imported from a \`.ts\` file (\`import { ${callee.text} } from "./rules.ts"\`), its own functions, \`Math\`'s, \`String\`/\`Number\`/\`Boolean\`, and the engine's (\`clamp\`, \`freeze\`, …).`,
           node
         );
         return null;
       }
       this.report(
         DiagnosticCode.UnsupportedExpression,
-        `Only allowlisted calls are supported: ${this.allowlistedCalls()}, and methods of handler parameters.`,
+        "Only these calls work in a component: functions imported from a `.ts` file, its own functions, `Math`'s, `String`/`Number`/`Boolean`, the engine's (`clamp`, `freeze`, …), and the methods of a handler's parameters.",
         node
       );
       return null;
@@ -870,7 +872,7 @@ export class ExpressionLowering extends LoweringBase {
       }
       this.report(
         code,
-        `'${name}' is not an allowlisted call. Supported: ${this.allowlistedCalls()}, methods of handler parameters, the array methods ${Object.keys(ARRAY_METHODS).join(", ")}, and the string and number methods ${[...VALUE_METHODS].join(", ")}.`,
+        `'${name}' is not a method a component can call. Array methods that make a new value (\`map\`, \`filter\`, \`find\`, \`reduce\`, \`toSorted\`, …) and string and number methods (\`padStart\`, \`toFixed\`, …) work, and in a handler so do the methods of a value the handler made itself. For anything else, write a function in a .ts file and import it.`,
         callee.name
       );
       return null;

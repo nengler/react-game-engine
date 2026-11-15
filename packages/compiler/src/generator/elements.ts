@@ -263,8 +263,8 @@ export class ElementEmitter extends HandlerEmitter {
     const view = (e: ElementIR): string => (alt ? `($item as ${e.component.name})` : "$item");
     // The branches test the condition itself (not `$branch`), so that TypeScript narrows what it reads (`p.tower ? … {...p.tower}`).
     const test = list.condition ? this.arrowBody(list.condition) : "true";
-    const construct = (e: ElementIR): void => {
-      w.line(`$item = ${this.construct(e, list)};`);
+    const construct = (e: ElementIR, branch: 0 | 1 | null = null): void => {
+      w.line(`$item = ${this.construct(e, list, branch)};`);
       this.emitStaticTransform(e.transform, "$item", transformTarget(e));
     };
     w.open("{");
@@ -314,8 +314,8 @@ export class ElementEmitter extends HandlerEmitter {
         );
       this.within({ itemLookups: lookups }, () => {
         if (alt) {
-          w.block(`if (${test})`, () => construct(el));
-          w.block("else", () => construct(alt));
+          w.block(`if (${test})`, () => construct(el, 0));
+          w.block("else", () => construct(alt, 1));
         } else construct(el);
         if (kids.length > 0) {
           this.within({ fieldBase: `${rec}.kids` }, () => {
@@ -533,26 +533,27 @@ export class ElementEmitter extends HandlerEmitter {
   // -- expressions ----------------------------------------------------------
 
   /** Every prop goes in at construction, callbacks too; on a component, the dynamic ones are re-sent through `updateProps` on render. */
-  protected construct(el: ElementIR, list: KeyedListChildIR | null = null): string {
+  protected construct(el: ElementIR, list: KeyedListChildIR | null = null, branch: 0 | 1 | null = null): string {
     const made = el.props.length > 0 ? `new ${el.component.name}(${this.propsObject(el.props)})` : `new ${el.component.name}()`;
-    const getters = this.propGetters(el, list);
+    const getters = this.propGetters(el, list, branch);
     return getters === null ? made : `this.withPropGetters(${made}, ${getters})`;
   }
 
   /**
    * The getters a child is given for its props that read this component's state or props (`health={s.health}`), so a handler of the
    * child reads what this component has now: a write by an earlier handler of this step, the child's own sibling's callback included.
-   * Each is the prop's expression read as a handler of this component reads it. Null for a component with no such prop, and for
-   * a prop that reads a keyed list's item (its getter would have to find the item again in the live list: it reads the last render's).
+   * Each is the prop's expression read as a handler of this component reads it. A keyed list's item, and a component below one, finds
+   * its item again by key in the list as it is now; an item that switches between two elements (`branch`) says nothing once it is in
+   * the other branch. Null for a component with no such prop, and inside a list that is itself in a list item.
    */
-  protected propGetters(el: ElementIR, list: KeyedListChildIR | null = null): string | null {
-    if (el.component.kind === "Intrinsic") return null;
-    // Only the element a list makes, not what is below it (those read the item through the list's record), and not one that switches
-    // between two elements.
-    if (this.itemIds.size > 0 && list === null) return null;
-    if (list !== null && list.alternate !== null) return null;
-    // A list inside a list item: its getter would have to find the outer items again too.
+  protected propGetters(el: ElementIR, list: KeyedListChildIR | null = null, branch: 0 | 1 | null = null): string | null {
+    // A built-in has no handlers to read its props, but a `<Provider>`'s readers do: they read its `value` live (`ContextReader.live`).
+    if (el.component.kind === "Intrinsic" && el.component.name !== "Provider") return null;
+    // The list whose item this element is, or is below: the item is found again in it.
+    const below = list === null && this.itemIds.size > 0;
+    if (below && this.openLists.length !== 1) return null;
     if (list !== null && this.openLists.length > 1) return null;
+    const around = list ?? (below ? this.openLists[0]! : null);
     const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
     const spread = el.props.some((p) => p.kind === "SpreadProp");
     if (dynamic.length === 0 && !spread) return null;
@@ -568,14 +569,29 @@ export class ElementEmitter extends HandlerEmitter {
     // render has them, read live). An item that is no longer there, or whose key was taken by another (`key={page}` with `label={page}`:
     // the old page, on its way out as the new one comes), says nothing, and the instance's last props stand.
     const wrap = (inner: () => string): string => {
-      if (list === null) return `() => ${inner()}`;
-      const item = list.item.name;
-      const params = list.index ? `${item}, ${list.index.name}` : item;
-      const source = emit(() => this.expr(this.live(list.source), true));
-      const test = list.condition !== null ? emit(() => this.arrowBody(this.live(list.condition!))) : null;
-      const key = emit(() => this.arrowBody(list.key));
+      if (around === null) {
+        // An object literal is the value, not a block: `() => ({ … })`.
+        const body = inner();
+        return body.startsWith("{") ? `() => (${body})` : `() => ${body}`;
+      }
+      const item = around.item.name;
+      const params = around.index ? `${item}, ${around.index.name}` : item;
+      const source = emit(() => this.expr(this.live(around.source), true));
+      const test = around.condition !== null ? emit(() => this.arrowBody(this.live(around.condition!))) : null;
+      const key = emit(() => this.arrowBody(around.key));
       if (test !== null) this.usesAssume = true;
-      return `() => { const $l = ${source}${test !== null ? `.filter((${item}) => ${test})` : ""}; const $i = $l.findIndex((${params}) => ${key} === $key); if ($i < 0) return undefined; const ${item} = $l[$i]!;${list.index ? ` const ${list.index.name} = $i;` : ""}${test !== null ? ` $assume(${test});` : ""} return ${inner()}; }`;
+      // A list of items that switch between two elements keeps every item (no filter); the condition picks the branch.
+      const switching = around.alternate !== null;
+      const filter = test !== null && !switching ? `.filter((${item}) => ${test})` : "";
+      const narrow =
+        test === null
+          ? ""
+          : !switching
+            ? ` $assume(${test});`
+            : branch === 1
+              ? ` if (${test}) return undefined; $assume(!(${test}));`
+              : ` if (!(${test})) return undefined; $assume(${test});`;
+      return `() => { const $l = ${source}${filter}; const $i = $l.findIndex((${params}) => ${key} === $key); if ($i < 0) return undefined; const ${item} = $l[$i]!;${around.index ? ` const ${around.index.name} = $i;` : ""}${narrow} return ${inner()}; }`;
     };
     if (spread) {
       // A spread's members are not known here: every value prop is worked out at once, in order, as the construction does.

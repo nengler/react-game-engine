@@ -39,7 +39,7 @@ import type { SpringOptions, TweenOptions } from "./math.ts";
 export type { TransformProps, TransformShorthand, Child } from "./jsx-runtime.ts";
 import type { TransformShorthand } from "./jsx-runtime.ts";
 
-export { clamp, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween } from "./math.ts";
+export { clamp, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, textOf } from "./math.ts";
 export { keepIfEqual } from "./equal.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
 export { readContext, type Context } from "./context.ts";
@@ -291,8 +291,11 @@ export function Pointer(_props: PointerProps & TransformShorthand): JSX.Element 
   return compileTimeOnly("Pointer");
 }
 
-/** What a `<Text>` may hold between its tags: text and `{expressions}` of strings or numbers. */
-export type TextChild = string | number;
+/**
+ * What a `<Text>` may hold between its tags: text and `{expressions}` of strings or numbers. As in React, `null`, `undefined` and
+ * booleans draw nothing, so `<Text>{maybe}</Text>` and `<Text>Ready{done && "!"}</Text>` work.
+ */
+export type TextChild = string | number | boolean | null | undefined;
 
 /**
  * The content is the element's children, and only them: `<Text size={12}>Score: {score}</Text>`. There is no `text` prop in JSX

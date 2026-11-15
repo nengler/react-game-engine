@@ -14,11 +14,10 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 
 - **Three zones.** The component body runs during render, so it cannot set state; a handler may run any loop, `try`, `new` or method
   on values it made; a plain `.ts` file allows anything. A newcomer has to know which zone they are in.
-- **The body's calls are an allowlist.** `reduce` in the body is `RGE1301`, and the message lists every allowed call in one long line.
-  Handlers have the standard library; the body does not. *Planned:* NEXT_PRIORITIES.md, "Now", step 3.
-- **Generic components** (`function List<T>(…)`) are not reported at the source: the error is TypeScript's, in the generated file
-  (`Cannot find name 'T'`). *Planned:* step 3.
-- **`<Text>{maybe}</Text>`** with a value that may be `undefined` is a type error; React would draw nothing. *Planned:* step 3.
+- **The body's calls are an allowlist.** Array methods that make a new value (`reduce` included since 2026-11-15), string and number
+  methods, `Math` and the engine's helpers; handlers also have the standard library on values they made. A refused call says so in one
+  short line.
+- **No generic components** (`function List<T>(…)`, `RGE1001`, reported at the type parameter): a component is one class.
 - **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.
 - **`useReducer` does not exist.** A reducer is a plain function in a `.ts` file that a handler calls (`s.n = reducer(s.n, action)`).
 
@@ -35,8 +34,8 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 - **Frame timing.** A write in a handler is read back at once by that handler, and drawn at the next render; objects attached
   mid-frame get hooks next frame; collision callbacks run after `useUpdate`, which is why the guide says to read tiles, not colliders,
   for movement and deaths.
-- **Props still read the last render in three places:** a context value, what is below a list item (and an item that switches between
-  two elements), and a callback prop (by design). *Planned:* step 3.
+- **Props read live in handlers** everywhere but a callback prop (a function, made once) and a list inside a list item (since
+  2026-11-15).
 - **Placement.** Built-ins take `x` / `y`; a component is placed with `transform={{ x, y }}` (its own props may say `x`). The origin is
   top-left except where `originX` / `originY` exist, and `z` adds to the parent's.
 

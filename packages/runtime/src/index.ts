@@ -130,6 +130,7 @@ export {
 } from "./input.ts";
 export {
   clamp,
+  textOf,
   EASINGS,
   NO_SHAKE,
   shakeOn,

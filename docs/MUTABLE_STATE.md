@@ -321,11 +321,11 @@ Still open:
   holds, and the child's last props stand. A list item (`{s.foes.map((f) => <Watch key={f.id} hp={f.hp} />)}`, also with a spread of the
   item or a condition on it) has its item found again by key in the live list, the source and the filter read live, so a sibling's write
   to an item shows in the step; an item whose key is gone says nothing, so an old page that is on its way out as `key={page}` changes
-  keeps reading its own last props, not the next key's (`liveprops.test.ts`). Not built yet, so these still read what the parent's last
-  render copied (the old one-step lag):
-  - a value passed by context (`<Ctx.Provider value={s.x}>`);
-  - what is below a list item (an item's own children), and a list item that switches between two elements (`c ? <A key … /> : <B key … />`);
-  - a callback prop is never live (it is created once).
+  keeps reading its own last props, not the next key's (`liveprops.test.ts`). **Since 2026-11-15** the rest read live too: a value passed
+  by context (the `<Provider>` gets a getter for its `value`, and a reader's handler reads `ContextReader.live`); what is below a list
+  item (its getters find the item again by key, as the item's own do); and an item that switches between two elements (each branch's
+  getter says nothing once the item is in the other branch). Only a callback prop is never live: it is created once. A list inside a
+  list item still reads what the last render copied: its getter would have to find the outer item again too.
   A getter in a list item finds its item with a `find` over the live list on each read, so a child reading several props in many items
   costs a pass of the list per read; Hearth's wave 10 and the bench budget are within bounds, and a per-frame cache is the way to cut it
   if a game needs that.
@@ -339,7 +339,7 @@ Still open:
     makes a child: a plain element, a conditional one, a keyed list's items (the item found again by key in the live list, with
     the list's filter and an alternate element applied), an item's own children, and nested children (the getter reads the
     child's own props live, recursively). Doing it for some of these and not others gives the two rules depending on where an
-    element sits, which this note calls the worst outcome. It was built in steps: the direct case, then list items and keys; the cases above still read the last render: `generator/elements.ts` (`propGetters`, `emitList`) and `GameObject.liveProp`.
+    element sits, which this note calls the worst outcome. It was built in steps: the direct case, then list items and keys, then context, an item's children and switching items: `generator/elements.ts` (`propGetters`, `emitList`), `GameObject.liveProp` and `ContextReader.live`.
 - **`useRef`** (open question 4) was removed (see MUTABLE_STATE_FOLLOWUPS.md); **game-state actions** (open question 5) are proposed in "The game state: actions write, readers read", not built.
 
 Found while building it:

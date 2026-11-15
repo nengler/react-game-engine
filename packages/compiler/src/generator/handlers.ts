@@ -237,7 +237,8 @@ export class HandlerEmitter extends ExpressionEmitter {
    * the transform gives a derived value read in a handler). The IR is plain data, so this is a copy with those nodes changed.
    */
   protected live(e: ExprIR): ExprIR {
-    const mutable = new Set(this.c.state.filter((s) => s.mutable !== undefined).map((s) => s.id));
+    // A `useMutable` field, and a context's value (read through its provider's getter).
+    const mutable = new Set(this.c.state.filter((s) => s.mutable !== undefined || s.refresh !== undefined).map((s) => s.id));
     let changed = false;
     const map = (value: unknown): unknown => {
       if (Array.isArray(value)) return value.map(map);
