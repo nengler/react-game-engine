@@ -161,7 +161,7 @@ npm run check</code></pre>
   return &lt;Entity transform={{ x, y }}&gt;&lt;Sprite image=&quot;hero.png&quot; /&gt;&lt;/Entity&gt;;
 }</code></pre>
 <p><code>useBody</code> is a box that moves a pixel at a time: add a <code>&lt;Tilemap solid&gt;</code> or a <code>&lt;Collider solid&gt;</code> to the level and <code>move</code> stops at it.</p>
-<p>Movement is over time, so it reads the held keys in <code>useUpdate</code>, which gets the same <code>input</code> as <code>useInput</code>. Something that happens once, on a press (<code>if (input.pressed(&quot;Z&quot;)) step();</code>), goes in <code>useInput</code>. There is no need to copy keys into a <code>useRef</code> to carry them from one to the other.</p>
+<p>Movement is over time, so it reads the held keys in <code>useUpdate</code>, which gets the same <code>input</code> as <code>useInput</code>. Something that happens once, on a press (<code>if (input.pressed(&quot;Z&quot;)) step();</code>), goes in <code>useInput</code>. There is no need to copy keys into a field to carry them from one to the other.</p>
 <p>Replace the <code>&lt;Sprite&gt;</code> with <code>&lt;Shape kind="rect" width={16} height={16} color="gold" /&gt;</code> to see a square, and back to see the sprite from <code>assets/hero.png</code>.</p>
 
 <h2>3. A sprite</h2>

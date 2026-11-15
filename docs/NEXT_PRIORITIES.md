@@ -1,6 +1,8 @@
 # react-game-engine: next priorities after Phase 3
 
-As of 2026-11-09. Written after the post-N6 review; see [NATIVE_PLAN.md](NATIVE_PLAN.md), "Review after N6", for what that review measured and fixed.
+**What is being worked on now is the table in "Now" below (2026-11-15).** The rest of this document is the record of how the engine got here: the priorities as first ranked, the findings of each game, and what waits.
+
+First written 2026-11-09, after the post-N6 review; see [NATIVE_PLAN.md](NATIVE_PLAN.md), "Review after N6", for what that review measured and fixed.
 
 ## Summary
 
@@ -19,6 +21,24 @@ Sizes are rough, for one engineer, in the style of the Phase 3 plan. Each priori
 **What comes after these** is Phase 4, decided 2026-11-10: play the engine on a real machine, build a real small game and let it drive the backlog, then make it usable outside this repository by making a third game outside it (decided 2026-11-11; [ADVENTURE_PLAN.md](ADVENTURE_PLAN.md)). See "Phase 4: driven by a real game" below.
 
 **Making it feel like React** (2026-11-13): a review of the engine as a whole asked how close writing a game is to writing React, what is missing and what big wins are cheap. Its plan, ordered, is [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md). Decided with it: the goal is that game code lives in components, written like React, and the limits that pushed the three games' logic into `rules/` are to be fixed (its section A), not recommended; it includes context, the web backend and a dependency-scoped `render()`, which are rows of "Not now" and priority 4 below. `useChange` is held for a separate discussion.
+
+## Now (decided 2026-11-15)
+
+After a review of the engine as a whole (three games, 1,800 tests, the new-game flow checked from an empty folder), the author set
+this order. Each step lands as its own PR, checked with `npm run ci:local` while Actions has no minutes. The web backend and QuickJS
+performance are set aside for now; the author has played Bramble in a window, and it works.
+
+| # | Step | What it covers |
+| --- | --- | --- |
+| 1 | Finish the game-state migration (**done**, #144) | Kite, Hearth and Bramble on `createGameState(data, actions)`; the `set` form removed; writes from components refused with the action to add; selected values read-only |
+| 2 | Fix the docs | The guide and the notes match the code: `PAIN_POINTS.md` rewritten, examples on `useMutable`, this table, a shorter README |
+| 3 | Props read live everywhere, and React subset gaps | Context values, what is below a list item and a switching item read live; generic components reported at the source; `reduce` in the body; a short allowlist message, printed once; `<Text>` takes `undefined` and `null` |
+| 4 | Checking visuals with a GPU renderer | `rge screenshot --gpu`: the desktop build under a virtual display on Mesa's software OpenGL, which runs real shaders; an image comparison with a tolerance; the software renderer says it skips shader effects |
+| 5 | Render targets and blend modes | One ABI change both shaders and lighting build on; a greybox of a cave or night area in Bramble starts here |
+| 6 | Shaders | Tested in Bramble's cave or night area |
+| 7 | Lighting | A light map multiplied over the scene, finishing that area |
+| 8 | Better collision shapes | Circles and polygons; whether they also stop movement (slopes) is the author's call |
+| 9 | Cutscenes | Sequences (REACT_FEEL_PLAN.md C2); the way into Bramble's cave is the first |
 
 ## Phase 4: driven by a real game
 

@@ -122,15 +122,15 @@ Limitations found while integrating:
 ## Authoring model
 
 ```tsx
-import { useState, Entity, Sprite } from "@rge/runtime/jsx";
+import { useMutable, Entity, Sprite } from "@rge/runtime/jsx";
 import { WarningIcon } from "./WarningIcon.tsx";
 
 function Player() {
-  const [health, setHealth] = useState(100);
+  const s = useMutable({ health: 100 });
   return (
     <Entity name="Player">
-      <Sprite image={health > 50 ? "normal.png" : "hurt.png"} />
-      {health < 25 && <WarningIcon />}
+      <Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} />
+      {s.health < 25 && <WarningIcon />}
     </Entity>
   );
 }
@@ -426,10 +426,10 @@ cleanup from `useMount`" below.
 
 ```tsx
 function Banner({ text, onDone }: BannerProps) {
-  const [shown, setShown] = useState(false);
-  useMount(() => setShown(true));        // once, when it joins the world
+  const s = useMutable({ shown: false });
+  useMount(() => { s.shown = true; });   // once, when it joins the world
   useUnmount(() => onDone?.());          // once, when it leaves
-  return <Sprite image={shown ? `banner-${text}.png` : "banner-hidden.png"} />;
+  return <Sprite image={s.shown ? `banner-${text}.png` : "banner-hidden.png"} />;
 }
 ```
 
@@ -890,12 +890,12 @@ function Panel({ title, children }: PanelProps) {
 }
 
 function Scoreboard() {
-  const [score, setScore] = useState(0);
+  const s = useMutable({ score: 0 });
   return (
     <Entity name="Scoreboard">
       <Panel title="hud">
-        <Coin value={score} />
-        {score > 10 && <Sprite image="star.png" />}
+        <Coin value={s.score} />
+        {s.score > 10 && <Sprite image="star.png" />}
       </Panel>
     </Entity>
   );
@@ -1415,13 +1415,13 @@ written with a `transform` attribute on a built-in element.
 
 ```tsx
 function Mover() {
-  const [x, setX] = useState(0);
+  const s = useMutable({ x: 0 });
   useUpdate((dt) => {
-    setX((previous) => previous + 60 * dt);
+    s.x += 60 * dt;
   });
   return (
-    <Entity name="Mover" transform={{ x, y: 0 }}>
-      <Sprite image={x > 100 ? "run.png" : "idle.png"} />
+    <Entity name="Mover" transform={{ x: s.x, y: 0 }}>
+      <Sprite image={s.x > 100 ? "run.png" : "idle.png"} />
     </Entity>
   );
 }
@@ -1429,24 +1429,29 @@ function Mover() {
 
 ```ts
 export class Mover extends Entity {
-  x: number = 0;
-  #xNext: number = this.x;       // pending value written by setX
-  readonly sprite: Sprite = new Sprite({ image: (this.x > 100) ? "run.png" : "idle.png" });
+  $s_x: number = 0;                  // the field as render saw it
+  #$s_xNext: number = this.$s_x;     // as handlers wrote it: `s.x += …` reads and writes this
+  readonly sprite: Sprite = new Sprite({ image: (this.$s_x > 100) ? "run.png" : "idle.png" });
   constructor() {
     super({ name: "Mover" });
-    this.transform.y = 0;          // static fields: set once
+    this.transform.y = 0;            // static fields: set once
     this.addChild(this.sprite);
     this.render();
     this.commitStructure();
   }
-  override commitState(): void { this.x = this.#xNext; }
-  override onUpdate(dt: number): void { this.setX((previous: number) => previous + (60 * dt)); }
-  override render(): void {
-    this.transform.x = this.x;     // dynamic fields: re-applied on render
-    this.sprite.image = (this.x > 100) ? "run.png" : "idle.png";
+  $set_s_x(value: number): void { if (value === this.#$s_xNext) return; this.#$s_xNext = value; this.markDirty(); }
+  override commitState(): void { this.$s_x = this.#$s_xNext; }
+  override onUpdate(dt: number): void { this.$set_s_x(this.#$s_xNext + (60 * dt)); }
+  override render(): void {          // dynamic fields: re-applied when what they read changed
+    const $1 = this.$s_x;
+    if (this.transform.x !== $1) { this.transform.x = $1; this.markMoved(); }
+    const $2 = (this.$s_x > 100) ? "run.png" : "idle.png";
+    if (this.sprite.image !== $2) { this.sprite.image = $2; this.sprite.markChanged(); }
   }
 }
 ```
+
+(Abridged from `packages/example/generated/Mover.ts`, which also has the hot-reload hooks and the `s` view a handler passes whole.)
 
 **The transform attribute**: `transform={{ x, y: 0, rotation: angle }}` is an
 object literal whose keys are transform fields (`x`, `y`, `z`, `rotation`,
@@ -2153,10 +2158,10 @@ function Enemy({ speed, tint = "red", onDefeated }: EnemyProps) {
 }
 
 function Level() {
-  const [score, setScore] = useState(0);
+  const s = useMutable({ score: 0 });
   return (
     <Entity name="Level">
-      <Enemy speed={score > 10 ? 2 : 1} onDefeated={() => setScore((score) => score + 1)} transform={{ x: 40 }} />
+      <Enemy speed={s.score > 10 ? 2 : 1} onDefeated={() => { s.score += 1; }} transform={{ x: 40 }} />
     </Entity>
   );
 }
@@ -2203,9 +2208,9 @@ its callbacks in the constructor call, and re-sends only the dynamic ones, in
 one call, from `render()`:
 
 ```ts
-readonly enemy: Enemy = new Enemy({ speed: (this.score > 10) ? 2 : 1, onDefeated: () => { this.setScore(…); } });
+readonly enemy: Enemy = new Enemy({ speed: (this.$s_score > 10) ? 2 : 1, onDefeated: () => { this.$set_s_score(this.#$s_scoreNext + 1); } });
 …
-this.enemy.updateProps({ speed: (this.score > 10) ? 2 : 1 });
+this.enemy.updateProps({ speed: (this.$s_score > 10) ? 2 : 1 });
 ```
 
 A changed prop marks the child dirty, and it renders in the same `World.flush()`
@@ -2462,8 +2467,8 @@ Generated output for the example above (abridged):
 
 ```ts
 export class Player extends Entity {
-  health: number = 100;
-  readonly sprite: Sprite = new Sprite({ image: (this.health > 50) ? "normal.png" : "hurt.png" });
+  $s_health: number = 100;
+  readonly sprite: Sprite = new Sprite({ image: (this.$s_health > 50) ? "normal.png" : "hurt.png" });
   warningIcon: WarningIcon | null = null;
   constructor() {
     super({ name: "Player" });
@@ -2471,10 +2476,10 @@ export class Player extends Entity {
     this.render();
     this.commitStructure();
   }
-  setHealth(value: number | ((previous: number) => number)): void { … this.markDirty(); }
+  $set_s_health(value: number): void { … this.markDirty(); }
   override render(): void {
-    this.sprite.image = (this.health > 50) ? "normal.png" : "hurt.png";
-    if (this.health < 25) {
+    this.sprite.image = (this.$s_health > 50) ? "normal.png" : "hurt.png";
+    if (this.$s_health < 25) {
       if (this.warningIcon === null) { this.warningIcon = new WarningIcon(); this.queueAddChild(this.warningIcon, 1); }
     } else if (this.warningIcon !== null) {
       this.queueRemoveChild(this.warningIcon);
