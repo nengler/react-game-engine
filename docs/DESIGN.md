@@ -1742,6 +1742,18 @@ the actions. Not built: rebinding at run time, and axes (a stick's value rather 
 - Not built: the plan's second layer (`transition` on a built-in's transform, eased by the runtime without renders), which waits for
   a game that measures the hooks as too costly.
 
+## Sequences, for cutscenes (2026-11-15)
+
+`sequence([wait(0.4), tween(1.2, set, easeOut), call(fn), waitFor(pred), parallel([…])])`, in `runtime/src/sequence.ts`, as
+REACT_FEEL_PLAN.md C2 proposed: a plain library, not compiler work. A sequence is a value with `step(dt)`; the game's rules or a
+component own it (Bramble's `Play` keeps one in a `useMutable` field and holds the world while it runs). Each step reports the time it
+has left over when it ends, and the next step gets it, so a sequence lasts what its steps add up to at any step size, and under the
+fixed timestep it is deterministic. Its `position` is plain data (`{ index, step }`, nested for `parallel`) and `restore` carries on from
+it, a `call` already made not made again; the closures are rebuilt by the code that makes the sequence, so a save keeps the position
+only. Building Bramble's cutscene found two things about writing one in a component: a field started at `null` cannot have its methods
+called (only an object a function made for the component, a "handle", can), so the cutscene field starts from `noCutscene()`; and
+`import type { Sequence } from "@rge/runtime"` is refused in a component, so `@rge/runtime/jsx` re-exports the type.
+
 ## Timers: `after`, `every`, `cancelTimers` (2026-11-13)
 
 `REACT_FEEL_PLAN.md`, C2. React code writes `setTimeout` in a handler; here each delay was a countdown kept as state.

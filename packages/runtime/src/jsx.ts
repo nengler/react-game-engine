@@ -39,6 +39,8 @@ import type { Child, JSX } from "./jsx-runtime.ts";
 import type { SpringOptions, TweenOptions } from "./math.ts";
 
 export type { TransformProps, TransformShorthand, Child } from "./jsx-runtime.ts";
+/** A cutscene's sequence, for a field's type (`intro: null as Sequence | null`); its steps come from `@rge/runtime` in a `.ts` file. */
+export type { Sequence, SequencePosition, Step } from "./sequence.ts";
 import type { TransformShorthand } from "./jsx-runtime.ts";
 
 export { clamp, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, textOf } from "./math.ts";
