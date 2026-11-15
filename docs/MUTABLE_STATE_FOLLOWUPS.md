@@ -61,7 +61,10 @@ closed, and the decision here is to keep the copy model and not add versions. Wh
    the local-and-assign pattern.
 3. **The refusals are a list to keep short.** `?.` in a write, an index that is not plain, an alias, a loop variable and a method's
    result used as a value are refused. Each should keep a test that shows its message. If authors hit one often (a loop over a list
-   writing its items is the likeliest), lower it rather than refuse it.
+   writing its items is the likeliest), lower it rather than refuse it. *Done 2026-11-15:* a loop over a field that writes through its item
+   (`for (const foe of s.foes) { foe.hp -= 1; }`) is lowered to a loop over the index, the item an alias of `s.foes[i]`
+   (`lowerItemLoop` in `transform/statements.ts`). A loop over a copy (`s.foes.filter(…)`) is still refused, as is a body that also
+   changes the list itself. Each write is still a copy (item 2).
 4. **Live props still read the last render in three places** (below): the same "two rules depending on where an element sits" the
    design note warns of. In-place writes make this easier to hit, because a handler can now change an item a child reads by context.
 

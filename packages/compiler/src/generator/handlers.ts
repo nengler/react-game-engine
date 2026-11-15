@@ -150,7 +150,7 @@ export class HandlerEmitter extends ExpressionEmitter {
           break;
         case "LocalConst":
           w.line(
-            `${stmt.mutable ? "let" : "const"} ${stmt.type ? annotated(stmt.name, stmt.type) : stmt.name} = ${this.expr(stmt.value, true)};`
+            `${stmt.mutable ? "let" : "const"} ${stmt.type ? annotated(stmt.name, stmt.type) : stmt.name}${stmt.uninitialized ? "" : ` = ${this.expr(stmt.value, true)}`};`
           );
           break;
         case "ForOf":

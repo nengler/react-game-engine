@@ -412,11 +412,29 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const decl = list.declarations[0]!;
     const mutable = (list.flags & NodeFlags.Let) !== 0;
     const isConst = (list.flags & NodeFlags.Const) !== 0;
+    // `let label: string;`, assigned by the statements after it: as TypeScript allows, with the type written.
+    if (mutable && list.declarations.length === 1 && isIdentifier(decl.name) && !decl.initializer) {
+      if (!decl.type) {
+        ctx.error(
+          ctx.inRenderBlock() ? DiagnosticCode.InvalidComponentBody : DiagnosticCode.UnsupportedStatement,
+          `\`let ${decl.name.text};\` needs its type, as TypeScript would otherwise make it \`any\`: \`let ${decl.name.text}: string;\`.`,
+          statement
+        );
+        return null;
+      }
+      const name = decl.name.text;
+      if (!checkFreshName(ctx, name, decl.name)) return null;
+      const type = ctx.typeFromNode(decl.type);
+      if (!type) return null;
+      const id = localId(ctx.componentName, name, ctx.nextSerial());
+      ctx.scope.declare(name, { kind: "local", id, name, mutable: true, owned: false });
+      return { kind: "LocalConst", id, name, value: { kind: "PlainRef", name: "undefined" }, mutable: true, type, uninitialized: true };
+    }
     if ((!isConst && !mutable) || list.declarations.length !== 1 || !isIdentifier(decl.name) || !decl.initializer) {
       const where = ctx.inRenderBlock() ? "in statements of the component body" : "in handlers";
       ctx.error(
         ctx.inRenderBlock() ? DiagnosticCode.InvalidComponentBody : DiagnosticCode.UnsupportedStatement,
-        `Only \`const name = expression;\` and \`let name = expression;\` declarations (one name, with a value) are supported ${where}.`,
+        `Only \`const name = expression;\`, \`let name = expression;\` and \`let name: Type;\` declarations (one name) are supported ${where}.`,
         statement
       );
       return null;
@@ -590,6 +608,10 @@ function lowerForOf(
     );
     return null;
   }
+  if (pattern.kind === "name" && writesThrough(pattern.name, loop.statement)) {
+    const item = lowerItemLoop(ctx, pattern.name, pattern.node, loop.expression, loop.statement, options);
+    if (item !== undefined) return item;
+  }
   const iterable = ctx.lowerExpression(loop.expression);
   if (!iterable) return null;
   return ctx.inScope((scope) => {
@@ -629,6 +651,108 @@ function lowerForOf(
       jumps: LOOP_JUMPS,
     });
     return body && { kind: "ForOf", binding, iterable, body };
+  });
+}
+
+/** The name a write is made through (`foe` in `foe.hp -= 1`, `foe.tags.push(t)`, `foe.pos.x++`), or null. */
+function writeRoot(node: Node): string | null {
+  let target: Node | null = null;
+  if (isBinaryExpression(node) && ASSIGNMENT_TOKENS.has(node.operatorToken.kind)) target = node.left;
+  else if (
+    (isPrefixUnaryExpression(node) || isPostfixUnaryExpression(node)) &&
+    (node.operator === SyntaxKind.PlusPlusToken || node.operator === SyntaxKind.MinusMinusToken)
+  )
+    target = node.operand;
+  else if (
+    isCallExpression(node) &&
+    isPropertyAccessExpression(node.expression) &&
+    Object.hasOwn(MUTATING_ARRAY_METHODS, node.expression.name.text)
+  )
+    target = node.expression.expression;
+  if (target === null) return null;
+  let root = unwrapParens(target as Expression);
+  let through = false;
+  while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root)) {
+    through ||= !isNonNullExpression(root);
+    root = unwrapParens(root.expression);
+  }
+  return through && isIdentifier(root) ? root.text : null;
+}
+
+/** Whether `body` writes through `name`, the item of the loop around it. */
+function writesThrough(name: string, body: Node): boolean {
+  let found = false;
+  const visit = (node: Node): void => {
+    if (found) return;
+    if (writeRoot(node) === name) found = true;
+    else node.forEachChild(visit);
+  };
+  visit(body);
+  return found;
+}
+
+/**
+ * `for (const foe of s.foes) { foe.hp -= 1; }`: a loop over a `useMutable` list that writes through its item. Lowered as the loop
+ * the author would write to change the list, over its index, the item a name for `s.foes[i]`: `foe.hp -= 1` is `s.foes[i].hp -= 1`,
+ * a copy with that item changed, and a read of `foe` after it sees the change. A body that also changes the list itself (`push`,
+ * `splice`, a new value for `s.foes`) is refused, because the items would move under the index. Undefined when `list` is not a
+ * `useMutable` list (the caller lowers an ordinary loop, which refuses the write with its own message).
+ */
+function lowerItemLoop(
+  ctx: LoweringContext,
+  name: string,
+  nameNode: Node,
+  list: Expression,
+  body: Statement,
+  options: FunctionOptions
+): StatementIR | null | undefined {
+  const path = mutablePath(ctx, list);
+  if (path === undefined || (path !== null && ctx.isHandleState(path.state))) return undefined;
+  if (path === null) return null;
+  const listText = list.getText();
+  let moved: Node | null = null;
+  const visit = (node: Node): void => {
+    if (moved !== null) return;
+    const assigned =
+      isBinaryExpression(node) && ASSIGNMENT_TOKENS.has(node.operatorToken.kind) && unwrapParens(node.left).getText() === listText;
+    const changed =
+      isCallExpression(node) &&
+      isPropertyAccessExpression(node.expression) &&
+      Object.hasOwn(MUTATING_ARRAY_METHODS, node.expression.name.text) &&
+      unwrapParens(node.expression.expression).getText() === listText;
+    if (assigned || changed) moved = node;
+    else node.forEachChild(visit);
+  };
+  visit(body);
+  if (moved !== null) {
+    ctx.error(
+      DiagnosticCode.UnsupportedStatement,
+      `This loop writes through \`${name}\` and also changes \`${listText}\` itself, which would move the items under it. Change the items in the loop and the list after it (\`${listText} = ${listText}.filter(…)\`), or build the new list in a local and assign it once.`,
+      moved
+    );
+    return null;
+  }
+  if (!checkFreshName(ctx, name, nameNode)) return null;
+  return ctx.inScope((scope) => {
+    const indexName = `$${name}Index`;
+    const local = localId(ctx.componentName, indexName, ctx.nextSerial());
+    const index: ExprIR = { kind: "LocalRead", local, name: indexName };
+    scope.declare(indexName, { kind: "local", id: local, name: indexName, mutable: true });
+    scope.declare(name, { kind: "item", name, list, index });
+    const lowered = lowerStatements(ctx, isBlock(body) ? body.statements : [body], options, { newScope: true, jumps: LOOP_JUMPS });
+    if (!lowered) return null;
+    // The list's length as it is at each test: the body writes items, never how many there are.
+    const current = ctx.lowerExpression(list);
+    if (!current) return null;
+    return {
+      kind: "For",
+      init: [{ kind: "LocalConst", id: local, name: indexName, value: { kind: "NumberLiteral", value: 0 }, mutable: true }],
+      test: { kind: "Binary", operator: "<", left: index, right: { kind: "MemberRead", object: current, name: "length", optional: false } },
+      update: [
+        { kind: "Assign", target: { kind: "Local", local, name: indexName }, operator: "+=", value: { kind: "NumberLiteral", value: 1 } },
+      ],
+      body: lowered,
+    };
   });
 }
 
@@ -730,7 +854,9 @@ const ASSIGNMENT_TOKENS: ReadonlySet<SyntaxKind> = new Set([
 /** A step from a `useMutable` field into a value it holds: `.hp`, or `[i]`. `bang` is a `!` after it, kept so the generated code type-checks. */
 type PathStep =
   | { readonly kind: "prop"; readonly name: string; readonly bang: boolean }
-  | { readonly kind: "index"; readonly index: Expression; readonly bang: boolean };
+  | { readonly kind: "index"; readonly index: Expression; readonly bang: boolean }
+  /** A loop's own index (`for (const foe of s.foes)` writing through `foe`), already lowered. */
+  | { readonly kind: "loopIndex"; readonly index: ExprIR; readonly bang: boolean };
 
 /** `s.enemies[i].hp`: the field (`s.enemies`) and what is reached through it. */
 interface MutablePath {
@@ -795,6 +921,13 @@ function mutablePath(ctx: LoweringContext, target: Expression): MutablePath | nu
       steps.unshift({ kind: "index", index: node.argumentExpression, bang });
       bang = false;
       node = unwrapParens(node.expression);
+    } else if (isIdentifier(node) && steps.length > 0) {
+      // `foe.hp -= 1` in `for (const foe of s.foes)`: the path of `s.foes[i]`, then the rest.
+      const binding = ctx.scope.get(node.text);
+      if (binding?.kind !== "item") return undefined;
+      const list = mutablePath(ctx, binding.list);
+      if (!list) return list;
+      return { state: list.state, steps: [...list.steps, { kind: "loopIndex", index: binding.index, bang: true }, ...steps] };
     } else {
       return undefined;
     }
@@ -824,7 +957,7 @@ function rebuildPath(ctx: LoweringContext, path: MutablePath, leaf: (current: Ex
         }
       );
     }
-    const index = ctx.lowerExpression(step.index);
+    const index = step.kind === "loopIndex" ? step.index : ctx.lowerExpression(step.index);
     if (!index) return null;
     const element: ExprIR = { kind: "IndexRead", object: read, index, optional: false };
     const value = go(step.bang ? { kind: "NonNull", expression: element } : element, i + 1);

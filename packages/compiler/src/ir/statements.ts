@@ -164,6 +164,11 @@ export interface LocalConstStmtIR {
   readonly mutable?: true;
   /** `let best: Enemy | null = null`: the annotation, written into the generated code. Absent when TypeScript infers it. */
   readonly type?: TypeIR;
+  /**
+   * `let label: string;`: declared without a value, which the code after it assigns (`switch` cases, an `if`/`else`). `value` is
+   * then `undefined`, and the generated code declares it the same way, so TypeScript checks it is assigned before it is read.
+   */
+  readonly uninitialized?: true;
 }
 
 export interface IfStmtIR {

@@ -545,16 +545,17 @@ export function Hero() {
     assert.deepEqual(hero.s.hp, [0, 3 + 2 + 1 + 0]);
   });
 
-  it("refuses a write the compiler would have to follow: an alias, a loop variable, an index with a call, `?.`", () => {
+  it("refuses a write the compiler would have to follow: an alias, a loop variable over a copy, an index with a call, `?.`", () => {
     assert.match(
       errors(foes("const f = s.foes[0]!; f.hp = 0;"))[0] ?? "",
       /write through its `useMutable` field \(`s\.foes\[i\]\.hp = 0`/,
       "an alias"
     );
+    // A loop over the field itself writes through its item (idioms.test.ts); over a copy, the write would change nothing the field holds.
     assert.match(
-      errors(foes("for (const f of s.foes) { f.hp = 0; }"))[0] ?? "",
+      errors(foes("for (const f of s.foes.filter((e) => e.hp > 0)) { f.hp = 0; }"))[0] ?? "",
       /a loop variable is a read, not a way to write/,
-      "a loop variable"
+      "a loop variable over a copy"
     );
     assert.match(
       errors(foes("const f = s.foes[0]!; f.hp++;"))[0] ?? "",

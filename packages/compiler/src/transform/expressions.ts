@@ -136,6 +136,16 @@ export class ExpressionLowering extends LoweringBase {
           return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param":
           return { kind: "ParamRead", param: binding.id, name: binding.name };
+        // A loop's item that the loop writes through: the list's element as it is now, `s.foes[i]!`.
+        case "item": {
+          const list = this.lowerNode(binding.list);
+          return (
+            list && {
+              kind: "NonNull",
+              expression: { kind: "IndexRead", object: list, index: binding.index, optional: false },
+            }
+          );
+        }
         case "state":
           return {
             kind: "StateRead",
@@ -855,6 +865,14 @@ export class ExpressionLowering extends LoweringBase {
         );
         return null;
       }
+      // `[...alive].sort(byX)`, `items.filter(f).reverse()`: on an array made right here, nothing else holds it, so sorting it in place
+      // is sorting a copy. Written as the copying form, which is what it means.
+      const fresh = unwrapParens(callee.expression);
+      const copying = name === "sort" ? "toSorted" : name === "reverse" ? "toReversed" : null;
+      if (copying !== null && this.isFreshArray(fresh) && !callee.questionDotToken && !node.questionDotToken) {
+        const lowered = this.lowerNode(fresh);
+        return lowered && this.lowerArrayCall(lowered, copying, node.arguments, node);
+      }
       const store = this.storeWrite(receiver, name);
       this.report(
         code,
@@ -884,6 +902,18 @@ export class ExpressionLowering extends LoweringBase {
     const receiver = this.lowerNode(callee.expression);
     if (!receiver) return null;
     return this.lowerArrayCall(receiver, name as ArrayMethodName, node.arguments, node);
+  }
+
+  /**
+   * An array made by the expression itself, which nothing else holds: a literal (`[...items]`) or what a copying method returns
+   * (`items.filter(…)`, `items.slice()`, `items.map(…)`).
+   */
+  protected isFreshArray(node: Expression): boolean {
+    if (isArrayLiteralExpression(node)) return true;
+    if (!isCallExpression(node) || !isPropertyAccessExpression(node.expression)) return false;
+    return ["filter", "map", "slice", "concat", "flatMap", "flat", "toSorted", "toReversed", "toSpliced", "with"].includes(
+      node.expression.name.text
+    );
   }
 
   /** An allowlisted array method called on a receiver already lowered: its arguments counted and lowered (an arrow for a callback). */

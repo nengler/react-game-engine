@@ -21,6 +21,13 @@ the component's own, `filter(…).map(…)`, conditions and lists inside list it
 - **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.
 - **`useReducer` does not exist.** A reducer is a plain function in a `.ts` file that a handler calls (`s.n = reducer(s.n, action)`).
 
+*Fixed 2026-11-15*, from eight everyday components compiled one by one: an imported constant or a call of an imported function as a
+`useMutable` field's value (`{ gold: START_GOLD, hero: makeHero() }`, typed as TypeScript would, and `s.hero.hp -= 1` writes through
+it); a derived value that may be null narrowing where it is tested (`cost !== null && gold >= cost`); `[...list].sort(f)` on a copy
+made there; `{boss && <Text>{boss.hp}</Text>}` with `boss` from `.find()`, which crashed the compiler; a loop writing through the item
+of a field's list (`for (const foe of s.foes) { foe.hp -= 1; }`, not when it also changes the list); and `let msg: string;` assigned by
+a `switch` after it.
+
 ## 2. Refs on elements are missing on purpose
 
 - **No `ref={…}`**: there is no handle on a node (`RGE1106`).
