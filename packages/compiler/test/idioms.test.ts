@@ -286,3 +286,57 @@ export function A() {
     assert.match(errors[0]!.message, /changes `s\.xs` in place/);
   });
 });
+
+describe("a loop over a useMutable list that writes through its item", () => {
+  const SOURCE = `import { Text, useInput, useMutable } from "@rge/runtime/jsx";
+interface Foe { id: number; hp: number; x: number; tags: string[] }
+export function Field() {
+  const s = useMutable({
+    foes: [{ id: 1, hp: 3, x: 0, tags: [] }, { id: 2, hp: 1, x: 50, tags: [] }, { id: 3, hp: 2, x: 90, tags: [] }] as Foe[],
+    log: "",
+  });
+  useInput((input) => {
+    if (!input.pressed("confirm")) return;
+    for (const foe of s.foes) {
+      if (foe.x > 80) break;
+      foe.hp -= 1;
+      foe.x += 10;
+      if (foe.hp <= 0) foe.tags.push("down");
+      s.log += \`\${foe.id}:\${foe.hp} \`;
+    }
+  });
+  return <Text>{\`\${s.foes.map((f) => \`\${f.hp}@\${f.x}\${f.tags.join("")}\`).join(",")} | \${s.log}\`}</Text>;
+}`;
+
+  it("changes each item it passes, reads its own writes, and stops at break", async () => {
+    assert.deepEqual(sourceErrors(SOURCE), [], "the source as written");
+    const compiled = compile(SOURCE);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Field } = await load<{ Field: new () => Entity }>(compiled);
+    const world = new World();
+    const field = new Field();
+    world.mount(field);
+    world.flush();
+    assert.deepEqual(texts(field), ["3@0,1@50,2@90 | "]);
+    world.tick(1 / 60, { pressed: (k: string) => k === "confirm", down: () => false, released: () => false } as never);
+    world.flush();
+    assert.deepEqual(texts(field), ["2@10,0@60down,2@90 | 1:2 2:0 "]);
+  });
+
+  it("refuses a loop that also changes the list itself, and says what to write", () => {
+    const errors = compileErrors(`import { Text, useUpdate, useMutable } from "@rge/runtime/jsx";
+interface Foe { hp: number }
+export function A() {
+  const s = useMutable({ foes: [] as Foe[] });
+  useUpdate(() => {
+    for (const foe of s.foes) {
+      foe.hp -= 1;
+      if (foe.hp <= 0) s.foes.splice(0, 1);
+    }
+  });
+  return <Text>{s.foes.length}</Text>;
+}`);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0]!.message, /also changes `s\.foes` itself/);
+  });
+});

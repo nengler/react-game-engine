@@ -1,3 +1,5 @@
+import type { Expression } from "typescript/ast";
+
 import type { ExprIR, LocalId, SoundId, StateId, TypeIR } from "../ir/types.ts";
 
 type Binding =
@@ -28,6 +30,11 @@ type Binding =
    * state, a prop or another value (`const list = enemies`) is not owned: changing it would change state in place.
    */
   | { readonly kind: "local"; readonly id: LocalId; readonly name: string; readonly mutable: boolean; owned?: boolean }
+  /**
+   * The item of `for (const foe of s.foes) { foe.hp -= 1; }`, a loop that writes through it: a name for `s.foes[i]`, the loop
+   * running over `i`. Read live, and written as `s.foes[i].hp -= 1` would be. `list` is the loop's `s.foes`, `index` the loop's `i`.
+   */
+  | { readonly kind: "item"; readonly name: string; readonly list: Expression; readonly index: ExprIR }
   /** The parameter of a computed `useGame` selector (`s` in `(s) => s.cursor === id`): only read as a path, `s.cursor`. */
   | { readonly kind: "storeRoot"; readonly name: string }
   | { readonly kind: "param"; readonly id: LocalId; readonly name: string; readonly type: TypeIR };

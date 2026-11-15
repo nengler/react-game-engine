@@ -136,6 +136,16 @@ export class ExpressionLowering extends LoweringBase {
           return { kind: "LocalRead", local: binding.id, name: binding.name };
         case "param":
           return { kind: "ParamRead", param: binding.id, name: binding.name };
+        // A loop's item that the loop writes through: the list's element as it is now, `s.foes[i]!`.
+        case "item": {
+          const list = this.lowerNode(binding.list);
+          return (
+            list && {
+              kind: "NonNull",
+              expression: { kind: "IndexRead", object: list, index: binding.index, optional: false },
+            }
+          );
+        }
         case "state":
           return { kind: "StateRead", state: binding.id };
         // Read whole (`takeHit(s)`, `<Camera shake={shake}>`). In a handler it is the component's own object for this `useMutable`,
