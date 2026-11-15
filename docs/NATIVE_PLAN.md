@@ -690,7 +690,7 @@ Old and new code alternately, the middle of three, Rust host:
 
 ### A V8 build for desktops (2026-11-10)
 
-After pass four, what is left in a busy frame is mostly the price QuickJS-ng charges for each statement: the same bench under Node is 10 to 30 times faster. QuickJS stays the default, because it is small and goes where a JIT is not allowed (iOS, consoles). For desktops there is now a second way to package a game, on V8:
+After pass four, what is left in a busy frame is mostly the price QuickJS-ng charges for each statement: the same bench under Node is 10 to 30 times faster. QuickJS was the default when this was written, because it is small and goes where a JIT is not allowed (iOS, consoles). *Since 2026-11-10 (NEXT_PRIORITIES.md, "V8 is the main engine") V8 is the default and QuickJS the fallback: `rge package` builds on V8 unless given `--engine quickjs`.* For desktops there is now a second way to package a game, on V8:
 
     npm run package -- --engine node [--headless]
 
@@ -929,3 +929,26 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 ## Frame time of Bramble (2026-11-12)
 
 `games/bramble/tools/frame-time.ts`, the whole replay to the cave on a recording backend under Node: mean 0.9 ms, 99th percentile 5 ms, slowest 13 ms (a garbage collection or a JIT step, not a door); the step that changes map costs 1.2 to 1.5 ms. With 11 enemies and 4 people. Not measured under QuickJS (the tool prints one line under Node only).
+
+## Pass five: a profile of Hearth's wave 10 under QuickJS (2026-11-15)
+
+The inspector's profiler (DESIGN.md, "Seeing inside a running game") run on Hearth's wave 10 (109 enemies, 13 to 16 towers) in the
+Rust host said where QuickJS's 12.5 ms a frame went: steps 5.5 ms (the towers' updates 2.6 of it, the enemies' 1.2), and
+"collisions" 6 ms, of which the walk that places the colliders and builds the frame was 5.6 and the collision tracking 0.5. Two
+changes came of it:
+
+- **A tilemap's records are copied while nothing about them changed** (`FrameBuilder.#tilemap`). They depend only on the map (its
+  `TileGrid`, which a hot reload replaces), the layer, the sheets' handles, the opacity and the draw list's alpha, the map's world
+  transform and the visible cells: when all of those are what they were the last time the map was drawn, last time's run of
+  records is appended in one `Float64Array.set`. Only when the builder reuses work (`retain`), so `retain: "check"`'s reference
+  build still draws every cell. Hearth's map is still: its walk went from 5.6 to about 3.7 ms. A scrolling map draws as before.
+- **The World answers a body's queries from a grid per tag** (`World.#indexOf`, `ColliderIndex`). Made on the first query for a tag
+  in an update phase and dropped with the colliders' boxes (as a tick starts, after every flush, and when a collider joins or
+  leaves), it puts each collider in the 32-pixel cells its box covers and a query looks only at the cells under its box; fewer than
+  16 colliders of a tag, or a query wider than there are colliders, scans them all. Answers are sorted into the order the colliders
+  joined, so they are exactly what a scan gave and replays do not move. The towers' updates went from 2.6 to 2.2 ms: each tower's
+  box is its longest reach, which covers a good part of the field, so most of their time is `pickTarget` and the generated code
+  around it, not the search.
+
+Wave 10 under QuickJS: mean 12.5 → 11.1 ms, p99 about 29 ms either way (a frame with a garbage collection). Under Node the mean
+stays about 1.0 ms. The bench scenes are unchanged (none of them is a still map or a crowd asking about itself).

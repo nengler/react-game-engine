@@ -88,7 +88,7 @@ packages/
               (what the compiler is told about the runtime)
   player/     (Phase 3) the native player's pure-TypeScript half: object tree → draw records, `Backend`, a recording backend for tests
   player-node/ (Phase 3) the Node host: koffi binding to `librge`, and `play.ts`
-  host/       (Phase 3) the shipping host: Rust + QuickJS-ng, linked statically against librge; `npm run package`
+  host/       (Phase 3) the small host: Rust + QuickJS-ng, linked statically against librge, for `npm run package -- --engine quickjs` (V8 is the default)
   demo/       (Phase 3) a small playable game in TSX with its generated output and assets; `npm run play:demo`
   kite/       a one-screen-rooms precision platformer: `npm run play:kite`, `npm run check:kite`
   hearth/     a small tower defense, the second game: `npm run play:hearth`, `npm run check:hearth`; see its DESIGN.md
