@@ -19,7 +19,7 @@ the room's start 0.45 s later. Leaving a room by its exit moves to the next, wit
 
 ## How it is built
 
-- **Each piece handles itself.** `Player.tsx` keeps the character's state (`useState`) and moves it in its own `useUpdate`
+- **Each piece handles itself.** `Player.tsx` keeps the character's state (`useMutable`) and moves it in its own `useUpdate`
   by calling `stepPlayer` (`rules/player.ts`): the body moves, spikes or a fall kill it and it comes back, an exit takes it
   into the next room. It answers what it did (sound, dust and freeze from `effects.ts`, its squash, the camera's shake
   through `onDie`) and reports what the run needs to know through the game state's actions (`died`, `respawned`,

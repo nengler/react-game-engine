@@ -1,6 +1,7 @@
 # Pain points for a new author
 
-As of 2026-11-12, with section 8 added 2026-11-14. What still reads unlike React, or would confuse someone opening the engine for the first time, gathered by
+As of 2026-11-12, with section 8 added 2026-11-14 and the state hooks brought up to date after #121 (`useMutable`
+replaces `useState`) and #127 (`useRef` removed). What still reads unlike React, or would confuse someone opening the engine for the first time, gathered by
 reading the authoring guide (`docs/*.html`), the findings in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md) and
 [`games/bramble/DESIGN.md`](../games/bramble/DESIGN.md), and Bramble's code. Findings that have already been fixed (computed lists,
 conditions in `.map`, spread props, `!== undefined`, component roots, objects in the game state) are left out.
@@ -23,7 +24,7 @@ TSX invites people to write React, and then they hit `RGE` codes.
   standard library work; only state and props stay immutable.
 - **Imported functions are assumed pure** and not checked. A call in JSX runs on every render.
 - ~~**Custom hooks are inlined text, not functions.**~~ *Since 2026-11-13:* a hook takes destructured parameters and callbacks,
-  returns refs, names the chain when hooks recurse, and the guide says how inlining works. A function declared in the component
+  returns its `useMutable`, names the chain when hooks recurse, and the guide says how inlining works. A function declared in the component
   body (`const add = (n: number) => …`) is a handler of the component's own.
 
 ## 2. Refs on elements and context are missing on purpose
@@ -61,7 +62,7 @@ TSX invites people to write React, and then they hit `RGE` codes.
 
 ## 5. ~~Names collide with the root built-in~~ (fixed 2026-11-13)
 
-*Since:* a state, ref or sound named like a member of the root built-in is kept in a `$name` field, so the name is the author's to
+*Since:* a state field or sound named like a member of the root built-in is kept in a `$name` field, so the name is the author's to
 use (`REACT_FEEL_PLAN.md`, B7). What follows is how it was.
 
 The component's class extends its root built-in, so state, refs and props cannot reuse the root's member names: no `width` prop on a
@@ -79,7 +80,7 @@ no React equivalent.
 - **No list inside a list item**, nor `{children}` or a `<Route>` there; the workaround is "make the item a component".
 - **Side-effect imports** are refused in component files (`RGE1001`); registering tilemaps moved into a `.ts` file `GameState.ts`
   imports.
-- ~~**Docs disagree about refs.**~~ *Done:* the guide says what the compiler allows (any value but an element, RGE1106), as `DESIGN.md` did.
+- ~~**Docs disagree about refs.**~~ *Moot since #127:* `useRef` is removed, and `RGE1106` is only `ref={…}` on an element.
 - **The manifest gates the API.** A new runtime method compiles in plain TypeScript but fails in a component until
   `runtime/src/manifest.ts` lists it (Bramble finding 8).
 - ~~**`useEffect` gave a bare `Unknown hook 'useEffect'.`**~~ *Since:* its message names what to write instead.
@@ -103,6 +104,10 @@ no React equivalent.
   ticked yet.
 
 ## 8. React written as React, run through the compiler (2026-11-14)
+
+*Since #121:* `useState` is `RGE1102` and `useMutable` replaces it, so the `useState` idioms below are how it was;
+`useMutable({ pos: { x: 0, y: 0 } })` infers a literal's type the same way, and an empty array still needs its type
+(`enemies: [] as Foe[]`).
 
 After everything in [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md) but D3, 28 everyday React idioms were compiled one by one. 12 are
 accepted as written: arrow-function components and `export default` of one, `filter(…).map(…)` in JSX, a ternary at the root, a
@@ -145,14 +150,16 @@ fragment of several roots, `switch` and `let` in the body, a function of the com
 - No refs on elements, no spreading props onto a built-in, no render props or function children, no generic components, no
   `async` handlers (the game's clock has timers).
 - `x` / `y` as props on built-ins only; a component is placed with `transform` (its own props may say `x`).
-- Since D5 a render compares what it reads by `===`, so state changed in place shows nothing, as in React; nothing warns.
+- Since D5 a render compares what it reads by `===`. *Since #124:* a component's own in-place write (`s.list.push(x)`) is lowered to
+  the copy, so it shows; one made by a helper in a `.ts` file still shows nothing and nothing warns at run time. `MutableList`
+  (#128) makes a helper taking `T[]` an error in the editor ([MUTABLE_STATE_FOLLOWUPS.md](MUTABLE_STATE_FOLLOWUPS.md), lists).
 - Inside `useUpdate`, `useBody`'s `x` and `y` are the step's snapshot even after `move`, as every state is; `blocked` asks the body
   where it is now.
 
 ## What to fix first
 
 1. ~~**Diagnostics in the `.tsx` source**~~ *Done:* `mapToSource` (DESIGN.md, "Errors in the source").
-2. ~~**Input focus or consumption**~~ *Done:* `inert` and `modal` (DESIGN.md, "Inert and modal"). The input refs in `Play.tsx` stay:
-   they carry a press from `useInput` to `useUpdate`, which a modal does not change.
+2. ~~**Input focus or consumption**~~ *Done:* `inert` and `modal` (DESIGN.md, "Inert and modal"). The input refs in `Play.tsx` went
+   too: `useUpdate` reads the input itself (section 3), and `useRef` is removed (#127).
 3. ~~**A "coming from React" page**~~ *Done:* "Coming from React", the guide's second section (`docs/index.html#react`): what
    carries over, what is different and what to write instead, and the three places code can go.

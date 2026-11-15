@@ -122,15 +122,15 @@ Limitations found while integrating:
 ## Authoring model
 
 ```tsx
-import { useState, Entity, Sprite } from "@rge/runtime/jsx";
+import { useMutable, Entity, Sprite } from "@rge/runtime/jsx";
 import { WarningIcon } from "./WarningIcon.tsx";
 
 function Player() {
-  const [health, setHealth] = useState(100);
+  const s = useMutable({ health: 100 });
   return (
     <Entity name="Player">
-      <Sprite image={health > 50 ? "normal.png" : "hurt.png"} />
-      {health < 25 && <WarningIcon />}
+      <Sprite image={s.health > 50 ? "normal.png" : "hurt.png"} />
+      {s.health < 25 && <WarningIcon />}
     </Entity>
   );
 }
@@ -426,10 +426,10 @@ cleanup from `useMount`" below.
 
 ```tsx
 function Banner({ text, onDone }: BannerProps) {
-  const [shown, setShown] = useState(false);
-  useMount(() => setShown(true));        // once, when it joins the world
+  const s = useMutable({ shown: false });
+  useMount(() => { s.shown = true; });   // once, when it joins the world
   useUnmount(() => onDone?.());          // once, when it leaves
-  return <Sprite image={shown ? `banner-${text}.png` : "banner-hidden.png"} />;
+  return <Sprite image={s.shown ? `banner-${text}.png` : "banner-hidden.png"} />;
 }
 ```
 
@@ -573,11 +573,11 @@ things and change it from handlers:
 interface EnemyData { id: string; hp: number }
 
 function Swarm() {
-  const [enemies, setEnemies] = useState<EnemyData[]>([]);
+  const s = useMutable({ enemies: [] as EnemyData[] });
   useUpdate((dt) => {
-    setEnemies(enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0));
+    s.enemies = s.enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0);
   });
-  return <Entity name="Swarm"><Sprite image={enemies.length > 3 ? "busy.png" : "calm.png"} /></Entity>;
+  return <Entity name="Swarm"><Sprite image={s.enemies.length > 3 ? "busy.png" : "calm.png"} /></Entity>;
 }
 ```
 
@@ -585,11 +585,12 @@ function Swarm() {
 an element type, or a `SourceType { text }` (a type written in the file:
 `EnemyData`, `Item | null`), copied into the generated code as written, next
 to the file's copied type declarations, so the type-check resolves it. A
-primitive is inferred from the initial value as before; state initialised
-from a prop takes the prop's type; an array or object literal needs the type
-argument (`useState([])` is `RGE1104`, as `[]` alone would be `never[]` in
-TypeScript). Refs stay primitive (`RGE1106`). The authoring `useState<T>`
-accepts any `T` and widens only primitives.
+primitive is inferred from the initial value as before; a field initialised
+from a prop takes the prop's type; a literal of plain values (`{ x: 0, y: 0 }`,
+`[1, 2]`) takes the type TypeScript infers; an empty array needs its type
+(`enemies: [] as EnemyData[]` is required, `enemies: []` is `RGE1104`, as `[]`
+alone would be `never[]` in TypeScript). The authoring `useMutable<T>` gives
+each array field the type `MutableList<T>` (see MUTABLE_STATE_FOLLOWUPS.md).
 
 **Expressions.**
 

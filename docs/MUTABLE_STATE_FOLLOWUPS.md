@@ -3,8 +3,8 @@
 As of 2026-11-14. A follow-up to [MUTABLE_STATE.md](MUTABLE_STATE.md), written after `useMutable` replaced `useState` (#121). It
 records what that change left open and what building it turned up, and one decision taken since: **`useRef` is removed.**
 
-Props read live across components, tree-order handlers and in-place list writes were built in #124 (a separate branch, still open when
-this was written). What follows assumes #124's choices; where this note first leaned another way, it says so.
+Props read live across components, tree-order handlers and in-place list writes were built in #124 (merged since). What follows
+assumes #124's choices; where this note first leaned another way, it says so.
 
 ## Decided and done: remove `useRef`
 
@@ -47,14 +47,12 @@ closed, and the decision here is to keep the copy model and not add versions. Wh
 1. **A helper or alias changes a list in place and nothing warns.** The compiler refuses the forms it can see (an alias,
    `const e = s.list[0]; e.hp = 0`, a loop variable, the result of `push` used as a value) with what to write instead. It cannot see
    `damage(s.enemies, 3)` in a plain `.ts` file, which allows anything, and render compares by `===`, so the screen shows nothing
-   and nothing says why. `readonly Foe[]` and `Readonly<Foe>` on the field catch it in the editor; they are not required. **First fix done 2026-11-15:** `useMutable` gives each array field the type `MutableList<T>`
-   (`packages/runtime/src/jsx.ts`): the in-place forms the compiler lowers (`push`, `splice`, `sort`, an index write) type-check, but it is not
-   assignable to `T[]`, so a helper that takes `Foe[]` is an error in the editor. It takes `readonly Foe[]` to read, or returns the new
-   list; the games needed no change. Items of a list are still plain `T`, so a helper may change an item in place (use `Readonly<Foe>`).
-   Still open: the development warning. Two cheap
-   fixes, in order: make `readonly` the inferred type of an array or record field of `useMutable`, so a helper taking `Foe[]` does
-   not type-check; and a development warning when a slot's contents differ from the committed copy that rewind already takes while
-   its reference is the same.
+   and nothing says why. **The type is done (#128):** `useMutable` gives each array field the type `MutableList<T>`
+   (`packages/runtime/src/jsx.ts`): the in-place forms the compiler lowers (`push`, `splice`, `sort`, an index write) type-check,
+   but it is not assignable to `T[]`, so a helper that takes `Foe[]` is an error in the editor. It takes `readonly Foe[]` to read,
+   or returns the new list; the games needed no change. Items of a list are still plain `T`, so a helper may change an item in
+   place (`Readonly<Foe>` catches it; it is not required). **Still open:** a development warning when a slot's contents differ from
+   the committed copy that rewind already takes while its reference is the same, which also catches the item case.
 2. **A copy per write.** A loop writing every item of a list is quadratic in its length. #124 puts the limit at hundreds of items,
    not thousands, and says to build the list in a local and assign it once. Measure it on Hearth's wave 10 (about 1.2 ms a frame,
    held by CI bench budgets) before it is relied on for a bigger list, and have the diagnostic that refuses an unsupported form name
@@ -119,5 +117,5 @@ Each is real today. The first two cause wrong behavior; the rest cost time.
    write inside the callee is lost. It is the opposite of `return s` from a hook, which hands the object back. Either make a copy an
    error where the callee could write it, or say it where `useMutable` is taught.
 6. ~~**Dead code from `useState`.**~~ *Fixed in #124:* the updater paths, setter binding and `inUpdater` are removed.
-7. **Stale text.** `packages/kite/DESIGN.md` (line 22) still says the character's state is `useState`. The doc comment on `useMutable`
-   in `packages/runtime/src/jsx.ts` was updated in #124.
+7. ~~**Stale text.**~~ *Fixed:* `packages/kite/DESIGN.md`, the examples in `docs/DESIGN.md` and `PAIN_POINTS.md` say `useMutable`;
+   the doc comment on `useMutable` in `packages/runtime/src/jsx.ts` was updated in #124.
