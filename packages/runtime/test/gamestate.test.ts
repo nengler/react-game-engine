@@ -3,24 +3,25 @@ import { describe, it } from "node:test";
 
 import { Entity, World, createGameState, resetGameState } from "../src/index.ts";
 
-interface State {
-  coins: number;
-  player: { hp: number; name: string };
-  collect: (n: number) => void;
-  hurt: () => void;
-  both: () => void;
-  same: () => void;
-}
-
 function counter() {
-  return createGameState<State>()((set, get) => ({
-    coins: 0,
-    player: { hp: 10, name: "Ada" },
-    collect: (n) => set((s) => ({ coins: s.coins + n })),
-    hurt: () => set((s) => ({ player: { ...s.player, hp: s.player.hp - 1 } })),
-    both: () => set((s) => ({ coins: s.coins + 1, player: { ...s.player, hp: get().player.hp - 1 } })),
-    same: () => set({ coins: get().coins }),
-  }));
+  return createGameState(
+    { coins: 0, player: { hp: 10, name: "Ada" } },
+    {
+      collect(s, n: number) {
+        s.coins += n;
+      },
+      hurt(s) {
+        s.player.hp -= 1;
+      },
+      both(s) {
+        s.coins += 1;
+        s.player.hp -= 1;
+      },
+      same(s) {
+        s.coins = s.coins + 0;
+      },
+    }
+  );
 }
 
 /** An object that reads the given paths of a store, the way generated code declares it. */
@@ -36,12 +37,14 @@ function reader(store: ReturnType<typeof counter>["store"], paths: string[]): En
 }
 
 describe("createGameState", () => {
-  it("works curried and plain, and getState has the state with its actions", () => {
-    const curried = counter();
-    const plain = createGameState<{ n: number }>((set) => ({ n: 1, up: () => set({ n: 2 }) }) as never);
-    assert.equal(curried.getState().coins, 0);
-    assert.equal(typeof curried.getState().collect, "function");
-    assert.equal((plain.getState() as { n: number }).n, 1);
+  it("getState has the state with its actions", () => {
+    const useGame = counter();
+    assert.equal(useGame.getState().coins, 0);
+    assert.equal(typeof useGame.getState().collect, "function");
+  });
+
+  it("refuses the removed `(set) => ({ … })` form with what to write", () => {
+    assert.throws(() => (createGameState as (...a: unknown[]) => unknown)(() => ({ n: 1 })), /takes the data and the actions/);
   });
 
   it("reads a leaf, an object or an array by its dotted path", () => {
@@ -60,7 +63,7 @@ describe("createGameState", () => {
     assert.throws(() => (useGame as unknown as () => void)(), /compile-time declaration/);
   });
 
-  it("runs actions that call set and get, and merges shallowly like Zustand", () => {
+  it("runs actions, and setState (for tests and tools) merges shallowly like Zustand", () => {
     const useGame = counter();
     useGame.getState().collect(3);
     useGame.getState().collect(4);
@@ -74,6 +77,22 @@ describe("createGameState", () => {
     assert.equal(useGame.getState().coins, 14);
     useGame.setState(null as never);
     assert.equal(useGame.getState().coins, 14);
+  });
+
+  it("refuses setState while an action runs, whose commit would overwrite it", () => {
+    const useGame = createGameState(
+      { n: 0 },
+      {
+        bad(s) {
+          s.n = 1;
+          useGame.setState({ n: 5 });
+        },
+      }
+    );
+    assert.throws(() => useGame.actions().bad(), /setState was called while the action 'bad' runs/);
+    assert.equal(useGame.getState().n, 0, "the action's changes were not committed");
+    useGame.setState({ n: 2 });
+    assert.equal(useGame.getState().n, 2, "and the store works afterwards");
   });
 
   it("tells exactly the readers of a leaf that changed, once each, finding it inside a replaced object", () => {
@@ -101,7 +120,7 @@ describe("createGameState", () => {
     world.flush();
     assert.deepEqual(delta(), [2, 2, 0, 3], "a reader of two changed leaves renders once");
     useGame.getState().same();
-    assert.equal(world.flush(), 0, "a set that changes no leaf renders nothing");
+    assert.equal(world.flush(), 0, "an action that changes no leaf renders nothing");
   });
 
   it("stops telling an object that left the world", () => {
@@ -117,7 +136,7 @@ describe("createGameState", () => {
     assert.equal(object.isDirty, false);
   });
 
-  it("goes back to the state its creator returned with resetGameState, telling readers", () => {
+  it("goes back to its initial data with resetGameState, telling readers", () => {
     const useGame = counter();
     const world = new World();
     const root = new Entity();
@@ -139,22 +158,24 @@ describe("createGameState", () => {
 
 describe("carrying a game state across a hot reload", () => {
   it("takes the old values that still fit and keeps the new actions", () => {
-    const older = createGameState<{ coins: number; player: { hp: number; name: string }; gone: number; add: () => void }>()((set) => ({
-      coins: 0,
-      player: { hp: 10, name: "a" },
-      gone: 1,
-      add: () => set((s) => ({ coins: s.coins + 1 })),
-    }));
+    const older = createGameState(
+      { coins: 0, player: { hp: 10, name: "a" }, gone: 1 },
+      {
+        add(s) {
+          s.coins += 1;
+        },
+      }
+    );
     older.getState().add();
     older.setState({ player: { hp: 3, name: "b" } });
 
-    const newer = createGameState<{ coins: number; player: { hp: number; name: number; mp: number }; list: number[]; add: () => void }>()(
-      (set) => ({
-        coins: 0,
-        player: { hp: 10, name: 0, mp: 5 },
-        list: [1],
-        add: () => set((s) => ({ coins: s.coins + 10 })),
-      })
+    const newer = createGameState(
+      { coins: 0, player: { hp: 10, name: 0, mp: 5 }, list: [1] },
+      {
+        add(s) {
+          s.coins += 10;
+        },
+      }
     );
     newer.store.carryFrom(older.store as never);
     const state = newer.getState();

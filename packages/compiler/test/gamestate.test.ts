@@ -101,34 +101,40 @@ export function HpBar() {
 
 describe("GameState.ts", () => {
   const read = (text: string) => compiler.parseGameState("GameState.ts", `import { createGameState } from "@rge/runtime";\n${text}`);
-  const wrap = (body: string) => `export const useGame = createGameState((set) => (${body}));`;
+  const wrap = (body: string) => `export const useGame = createGameState(${body}, {});`;
 
-  it("reads a nested state tree with typed leaves, and the actions, in both creator forms", () => {
-    const body = `{ coins: 0, player: { hp: -3, "name": "Ada", flags: { muted: false } }, collect() { set({}); }, hurt: () => set({}), heal: function () { set({}); } }`;
-    for (const text of [
-      wrap(body),
-      `export const useGame = createGameState<State>()((set, get) => (${body}));`,
-      `export const useGame = createGameState((set) => { return ${body}; });`,
-    ]) {
-      const { schema, diagnostics } = read(text);
-      assert.deepEqual(diagnostics, [], text);
-      assert.equal(schema!.name, "useGame");
-      assert.deepEqual(schema!.actions, ["collect", "hurt", "heal"]);
-      assert.deepEqual(schema!.tree, {
-        kind: "node",
-        children: {
-          coins: { kind: "leaf", type: "number", initial: 0 },
-          player: {
-            kind: "node",
-            children: {
-              hp: { kind: "leaf", type: "number", initial: -3 },
-              name: { kind: "leaf", type: "string", initial: "Ada" },
-              flags: { kind: "node", children: { muted: { kind: "leaf", type: "boolean", initial: false } } },
-            },
+  it("reads a nested state tree with typed leaves", () => {
+    const { schema, diagnostics } = read(wrap(`{ coins: 0, player: { hp: -3, "name": "Ada", flags: { muted: false } } }`));
+    assert.deepEqual(diagnostics, []);
+    assert.equal(schema!.name, "useGame");
+    assert.deepEqual(schema!.actions, []);
+    assert.deepEqual(schema!.tree, {
+      kind: "node",
+      children: {
+        coins: { kind: "leaf", type: "number", initial: 0 },
+        player: {
+          kind: "node",
+          children: {
+            hp: { kind: "leaf", type: "number", initial: -3 },
+            name: { kind: "leaf", type: "string", initial: "Ada" },
+            flags: { kind: "node", children: { muted: { kind: "leaf", type: "boolean", initial: false } } },
           },
         },
-      });
+      },
+    });
+  });
+
+  it("refuses the removed `(set) => ({ … })` form, and data with no actions, saying what to write", () => {
+    const messages = (text: string) => read(text).diagnostics.map((d) => `${d.code} ${d.message}`);
+    for (const text of [
+      `export const useGame = createGameState((set) => ({ coins: 0 }));`,
+      `export const useGame = createGameState<State>()((set, get) => ({ coins: 0 }));`,
+    ]) {
+      const found = messages(text);
+      assert.equal(found.length, 1, text);
+      assert.match(found[0]!, /form of createGameState was removed: pass the data and the actions/, text);
     }
+    assert.match(messages(`export const useGame = createGameState({ coins: 0 });`)[0]!, /actions as its second argument/);
   });
 
   it("reads `createGameState(data, actions)`: the data's tree, and each action by name", () => {
@@ -194,6 +200,7 @@ describe("GameState.ts", () => {
     for (const text of [
       wrap(`{ a: 1, a: 2 }`),
       wrap(`{ a: 1, a() {} }`),
+      `export const useGame = createGameState({ a: 1 }, { a(s) {} });`,
       wrap(`{ "a.b": 1 }`),
       wrap(`{ ...base }`),
       wrap(`{ [key]: 1 }`),
@@ -201,9 +208,9 @@ describe("GameState.ts", () => {
       wrap(`makeState()`),
       `export const useGame = createGameState(makeCreator);`,
       `export const useGame = createGameState((set) => { const x = 1; return { x }; });`,
-      `const useGame = createGameState((set) => ({ a: 1 }));`,
+      `const useGame = createGameState({ a: 1 }, {});`,
       `export const other = 5;`,
-      `${wrap(`{}`)}\nexport const useOther = createGameState((set) => ({}));`,
+      `${wrap(`{}`)}\nexport const useOther = createGameState({}, {});`,
     ]) {
       assert.deepEqual(codes(text), [DiagnosticCode.InvalidGameStateSchema], text);
     }
@@ -407,6 +414,33 @@ export function Swarm() {
     assert.deepEqual(run(`useUpdate(() => { const x = hurt; });`), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(run(`useUpdate(() => { st.n = hurt(); });`), [DiagnosticCode.UnsupportedExpression]);
     assert.ok(errors(`function A() { const hurt = useGame((s) => s.hurt); return <Text size={hurt}>x</Text>; }`).length > 0);
+  });
+
+  it("refuses a write to a selected value, naming the action to add", () => {
+    const write = (body: string) =>
+      errors(
+        `function A() { const player = useGame((s) => s.player); const { hp } = useGame((s) => s.player); const list = useGame((s) => s.enemies); ${body} return <Entity name="A" />; }`
+      );
+    const field = write(`useInput(() => { player.hp = 0; });`);
+    assert.deepEqual(
+      field.map((d) => d.code),
+      [DiagnosticCode.UnsupportedStatement]
+    );
+    assert.match(
+      field[0]!.message,
+      /'player' is read from the game state, which only its actions change.*`name\(s\) \{ s\.player\.hp = …; \}`/
+    );
+    assert.match(write(`useInput(() => { hp += 1; });`)[0]!.message, /`name\(s\) \{ s\.player\.hp = …; \}`/);
+    const push = write(`useInput(() => { list.push({ id: 1, hp: 3 }); });`);
+    assert.match(push[0]!.message, /'list' is read from the game state.*`name\(s\) \{ s\.enemies\.push\(…\); \}`/);
+  });
+
+  it("types what a selector returns as read-only, so a helper cannot change it in place", () => {
+    const file = (text: string) => [{ fileName: join(ROOT, "Ro.tsx"), text }];
+    const source = (body: string) =>
+      `import { Entity, useInput } from "@rge/runtime/jsx";\nimport { useGame } from "./GameState.ts";\nfunction grow(list: { id: number; hp: number }[]): void { list.push({ id: 0, hp: 1 }); }\nexport function A() {\n  const list = useGame((s) => s.enemies);\n  const player = useGame((s) => s.player);\n  useInput(() => { ${body} });\n  return <Entity />;\n}`;
+    assert.deepEqual(compiler.typeCheckSources(file(source(`const n: number = list.length + player.hp;`))), []);
+    assert.ok(compiler.typeCheckSources(file(source(`grow(list);`))).length > 0, "a readonly list is not a mutable one");
   });
 
   it("imports only the game state from a .ts module, and needs one to exist", () => {

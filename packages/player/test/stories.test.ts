@@ -5,7 +5,7 @@ import { createGameState, Entity, Game, Screen, Text, type GameObject } from "@r
 
 import { gameLook, runScript, stories, storiesIn, story, storyRoot } from "../src/index.ts";
 
-const useScore = createGameState<{ score: number }>()(() => ({ score: 0 }));
+const useScore = createGameState({ score: 0 }, {});
 
 /** A hand-written component, as the compiler would make one: a label of its props and the score. */
 class Badge extends Entity<{ label: string }> {

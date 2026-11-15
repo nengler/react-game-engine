@@ -93,11 +93,7 @@ export function Coins() {
 `;
 const STATE = `import { createGameState } from "@rge/runtime";
 
-interface State {
-  coins: number;
-}
-
-export const useGame = createGameState<State>()(() => ({ coins: 0 }));
+export const useGame = createGameState({ coins: 0 }, {});
 `;
 
 describe("the language server", () => {

@@ -10,7 +10,7 @@
  * `prefabs.json` (their props, as data) to outDir, and checks across files:
  * exported names are unique and no component statically contains itself.
  *
- * A `GameState.ts` in srcDir (`export const useGame = createGameState<State>()((set) => ({ … }))`) is the game's
+ * A `GameState.ts` in srcDir (`export const useGame = createGameState({ … }, { … })`) is the game's
  * global state: components import it and read it with selectors, `useGame((s) => s.player.hp)`. The compiler
  * reads the file to check those selectors; generated code imports it from where it is.
  *

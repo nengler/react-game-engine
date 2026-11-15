@@ -559,6 +559,7 @@ export class HookLowering extends ExpressionLowering {
     this.stateTypes.set(id, type);
     hooks.push({ kind: "UseState", state: id, setterName: null, span: this.span(at) });
     if (!this.storePaths.has(globalKey)) this.storePaths.set(globalKey, id);
+    this.storeNames.set(name, globalKey);
     return id;
   }
 

@@ -133,6 +133,8 @@ export class LoweringBase {
   protected readonly handleStates = new Set<string>();
   /** Every path of the game state this component reads, to the snapshot that holds it (see `storePathState`). */
   protected readonly storePaths = new Map<string, StateId>();
+  /** Each name a selector gave a value of the game state (`const run = useGame((s) => s.run)`), with its path: never written. */
+  protected readonly storeNames = new Map<string, string>();
 
   constructor(component: ComponentAnalysis, module: ModuleContext) {
     this.gameState = module.gameState;

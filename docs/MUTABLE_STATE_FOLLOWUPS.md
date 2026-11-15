@@ -65,12 +65,15 @@ closed, and the decision here is to keep the copy model and not add versions. Wh
 4. **Live props still read the last render in three places** (below): the same "two rules depending on where an element sits" the
    design note warns of. In-place writes make this easier to hit, because a handler can now change an item a child reads by context.
 
-## Open: the game state is not migrated
+## Done: the game state is migrated
 
-**Started 2026-11-15.** `createGameState(data, actions)` is built beside the creator form (runtime `GameStore.fromActions`, the
-compiler's schema reader, DESIGN.md "Global state"), with a draft per action and a commit that keeps unchanged objects' identity. The
-demo and the template use it. Left: Kite, Hearth and Bramble; a handler reading the live store; a component write to the store as a
-compile error; read-only selected values; then removing the creator form. The text below is the plan as written.
+**Done 2026-11-15.** `createGameState(data, actions)` is the only form: Kite, Hearth, Bramble, the demo and the templates use it, and
+the `(set) => ({ … })` form is removed from the runtime and the compiler (`RGE1109` says what to write instead). A write to a selected
+value in a component is an error that spells the action to add, and what a selector returns is typed `ReadonlyDeep<T>`, so a helper
+that changes it in place does not type-check. `setState` stays for tests, stories and tools, and throws while an action runs; inside an
+action, `getState()` reads its draft, which Bramble's save needed (its `pick` runs from the `advance` action). See DESIGN.md, "Global
+state". Still open from the list below: a handler reading the live store (rule 2), and the boilerplate question (Kite has 8 actions,
+Hearth 10, Bramble 14; none wanted a `free: [...]` list). The text below is the plan as it was written.
 
 `createGameState` still takes `set` and `get`, and the state holds its actions. Components write nothing to it directly. The design
 in [MUTABLE_STATE.md](MUTABLE_STATE.md), "The game state: actions write, readers read", is proposed and not built:

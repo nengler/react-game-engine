@@ -13,9 +13,7 @@ const ROOT = join(OUTPUT_ROOT, String(process.pid), "game");
 const STATE_FILE = join(ROOT, "GameState.ts");
 const STATE = `import { createGameState } from "@rge/runtime";
 
-interface State { coins: number }
-
-export const useGame = createGameState<State>()((set) => ({ coins: 0 }));
+export const useGame = createGameState({ coins: 0 }, {});
 `;
 
 let compiler: Compiler;
