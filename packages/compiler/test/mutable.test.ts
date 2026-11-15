@@ -219,7 +219,7 @@ describe("useMutable: read whole, and handed back by a hook", () => {
     );
     assert.deepEqual(typeCheck(compiled), []);
     // One object per useMutable, made with the component: a handler hands it over rather than a copy.
-    assert.match(compiled.code, /readonly #sObject: \{[^}]*\} = \(\(self\) => \(\{ get a\(\) \{ return self\.#\$s_aNext; \}/);
+    assert.match(compiled.code, /get #sObject\(\): \{[^}]*\} \{ const self = this; return \(this\.#sObjectCache \?\?= \{ get a\(\) \{ return self\.#\$s_aNext; \}/);
     assert.match(compiled.code, /total\(this\.#sObject\)/);
     const module = await load<Record<string, new () => Entity & { s: Record<string, unknown> }>>(compiled);
     const world = new World();

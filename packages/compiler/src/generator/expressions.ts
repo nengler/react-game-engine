@@ -82,6 +82,8 @@ export class ExpressionEmitter {
   protected mode: EmitMode = { itemLookup: null, inCallback: false, inlineMemos: false, fieldBase: "this", conditions: [], memoLocals: new Map(), renderMemos: new Map(), guard: null };
   /** Whether a callback was written with `$assume`, so the module declares it. */
   usesAssume = false;
+  /** The `useMutable`s a handler has passed whole (`takeHit(s)`), by view name: the class gets an object for each (see the generator). */
+  protected readonly mutableObjects = new Set<string>();
   /** How many temporaries the `render()` being written has used (see `emitReportedWrites`). */
   protected renderTemps = 0;
   /** The imported game state (`useGame`), when the module uses one. */
@@ -242,7 +244,10 @@ export class ExpressionEmitter {
         if (e.mutableCopy && e.live) {
           const first = e.properties[0]!;
           const view = first.kind === "Property" && first.value.kind === "StateRead" ? this.state(first.value.state).mutable?.view : undefined;
-          if (view !== undefined) return `this.${mutableObject(view)}`;
+          if (view !== undefined) {
+            this.mutableObjects.add(view);
+            return `this.${mutableObject(view)}`;
+          }
         }
         const literal = `{ ${e.properties.map((p) => (p.kind === "Spread" ? `...${this.expr(p.value, true)}` : `${propertyKey(p.name)}: ${this.expr(p.value, true)}`)).join(", ")} }`;
         if (!e.mutableCopy) return literal;

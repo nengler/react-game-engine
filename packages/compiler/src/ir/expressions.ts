@@ -206,8 +206,8 @@ export interface ObjectLiteralIR {
   /** A `useMutable` read whole (`total(s)`): its fields, each a `StateRead`. In render, a copy of them. */
   readonly mutableCopy?: true;
   /**
-   * With `mutableCopy`, read in a handler: not a copy but the component's object for that `useMutable` (`takeHit(s)`), made at
-   * construction, whose fields read and write the component's. The properties still list what it reads (a memo's dependencies).
+   * With `mutableCopy`, read in a handler: not a copy but the component's object for that `useMutable` (`takeHit(s)`), made the
+   * first time it is passed and kept, whose fields read and write the component's. The properties still list what it reads (a memo's dependencies).
    */
   readonly live?: true;
 }
