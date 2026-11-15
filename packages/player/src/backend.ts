@@ -63,6 +63,12 @@ export interface Backend {
    * estimates. Both native hosts implement it (ABI v2).
    */
   measureText?(text: string, size: number): { readonly width: number; readonly height: number };
+  /**
+   * What was typed during the last `frame`, for text fields: the characters the keyboard layout made (with the system's key repeat),
+   * and `"\b"` for each press or repeat of Backspace. Empty when nothing was. Optional: without it nothing can be typed. Both native
+   * hosts implement it (ABI v9).
+   */
+  typed?(): string;
   /** The size in pixels of a loaded texture, for layout. Optional; both native hosts implement it (ABI v2). */
   textureSize?(handle: number): { readonly width: number; readonly height: number };
   /**

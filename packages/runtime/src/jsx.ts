@@ -20,6 +20,7 @@ import type { SliderProps } from "./components/Slider.ts";
 import type { ButtonProps } from "./components/Button.ts";
 import type { MenuProps } from "./components/Menu.ts";
 import type { TooltipProps } from "./components/Tooltip.ts";
+import type { TextInputProps } from "./components/TextInput.ts";
 import type { ToggleProps } from "./components/Toggle.ts";
 import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
@@ -390,6 +391,15 @@ export function Menu(_props: MenuProps & { children?: Child } & TransformShortha
  */
 export function Tooltip(_props: TooltipProps & { children?: Child } & TransformShorthand): JSX.Element {
   return compileTimeOnly("Tooltip");
+}
+
+/**
+ * A one-line text field: `<TextInput value={s.name} placeholder="Your name" maxLength={12} onChange={(v) => { s.name = v; }} onSubmit={start} />`.
+ * Focus it (a click, or the arrows) and type; Backspace takes off the last character and Enter calls `onSubmit`. While it has the focus,
+ * letters do not trigger the game's `confirm`, `back` or `pressKey`s.
+ */
+export function TextInput(_props: TextInputProps & TransformShorthand): JSX.Element {
+  return compileTimeOnly("TextInput");
 }
 
 /**

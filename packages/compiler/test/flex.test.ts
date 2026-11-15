@@ -5,7 +5,7 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Button, createControls, createInputState, Flex, Menu as MenuBox, Shape, Slider, Text, Toggle, World, type GameObject } from "@rge/runtime";
+import { Button, createControls, createInputState, Flex, Menu as MenuBox, Shape, Slider, Text, TextInput, Toggle, Tooltip, World, type GameObject } from "@rge/runtime";
 import { FrameBuilder } from "@rge/player";
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -321,6 +321,52 @@ function Options({ onClose }: { onClose: () => void }) {
     assert.deepEqual(checkMenu(`<Menu loop={false} onBack={() => n}><Button onAdjust={(d) => d.toFixed(0)} focusBackground="red"><Text>Go</Text></Button></Menu>`), []);
     assert.ok(checkMenu(`<Button onAdjust={(d: string) => d} />`).length > 0, "onAdjust is given a number");
     assert.ok(checkMenu(`<Menu loop="yes" />`).length > 0, "loop is a boolean");
+  });
+
+  it("compiles a TextInput bound to state and a Tooltip in a Button, and type-checks their props", async () => {
+    const source = `
+function Name() {
+  const s = useMutable({ name: "", sent: "" });
+  return (
+    <Flex direction="column">
+      <TextInput autoFocus value={s.name} placeholder="Your name" maxLength={8} onChange={(v) => { s.name = v.toUpperCase(); }} onSubmit={(v) => { s.sent = v; }} />
+      <Button onPress={() => { s.sent = s.name; }}>
+        <Text>Go</Text>
+        <Tooltip><Text>Send {s.name}</Text></Tooltip>
+      </Button>
+    </Flex>
+  );
+}`;
+    const compiled = compile(source, "NameField.tsx");
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Name } = await load<{ Name: new () => Flex & { s: { name: string; sent: string } } }>(compiled);
+    const name = new Name();
+    const world = new World();
+    world.mount(name);
+    world.flush();
+    const type = (typed: string, ...pressed: string[]) => {
+      world.tick(1 / 60, createInputState({ typed, pressed }));
+      world.flush();
+    };
+    type("");
+    type("ada");
+    const field = name.children[0] as TextInput;
+    assert.equal(name.s.name, "ADA");
+    assert.equal(field.value, "ADA", "the state's value is written back into the field");
+    type("", "Enter");
+    assert.equal(name.s.sent, "ADA");
+    const tip = (name.children[1] as Button).children[1] as Tooltip;
+    assert.ok(tip instanceof Tooltip);
+    assert.equal((tip.children[0] as Text).text, "Send ADA");
+    const check = (element: string) =>
+      getCompiler().typeCheckSources([
+        { fileName: `${process.cwd()}/.test-output/TextCheck${Math.random()}.tsx`, text: `import { Flex, Text, TextInput, Tooltip } from "@rge/runtime/jsx";\nfunction C({ n }: { n: string }) { return ${element}; }` },
+      ]);
+    assert.deepEqual(check(`<TextInput value={n} onChange={(v) => v.trim()} onSubmit={(v) => v.length} textSize={8} />`), []);
+    assert.ok(check(`<TextInput value={3} />`).length > 0, "a value is a string");
+    assert.ok(check(`<TextInput onChange={(v: number) => v} />`).length > 0, "onChange is given a string");
+    assert.ok(check(`<Tooltip show="yes" />`).length > 0, "show is a boolean");
+    assert.ok(compileErrors(`function C() { return <TextInput><Text>no</Text></TextInput>; }`).length > 0, "a TextInput takes no children");
   });
 
   it("lets state take a widget's names, kept in `$name` fields", () => {

@@ -1,5 +1,5 @@
 import type { Backend, StorageBackend, WindowConfig } from "@rge/player";
-import { RGE_IN_HEIGHT, RGE_IN_WIDTH, RGE_OPEN_HIDDEN, RGE_OPEN_RESIZABLE, RGE_OPEN_SHARP, RGE_OPEN_SMOOTH, RGE_OPEN_VSYNC } from "@rge/player";
+import { RGE_IN_HEIGHT, RGE_IN_WIDTH, RGE_TYPED_MAX, RGE_OPEN_HIDDEN, RGE_OPEN_RESIZABLE, RGE_OPEN_SHARP, RGE_OPEN_SMOOTH, RGE_OPEN_VSYNC } from "@rge/player";
 import { findNativeLibrary, loadNative, type Native } from "./ffi.ts";
 
 export interface Pixels {
@@ -13,6 +13,7 @@ export interface Pixels {
 export class NodeBackend implements Backend {
   readonly #native: Native;
   readonly #encoder = new TextEncoder();
+  readonly #typed = new Uint32Array(RGE_TYPED_MAX);
   #text = new Uint8Array(256);
   #offsets = new Int32Array(64);
   #width = 0;
@@ -116,6 +117,12 @@ export class NodeBackend implements Backend {
     this.#native.frame(clearColor, records.subarray(0, length), length, this.#text, this.#offsets, count, input, keys);
     this.#width = input[RGE_IN_WIDTH] as number;
     this.#height = input[RGE_IN_HEIGHT] as number;
+  }
+
+  /** What was typed in the last frame (see `Backend.typed`). */
+  typed(): string {
+    const count = Math.min(this.#native.typed(this.#typed, this.#typed.length), this.#typed.length);
+    return count === 0 ? "" : String.fromCodePoint(...this.#typed.subarray(0, count));
   }
 
   /** The last presented frame, or null if the window is not hidden (nothing is captured) or no frame was drawn. */

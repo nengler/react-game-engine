@@ -32,6 +32,12 @@ let passes = 0;
  * Owns the root of the object tree and drives dirty-driven updates:
  * render every dirty object, then apply queued structural changes.
  */
+/** A focusable that takes typing (`<TextInput>`): while it has the focus, the World hands it `InputState.typed`, and Enter submits it. */
+interface TextEntry {
+  takeText(typed: string): void;
+  submit(): void;
+}
+
 export class World implements BodySpace {
   readonly root: GameObject = new GameObject();
   /**
@@ -314,7 +320,10 @@ export class World implements BodySpace {
       live.push(p);
       if (p.focusable === true) focusables.push(p);
     }
-    const ask = (action: string, keys: readonly string[]): boolean => (input.isAction?.(action) ? input.pressed(action) : keys.some((k) => input.pressed(k)));
+    // While a text field has the focus, what is typed goes into it, and the keys that move or press are only the plain ones (the arrows,
+    // Enter, Escape and the gamepad's), never letters an action is bound to: typing "x" must not go back, nor a `pressKey` fire.
+    const ask = (action: string, keys: readonly string[]): boolean => (!typing() && input.isAction?.(action) ? input.pressed(action) : keys.some((k) => input.pressed(k)));
+    const typing = (): boolean => this.#focused !== null && typeof (this.#focused as Partial<TextEntry>).takeText === "function";
     if (this.#focused !== null && !focusables.includes(this.#focused)) {
       const lost = this.#focused;
       if (anyInert && lost.world === this && lost.focusable === true && lost.disabled !== true && this.isInert(lost)) this.#focusBeforeInert = lost;
@@ -329,6 +338,7 @@ export class World implements BodySpace {
       const auto = focusables.find((p) => p.autoFocus === true);
       if (auto) this.focus(auto);
     }
+    if (typing()) (this.#focused as unknown as TextEntry).takeText(input.typed ?? "");
     if (focusables.length > 0) {
       const dx = (ask("right", ["ArrowRight", "PadRight"]) ? 1 : 0) - (ask("left", ["ArrowLeft", "PadLeft"]) ? 1 : 0);
       const dy = dx !== 0 ? 0 : (ask("down", ["ArrowDown", "PadDown"]) ? 1 : 0) - (ask("up", ["ArrowUp", "PadUp"]) ? 1 : 0);
@@ -340,9 +350,13 @@ export class World implements BodySpace {
           const next = this.#nextFocus(this.#focused, focusables, dx, dy);
           if (next !== null) this.focus(next);
         }
-      } else if (this.#focused !== null && ask("confirm", ["Enter", "PadA"])) this.#focused.onPress?.();
+      } else if (this.#focused !== null && ask("confirm", ["Enter", "PadA"])) {
+        if (typing()) (this.#focused as unknown as TextEntry).submit();
+        else this.#focused.onPress?.();
+      }
       else if (this.#focused !== null && ask("back", ["Escape", "PadB"])) menuOf(this.#focused)?.onBack?.();
     }
+    if (typing()) return;
     for (const p of live) if (p.pressKey !== undefined && p.world === this && input.pressed(p.pressKey)) p.onPress?.();
   }
 

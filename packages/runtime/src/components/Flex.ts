@@ -269,6 +269,7 @@ export function flexBorderRoom(f: Flex): number {
 export const WIDGET_NONE = 0;
 export const WIDGET_SLIDER = 1;
 export const WIDGET_TOGGLE = 2;
+export const WIDGET_TEXT = 3;
 
 export class Flex<P extends object = {}> extends GameObject<P> {
   static override readonly intrinsic = true;

@@ -8,6 +8,7 @@ import {
   Pointer,
   Flex,
   Tooltip,
+  TextInput,
   Game,
   GameObject,
   Hud,
@@ -33,6 +34,7 @@ import {
   WIDGET_NONE,
   WIDGET_SLIDER,
   WIDGET_TOGGLE,
+  WIDGET_TEXT,
   type Slider,
   type Toggle,
 } from "@rge/runtime";
@@ -1888,6 +1890,17 @@ export class FrameBuilder {
       const fill = x + thumb / 2 - edge;
       if (fill > 0 && slider.fillColor !== "") list.box(this.#partAt(world, edge, edge), fill, height, this.#color(slider.fillColor), 0, 0, radius);
       if (thumb > 0) list.box(this.#partAt(world, x, edge), thumb, height, this.#color(slider.thumbColor), 0, 0, radius);
+    } else if (flex.widget === WIDGET_TEXT) {
+      // The caret, while the field has the focus: one pixel wide (scaled with the box), the label's height, after the text (where
+      // the children end, less the padding after them), or before the placeholder. It blinks twice a second while the clock runs.
+      const field = flex as unknown as TextInput;
+      if (flex.world === null || flex.world.focused !== (flex as unknown) || field.disabled === true) return;
+      if (this.#time !== undefined && Math.floor(this.#time * 2) % 2 === 1) return;
+      const label = field.label;
+      const x = field.showsPlaceholder() ? label.layoutX : (flex.box.contentEnd[0] as number) - (flex.paddingRight ?? flex.paddingX ?? flex.padding ?? 0) - flex.scrollX;
+      const top = label.layoutY;
+      const tall = Math.max((flex.box.size[1] as number) - top - (flex.paddingBottom ?? flex.paddingY ?? flex.padding ?? 0) - edge, 1);
+      list.box(this.#partAt(world, Math.min(x, edge + width - 1), top), 1, tall, this.#color(field.caretColor), 0, 0, 0);
     } else if (flex.widget === WIDGET_TOGGLE) {
       const toggle = flex as unknown as Toggle;
       list.box(this.#partAt(world, edge, edge), width, height, this.#color(toggle.checked ? toggle.onColor : toggle.offColor), 0, 0, height / 2);

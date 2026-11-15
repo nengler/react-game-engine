@@ -91,6 +91,8 @@ export interface InputFrame {
   readonly down?: readonly string[];
   /** Went up this frame. */
   readonly released?: readonly string[];
+  /** Characters typed this frame (`Backend.typed`), `"\b"` for Backspace. */
+  readonly typed?: string;
 }
 
 export interface RecordingOptions {
@@ -164,6 +166,13 @@ export class RecordingBackend implements Backend {
 
   queueInput(frame: InputFrame): void {
     this.#queue.push(frame);
+  }
+
+  #typed = "";
+
+  /** What the last frame's scripted input typed. */
+  typed(): string {
+    return this.#typed;
   }
 
   get lastFrame(): RecordedFrame {
@@ -270,7 +279,9 @@ export class RecordingBackend implements Backend {
     });
     if (this.#keepFrames !== undefined && this.frames.length > this.#keepFrames) this.frames.splice(0, this.frames.length - this.#keepFrames);
 
-    applyInputFrame(this.#queue.shift() ?? {}, input, keys, this.config?.width ?? 0, this.config?.height ?? 0);
+    const next = this.#queue.shift() ?? {};
+    this.#typed = next.typed ?? "";
+    applyInputFrame(next, input, keys, this.config?.width ?? 0, this.config?.height ?? 0);
   }
 
   /** Check the frame's records, and when `out` is given, read them into it. */

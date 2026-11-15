@@ -7,7 +7,7 @@
  */
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 8
+#define RGE_ABI_VERSION 9
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -163,6 +163,13 @@ void rge_frame(uint32_t clearColor,
                const double *records, int32_t recordsLength,
                const char *text, const int32_t *textOffsets, int32_t textCount,
                double *input, uint8_t *keys);
+
+/* Text typed in the last rge_frame, for text fields: the characters the keyboard layout made (Unicode code points, with the
+ * system's key repeat), not keys, and RGE_TYPED_BACKSPACE for each press or repeat of Backspace. Copies up to `capacity` of
+ * them to `out` and returns how many there were (at most RGE_TYPED_MAX; more in one frame are dropped). Since ABI v9. */
+int32_t rge_typed(uint32_t *out, int32_t capacity);
+#define RGE_TYPED_BACKSPACE 8
+#define RGE_TYPED_MAX 64
 
 /* Collisions: which boxes overlap. `boxes` holds `count` boxes of four doubles each (minX, minY, maxX, maxY), all
  * finite, with maxX > minX and maxY > minY. Two boxes overlap when they share an area: boxes that only share an edge
