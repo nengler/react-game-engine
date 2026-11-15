@@ -246,7 +246,7 @@ describe("key on any element", () => {
     assert.deepEqual(book.children.map((c: { name: string; image?: string }) => c.image ?? c.name.split(":")[0]), ["Tc", "openc", "right.png"]);
   });
 
-  it("refuses key on a component's root and one inside a list item, and passes a keyed element beside other children", async () => {
+  it("refuses key on a component's root, takes one inside a list item, and passes a keyed element beside other children", async () => {
     const root = compileErrors(`function A() { return <Entity name="A" key="x" />; }`);
     assert.deepEqual(root.map((d) => d.code), [DiagnosticCode.UnsupportedAttribute]);
     assert.match(root[0]!.message, /where the component is used, not on its root/);
@@ -264,10 +264,9 @@ export function A() { const s = useMutable({ k: 1 }); return <Panel><Sprite key=
     a.s.k = 2;
     world.flush();
     assert.deepEqual(images(), ["a.png", "b.png"], "the keyed element starts over in its own place");
-    const nested = compileErrors(`interface Item { id: string }
+    const nested = compile(`interface Item { id: string }
 function A() { const s = useMutable({ items: [] as Item[], k: 1 });
-  return <Entity name="A">{s.items.map((i) => <Entity key={i.id}><Sprite key={s.k} image="a.png" /></Entity>)}</Entity>; }`);
-    assert.deepEqual(nested.map((d) => d.code), [DiagnosticCode.InvalidList]);
-    assert.match(nested[0]!.message, /A list item cannot hold a keyed element among its children yet/);
+  return <Entity name="A">{s.items.map((i) => <Entity key={i.id}><Sprite key={s.k} image="a.png" /></Entity>)}</Entity>; }`, "KeyedInItem.tsx");
+    assert.deepEqual(typeCheck(nested), [], "a keyed element inside a list item is a list of the item's own (nested-lists.test.ts)");
   });
 });

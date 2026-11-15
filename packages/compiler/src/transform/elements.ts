@@ -344,13 +344,25 @@ export class ElementLowering extends HookLowering {
 
   /**
    * A list item's children: elements and conditions of them (`{d.locked && <Lock …/>}`), nested as deep as needed; any of them
-   * may read the item. Not yet: a list, `{children}` or a <Route> among them. Null (after reporting) for one of those.
+   * may read the item. A list (or a keyed element) among them is a list of the item's own (`{row.cells.map((cell) => …)}`): it may read
+   * the item too, and its state lives in the item's record. Not yet: `{children}` or a <Route>. Null (after reporting) for one of those.
    */
   protected listItemChildren(kids: readonly ChildIR[], item: ParamIR, index: ParamIR | null, at: Node): ChildIR[] | null {
     const out: ChildIR[] = [];
+    const readsItem = (e: ExprIR): boolean => readsParam(e, item.id) || (index !== null && readsParam(e, index.id));
     for (const c of kids) {
-      if (c.kind === "KeyedListChild" || c.kind === "ChildrenSlot" || (c.element.component.kind === "Intrinsic" && c.element.component.name === ROUTE_TAG)) {
-        const what = c.kind === "KeyedListChild" ? (isKeyedElement(c) ? "a keyed element" : "a list") : c.kind === "ChildrenSlot" ? "`{children}`" : "a <Route>";
+      if (c.kind === "KeyedListChild") {
+        // Its own items were made list items of it already; now what they read of this item becomes dynamic too.
+        const grand = this.listItemChildren(c.element.children, item, index, at);
+        const element = grand && this.asListItem({ ...c.element, children: grand }, item, index);
+        const alternate = c.alternate && this.asListItem(c.alternate, item, index);
+        if (!element || (c.alternate && !alternate)) return null;
+        const reads = [c.source, c.key, ...(c.condition ? [c.condition] : [])].some(readsItem);
+        out.push({ ...c, element, alternate, dependencies: reads ? [...c.dependencies, { kind: "Item" }] : c.dependencies });
+        continue;
+      }
+      if (c.kind === "ChildrenSlot" || (c.element.component.kind === "Intrinsic" && c.element.component.name === ROUTE_TAG)) {
+        const what = c.kind === "ChildrenSlot" ? "`{children}`" : "a <Route>";
         const holder = isKeyedElement({ item }) ? "A keyed element" : "A list item";
         this.report(DiagnosticCode.InvalidList, `${holder} cannot hold ${what} among its children yet: make it a component that renders it.`, at);
         return null;
@@ -360,7 +372,7 @@ export class ElementLowering extends HookLowering {
       if (!element) return null;
       if (c.kind === "StaticChild") out.push({ kind: "StaticChild", element });
       else {
-        const reads = readsParam(c.condition, item.id) || (index !== null && readsParam(c.condition, index.id));
+        const reads = readsItem(c.condition);
         out.push({ ...c, element, dependencies: reads ? [...c.dependencies, { kind: "Item" }] : c.dependencies });
       }
     }

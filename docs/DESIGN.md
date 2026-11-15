@@ -931,7 +931,10 @@ relative to the container that holds `{children}`.
 `ElementIR.children` as static children, conditional children, or a keyed
 list, owned by the parent. A list may sit among other passed children: its
 items' order is a path, the list's position and then the item's index (see
-"Forwarding"); a list inside a list item is not supported yet, and `children={…}` as an attribute is `RGE1203`. Whether
+"Forwarding"). A list inside a list item (`{row.cells.map(…)}`) keeps its
+state (instances by key, order, records) in the outer item's record, its
+source may read the outer item (a method taking it), and its callbacks read
+each item around them through that item's record. `children={…}` as an attribute is `RGE1203`. Whether
 the receiver renders `{children}` is its own file's business: the source
 type-check catches `<Leaf>…</Leaf>` for a props type without `children`
 (`RGE9002`), and the runtime throws a clear error if a component that does not

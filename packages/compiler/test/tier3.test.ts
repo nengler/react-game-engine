@@ -648,9 +648,9 @@ describe("children on list items", () => {
     assert.match(compiled.code, /\$item\.attachPassedChild\(\$rec\.kids\.tag, 0\)/);
   });
 
-  it("still rejects a list inside an item's children", () => {
-    const errors = compileErrors(`${ITEM_CHILDREN}\nfunction Bad() { const s = useMutable({ opts: [] as Opt[] }); return <Entity name="B">{s.opts.map((o) => <Btn key={o.id} on onPress={() => {}}>{s.opts.map((p) => <Tag key={p.id} text="x" />)}</Btn>)}</Entity>; }`);
-    assert.equal(errors[0]?.code, DiagnosticCode.InvalidList);
+  it("takes a list inside an item's children (nested-lists.test.ts)", () => {
+    const nested = compile(`${ITEM_CHILDREN}\nfunction Nested() { const s = useMutable({ opts: [] as Opt[] }); return <Entity name="B">{s.opts.map((o) => <Btn key={o.id} on onPress={() => {}}>{s.opts.map((p) => <Tag key={p.id} text="x" />)}</Btn>)}</Entity>; }`, "NestedItems.tsx");
+    assert.deepEqual(typeCheck(nested), []);
   });
 });
 
