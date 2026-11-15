@@ -2060,8 +2060,9 @@ its box. Decided as the smaller of two scopes (NEXT_PRIORITIES.md, "Now", step 8
   uses no shapes pays one property read per pair, and a box is still upright against a box (its rotated bounds), as before. Against a
   shape, a turned box is exact.
 - **Body queries** (`touching`, `overlapping`) filter by shape the same way (`World.tagIn`, `collidersIn`), against the body's box.
-- **Not built:** solid shapes (a body still stops at a solid collider's box: no slopes, no round pillars), concave polygons, and
-  drawing shapes in the debug overlay (it draws boxes).
+- **Decided 2026-11-15: circles and polygons only, for now.** Solid shapes (a body still stops at a solid collider's box: no slopes,
+  no round pillars) are not planned until a game needs them. Also not built: concave polygons, and drawing shapes in the debug
+  overlay (it draws boxes).
 
 ## Custom hooks (priority 7)
 

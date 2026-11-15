@@ -37,7 +37,7 @@ performance are set aside for now; the author has played Bramble in a window, an
 | 5 | Render targets and blend modes (**done**, #151: `<Layer>`, ABI v10; Bramble's cave is dark and lit by the lantern) | One ABI change both shaders and lighting build on; a greybox of a cave or night area in Bramble starts here |
 | 6 | Shaders (**done**, ABI v11: `<Layer shader params>`, a GLSL `effect` function per file; the software renderer warns that it runs none; Bramble's cave flickers and darkens at the edges) | Tested in Bramble's cave or night area |
 | 7 | Lighting (**done**, ABI v12: `<Lighting ambient>` and `<Light radius color intensity>`; Bramble's lantern, the cave's items and the wisps are lights; no shadows) | A light map multiplied over the scene, finishing that area |
-| 8 | Better collision shapes (**done**: `shape="circle"` and convex `shape="polygon"` on `<Collider>`, tested exactly for contacts and body queries, rotated boxes exact against them; solid shapes and slopes not yet) | Circles and polygons; whether they also stop movement (slopes) is the author's call |
+| 8 | Better collision shapes (**done**: `shape="circle"` and convex `shape="polygon"` on `<Collider>`, tested exactly for contacts and body queries, rotated boxes exact against them. Decided 2026-11-15: for now collision shapes are circles and polygons only; solid shapes and slopes are not planned) | Circles and polygons; whether they also stop movement (slopes) is the author's call |
 | 9 | Cutscenes (**done**: `sequence`, `wait`, `call`, `waitFor`, `tween`, `parallel` in `@rge/runtime`; Bramble's first visit to the cave is one) | Sequences (REACT_FEEL_PLAN.md C2); the way into Bramble's cave is the first |
 
 ## Phase 4: driven by a real game
