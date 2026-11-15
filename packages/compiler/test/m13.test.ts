@@ -315,7 +315,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
   });
 
   it("keeps the sprite's own names apart from the state of a component rooted at it", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    // Since 2026-11-13 a name the root built-in has is the author's to use: its field is `$name`.
     for (const name of ["frames", "fps", "playing", "frame", "elapsed", "image"]) {
       const result = getCompiler().compile(
         "C.tsx",

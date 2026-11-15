@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Text wrappers (REACT_FEEL_PLAN.md, B3): a component whose props say `children: TextChild | readonly TextChild[]` takes words
+ * Text wrappers (DESIGN.md, "Text", text wrappers): a component whose props say `children: TextChild | readonly TextChild[]` takes words
  * between its tags, as `<Text>` does, and passes them on with `<Text>{children}</Text>`.
  */
 import { after, describe, it } from "node:test";

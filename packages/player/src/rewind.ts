@@ -1,5 +1,5 @@
 /**
- * Rewind in `rge dev` (REACT_FEEL_PLAN.md D1): record every frame's input while playing, snapshot the game every second, and go
+ * Rewind in `rge dev` (DESIGN.md, "Rewind in `rge dev`"): record every frame's input while playing, snapshot the game every second, and go
  * back to any recorded frame by restoring the snapshot before it and playing the recorded input again from there, muted and
  * undrawn, to that frame. While paused there, a hot reload plays the same input again with the new code, so the same moment shows
  * with the fix; resuming plays on with live input and drops the recorded future.

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 /**
- * Component state in saves (REACT_FEEL_PLAN.md, A5): `createSave({ tree: true })` keeps each component's own state, found again by
+ * Component state in saves (DESIGN.md, "Component state in saves"): `createSave({ tree: true })` keeps each component's own state, found again by
  * its path, and a list item by its key.
  */
 import { after, before, describe, it } from "node:test";

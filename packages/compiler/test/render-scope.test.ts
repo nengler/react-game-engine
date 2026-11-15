@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Dependency-scoped `render()` (REACT_FEEL_PLAN.md, D5): a render works out each memo it always reads once, and runs each part
+ * Dependency-scoped `render()` (DESIGN.md, "Dependency-scoped `render()`"): a render works out each memo it always reads once, and runs each part
  * (one element's values, one child's props) only when a state field or prop that part reads is a different value than at the last
  * render. What is under a condition or in a list, and what reads something the compiler cannot follow, always runs.
  */

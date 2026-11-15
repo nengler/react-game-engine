@@ -107,7 +107,7 @@ function Lamp() {
   });
 
   it("keeps generated state apart from the manifest's member names", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
+    // Since 2026-11-13 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
     const compiler = new Compiler();
     try {
       const result = compiler.compile(

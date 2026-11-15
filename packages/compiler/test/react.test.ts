@@ -127,13 +127,13 @@ function Pickup() {
     assert.deepEqual(codes("const s = 1;"), [DiagnosticCode.InvalidComponentBody]);
     assert.deepEqual(codes("const a = 1; const a = useMutable({ n: 0 });"), [DiagnosticCode.InvalidUseState]);
     assert.deepEqual(codes("const a = b; const b = 1;"), [DiagnosticCode.UnknownIdentifier]);
-    // An arrow in the body is a function of the component since REACT_FEEL_PLAN.md B6 (hooks-as-functions.test.ts).
+    // An arrow in the body is a function of the component since 2026-11-13 (hooks-as-functions.test.ts).
     assert.ok(compile(`function C() { const f = () => 1; return <Entity />; }`).code.includes("readonly f = () =>"));
-    // `let` and loops in the body are a render block since REACT_FEEL_PLAN.md A1 (render-blocks.test.ts); `var` is not.
+    // `let` and loops in the body are a render block since 2026-11-13 (render-blocks.test.ts); `var` is not.
     assert.deepEqual(codes("var a = 1;"), [DiagnosticCode.InvalidComponentBody]);
   });
 
-  it("gives every handler the latest writes, in the order they run, and renders once (docs/MUTABLE_STATE.md)", async () => {
+  it("gives every handler the latest writes, in the order they run, and renders once (docs/DESIGN.md, 'State: useMutable')", async () => {
     const { Snap } = await load<{ Snap: new () => Entity & { s: { n: number; seenBySecond: number; doubled: number } } }>(
       compile(`function Snap() {
   const s = useMutable({ n: 1, seenBySecond: 0, doubled: 0 });

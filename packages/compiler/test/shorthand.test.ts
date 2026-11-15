@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 /**
- * `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` as props of their own on a built-in that takes `transform` (REACT_FEEL_PLAN.md,
- * B2): `<Sprite x={spot.x} y={spot.y} />` is `transform={{ x: spot.x, y: spot.y }}`, lowered to the same writes.
+ * `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` as props of their own on a built-in that takes `transform` (DESIGN.md,
+ * "Placing things"): `<Sprite x={spot.x} y={spot.y} />` is `transform={{ x: spot.x, y: spot.y }}`, lowered to the same writes.
  */
 import { after, describe, it } from "node:test";
 

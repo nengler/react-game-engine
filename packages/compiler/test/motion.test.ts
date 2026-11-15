@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-/** Motion (REACT_FEEL_PLAN.md, C1): `useSpring` and `useTween`, shipped hooks that step in the component's update. */
+/** Motion (DESIGN.md, "Motion: springs, tweens and opacity"): `useSpring` and `useTween`, shipped hooks that step in the component's update. */
 import { after, describe, it } from "node:test";
 
 import { Entity, EASINGS, World, freeze, springFrom, startSpring, stepSpring, type InputState } from "@rge/runtime";

@@ -243,7 +243,7 @@ describe("diagnostics for the new statements", () => {
   });
 
   it("rejects a `for…of` that is not `for (const x of …)`, and `for…in`", () => {
-    // `while` and C-style `for` are handler code since REACT_FEEL_PLAN.md A1 (loops.test.ts).
+    // `while` and C-style `for` are handler code since 2026-11-13 (loops.test.ts).
     for (const loop of [
       "for (let x of [1]) { }",
       "for (const [a, ...rest] of [[1, 2]]) { }",

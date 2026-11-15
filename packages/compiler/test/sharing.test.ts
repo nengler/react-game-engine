@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 /**
- * Sharing state between components (REACT_FEEL_PLAN.md, A6): lifted up to a common parent and passed down by props or through
+ * Sharing state between components (DESIGN.md, "Sharing state between components"): lifted up to a common parent and passed down by props or through
  * context, with the timing pinned. A value a child reports up in a step is seen, in that step, by a sibling after it that reads it by
  * a prop (props are read live in handlers); a value passed by context is still the one the parent last rendered, seen in the next step.
  */

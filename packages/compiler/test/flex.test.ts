@@ -457,7 +457,7 @@ function Name() {
   });
 
   it("lets state take a widget's names, kept in `$name` fields", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    // Since 2026-11-13 a name the root built-in has is the author's to use: its field is `$name`.
     for (const [tag, names] of [
       ["Slider", ["value", "min", "max", "step", "fillColor", "thumbColor", "thumbWidth", "moveTo", "fraction"]],
       ["Toggle", ["checked", "onColor", "offColor", "thumbColor", "flip"]],
@@ -482,7 +482,7 @@ function Name() {
   });
 
   it("lets state take the new names, kept in `$name` fields", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    // Since 2026-11-13 a name the root built-in has is the author's to use: its field is `$name`.
     for (const name of ["onPress", "contains"]) {
       assert.ok(
         compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`),

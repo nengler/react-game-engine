@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Rewind (REACT_FEEL_PLAN.md D1) on a platformer, where a bug is a frame-exact jump: Kite's first rooms, played through rewind,
+ * Rewind (DESIGN.md, "Rewind in `rge dev`") on a platformer, where a bug is a frame-exact jump: Kite's first rooms, played through rewind,
  * then sent back to frames in the middle of wall jumps and played again from a snapshot. Every frame must replay as recorded.
  */
 import { describe, it } from "node:test";

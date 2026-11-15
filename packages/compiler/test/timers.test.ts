@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-/** Timers (REACT_FEEL_PLAN.md, C2): `after`, `every` and `cancelTimers` in handlers, the component's own. */
+/** Timers (DESIGN.md, "Timers"): `after`, `every` and `cancelTimers` in handlers, the component's own. */
 import { after as afterAll, describe, it } from "node:test";
 
 import { Entity, Text, World, freeze, type InputState } from "@rge/runtime";

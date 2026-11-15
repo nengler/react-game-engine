@@ -145,7 +145,7 @@ describe("M14: diagnostics", () => {
       result.diagnostics.map((d) => d.code),
       [DiagnosticCode.MissingImport]
     );
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
+    // Since 2026-11-13 a name the root built-in has is the author's to use: its field is `$name`.
     assert.ok(
       compile(`function C() { const width = useMutable({ n: 1 }); return <Pointer width={width.n} height={1} />; }`).code.includes(
         "get $width()"

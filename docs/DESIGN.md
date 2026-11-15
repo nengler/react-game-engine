@@ -1,23 +1,14 @@
 # Compiler design
 
-This document describes the architecture of the TSX → TypeScript game-object
-compiler as it stands after Phase 2 (M0–M15), the decisions taken, and the
-alternatives that were considered. It is the place to push back on a decision before more code is
-built on top of it.
-
-**State, since 2026-11-14 (#121): `useMutable`, and no `useState`.** A component's state is `const s = useMutable({ hp: 3 })`,
-written directly (`s.hp -= 1`); a handler reads its own writes, render sees what the frame committed (see "State reads in
-handlers" below and [MUTABLE_STATE.md](MUTABLE_STATE.md)). A `useState` is `RGE1102`, whose message writes out the conversion; the
-editor's quick fix and `tools/codemod-mutable.ts` convert a file (`codemod/mutable.ts`). Sections written before then describe
-`useState`, `setX(…)` and updaters as they were built: each `useMutable` field is still one of those state slots (a field, a
-pending value, a setter, a hot-reload key), so what they say about storage, rendering and saving holds; what they say about
-setters, updaters and a handler seeing a snapshot does not.
-
-**No `useRef` either, since the same change.** A value that persists and never renders is a `useMutable` field the JSX does not read (`const s = useMutable({ timer: 0 })`, `s.timer -= dt`, where `timer.current -= dt` was). A write marks the component, which re-runs `render()`, but each part of it is guarded by what it reads, so a field nothing reads changes nothing drawn. A `useRef` is `RGE1102`, whose message writes out the conversion; the same codemod and quick fix convert it (a ref used as a value, such as returned from a hook, is left for a person: return the `useMutable` instead). A field cannot be written in `useUnmount`, which a ref could (see "Lifecycle"); to tell the parent, call a callback prop (`onGone?.()`): the update would have nowhere to render.
+This document describes the architecture of the TSX → TypeScript game-object compiler and the runtime it targets, the
+decisions taken, and the alternatives that were considered. It is the place to push back on a decision before more code is
+built on top of it. The native player (librge, its ABI, the hosts and their performance) is described in [PLAYER.md](PLAYER.md),
+and `<Flex>` layout and the fixed game resolution in [LAYOUT.md](LAYOUT.md). A date after a heading is when that decision was
+taken; the section describes the code as it is now.
 
 ## Ground rules and settled decisions
 
-A change that breaks one of these rules needs a design note first, as Phase 3's [NATIVE_PLAN.md](NATIVE_PLAN.md) was for the player. That document adds the player's own rules (the runtime stays backend-free; `@rge/player` and `@rge/runtime` import nothing from Node; `rge.h` is the source of truth for the protocol; the C side does no maths): see its [Ground rules](NATIVE_PLAN.md#ground-rules).
+A change that breaks one of these rules is written up first (a section here, or in [PLAYER.md](PLAYER.md) for the player) and agreed before it is built. [PLAYER.md](PLAYER.md) adds the player's own rules: the runtime stays backend-free; `@rge/player` and `@rge/runtime` import nothing from Node; `rge.h` is the source of truth for the protocol; the C side does no maths.
 
 - **Feel like ideal React.** A component is a function of state and props, hooks follow React's conventions, and imports, `key`, and callbacks-as-props look like React's. "Ideal" means React's model, not its accidents (stale closures, dependency arrays). A feature that makes authors learn an engine-specific API where a React one exists needs a design note first.
 - **IR first.** Each feature starts as new variants in the `packages/compiler/src/ir/` files (`types.ts` re-exports them all). Code is generated only from IR, never from the AST.
@@ -28,7 +19,7 @@ A change that breaks one of these rules needs a design note first, as Phase 3's 
 - **Unsupported means a diagnostic.** Never silently drop syntax. Diagnostic codes in `diagnostics.ts` are append-only.
 - **Generated code must type-check.** Every feature adds a test that runs generated output through `typeCheckFiles` and one that imports and runs it against the runtime.
 
-Decisions taken while building the compiler (Phase 2, M0–M15), each still in force:
+Decisions, each still in force:
 
 | Decision | Choice |
 | --- | --- |
@@ -36,14 +27,14 @@ Decisions taken while building the compiler (Phase 2, M0–M15), each still in f
 | Input model | Per-frame `useInput` hook with polled `InputState` for devices. Events that belong to an element are callback props on that element (`<Collider onCollisionEnter>`, `<Pointer onPress>`), lowered to `CallbackProp` with parameter types from the manifest's `intrinsicCallbacks`; no separate event-prop IR variant |
 | Scene format | Support both: JSON scenes validated against the generated schema, and TSX scenes that compose prefabs |
 | Hook names | Hooks start with `use`, as in React: `useUpdate`, `useInput` (were `onUpdate`, `onInput`; the old names report `RGE1102`). Collision handling is a prop on `<Collider onCollisionEnter={…}>`, replacing the `onCollisionEnter` hook (decided 2026-11-08, done in M4b) |
-| State reads in handlers | `useMutable` (2026-11-14, #121; it replaces `useState`, whose React snapshot semantics were decided 2026-11-08): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. "Every handler in a frame sees the same state" becomes "every handler sees the latest writes, in the order handlers run; render sees the frame's committed state". See [MUTABLE_STATE.md](MUTABLE_STATE.md) |
+| State reads in handlers | `useMutable` (2026-11-14, replacing `useState` and React's snapshot): a handler sees a field as it was last written, this step included (the pending value), and so does a derived `const` read in a handler and the condition a callback is created under; render, and the props and context it hands down, see what the frame committed. Every handler sees the latest writes, in the order handlers run (tree order); render sees the frame's committed state. See "State: `useMutable`" |
 | Global state | `createGameState(data, actions)` in `GameState.ts`, real code the game runs: the data a plain object, each action taking the state as its first argument and writing a draft of it directly, committed when the outermost action returns (only changed paths tell readers; unchanged objects keep their identity). **Access** with a selector that returns the value, `const hp = useGame((s) => s.player.hp)` (paths the compiler checks and subscribes to), read-only; **update** by calling an action from `useGame.actions()` in a handler. Per process, reset by the player. Decided 2026-11-09 as a Zustand store changed with `set`; that form was removed 2026-11-15. See "Global state" |
 | Refs | No `useRef` (removed 2026-11-14): a value that never renders is a `useMutable` field the JSX does not read. No `ref={…}` on elements or components (`RGE1106`): what is on screen is driven by state and props (decided 2026-11-08) |
 | Component forms | Arrow-function components and default exports/imports are allowed. A component may return a fragment (an implicit container) or a non-Entity root; a root may have JSX children only if its element type accepts children (decided 2026-11-08) |
 | Lifecycle | `useMount(() => …)` and `useUnmount(() => …)`; no `useEffect` (decided 2026-11-08, confirmed 2026-11-12 with what replaces each of its uses: see "Why there is no `useEffect`") |
 | Built-in elements | `<Game>` (the optional root carrying window, assets and game state; see "Game"), `<Text>`, `<Shape>`, `<Camera>`, `<AnimatedSprite>`, `<Pointer>`, on top of `<Entity>`, `<Sprite>`, `<Collider>`. Each placed element is listed in the manifest's `transformIntrinsics` (decided 2026-11-08) |
 | Camera target | A camera follows its children (`<Camera><Hero /></Camera>`) and is transparent to their transforms (`GameObject.childSpace()`); its own `transform` is an offset from the followed point. Replaces the sketched `follow={hero}`, which needed element refs (removed in M3) (decided 2026-11-09, #21) |
-| Mutating state in place | Rejected at compile time: every in-place write is a diagnostic (the mutating array methods, `++` and `delete` are `RGE1301`; assignment to anything but `ref.current`, including `e.hp = 1` and `items.length = 0`, is `RGE1402`), so the setter's `===` check cannot be defeated from source. No dev-mode `Object.freeze` (decided 2026-11-09). A `useMutable` field is written directly (`s.vx += 1`), each write going through its generated setter. Changing a list or an object in a field in place (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`, `s.pos.x = 3`) is lowered to the copy the author would write (option 2 in [MUTABLE_STATE.md](MUTABLE_STATE.md)): the field gets a new value, copying only what the path passes through, so `===` still finds every change. A result used as a value, an alias (`const e = s.enemies[i]; e.hp = 0`) and a loop variable are refused (`RGE1301` / `RGE1402`, with what to write instead) |
+| Mutating state in place | A `useMutable` field is written directly (`s.vx += 1`), each write going through its generated setter. Changing a list or an object in a field in place (`s.enemies.push(e)`, `s.enemies[i].hp -= 1`, `s.pos.x = 3`, a `for … of` over a field writing its items) is lowered to the copy the author would write: the field gets a new value, copying only what the path passes through, so `===` still finds every change. A result used as a value and an alias (`const e = s.enemies[i]; e.hp = 0`) are refused (`RGE1301` / `RGE1402`, with what to write instead); any other in-place write to something that is not a field or a `let` local is refused too. No dev-mode `Object.freeze`. See "State: `useMutable`" |
 | Sound | A hook, not an element: `const playSound = useSound("hit.wav")`, then `playSound()` in handlers. Sounds have no position, so they do not take `transform`. Playing is an effect, not state, so it happens immediately rather than at the next render (decided 2026-11-08) |
 | Authoring | Source files import hooks and intrinsics from a typed entry point and type-check in editors (decided 2026-11-08) |
 | Transforms: a non-reactive `useTransform` handle written imperatively in handlers, or position as state written through a JSX attribute | Position is state, set with `transform={{ x, y }}` on any built-in element (decided 2026-11-08; every runtime object has a transform, and the manifest's `transformIntrinsics` lists which built-ins take the attribute). Transforms nest: relative to the parent by default, `global: true` opts out. Authoring should feel as close to ideal React as possible; a per-frame move costs one render per tick, and dependency-scoped rendering is the optimisation if that ever matters |
@@ -77,7 +68,7 @@ generated file. Each generated line maps to the start of the construct it was wr
 the IR's spans), not to the exact expression, so a stack trace through `node --enable-source-maps` names the right line of
 the `.tsx`. Spans already point at the source as written, through the custom-hook inliner's `EditMap`.
 
-**Errors in the source** (2026-11-12, PAIN_POINTS.md and Bramble finding 6). Every `compile` now returns the same line origins
+**Errors in the source** (2026-11-12). Every `compile` now returns the same line origins
 (`origins`), with or without a map. The command line keeps them per generated file, and `mapToSource` moves each type error the
 check of the generated code finds (`RGE9001`) to the source line of the construct its generated line was written for, keeping
 where it was found: `src/Settings.tsx:9:28 - error RGE9001: TS2345: … (in the generated out/Settings.ts:44:59)`. A line written for
@@ -141,8 +132,8 @@ ignored):
 
 * A component is a top-level `function` declaration or `const` arrow function
   with a capitalised name (optionally `export`ed, or the module's default
-  export) whose body is: hooks (`useMutable`, `useSound`, the handler hooks),
-  `const name = expression;` derived values, then one `return`. An arrow with
+  export) whose body is hooks (`useMutable`, `useSound`, the handler hooks), derived values and statements (see "Statements in the
+  component body"), and a `return`. An arrow with
   an expression body (`const Dot = () => <Sprite … />`) is just its return. A derived `const` (`const hurt = health < 25;`) may read
   anything declared above it; it is inlined where it is used, so JSX that uses
   it updates with the state it reads, and a handler that uses it sees current
@@ -164,8 +155,8 @@ ignored):
   `{items.map((item) => <Element key={item.id} … />)}` (see "Keyed lists").
   A fragment `<>…</>` may stand for an element anywhere here, as a child or as
   a branch (`{alive && <>…</>}`): it is an implicit `<Entity>` holding its
-  children, so they come and go together (decided 2026-11-11). Text children,
-  spread attributes and other expression children are rejected.
+  children, so they come and go together (decided 2026-11-11). Text children
+  go in a `<Text>` or a component that forwards them (see "Text"); spread props are in "Spread props".
 * Imports: components from `./Name.tsx`, and hooks, built-in elements and
   `clamp` and the `Child` type from `@rge/runtime/jsx` (the manifest's
   `authoringModule`; the type is written `import { type Child }`, the one
@@ -202,6 +193,92 @@ ignored):
   `! - +`, binary arithmetic / comparison / logical, `?:`, parentheses, array
   and object literals (with spreads), member reads (`e.id`, `items.length`,
   `found?.hp`) and the non-mutating array methods. See "Arrays and records".
+
+## State: `useMutable` (2026-11-14)
+
+A component's state is `const s = useMutable({ hp: 3, foes: [] as Foe[] })`, written directly (`s.hp -= 1`,
+`s.foes.push(f)`). There is no `useState` and no `useRef`: each is `RGE1102`, whose message writes out the conversion in the
+author's names, once per hook. The editor's quick fix and `node tools/codemod-mutable.ts <files or folders>` convert a whole file
+(both are `convertToMutable`, `packages/compiler/src/codemod/mutable.ts`; a ref used as a value, such as returned from a hook, is
+left for a person).
+
+**Why not React's snapshot.** React's state is a snapshot: a handler sees the value from the last render, and a setter's value
+shows only after the next one. That suits UI, where a handler does one thing, and not a step function, which reads, changes and
+re-reads the same values many times a frame. Under `useState` Kite's `Runner` copied eight values into locals at the top of
+`useUpdate`, ran the step on the copies and called eight setters at the end, and that shape pushed game logic out of components
+into plain `rules/` files. React keeps state immutable because it finds changes at run time by comparing values; this compiler
+sees every write, as Svelte 5, Vue and Solid do, so state can be written directly. What makes code read like React is kept:
+components and JSX, read-only props flowing down, render as a pure function of state and props, and hooks for lifecycle and
+per-frame work. A handler that cannot read what it just wrote is one of React's accidents, not its model. A second hook beside
+`useState` was rejected (an author who knows the engine would always pick the direct one), and so was keeping React's name for
+it, since `setA(b); setB(a)` and `setX(x + 1)` twice would mean something React code does not expect.
+
+**The rules.**
+
+1. **A handler reads its own writes.** Each field is a state slot: it renders when it changes, it is saved, and hot reload and
+   rewind keep it.
+2. **One timing rule for all state: a handler sees every write at once; render sees what the frame committed.** Handlers run in
+   tree order (depth first, a parent before its children, siblings in order; `useInput` across the whole tree, then `useUpdate`;
+   `World.tick`, pinned by `packages/runtime/test/update-order.test.ts`), and each sees the writes of every handler before it.
+   Then each changed component renders once. A derived `const` (plain, destructured, or a render block's names) read in a handler
+   is worked out from the fields as they are now, under a memo of its own keyed on their pending values; in render it is worked
+   out from the committed values.
+3. **Props are read-only, and read live in handlers.** A child changes its parent's state through a callback prop; a write to a
+   prop or to anything inside one is an error that names the callback form. A child's handler reads a prop as the parent has it
+   now, through a getter the parent hands it (`GameObject.propGetters`, read as `this.$live.health`), so two towers firing at an
+   enemy with 1 hp in the same step do not both fire: the second sees it dead. This holds for a plain child, a conditional one, a
+   keyed list's items (found again by key in the live list), what is below a list item, an item that switches between two
+   elements, and a context value. A callback prop is never live: it is created once. A getter whose condition no longer holds, or
+   whose item's key is gone, says nothing, and the child's last props stand. Render reads what the frame committed. React keeps
+   reads stale for UI reasons (a consistent screen, concurrent rendering) that a fixed-step game loop does not have; the price is
+   that update order is visible, which is why it is defined and tested.
+4. **Render stays pure.** No writes in the component body (`RGE1402`); a write belongs in a handler.
+
+**Lists and objects changed in place are lowered to copies.** `s.list.push(x)` becomes `s.list = [...s.list, x]`, and
+`s.list[i].hp -= 1` becomes `s.list.with(i, { ...item, hp })`, copying each level the path passes through and sharing the rest.
+The mutating methods (`push`, `unshift`, `pop`, `shift`, `splice`, `sort`, `reverse`) become a spread, `slice`, `toSpliced`,
+`toSorted` and `toReversed`; `=`, the compound operators, `++` and `--` through an index or a property become `with` and object
+spreads. A `for (const foe of s.foes) { foe.hp -= 1; }` is lowered to a loop over the index (`lowerItemLoop`). Refused, each with
+the form to write: a method's result used as a value, an index that is not plain, `?.` in a write, a write through another name
+(`const e = s.list[0]; e.hp = 0`), and a loop over a copy (`s.foes.filter(…)`) that writes its items. Index writes need an array;
+a record is replaced with a spread. Two alternatives were set aside. A version number on each slot cannot reach what the engine
+compares item by item (a keyed list hands each child its item, and a child's props guard is `===`). Hidden write-tracking proxies
+(Svelte 5's answer) cost a trap on every read in per-frame loops, cannot be copied by `structuredClone` (rewind would silently stop
+snapshotting them), and show up as `Proxy {}` in the debugger. Copying keeps `===` true to what changed, costs nothing at run time
+and keeps the committed value a snapshot. Its cost is a copy per write: a loop writing every item of a list is quadratic in its
+length, fine for hundreds of items; a write that must be fast builds the list in a local (`const next = s.list.map(…)`) and
+assigns it once.
+
+**A helper cannot change a list field.** An array field is typed `MutableList<T>` (`packages/runtime/src/jsx.ts`): the forms the
+compiler lowers type-check, but it is not assignable to `T[]`, so a helper in a plain `.ts` file that takes `Foe[]` is an error in
+the editor. A helper takes `readonly Foe[]` to read, or returns the new list. Items are plain `T`, so a helper can still change an
+item in place, which nothing reports; `Readonly<Foe>` on the field's type catches it.
+
+**`s` as a whole.** A hook hands its state back as the object (`return s`), so `const counter = useCounter(2)` makes `counter` the
+hook's fields. `s` passed whole in a handler (`takeHit(s)`) is the component's own object, made the first time and kept, whose
+getters read the fields as the handler sees them and whose setters write through the fields' setters, so a helper's write renders;
+after the component is unmounted a write through it does nothing and warns in development (`setDevelopmentWarnings`). In render
+(`total(s)`, `<Camera shake={shake}>`) `s` is a copy of the committed fields, typed `Readonly<…>`. From outside, a compiled
+component's `component.s.vx` reads the committed value and `component.s.vx = 1` writes through the setter, so tests and tools
+write state as handlers do.
+
+**No `useRef`.** A ref was a field that never renders, readable in handlers only. A `useMutable` field nothing in render reads
+costs one comparison, not a redraw, since each part of `render()` is guarded by what it reads, so two hooks for one kind of value
+were not worth keeping. A field cannot be written in `useUnmount` (`RGE1402`), which a ref could; to tell the parent, call a
+callback prop (`onGone?.()`). There is no `ref={…}` on elements either (`RGE1106`).
+
+**Things to know.**
+
+- TypeScript does not narrow a field inside a closure: `{s.waiting !== null && <Prompt onKey={() => bind(s.waiting)} />}` is a
+  type error where `const waiting = s.waiting` above it is not. It is also a real hazard, since the callback runs later and the
+  field may have changed. The guide teaches the `const`.
+- After the codemod, check `setX(x + 1); use(x + 1)`: under a snapshot `use` read the old `x`, but converted to
+  `s.x += 1; use(s.x + 1)` it adds one twice.
+- A hook's own state is named after the hook (`body.x`, `body2` for a second call or a clash), which `t.state()`, saves, hot
+  reload and the inspector show.
+
+The game state follows the same direct form with one difference: only actions written in `GameState.ts` change it. See "Global
+state (`createGameState`)".
 
 ## IR
 
@@ -273,45 +350,28 @@ scope), `Block` (`{ … }`), `Break` (inside a `for…of` or `switch`) /
 `Continue` (inside a `for…of`), of the same function, `Return`, and `SetState` (`{ state, value }`, for `s.x = value`).
 Parameters are `ParamRead`, locals are `LocalRead`, state is `StateRead`.
 `Assign` (`=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `||=`, `&&=`, `??=`) writes
-`ref.current` or a `let` local; `n++` / `--r.current` as a statement is
-`+= 1` / `-= 1` on those two. See "Transforms and refs". Position is not
+a `let` local or a value the handler owns (see "Any expression in handlers"); a write to a `useMutable` field is a `SetState`, and
+`n++` / `--n` as a statement is `+= 1` / `-= 1`. Position is not
 assigned: it is state. `While` (`while`, and `do…while` with `doWhile`), `For` (C-style: `let` locals or
 assignments, a test that may be left out, and assignments as the update) and `Try` / `Throw` are written as
 they are (2026-11-13, see "Every loop, and `try`, in handlers"). A loop may now run forever and hang a frame, as
 it may in any JavaScript.
 
-**Expressions** added: `ParamRead`, `LocalRead`, `PropertyRead` (only on a
-parameter of a runtime handle type, e.g. `input.pointerX`), `Call` and
-`TemplateLiteral`. `Call` is limited to an allowlist (`Math.abs/floor/ceil/
-round/sign/sqrt/sin/cos/min/max`, `clamp`) and to methods of handle
-parameters (`input.pressed/down/released`); the tables live in
-`transform/handles.ts`. Everything else (`var`, labelled jumps,
-closures that escape (but for an arrow handed to a function, see "A cleanup from `useMount`"), `this`, `await`, other calls) is a diagnostic
-(`RGE1301`/`RGE1401`/`RGE1402`); assignment to anything but `ref.current` or a
-`let` local is `RGE1402`, and `++` on anything else stays `RGE1301`.
+**Expressions** added: `ParamRead`, `LocalRead`, `PropertyRead`, `Call` and
+`TemplateLiteral`. Which calls and in-place changes a handler may make is in "Any expression in handlers" below (the handle
+methods, `input.pressed/down/released` and the like, are in `transform/handles.ts`). `var`, labelled jumps, `this`, `await` and
+closures that escape (but for an arrow handed to a function, see "A cleanup from `useMount`") are diagnostics
+(`RGE1301`/`RGE1401`/`RGE1402`).
 
-**Scoping**: component scope (state, setters) → function scope (parameters) →
-block scope (`const`s). Shadowing follows JS, so the React idiom
-`setCount((count) => count + 1)` works: state is emitted as `this.count`, so a
-parameter or local of the same name cannot be confused with it. Only a
-redeclaration in the same scope (the function body shares its parameters'
-scope, as in JS) or rebinding `Math`/`clamp` is `RGE1401`.
+**Scoping**: component scope (state) → function scope (parameters) → block scope (`const`s). Shadowing follows JS: state is
+emitted as a field of `this`, so a parameter or local of the same name cannot be confused with it. Only a redeclaration in the same
+scope (the function body shares its parameters' scope, as in JS) or rebinding `Math`/`clamp` is `RGE1401`.
 
-**Semantics** (React's): state is a snapshot. A setter records the next value
-in a private pending field (`#healthNext`) and calls `markDirty()`; reads
-(`this.health`) keep the value from the last render until the component
-renders again, when `commitState()` (run by `runRender()` just before
-`render()`) copies pending into current. So `setN(n + 1); setN(n + 1)` adds 1,
-`setN((n) => n + 1)` twice adds 2 (updaters chain on the pending value), and
-every handler in a frame sees the same state whichever runs first. Any number
-of setter calls in a frame cause one render, in the frame's render phase.
-Refs are the deliberate exception: `ref.current` is a plain field, read and
-written immediately.
-
-**`useMutable`** (#121) keeps the same storage and changes only what a handler
-reads. `const s = useMutable({ vx: 0 })` makes one state slot per field (id
+**Storage.** `const s = useMutable({ vx: 0 })` makes one state slot per field (id
 `Hero.s.vx`, field `$s_vx`, pending `#$s_vxNext`, setter `$set_s_vx`), marked
-`StateIR.mutable`. A write (`s.vx += 1`) is a `SetState` of the slot; a read in a
+`StateIR.mutable`. A write (`s.vx += 1`) is a `SetState` of the slot: the setter records the value in the pending field and calls
+`markDirty()`, and `commitState()` (run by `runRender()` just before `render()`) copies pending into current, so any number of
+writes in a frame cause one render, in the frame's render phase. A read in a
 handler is a `live` `StateRead` of the pending value, so a handler reads its
 own writes, and every other read (render, the props it hands children) is the
 committed value. A derived `const` that reads a field is lowered again where a
@@ -333,7 +393,7 @@ a `return;` in one cannot skip the others:
 override onUpdate(dt: number): void { this.#onUpdate0(dt); this.#onUpdate1(dt); }
 ```
 
-`SetState` emits `this.setX(…)`, so dirty marking stays in the setter.
+`SetState` emits a call to the field's setter, so dirty marking stays in the setter.
 
 **Runtime frame** (`World.tick(dt, input = NO_INPUT)`): `onInput` → `onUpdate` (the methods `useInput` / `useUpdate` compile to)
 → render dirty objects → commit structure. Objects register on attach only if
@@ -359,14 +419,14 @@ decided in "Collider callbacks" below.
 it hit. Choosing which pointers to test, and in what order for overlaps, is the
 input system's job.
 
-Input model decision (per the Phase 2 plan): a polled per-frame `useInput` hook,
+Input model decision: a polled per-frame `useInput` hook,
 not JSX event props. Element-level events are callback props on the element
 (`<Collider onCollisionEnter>`, `<Pointer onPress>`).
 
 ### Every loop, and `try`, in handlers (2026-11-13)
 
 Handlers allowed `for…of` only, so that a handler could not hang a frame. That rule was one of the subset's costs that pushed
-the games' logic out of components (`REACT_FEEL_PLAN.md`, A1), and a hung frame is a bug an author finds at once, as in any
+the games' logic out of components, and a hung frame is a bug an author finds at once, as in any
 JavaScript. So a handler takes `while`, `do…while`, C-style `for` (with several `let`s and a comma list of updates),
 `try` / `catch` (with a name or none) / `finally`, and `throw`. `break` and `continue` work in every loop. Each is a statement
 kind of its own (`While`, `For`, `Try`, `Throw`), lowered like the rest and written out as it was written. A `for` loop's `let`s
@@ -374,7 +434,7 @@ are scoped to the loop, as in JavaScript; its head may not call a setter. Labell
 
 ### Any expression in handlers (2026-11-13)
 
-The second step of A1. A handler's expressions were an allowlist (a few `Math` functions, the array, string and number methods
+A handler's expressions were an allowlist (a few `Math` functions, the array, string and number methods
 that change nothing, handle methods), so a local list could not be pushed to, a `Map` could not be made, and `console.log` was an
 error. Now, in a handler:
 
@@ -397,7 +457,7 @@ What stays out: `this`, `await`, `var`, labelled jumps, and calls of unknown glo
 
 ### Statements in the component body (2026-11-13)
 
-The third step of A1. A component body held hooks, derived `const`s and a `return`; a `let`, a loop or a list built up was
+A component body held hooks, derived `const`s and a `return`; a `let`, a loop or a list built up was
 `RGE1101`, so every list a screen drew was made by the rules (Bramble's `rules/view.ts`). Now a run of body statements that are
 not hooks, and not all `const name = …`, is a **render block** (`RenderBlockAnalysis` in the analyzer):
 
@@ -481,8 +541,8 @@ that escape" were a diagnostic). Now, in a handler, an arrow passed to a plain f
 an imported object, a callback prop or a local holding a function is a `CallbackIR` (`{ kind: "Callback", fn: FunctionIR }`):
 a handler of its own, lowered like a callback prop (contextual parameters, handler statements, state set through `this`). It
 may run later, after the component has left; a setter called then marks a detached object, which never renders, so nothing
-breaks, but the cleanup is how to stop it. Outside handlers an arrow is still only a callback prop, an updater or an array
-method's argument. A handler's own local may now be called (`stop()`, callee `Local`); the type-check checks it is a function.
+breaks, but the cleanup is how to stop it. Outside handlers an arrow is still only a callback prop or an array method's
+argument. A handler's own local may now be called (`stop()`, callee `Local`); the type-check checks it is a function.
 `walkExpr` walks a callback's statements, so whatever looks for reads and calls in a handler sees inside it.
 
 **Generated code.** A `useMount` whose statements return a value is a method of its own, typed `(() => void) | void`, and
@@ -512,12 +572,12 @@ which replaced the module-level `settings.subscribe` that mirrored the settings 
 
 `const values = useStore(settings, settingsView)` is React's `useSyncExternalStore`: a value read from a store outside the game
 state, read at mount and again on each notification, rendering only when the data read differs. Bramble's settings screen wrote it
-out by hand (two `useState`s, a `useMount` that subscribed and set both), which is what it replaces (`REACT_FEEL_PLAN.md`, B5).
+out by hand (two state fields and a `useMount` that subscribed and set both), which is what it replaces.
 
-- It is a shipped hook (`hooks/library.ts`), written from `useState` with a lazy initial value and a `useMount` that returns the
+- It is a shipped hook (`hooks/library.ts`), written from `useMutable({ value: read() })` and a `useMount` that returns the
   subscription as its cleanup, so it costs nothing new in the compiler. Its type comes from the initial value:
   `ReturnType<typeof settingsView>`.
-- The updater is `keepIfEqual(previous, read())` (`runtime/src/equal.ts`): the setter renders when it is given a different object,
+- Each notification writes `s.value = keepIfEqual(s.value, read())` (`runtime/src/equal.ts`): the setter renders when it is given a different object,
   and a read usually builds a new one, so data equal all the way down (`sameData`) keeps the old value.
 - For it to work as a function, the inliner now writes an argument that names an import of the calling file in place of its
   parameter, as it did for literals: `store.subscribe(…)` becomes `settings.subscribe(…)`, a method of an imported object, and
@@ -528,7 +588,7 @@ out by hand (two `useState`s, a `useMount` that subscribed and set both), which 
 ## Why there is no `useEffect` (2026-11-12)
 
 `useEffect` is the first hook a React author reaches for, and it stays out on purpose. This section says why, and what
-stands in for each thing it is used for. Asked again on 2026-11-12, after the review in [PAIN_POINTS.md](PAIN_POINTS.md):
+stands in for each thing it is used for. Asked again on 2026-11-12, after a review of what trips new authors:
 the worry is not that it cannot be built (the compiler knows what every expression reads, so it could even work out the
 dependencies itself) but that it would be used for everything, including what it should not be used for.
 
@@ -541,7 +601,7 @@ drops, where the rules' events cannot help because the component does not know t
 
 - **A frame late, per link.** An effect runs after the render that saw the change; a setter it calls renders next frame,
   and an effect that triggers another adds a frame each. Kite's first version, which compared counters with refs to play
-  sounds, was "one step late" for exactly this reason (NEXT_PRIORITIES.md, finding 3 of the first level).
+  sounds, was "one step late" for exactly this reason.
 - **The patterns React's own docs warn against** become the easy path: state copied from other state (here a derived
   `const` already does it), chains of effects that set state, and "when X changes, do Y" where Y belongs where X was changed.
 - **Game logic leaves the rules.** Both games found that the rules as plain functions returning events, answered by
@@ -573,11 +633,11 @@ things and change it from handlers:
 interface EnemyData { id: string; hp: number }
 
 function Swarm() {
-  const [enemies, setEnemies] = useState<EnemyData[]>([]);
+  const s = useMutable({ enemies: [] as EnemyData[] });
   useUpdate((dt) => {
-    setEnemies(enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0));
+    s.enemies = s.enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0);
   });
-  return <Entity name="Swarm"><Sprite image={enemies.length > 3 ? "busy.png" : "calm.png"} /></Entity>;
+  return <Entity><Sprite image={s.enemies.length > 3 ? "busy.png" : "calm.png"} /></Entity>;
 }
 ```
 
@@ -585,11 +645,11 @@ function Swarm() {
 an element type, or a `SourceType { text }` (a type written in the file:
 `EnemyData`, `Item | null`), copied into the generated code as written, next
 to the file's copied type declarations, so the type-check resolves it. A
-primitive is inferred from the initial value as before; state initialised
-from a prop takes the prop's type; an array or object literal needs the type
-argument (`useState([])` is `RGE1104`, as `[]` alone would be `never[]` in
-TypeScript). Refs stay primitive (`RGE1106`). The authoring `useState<T>`
-accepts any `T` and widens only primitives.
+primitive is inferred from the initial value; a field initialised from a prop
+takes the prop's type; an empty array or a record needs its type
+(`enemies: [] as EnemyData[]`; an empty array with none is `RGE1104`, as `[]`
+alone would be `never[]` in TypeScript). An array field is typed `MutableList<T>`
+in the authoring module (see "State: `useMutable`").
 
 **Expressions.**
 
@@ -607,43 +667,21 @@ early. Members of a runtime handle parameter (`input.pointerX`) remain
 `PropertyRead`, checked against the manifest.
 
 **Array methods** (`ARRAY_METHODS` in `ir/expressions.ts`): `filter`, `map`,
-`some`, `every`, `find`, `findIndex` (each takes a callback), `includes`,
-`indexOf`, `slice` and `concat`. None changes its receiver. The mutating ones
-(`push`, `splice`, `sort`, `forEach`, …) are `RGE1301` with the immutable
-alternative (`setItems([...items, item])`). A callback is an inline,
-expression-bodied arrow: it is consumed synchronously by the method, so it
-never escapes (a deliberate, narrow exception to "no closures"), and with no
-block body it cannot set state or call callbacks while the array is walked.
-Its parameters are `Contextual`: the array's element type provides them, so
-`(e) => e.hp > 0` needs no annotation. An arrow anywhere else (other than a
-callback prop or a state updater) is `RGE1301`.
+`flatMap`, `some`, `every`, `find`, `findIndex` (each takes a callback), `includes`,
+`indexOf`, `slice`, `concat`, `join` and the rest of the table. None changes its receiver. A mutating method
+(`push`, `splice`, `sort`, …) on a `useMutable` field is lowered to a copy (see "State: `useMutable`"), and on a value a
+handler made itself it is called as written ("Any expression in handlers"); anywhere else it is `RGE1301`, with the form to write.
+A callback is an arrow consumed synchronously by the method, so it never escapes. Its parameters are `Contextual`: the array's
+element type provides them, so `(e) => e.hp > 0` needs no annotation.
 
 **Dependencies.** A JSX value that reads an array, including inside a
 callback (`items.some((e) => e.hp < 1)`), depends on that state, so it
 re-renders when the array changes.
 
-**Immutable updates.** A setter renders only when it gets a new value (the
-`===` check in the generated setter), so changing an array in place would
-never render; that is why the mutating methods are rejected. `setItems(items)`
-and `setItems((list) => list)` are no-ops; `setItems([...items])` renders. The
-generated code is ordinary TypeScript:
-
-```ts
-enemies: EnemyData[] = [];
-#enemiesNext: EnemyData[] = this.enemies;
-setEnemies(value: EnemyData[] | ((previous: EnemyData[]) => EnemyData[])): void { … }
-
-override onUpdate(dt: number): void {
-  this.setEnemies(this.enemies.map((e) => ({ ...e, hp: e.hp - dt })).filter((e) => e.hp > 0));
-}
-```
-
-An arrow whose body is an object literal is parenthesised, in callbacks and in
-updaters (`setP((p: P) => ({ ...p, x: 1 }))`).
-
-**Updaters are gone** (#121 removed `useState`, and with it `setX(prev => …)` and the in-place block the generator wrote for
-a one-expression updater). A handler's `s.x += speed * dt` is a read of the pending value and a call to the field's setter,
-which is the whole of what that block did.
+**New values, not changed ones.** A setter renders only when it gets a new value (the `===` check in the generated setter), which
+is why a write inside a field is lowered to a copy rather than made in place: `s.items = s.items` renders nothing, and
+`s.items = [...s.items]` or `s.items.push(x)` renders. An arrow whose body is an object literal is parenthesised in the
+generated code.
 
 ## Keyed lists
 
@@ -651,11 +689,11 @@ which is the whole of what that block did.
 element per item of an array, by key (M5b):
 
 ```tsx
-const [enemies, setEnemies] = useState<EnemyData[]>([]);
+const s = useMutable({ enemies: [] as EnemyData[] });
 return (
   <Entity name="Pack">
     <Sprite image="bg.png" />
-    {enemies.map((e) => <Enemy key={e.id} speed={e.speed} onDefeated={() => remove(e.id)} />)}
+    {s.enemies.map((e) => <Enemy key={e.id} speed={e.speed} onDefeated={() => remove(e.id)} />)}
     <Sprite image="fg.png" />
   </Entity>
 );
@@ -732,15 +770,14 @@ a callback reads the item.
   not change is not marked dirty and does not render.
 * **Callbacks see the current item.** A callback prop is created once, with
   the item's first value. Inside it, item reads go through a `{ current }`
-  holder (`$rec.current`) that every render refreshes, so after `setEnemies`
-  replaces a record under the same key the callback reads the new one (as of
-  the last render, like any state read). The callback keeps its holder after
+  holder (`$rec.current`) that every render refreshes, so after a write
+  replaces a record under the same key the callback reads the new one. The callback keeps its holder after
   the item is removed, so `useUnmount` can still call it (it runs when the
   removal commits, after the render that dropped the key).
 * **In a conditional subtree** the list's fields are emptied when the subtree
   unmounts, so it is built afresh when it mounts again.
-* **Immutable updates** are what make the list re-render: see "Arrays and
-  records".
+* **New values** are what make the list re-render; a write inside a field is
+  lowered to one (see "Arrays and records").
 
 ### Conditionals inside the map (2026-11-11)
 
@@ -765,7 +802,7 @@ type-checks.
 ### Narrowing in the generated code (2026-11-12)
 
 What TypeScript narrows in the source, the generated code must narrow too, or the check of the generated code fails where the
-source passed (Bramble finding 17). Three places lost it:
+source passed (found by Bramble). Three places lost it:
 
 - **A callback made under a condition** (`{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`). In the
   source the arrow closes over a narrowed `const`; in the generated code it reads `this.capturing`, which TypeScript does not narrow
@@ -819,7 +856,7 @@ list, `{children}`, a `<Route>`, and children on an item that switches between t
 **`undefined` is a value** (`PlainRef "undefined"`), in render and in handlers: `{gate !== undefined && <Sprite … />}`,
 `if (key !== undefined) bindKey(action, key)`.
 
-**Methods of strings and numbers, destructured and memoized derived values, and `useState` from the game state** (also 2026-11-12,
+**Methods of strings and numbers, destructured and memoized derived values, and state from the game state** (also 2026-11-12,
 from the second Bramble review). `VALUE_METHODS` lists the string and number methods that change nothing (`padStart`, `startsWith`,
 `toUpperCase`, `toFixed`, …), called as written (`CalleeIR` `ValueMethod`); `String`, `Number` and `Boolean` are allowed as
 functions; `flatMap`, `join`, `at`, `lastIndexOf` and `flat` joined the array methods, and, once the type-check target moved to ES2023
@@ -828,12 +865,11 @@ name is a member or index read of the one value. A derived value that calls a fu
 generated code is `this.$memo(key, [deps], () => value)` (`GameObject.$memo`), the deps being the state and props it reads, so it
 is worked out once per change of them wherever it is used (render, handlers, field initialisers), as React's `useMemo`; in `super(…)`'s
 arguments, where `this` is not there yet, it is written in place. A call inside a nested memo does not make a memo of its own.
-`useState`'s initial value may read the game state (the component's snapshot of it, already a field above), not the component's
-own state.
+A `useMutable` field's initial value may read the game state (the component's snapshot of it, already a field above) and state
+declared above it.
 
 **A game-state value named like a member of the root** (`const name = useGame((s) => s.speaker)` in an `<Entity>` root) is kept in the
-field `$name`; the author's name is unchanged. A `useState` with such a name is still `RGE1103`, since its field and setter are the
-component's public API.
+field `$name`; the author's name is unchanged.
 
 **Runtime.** Children are sorted by `(slot, order)`: `addChild(child, slot,
 order = 0)` and `queueAddChild(child, slot, order)` insert after every sibling
@@ -1077,11 +1113,11 @@ left in Tiled, an entity at its top left, so the importer moves the anchor
 along the object's own rotated up axis. An object with no class is skipped
 with a warning. A layer's `offsetx` / `offsety`, and those of every group it is in,
 shift its objects, because Tiled shows them there. A layer or group hidden in Tiled, and an object with `visible: false`,
-are not placed (priority 7). Flip bits in an object's `gid` do not move its anchor, so they need no handling. Not handled:
+are not placed. Flip bits in an object's `gid` do not move its anchor, so they need no handling. Not handled:
 whether an `int` property is whole, and properties inherited from object templates.
 
-**Tile layers** (priority 7) are a second import, `importTilemap`, of the same `.tmj` into `generated/tilemaps.ts`, a table of
-`TilemapData` by file name (see `NATIVE_PLAN.md`, "Tilemap"): the layers' ids with flip bits split off, each layer's `visible`
+**Tile layers** are a second import, `importTilemap`, of the same `.tmj` into `generated/tilemaps.ts`, a table of
+`TilemapData` by file name (see [PLAYER.md](PLAYER.md), "Tilemap"): the layers' ids with flip bits split off, each layer's `visible`
 (a hidden group hides its layers), the first embedded tileset's `firstgid` and its tiles with the property `solid`. It is written
 **before** the sources are type-checked, because a game's own code (its rules) imports it. A map with no tile data (an objects-only
 map) writes nothing.
@@ -1107,7 +1143,7 @@ transform, children).
 `<Text>` (M10) is a leaf built-in for HUDs, labels and menus. Its content is
 its children, and only them (2026-11-12: the `text` attribute is refused, with
 where the words go, and `TextAttributes` leaves it out of the props; before, the
-attribute and the children were two ways to write one thing, PAIN_POINTS.md):
+attribute and the children were two ways to write one thing):
 
 ```tsx
 <Text size={12} color="gold" transform={{ x: 8, y: 8 }}>Score: {score}</Text>
@@ -1149,7 +1185,7 @@ non-string `text`.
 placeholder for (as `Sprite.image` does), and `text`, `size` and `color` become
 names a state, ref or prop may not use.
 
-**Text wrappers** (2026-11-13, REACT_FEEL_PLAN.md B3). React shares a text style with a component, `<Label>Coins: {coins}</Label>`;
+**Text wrappers** (2026-11-13). React shares a text style with a component, `<Label>Coins: {coins}</Label>`;
 here it failed five ways (no `TextChild` type to import, `children` had to be `Child`, `{children}` inside `<Text>` meant nothing,
 and a component could not take text). Now a props type with `children: TextChild | readonly TextChild[]` (`isTextChildrenType`,
 which also takes `string`) makes `children` an ordinary value prop rather than a slot. At a use site, `childrenKind` sorts what is
@@ -1278,7 +1314,7 @@ with or without a `<Game>`, so `state` is simply not one of its props.
 
 A user component cannot be called `Game`: it is an intrinsic like `Entity` (`RGE1206`). The demo's root is `Main`.
 
-**Fast-forward and pause: `timeScale` and `paused`** (2026-11-13, REACT_FEEL_PLAN.md A7). Hearth's 2× speed used to run its rules
+**Fast-forward and pause: `timeScale` and `paused`** (2026-11-13). Hearth's 2× speed used to run its rules
 twice per engine step, and its pause skipped them: both were the rules' business, and with the battle in components there is no
 one function to call twice. They are the world's now. Each frame the player reads the current root's `timeScale` (default 1) and
 `paused`: the frame's time is multiplied by `timeScale` before it reaches the fixed-step driver, so `2` runs two whole steps of
@@ -1485,15 +1521,12 @@ removed; calling it reports `RGE1102` with a pointer to the attribute
 (`RGE1105` is retired).
 
 **Cost**: moving every frame is a state change every frame, so the component
-renders once per tick (one render however many setters ran). `render()`
-re-evaluates all of the component's dynamic props; the IR already records each
-prop's `dependencies`, so a later optimisation can re-evaluate only the props
-whose state changed.
+renders once per tick (one render however many writes there were). `render()`
+re-evaluates only the parts whose inputs changed (see "Dependency-scoped `render()`").
 
-**useRef** was removed on 2026-11-14 (docs/MUTABLE_STATE_FOLLOWUPS.md). It held a value that persists and never renders; since a `useMutable`
-field is written directly and read at once in a handler, a ref was a field that happened not to render, spelt `r.current` and readable in
-handlers only. The IR lost `RefIR`, `RefRead` and the `RefCurrent` assignment target, and `RGE1304` (a `ref.current` read in JSX) is
-retired. `ref={…}` on any element is still `RGE1106`, and `useRef` is `RGE1102`.
+**No `useRef`** (removed 2026-11-14; why is in "State: `useMutable`"). The IR lost `RefIR`, `RefRead` and the `RefCurrent`
+assignment target, and `RGE1304` (a `ref.current` read in JSX) is retired. `ref={…}` on any element is still `RGE1106`, and
+`useRef` is `RGE1102`.
 
 **useSound** (M15): `const playHit = useSound("hit.wav")` binds a sound, and
 `playHit()` as a statement in a handler (`useUpdate`, `useInput`, `useMount`,
@@ -1515,17 +1548,17 @@ Options such as `volume` come later.
 
 ## Sharing state between components (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, A6. With game code in components, an enemy that chases the player needs the player's position. React's
-answer holds here: the common parent keeps it (`useState`), the player reports it up through a callback prop, and the parent
-passes it down as a prop or through context. The timing, pinned by `sharing.test.ts`: every update in a step sees the state as
-the step began (the snapshot rule), and a setter called in a step renders after it, so a value reported up in step N reaches the
-siblings, by props and through context alike, in step N + 1. One step of lag between independent things is deterministic and is
-what most engines do; a built-in that must not lag reads its child's transform directly (`<Camera>`).
+With game code in components, an enemy that chases the player needs the player's position. React's answer holds here: the common
+parent keeps it in its `useMutable`, the player reports it up through a callback prop, and the parent passes it down as a prop or
+through context. The timing, pinned by `sharing.test.ts`: handlers run in tree order and read props and context live, so a value
+a child reports up in a step is seen in that same step by a sibling after it, by props and through context alike; a sibling before
+it sees it in the next step. That one step of lag is deterministic; a built-in that must not lag reads its child's transform
+directly (`<Camera>`).
 
 ## Context (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, C3, React's API compiled. Context was left out while props covered every tree (NEXT_PRIORITIES.md, "Not
-now"); with game code moving into components (section A), a parent sharing its state with a deep subtree is the React answer.
+React's API compiled. Context was left out while props covered every tree; with game code in components, a parent sharing its
+state with a deep subtree is the React answer.
 
 - **`createContext(default)`** (`runtime/src/context.ts`), in a `.ts` file, returns `{ default, Provider }`; `Provider` is only for
   the type-checker (a method, so a context of any value type fits `Context<unknown>`).
@@ -1544,7 +1577,10 @@ now"); with game code moving into components (section A), a parent sharing its s
 
 A component's own state is `useMutable`. The **game state** belongs to the game: a score, hit points, a mute switch, the screen,
 shared by every component. It is one nested object: **data**, read with selectors that return the value, as in Zustand, and
-**actions**, which write it directly (MUTABLE_STATE.md, "The game state: actions write, readers read"). Decided 2026-11-09 as a
+**actions**, which write it directly. Only actions change it, as only a parent changes the state it passes down: an action keeps an
+invariant and its side effects together, gives replays and debugging a named event, and keeps one place to answer "what can
+change `run`?". Calling an action marks the store dirty, and at the end of the action the store compares its draft with the
+committed state leaf by leaf and tells only the readers whose leaves changed, so nothing is added to the read path. Decided 2026-11-09 as a
 Zustand store changed through `set`; since 2026-11-15 the data-and-actions form below is the only one, and the `set` form is
 removed (`RGE1109` names what to write instead).
 
@@ -1575,7 +1611,7 @@ subscribes to exactly that path; any other expression is a computed selector (be
 with the nearest key at the level it went wrong (`'player.hpp' … did you mean "player.hp"? 'player' has: hp, name`).
 `hp` is then a snapshot of the last render, usable in JSX and handlers, with the leaf's type.
 
-**Computed selectors** (2026-11-11, second-game finding 7). The selector may be any expression of the state:
+**Computed selectors** (2026-11-11). The selector may be any expression of the state:
 `const selected = useGame((s) => s.cursor === id)`, `const focus = useGame((s) => focusOf(s.battle, s.cursor))`,
 `useGame((s) => s.battle.pads[s.cursor]?.tower != null)`. Each path it reads (`s.cursor`, `s.battle`) becomes a snapshot of its
 own, `$cursor`, `$battle` (one per path, shared with a plain selector of the same path in the component), and the expression is
@@ -1660,13 +1696,13 @@ The IR marks such a state `globalKey` (the dotted path) and has a `CallAction` s
 `gameStateKeys` are reserved member names, like the other `GameObject` fields.
 
 **Not yet.** Zustand's `subscribe` and middleware; a handler reading the store live (it reads what its component's last render
-saw, rule 2 of MUTABLE_STATE.md); and more than one store per project (one `createGameState` call per project).
+saw, unlike its own `useMutable` fields); and more than one store per project (one `createGameState` call per project).
 
 ### Actions: `useGame.actions()` (2026-11-13)
 
 `const { collect, hurt } = useGame.actions()` takes the actions a component calls. It replaced
 `const { advance, togglePause } = useGame((s) => s)`, the one case where a component selected the whole state, which every game
-wrote and which reads like the Zustand anti-pattern it was an exception to (`REACT_FEEL_PLAN.md`, B4).
+wrote and which reads like the Zustand anti-pattern it was an exception to.
 
 - The destructuring split (`hooks/inline.ts`, `storeSelectionEdits`) turns each name into `const collect = useGame.$actions((s) => s.collect)`,
   which `matchStoreStatement` reads as a selector with `via: "actions"`. An action binding subscribes to nothing, as it always did.
@@ -1678,7 +1714,7 @@ wrote and which reads like the Zustand anti-pattern it was an exception to (`REA
 - At run time `useGame.actions()` returns the state's functions, for plain code (`useGame.actions().collect()`). Its type is
   `ActionsOf<S>`.
 
-## Plain functions in components (priority 7)
+## Plain functions in components
 
 A component may import functions from a relative `.ts` file (`import { fadeThrough } from "./transitions.ts"`) and **call them in any expression** (a prop, a derived value, a handler) or **pass them as values** (`transition={fadeThrough}`). The compiler does not look inside them: TypeScript checks the call, the function is assumed pure, and a dynamic prop that calls one depends on the state in its arguments, so it is re-evaluated when those change. The function body is plain TypeScript with loops, arrays and anything else. This is the escape hatch from the restricted handler language: the logic goes in a `.ts` file, the component only wires it up.
 
@@ -1703,8 +1739,7 @@ useInput((input) => { if (input.pressed("confirm")) begin(); });
 ```
 
 Each binding is a `KeyName`, the union of the names in `KEY_NAMES` (the player's `KEYS` is that list), so a misspelt key is a
-type error where the controls are written: `Type '"Spcae"' is not assignable to type … Did you mean '"Space"'?` (priority 5,
-2026-11-11). Action names in `input.pressed("…")` are not checked by type; an unknown name is a warning at run time.
+type error where the controls are written: `Type '"Spcae"' is not assignable to type … Did you mean '"Space"'?` (2026-11-11). Action names in `input.pressed("…")` are not checked by type; an unknown name is a warning at run time.
 
 Every `InputState` question (`pressed`, `down`, `released`) then takes an action name as well as a key name: `down` is any of
 its keys held, `pressed` is one of them going down this step, `released` is one going up with none still held. Rules in plain
@@ -1716,10 +1751,8 @@ the actions. Not built: rebinding at run time, and axes (a stick's value rather 
 
 ## Motion: springs, tweens and opacity (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, C1, the first layer (hooks).
-
 - **`useSpring(target, { duration, bounce })`** and **`useTween(target, { duration, ease })`** are shipped hooks
-  (`hooks/library.ts`): a `useState` made by `startSpring` / `startTween` and a `useUpdate` that steps it with `stepSpring` /
+  (`hooks/library.ts`): a `useMutable` field made by `startSpring` / `startTween` and a `useUpdate` that steps it with `stepSpring` /
   `stepTween` (`runtime/src/math.ts`). Each step returns the same object once settled, so the state stops changing and the component
   stops rendering. They follow the fixed step, `freeze`, replays and hot reload because they are state stepped in an update. They
   stop under `<Game paused>` too, which is right for the world and wrong for a pause menu: a clock for presentation that a pause
@@ -1732,20 +1765,20 @@ the actions. Not built: rebinding at run time, and axes (a stick's value rather 
   function.
 - **Numbers only, in the hooks.** A hook's state made by a call is typed `ReturnType<typeof f>`, which cannot depend on the
   argument, so the hooks take a number (a point is two). The math functions take points in plain code.
-- **An initial value may read state declared above it** (`useState(() => startSpring(target))` with `target` from state), as in
-  React's first render: state fields are made in declaration order. `RGE1303` is no longer reported.
+- **An initial value may read state declared above it** (`useMutable({ spring: startSpring(target) })` with `target` from state),
+  as in React's first render: state fields are made in declaration order.
 - **`transform.opacity`** (0 to 1, default 1) is pushed on the draw list's alpha stack (`pushAlpha`, as a `<Flex opacity>` is) where
   the walk enters the object and popped where it leaves, in the world walk and the HUD walk, so it multiplies down the tree and
   every record's colour alpha is scaled by it, in both backends (no ABI change). Records with an alpha in them are never copied to
   another frame: a faded object reports itself `WALK_OPAQUE`, takes no leaf fast path, and is kept out of the "it only moved" copy,
   since an opacity change is reported as a move.
-- Not built: the plan's second layer (`transition` on a built-in's transform, eased by the runtime without renders), which waits for
-  a game that measures the hooks as too costly.
+- Not built: a second layer (`transition` on a built-in's transform, eased by the runtime without renders), which waits for a game
+  that measures the hooks as too costly.
 
 ## Sequences, for cutscenes (2026-11-15)
 
-`sequence([wait(0.4), tween(1.2, set, easeOut), call(fn), waitFor(pred), parallel([…])])`, in `runtime/src/sequence.ts`, as
-REACT_FEEL_PLAN.md C2 proposed: a plain library, not compiler work. A sequence is a value with `step(dt)`; the game's rules or a
+`sequence([wait(0.4), tween(1.2, set, easeOut), call(fn), waitFor(pred), parallel([…])])`, in `runtime/src/sequence.ts`: a plain
+library, not compiler work. A sequence is a value with `step(dt)`; the game's rules or a
 component own it (Bramble's `Play` keeps one in a `useMutable` field and holds the world while it runs). Each step reports the time it
 has left over when it ends, and the next step gets it, so a sequence lasts what its steps add up to at any step size, and under the
 fixed timestep it is deterministic. Its `position` is plain data (`{ index, step }`, nested for `parallel`) and `restore` carries on from
@@ -1756,7 +1789,7 @@ called (only an object a function made for the component, a "handle", can), so t
 
 ## Timers: `after`, `every`, `cancelTimers` (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, C2. React code writes `setTimeout` in a handler; here each delay was a countdown kept as state.
+React code writes `setTimeout` in a handler; before timers, each delay here was a countdown kept as state.
 
 - **Runtime.** `GameObject.after(seconds, fn)`, `every(seconds, fn)` and `cancelTimers()` keep a list of timers on the object; the
   `World` keeps the objects that have any and calls `stepTimers(dt)` on each after the step's updates, in the update phase, so timers
@@ -1766,13 +1799,13 @@ called (only an object a function made for the component, a "handle", can), so t
   (`TIMER_FUNCTIONS`); a call is the component's own method, `this.after(…)`, and the function passed is lowered as a handler (a
   callback, as one handed to `settings.subscribe`). Their names are reserved members, so a state called `after` takes `$after`.
 - **Hot reload drops pending timers**, with a note in the log: a timer's function closes over the instance that set it, which the
-  reload replaces, and it cannot be carried to the new one. (The plan hoped to keep timers by call site; that would need the
-  handler that set the timer to run again.) A save never holds a timer either: a delay that is gameplay is state.
-- **Sequences** (cutscenes) are not built; they wait for a game with a cutscene (NEXT_PRIORITIES.md, "Not now").
+  reload replaces, and it cannot be carried to the new one. (Keeping timers by call site would need the handler that set the timer
+  to run again.) A save never holds a timer either: a delay that is gameplay is state.
+- **Sequences**, for cutscenes, are a separate library: see "Sequences, for cutscenes".
 
 ## Seeing inside a running game: the overlay and the inspector (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, C4. Both are development tools of `rge dev` only: the player takes `devtools` (which `playWithReload` sets),
+Both are development tools of `rge dev` only: the player takes `devtools` (which `playWithReload` sets),
 and without it neither exists.
 
 - **The layout overlay** (`player/src/overlay.ts`). With `devtools`, the root's `overlayKey` (F1) turns it on: the frame builder then
@@ -1793,7 +1826,7 @@ and without it neither exists.
   `recording` is on (the inspector turns it on) `setState` keeps the last 50 changes: the action's name (or `setState`) and each
   leaf changed, before and after.
 - **Editing** sets a state through `loadHotState` (`editState`), as hot reload does, or a game-state leaf through `setState`; each
-  is logged as an edit from the inspector that a replay does not repeat (rewind, D1, will record them).
+  is logged as an edit from the inspector, which a replay does not repeat.
 - **The profiler** (2026-11-15; `runtime/src/profile.ts`). Speed was learned from CI's bench budgets, after the fact; the profiler
   says where a frame's script time goes while the game runs. The inspector's "profile" button calls `startProfiling()`, and while a
   profiler is active the World times each `onInput`, `onUpdate` (with its timers) and render (`renderInPass`) and adds it to a row
@@ -1808,7 +1841,7 @@ and without it neither exists.
 
 ## Rewind in `rge dev` (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, D1. `player/src/rewind.ts`; `rge dev` turns it on.
+`player/src/rewind.ts`; `rge dev` turns it on.
 
 - **Recording.** `Rewind` wraps the backend the player is given (a `Proxy`): live, `frame()` draws and polls as usual and keeps a copy
   of the input it wrote, which is the next frame's. Each frame's state is hashed (`hashState`: the game states' values and the
@@ -1839,7 +1872,7 @@ and without it neither exists.
 
 ## Kite's movement with `useBody`, compared (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, A2's open item. `packages/kite/src/Runner.tsx`, `packages/kite/test/runner.test.ts`.
+`packages/kite/src/Runner.tsx`, `packages/kite/test/runner.test.ts`.
 
 - **Same pixels.** The component and `stepBody` use the same mover (`moveActorX` / `moveActorY`) and the same numbers; the body
   finds solid tiles through `<Tilemap solid>` (`World.solidIn`) where the rules call `solidAt`. Six scripts, two rooms, walls and
@@ -1853,7 +1886,7 @@ and without it neither exists.
 
 ## Dependency-scoped `render()` (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, D5. `generator/generator.ts` (the render method), `RenderGuard` in `generator/expressions.ts`, the guards in
+`generator/generator.ts` (the render method), `RenderGuard` in `generator/expressions.ts`, the guards in
 `generator/elements.ts`.
 
 ```ts
@@ -1887,8 +1920,6 @@ override render(): void {
 
 ## Placing things: `<Flex>` anywhere, and `x` / `y` as props (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, B2.
-
 - **Shorthand.** `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` are props of every built-in in the manifest's
   `transformIntrinsics` (`TRANSFORM_SHORTHAND`, `lowerTransform`): they lower to the same transform writes as `transform={{ … }}`,
   so nothing changes at run time and no member is reserved. `opacity` and `global` are not shorthand (`<Sprite>`, `<Flex>` and
@@ -1901,7 +1932,7 @@ override render(): void {
 
 ## Diagnostics in the editor: `rge lsp` (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, D2. `packages/language-server` (the server and the quick fixes), `rge lsp` (the command line starts it),
+`packages/language-server` (the server and the quick fixes), `rge lsp` (the command line starts it),
 `editors/vscode` (the extension, `npm run vscode:pack`).
 
 - **A server beside TypeScript's.** TypeScript's own server keeps the types, hovers and completions; this one adds the `RGE`
@@ -1926,7 +1957,7 @@ override render(): void {
 
 ## Previews: stories and `rge preview` (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, D4. `player/src/stories.ts` (the format, and building a story's root), `player-node/src/preview.ts` (the
+`player/src/stories.ts` (the format, and building a story's root), `player-node/src/preview.ts` (the
 window, the screenshots, the comparison), `cli/src/commands/preview.ts`, and a `previews` step in `rge check`.
 
 - **Where stories live.** A `stories/` folder beside `test/`, not beside the component in `src/`: a stories file imports the
@@ -1948,7 +1979,7 @@ window, the screenshots, the comparison), `cli/src/commands/preview.ts`, and a `
 - **Keys.** Rewind's "a second" keys were PageUp and PageDown, which are not in `KEY_NAMES`: `KEY_INDEX.get` gave `undefined` and
   the keys never worked. They are ↑ and ↓ now, and F5 and F6 were free for stories.
 
-## Effects that happen at a moment (priority 7, 2026-11-11)
+## Effects that happen at a moment (2026-11-11)
 
 Not everything a game shows is state. A burst of dust where the character landed, a sound, a shake of the view: each
 happens at a moment and then plays out on its own, after whatever caused it has moved on. React has no `useEffect`
@@ -1967,7 +1998,7 @@ export const sfx = createSounds({ land: { src: "land.wav", volume: 0.5 }, start:
 <ParticleLayer particles={fx} />     {/* like <Toaster />: where bursts are drawn, in the world */}
 ```
 
-**Once a step** (2026-11-13, A7): a sound entry with `once: true` plays at most once a step, however many components ask for it.
+**Once a step** (2026-11-13, for Hearth): a sound entry with `once: true` plays at most once a step, however many components ask for it.
 `World.tick` counts steps (`countStep` in `Sound.ts`); the store remembers the step a `once` sound last played in. Hearth's rules
 did this by hand over a step's events; with twenty towers each playing its own shot, the store has to.
 
@@ -1984,25 +2015,25 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
 - **`createSounds(entries)`** → `SoundStore`: `play(name, volume?)` plays at the entry's volume times `volume`, and `plays(name)`.
   Every file is loaded when a sound sink is installed (`addSoundPreload`), so the first play does not hitch. Asset names in
   a `.ts` file are not checked at build time (only literals in components are).
-- **Time since mount is state: `const time = useTime()`** (2026-11-11). An engine-shipped hook like `useSquash`: a `useState(0)` that
-  a `useUpdate` adds `dt` to, so the component renders each update. For a blink or a bob (`time % 1 < 0.66`), where a game wrote
+- **Time since mount is state: `const time = useTime()`** (2026-11-11). An engine-shipped hook like `useSquash`: a `useMutable({ time: 0 })`
+  that a `useUpdate` adds `dt` to, so the component renders each update. For a blink or a bob (`time % 1 < 0.66`), where a game wrote
   the clock out by hand.
-- **A shake is state: `const [shake, setShake] = useShake()`** (2026-11-11, replacing a `createShake()` object). The value is
-  `{ strength, duration, elapsed? }`; `setShake({ strength: 3, duration: 0.25 })` in a handler starts one, the hook's own update
+- **A shake is state: `const shake = useShake()`** (2026-11-11, replacing a `createShake()` object). The hook hands back its
+  fields `{ strength, duration, elapsed }`; `shake.strength = 3; shake.duration = 0.25; shake.elapsed = 0` in a handler starts one, the hook's own update
   runs it down (`shakeOn`, the same object once over), and `<Camera shake={shake}>` draws it: the camera's offset is a pure
   function of the value (whole pixels from a fixed sequence, so runs repeat). The component that owns the camera owns the
-  shake; a child that knows when to shake tells it with a callback prop (Kite: `<Player onDie={() => setShake(…)} />`).
-- **Squash and stretch is state: `const [squash, setSquash] = useSquash(1.75)`** (decided 2026-11-11, replacing a
-  `createSquash()` object with a `start` method, which was the imperative shape). `setSquash({ x: 0.6, y: 1.4 })` (a `Vector2`) in a
+  shake; a child that knows when to shake tells it with a callback prop.
+- **Squash and stretch is state: `const squash = useSquash(1.75)`** (decided 2026-11-11, replacing a
+  `createSquash()` object with a `start` method, which was the imperative shape). `squash.x = 0.6; squash.y = 1.4` in a
   handler, and `transform={{ scaleX: squash.x, scaleY: squash.y }}` on the sprite, which scales about its origin. It
   springs back to 1 at `recover` a second in the component's own `useUpdate` (`springBack`, a runtime function that returns
   the same object at rest, so the state stops changing). `useSquash` is an **engine-shipped custom hook**: ordinary source
-  (`useState` + `useUpdate`, in `compiler/src/hooks/library.ts`, with `useShake`), inlined like any custom hook when a component imports it
+  (`useMutable` + `useUpdate`, in `compiler/src/hooks/library.ts`, with `useShake`), inlined like any custom hook when a component imports it
   from `@rge/runtime/jsx`, where it is declared for TypeScript.
 - **Per-instance objects.** A store in a module is global; an object that belongs to one entity is that component's own,
-  made with React's lazy initializer: `const [tally] = useState(() => makeTally())`. The arrow's body is the initial value
-  (the generated field is evaluated once per instance anyway), typed `ReturnType<typeof makeTally>`, and a handler may call
-  its methods (`tally.add(1)`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function from
+  made by a factory as a field's initial value: `const s = useMutable({ tally: makeTally() })`. The initial value is evaluated
+  once per instance, typed `ReturnType<typeof makeTally>`, and a handler may call
+  its methods (`s.tally.add(1)`, `CalleeIR` `ValueMethod`): only for state a factory made (a runtime `create…` function from
   the manifest, or a function from a `.ts` file), so arrays and records keep their messages. This is for objects that are
   not values; a value that changes over time is state (`useSquash`, `useShake`). The manifest's `functions` table includes
   `springBack` and `shakeOn`, which the shipped hooks call.
@@ -2026,8 +2057,8 @@ for (const e of events) if (e.type === "land") { sfx.play("land"); fx.burst("dus
 ## Layers (2026-11-15)
 
 `<Layer blend clear childBlend opacity>` is a built-in container whose children are drawn off screen and then laid over what is under
-it with a blend mode (ABI v10, NATIVE_PLAN.md). It is the first piece of lighting and of shaders (NEXT_PRIORITIES.md, "Now"): a light map
-is a `multiply` layer cleared to the darkness, with the lights in it drawn with `childBlend="add"`; a shader will take a layer as its input.
+it with a blend mode (ABI v10, [PLAYER.md](PLAYER.md)). Lighting and shaders are built on it: a light map is a `multiply` layer
+cleared to the darkness, with the lights in it drawn with `childBlend="add"`, and a shader takes a layer as its input.
 
 - **A container, not a prop on each drawable.** A blend mode on a sprite would be a state change in the record stream, and the frame is
   sorted by `z` after it is written, which would move a sprite away from the state it needs. A layer's records are one block between a
@@ -2043,7 +2074,7 @@ is a `multiply` layer cleared to the darkness, with the lights in it drawn with 
 - **Shaders** (2026-11-15, ABI v11) go on a layer, run as it is laid over: `<Layer shader="cave.glsl" params={[0.12]}>`. A shader is an
   asset like an image, one GLSL function `vec4 effect(vec2 uv)` that the engine wraps for its platform, so a game's shaders are not
   tied to desktop GLSL. Not a shader on each sprite: a layer is already the off-screen picture a post-process needs, and a sprite with
-  an effect is a layer with one child. The software renderer runs none and says so (NATIVE_PLAN.md, "ABI v11").
+  an effect is a layer with one child. The software renderer runs none and says so ([PLAYER.md](PLAYER.md), "ABI v11").
 - **Lights** (2026-11-15, ABI v12): `<Lighting ambient>` is a `Layer` subclass fixed to `multiply` over the world and `add` among its
   children, cleared to the ambient colour; `<Light radius color intensity>` is a leaf drawn as a native falloff (`RGE_OP_LIGHT`), so a
   light needs no image and looks the same in tests. No shadows: walls do not block light. A light outside a `<Lighting>` is drawn as a
@@ -2052,7 +2083,7 @@ is a `multiply` layer cleared to the darkness, with the lights in it drawn with 
 ## Collider shapes (2026-11-15)
 
 `<Collider shape="circle">` is the circle inside its box; `shape="polygon" points={[…]}` a convex polygon in its own pixels, inside
-its box. Decided as the smaller of two scopes (NEXT_PRIORITIES.md, "Now", step 8): shapes change what **touches**, not what **stops**.
+its box. Decided (2026-11-15) as the smaller of two scopes: shapes change what **touches**, not what **stops**.
 
 - **Boxes first, then the shape.** The tracker's sweep, its bands, the native broad phase and the incremental update all still find
   pairs by box; a pair in which either collider has a shape is then tested exactly (`shapesTouch` in `collide.ts`, the separating
@@ -2064,7 +2095,7 @@ its box. Decided as the smaller of two scopes (NEXT_PRIORITIES.md, "Now", step 8
   no round pillars) are not planned until a game needs them. Also not built: concave polygons, and drawing shapes in the debug
   overlay (it draws boxes).
 
-## Custom hooks (priority 7)
+## Custom hooks
 
 "Hooks are compiler intrinsics" extends to the ones an author writes. A function named `use…` (not a built-in hook, not the
 game state's store) whose body is what a component body may hold is a **custom hook**, and a call to it that is a statement of a
@@ -2076,17 +2107,17 @@ function usePlatformerBody() { const step = useGame((s) => s.step); const s = us
 export function Player() { usePlatformerBody(); … }
 ```
 
-- **Names.** What the hook declares at its top level (its `const`s, its `[x, setX]` state, its parameters) is given a prefix unique to the call, `_useName3_x`, so two calls make two separate states and nothing clashes with the component's own names. The exception is a hook's own `useMutable` (`const b = useMutable(…)`), named after the hook, `useBody` → `body`, so its state is saved as `Comp.body.x`; a second call, or a name the component already uses, numbers it (`body2`), and a hook named for a keyword (`useDefault`) keeps the prefix. A mutable the hook returns (`return s`) takes the caller's name. Properties, keys and JSX attribute names are left alone; `{ x }` becomes `{ x: _useName3_x }`.
+- **Names.** What the hook declares at its top level (its `const`s, its parameters) is given a prefix unique to the call, `_useName3_x`, so two calls make two separate states and nothing clashes with the component's own names. The exception is a hook's own `useMutable` (`const b = useMutable(…)`), named after the hook, `useBody` → `body`, so its state is saved as `Comp.body.x`; a second call, or a name the component already uses, numbers it (`body2`), and a hook named for a keyword (`useDefault`) keeps the prefix. A mutable the hook returns (`return s`) takes the caller's name. Properties, keys and JSX attribute names are left alone; `{ x }` becomes `{ x: _useName3_x }`.
 - **Parameters.** A literal argument (a string, number or boolean) is written into the hook where the parameter is used, so a parameter can be a `useSound` path; any other argument is bound with `const _useName3_p = (argument);`. A missing argument takes the parameter's default. A destructured parameter is a diagnostic.
-- **Results.** `const v = useX()`, `const { a, b } = useX()` (the hook returns an object literal) and `const [a, b] = useX()` (an array literal) become `const` declarations of the returned expressions. A name the hook declares and returns as it is (`return [count, setCount]`, `return { on, toggle: setOn }`) is not copied: the hook's own declaration takes the caller's name, so a hook can return a setter, as in React (decided 2026-11-11). Anything else returned is a value (a state-derived expression); refs cannot be returned (they are not readable outside handlers).
+- **Results.** `const v = useX()`, `const { a, b } = useX()` (the hook returns an object literal) and `const [a, b] = useX()` (an array literal) become `const` declarations of the returned expressions. A name the hook declares and returns as it is (`return s`, `return [count, step]`) is not copied: the hook's own declaration takes the caller's name, so a hook can hand back its `useMutable` for the caller to read and write (decided 2026-11-11, for setters then). Anything else returned is a value (a state-derived expression).
 - **Where.** In the component's file, or imported from a relative `.tsx` (`import { useClock } from "./hooks.tsx"`, read by the CLI; the hook's imports from the authoring module are added to the file that uses it). Hooks may call hooks, to a depth of six, which also stops recursion. A call anywhere but as a statement of the component body (in a condition, a callback, an expression) is `RGE1101` with the hook's name.
 - **What is left.** After expansion the hook's declaration and its import are removed, so a hooks-only file compiles to an empty module. Positions in later diagnostics are those of the expanded text. An unknown `use…` name is left alone, so the retired hooks keep their messages.
 
-The author's editor still sees ordinary typed functions: the file type-checks as written (the hook calls `useState` and friends, which throw only if actually run).
+The author's editor still sees ordinary typed functions: the file type-checks as written (the hook calls `useMutable` and friends, which throw only if actually run).
 
 ### Hooks that behave like functions, and functions in the body (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, B6. Inlining stays (it is what makes a hook free at run time and lets the compiler see every state it
+Inlining stays (it is what makes a hook free at run time and lets the compiler see every state it
 declares); what a function can do and a hook could not is closed:
 
 - **A destructured parameter** (`function useMover({ speed, limit: max }: Options)`) binds each name to that member of the
@@ -2111,7 +2142,7 @@ Not done: diagnostics inside a hook still point at the expanded text's mapping, 
 
 ## Component state in saves (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, A5. A save picked from the game state, so state a component kept itself was lost on save, one more reason
+A save picked from the game state, so state a component kept itself was lost on save, one more reason
 the games kept everything in the store. `createSave({ …, tree: true })` keeps the tree too:
 
 - **The game's tree.** `gameTree.ts` holds the world and root the game runs: the player sets it when it mounts the root (and
@@ -2130,7 +2161,7 @@ the games kept everything in the store. `createSave({ …, tree: true })` keeps 
 
 ## Testing one component: `@rge/testing` (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, A4. A rule is a function, so a test calls it; a component could be tested only by running the whole game
+A rule is a function, so a test calls it; a component could be tested only by running the whole game
 from an input script and reading the game state or the draw records, which alone was a reason to keep logic out of components.
 `packages/testing` is a small package over the headless `World`:
 
@@ -2142,22 +2173,22 @@ from an input script and reading the game state or the draw records, which alone
 - `collide` / `separate` report contacts between one of the component's colliders (by tag) and a collider made for the test
   from `{ tag, data, width, height }` (made once per spec, under the holder); `press` calls `World.reportPress` at a pressable's
   middle; `setProps` calls the generated `updateProps`.
-- `state(component)` reads `saveHotState()` back by source name (`"Enemy.health"` becomes `health`): the accessor B7 planned,
+- `state(component)` reads `saveHotState()` back by source name (`"Enemy.health"` becomes `health`): the accessor tests needed,
   which hot reload already had. `texts`, `find` and `findAll` read the tree.
 
 Every method flushes the world after it, so what a test reads is what would be drawn.
 
-**Whole subtrees that collide** (2026-11-13, A7): with `collisions: true` every step ends as the player's does, with a
+**Whole subtrees that collide** (2026-11-13, for Hearth): with `collisions: true` every step ends as the player's does, with a
 `CollisionTracker` over every collider under the holder, so a battle whose shots hit its enemies is tested as one component
 (`render(Play, …, { collisions: true })`). `place({ tag, data, x, y, width, height })` puts another collider in the world, each in
 an entity of its own (colliders with the same parent are one thing's and never touch); `remove` takes it out. Without the option
 nothing collides on its own, and contacts are reported with `collide`, as before. Not done: compiling the component from
-its `.tsx` on demand (tests import the generated class, as `game.ts` does). Since A8 it is packed (`npm run pack`) and a dev
+its `.tsx` on demand (tests import the generated class, as `game.ts` does). It is packed (`npm run pack`) and a dev
 dependency of every new game, whose template tests its `Hero` with it.
 
 ## Bodies: `useBody` (2026-11-13)
 
-`REACT_FEEL_PLAN.md`, A2. Collisions are found after every step and reported to `onCollisionEnter` after the step's update
+Collisions are found after every step and reported to `onCollisionEnter` after the step's update
 ("Why collisions are per step"), so a component that moved itself learned it hit a wall a step late, inside it. Kite answered by
 moving in plain functions over the tile grid (`moveActorX` / `moveActorY` with a `blocked(x, y)` the rules write). A body does the
 same for a component, against the world it is mounted in:
@@ -2169,13 +2200,13 @@ same for a component, against the world it is mounted in:
 - **What is solid.** The `World` keeps the colliders and tilemaps registered in it (`registerObject`), and answers `solidIn(box,
   ignore)`: a solid tile of a `<Tilemap solid>` (its `TileGrid.solidAt`, at the map's world position) or a `<Collider solid>` whose
   box overlaps, not under the body's own component. Both `solid` props are new, default false.
-- **How a body knows its world.** A per-instance object a factory made (`useState(() => createBody(…))`, a "handle" state, now
+- **How a body knows its world.** A per-instance object a factory made (`useMutable({ body: createBody(…) })`, a "handle" state,
   marked `handle` in the IR) is listed by the generated `ownedHandles()`; `GameObject.attachToWorld` calls each one's
   `attachOwner(owner, world)` if it has one, and `detachFromWorld` its `detachOwner()`. Any runtime object may use this.
-- **`useBody`** is a shipped hook (`hooks/library.ts`): the body in a lazy `useState`, `x` and `y` as state, and `move`,
-  `touching` and `place` as functions of the component (B6) that move the body and set `x` and `y`. So the component renders where
+- **`useBody`** is a shipped hook (`hooks/library.ts`): the body, `x` and `y` in its `useMutable`, and `move`,
+  `touching` and `place` as functions of the component (see "Hooks that behave like functions") that move the body and set `x` and `y`. So the component renders where
   the body is, in the step it moved.
-- **`overlapping(tag)`** (2026-11-13, A7): every collider with the tag that overlaps the box, as contacts (`tag`, `owner`, `data`),
+- **`overlapping(tag)`** (2026-11-13, for Hearth's towers): every collider with the tag that overlaps the box, as contacts (`tag`, `owner`, `data`),
   typed by tag through `ColliderData` (`ContactOf<Tag>`; the hook's function keeps its `<Tag extends string>`, as any function of
   a component's own now keeps its type parameters). A Hearth tower keeps a body as big as its longest reach and asks it which
   enemies are near; their colliders' `data` say where each is. `World` answers `tagIn`, `solidIn` and `collidersIn` from a cache
@@ -2185,11 +2216,11 @@ same for a component, against the world it is mounted in:
   Hearth's step.
 
 Not done: a body is not itself a collider that others hit (a component draws a `<Collider>` at its position), there are no
-one-way platforms or slopes, and Kite still moves with its rules (rewriting it with `useBody` is part of A7's proof).
+one-way platforms or slopes. Kite's `Runner` is written with it beside the rules: see "Kite's movement with `useBody`, compared".
 
-## Tilemap, assets and the other built-ins (priority 7)
+## Tilemap, assets and the other built-ins
 
-`<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [NATIVE_PLAN.md](NATIVE_PLAN.md) ("Priority 7 additions"). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.
+`<Tilemap>`, `<Particles>`, `<Fade>`, `<Music>`, the new `<Camera>`, `<Sprite>`, `<AnimatedSprite>` and `<Text>` props, `fixedStep` and `gamepadDeadzone` on `<Game>`, and `freeze()` are described where they act, in [PLAYER.md](PLAYER.md). On the compiler side each is a manifest entry (`intrinsics`, `intrinsicMembers`, `intrinsicRequired`, `intrinsicHooks` for those that override `onUpdate`, `intrinsicLiterals` for `Particles.space`, `functions` for `freeze`) plus `jsx.ts` declarations; no compiler code was needed for them. A `useSound` play function takes an optional volume, lowered to `.play(volume)`.
 
 **Build-time asset check.** `rge-compile --assets <dir>` (`checkAssets`, `RGE1211`) reports every literal image, font, music file and `useSound` path that is not a file in the folder, with the nearest file name; literals inside conditionals and arrays are found (`frames={on ? [...] : [...]}`), computed paths are not. The files of a `createSounds({ … })` (a plain `.ts` module, found by scanning the source folder; `checkSoundStores`) are checked the same way, as a name or `{ src }` written as a literal. `npm run check:<game>` passes `--assets` when the package has an `assets/` folder.
 
@@ -2276,8 +2307,8 @@ built-in, `key` and `children` are errors (`RGE1203`, `RGE1202`).
 
 **Reads.** A prop may be read in JSX, conditions, derived values, handlers,
 `transform` fields, and the initial value of a `useMutable` field (read once,
-at construction, as in React); a `useState` initial that is a primitive prop
-takes its type from the prop's declaration. State is unchanged.
+at construction, as in React); a field initialised from a primitive prop
+takes its type from the prop's declaration.
 
 **Placement.** `transform` on a component element sets the child's
 `placement`, which composes under the child's own `transform`
@@ -2289,8 +2320,8 @@ it; the JSX types accept it on every element.
 
 **Layout offset.** A third writer comes before both: `layoutX` and `layoutY`,
 a position the player's layout pass writes into an object a layout container
-places (`world = parent × layout × placement × transform`). Nothing writes it
-yet; `<Flex>` will (see [UI_PLAN.md](UI_PLAN.md)). Like placement, it cannot
+places (`world = parent × layout × placement × transform`). `<Flex>` writes it
+(see [LAYOUT.md](LAYOUT.md)). Like placement, it cannot
 conflict: layout decides the slot, and the object's own `transform` nudges it
 within the slot, as CSS's `transform` does. Both names are reserved members.
 
@@ -2313,7 +2344,7 @@ keys, from the manifest's `intrinsicMembers`. It is `RGE1203` with that reason, 
 
 ### Constants, helpers and index reads beside components (2026-11-11)
 
-Second-game finding 7. A component file may hold top-level `const` values and lower-case `function` helpers, as a React file
+A component file may hold top-level `const` values and lower-case `function` helpers, as a React file
 does: `const ROW = { bolt: 0, mortar: 1, frost: 2 } as const;`, `function labelOf(kind, n) { … }`. The analyzer keeps each as a
 `ModuleDeclaration` (its text and the names it mentions), the generator copies it into the module before the components (importing
 what it reads from a `.ts` file or the runtime), and components read it like a plain import, in JSX, lists, derived values and
@@ -2366,7 +2397,7 @@ like any component. Details:
   there and its real value in the first `render()`, which the constructor runs.
 * The class gains the root's own fields (the manifest's `intrinsicMembers`) and every object's (`reservedMembers`). A
   state, ref or sound whose name is one of them is kept in a field named `$name` instead, and its setter in `$setName` when
-  that is one (`claimField`, 2026-11-13, `REACT_FEEL_PLAN.md` B7): the author writes `name`, the generated code reads
+  that is one (`claimField`, 2026-11-13): the author writes `name`, the generated code reads
   `this.$name`, and the entity's own `name` is untouched. Props never clashed: they live in `this.props`. Before, such a name
   was `RGE1103`, a rule that followed from code the author never sees. `$` names are the compiler's own. Private fields
   (`#name`) were the plan's first idea; they would have hidden state from the tests and tools that read a component's state
@@ -2381,14 +2412,14 @@ like any component. Details:
 A root `<Entity>`, `<Game>` or fragment (and the container a component or condition root is held in) with no `name` prop gets
 the component's name in its `super()` call: `function Player() { return <Entity>…</Entity>; }` generates
 `super({ name: "Player" })`, exactly what `<Entity name="Player">` did. A written `name`, static or dynamic, wins. Nested
-entities are not named. Every game wrote the component's name again on its root (`REACT_FEEL_PLAN.md`, B1), and `name` is
+entities are not named. Every game wrote the component's name again on its root, and `name` is
 what a collision's `other.owner` reads, so leaving it out used to change game logic without a sign in the source. The games,
 the template and the guide no longer write it. Only `Entity` and `Game` take a `name` (`NAMED_ROOTS` in the generator).
 
 ### Component, condition and null roots (2026-11-11)
 
 `return <Panel title="BUILD">…</Panel>`, `return on ? <Sprite …/> : null`, `return open && <Menu />` and `return null` are
-accepted (they were `RGE1003` / `RGE1002`; found by Hearth, second-game finding 8). The component's class extends the host
+accepted (they were `RGE1003` / `RGE1002`; found by Hearth). The component's class extends the host
 intrinsic (`Entity`), holds that one child (or the condition's children, as `{…}` children are), and sets
 `override readonly layoutContents = true`. `GameObject.layoutContents` is CSS's `display: contents` for `<Flex>` layout: a
 `Flex` lays out such a child's children as its own (`FlexBox.kids`, flattened in `#measureChildren`; when no child is see-through,
@@ -2431,7 +2462,7 @@ any later built-in. So a name is now scoped as in React: a component declared in
 built-in of that name, and `RGE1206` is only for a file that also imports the built-in (or names a component `Entity` or `Game`,
 whose tags the compiler always reads as the built-ins).
 
-**Inert and modal** (2026-11-12, from PAIN_POINTS.md: "nothing lets a component own or consume the keys"). Input stays polled;
+**Inert and modal** (2026-11-12: nothing let a component own or consume the keys). Input stays polled;
 what changed is who hears it, decided by subtree as in HTML. `inert` and `modal` are accessors on `GameObject` and props of
 `<Entity>`, `<Flex>` and `<Hud>` (`InputScopeProps`), so a component puts them on its root (`<Entity inert={disabled}>`) and they
 follow state like any prop. `inert` was already the router's mechanism (`World.setInert`, used on a screen being left); the prop
@@ -2455,13 +2486,13 @@ centred on it). A bitmap-font `<Text>` without a `size` is drawn at the font's o
 `registerTilemaps` call. A component may import types from a `.ts` file (`import type { Tower as TowerData } from "./rules/battle.ts"`,
 `import { type Kind }`); the generated module imports the ones it mentions as types.
 
-**Hover** (2026-11-11, second-game finding 11). `<Pointer>` and `<Flex>` take `onPointerEnter` and `onPointerLeave`, the DOM's
+**Hover** (2026-11-11). `<Pointer>` and `<Flex>` take `onPointerEnter` and `onPointerLeave`, the DOM's
 `pointerenter` / `pointerleave`: each frame the player finds the topmost pressable under the mouse (last frame's draw order,
 the same search a press makes) and `World.reportHover` tells the one before it left and the new one it was entered; an inert one
 counts as none, and a mouse off the screen is over nothing. A `<Flex>` with only hover callbacks is collected for the mouse but
 lets a press through to what is under it. State is the component's: `onPointerEnter={() => setHovered(true)}`.
 
-**Functions passed whole** (2026-11-11, second-game finding 9). `onPress={resume}` where `resume` is a game-state action, and
+**Functions passed whole** (2026-11-11). `onPress={resume}` where `resume` is a game-state action, and
 `<Flex onPress={onPress}>` where `onPress` is the component's own callback prop (or `props.onPress`): to a built-in, the
 compiler writes the arrow the author would have (`() => useGame.getState().resume()`, `() => this.props.onPress?.()`), with the
 parameters the manifest lists; to a component, an action is the store's own function (`ActionRef`), a static prop, since an action
@@ -2485,7 +2516,7 @@ the comparison like any other string.
 
 * `data` is the `data` prop of the other `<Collider>` (any value; undefined when it has none), so a
   coin says what it is worth and an enemy how much it hurts without the game state keeping a table by id
-  (`REACT_FEEL_PLAN.md`, A3). Its type: `Contact` is `BaseContact` (`data: unknown`) until a game declares
+  Its type: `Contact` is `BaseContact` (`data: unknown`) until a game declares
   the global interface `ColliderData` (`declare global { interface ColliderData { coin: { value: number } } }`),
   then a union with one member per declared tag, so `other.tag === "coin"` narrows `other.data` in the
   generated code as in the source. A global interface rather than an augmentation of `@rge/runtime`, because
@@ -2610,14 +2641,13 @@ by the CLI's whole-project check, which follows imports (`RGE1205`); the
 transform still reports the ones inside a file. Only static containment
 counts: a component that mounts the other conditionally is fine.
 
-## Runtime (mock)
+## Runtime
 
-`packages/runtime` is deliberately minimal: `GameObject` (tree, transforms,
-dirty flag, queued structure ops, passed-children slots, hook methods), `World`
-(dirty queue, `flush`, `tick`, `reportCollision`, `reportPress`), the eight
-intrinsics with public prop fields, the `Sound` mock, `loadScene`, input
-helpers and the manifest. It has no rendering, physics, input or audio
-backend; the compiler only knows what the manifest tells it.
+`packages/runtime` holds `GameObject` (tree, transforms, dirty flag, queued structure ops, passed-children slots, hook methods),
+`World` (dirty queue, `flush`, `tick`, `reportCollision`, `reportPress`), the built-ins with public prop fields, `Sound` (which
+reports to the sink a player installs), the game state, saves, `loadScene`, input helpers and the manifest. It has no rendering,
+physics, input or audio backend of its own: that is the player's (see "Player" and [PLAYER.md](PLAYER.md)). The compiler only knows
+what the manifest tells it.
 
 `commitStructure()` also settles children it has just attached, so a freshly
 constructed object whose nested conditions are true has its whole subtree
@@ -2625,7 +2655,7 @@ attached without a `World`.
 
 ## Player
 
-`@rge/player` (Phase 3, [NATIVE_PLAN.md](NATIVE_PLAN.md)) is the pure-TypeScript half of the native
+`@rge/player` ([PLAYER.md](PLAYER.md)) is the pure-TypeScript half of the native
 player. It draws nothing itself: it turns the object tree into one flat buffer of draw records per
 frame, hands it to a `Backend` (a window, or a test recorder) and feeds the backend's input back to the
 game. It imports nothing from Node, so it also runs in the embedded JavaScript engine of the shipped
@@ -2644,7 +2674,7 @@ and the first frame is drawn. A root that throws opens no window, unless errors 
 is the `<Game>` prop where it is written, else the `PlayerConfig` field, else the default (640 × 360, title
 `"react-game-engine"`, background black, assets `"assets"`); `hidden` is the player's alone.
 
-**Errors in the window** (priority 5, 2026-11-11). With `showErrors`, an error thrown while building the root, mounting it or in
+**Errors in the window** (2026-11-11). With `showErrors`, an error thrown while building the root, mounting it or in
 a step does not close the window: the player stops stepping the world and draws the error instead, on a dark red background in
 window pixels: a heading, `Name: message`, the stack (dimmer, wrapped to the window, cut with a line that says so), and a note
 at the bottom ("Close the window to quit."). `player.failure` holds the error while it is shown. `run` turns this on for a
@@ -2653,7 +2683,7 @@ visible window and, once the window is closed, throws the error, so both hosts s
 want. Because the error screen is drawn by the TypeScript player through the ordinary draw records, the Rust host needs no
 change. A host can also show its own error (`player.showError(error, note)`): the Node launcher shows a compile error this way.
 
-**Hot reload** (priority 5, 2026-11-11). `player.reload(config)` builds `config.root` again, from a newer build of the game's
+**Hot reload** (2026-11-11). `player.reload(config)` builds `config.root` again, from a newer build of the game's
 classes, and puts it in place of the current root in the same window and world. What carries over:
 
 - **Each component's own state.** The compiler gives a component with `useMutable` state a `saveHotState()` (its values by
@@ -2672,7 +2702,7 @@ classes, and puts it in place of the current root in the same window and world. 
 
 A reload that fails (the new root throws while it is built or mounted) shows the error and keeps the state of the last good tree
 for the next try, so fixing the bug brings the game back where it was. A crash in a step leaves the world as the error found it,
-and the next reload takes its state from there. How the Node launcher gets a newer build is in NATIVE_PLAN.md
+and the next reload takes its state from there. How the Node launcher gets a newer build is in [PLAYER.md](PLAYER.md)
 (`packages/player-node`).
 
 **Reusing draw records** (decided and built 2026-11-10). Most objects stand still in a given frame, and walking them is most
@@ -2756,7 +2786,7 @@ collider's path, so a very fast, thin one can pass through another between two s
   transform field and not a `z=` attribute: `z` is a common prop name (a coordinate, a layer), and an
   attribute would reserve it on every component. The cost is a read of two fields per object in the tree
   walk: about 10% of the script time of the 2,000 and 5,000 moving-rect bench scenes under QuickJS
-  (median of interleaved runs, noisy to about the same size). Priority 4's setters on `Transform` would let
+  (median of interleaved runs, noisy to about the same size). Setters on `Transform` that mark it changed would let
   a game that never sets `z` skip it.
 * *Origin:* top-left, for `Sprite`, `AnimatedSprite`, `Shape` and `Text`, rotated and scaled about it.
   A negative scale flips.
@@ -2802,7 +2832,7 @@ HUD coordinates: the window point taken back through `BuiltFrame.hudView` (the s
 identity), not through the camera.
 
 **Layout (`<Flex>`).** A `Flex` is a container that places its children in a row or a column; the algorithm is in
-`packages/player/src/layout.ts` and is Clay's, ported (docs/UI_PLAN.md has the rules and the reasons). The walk
+`packages/player/src/layout.ts` and is Clay's, ported ([LAYOUT.md](LAYOUT.md) has the rules and the reasons). The walk
 reaches a layout root (a `Flex` whose parent is not a `Flex`) and lays out everything under it before descending:
 fit sizes bottom-up, then sharing out space top-down, widths first and then heights, then positions, each child's
 `layoutX` / `layoutY` (composed before `placement` and `transform`, so a child's own `transform` moves it within its

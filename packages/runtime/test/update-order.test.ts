@@ -6,7 +6,7 @@ import { GameObject, World } from "../src/index.ts";
 /**
  * The order a frame's handlers run in: `onInput`, then `onUpdate`, each over the tree from the top, a parent before its children
  * and siblings in the order they are children of their parent (depth first). A component reads what an earlier handler wrote
- * in the step, so this order is part of what a game does (docs/MUTABLE_STATE.md, "Shared lists: live everywhere"): it holds
+ * in the step, so this order is part of what a game does (docs/DESIGN.md, "State: `useMutable`", rules 2 and 3): it holds
  * for objects that join the tree later, move within it, or are added in the middle of a frame, not only for the first mount.
  */
 class Probe extends GameObject {

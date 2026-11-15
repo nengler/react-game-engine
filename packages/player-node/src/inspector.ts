@@ -1,5 +1,5 @@
 /**
- * The development inspector (REACT_FEEL_PLAN.md C4): a local web page that `rge dev` serves while the game runs, showing the tree
+ * The development inspector (DESIGN.md, "Seeing inside a running game"): a local web page that `rge dev` serves while the game runs, showing the tree
  * by component (as React DevTools does), the selected component's props, state, refs, game-state subscriptions and renders, and
  * each game state with the last actions and what they changed (as Redux DevTools does). A state value or a game-state leaf can be
  * edited from it; an edit is development-only (it is not input, so a replay does not repeat it) and is said so in the log.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-/** Rewind in `rge dev` (REACT_FEEL_PLAN.md D1): record, snapshot, go back, play again, and say where a replay differs. */
+/** Rewind in `rge dev` (DESIGN.md, "Rewind in `rge dev`"): record, snapshot, go back, play again, and say where a replay differs. */
 import { describe, it } from "node:test";
 
 import { Sound, Text, createGameState, type InputState } from "@rge/runtime";
