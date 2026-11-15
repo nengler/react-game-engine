@@ -5,12 +5,14 @@ description: How to watch a pull request in this repository until it is mergeabl
 
 # Watching a pull request in react-game-engine
 
-A PR you opened, or were asked to get mergeable, is yours until CI is green on its current head, it has no merge
-conflict, and no review is waiting on a change. Subscribe with `subscribe_pr_activity` when it is opened; CI results
+A PR you opened, or were asked to get mergeable, is yours until it is merged. Merge it once all five CI jobs (check,
+native, host, outside, native-desktop) pass on its current head, it has no merge conflict, and no review is waiting on a
+change. The jobs pass on Actions, or, when Actions can't run them, all five in `npm run ci:local` (see "When Actions doesn't
+run"); a skipped job has not passed. Subscribe with `subscribe_pr_activity` when it is opened; CI results
 and reviews then wake you, so do not poll. Unsubscribe with `unsubscribe_pr_activity` when it is merged or closed, or
 when the user says stop.
 
-- **CI green and no open review:** report it once and wait. Do not unsubscribe: a review or the merge still wakes you.
+- **All five jobs green, no conflict and no open review:** merge, then unsubscribe and report it once.
 - **CI red:** read the failing job's log (`get_job_logs`), find the cause, fix it on the PR branch, and push. See
   "When CI fails" below.
 - **Review comments:** do the small, clear asks, reply on the thread, and resolve what you addressed. Bring larger asks
@@ -52,8 +54,10 @@ those. It skips native-desktop, and says so, when `xvfb-run` is missing. When `c
 
 Every job failing within seconds, with no steps, no logs (`get_job_logs` returns 404) and `runner_id: 0`, means GitHub never
 started them: usually the account is out of Actions minutes or has a billing hold. It is not the PR, and a rerun won't help.
-Run `npm run ci:local` on the PR head instead, then say once on the PR that Actions didn't run and which jobs passed locally
-(and any it skipped). Passing locally is not passing CI: merge on it only when the user says to.
+Run `npm run ci:local` on the PR head instead, with no job names, so all five jobs run, then say once on the PR that Actions
+didn't run and which jobs passed locally. When all five pass there, with no conflict and no review waiting, merge. If one was
+skipped (native-desktop needs `xvfb-run` and the X11/GL libraries from `ci.yml`), it has not passed: install what it needs
+and run it, or say what blocks it; do not merge without it.
 
 ## When CI fails
 
