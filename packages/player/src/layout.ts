@@ -1,7 +1,7 @@
 import { Camera, FLEX_ANCHORS, Flex, flexBorderRoom, type FlexAnchor, type GameObject } from "@rge/runtime";
 
 /**
- * `<Flex>` layout, after Clay (see docs/UI_PLAN.md, "The layout algorithm"). Everything below one layout root (a
+ * `<Flex>` layout, after Clay (see docs/LAYOUT.md, "The algorithm"). Everything below one layout root (a
  * `Flex` whose parent is not a `Flex`) is laid out together, in this order:
  *
  * 1. widths: fit sizes bottom-up, then sharing out space top-down;

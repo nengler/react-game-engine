@@ -14,9 +14,9 @@ the workspaces). Linux is the supported platform.
 **Start with the [authoring guide](docs/index.html)** (open it in a browser): [Getting started](docs/start.html) goes from an
 empty folder to a packaged game (`rge create my-game`, or `--template menu` / `--template platformer`), and
 [Recipes](docs/recipes.html) has a menu, a settings screen, a health bar and other everyday pieces. For how it is built, read
-[docs/DESIGN.md](docs/DESIGN.md) (the compiler, the IR and every design decision) and [docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md)
-(the player, its ABI and its performance). What is being worked on now is the "Now" table in
-[docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md); what still trips a new author is [docs/PAIN_POINTS.md](docs/PAIN_POINTS.md).
+[docs/DESIGN.md](docs/DESIGN.md) (the compiler, the runtime and every design decision), [docs/PLAYER.md](docs/PLAYER.md)
+(the player, its ABI and its performance) and [docs/LAYOUT.md](docs/LAYOUT.md) (`<Flex>`, `<Hud>`, `<Screen>`). What is next is
+in [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md); what still trips a new author is [docs/PAIN_POINTS.md](docs/PAIN_POINTS.md).
 
 ```tsx
 import { useMutable, Entity, Sprite, Collider } from "@rge/runtime/jsx";
@@ -44,7 +44,7 @@ tested alone with [`@rge/testing`](packages/testing), as React Testing Library t
 files are for what you would extract in React too: tables, pure calculations, and code a search runs thousands of times.
 
 UI is laid out, not placed by hand. A `<Hud>` stays on screen while the camera moves, and a `<Flex>` in it places its
-children in a row or a column (see [docs/UI_PLAN.md](docs/UI_PLAN.md)):
+children in a row or a column (see [docs/LAYOUT.md](docs/LAYOUT.md)):
 
 ```tsx
 import { useMutable, Flex, Hud, Sprite, Text } from "@rge/runtime/jsx";

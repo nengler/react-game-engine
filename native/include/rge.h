@@ -3,7 +3,7 @@
 /*
  * The boundary between the TypeScript player and the native library. This header is the single
  * source of truth: packages/player/src/protocol.ts mirrors it, and a test fails if they differ.
- * Change this file first, bump RGE_ABI_VERSION, then update protocol.ts. See docs/NATIVE_PLAN.md.
+ * Change this file first, bump RGE_ABI_VERSION, then update protocol.ts. See docs/PLAYER.md.
  */
 #include <stdint.h>
 

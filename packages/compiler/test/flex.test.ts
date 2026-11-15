@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * `<Flex>`: the layout container (U2 in docs/UI_PLAN.md). The compiler learns its props from the runtime manifest, adds
+ * `<Flex>`: the layout container (docs/LAYOUT.md). The compiler learns its props from the runtime manifest, adds
  * only the size check and the `flex-start` hint, and what layout means is the player's, tested in packages/player; these
  * tests compile real components and lay them out through the frame builder.
  */

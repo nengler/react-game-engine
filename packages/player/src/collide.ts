@@ -217,7 +217,7 @@ class ById {
  * pairs for each box the next ones first deal the boxes into horizontal bands and sweep each band on its own. Boxes in a
  * row or in a pile gain nothing from bands and are swept as one. A host that can find the overlapping boxes itself
  * (`Backend.overlaps`; both native hosts) is asked instead, and only the rules for each pair run in script. Measured: see
- * `packages/player/bench/frame.ts`, and the numbers in `docs/NATIVE_PLAN.md`.
+ * `packages/player/bench/frame.ts`, and the numbers in `docs/PLAYER.md`.
  *
  * **Only what moved is looked at again.** An entry that is the same object as the one for that collider last frame is
  * taken to be unchanged: the frame builder reuses the entry of a collider in a subtree it reused (see `FrameBuilder`), and
