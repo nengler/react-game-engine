@@ -67,18 +67,4 @@ describe("Kite's movement with useBody", () => {
       assert.ok(new Set(rules.map((p) => `${p.x},${p.y}`)).size > 5, "it moved");
     });
   }
-
-  it("costs, per step", () => {
-    const script = SCRIPTS[4]![2];
-    const time = (run: () => unknown): number => {
-      run();
-      const start = performance.now();
-      for (let i = 0; i < 20; i++) run();
-      return (performance.now() - start) / 20;
-    };
-    const steps = parseInputScript(script, { dt: DT, bindings }).length;
-    const rules = time(() => byRules(0, script)) / steps;
-    const component = time(() => byComponent(0, script)) / steps;
-    console.log(`a step: the rules ${(rules * 1000).toFixed(1)} µs, the component (with its world's tick and render) ${(component * 1000).toFixed(1)} µs`);
-  });
 });
