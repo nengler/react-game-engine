@@ -1,12 +1,11 @@
-import assert from "node:assert/strict";
 /**
- * M14: `<Pointer>`. A hit area for presses, with an `onPress` callback prop
- * like `<Collider onCollisionEnter>`. The runtime tests the press against the
- * pointer's world transform and size (`pointer.test.ts`).
+ * `<Pointer>`. A hit area for presses, with an `onPress` callback prop like `<Collider onCollisionEnter>`. The runtime tests the
+ * press against the pointer's world transform and size (packages/runtime/test/pointer.test.ts). Also hover callbacks.
  */
+import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
-import { Entity, Pointer, World, runtimeManifest } from "@tsengine/runtime";
+import { Entity, Pointer, World, runtimeManifest, Flex } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -52,7 +51,7 @@ before(async () => {
   ({ Menu, Button } = await load<{ Menu: typeof Menu; Button: typeof Button }>(compile(MENU, "Menu.tsx")));
 });
 
-describe("M14: IR and generated code", () => {
+describe("<Pointer>: IR and generated code", () => {
   const compiled = compile(MENU, "Menu.tsx");
 
   it("lowers onPress to a callback prop with no parameters", () => {
@@ -72,7 +71,7 @@ describe("M14: IR and generated code", () => {
   });
 });
 
-describe("M14: authored source type-checks", () => {
+describe("<Pointer>: authored source type-checks", () => {
   const check = (body: string) =>
     getCompiler().typeCheckSources([
       {
@@ -93,7 +92,7 @@ describe("M14: authored source type-checks", () => {
   });
 });
 
-describe("M14: runtime behaviour", () => {
+describe("<Pointer>: runtime behaviour", () => {
   it("calls the handler for a press inside, and renders the state it sets", () => {
     const world = new World();
     const menu = new Menu();
@@ -128,7 +127,7 @@ describe("M14: runtime behaviour", () => {
   });
 });
 
-describe("M14: diagnostics", () => {
+describe("<Pointer>: diagnostics", () => {
   it("rejects a handler with parameters", () => {
     const codes = compileErrors(
       `function C() { return <Entity name="C"><Pointer width={1} height={1} onPress={(x) => {}} /></Entity>; }`
@@ -139,5 +138,37 @@ describe("M14: diagnostics", () => {
   it("is placed with transform and is a leaf", () => {
     assert.ok(runtimeManifest.transformIntrinsics.includes("Pointer"));
     assert.ok(!runtimeManifest.containerIntrinsics.includes("Pointer"));
+  });
+});
+
+describe("hover callbacks", () => {
+  it("hover callbacks are built-in callback props of <Pointer> and <Flex>, and may be passed whole", async () => {
+    const compiled = compile(`
+interface TipProps { onPointerEnter: () => void; }
+export function Tip({ onPointerEnter }: TipProps) {
+  const s = useMutable({ over: false });
+  return (
+    <Entity>
+      <Pointer width={4} height={4} onPointerEnter={() => { s.over = true; }} onPointerLeave={() => { s.over = false; }} />
+      <Flex onPointerEnter={onPointerEnter} />
+      {s.over && <Text size={8}>tip</Text>}
+    </Entity>
+  );
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    let entered = 0;
+    const { Tip } = await load<{ Tip: new (p: { onPointerEnter: () => void }) => Entity }>(compiled);
+    const world = new World();
+    const tip = new Tip({ onPointerEnter: () => entered++ });
+    world.mount(tip);
+    world.flush();
+    const [pointer, flex] = tip.children as [Pointer, Flex];
+    world.reportHover(pointer);
+    world.flush();
+    assert.equal(tip.children.length, 3, "the tip shows while the mouse is over the pointer");
+    world.reportHover(flex);
+    world.flush();
+    assert.equal(tip.children.length, 2);
+    assert.equal(entered, 1);
   });
 });

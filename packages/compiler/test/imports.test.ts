@@ -1,10 +1,13 @@
+/**
+ * Imports in component files: components across files, the mandatory imports from the authoring module, and types imported
+ * from a plain .ts file. Plain functions imported from a .ts file are in plainfunctions.test.ts.
+ */
 import assert from "node:assert/strict";
-/** M0 hardening: nested conditional commit, runtime manifest as config, components across files. */
 import { after, describe, it } from "node:test";
 
-import { Entity, Sprite, World, runtimeManifest } from "@tsengine/runtime";
+import { Entity, World } from "@tsengine/runtime";
 
-import { Compiler, DiagnosticCode } from "../src/index.ts";
+import { DiagnosticCode, AUTHORING_HOOKS } from "../src/index.ts";
 import {
   cleanOutput,
   closeCompiler,
@@ -12,11 +15,9 @@ import {
   compileErrors,
   compileProject,
   compileProjectErrors,
-  load,
   loadProject,
   typeCheck,
   typeCheckProject,
-  withAuthoringImports,
   elementOf,
   getCompiler,
 } from "./helpers.ts";
@@ -26,127 +27,7 @@ after(() => {
   cleanOutput();
 });
 
-describe("M0: nested conditionals commit without a World", () => {
-  const NESTED = `
-function Nested() {
-  const s = useMutable({ outer: true, inner: true });
-  return (
-    <Entity name="Nested">
-      {s.outer && (
-        <Entity name="Outer">
-          {s.inner && <Sprite image="deep.png" />}
-        </Entity>
-      )}
-    </Entity>
-  );
-}`;
-
-  it("attaches the full subtree of a freshly constructed object", async () => {
-    const { Nested } = await load<{ Nested: new () => Entity }>(compile(NESTED, "Nested.tsx"));
-    const nested = new Nested();
-    assert.equal(nested.children.length, 1);
-    const outer = nested.children[0]!;
-    assert.equal(outer.children.length, 1);
-    assert.ok(outer.children[0] instanceof Sprite);
-    assert.equal(nested.hasPendingStructure, false);
-    assert.equal(outer.hasPendingStructure, false);
-  });
-
-  it("still settles correctly inside a World when state flips later", async () => {
-    const mod = await load<{ Nested: new () => Entity & { s: { [field: string]: unknown } } }>(compile(NESTED, "Nested.tsx"));
-    const world = new World();
-    const nested = new mod.Nested();
-    world.mount(nested);
-    nested.s.inner = false;
-    world.flush();
-    assert.equal(nested.children[0]!.children.length, 0);
-    nested.s.outer = false;
-    world.flush();
-    assert.equal(nested.children.length, 0);
-    nested.s.outer = true;
-    nested.s.inner = true;
-    world.flush();
-    assert.equal(nested.children[0]!.children.length, 1);
-  });
-});
-
-describe("M0: runtime manifest as compiler config", () => {
-  const TORCH = `
-function Lamp() {
-  return (
-    <Entity name="Lamp">
-      <Torch radius={4} />
-    </Entity>
-  );
-}`;
-
-  it("rejects an intrinsic the manifest does not list", () => {
-    const compiler = new Compiler();
-    try {
-      const result = compiler.compile("Lamp.tsx", withAuthoringImports(TORCH));
-      assert.deepEqual(
-        result.diagnostics.map((d) => d.code),
-        [DiagnosticCode.UnknownComponent]
-      );
-    } finally {
-      compiler.close();
-    }
-  });
-
-  it("accepts a new intrinsic with no compiler edit", () => {
-    const manifest = { ...runtimeManifest, intrinsics: [...runtimeManifest.intrinsics, "Torch"] };
-    const compiler = new Compiler({ manifest });
-    try {
-      const result = compiler.compile("Lamp.tsx", withAuthoringImports(TORCH, manifest));
-      assert.ok(result.ok);
-      assert.match(result.code, /import \{ Entity, Torch \} from "@tsengine\/runtime";/);
-      assert.match(result.code, /new Torch\(\{ radius: 4 \}\)/);
-    } finally {
-      compiler.close();
-    }
-  });
-
-  it("takes the reserved names, host intrinsic and functions from the manifest it is given", () => {
-    const manifest = {
-      ...runtimeManifest,
-      reservedMembers: [...runtimeManifest.reservedMembers, "score"],
-      functions: { clamp: 3, wrap: 2 },
-    };
-    const compiler = new Compiler({ manifest });
-    try {
-      const reserved = compiler.compile(
-        "R.tsx",
-        withAuthoringImports(
-          `
-function R() {
-  const score = useMutable({ n: 0 });
-  return <Entity name="R" />;
-}`,
-          manifest
-        )
-      );
-      assert.ok(reserved.ok && reserved.code.includes("get $score()"), "a reserved name from the manifest is kept apart, as `$score`");
-      const calls = compiler.compile(
-        "W.tsx",
-        withAuthoringImports(
-          `
-function W() {
-  const s = useMutable({ n: 0 });
-  useUpdate(() => { s.n = wrap(s.n, 10); });
-  return <Entity name="W" />;
-}`,
-          manifest
-        )
-      );
-      assert.ok(calls.ok);
-      assert.match(calls.code, /import \{ Entity, wrap \} from "@tsengine\/runtime";/);
-    } finally {
-      compiler.close();
-    }
-  });
-});
-
-describe("M0: components across files", () => {
+describe("components across files", () => {
   const WARNING = `
 export function WarningIcon() {
   return (
@@ -314,5 +195,85 @@ function S() {
     );
     assert.match(result[0]!.message, /^`useState` is replaced by `useMutable`/, "a hook that was replaced says what replaced it");
     assert.match(result[1]!.message, /'useTransform' is not exported/);
+  });
+});
+
+describe("imports are mandatory", () => {
+  /** Calls the compiler directly, so the test helpers cannot add imports for us. */
+  const codes = (source: string) =>
+    getCompiler()
+      .compile("Raw.tsx", source)
+      .diagnostics.map((d) => d.code);
+  const messages = (source: string) =>
+    getCompiler()
+      .compile("Raw.tsx", source)
+      .diagnostics.map((d) => d.message);
+
+  it("reports each hook, element and function used without an import, once per name", () => {
+    const source = `function C() {
+  const s = useMutable({ n: 0, m: 0 });
+  useUpdate((dt) => { s.n = clamp(s.n + dt, 0, 10); });
+  useUpdate((dt) => { s.m = clamp(s.m + dt, 0, 10); });
+  return <Entity name="C"><Sprite image="a.png" /><Sprite image="b.png" /></Entity>;
+}`;
+    const result = getCompiler().compile("Raw.tsx", source);
+    assert.ok(!result.ok);
+    assert.ok(result.diagnostics.every((d) => d.code === DiagnosticCode.MissingImport));
+    // useUpdate is used twice, Sprite twice: still one report per name, in order of first use.
+    assert.deepEqual(
+      result.diagnostics.map((d) => /'(\w+)'/.exec(d.message)?.[1]),
+      ["useMutable", "useUpdate", "clamp", "Entity", "Sprite"]
+    );
+  });
+
+  it("names the import line to add", () => {
+    const [message] = messages(`function C() { return <Entity name="C" />; }`);
+    assert.equal(message, `'Entity' is not imported: add \`import { Entity } from "@tsengine/runtime/jsx"\`.`);
+  });
+
+  it("reports a name once per file, however many components use it", () => {
+    const source = `function A() { return <Entity name="A" />; }\nfunction B() { return <Entity name="B" />; }`;
+    assert.deepEqual(codes(source), [DiagnosticCode.MissingImport]);
+  });
+
+  it("is satisfied by importing, and does not ask for globals like Math", () => {
+    const source = `import { useMutable, useUpdate, Entity } from "@tsengine/runtime/jsx";
+function C() {
+  const s = useMutable({ n: 0 });
+  useUpdate(() => { s.n = Math.floor(s.n + 1); });
+  return <Entity name="C" />;
+}`;
+    assert.deepEqual(codes(source), []);
+  });
+
+  it("checks every hook kind, including the ones that shaped earlier tests", () => {
+    for (const hook of ["useMutable", "useUpdate", "useInput"]) {
+      const body = hook === "useMutable" ? `const a = useMutable({ n: 0 });` : `${hook}(() => {});`;
+      const others = ["Entity", ...AUTHORING_HOOKS.filter((h) => h !== hook)].join(", ");
+      const result = codes(`import { ${others} } from "@tsengine/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`);
+      assert.deepEqual(result, [DiagnosticCode.MissingImport], hook);
+    }
+  });
+
+  it("is a separate error from a name the entry point does not export", () => {
+    assert.deepEqual(codes(`import { Entity, Nope } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C" />; }`), [
+      DiagnosticCode.UnknownImport,
+    ]);
+  });
+});
+
+describe("types imported from a .ts file", () => {
+  it("are imported by the generated module as types, renamed or not, when it uses them", async () => {
+    const project = compileProject({
+      "Card.tsx": `
+import type { Tower as TowerData } from "./rules.ts";
+import { type Kind } from "./rules.ts";
+interface CardProps { tower: TowerData | null; kind: Kind; }
+export function Card({ tower, kind }: CardProps) {
+  return <Entity>{tower !== null && <Text size={8}>{\`\${kind} \${tower.level}\`}</Text>}</Entity>;
+}`,
+    });
+    const code = project["Card.tsx"]!.code;
+    assert.match(code, /import type \{ Tower as TowerData, Kind \} from "\.\.\/rules\.ts";/);
   });
 });

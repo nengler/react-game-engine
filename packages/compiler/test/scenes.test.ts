@@ -1,15 +1,10 @@
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 /**
- * M6: prefabs and scenes. An exported component is a prefab: the compiler
- * emits a registry and a data schema; a scene (JSON, or a Tiled map) places
- * prefabs by name; `loadScene` builds the objects. A scene loaded from data
- * must give the same tree as the TSX that composes the same components.
+ * Prefabs and scenes. An exported component is a prefab: the compiler emits a registry and a data schema; a scene (JSON, or a
+ * Tiled map: tilemap.test.ts) places prefabs by name; `loadScene` builds the objects. A scene loaded from data must give the
+ * same tree as the TSX that composes the same components. The CLI's `--scenes` is in cli.test.ts.
  */
+import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
 
 import { Entity, GameObject, Sprite, World, loadScene, type PrefabRegistry, type Scene } from "@tsengine/runtime";
 
@@ -17,7 +12,6 @@ import {
   DiagnosticCode,
   checkProject,
   constantValue,
-  importTiled,
   prefabsIndexSource,
   prefabsJson,
   projectSchemas,
@@ -25,88 +19,13 @@ import {
   type ExprIR,
   type ProjectModule,
 } from "../src/index.ts";
-import { OUTPUT_ROOT, cleanOutput, closeCompiler, compile, compileProject, getCompiler, load, sameOrder, typeCheck } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileProject, getCompiler, load, sameOrder, typeCheck } from "./helpers.ts";
+import { WORLD } from "./scene-fixture.ts";
 
 after(() => {
   closeCompiler();
   cleanOutput();
 });
-
-const WORLD = `
-import { type Child, Entity, Sprite, useMount, useMutable, useUpdate } from "@tsengine/runtime/jsx";
-
-interface EnemyProps {
-  speed: number;
-  tint?: "red" | "blue";
-  bounds?: number[];
-  style?: { bold: boolean };
-  onDefeated?: () => void;
-}
-
-export function Enemy({ speed, tint = "red", bounds = [0, 10] }: EnemyProps) {
-  return (
-    <Entity name="Enemy">
-      <Sprite image={tint === "red" ? "enemy-red.png" : "enemy-blue.png"} />
-    </Entity>
-  );
-}
-
-interface FrameProps {
-  title: string;
-  children: Child;
-}
-
-export function Frame({ title, children }: FrameProps) {
-  return (
-    <Entity name="Frame">
-      <Sprite image={title + ".png"} />
-      <Entity name="Content">{children}</Entity>
-    </Entity>
-  );
-}
-
-export function Marker() {
-  return <Entity name="Marker" />;
-}
-
-interface MoverProps {
-  speed?: number;
-}
-
-export function Mover({ speed = 10 }: MoverProps) {
-  const s = useMutable({ x: 0 });
-  useUpdate((dt) => { s.x += dt * speed; });
-  return <Entity name="Mover" transform={{ x: s.x }} />;
-}
-
-interface ProbeProps {
-  tag: string;
-}
-
-export function Probe({ tag }: ProbeProps) {
-  const s = useMutable({ mounted: 0 });
-  useMount(() => {
-    s.mounted += 1;
-  });
-  return <Entity name={tag} />;
-}
-
-function Hidden() {
-  return <Entity name="Hidden" />;
-}
-
-export function Level() {
-  return (
-    <Entity name="Level">
-      <Frame title="hud">
-        <Enemy speed={1} transform={{ x: 10 }} />
-        <Enemy speed={2} tint="blue" transform={{ x: 20, y: 5, rotation: 0.5 }} />
-      </Frame>
-      <Hidden />
-    </Entity>
-  );
-}
-`;
 
 interface WorldModule {
   prefabs: PrefabRegistry;
@@ -123,7 +42,7 @@ before(async () => {
 
 const project = (): ProjectModule[] => [{ ir: compiled.ir, generatedName: "World.ts" }];
 
-describe("M6: the prefab registry", () => {
+describe("the prefab registry", () => {
   it("lists the exported components, not the private ones", () => {
     assert.deepEqual(Object.keys(world.prefabs).sort(), ["Enemy", "Frame", "Level", "Marker", "Mover", "Probe"]);
     assert.deepEqual(
@@ -188,7 +107,7 @@ describe("M6: the prefab registry", () => {
   });
 });
 
-describe("M6: constant defaults", () => {
+describe("constant defaults", () => {
   const num = (value: number): ExprIR => ({ kind: "NumberLiteral", value });
   const str = (value: string): ExprIR => ({ kind: "StringLiteral", value });
 
@@ -228,7 +147,7 @@ describe("M6: constant defaults", () => {
   });
 });
 
-describe("M6: project checks and outputs", () => {
+describe("project checks and outputs", () => {
   it("builds the merged registry and the data schema", () => {
     const source = prefabsIndexSource([
       { ir: compiled.ir, generatedName: "World.ts" },
@@ -307,7 +226,7 @@ function where(text: string, needle: string): { line: number; column: number } {
   return { line: head.length, column: head.at(-1)!.length + 1 };
 }
 
-describe("M6: scene validation", () => {
+describe("scene validation", () => {
   const check = (text: string): CompilerDiagnostic[] => getCompiler().validateScene("scene.json", text, projectSchemas(project()));
   const expectOne = (text: string, code: string, needle: string, message: RegExp): void => {
     const diagnostics = check(text);
@@ -466,182 +385,7 @@ describe("M6: scene validation", () => {
   });
 });
 
-describe("M6: the Tiled importer", () => {
-  const map = (layers: unknown[]): string => JSON.stringify({ type: "map", layers });
-  const objects = (...list: Record<string, unknown>[]) => ({ type: "objectgroup", name: "Things", objects: list });
-
-  it("turns object layers into entities: class or type, ids, position, properties of each type", () => {
-    const { scene, diagnostics } = importTiled(
-      "m.tmj",
-      map([
-        { type: "tilelayer", name: "Ground", data: [] },
-        objects(
-          {
-            id: 7,
-            class: "Enemy",
-            x: 32,
-            y: 48,
-            properties: [
-              { name: "speed", type: "float", value: 1.5 },
-              { name: "n", type: "int", value: 2 },
-              { name: "ok", type: "bool", value: false },
-              { name: "tint", type: "string", value: "blue" },
-              { name: "sprite", type: "file", value: "a.png" },
-              { name: "c", type: "color", value: "#ff0000" },
-            ],
-          },
-          { id: 8, type: "Marker", x: 1, y: 2 }
-        ),
-      ])
-    );
-    assert.deepEqual(diagnostics, []);
-    assert.deepEqual(scene, {
-      version: 1,
-      entities: [
-        {
-          id: "Things/7",
-          prefab: "Enemy",
-          props: { speed: 1.5, n: 2, ok: false, tint: "blue", sprite: "a.png", c: "#ff0000" },
-          transform: { x: 32, y: 48 },
-        },
-        { id: "Things/8", prefab: "Marker", transform: { x: 1, y: 2 } },
-      ],
-    });
-  });
-
-  it("converts rotation to radians, and flattens groups", () => {
-    const { scene } = importTiled(
-      "m.tmj",
-      map([
-        {
-          type: "group",
-          name: "G",
-          layers: [{ type: "group", name: "Inner", layers: [objects({ id: 1, class: "Marker", x: 0, y: 0, rotation: 180 })] }],
-        },
-      ])
-    );
-    assert.deepEqual(
-      scene.entities.map((e) => [e.id, e.transform.rotation]),
-      [["Things/1", Math.PI]].map(([id, r]) => [id, Math.round((r as number) * 1e6) / 1e6])
-    );
-  });
-
-  it("moves a tile object from its bottom-left anchor to its top-left, along its rotated up axis", () => {
-    const flat = importTiled("m.tmj", map([objects({ id: 1, class: "Marker", gid: 5, x: 100, y: 100, height: 16, rotation: 0 })])).scene
-      .entities[0]!;
-    assert.deepEqual(flat.transform, { x: 100, y: 84 });
-    const turned = importTiled("m.tmj", map([objects({ id: 1, class: "Marker", gid: 5, x: 100, y: 100, height: 16, rotation: 90 })])).scene
-      .entities[0]!;
-    assert.deepEqual([turned.transform.x, turned.transform.y], [116, 100]);
-  });
-
-  it("shifts objects by their layer's offset, and by every enclosing group's", () => {
-    const { scene } = importTiled(
-      "m.tmj",
-      map([
-        {
-          type: "group",
-          name: "Outer",
-          offsetx: 100,
-          offsety: 10,
-          layers: [
-            {
-              type: "group",
-              name: "Inner",
-              offsetx: 20,
-              layers: [{ type: "objectgroup", name: "Deep", offsetx: 3, offsety: 4, objects: [{ id: 1, class: "Marker", x: 1, y: 2 }] }],
-            },
-            { type: "objectgroup", name: "Sibling", objects: [{ id: 2, class: "Marker", x: 1, y: 2 }] },
-          ],
-        },
-        { type: "objectgroup", name: "Plain", objects: [{ id: 3, class: "Marker", x: 1, y: 2 }] },
-      ])
-    );
-    const at = (id: string) => scene.entities.find((e) => e.id === id)!.transform;
-    assert.deepEqual(at("Deep/1"), { x: 1 + 100 + 20 + 3, y: 2 + 10 + 0 + 4 });
-    assert.deepEqual(at("Sibling/2"), { x: 1 + 100, y: 2 + 10 }, "the group's offset, not its sibling's");
-    assert.deepEqual(at("Plain/3"), { x: 1, y: 2 }, "nothing outside the group is shifted");
-  });
-
-  it("applies an offset to a tile object's anchor too", () => {
-    const { scene } = importTiled(
-      "m.tmj",
-      map([
-        {
-          type: "objectgroup",
-          name: "T",
-          offsetx: 50,
-          offsety: 50,
-          objects: [{ id: 1, class: "Marker", gid: 5, x: 100, y: 100, height: 16 }],
-        },
-      ])
-    );
-    assert.deepEqual(scene.entities[0]!.transform, { x: 150, y: 134 });
-  });
-
-  it("skips an object with no class, with a warning, and reports property types it cannot hold", () => {
-    const { scene, diagnostics } = importTiled(
-      "m.tmj",
-      map([
-        objects(
-          { id: 1, name: "spawn", x: 0, y: 0 },
-          {
-            id: 2,
-            class: "Enemy",
-            x: 0,
-            y: 0,
-            properties: [
-              { name: "target", type: "object", value: 3 },
-              { name: "speed", type: "float", value: "fast" },
-            ],
-          }
-        ),
-      ])
-    );
-    assert.deepEqual(
-      scene.entities.map((e) => e.id),
-      ["Things/2"],
-      "the skipped object is not an entity"
-    );
-    assert.deepEqual(
-      diagnostics.map((d) => [d.code, d.severity]),
-      [
-        [DiagnosticCode.TiledImport, "warning"],
-        [DiagnosticCode.TiledImport, "error"],
-        [DiagnosticCode.TiledImport, "error"],
-      ]
-    );
-    assert.match(diagnostics[0]!.message, /m\.tmj: layer 'Things', object 1 \('spawn'\) has no type/);
-    assert.match(diagnostics[1]!.message, /property 'target' has the type 'object'/);
-    assert.match(diagnostics[2]!.message, /property 'speed' is not a number/);
-  });
-
-  it("rejects what is not a Tiled map", () => {
-    assert.match(importTiled("m.tmj", "{").diagnostics[0]!.message, /not valid JSON/);
-    assert.match(importTiled("m.tmj", "{}").diagnostics[0]!.message, /not a Tiled map/);
-    assert.deepEqual(importTiled("m.tmj", "{}").scene.entities, []);
-  });
-
-  it("produces a scene that validates against the prefabs", () => {
-    const { scene } = importTiled(
-      "m.tmj",
-      map([
-        objects(
-          { id: 1, class: "Enemy", x: 4, y: 5, properties: [{ name: "speed", type: "int", value: 2 }] },
-          { id: 2, class: "Enemy", x: 4, y: 5 }
-        ),
-      ])
-    );
-    const diagnostics = getCompiler().validateScene("m.scene.json", JSON.stringify(scene, null, 2), projectSchemas(project()));
-    assert.deepEqual(
-      diagnostics.map((d) => d.code),
-      [DiagnosticCode.MissingPrefabProp],
-      "the second object forgot its required speed"
-    );
-  });
-});
-
-describe("M6: loadScene", () => {
+describe("loadScene", () => {
   /** A tree as plain data: what a scene and the equivalent TSX must agree on. */
   function describeTree(object: GameObject): unknown {
     const fields = (t: { x: number; y: number; rotation: number; scaleX: number; scaleY: number; global: boolean }) => ({
@@ -779,137 +523,5 @@ describe("M6: loadScene", () => {
       () => loadScene(new World(), { version: 1, entities: [{ id: "a", prefab: "toString" }] }, world.prefabs),
       /unknown prefab 'toString'/
     );
-  });
-});
-
-describe("M6: the CLI", () => {
-  const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../src/cli.ts");
-  let counter = 0;
-
-  /** Writes a project inside the repo (so `@tsengine/runtime/jsx` resolves), runs the CLI with --scenes, and reads back what it wrote. */
-  function run(files: Record<string, string>, scenes: Record<string, string>) {
-    const dir = join(OUTPUT_ROOT, `m6-cli-${process.pid}`, String(++counter));
-    for (const [name, text] of Object.entries(files)) {
-      mkdirSync(join(dir, "src"), { recursive: true });
-      writeFileSync(join(dir, "src", name), text);
-    }
-    for (const [name, text] of Object.entries(scenes)) {
-      mkdirSync(join(dir, "scenes"), { recursive: true });
-      writeFileSync(join(dir, "scenes", name), text);
-    }
-    const result = spawnSync(process.execPath, [cli, join(dir, "src"), join(dir, "out"), "--scenes", join(dir, "scenes")], {
-      encoding: "utf8",
-    });
-    return { status: result.status, output: `${result.stdout}${result.stderr}`, out: join(dir, "out") };
-  }
-
-  const FILES = {
-    "Enemy.tsx": `import { Entity } from "@tsengine/runtime/jsx";\ninterface EnemyProps { speed: number }\nexport function Enemy({ speed }: EnemyProps) { return <Entity name="Enemy" transform={{ x: speed }} />; }`,
-  };
-  const GOOD = `{ "version": 1, "entities": [{ "id": "a", "prefab": "Enemy", "props": { "speed": 2 } }] }`;
-  const TMJ = JSON.stringify({
-    type: "map",
-    layers: [
-      {
-        type: "objectgroup",
-        name: "Units",
-        objects: [{ id: 1, class: "Enemy", x: 8, y: 9, properties: [{ name: "speed", type: "int", value: 3 }] }],
-      },
-    ],
-  });
-
-  it("writes prefabs.ts and prefabs.json, validates scenes, and imports a Tiled map", () => {
-    const { status, output, out } = run(FILES, { "good.json": GOOD, "map.tmj": TMJ });
-    assert.equal(status, 0, output);
-    assert.match(output, /wrote prefabs\.ts and prefabs\.json \(1 prefab\)/);
-    assert.match(readFileSync(join(out, "prefabs.ts"), "utf8"), /import \{ prefabs as prefabs0 \} from "\.\/Enemy\.ts";/);
-    assert.deepEqual(Object.keys((JSON.parse(readFileSync(join(out, "prefabs.json"), "utf8")) as { prefabs: object }).prefabs), ["Enemy"]);
-    const imported = JSON.parse(readFileSync(join(out, "scenes", "map.scene.json"), "utf8")) as {
-      entities: { id: string; transform: object }[];
-    };
-    assert.deepEqual(
-      imported.entities.map((e) => e.id),
-      ["Units/1"]
-    );
-  });
-
-  it("fails a bad scene with its file, line and column and JSON path", () => {
-    const { status, output } = run(FILES, {
-      "bad.json": `{\n  "version": 1,\n  "entities": [\n    { "id": "a", "prefab": "Enemy", "props": { "speed": "fast" } }\n  ]\n}\n`,
-    });
-    assert.equal(status, 1);
-    assert.match(output, /bad\.json:4:57 - error TSE1506: entities\[0\]\.props\.speed: Expected a number, got the string "fast"/);
-  });
-
-  it("fails a Tiled map whose object does not fit its prefab", () => {
-    const { status, output } = run(FILES, {
-      "map.tmj": JSON.stringify({
-        type: "map",
-        layers: [{ type: "objectgroup", name: "Units", objects: [{ id: 1, class: "Enemy", x: 0, y: 0 }] }],
-      }),
-    });
-    assert.equal(status, 1);
-    assert.match(output, /map\.scene\.json:\d+:\d+ - error TSE1505: entities\[0\]: Enemy needs the prop 'speed'/);
-  });
-
-  /** Runs the CLI with exactly these arguments after the source and output directories. */
-  function runWith(files: Record<string, string>, extra: (dir: string) => string[], scenes: Record<string, string> = {}) {
-    const dir = join(OUTPUT_ROOT, `m6-cli-${process.pid}`, `w${++counter}`);
-    mkdirSync(join(dir, "src"), { recursive: true });
-    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, "src", name), text);
-    for (const [name, text] of Object.entries(scenes)) {
-      mkdirSync(join(dir, "scenes"), { recursive: true });
-      writeFileSync(join(dir, "scenes", name), text);
-    }
-    const result = spawnSync(process.execPath, [cli, join(dir, "src"), join(dir, "out"), ...extra(dir)], { encoding: "utf8" });
-    return { status: result.status, output: `${result.stdout}${result.stderr}`, out: join(dir, "out") };
-  }
-
-  it("refuses a flag with no value, instead of silently skipping what it was for", () => {
-    for (const flag of ["--scenes", "--runtime"]) {
-      const { status, output } = runWith(FILES, () => [flag]);
-      assert.equal(status, 2, flag);
-      assert.match(output, new RegExp(`${flag} needs a value`));
-    }
-    const followedByFlag = runWith(FILES, () => ["--scenes", "--no-check"]);
-    assert.equal(followedByFlag.status, 2, "the next argument is another flag, not a value");
-  });
-
-  it("refuses an unknown option, and a scenes or source directory that does not exist", () => {
-    const unknown = runWith(FILES, () => ["--sceens", "x"]);
-    assert.equal(unknown.status, 2);
-    assert.match(unknown.output, /unknown option --sceens/);
-    const missing = runWith(FILES, (dir) => ["--scenes", join(dir, "nope")]);
-    assert.equal(missing.status, 2);
-    assert.match(missing.output, /The scenes directory '.*nope' does not exist/);
-    assert.doesNotMatch(missing.output, /at .*\.ts:\d+/, "a message, not a stack trace");
-  });
-
-  it("writes prefabs.ts and prefabs.json only when every file compiled, so they are never missing a component", () => {
-    const broken = {
-      ...FILES,
-      "Broken.tsx": `import { Entity } from "@tsengine/runtime/jsx";\nexport function Broken() { return <Entity name="b">{oops}</Entity>; }`,
-    };
-    const partial = runWith(broken, () => ["--no-check"]);
-    assert.equal(partial.status, 1);
-    assert.match(partial.output, /skipped prefabs\.ts and prefabs\.json: not every file compiled/);
-    assert.equal(existsSync(join(partial.out, "prefabs.ts")), false);
-    assert.equal(existsSync(join(partial.out, "prefabs.json")), false);
-    assert.equal(existsSync(join(partial.out, "Enemy.ts")), true, "the file that compiled is still written, as before");
-    const whole = runWith(FILES, () => ["--no-check"]);
-    assert.equal(existsSync(join(whole.out, "prefabs.ts")), true);
-  });
-
-  it("fails duplicate exported names, and does not validate scenes against a broken project", () => {
-    const { status, output } = run(
-      {
-        ...FILES,
-        "Other.tsx": `import { Entity } from "@tsengine/runtime/jsx";\nexport function Enemy() { return <Entity name="Other" />; }`,
-      },
-      { "good.json": GOOD }
-    );
-    assert.equal(status, 1);
-    assert.match(output, /TSE1206: Exported component 'Enemy' is also exported from/);
-    assert.match(output, /skipped scene validation/);
   });
 });

@@ -116,3 +116,26 @@ export function A() {
     );
   });
 });
+
+describe("useTime", () => {
+  it("useTime gives the seconds since mount, growing each update", async () => {
+    const compiled = compile(`
+export function Blink() {
+  const time = useTime();
+  return <Text size={8} color={time % 1 < 0.5 ? "white" : "black"}>{\`\${Math.floor(time)}\`}</Text>;
+}`);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Blink } = await load<{ Blink: new () => Text }>(compiled);
+    const world = new World();
+    const blink = new Blink();
+    world.mount(blink);
+    world.flush();
+    assert.equal(blink.color, "white");
+    for (let i = 0; i < 4; i++) world.tick(0.2);
+    world.flush();
+    assert.equal(blink.color, "black");
+    for (let i = 0; i < 2; i++) world.tick(0.2);
+    world.flush();
+    assert.equal(blink.text, "1");
+  });
+});

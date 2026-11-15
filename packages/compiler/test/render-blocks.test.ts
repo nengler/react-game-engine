@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, Text, World } from "@tsengine/runtime";
+import { Entity, Text, World, Sprite } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
@@ -119,5 +119,60 @@ describe("what statements in the body may not do", () => {
 
   it("does not return early", () => {
     assert.deepEqual(codes("if (s.n > 1) { return; }"), [DiagnosticCode.InvalidComponentBody]);
+  });
+});
+
+describe("derived values: destructured, and worked out once", () => {
+  const SOURCE = `
+export const CALLS = { hero: 0 };
+interface Hero { x: number; y: number; frame: number; }
+function heroOf(step: number): Hero {
+  CALLS.hero++;
+  return { x: step * 2, y: step * 3, frame: step % 4 };
+}
+
+export function Walker() {
+  const s = useMutable({ step: 1, blink: false });
+  const { x, y, frame: f } = heroOf(s.step);
+  const [first, , third] = [x, y, f];
+  return (
+    <Entity name={s.blink ? "on" : "off"}>
+      <Sprite image="hero.png" frame={f} transform={{ x, y }} />
+      <Text>{\`\${first} \${third}\`}</Text>
+    </Entity>
+  );
+}`;
+
+  it("reads members of one value, worked out again only when what it reads changes", async () => {
+    const compiled = compile(SOURCE);
+    assert.match(compiled.code, /this\.\$memo\("x,y,f", \[this\.\$s_step\], \(\) => heroOf\(this\.\$s_step\)\)/);
+    assert.deepEqual(typeCheck(compiled), []);
+    const { Walker, CALLS } = await load<{ Walker: new () => Entity & { s: { [field: string]: unknown } }; CALLS: { hero: number } }>(
+      compiled
+    );
+    const world = new World();
+    const walker = new Walker();
+    world.mount(walker);
+    world.flush();
+    const sprite = walker.children[0] as Sprite;
+    assert.deepEqual([sprite.transform.x, sprite.transform.y, sprite.frame, (walker.children[1] as Text).text], [2, 3, 1, "2 1"]);
+    assert.equal(CALLS.hero, 1, "three uses, one call");
+    walker.s.blink = true;
+    world.flush();
+    assert.equal(walker.name, "on");
+    assert.equal(CALLS.hero, 1, "a render that changes nothing it reads does not call it again");
+    walker.s.step = 2;
+    world.flush();
+    assert.deepEqual([sprite.transform.x, sprite.frame], [4, 2]);
+    assert.equal(CALLS.hero, 2);
+  });
+
+  it("refuses a default, a rest or a nested pattern", () => {
+    for (const pattern of ["{ x = 1 }", "{ ...rest }", "{ a: { b } }", "[a, ...rest]"]) {
+      const errors = compileErrors(
+        `interface P { v: { x: number; a: { b: number } }; l: number[] } export function A({ v, l }: P) { const ${pattern} = ${pattern.startsWith("[") ? "l" : "v"}; return <Entity />; }`
+      );
+      assert.equal(errors[0]?.code, DiagnosticCode.InvalidComponentBody, pattern);
+    }
   });
 });
