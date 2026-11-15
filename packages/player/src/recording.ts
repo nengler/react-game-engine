@@ -252,14 +252,29 @@ export class RecordingBackend implements Backend {
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
     if (input.length < RGE_IN_LEN) throw new Error(`The input buffer needs ${RGE_IN_LEN} entries, not ${input.length}.`);
     if (keys.length < KEYS.length) throw new Error(`The keys buffer needs ${KEYS.length} entries, not ${keys.length}.`);
-    this.frames.push({ clearColor: colorToHex(clearColor), records: this.#decode(records, length, texts) });
+    // Every frame is checked now (a bad record is the player's bug, and should fail the frame that drew it), but read into
+    // `DecodedRecord`s only when a test looks: a long scripted run that keeps two frames of thirty thousand never builds the rest.
+    this.#decode(records, length, texts, null);
+    const copy = records.slice(0, length);
+    const strings = texts.slice();
+    let decoded: DecodedRecord[] | undefined;
+    const decode = (): DecodedRecord[] => {
+      if (decoded === undefined) this.#decode(copy, length, strings, (decoded = []));
+      return decoded;
+    };
+    this.frames.push({
+      clearColor: colorToHex(clearColor),
+      get records() {
+        return decode();
+      },
+    });
     if (this.#keepFrames !== undefined && this.frames.length > this.#keepFrames) this.frames.splice(0, this.frames.length - this.#keepFrames);
 
     applyInputFrame(this.#queue.shift() ?? {}, input, keys, this.config?.width ?? 0, this.config?.height ?? 0);
   }
 
-  #decode(records: Float64Array, length: number, texts: readonly string[]): DecodedRecord[] {
-    const out: DecodedRecord[] = [];
+  /** Check the frame's records, and when `out` is given, read them into it. */
+  #decode(records: Float64Array, length: number, texts: readonly string[], out: DecodedRecord[] | null): void {
     for (let at = 0; at < length; ) {
       const op = records[at] as number;
       const placed = (): Placed => ({ x: records[at + 1] as number, y: records[at + 2] as number, rotation: records[at + 3] as number, scaleX: records[at + 4] as number, scaleY: records[at + 5] as number });
@@ -269,23 +284,23 @@ export class RecordingBackend implements Backend {
       switch (op) {
         case RGE_OP_VIEW:
           need(RGE_OP_VIEW_LEN);
-          out.push({ op: "view", a: records[at + 1]!, b: records[at + 2]!, c: records[at + 3]!, d: records[at + 4]!, e: records[at + 5]!, f: records[at + 6]! });
+          out?.push({ op: "view", a: records[at + 1]!, b: records[at + 2]!, c: records[at + 3]!, d: records[at + 4]!, e: records[at + 5]!, f: records[at + 6]! });
           at += RGE_OP_VIEW_LEN;
           break;
         case RGE_OP_CANVAS:
           need(RGE_OP_CANVAS_LEN);
           if (at !== 0) throw new Error(`A canvas record must be the first record of a frame, not at ${at}.`);
-          out.push({ op: "canvas", width: records[at + 1]!, height: records[at + 2]!, destX: records[at + 3]!, destY: records[at + 4]!, destW: records[at + 5]!, destH: records[at + 6]!, borderColor: colorToHex(records[at + 7]!) });
+          out?.push({ op: "canvas", width: records[at + 1]!, height: records[at + 2]!, destX: records[at + 3]!, destY: records[at + 4]!, destW: records[at + 5]!, destH: records[at + 6]!, borderColor: colorToHex(records[at + 7]!) });
           at += RGE_OP_CANVAS_LEN;
           break;
         case RGE_OP_SCISSOR:
           need(RGE_OP_SCISSOR_LEN);
-          out.push({ op: "scissor", x: records[at + 1]!, y: records[at + 2]!, width: records[at + 3]!, height: records[at + 4]! });
+          out?.push({ op: "scissor", x: records[at + 1]!, y: records[at + 2]!, width: records[at + 3]!, height: records[at + 4]! });
           at += RGE_OP_SCISSOR_LEN;
           break;
         case RGE_OP_SCISSOR_END:
           need(RGE_OP_SCISSOR_END_LEN);
-          out.push({ op: "scissorEnd" });
+          out?.push({ op: "scissorEnd" });
           at += RGE_OP_SCISSOR_END_LEN;
           break;
         case RGE_OP_SPRITE: {
@@ -293,7 +308,7 @@ export class RecordingBackend implements Backend {
           const handle = records[at + 6] as number;
           const texture = this.#textures[handle];
           if (texture === undefined) throw new Error(`Sprite record uses texture handle ${handle}, which was never loaded.`);
-          out.push({ op: "sprite", ...placed(), texture });
+          out?.push({ op: "sprite", ...placed(), texture });
           at += RGE_OP_SPRITE_LEN;
           break;
         }
@@ -303,7 +318,7 @@ export class RecordingBackend implements Backend {
           const texture = this.#textures[handle];
           if (texture === undefined) throw new Error(`Sprite region record uses texture handle ${handle}, which was never loaded.`);
           const flags = records[at + 13] as number;
-          out.push({
+          out?.push({
             op: "spriteRegion",
             ...placed(),
             texture,
@@ -323,13 +338,13 @@ export class RecordingBackend implements Backend {
         case RGE_OP_RECT:
         case RGE_OP_ELLIPSE: {
           need(RGE_OP_RECT_LEN);
-          out.push({ op: op === RGE_OP_RECT ? "rect" : "ellipse", ...placed(), width: records[at + 6]!, height: records[at + 7]!, color: colorToHex(records[at + 8]!) });
+          out?.push({ op: op === RGE_OP_RECT ? "rect" : "ellipse", ...placed(), width: records[at + 6]!, height: records[at + 7]!, color: colorToHex(records[at + 8]!) });
           at += op === RGE_OP_RECT ? RGE_OP_RECT_LEN : RGE_OP_ELLIPSE_LEN;
           break;
         }
         case RGE_OP_BOX: {
           need(RGE_OP_BOX_LEN);
-          out.push({
+          out?.push({
             op: "box",
             ...placed(),
             width: records[at + 6]!,
@@ -347,7 +362,7 @@ export class RecordingBackend implements Backend {
           const index = records[at + 6] as number;
           const text = texts[index];
           if (text === undefined) throw new Error(`Text record uses string ${index}, but the frame has ${texts.length}.`);
-          out.push({ op: "text", ...placed(), text, size: records[at + 7]!, color: colorToHex(records[at + 8]!) });
+          out?.push({ op: "text", ...placed(), text, size: records[at + 7]!, color: colorToHex(records[at + 8]!) });
           at += RGE_OP_TEXT_LEN;
           break;
         }
@@ -355,7 +370,6 @@ export class RecordingBackend implements Backend {
           throw new Error(`Unknown draw op ${op} at record offset ${at}.`);
       }
     }
-    return out;
   }
 }
 
