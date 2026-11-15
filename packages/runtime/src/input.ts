@@ -18,6 +18,11 @@ export interface InputState {
   lastPressed(): KeyName | undefined;
   /** Whether `name` is an action of the game's controls (asking about one that is not would be about a key of that name). */
   isAction?(name: string): boolean;
+  /**
+   * What was typed this step, for a text field: the characters the keyboard layout made (with key repeat), and `"\b"` for each
+   * Backspace. Empty when nothing was. A focused `<TextInput>` takes it; a game can read it too.
+   */
+  readonly typed?: string;
 }
 
 /** Is `name` one of the keys the player knows (`KEY_NAMES`). */
@@ -48,6 +53,8 @@ export interface InputSnapshot {
   readonly down?: Iterable<string>;
   readonly released?: Iterable<string>;
   readonly pointer?: { readonly x: number; readonly y: number };
+  /** What was typed (see `InputState.typed`). */
+  readonly typed?: string;
 }
 
 /**
@@ -167,6 +174,7 @@ export function createInputState(snapshot: InputSnapshot = {}, controls?: Contro
     released,
     pointerX: snapshot.pointer?.x ?? 0,
     pointerY: snapshot.pointer?.y ?? 0,
+    typed: snapshot.typed ?? "",
     isAction: (name) => controls?.keysOf(name) !== undefined,
     lastPressed: () => [...(snapshot.pressed ?? [])].find(isKeyName),
   };

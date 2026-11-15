@@ -552,6 +552,9 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     const scale = live?.timeScale ?? 1;
     world.paused = live?.paused === true;
     const dt = (input.values[RGE_IN_DT] as number) * (scale > 0 ? scale : 0);
+    // What was typed since the last frame goes to this frame's first step only.
+    input.typed = input.typedNext;
+    input.typedNext = "";
     animationTime += dt > 0 ? Math.min(dt, MAX_DT * Math.max(1, scale)) : 0;
     if (driver === null) {
       tick(dt > 0 ? Math.min(dt, MAX_DT) : 0);
@@ -561,6 +564,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
         const frozen = world.frozenSteps > 0;
         input.handlerKeys = stepKeys;
         tick(stepDt, () => (input.handlerKeys = updateKeys));
+        input.typed = "";
         collide();
         return frozen;
       });
@@ -594,6 +598,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     }
     const drawStarted = profiler?.now() ?? 0;
     backend.frame(background, built.list.records, built.list.length, built.list.texts, input.values, input.keys);
+    input.typedNext = backend.typed?.() ?? "";
     if (profiler !== null) {
       profiler.phase("draw", profiler.now() - drawStarted);
       profiler.frame();

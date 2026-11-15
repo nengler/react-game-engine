@@ -34,6 +34,7 @@ pub fn install<'js>(ctx: &Ctx<'js>) -> JsResult<()> {
     backend.set("measureText", Function::new(ctx.clone(), measure_text)?.with_name("measureText")?)?;
     backend.set("textureSize", Function::new(ctx.clone(), texture_size)?.with_name("textureSize")?)?;
     backend.set("overlaps", Function::new(ctx.clone(), overlaps)?.with_name("overlaps")?)?;
+    backend.set("typed", Function::new(ctx.clone(), typed)?.with_name("typed")?)?;
     backend.set("frame", Function::new(ctx.clone(), frame)?.with_name("frame")?)?;
     // Saved data (ABI v7): `storage.open(gameId)`, then `read(name)` (text or null), `write(name, text)` and `remove(name)`.
     let storage = Object::new(ctx.clone())?;
@@ -144,6 +145,14 @@ fn storage_write(name: String, text: String) -> bool {
 fn storage_remove(name: String) {
     let name = c_string(&name);
     unsafe { ffi::rge_storage_remove(name.as_ptr()) };
+}
+
+/// What was typed in the last frame (ABI v9): its characters, with U+0008 for each Backspace.
+fn typed() -> String {
+    let mut out = [0u32; ffi::RGE_TYPED_MAX];
+    let count = unsafe { ffi::rge_typed(out.as_mut_ptr(), ffi::RGE_TYPED_MAX as i32) };
+    let count = (count.max(0) as usize).min(ffi::RGE_TYPED_MAX);
+    out[..count].iter().filter_map(|&c| char::from_u32(c)).collect()
 }
 
 /// The width and line height of `text` at `size`, as an object.

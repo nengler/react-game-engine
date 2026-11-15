@@ -22,6 +22,8 @@ static struct {
   RenderTexture2D canvas; /* the off-screen target of RGE_OP_CANVAS; id 0 when there is none */
   RenderTexture2D upscaled; /* RGE_OPEN_SHARP: the canvas scaled up by a whole number, before the bilinear step down to the window */
   bool sharp;
+  uint32_t typed[RGE_TYPED_MAX]; /* what rge_frame collected for rge_typed */
+  int32_t typed_count;
 } state;
 
 #define MAX_CANVAS 16384
@@ -451,6 +453,20 @@ void rge_frame(uint32_t clear_color, const double *records, int32_t records_leng
     int32_t count = keys_count();
     for (int32_t i = 0; i < count; i++) keys[i] = keys_flags(i);
   }
+  /* The characters typed this frame, Backspace among them where it fell (raylib queues characters, so a Backspace goes after them). */
+  state.typed_count = 0;
+  for (int c = GetCharPressed(); c != 0; c = GetCharPressed()) {
+    if (state.typed_count < RGE_TYPED_MAX) state.typed[state.typed_count++] = (uint32_t)c;
+  }
+  if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && state.typed_count < RGE_TYPED_MAX) state.typed[state.typed_count++] = RGE_TYPED_BACKSPACE;
+}
+
+int32_t rge_typed(uint32_t *out, int32_t capacity) {
+  if (out != NULL) {
+    int32_t n = state.typed_count < capacity ? state.typed_count : capacity;
+    for (int32_t i = 0; i < n; i++) out[i] = state.typed[i];
+  }
+  return state.typed_count;
 }
 
 int32_t rge_read_pixels(uint8_t *rgba, int32_t capacity) {

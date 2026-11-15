@@ -32,6 +32,10 @@ export class PlayerInput implements InputState {
   handlerKeys: Uint8Array = this.keys;
   /** Set by the player after each frame is built. */
   view: ViewTransform = IDENTITY_VIEW;
+  /** What was typed for the step being run (`InputState.typed`): the frame's characters, seen by its first step only. */
+  typed = "";
+  /** What the backend reported typed in the frame just drawn, for the next frame's first step. */
+  typedNext = "";
   /** The game's actions (`<Game controls>`): a name of one of them is answered for any of its keys. */
   controls: Controls | undefined = undefined;
   readonly #warner: Warner;

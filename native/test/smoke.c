@@ -247,6 +247,11 @@ int main(void) {
 
   /* An empty frame is the clear colour everywhere. */
   reset(); view(1, 0, 0, 1, 0, 0); frame();
+  {
+    /* Nothing is typed in a hidden window: rge_typed reports none, and takes NULL and no room. */
+    uint32_t typed[RGE_TYPED_MAX];
+    CHECK(rge_typed(typed, RGE_TYPED_MAX) == 0 && rge_typed(NULL, 0) == 0, "nothing typed");
+  }
   expect(0, 0, CLEAR, "clear top-left");
   expect(W - 1, H - 1, CLEAR, "clear bottom-right");
 

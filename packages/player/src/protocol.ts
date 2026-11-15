@@ -5,7 +5,7 @@
  */
 import { KEY_NAMES, type KeyName } from "@rge/runtime";
 
-export const RGE_ABI_VERSION = 8;
+export const RGE_ABI_VERSION = 9;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const RGE_OP_VIEW = 1;
@@ -53,6 +53,11 @@ export const RGE_KEY_DOWN = 1;
 export const RGE_KEY_PRESSED = 2;
 export const RGE_KEY_RELEASED = 4;
 
+/** In what `rge_typed` gives (ABI v9): a press or repeat of Backspace, among the characters typed. */
+export const RGE_TYPED_BACKSPACE = 8;
+/** The most characters `rge_typed` keeps from one frame. */
+export const RGE_TYPED_MAX = 64;
+
 // Window options for `open`.
 export const RGE_OPEN_RESIZABLE = 1;
 export const RGE_OPEN_VSYNC = 2;
@@ -86,6 +91,8 @@ export const PROTOCOL = {
   RGE_SPRITE_FLIP_X,
   RGE_SPRITE_FLIP_Y,
   RGE_SOUND_VOICES,
+  RGE_TYPED_BACKSPACE,
+  RGE_TYPED_MAX,
   RGE_IN_DT,
   RGE_IN_WIDTH,
   RGE_IN_HEIGHT,

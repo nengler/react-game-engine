@@ -1,7 +1,8 @@
 //! `native/include/rge.h`, as Rust declarations. The header is the source of truth.
 use std::os::raw::c_char;
 
-pub const RGE_ABI_VERSION: i32 = 8;
+pub const RGE_ABI_VERSION: i32 = 9;
+pub const RGE_TYPED_MAX: usize = 64;
 
 pub const RGE_IN_LEN: usize = 7;
 
@@ -31,6 +32,7 @@ extern "C" {
     pub fn rge_storage_read(name: *const c_char, out: *mut u8, capacity: i32) -> i32;
     pub fn rge_storage_write(name: *const c_char, data: *const u8, length: i32) -> i32;
     pub fn rge_storage_remove(name: *const c_char) -> i32;
+    pub fn rge_typed(out: *mut u32, capacity: i32) -> i32;
     pub fn rge_overlaps(boxes: *const f64, count: i32, order: *mut i32, pairs: *mut i32, capacity: i32) -> i32;
     pub fn rge_frame(
         clear_color: u32,
