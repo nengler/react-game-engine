@@ -180,6 +180,19 @@ for (let i = 3; i < 13; i++) {
   px(15, 13, i, "#ffffff");
 }
 writeFileSync(join(assets, "things.png"), rgbaPng(FRAMES * TILE, TILE, sheet));
+
+// The lantern's light, for the cave's light layer (drawn with childBlend="add" in a multiply layer): white at the middle, falling
+// off smoothly to black at the edge, so where it is drawn the dark is lifted and elsewhere it stays. 96 × 96, the middle at 48, 48.
+const LIGHT = 96;
+const light = new Uint8Array(LIGHT * LIGHT * 4);
+for (let y = 0; y < LIGHT; y++) {
+  for (let x = 0; x < LIGHT; x++) {
+    const d = Math.hypot(x + 0.5 - LIGHT / 2, y + 0.5 - LIGHT / 2) / (LIGHT / 2);
+    const v = Math.round(255 * Math.max(0, 1 - d) ** 1.5);
+    light.set([v, Math.round(v * 0.92), Math.round(v * 0.75), 255], (y * LIGHT + x) * 4);
+  }
+}
+writeFileSync(join(assets, "light.png"), rgbaPng(LIGHT, LIGHT, light));
 console.log("wrote assets/things.png");
 
 // ---- Sound: short synthesised effects and a looping theme (16-bit mono PCM WAVs). ----

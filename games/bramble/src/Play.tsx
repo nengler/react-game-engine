@@ -1,4 +1,4 @@
-import { Camera, Entity, Hud, ParticleLayer, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Hud, Layer, ParticleLayer, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
 
 import { Dialogue } from "./Dialogue.tsx";
 import { fx } from "./effects.ts";
@@ -44,6 +44,12 @@ export function Play() {
         />
       </Camera>
       <ParticleLayer particles={fx} />
+      {/* The cave is dark: a layer of near-black multiplied over it, with the lantern's light added where the character is. */}
+      {run.map === "cave" && (
+        <Layer blend="multiply" clear="#16162c" childBlend="add">
+          <Sprite image="light.png" originX={48} originY={48} x={x + 8} y={y + 8} />
+        </Layer>
+      )}
       <Hud>
         <Text x={4} y={3} color="#ff6b6b">{`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`}</Text>
         {run.notice !== null && <Notice text={run.notice} />}
