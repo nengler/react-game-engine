@@ -1,4 +1,4 @@
-import { Flex, Game, WIDGET_NONE, World, captureHotState, objectAt, pathIn, setTextDefaults, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, setGameTree, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
+import { activeProfiler, Flex, Game, WIDGET_NONE, World, captureHotState, objectAt, pathIn, setTextDefaults, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, setGameTree, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
 import type { Backend, WindowConfig } from "./backend.ts";
 import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
@@ -235,10 +235,24 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
    * ended, and render what the callbacks changed, so the next step, and this frame's drawing, see it.
    */
   const collide = (): void => {
+    const profiler = activeProfiler();
+    const started = profiler?.now() ?? 0;
     lastBuilt = builder.build(world.root, input.width, input.height, animationTime);
     collisions.update(world, lastBuilt.colliders);
     stale = collisions.reported > 0;
     if (stale) world.flush();
+    if (profiler !== null) profiler.phase("collisions", profiler.now() - started);
+  };
+  /** A step of the world (`useInput`, `useUpdate`, the renders they cause), timed when the profiler is on. */
+  const tick = (dt: number, beforeUpdate?: () => void): void => {
+    const profiler = activeProfiler();
+    if (profiler === null) {
+      world.tick(dt, input, beforeUpdate);
+      return;
+    }
+    const started = profiler.now();
+    world.tick(dt, input, beforeUpdate);
+    profiler.phase("steps", profiler.now() - started);
   };
   let pointers: readonly Pressable[] = [];
   let hudPointersFrom = 0;
@@ -540,13 +554,13 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     const dt = (input.values[RGE_IN_DT] as number) * (scale > 0 ? scale : 0);
     animationTime += dt > 0 ? Math.min(dt, MAX_DT * Math.max(1, scale)) : 0;
     if (driver === null) {
-      world.tick(dt > 0 ? Math.min(dt, MAX_DT) : 0, input);
+      tick(dt > 0 ? Math.min(dt, MAX_DT) : 0);
       collide();
     } else {
       const steps = driver.advance(dt > 0 ? Math.min(dt, MAX_DT * Math.max(1, scale)) : 0, input.keys, (stepKeys, updateKeys, stepDt) => {
         const frozen = world.frozenSteps > 0;
         input.handlerKeys = stepKeys;
-        world.tick(stepDt, input, () => (input.handlerKeys = updateKeys));
+        tick(stepDt, () => (input.handlerKeys = updateKeys));
         collide();
         return frozen;
       });
@@ -557,7 +571,10 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       }
     }
     // The last walk is this frame's unless a collision callback has changed something since.
+    const profiler = activeProfiler();
+    const buildStarted = profiler?.now() ?? 0;
     const built = lastBuilt !== null && !stale ? lastBuilt : builder.build(world.root, input.width, input.height, animationTime);
+    if (profiler !== null) profiler.phase("build", profiler.now() - buildStarted);
     lastBuilt = null;
     pointers = built.pointers;
     hudPointersFrom = built.hudPointersFrom;
@@ -575,7 +592,12 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       shown.view({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
       shown.text({ x: 3, y: 3, rotation: 0, scaleX: 1, scaleY: 1 }, `${smoothDt > 0 ? Math.round(1 / smoothDt) : 0} fps  ${smoothMs.toFixed(1)} ms`, 8, 0xffe14dff);
     }
+    const drawStarted = profiler?.now() ?? 0;
     backend.frame(background, built.list.records, built.list.length, built.list.texts, input.values, input.keys);
+    if (profiler !== null) {
+      profiler.phase("draw", profiler.now() - drawStarted);
+      profiler.frame();
+    }
     return input.values[RGE_IN_QUIT] === 0;
   }
 }

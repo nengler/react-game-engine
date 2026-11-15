@@ -117,4 +117,41 @@ describe("the inspector", () => {
       player.close();
     }
   });
+
+  it("profiles on request: a table of components and the player's phases, once a second, and off again", async () => {
+    const backend = new RecordingBackend();
+    for (let i = 0; i < 200; i++) backend.queueInput({ dt: 1 / 60 });
+    /** An enemy that does something each frame, so the profile has something to time. */
+    class Walker extends Enemy {
+      override onUpdate(): void {
+        this.hp++;
+        this.markDirty();
+      }
+    }
+    const player = createPlayer(backend, { root: () => new Walker({}) });
+    const logged: string[] = [];
+    const inspector = await startInspector({ root: () => player.world.root, stores: () => new Map(), log: (m) => logged.push(m) });
+    try {
+      const page = await (await fetch(inspector.url)).text();
+      assert.match(page, /id="profile-toggle"/);
+      // Keep a page open (the profile is sent only while one is), then turn the profiler on and play frames until a window is sent.
+      const seen = events(inspector.url, (s) => s.get("profile") !== undefined && s.get("profile") !== null);
+      await new Promise((r) => setTimeout(r, 50));
+      assert.equal((await post(inspector.url, "/profile", { on: true })).status, 200);
+      for (let i = 0; i < 120 && !(await Promise.race([seen.then(() => true), new Promise((r) => setTimeout(() => r(false), 0))])); i++) {
+        player.step();
+        inspector.update();
+      }
+      const report = (await seen).get("profile") as { frames: number; phases: Record<string, number>; components: { name: string }[] };
+      assert.equal(report.frames, 60);
+      assert.deepEqual(Object.keys(report.phases).sort(), ["build", "collisions", "draw", "steps"]);
+      assert.ok(report.components.some((c) => c.name === "Walker"), JSON.stringify(report.components));
+      assert.ok(logged.some((m) => /profiling on/.test(m)));
+      await post(inspector.url, "/profile", { on: false });
+      assert.ok(logged.some((m) => /profiling off/.test(m)));
+    } finally {
+      await inspector.close();
+      player.close();
+    }
+  });
 });

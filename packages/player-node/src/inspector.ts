@@ -10,7 +10,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Rewind } from "@rge/player";
-import { asData, editState, inspectObject, inspectTree, inspectedObject, type GameObject, type GameStore } from "@rge/runtime";
+import { activeProfiler, asData, editState, inspectObject, inspectTree, inspectedObject, startProfiling, stopProfiling, type GameObject, type GameStore } from "@rge/runtime";
 
 export interface InspectorOptions {
   /** The game's current root (it changes on a hot reload). */
@@ -34,13 +34,16 @@ export interface Inspector {
 
 /** Steps between two sends: 6 a second at 60 frames a second. */
 const EVERY = 10;
+/** Frames in one window of the profile the page shows: a second at 60 frames a second. */
+const PROFILE_EVERY = 60;
 
 export function startInspector(options: InspectorOptions): Promise<Inspector> {
   const log = options.log ?? ((message: string) => console.log(message));
   const clients = new Set<ServerResponse>();
   let selected: number | null = null;
   let frame = 0;
-  const last = { tree: "", object: "", stores: "", rewind: "" };
+  let profileFrame = 0;
+  const last = { tree: "", object: "", stores: "", rewind: "", profile: "" };
 
   const send = (res: ServerResponse, event: string, data: string): void => {
     res.write(`event: ${event}\ndata: ${data}\n\n`);
@@ -57,7 +60,8 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
   };
 
   const snapshot = (force = false): void => {
-    if (force) last.tree = last.object = last.stores = last.rewind = "";
+    if (force) last.tree = last.object = last.stores = last.rewind = last.profile = "";
+    if (force && activeProfiler() === null) broadcast("profile", "null", "profile");
     const rewind = options.rewind;
     if (rewind) broadcast("rewind", JSON.stringify({ paused: rewind.paused, ...rewind.range, snapshots: rewind.snapshotFrames, divergence: rewind.divergence }), "rewind");
     const root = options.root();
@@ -138,10 +142,21 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
       for (const store of options.stores().values()) store.recording = true;
       req.on("close", () => clients.delete(res));
       snapshot(true);
-    } else if (req.method === "POST" && (url === "/select" || url === "/edit" || url === "/rewind")) {
+    } else if (req.method === "POST" && (url === "/select" || url === "/edit" || url === "/rewind" || url === "/profile")) {
       void body(req).then((data) => {
         let answer = "ok";
         if (url === "/select") selected = typeof data["id"] === "number" ? data["id"] : null;
+        else if (url === "/profile") {
+          // The profiler times every handler and render while it is on: a little slower, so it is on only while asked for.
+          if (data["on"] === true) {
+            startProfiling();
+            profileFrame = 0;
+            log("inspector: profiling on (handlers and renders are timed, which costs a little)");
+          } else {
+            stopProfiling();
+            log("inspector: profiling off");
+          }
+        }
         else if (url === "/rewind") answer = applyRewind(data);
         else answer = applyEdit(data);
         res.writeHead(answer === "ok" ? 200 : 400, { "content-type": "text/plain" });
@@ -162,12 +177,18 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
       done({
         url: `http://127.0.0.1:${port}/`,
         update: () => {
+          const profiler = activeProfiler();
+          if (profiler !== null && ++profileFrame % PROFILE_EVERY === 0) {
+            if (clients.size === 0) stopProfiling();
+            else broadcast("profile", JSON.stringify(profiler.take()), "profile");
+          }
           if (clients.size === 0 || ++frame % EVERY !== 0) return;
           for (const store of options.stores().values()) store.recording = true;
           snapshot();
         },
         close: () =>
           new Promise<void>((closed) => {
+            stopProfiling();
             for (const res of clients) res.end();
             clients.clear();
             server.close(() => closed());
@@ -194,8 +215,15 @@ const PAGE = `<!doctype html>
   header { flex-wrap: wrap; } #rewind { display: inline-flex; gap: 6px; align-items: center; } #rewind[hidden] { display: none; }
   #rewind input { width: 260px; } button { font: inherit; background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 4px; padding: 1px 8px; cursor: pointer; }
   .diverged { color: #e5534b; }
-  main { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(260px, 1.2fr); gap: 1px; background: var(--line); height: calc(100vh - 44px); }
-  @media (max-width: 800px) { main { grid-template-columns: 1fr; height: auto; } }
+  body { display: flex; flex-direction: column; height: 100vh; }
+  main { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) minmax(260px, 1.2fr); gap: 1px; background: var(--line); flex: 1; min-height: 0; }
+  @media (max-width: 800px) { body { height: auto; } main { grid-template-columns: 1fr; } }
+  #profile { max-height: 40vh; border-bottom: 1px solid var(--line); flex: none; } #profile[hidden] { display: none; }
+  #profile td, #profile th { text-align: right; white-space: nowrap; width: auto; color: inherit; }
+  #profile th { font-weight: normal; color: var(--dim); padding: 2px 4px; border-bottom: 1px solid var(--line); }
+  #profile td:first-child, #profile th:first-child { text-align: left; }
+  #profile tr.hot td { color: #e5534b; } #profile .phases { color: var(--dim); margin: 4px 0; }
+  button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
   section { background: var(--panel); overflow: auto; padding: 8px 12px; min-width: 0; }
   h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); margin: 6px 0; }
   ul { list-style: none; margin: 0; padding-left: 14px; } section > ul { padding-left: 0; }
@@ -213,6 +241,7 @@ const PAGE = `<!doctype html>
 </head>
 <body>
 <header><b>rge inspector</b><span id="status">connecting…</span><span>edits here are development-only</span>
+  <button id="profile-toggle" title="Time each component's handlers and renders, per frame">profile</button>
   <span id="rewind" hidden>
     <button id="rw-pause" title="Pause (F2 in the window)">pause</button>
     <button id="rw-back" title="One frame back">◀</button>
@@ -222,6 +251,7 @@ const PAGE = `<!doctype html>
     <span id="rw-label"></span>
   </span>
 </header>
+<section id="profile" hidden><h2>Profile: milliseconds a frame, over the last second</h2><p class="phases" id="phases">waiting for a second of frames…</p><table id="profile-table"></table></section>
 <main>
   <section><h2>Tree</h2><ul id="tree"><li class="empty">waiting for the game</li></ul></section>
   <section><h2>Selected</h2><div id="object"><p class="empty">Select a component in the tree.</p></div></section>
@@ -317,6 +347,28 @@ events.addEventListener("rewind", (e) => {
   const label = document.getElementById("rw-label");
   label.textContent = (r.paused === null ? "playing, frame " : "paused at frame ") + at + " of " + r.from + "–" + r.to + (r.divergence !== null ? "  (plays differently from frame " + r.divergence + ")" : "");
   label.className = r.divergence !== null ? "diverged" : "";
+});
+let profiling = false;
+const toggle = document.getElementById("profile-toggle");
+toggle.onclick = () => {
+  profiling = !profiling;
+  toggle.classList.toggle("on", profiling);
+  document.getElementById("profile").hidden = !profiling;
+  post("/profile", { on: profiling });
+};
+const ms = (v) => v < 0.005 ? "–" : v.toFixed(2);
+events.addEventListener("profile", (e) => {
+  const p = JSON.parse(e.data);
+  if (p === null) return;
+  const phases = Object.entries(p.phases).map(([name, v]) => name + " " + ms(v)).join("   ");
+  document.getElementById("phases").textContent = p.frames + " frames.  " + (phases || "no phases (driven without the player)") + "   (draw includes waiting for the display)";
+  const table = document.getElementById("profile-table");
+  table.replaceChildren(el("tr", "", ...["component", "count", "input", "update", "render", "total", "renders"].map((h) => el("th", "", text(h)))));
+  for (const c of p.components) {
+    const row = el("tr", c.total >= 1 ? "hot" : "", el("td", "", text(c.name)), el("td", "", text(c.instances)), el("td", "", text(ms(c.input))), el("td", "", text(ms(c.update))), el("td", "", text(ms(c.render))), el("td", "", text(ms(c.total))), el("td", "", text(c.renders.toFixed(1))));
+    table.append(row);
+  }
+  if (!p.components.length) table.append(el("tr", "", el("td", "empty", text("nothing ran"))));
 });
 document.getElementById("rw-pause").onclick = () => post("/rewind", { action: "pause" });
 document.getElementById("rw-play").onclick = () => post("/rewind", { action: "resume" });

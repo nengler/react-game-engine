@@ -62,3 +62,4 @@ export { Body, createBody, boxesOverlap, type BodyHit, type BodyOptions, type Bo
 export { moveActorX, moveActorY, type Blocked, type PixelActor } from "./move.ts";
 export { CALLBACK_PRIMITIVES, runtimeManifest, type RuntimeManifest, type HandleTypeManifest } from "./manifest.ts";
 export { findPath, lineOfSight, type Cell, type PathGrid, type PathOptions, type PathPoint } from "./path.ts";
+export { activeProfiler, PROFILE_INPUT, PROFILE_RENDER, PROFILE_UPDATE, Profiler, startProfiling, stopProfiling, type ProfileEntry, type ProfileKind, type ProfileReport } from "./profile.ts";

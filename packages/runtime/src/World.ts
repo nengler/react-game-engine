@@ -9,6 +9,7 @@ import { restoreHotState } from "./hot.ts";
 import type { Pressable } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
 import { countStep } from "./Sound.ts";
+import { activeProfiler, PROFILE_INPUT, PROFILE_RENDER, PROFILE_UPDATE } from "./profile.ts";
 
 /** Steps the world is asked to freeze for by `freeze`: taken up by the next tick that is not already frozen. */
 let freezeRequest = 0;
@@ -108,16 +109,37 @@ export class World implements BodySpace {
     if (this.#pressables.size > 0 && input !== NO_INPUT) this.#keys(input, anyInert);
     const order = (this.#order ??= this.#treeOrder());
     const inputs = order.input;
-    for (const object of inputs) if (object.world === this) object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
+    const profiler = activeProfiler();
+    if (profiler === null) {
+      for (const object of inputs) if (object.world === this) object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
+    } else {
+      for (const object of inputs) {
+        if (object.world !== this) continue;
+        const started = profiler.now();
+        object.onInput(anyInert && this.isInert(object) ? NO_INPUT : input);
+        profiler.add(object, PROFILE_INPUT, profiler.now() - started);
+      }
+    }
     if (this.#frozen > 0) this.#frozen--;
     else if (!this.paused) {
       beforeUpdate?.();
       const updates = order.update;
-      for (const object of updates) if (object.world === this) object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
+      if (profiler === null) {
+        for (const object of updates) if (object.world === this) object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
+      } else {
+        for (const object of updates) {
+          if (object.world !== this) continue;
+          const started = profiler.now();
+          object.onUpdate(dt, anyInert && this.isInert(object) ? NO_INPUT : input);
+          profiler.add(object, PROFILE_UPDATE, profiler.now() - started);
+        }
+      }
       // Timers, after the updates of the step, in the order their objects first set one.
       if (this.#timed.size > 0) {
         for (const object of [...this.#timed]) {
+          const started = profiler?.now() ?? 0;
           if (object.world !== this || !object.stepTimers(dt)) this.#timed.delete(object);
+          if (profiler !== null) profiler.add(object, PROFILE_UPDATE, profiler.now() - started);
         }
       }
     }
@@ -447,7 +469,18 @@ export class World implements BodySpace {
       const dirty = this.#dirty;
       this.#dirty = [];
       const pass = ++passes;
-      for (let i = 0; i < dirty.length; i++) if ((dirty[i] as GameObject).renderInPass(this, pass)) renders++;
+      const profiler = activeProfiler();
+      if (profiler === null) {
+        for (let i = 0; i < dirty.length; i++) if ((dirty[i] as GameObject).renderInPass(this, pass)) renders++;
+      } else {
+        for (let i = 0; i < dirty.length; i++) {
+          const object = dirty[i] as GameObject;
+          const started = profiler.now();
+          if (!object.renderInPass(this, pass)) continue;
+          renders++;
+          profiler.add(object, PROFILE_RENDER, profiler.now() - started);
+        }
+      }
       const structure = [...this.#structure];
       this.#structure.clear();
       for (const object of structure) object.commitStructure();
