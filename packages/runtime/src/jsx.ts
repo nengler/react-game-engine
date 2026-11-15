@@ -19,6 +19,7 @@ import type { PointerProps } from "./components/Pointer.ts";
 import type { SliderProps } from "./components/Slider.ts";
 import type { ButtonProps } from "./components/Button.ts";
 import type { MenuProps } from "./components/Menu.ts";
+import type { TooltipProps } from "./components/Tooltip.ts";
 import type { ToggleProps } from "./components/Toggle.ts";
 import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
@@ -380,6 +381,15 @@ export function Button(_props: ButtonProps & { children?: Child } & TransformSho
  */
 export function Menu(_props: MenuProps & { children?: Child } & TransformShorthand): JSX.Element {
   return compileTimeOnly("Menu");
+}
+
+/**
+ * A tip shown while the mouse is over the box it is in, or that box has the focus: a floating `<Flex>` above its parent, over what is near
+ * it. `<Button onPress={sell}><Text>Sell</Text><Tooltip><Text>Sells for 5 gold</Text></Tooltip></Button>`. `show` forces it on or off;
+ * `anchor` and `to` place it elsewhere; any `<Flex>` prop changes its look.
+ */
+export function Tooltip(_props: TooltipProps & { children?: Child } & TransformShorthand): JSX.Element {
+  return compileTimeOnly("Tooltip");
 }
 
 /**
