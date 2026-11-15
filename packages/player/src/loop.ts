@@ -261,6 +261,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   input.values[RGE_IN_HEIGHT] = height;
   const builder = new FrameBuilder({
     loadTexture: (path) => backend.loadTexture(path),
+    loadShader: (path) => backend.loadShader?.(path) ?? -2,
     measureText: backend.measureText ? (text, size) => backend.measureText!(text, size) : undefined,
     textureSize: backend.textureSize ? (handle) => backend.textureSize!(handle) : undefined,
     assets,

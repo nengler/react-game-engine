@@ -364,7 +364,7 @@ export const runtimeManifest: RuntimeManifest = {
     Router: ["transition", "duration", "coverColor", "cover", "route", "current", "transitioning"],
     Route: ["name", "keepAlive", "visible", "active"],
     Provider: ["name", "context", "value", "addReader", "removeReader"],
-    Layer: ["name", "blend", "childBlend", "clear", "opacity"],
+    Layer: ["name", "blend", "childBlend", "clear", "opacity", "shader", "params"],
     Flex: [...FLEX_FIELDS, "contains", "boxPoint", "focusPoint", "onNavigate"],
     // A widget is a Flex with more: its members are Flex's fields, and what it adds (the methods Flex has are its prototype's, not its own).
     Slider: [

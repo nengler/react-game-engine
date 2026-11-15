@@ -361,7 +361,7 @@ static bool begin_layer(uint32_t clear, int32_t child_blend) {
   return true;
 }
 
-static void end_layer(int32_t blend, uint32_t tint) {
+static void end_layer(int32_t blend, uint32_t tint, int32_t shader_handle, float time, const double *params) {
   if (target.depth == 0) return;
   RenderTexture2D *layer = &state.layers[target.depth - 1];
   end_current_target();
@@ -371,9 +371,21 @@ static void end_layer(int32_t blend, uint32_t tint) {
    * source is flipped. The scissor still clips it. */
   if (target.scissor_on) begin_scissor(target.scissor[0], target.scissor[1], target.scissor[2], target.scissor[3]);
   set_blend(blend, (tint & 255u) < 255u);
+  RgeShader shader;
+  bool shaded = assets_shader(shader_handle, &shader);
+  if (shaded) {
+    BeginShaderMode(shader.shader);
+    float resolution[2] = { (float)target.width, (float)target.height };
+    float p[8];
+    for (int i = 0; i < 8; i++) p[i] = params != NULL && isfinite(params[i]) ? (float)params[i] : 0.0f;
+    if (shader.resolution >= 0) SetShaderValue(shader.shader, shader.resolution, resolution, SHADER_UNIFORM_VEC2);
+    if (shader.time >= 0) SetShaderValue(shader.shader, shader.time, &time, SHADER_UNIFORM_FLOAT);
+    if (shader.params >= 0) SetShaderValueV(shader.shader, shader.params, p, SHADER_UNIFORM_FLOAT, 8);
+  }
   DrawTexturePro(layer->texture, (Rectangle){ 0.0f, 0.0f, (float)target.width, -(float)target.height },
                  (Rectangle){ 0.0f, 0.0f, (float)target.width, (float)target.height }, (Vector2){ 0.0f, 0.0f }, 0.0f, unpack_color(tint));
   rlDrawRenderBatchActive();
+  if (shaded) EndShaderMode();
   if (target.scissor_on) EndScissorMode();
   restore_target_state();
 }
@@ -435,7 +447,7 @@ static void execute_records(const double *records, int32_t length, const char *t
           report_bad_frame("layer end with no layer open", at);
           goto done;
         }
-        end_layer(blend_of(r[1]), to_color(r[2]));
+        end_layer(blend_of(r[1]), to_color(r[2]), to_index(r[3]), isfinite(r[4]) ? (float)r[4] : 0.0f, r + 5);
         break;
       case RGE_OP_SCISSOR: {
         /* NaN or negative sizes clip everything, which is what an empty rectangle means. */
@@ -516,7 +528,7 @@ static void execute_records(const double *records, int32_t length, const char *t
   }
 done:
   /* A layer still open is closed as if by an END: laid over its target, normal, white. */
-  while (target.depth > 0) end_layer(RGE_BLEND_NORMAL, 0xFFFFFFFFu);
+  while (target.depth > 0) end_layer(RGE_BLEND_NORMAL, 0xFFFFFFFFu, -1, 0.0f, NULL);
   set_blend(RGE_BLEND_NORMAL, false);
   if (target.scissor_on) EndScissorMode();
   if (target.view_pushed) rlPopMatrix();

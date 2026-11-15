@@ -45,6 +45,7 @@ export class ScriptedInputBackend implements Backend {
   close: Backend["close"] = () => this.#inner.close();
   loadTexture: Backend["loadTexture"] = (path) => this.#inner.loadTexture(path);
   loadSound: Backend["loadSound"] = (path) => this.#inner.loadSound(path);
+  loadShader: NonNullable<Backend["loadShader"]> = (path) => this.#inner.loadShader?.(path) ?? -2;
   playSound: Backend["playSound"] = (handle, volume) => this.#inner.playSound(handle, volume);
 
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {

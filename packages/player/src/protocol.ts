@@ -5,7 +5,7 @@
  */
 import { KEY_NAMES, type KeyName } from "@rge/runtime";
 
-export const RGE_ABI_VERSION = 10;
+export const RGE_ABI_VERSION = 11;
 
 // Draw records: a flat array of doubles, each record starting with its op.
 export const RGE_OP_VIEW = 1;
@@ -33,7 +33,10 @@ export const RGE_OP_CANVAS_LEN = 8;
 export const RGE_OP_SPRITE_REGION_LEN = 15;
 export const RGE_OP_BOX_LEN = 12;
 export const RGE_OP_LAYER_BEGIN_LEN = 3;
-export const RGE_OP_LAYER_END_LEN = 3;
+export const RGE_OP_LAYER_END_LEN = 13;
+
+/** What `rge_load_shader` gives in a build that cannot run shaders (the software renderer). Not in `PROTOCOL`: the header writes it in parentheses. */
+export const RGE_SHADER_UNSUPPORTED = -2;
 
 // Blend modes of a layer (ABI v10): how what is drawn meets what is under it.
 export const RGE_BLEND_NORMAL = 0;

@@ -46,6 +46,11 @@ export interface Backend {
   loadTexture(path: string): number;
   /** A sound handle, or -1 if the file could not be loaded. */
   loadSound(path: string): number;
+  /**
+   * A shader for a `<Layer>` (ABI v11): its handle; -1 if the file is missing or does not compile; -2 (`RGE_SHADER_UNSUPPORTED`)
+   * where shaders cannot run (the software renderer), whose layers are drawn without them. Optional: without it, no layer is shaded.
+   */
+  loadShader?(path: string): number;
   /** Play a sound; `volume` is 0 to 1 (default 1). A sound played again while it still sounds plays over itself, up to four voices. */
   playSound(handle: number, volume?: number): void;
   /**

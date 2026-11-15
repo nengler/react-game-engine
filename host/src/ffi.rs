@@ -1,7 +1,7 @@
 //! `native/include/rge.h`, as Rust declarations. The header is the source of truth.
 use std::os::raw::c_char;
 
-pub const RGE_ABI_VERSION: i32 = 10;
+pub const RGE_ABI_VERSION: i32 = 11;
 pub const RGE_TYPED_MAX: usize = 64;
 
 pub const RGE_IN_LEN: usize = 7;
@@ -19,6 +19,7 @@ extern "C" {
     pub fn rge_close();
     pub fn rge_set_fullscreen(on: i32) -> i32;
     pub fn rge_load_texture(path: *const c_char) -> i32;
+    pub fn rge_load_shader(path: *const c_char) -> i32;
     pub fn rge_load_sound(path: *const c_char) -> i32;
     pub fn rge_play_sound_ex(handle: i32, volume: f64);
     pub fn rge_load_music(path: *const c_char) -> i32;

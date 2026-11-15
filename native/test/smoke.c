@@ -57,7 +57,11 @@ static void text(double x, double y, int32_t index, double size, uint32_t color)
 static void scissor(double x, double y, double w, double h) { push(RGE_OP_SCISSOR); push(x); push(y); push(w); push(h); }
 static void scissor_end(void) { push(RGE_OP_SCISSOR_END); }
 static void layer_begin(uint32_t clear, int child_blend) { push(RGE_OP_LAYER_BEGIN); push(clear); push(child_blend); }
-static void layer_end(int blend, uint32_t tint) { push(RGE_OP_LAYER_END); push(blend); push(tint); }
+static void layer_end_shaded(int blend, uint32_t tint, int32_t shader, double time, double p0) {
+  push(RGE_OP_LAYER_END); push(blend); push(tint); push(shader); push(time); push(p0);
+  for (int i = 1; i < 8; i++) push(0);
+}
+static void layer_end(int blend, uint32_t tint) { layer_end_shaded(blend, tint, -1, 0, 0); }
 /* Whether each channel of a pixel is within 2 of rgba: blending rounds differently on the GPU and the software renderer. */
 static void expect_near(int x, int y, uint32_t rgba, const char *what) {
   const uint8_t *p = &pixels[(y * W + x) * 4];
@@ -521,6 +525,41 @@ int main(void) {
     reset(); view(1, 0, 0, 1, 0, 0); rect(0, 0, 0, 1, 1, 64, 48, 0x808080ffu); layer_begin(0x00000000u, RGE_BLEND_NORMAL); sprite(0, 0, 1, 1, dim_tex); layer_end(RGE_BLEND_MULTIPLY, WHITE_RGBA); frame();
     expect_near(4, 4, 0x180000ffu, "an opaque layer multiplied over grey: its colour times the grey");
     remove("rge_smoke_dim.png");
+  }
+  {
+    /* Shaders (ABI v11): an `effect` function in a file, run on a layer as it is laid over. */
+    FILE *f = fopen("rge_smoke_shader.glsl", "w");
+    /* Top half (by pixel, from the top) red; bottom half the layer's own colour, its green scaled by params[0] and time / 10. */
+    fputs("vec4 effect(vec2 uv) {\n"
+          "  vec4 c = texture(image, uv);\n"
+          "  if (pixel.y < resolution.y / 2.0) return vec4(1.0, 0.0, 0.0, 1.0);\n"
+          "  return vec4(c.r, c.g * params[0] * time / 10.0, c.b, c.a);\n"
+          "}\n", f);
+    fclose(f);
+    FILE *bad = fopen("rge_smoke_bad.glsl", "w");
+    fputs("vec4 effect(vec2 uv) { return nope; }\n", bad);
+    fclose(bad);
+    int32_t shader = rge_load_shader("rge_smoke_shader.glsl");
+    CHECK(rge_load_shader("does-not-exist.glsl") == -1, "a missing shader file is -1");
+    CHECK(rge_load_shader(NULL) == -1, "a null shader path is -1");
+#if defined(RGE_SMOKE_SOFTWARE)
+    CHECK(shader == RGE_SHADER_UNSUPPORTED, "the software renderer runs no shaders: %d", shader);
+    reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x00ff00ffu, RGE_BLEND_NORMAL); layer_end_shaded(RGE_BLEND_NORMAL, WHITE_RGBA, shader, 10, 1); frame();
+    expect(4, 4, C_GREEN, "without shaders a shaded layer is laid over as it is");
+#else
+    CHECK(shader >= 0, "load a shader: %d", shader);
+    CHECK(rge_load_shader("rge_smoke_bad.glsl") == -1, "a shader that does not compile is -1");
+    reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x00ff00ffu, RGE_BLEND_NORMAL); layer_end_shaded(RGE_BLEND_NORMAL, WHITE_RGBA, shader, 10, 0.5); frame();
+    expect_near(4, 4, C_RED, "the shader runs: the top half, by pixel from the top, is red");
+    expect_near(4, 40, 0x008000ffu, "...the bottom half is the layer's green times params[0] times time / 10");
+    reset(); canvas(16, 12, 0, 0, 64, 48, C_GREEN); view(1, 0, 0, 1, 0, 0); layer_begin(0x0000ffffu, RGE_BLEND_NORMAL); layer_end_shaded(RGE_BLEND_NORMAL, WHITE_RGBA, shader, 10, 1); frame();
+    expect_near(8, 8, C_RED, "in a canvas, pixel and resolution are the canvas's: its top half is red");
+    expect_near(8, 40, 0x0000ffffu, "...and its bottom half the layer's blue");
+    reset(); view(1, 0, 0, 1, 0, 0); layer_begin(0x00ff00ffu, RGE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 4, 4, C_RED); layer_end_shaded(RGE_BLEND_NORMAL, WHITE_RGBA, 999, 0, 0); frame();
+    expect(30, 30, C_GREEN, "an unknown shader handle lays the layer over without one");
+#endif
+    remove("rge_smoke_shader.glsl");
+    remove("rge_smoke_bad.glsl");
   }
   /* The view carries into a layer, and layers nest. */
   reset(); view(1, 0, 0, 1, 10, 0); layer_begin(0x00000000u, RGE_BLEND_NORMAL); rect(0, 0, 0, 1, 1, 4, 4, C_RED);
