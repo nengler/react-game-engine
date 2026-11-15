@@ -148,6 +148,16 @@ export function analyzeSourceFile(
       continue;
     }
     if (isFunctionDeclaration(statement) && statement.name && /^[A-Z]/.test(statement.name.text)) {
+      if (statement.typeParameters && statement.typeParameters.length > 0) {
+        diagnostics.push(
+          error(
+            DiagnosticCode.UnsupportedSyntax,
+            `Component '${statement.name.text}' has type parameters: generic components are not supported (a component compiles to one class, whose props have one type). Give the props a concrete type, a union of the kinds it takes, or \`unknown\` with a plain .ts function that reads it.`,
+            span(statement.typeParameters[0]!)
+          )
+        );
+        continue;
+      }
       const isDefault = (statement.modifierFlags & ModifierFlags.Default) !== 0;
       const component = analyzeComponent(
         {
@@ -190,6 +200,16 @@ export function analyzeSourceFile(
               DiagnosticCode.UnsupportedSyntax,
               `Component '${declaration.name.text}' must be declared with \`const\`.`,
               span(statement)
+            )
+          );
+          continue;
+        }
+        if (arrow.typeParameters && arrow.typeParameters.length > 0) {
+          diagnostics.push(
+            error(
+              DiagnosticCode.UnsupportedSyntax,
+              `Component '${declaration.name.text}' has type parameters: generic components are not supported (a component compiles to one class, whose props have one type). Give the props a concrete type, a union of the kinds it takes, or \`unknown\` with a plain .ts function that reads it.`,
+              span(arrow.typeParameters[0]!)
             )
           );
           continue;

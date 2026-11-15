@@ -98,6 +98,8 @@ export class LoweringBase {
   protected readonly stateTypes = new Map<StateId, TypeIR>();
   /** The state slots that are fields of a `useMutable`: a handler reads them as they are now (a `live` read). */
   protected readonly mutableStates = new Set<StateId>();
+  /** The values a `useContext` reads: a handler reads one live, as its provider's parent has it now (`ContextReader.live`). */
+  protected readonly contextValues = new Set<StateId>();
   protected serial = 0;
   scope: Scope = this.componentScope;
   protected readonly usedNames: Set<string>;

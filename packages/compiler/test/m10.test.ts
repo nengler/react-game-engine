@@ -81,7 +81,9 @@ describe("M10: IR", () => {
     assert.deepEqual(valueOf(text), {
       kind: "TemplateLiteral",
       quasis: ["Score: ", ""],
-      expressions: [{ kind: "StateRead", state: "Scoreboard.s.score" }],
+      expressions: [
+        { kind: "Call", callee: { kind: "Function", name: "textOf" }, args: [{ kind: "StateRead", state: "Scoreboard.s.score" }] },
+      ],
     });
     assert.deepEqual(text.kind === "DynamicProp" && text.dependencies, [{ kind: "State", state: "Scoreboard.s.score" }]);
     assert.equal(prop(texts[0]!.props, "size").kind, "StaticProp");
@@ -111,7 +113,7 @@ describe("M10: IR", () => {
     assert.deepEqual(valueOf(prop(badge.root.props, "text")), {
       kind: "TemplateLiteral",
       quasis: ["+", ""],
-      expressions: [{ kind: "PropRead", name: "points" }],
+      expressions: [{ kind: "Call", callee: { kind: "Function", name: "textOf" }, args: [{ kind: "PropRead", name: "points" }] }],
     });
   });
 });
@@ -150,12 +152,12 @@ describe("M10: generated code", () => {
   const { code } = compile(HUD, "Scoreboard.tsx");
 
   it("builds the element with its text and updates the field in place", () => {
-    assert.match(code, /readonly text: Text = new Text\(\{ size: 12, text: `Score: \$\{this\.\$s_score\}` \}\);/);
-    assert.match(code, /const (\$\d+) = `Score: \$\{this\.\$s_score\}`;[^]*?this\.text\.text = \1;/);
+    assert.match(code, /readonly text: Text = new Text\(\{ size: 12, text: `Score: \$\{textOf\(this\.\$s_score\)\}` \}\);/);
+    assert.match(code, /const (\$\d+) = `Score: \$\{textOf\(this\.\$s_score\)\}`;[^]*?this\.text\.text = \1;/);
     assert.match(
       code,
-      /const (\$\d+) = `\$\{this\.props\.label \+ ":"\}`;[^]*?this\.text2\.text = \1;/,
-      "an expression child is a dynamic text, as a template literal (always a string)"
+      /const (\$\d+) = `\$\{textOf\(this\.props\.label \+ ":"\)\}`;[^]*?this\.text2\.text = \1;/,
+      "an expression child is a dynamic text, as a template literal (always a string), null and booleans drawn as nothing"
     );
     assert.match(code, /const (\$\d+) = \(this\.\$s_score > 5\) \? "gold" : "white";[^]*?this\.text2\.color = \1;/);
     assert.match(code, /readonly text4: Text = new Text\(\{ text: "Fixed" \}\);/);
@@ -164,7 +166,7 @@ describe("M10: generated code", () => {
   it("makes a Text-rooted component a Text, with the content as its required prop", () => {
     assert.match(code, /export class Badge extends Text<BadgeProps> \{/);
     assert.match(code, /super\(\{ color: "gold", text: undefined as never \}, props\);/);
-    assert.match(code, /const (\$\d+) = `\+\$\{this\.props\.points\}`;[^]*?this\.text = \1;/);
+    assert.match(code, /const (\$\d+) = `\+\$\{textOf\(this\.props\.points\)\}`;[^]*?this\.text = \1;/);
   });
 
   it("type-checks the generated module", () => {
@@ -192,8 +194,9 @@ describe("M10: authored source type-checks", () => {
     assert.ok(check(`<Text text="a">b</Text>`).length > 0, "both forms");
     assert.ok(check(`<Text><Sprite image="x" /></Text>`).length > 0, "an element");
     assert.ok(check(`<Text size="big">x</Text>`).length > 0, "a wrong prop type");
-    assert.ok(check(`<Text>{true}</Text>`).length > 0, "a boolean");
     assert.ok(check(`<Text>{n}</Text>`).length === 0, "a number is text too");
+    assert.ok(check(`<Text>{n > 1 && "many"}{undefined}{null}</Text>`).length === 0, "null, undefined and booleans draw nothing");
+    assert.ok(check(`<Text>{{ n }}</Text>`).length > 0, "an object is not text");
   });
 });
 

@@ -61,7 +61,7 @@ export function Level({ onChaserSees, onWatcherSees }: LevelProps) {
 }`;
 
 describe("sharing state between components", () => {
-  it("lifts it up: what a child reports in a step, a later sibling sees by props at once, and through context in the next", async () => {
+  it("lifts it up: what a child reports in a step, a later sibling sees at once, by props and through context alike", async () => {
     const compiled = compile(SOURCE, "Level.tsx");
     mkdirSync(dirname(compiled.fileName), { recursive: true });
     writeFileSync(join(dirname(compiled.fileName), "..", "level.ts"), LEVEL);
@@ -78,7 +78,8 @@ describe("sharing state between components", () => {
     }
     // Step 1: the player moves to 1 and reports it. The chaser, after it in the tree, reads `target` as the parent has it now: 1.
     assert.deepEqual(byProps, [1, 2, 3, 4]);
-    // The watcher reads a context value, which is what the parent last rendered: 0, the state as the step began (not live yet).
-    assert.deepEqual(byContext, [0, 1, 2, 3]);
+    // The watcher reads a context value live too (its provider's getter): 1, not the 0 the provider was last given. Before, a context
+    // value lagged a step; it was one of the three places props were not yet live.
+    assert.deepEqual(byContext, [1, 2, 3, 4]);
   });
 });

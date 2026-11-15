@@ -679,6 +679,7 @@ export const runtimeManifest: RuntimeManifest = {
   },
   functions: {
     clamp: 3,
+    textOf: 1,
     freeze: 1,
     springBack: 3,
     shakeOn: 2,
