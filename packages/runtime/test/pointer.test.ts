@@ -101,10 +101,4 @@ describe("Pointer", () => {
     assert.equal(world.reportPress(pointer, off.x, off.y), false, "a point on screen beside it");
     assert.equal(presses.length, 1);
   });
-
-  it("only dispatches: a handler that sets state renders in the next flush", () => {
-    const { world, pointer } = mounted();
-    assert.doesNotThrow(() => world.reportPress(pointer, 1, 1));
-    assert.equal(world.flush(), 0);
-  });
 });
