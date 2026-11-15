@@ -465,7 +465,7 @@ Also decided on 2026-11-09, each as recommended:
 | Aspect-ratio boxes | Nothing in a HUD needs one | A portrait or a minimap frame that must keep its shape while growing |
 | Layout transitions (animating size and position changes) | Clay has them; a game can animate `transform` today | A menu that should slide or resize smoothly |
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |
-| Focus and keyboard or gamepad navigation between buttons | Needs gamepads first (a "Not now" item in NEXT_PRIORITIES) | A console-style menu |
+| ~~Focus and keyboard or gamepad navigation between buttons~~ | Built: `focusable` and `autoFocus`, then `<Button>`, `<Menu>` and `onAdjust` (2026-11-15; DESIGN.md, "Buttons, menus and `onAdjust`") | — |
 
 # Part 2: a fixed game resolution (`<Screen>`)
 

@@ -40,6 +40,8 @@ export interface ModuleContext {
   readonly sourceFile: SourceFile;
   readonly fileName: string;
   readonly manifest: RuntimeManifest;
+  /** The built-ins this file can use: the manifest's, less any its own components shadow. */
+  readonly intrinsics: ReadonlySet<string>;
   /** Components declared in this file. */
   readonly locals: ReadonlySet<string>;
   /** Components imported from other `.tsx` files, by local name. */
@@ -110,10 +112,10 @@ export class LoweringBase {
     this.sourceFile = module.sourceFile;
     this.fileName = module.fileName;
     this.manifest = module.manifest;
-    this.intrinsics = new Set(module.manifest.intrinsics);
+    this.intrinsics = module.intrinsics;
     this.imported = module.imported;
     // A component extends its root element's class, so it may not reuse that class's own field names.
-    this.usedNames = new Set([...module.manifest.reservedMembers, ...(module.manifest.intrinsicMembers[rootTag(component.jsx, module.manifest.hostIntrinsic)] ?? [])]);
+    this.usedNames = new Set([...module.manifest.reservedMembers, ...(module.intrinsics.has(rootTag(component.jsx, module.manifest.hostIntrinsic)) ? (module.manifest.intrinsicMembers[rootTag(component.jsx, module.manifest.hostIntrinsic)] ?? []) : [])]);
     this.locals = module.locals;
     this.hostIntrinsic = module.manifest.hostIntrinsic;
     this.diagnostics = module.diagnostics;

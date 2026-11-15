@@ -141,9 +141,10 @@ function Level() {
     assert.deepEqual(check, []);
   });
 
-  it("takes the built-in's name, so a component cannot be called Hud", () => {
-    const errors = compileErrors(`function Hud() { return <Entity name="Hud" />; }`);
-    assert.ok(errors.some((d) => /conflicts with a runtime intrinsic/.test(d.message)), errors.map((d) => d.message).join("\n"));
+  it("lets a component called Hud shadow the built-in, but not in a file that imports <Hud>", () => {
+    assert.match(compile(`function Hud() { return <Entity name="Hud" />; }`).code, /class Hud extends Entity/);
+    const clash = compileErrors(`import { Entity, Hud } from "@rge/runtime/jsx"; function Hud() { return <Entity name="Hud" />; }`);
+    assert.ok(clash.some((d) => /conflicts with the built-in <Hud> this file imports/.test(d.message)), clash.map((d) => d.message).join("\n"));
   });
 });
 

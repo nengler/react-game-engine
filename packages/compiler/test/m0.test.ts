@@ -213,7 +213,7 @@ function Player() {
 
   it("rejects an import that collides with an intrinsic or a local component", () => {
     const local = compileProjectErrors({
-      "P.tsx": `import { Sprite } from "./Sprite.tsx";\nfunction P() { return <Entity name="P" />; }`,
+      "P.tsx": `import { Entity, Sprite as _S } from "@rge/runtime/jsx";\nimport { Entity } from "./Entity.tsx";\nfunction P() { return <Entity name="P" />; }`,
     });
     assert.ok(local.some((d) => d.code === DiagnosticCode.DuplicateComponent));
     const dup = compileProjectErrors({

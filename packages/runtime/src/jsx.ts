@@ -17,6 +17,8 @@ import type { SpriteProps } from "./components/Sprite.ts";
 import type { ColliderProps, ContactOf } from "./components/Collider.ts";
 import type { PointerProps } from "./components/Pointer.ts";
 import type { SliderProps } from "./components/Slider.ts";
+import type { ButtonProps } from "./components/Button.ts";
+import type { MenuProps } from "./components/Menu.ts";
 import type { ToggleProps } from "./components/Toggle.ts";
 import type { TextProps } from "./components/Text.ts";
 import type { ShapeProps } from "./components/Shape.ts";
@@ -360,6 +362,24 @@ export function Slider(_props: SliderProps & TransformShorthand): JSX.Element {
  */
 export function Toggle(_props: ToggleProps & TransformShorthand): JSX.Element {
   return compileTimeOnly("Toggle");
+}
+
+/**
+ * A button, a `<Flex>` that takes the focus and has a look for each state: `<Button onPress={start}><Text>Play</Text></Button>`. A click,
+ * the confirm key while it has the focus, or its `pressKey` presses it; `onAdjust` hears left and right while it has the focus (a settings
+ * row). Any `<Flex>` prop replaces the default look (`background`, `focusBackground`, `pressedBackground`, `backgroundImage` and the rest).
+ */
+export function Button(_props: ButtonProps & { children?: Child } & TransformShorthand): JSX.Element {
+  return compileTimeOnly("Button");
+}
+
+/**
+ * A menu, a `<Flex>` column whose focusable children (usually `<Button>`s) are its items: while one has the focus, up and down move it
+ * among them only, going round at the ends (`loop={false}` stops at them), and `back` calls `onBack`. `autoFocus` on an item starts there.
+ * `<Menu onBack={close}><Button autoFocus onPress={resume}><Text>Resume</Text></Button>…</Menu>`.
+ */
+export function Menu(_props: MenuProps & { children?: Child } & TransformShorthand): JSX.Element {
+  return compileTimeOnly("Menu");
 }
 
 /**

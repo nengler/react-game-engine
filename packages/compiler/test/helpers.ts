@@ -44,7 +44,9 @@ export interface CompiledModule {
 export function withAuthoringImports(source: string, manifest: RuntimeManifest = runtimeManifest): string {
   if (source.includes(`from "${manifest.authoringModule}"`)) return source;
   const exported = [...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions), ...LIBRARY_HOOKS];
-  const used = exported.filter((name) => new RegExp(`\\b${name}\\b`).test(source));
+  // A name the source declares or imports itself is its own component, which shadows a built-in of that name.
+  const own = (name: string): boolean => new RegExp(`(function|const|class)\\s+${name}\\b|import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"\\.`).test(source);
+  const used = exported.filter((name) => new RegExp(`\\b${name}\\b`).test(source) && !own(name));
   if (used.length === 0) return source;
   return `import { ${used.join(", ")} } from "${manifest.authoringModule}"; ${source}`;
 }

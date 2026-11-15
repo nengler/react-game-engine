@@ -1,7 +1,7 @@
 import { Entity, Text, useMutable, useStore } from "@rge/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { KeyPrompt } from "./KeyPrompt.tsx";
-import { Menu } from "./Menu.tsx";
+import { Choices } from "./Choices.tsx";
 import { settingsRows } from "./rules/menu.ts";
 import { bindingsView, settings, settingsView } from "./settings.ts";
 
@@ -20,7 +20,7 @@ export function Settings() {
   return (
     <Entity>
       <Text x={0} y={6} width={320} align="center">SETTINGS</Text>
-      <Menu
+      <Choices
         top={22}
         rows={settingsRows(values, bindings, s.capturing)}
         onAdjust={adjust}

@@ -26,6 +26,8 @@ export { createMemoryStorage, createSave, createSettings, getStorage, Save, setS
 export { Pointer, type PointerProps, type Pressable } from "./components/Pointer.ts";
 export { Slider, type SliderProps } from "./components/Slider.ts";
 export { Toggle, type ToggleProps } from "./components/Toggle.ts";
+export { Button, BUTTON_DEFAULTS, type ButtonProps } from "./components/Button.ts";
+export { Menu, type MenuProps } from "./components/Menu.ts";
 export { setTextDefaults, Text, TEXT_ALIGNS, type TextAlign, type TextProps } from "./components/Text.ts";
 export { Shape, SHAPE_KINDS, type ShapeKind, type ShapeProps } from "./components/Shape.ts";
 export { Camera, type CameraProps, type Point, type ViewTransform } from "./components/Camera.ts";

@@ -5,7 +5,7 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Flex, Shape, Slider, Text, Toggle, World, type GameObject } from "@rge/runtime";
+import { Button, createControls, createInputState, Flex, Menu as MenuBox, Shape, Slider, Text, Toggle, World, type GameObject } from "@rge/runtime";
 import { FrameBuilder } from "@rge/player";
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -261,6 +261,47 @@ function Settings() {
     assert.equal(text.text, "loud off", "and the toggle told its handler a flag");
   });
 
+  it("compiles a Menu of Buttons with their labels as children, and onAdjust and onBack reach the component's handlers", async () => {
+    const source = `
+function Options({ onClose }: { onClose: () => void }) {
+  const s = useMutable({ volume: 5, chosen: "" });
+  return (
+    <Menu gap={2} onBack={onClose}>
+      <Button autoFocus onAdjust={(d) => { s.volume += d; }} onPress={() => { s.chosen = "volume"; }}>
+        <Text>Volume {s.volume}</Text>
+      </Button>
+      <Button onPress={() => { s.chosen = "done"; }}>
+        <Text>Done</Text>
+      </Button>
+    </Menu>
+  );
+}`;
+    const closed: string[] = [];
+    const { Options } = await load<{ Options: new (props: { onClose: () => void }) => MenuBox }>(compile(source, "Options.tsx"));
+    const options = new Options({ onClose: () => closed.push("closed") });
+    assert.ok(options instanceof MenuBox);
+    const [volume, done] = options.children as [Button, Button];
+    assert.ok(volume instanceof Button && done instanceof Button);
+    done.transform.y = 20;
+    const world = new World();
+    world.mount(options);
+    world.flush();
+    const controls = createControls({ left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"], confirm: ["Z"], back: ["X"] });
+    const press = (...pressed: string[]) => {
+      world.tick(1 / 60, createInputState({ pressed }, controls));
+      world.flush();
+    };
+    press();
+    press("ArrowRight");
+    press("ArrowRight");
+    assert.equal((volume.children[0] as Text).text, "Volume 7");
+    press("ArrowDown");
+    assert.equal(world.focused, done);
+    press("Z");
+    press("X");
+    assert.deepEqual(closed, ["closed"]);
+  });
+
   it("type-checks a Slider's and a Toggle's props and the parameter of onChange, in the source and the generated module", () => {
     assert.deepEqual(typeCheck(compile(`function C() { const s = useMutable({ v: 1 }); return <Slider value={s.v} onChange={(x) => { s.v = x; }} />; }`, "SliderOk.tsx")), []);
     const check = (element: string) =>
@@ -273,6 +314,13 @@ function Settings() {
     assert.ok(check(`<Slider onChange={(v: string) => v} />`).length > 0, "onChange is given a number");
     assert.ok(check(`<Toggle checked="yes" />`).length > 0, "checked is a boolean");
     assert.ok(check(`<Toggle onChange={(on: number) => on} />`).length > 0, "onChange is given a flag");
+    const checkMenu = (element: string) =>
+      getCompiler().typeCheckSources([
+        { fileName: `${process.cwd()}/.test-output/MenuCheck${Math.random()}.tsx`, text: `import { Button, Menu, Text } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }` },
+      ]);
+    assert.deepEqual(checkMenu(`<Menu loop={false} onBack={() => n}><Button onAdjust={(d) => d.toFixed(0)} focusBackground="red"><Text>Go</Text></Button></Menu>`), []);
+    assert.ok(checkMenu(`<Button onAdjust={(d: string) => d} />`).length > 0, "onAdjust is given a number");
+    assert.ok(checkMenu(`<Menu loop="yes" />`).length > 0, "loop is a boolean");
   });
 
   it("lets state take a widget's names, kept in `$name` fields", () => {
@@ -353,9 +401,25 @@ describe("Flex: diagnostics", () => {
     }
   });
 
-  it("takes the built-in's name, so a component cannot be called Flex", () => {
-    const errors = compileErrors(`function Flex() { return <Entity name="Flex" />; }`);
-    assert.ok(errors.some((d) => /conflicts with a runtime intrinsic/.test(d.message)));
+  it("lets a component of the game's own called Menu or Button shadow the built-in, as a name does in React", async () => {
+    const source = `
+function Button({ label }: { label: string }) {
+  return <Flex padding={2}><Text>{label}</Text></Flex>;
+}
+
+function Menu() {
+  return (
+    <Flex direction="column">
+      <Button label="Play" />
+    </Flex>
+  );
+}`;
+    const { Menu: Mine } = await load<{ Menu: new () => Flex }>(compile(source, "OwnMenu.tsx"));
+    const menu = new Mine();
+    assert.ok(!(menu instanceof MenuBox), "the file's own Menu, not the built-in");
+    assert.ok(!(menu.children[0] instanceof Button) && menu.children[0] instanceof Flex);
+    const errors = compileErrors(`import { Entity, Flex } from "@rge/runtime/jsx"; function Flex() { return <Entity name="Flex" />; }`);
+    assert.ok(errors.some((d) => /conflicts with the built-in <Flex> this file imports/.test(d.message)));
   });
 });
 

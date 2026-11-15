@@ -7,7 +7,7 @@ import { spanOf } from "../parser/parser.ts";
 import { type GameStateDefinition } from "../gamestate/schema.ts";
 import { type RuntimeManifest } from "@rge/runtime";
 import { type LoweringContext } from "./statements.ts";
-import { TIMER_FUNCTIONS, SOUND_CLASS, type AuthoringImports, checkStaticCycles } from "./helpers.ts";
+import { GAME_TAG, TIMER_FUNCTIONS, SOUND_CLASS, type AuthoringImports, checkStaticCycles } from "./helpers.ts";
 import { ElementLowering } from "./elements.ts";
 import { type ModuleContext } from "./lowering.ts";
 
@@ -32,12 +32,17 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   const sourceFile = analysis.sourceFile;
   const span = (node: Node): SourceSpan => spanOf(node, sourceFile, analysis.fileName);
   const manifest = options.manifest;
+  // A component declared in or imported into this file shadows a built-in of the same name, as a name does in React, unless the file
+  // also imports that built-in from the authoring module: so a game's own `Menu` or `Button` keeps working when the runtime adds one.
+  const authoredHere = new Set(analysis.authoringImports.filter((i) => !i.isTypeOnly).map((i) => i.name));
   const intrinsics = new Set(manifest.intrinsics);
+  // The host element and `<Game>` are never shadowed: the compiler gives those tags their own meaning wherever they are.
+  const builtIn = (name: string): boolean => intrinsics.has(name) && (authoredHere.has(name) || name === manifest.hostIntrinsic || name === GAME_TAG);
 
   const locals = new Set<string>();
   for (const c of analysis.components) {
-    if (intrinsics.has(c.name)) {
-      diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' conflicts with a runtime intrinsic.`, span(c.declaration)));
+    if (builtIn(c.name)) {
+      diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' conflicts with the built-in <${c.name}>${authoredHere.has(c.name) ? ` this file imports from "${manifest.authoringModule}": rename the component, or drop the import` : ", which is never shadowed: rename the component"}.`, span(c.declaration)));
     } else if (c.name === SOUND_CLASS) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Component '${c.name}' conflicts with the runtime's ${SOUND_CLASS} class, which generated code imports for useSound.`, span(c.declaration)));
     } else if (locals.has(c.name)) {
@@ -47,7 +52,7 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   }
   const imported = new Map<string, { module: string; isDefault: boolean }>();
   for (const i of analysis.imports) {
-    if (intrinsics.has(i.name) || i.name === SOUND_CLASS || locals.has(i.name) || imported.has(i.name)) {
+    if (builtIn(i.name) || i.name === SOUND_CLASS || locals.has(i.name) || imported.has(i.name)) {
       diagnostics.push(error(DiagnosticCode.DuplicateComponent, `Imported component '${i.name}' conflicts with another component or a runtime intrinsic.`, span(i.node)));
     } else {
       imported.set(i.name, { module: i.module, isDefault: i.isDefault });
@@ -108,7 +113,8 @@ export function buildModuleIR(analysis: SourceAnalysis, options: TransformOption
   const typeDecls = new Map(analysis.typeDeclarations.map((t) => [t.name, t] as const));
   const typeDeclarations: TypeDeclarationIR[] = analysis.typeDeclarations.map((t) => ({ kind: "TypeDeclaration", name: t.name, text: t.text }));
 
-  const context: ModuleContext = { sourceFile, fileName: analysis.fileName, manifest, locals, imported, authoring, typeDecls, diagnostics, analysisFailed: analysis.diagnostics.some((d) => d.severity === "error"), gameState: options.gameState, storeImports, plainImports: plainNames };
+  for (const name of [...locals, ...imported.keys()]) if (!builtIn(name)) intrinsics.delete(name);
+  const context: ModuleContext = { sourceFile, fileName: analysis.fileName, manifest, intrinsics, locals, imported, authoring, typeDecls, diagnostics, analysisFailed: analysis.diagnostics.some((d) => d.severity === "error"), gameState: options.gameState, storeImports, plainImports: plainNames };
   const components: ComponentIR[] = [];
   for (const c of analysis.components) {
     const lowered = new ComponentLowering(c, context).lower();

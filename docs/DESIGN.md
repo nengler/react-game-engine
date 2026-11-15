@@ -2340,6 +2340,21 @@ a laid-out box's middle; along the direction, plus twice the distance across, so
 without one) presses the focused one. A click on a focusable one focuses it before pressing it. `World.focus(p)` / `World.focused` for
 code. One focused or removed, inert or no longer focusable, loses it; the next tick an `autoFocus` one may take it.
 
+**Buttons, menus and `onAdjust`** (2026-11-15). Every game had written its own menu: a cursor in state, `useInput` reading up and down,
+a bar behind the row under the cursor. The focus already did that, so three small additions put it to work. `<Button>` is a `Flex`
+with defaults (`BUTTON_DEFAULTS`: focusable, padded, centred, a colour for each state) that any prop overrides; it adds no field.
+`<Menu>` is a `Flex` (a column by default) that scopes the focus: from an item inside a menu, a direction looks only at the menu's own
+items (`menuOf`, the nearest `Menu` up the parents), and finding none it goes round to the farthest the other way (`loop`, default
+true), so the focus never leaves the menu by the keys; `back` (or Escape and PadB) calls its `onBack`. `onAdjust` on any `Flex` is
+`onNavigate` for left and right: called with -1 or 1 and used up, so a settings row changes its value in place, as a slider does.
+And focus taken by a modal is put aside (`#focusBeforeInert`) and given back when the element can take it again, before any
+`autoFocus`, as a browser does when a dialog closes: without it, Bramble's key prompt sent the settings cursor back to the top.
+
+Adding built-ins called `Button` and `Menu` would have broken every game with a component of either name (`RGE1206`), and so would
+any later built-in. So a name is now scoped as in React: a component declared in a file, or imported from another, shadows a
+built-in of that name, and `RGE1206` is only for a file that also imports the built-in (or names a component `Entity` or `Game`,
+whose tags the compiler always reads as the built-ins).
+
 **Inert and modal** (2026-11-12, from PAIN_POINTS.md: "nothing lets a component own or consume the keys"). Input stays polled;
 what changed is who hears it, decided by subtree as in HTML. `inert` and `modal` are accessors on `GameObject` and props of
 `<Entity>`, `<Flex>` and `<Hud>` (`InputScopeProps`), so a component puts them on its root (`<Entity inert={disabled}>`) and they
