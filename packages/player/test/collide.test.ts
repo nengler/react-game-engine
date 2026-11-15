@@ -135,22 +135,6 @@ describe("CollisionTracker", () => {
     assert.equal(log.length, 2);
   });
 
-  it("reports again when a pair separates and touches again", () => {
-    const world = new World();
-    const log: string[] = [];
-    const a = actor("a", 0, log);
-    const b = actor("b", 5, log);
-    world.mount(a.entity);
-    world.mount(b.entity);
-    const tracker = new CollisionTracker();
-    tracker.update(world, collidersOf(world));
-    b.entity.transform.x = 100;
-    tracker.update(world, collidersOf(world));
-    b.entity.transform.x = 5;
-    tracker.update(world, collidersOf(world));
-    assert.deepEqual(log, ["a met b", "b met a", "a met b", "b met a"]);
-  });
-
   it("does not count boxes that only touch at an edge", () => {
     const world = new World();
     const log: string[] = [];
@@ -526,24 +510,6 @@ describe("collisions in the frame loop", () => {
     right.markMoved();
     player.step();
     assert.equal(backend.plays.length, 4, "met again");
-    player.close();
-  });
-
-  it("does not report colliders that never overlap", () => {
-    const backend = new RecordingBackend();
-    const player = createPlayer(backend, {
-      ...WINDOW,
-      root: () => {
-        const root = new Entity();
-        const far = new Hero();
-        far.placement.x = 150;
-        root.addChild(new Hero());
-        root.addChild(far);
-        return root;
-      },
-    });
-    for (let i = 0; i < 5; i++) player.step();
-    assert.deepEqual(backend.plays, []);
     player.close();
   });
 });

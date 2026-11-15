@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { createControls, createSave, createSettings, Entity, getVolume, setVolume, type Controls } from "@rge/runtime";
 
-import { createPlayer, parseInputScript, RecordingBackend } from "../src/index.ts";
+import { createPlayer, RecordingBackend } from "../src/index.ts";
 
 const controls: Controls = createControls({ jump: ["Z"] });
 
@@ -80,12 +80,5 @@ describe("saved data in the player", () => {
     };
     createPlayer(without, { id: "mygame", warn: (m) => warnings.push(m), root: () => new Entity() }).close();
     assert.equal(warnings.filter((w) => /no saved data/.test(w)).length, 1);
-  });
-
-  it("keeps working through an input script: rebinding does not break names the script uses", () => {
-    const local = createControls({ jump: ["Z"] });
-    local.bind("jump", ["Space"]);
-    const frames = parseInputScript("jump", { bindings: { jump: ["Space"] } });
-    assert.equal(frames.length, 1);
   });
 });

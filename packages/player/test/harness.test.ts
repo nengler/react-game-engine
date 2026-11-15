@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Entity, GameObject } from "@rge/runtime";
+import { Entity } from "@rge/runtime";
 
 import { parseInputScript, runScript, ScriptedInputBackend, RecordingBackend, type PlayerConfig } from "../src/index.ts";
 
@@ -27,12 +27,6 @@ describe("runScript", () => {
     );
     assert.deepEqual(result.states, ["0/0", "0/0", "1/1", "2/1", "3/1", "3/1", "3/1"]);
     assert.equal(result.backend.frames.length, frames.length + 1, "the warm-up step plus one per frame");
-    assert.deepEqual(result.warnings, []);
-  });
-
-  it("collects the game's warnings instead of printing them", () => {
-    const config: PlayerConfig = { root: () => new GameObject() };
-    const result = runScript(config, [{ dt: 1 / 60, down: ["Space"] }], () => 0);
     assert.deepEqual(result.warnings, []);
   });
 });

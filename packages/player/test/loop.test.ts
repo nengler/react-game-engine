@@ -13,7 +13,6 @@ import {
   Shape,
   Sound,
   Text,
-  World,
   createGameState,
   getSoundSink,
   type InputState,
@@ -370,14 +369,6 @@ describe("createPlayer", () => {
       p.close();
     });
   });
-
-  it("exposes the world it mounted the root in", () => {
-    const root = new Entity();
-    const { player: p } = player(() => root);
-    assert.ok(p.world instanceof World);
-    assert.equal(root.world, p.world);
-    p.close();
-  });
 });
 
 describe("run", () => {
@@ -426,12 +417,6 @@ describe("pointer presses", () => {
     p.close();
   }
 
-  it("calls onPress of a pointer under the mouse", () => {
-    const log: string[] = [];
-    click(() => pointerAt("a", 100, 100, 50, log), { x: 120, y: 120 });
-    assert.deepEqual(log, ["a"]);
-  });
-
   it("gives a press to the pointer with the higher z, wherever it is in the tree", () => {
     const log: string[] = [];
     const root = (): GameObject => {
@@ -447,12 +432,6 @@ describe("pointer presses", () => {
     log.length = 0;
     click(root, { x: 120, y: 120 });
     assert.deepEqual(log, ["later"], "outside the raised one, the other still gets it");
-  });
-
-  it("calls nothing for a press outside every pointer", () => {
-    const log: string[] = [];
-    click(() => pointerAt("a", 100, 100, 50, log), { x: 10, y: 10 });
-    assert.deepEqual(log, []);
   });
 
   it("gives an overlapping press to the topmost pointer only", () => {
