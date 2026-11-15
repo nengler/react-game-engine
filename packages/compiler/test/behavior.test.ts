@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Compiles components, imports the generated TypeScript, and exercises the
  * resulting classes against the mock runtime.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Collider, Entity, GameObject, Sprite, World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, load, sameOrder, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -126,7 +128,7 @@ describe("writes through a component's view (`player.s.health = 80`, as a test o
   it("mark the object dirty, and the view reads the committed value until the next render", () => {
     const { world, player } = mountPlayer();
     assert.equal(player.isDirty, false);
-    player.s.health = (80);
+    player.s.health = 80;
     assert.equal(player.isDirty, true);
     assert.equal(player.s.health, 100, "reads keep the value from the last render until it re-renders");
     world.flush();
@@ -135,23 +137,23 @@ describe("writes through a component's view (`player.s.health = 80`, as a test o
 
   it("read the committed value, so two writes of `s.health - 10` from outside give 90 (a handler reads its own writes instead)", () => {
     const { world, player } = mountPlayer();
-    player.s.health = (player.s.health - 10);
-    player.s.health = (player.s.health - 10);
+    player.s.health = player.s.health - 10;
+    player.s.health = player.s.health - 10;
     world.flush();
     assert.equal(player.s.health, 90);
   });
 
   it("do not mark the object dirty when the value is unchanged", () => {
     const player = new Player();
-    player.s.health = (100);
+    player.s.health = 100;
     assert.equal(player.isDirty, false);
   });
 
   it("schedule a single render per flush, however many times state changes", () => {
     const { world, player } = mountPlayer();
-    player.s.health = (90);
-    player.s.health = (60);
-    player.s.health = (40);
+    player.s.health = 90;
+    player.s.health = 60;
+    player.s.health = 40;
     assert.equal(world.flush(), 1);
     assert.equal(player.isDirty, false);
     assert.equal(world.flush(), 0);
@@ -159,7 +161,7 @@ describe("writes through a component's view (`player.s.health = 80`, as a test o
 
   it("do not change dependent props until the world renders", () => {
     const { world, player } = mountPlayer();
-    player.s.health = (10);
+    player.s.health = 10;
     assert.equal(player.sprite.image, "normal.png");
     world.flush();
     assert.equal(player.sprite.image, "hurt.png");
@@ -208,12 +210,19 @@ function Idle() {
   before(async () => {
     const compiled = compile(COUNTER);
     code = compiled.code;
-    assert.deepEqual(typeCheck(compiled).map((d) => d.message), [], "the generated code type-checks");
+    assert.deepEqual(
+      typeCheck(compiled).map((d) => d.message),
+      [],
+      "the generated code type-checks"
+    );
     ({ Counter, Idle } = await load<{ Counter: typeof Counter; Idle: typeof Idle }>(compiled));
   });
 
   it("are setter calls of the value worked out from the field as it is now, in a hook and in a callback", () => {
-    assert.match(code, /this\.\$set_st_n\(this\.#\$st_nNext \+ this\.\$live\.step\);\n\s+this\.\$set_st_n\(this\.#\$st_nNext \+ this\.\$live\.step\);/);
+    assert.match(
+      code,
+      /this\.\$set_st_n\(this\.#\$st_nNext \+ this\.\$live\.step\);\n\s+this\.\$set_st_n\(this\.#\$st_nNext \+ this\.\$live\.step\);/
+    );
     assert.match(code, /onPress: \(\) => \{ this\.\$set_st_n\(this\.#\$st_nNext \+ 100\); \}/);
     assert.match(code, /if \(this\.#\$st_bigNext > 2\) \{\n\s+this\.\$set_st_big\(0\);/);
   });
@@ -246,8 +255,22 @@ function Idle() {
     const world = new World();
     const counter = new Counter({ step: 0 });
     world.mount(counter);
-    world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, lastPressed: () => undefined, pointerX: 0, pointerY: 0 });
-    world.tick(0.1, { down: (key: string) => key === "A", pressed: () => false, released: () => false, lastPressed: () => undefined, pointerX: 0, pointerY: 0 });
+    world.tick(0.1, {
+      down: (key: string) => key === "A",
+      pressed: () => false,
+      released: () => false,
+      lastPressed: () => undefined,
+      pointerX: 0,
+      pointerY: 0,
+    });
+    world.tick(0.1, {
+      down: (key: string) => key === "A",
+      pressed: () => false,
+      released: () => false,
+      lastPressed: () => undefined,
+      pointerX: 0,
+      pointerY: 0,
+    });
     assert.deepEqual(counter.st.items, [0, 1]);
   });
 });
@@ -282,7 +305,10 @@ function Drifter({ tint }: DrifterProps) {
 
   before(async () => {
     const compiled = compile(DRIFTER);
-    assert.deepEqual(typeCheck(compiled).map((d) => d.message), []);
+    assert.deepEqual(
+      typeCheck(compiled).map((d) => d.message),
+      []
+    );
     ({ Drifter } = await load<{ Drifter: typeof Drifter }>(compiled));
   });
 
@@ -334,14 +360,24 @@ function Tag() {
   return <Text transform={{ x: s.x, y: s.y }}>{\`n\${s.n}\`}</Text>;
 }
 `);
-    assert.deepEqual(typeCheck(compiled).map((d) => d.message), []);
+    assert.deepEqual(
+      typeCheck(compiled).map((d) => d.message),
+      []
+    );
     const { Tag } = await load<{ Tag: new () => GameObject & { text: string } }>(compiled);
     const world = new World();
     const tag = new Tag();
     world.mount(tag);
     const press = (key: string, serial: number): void => {
       world.serial = serial;
-      world.tick(0.1, { pressed: (k: string) => k === key, down: () => false, released: () => false, lastPressed: () => undefined, pointerX: 0, pointerY: 0 });
+      world.tick(0.1, {
+        pressed: (k: string) => k === key,
+        down: () => false,
+        released: () => false,
+        lastPressed: () => undefined,
+        pointerX: 0,
+        pointerY: 0,
+      });
     };
     press("Y", 1); // only the second of the two transform values changes
     assert.deepEqual([tag.transform.x, tag.transform.y], [0, 5]);
@@ -360,12 +396,12 @@ describe("dynamic props", () => {
     const sprite = player.sprite;
     const collider = player.collider;
 
-    player.s.health = (40);
+    player.s.health = 40;
     world.flush();
     assert.equal(player.sprite, sprite, "Sprite instance must be the same object after a state update");
     assert.equal(sprite.image, "hurt.png");
 
-    player.s.health = (90);
+    player.s.health = 90;
     world.flush();
     assert.equal(player.sprite, sprite);
     assert.equal(sprite.image, "normal.png");
@@ -379,7 +415,7 @@ describe("dynamic props", () => {
 describe("conditional children", () => {
   it("are created when their condition becomes true", () => {
     const { world, player } = mountPlayer();
-    player.s.health = (20);
+    player.s.health = 20;
     world.flush();
 
     const warning = player.warningIcon;
@@ -393,10 +429,10 @@ describe("conditional children", () => {
 
   it("are not recreated while the condition stays true", () => {
     const { world, player } = mountPlayer();
-    player.s.health = (20);
+    player.s.health = 20;
     world.flush();
     const warning = player.warningIcon;
-    player.s.health = (10);
+    player.s.health = 10;
     world.flush();
     assert.equal(player.warningIcon, warning);
     assert.equal(player.children.filter((c) => c instanceof WarningIcon).length, 1);
@@ -404,12 +440,12 @@ describe("conditional children", () => {
 
   it("are removed when their condition becomes false", () => {
     const { world, player } = mountPlayer();
-    player.s.health = (20);
+    player.s.health = 20;
     world.flush();
     const warning = player.warningIcon;
     assert.ok(warning);
 
-    player.s.health = (30);
+    player.s.health = 30;
     world.flush();
     assert.equal(player.warningIcon, null);
     assert.ok(!player.children.includes(warning));
@@ -423,7 +459,7 @@ describe("conditional children", () => {
     const world = new World();
     const player = new Player();
     world.mount(player);
-    player.s.health = (20);
+    player.s.health = 20;
     player.runRender(); // render without committing structure
     assert.ok(player.warningIcon, "instance is created during render");
     assert.ok(!player.children.includes(player.warningIcon), "...but attached only on commit");
@@ -440,7 +476,7 @@ describe("conditional children", () => {
           return <Entity>{s.health < 25 && <WarningIcon />}</Entity>;
         }
         function WarningIcon() { return <Entity />; }
-      `),
+      `)
     );
     const low = new Low();
     assert.ok(low.warningIcon);
@@ -467,12 +503,12 @@ describe("nested components", () => {
     const level = new Level();
     world.mount(level);
 
-    level.s.wave = (3);
+    level.s.wave = 3;
     world.flush();
     assert.ok(level.enemy3 instanceof Enemy);
     sameOrder(level.children, [level.enemy, level.enemy2, level.enemy3]);
 
-    level.s.wave = (2);
+    level.s.wave = 2;
     world.flush();
     assert.equal(level.enemy3, null);
     sameOrder(level.children, [level.enemy, level.enemy2]);
@@ -497,7 +533,7 @@ describe("nested components", () => {
       <Sprite image="g" />
     </Entity>
   );
-}`),
+}`)
     );
     const images = (o: GameObject): string[] => o.children.map((c) => (c instanceof Sprite ? c.image : (c as Entity).name));
     const world = new World();
@@ -505,17 +541,17 @@ describe("nested components", () => {
     world.mount(ordered);
     assert.deepEqual(images(ordered), ["a", "c", "g"]);
 
-    ordered.s.show = (true);
-    ordered.s.inner = (true);
+    ordered.s.show = true;
+    ordered.s.inner = true;
     world.flush();
     assert.deepEqual(images(ordered), ["a", "b", "c", "group", "g"]);
     assert.deepEqual(images(ordered.children[3]!), ["d", "e", "f"]);
 
     // Unmount and remount: the slot is reused, not appended.
-    ordered.s.show = (false);
+    ordered.s.show = false;
     world.flush();
     assert.deepEqual(images(ordered), ["a", "c", "g"]);
-    ordered.s.show = (true);
+    ordered.s.show = true;
     world.flush();
     assert.deepEqual(images(ordered), ["a", "b", "c", "group", "g"]);
   });
@@ -525,7 +561,7 @@ describe("nested components", () => {
     const level = new Level();
     world.mount(level);
 
-    level.s.bossVisible = (true);
+    level.s.bossVisible = true;
     world.flush();
     const boss = level.entity;
     assert.ok(boss && boss.name === "Boss");
@@ -535,13 +571,13 @@ describe("nested components", () => {
     assert.equal(bossSprite?.image, "boss.png");
 
     // A dynamic prop inside the conditional subtree updates in place.
-    level.s.wave = (6);
+    level.s.wave = 6;
     world.flush();
     assert.equal(level.sprite, bossSprite);
     assert.equal(bossSprite?.image, "boss-enraged.png");
 
     // Unmounting removes the subtree and releases every field in it.
-    level.s.bossVisible = (false);
+    level.s.bossVisible = false;
     world.flush();
     assert.equal(level.entity, null);
     assert.equal(level.sprite, null);

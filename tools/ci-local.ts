@@ -74,7 +74,8 @@ export function parseWorkflow(text: string): Workflow {
       const line = lines[i++]!;
       if (skippable(line)) continue;
       const match = KEY.exec(line);
-      if (!match || match[2] !== undefined || match[4] === undefined) throw new Error(`${where}: ci-local cannot read line ${i}: ${line.trim()}`);
+      if (!match || match[2] !== undefined || match[4] === undefined)
+        throw new Error(`${where}: ci-local cannot read line ${i}: ${line.trim()}`);
       map[match[3]!] = scalar(match[4], `${where}, line ${i}`);
     }
     return map;
@@ -121,7 +122,8 @@ export function parseWorkflow(text: string): Workflow {
           if (skippable(keyLine)) continue;
           const keyMatch = KEY.exec(keyLine);
           const jobKey = keyMatch?.[3];
-          if (!keyMatch || jobKey === undefined || !JOB_KEYS.has(jobKey)) throw new Error(`job ${job.name}: ci-local does not know '${keyLine.trim()}'`);
+          if (!keyMatch || jobKey === undefined || !JOB_KEYS.has(jobKey))
+            throw new Error(`job ${job.name}: ci-local does not know '${keyLine.trim()}'`);
           if (jobKey === "timeout-minutes") job.timeoutMinutes = Number(keyMatch[4]);
           if (jobKey !== "steps") continue;
           const keyIndent = keyMatch[1]!.length;
@@ -132,7 +134,8 @@ export function parseWorkflow(text: string): Workflow {
               continue;
             }
             const first = KEY.exec(stepLine);
-            if (!first || first[2] === undefined) throw new Error(`job ${job.name}: ci-local cannot read line ${i + 1}: ${stepLine.trim()}`);
+            if (!first || first[2] === undefined)
+              throw new Error(`job ${job.name}: ci-local cannot read line ${i + 1}: ${stepLine.trim()}`);
             const fieldIndent = first[1]!.length + 2;
             const step = { name: "", run: null as string | null, uses: null as string | null, env: {} as Record<string, string>, id: "" };
             let firstField = true;
@@ -143,16 +146,19 @@ export function parseWorkflow(text: string): Workflow {
                 continue;
               }
               const field = KEY.exec(fieldLine);
-              const atField = field !== null && (firstField ? field[2] !== undefined : field[2] === undefined && field[1]!.length === fieldIndent);
+              const atField =
+                field !== null && (firstField ? field[2] !== undefined : field[2] === undefined && field[1]!.length === fieldIndent);
               if (!atField) {
-                if (indentOf(fieldLine) >= fieldIndent || field === null) throw new Error(`job ${job.name}: ci-local cannot read line ${i + 1}: ${fieldLine.trim()}`);
+                if (indentOf(fieldLine) >= fieldIndent || field === null)
+                  throw new Error(`job ${job.name}: ci-local cannot read line ${i + 1}: ${fieldLine.trim()}`);
                 break;
               }
               i++;
               firstField = false;
               const name = field[3]!;
               const where = `job ${job.name}, line ${i}`;
-              if (!STEP_KEYS.has(name)) throw new Error(`${where}: ci-local does not know the step key '${name}'; teach tools/ci-local.ts what CI does with it`);
+              if (!STEP_KEYS.has(name))
+                throw new Error(`${where}: ci-local does not know the step key '${name}'; teach tools/ci-local.ts what CI does with it`);
               const value = field[4];
               if (name === "with") skipBlock(fieldIndent);
               else if (name === "env") step.env = readMap(fieldIndent, where);
@@ -162,7 +168,12 @@ export function parseWorkflow(text: string): Workflow {
               else if (name === "name") step.name = scalar(value, where);
             }
             if ((step.run === null) === (step.uses === null)) throw new Error(`job ${job.name}: a step needs exactly one of run and uses`);
-            job.steps.push({ name: step.name || (step.run ?? `uses ${step.uses}`).split("\n")[0]!, run: step.run, uses: step.uses, env: step.env });
+            job.steps.push({
+              name: step.name || (step.run ?? `uses ${step.uses}`).split("\n")[0]!,
+              run: step.run,
+              uses: step.uses,
+              env: step.env,
+            });
           }
         }
         jobs.push(job);
@@ -195,7 +206,8 @@ function main(argv: string[]): number {
   const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const refAt = argv.indexOf("--ref");
   const ref = refAt >= 0 ? argv[refAt + 1] : undefined;
-  if (refAt >= 0 && (ref === undefined || ref.startsWith("--"))) throw new Error("--ref needs a git ref, such as origin/main or a PR branch");
+  if (refAt >= 0 && (ref === undefined || ref.startsWith("--")))
+    throw new Error("--ref needs a git ref, such as origin/main or a PR branch");
   const list = argv.includes("--list");
   const keep = argv.includes("--keep");
   const wanted = argv.filter((arg, at) => !arg.startsWith("--") && !(refAt >= 0 && at === refAt + 1));
@@ -210,20 +222,24 @@ function main(argv: string[]): number {
   try {
     const workflow = parseWorkflow(readFileSync(join(root, ".github/workflows/ci.yml"), "utf8"));
     const unknown = wanted.filter((name) => !workflow.jobs.some((job) => job.name === name));
-    if (unknown.length > 0) throw new Error(`No job named ${unknown.join(", ")} (jobs: ${workflow.jobs.map((job) => job.name).join(", ")})`);
+    if (unknown.length > 0)
+      throw new Error(`No job named ${unknown.join(", ")} (jobs: ${workflow.jobs.map((job) => job.name).join(", ")})`);
     const jobs = wanted.length === 0 ? workflow.jobs : workflow.jobs.filter((job) => wanted.includes(job.name));
 
     if (list) {
       for (const job of jobs) {
         console.log(`${job.name}${job.timeoutMinutes === null ? "" : ` (${job.timeoutMinutes} min)`}`);
-        for (const step of job.steps) console.log(`  ${step.run === null ? "skip" : installsSystemPackages(step.run) ? "skip" : "run "}  ${step.name}`);
+        for (const step of job.steps)
+          console.log(`  ${step.run === null ? "skip" : installsSystemPackages(step.run) ? "skip" : "run "}  ${step.name}`);
       }
       return 0;
     }
 
     const commit = git(["log", "-1", "--format=%h %s"], root);
     const dirty = worktree === null && git(["status", "--porcelain"], root) !== "";
-    console.log(`ci-local: ${jobs.map((job) => job.name).join(", ")} at ${commit}${dirty ? " (with uncommitted changes)" : ""}, Node ${process.version}`);
+    console.log(
+      `ci-local: ${jobs.map((job) => job.name).join(", ")} at ${commit}${dirty ? " (with uncommitted changes)" : ""}, Node ${process.version}`
+    );
 
     const outputs = mkdtempSync(join(tmpdir(), "rge-ci-output-"));
     const done = new Set<string>();
@@ -254,10 +270,19 @@ function main(argv: string[]): number {
           cwd: root,
           stdio: "inherit",
           timeout: deadline === Infinity ? undefined : Math.max(1, deadline - Date.now()),
-          env: { ...process.env, CI: "true", GITHUB_WORKSPACE: root, GITHUB_OUTPUT: output, ...Object.fromEntries(Object.entries(env).map(([name, value]) => [name, value.replaceAll("${GITHUB_WORKSPACE}", root)])) },
+          env: {
+            ...process.env,
+            CI: "true",
+            GITHUB_WORKSPACE: root,
+            GITHUB_OUTPUT: output,
+            ...Object.fromEntries(Object.entries(env).map(([name, value]) => [name, value.replaceAll("${GITHUB_WORKSPACE}", root)])),
+          },
         });
         if (result.status !== 0) {
-          failedStep = result.error !== undefined && Date.now() >= deadline ? `${step.name} (the job's ${job.timeoutMinutes} minutes ran out)` : step.name;
+          failedStep =
+            result.error !== undefined && Date.now() >= deadline
+              ? `${step.name} (the job's ${job.timeoutMinutes} minutes ran out)`
+              : step.name;
           break;
         }
         done.add(key);
@@ -268,7 +293,11 @@ function main(argv: string[]): number {
 
     console.log(`\nci-local at ${commit}${dirty ? " (with uncommitted changes)" : ""}:`);
     for (const outcome of outcomes) {
-      const note = outcome.ok ? (outcome.skipped.length > 0 ? `  (skipped: ${outcome.skipped.join("; ")})` : "") : `  failed at: ${outcome.failedStep}`;
+      const note = outcome.ok
+        ? outcome.skipped.length > 0
+          ? `  (skipped: ${outcome.skipped.join("; ")})`
+          : ""
+        : `  failed at: ${outcome.failedStep}`;
       console.log(`  ${outcome.ok ? "pass" : "FAIL"}  ${outcome.job.padEnd(16)} ${outcome.seconds.toFixed(0).padStart(5)}s${note}`);
     }
     return outcomes.every((outcome) => outcome.ok) ? 0 : 1;
@@ -280,4 +309,5 @@ function main(argv: string[]): number {
   }
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  process.exitCode = main(process.argv.slice(2));

@@ -1,6 +1,7 @@
+import assert from "node:assert/strict";
 /** `useRef` to `useMutable` (the codemod and the editor's quick fix share it): what it writes, and where it stops. */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { cleanOutput, closeCompiler, getCompiler } from "./helpers.ts";
 
 after(() => {
@@ -12,7 +13,12 @@ const IMPORT = (names: string) => `import { ${names} } from "@rge/runtime/jsx";\
 
 function convert(body: string, names = "Entity, useRef, useMutable, useUpdate") {
   const result = getCompiler().convertToMutable("C.tsx", IMPORT(names) + body);
-  return { ...result, errors: getCompiler().compile("C.tsx", result.text).diagnostics.filter((d) => d.severity === "error") };
+  return {
+    ...result,
+    errors: getCompiler()
+      .compile("C.tsx", result.text)
+      .diagnostics.filter((d) => d.severity === "error"),
+  };
 }
 
 describe("useRef to useMutable", () => {
@@ -54,7 +60,7 @@ describe("useRef to useMutable", () => {
   useUpdate(() => { seen.current = [...seen.current, "x"]; last.current = seen.current.length; });
   return <Entity name="C" />;
 }`,
-      "Entity, useRef, useUpdate",
+      "Entity, useRef, useUpdate"
     );
     assert.match(r.text, /const s = useMutable\(\{ seen: \[\] as string\[\], last: null as number \| null \}\);/);
     assert.match(r.text, /import \{ Entity, useMutable, useUpdate \}/);

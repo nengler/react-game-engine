@@ -2,9 +2,19 @@ import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
 import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
+
 import { LIBRARY_HOOKS } from "../src/hooks/library.ts";
-import { AUTHORING_HOOKS, Compiler, formatDiagnostic, type ChildIR, type CompilerDiagnostic, type ElementIR, type IRModule } from "../src/index.ts";
+import {
+  AUTHORING_HOOKS,
+  Compiler,
+  formatDiagnostic,
+  type ChildIR,
+  type CompilerDiagnostic,
+  type ElementIR,
+  type IRModule,
+} from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** Inside the repo so generated code resolves `@rge/runtime` through the workspace. */
@@ -45,7 +55,8 @@ export function withAuthoringImports(source: string, manifest: RuntimeManifest =
   if (source.includes(`from "${manifest.authoringModule}"`)) return source;
   const exported = [...manifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(manifest.functions), ...LIBRARY_HOOKS];
   // A name the source declares or imports itself is its own component, which shadows a built-in of that name.
-  const own = (name: string): boolean => new RegExp(`(function|const|class)\\s+${name}\\b|import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"\\.`).test(source);
+  const own = (name: string): boolean =>
+    new RegExp(`(function|const|class)\\s+${name}\\b|import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from\\s*"\\.`).test(source);
   const used = exported.filter((name) => new RegExp(`\\b${name}\\b`).test(source) && !own(name));
   if (used.length === 0) return source;
   return `import { ${used.join(", ")} } from "${manifest.authoringModule}"; ${source}`;

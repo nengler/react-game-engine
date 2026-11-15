@@ -45,7 +45,10 @@ interface TiledLayer {
 
 /** Whether a layer is marked as data for the rules (the bool property `data`), not prefabs. */
 export function isDataLayer(layer: { readonly properties?: unknown }): boolean {
-  return Array.isArray(layer.properties) && (layer.properties as TiledProperty[]).some((p) => p.name === "data" && (p as { value?: unknown }).value === true);
+  return (
+    Array.isArray(layer.properties) &&
+    (layer.properties as TiledProperty[]).some((p) => p.name === "data" && (p as { value?: unknown }).value === true)
+  );
 }
 
 interface SceneEntityData {
@@ -98,7 +101,8 @@ export function importTiled(fileName: string, text: string): TiledImport {
     if (object.visible === false) return; // hidden in Tiled: not placed
     const label = `layer '${layerName}', object ${String(object.id)}${typeof object.name === "string" && object.name ? ` ('${object.name}')` : ""}`;
     // `class` is where Tiled 1.9 and later keep what older versions called `type`.
-    const prefab = typeof object.class === "string" && object.class !== "" ? object.class : typeof object.type === "string" ? object.type : "";
+    const prefab =
+      typeof object.class === "string" && object.class !== "" ? object.class : typeof object.type === "string" ? object.type : "";
     if (prefab === "") {
       skip(`${label} has no type, so it is not a prefab and was skipped. Set its Class in Tiled to place a component.`);
       return;
@@ -122,13 +126,25 @@ export function importTiled(fileName: string, text: string): TiledImport {
         if (typeof property.name !== "string") continue;
         const value = property.value;
         switch (property.type ?? "string") {
-          case "bool": if (typeof value === "boolean") props[property.name] = value; else fail(`${label}: property '${property.name}' is not a boolean.`); break;
+          case "bool":
+            if (typeof value === "boolean") props[property.name] = value;
+            else fail(`${label}: property '${property.name}' is not a boolean.`);
+            break;
           case "int":
-          case "float": if (typeof value === "number") props[property.name] = value; else fail(`${label}: property '${property.name}' is not a number.`); break;
+          case "float":
+            if (typeof value === "number") props[property.name] = value;
+            else fail(`${label}: property '${property.name}' is not a number.`);
+            break;
           case "string":
           case "file":
-          case "color": if (typeof value === "string") props[property.name] = value; else fail(`${label}: property '${property.name}' is not a string.`); break;
-          default: fail(`${label}: property '${property.name}' has the type '${String(property.type)}', which a scene cannot hold (use bool, int, float, string, file or color).`);
+          case "color":
+            if (typeof value === "string") props[property.name] = value;
+            else fail(`${label}: property '${property.name}' is not a string.`);
+            break;
+          default:
+            fail(
+              `${label}: property '${property.name}' has the type '${String(property.type)}', which a scene cannot hold (use bool, int, float, string, file or color).`
+            );
         }
       }
     }

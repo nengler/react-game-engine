@@ -1,4 +1,5 @@
 import { AnimatedSprite, Collider, Entity, Particles, useSquash, useMutable, useUpdate } from "@rge/runtime/jsx";
+
 import { DashTrail } from "./DashTrail.tsx";
 import { playEvents, squashFor } from "./effects.ts";
 import { useGame } from "./GameState.ts";
@@ -79,11 +80,28 @@ export function Player({ onDie }: PlayerProps) {
         originX={6}
         originY={12}
         tint={body.dashes > 0 || dead ? "#ffffff" : "#9db4ff"}
-        x={4} y={height} scaleX={squash.x} scaleY={squash.y}
+        x={4}
+        y={height}
+        scaleX={squash.x}
+        scaleY={squash.y}
       />
       <Collider width={8} height={height} tag="player" layer="player" />
       {/* Sparks while dashing: state, not a moment, so it is an emitter that is on while the body dashes. */}
-      <Particles rate={120} lifetime={0.25} speed={6} spread={180} size={3} shrink fade color="#ff9a7a" space="world" emitting={body.state === "dash"} x={4} y={6} max={24} />
+      <Particles
+        rate={120}
+        lifetime={0.25}
+        speed={6}
+        spread={180}
+        size={3}
+        shrink
+        fade
+        color="#ff9a7a"
+        space="world"
+        emitting={body.state === "dash"}
+        x={4}
+        y={6}
+        max={24}
+      />
     </Entity>
   );
 }

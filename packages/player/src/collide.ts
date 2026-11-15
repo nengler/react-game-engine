@@ -1,4 +1,5 @@
 import type { Collider, GameObject, World, WorldTransform } from "@rge/runtime";
+
 import type { ColliderEntry } from "./draw.ts";
 
 /** An axis-aligned box in world space. */
@@ -840,7 +841,11 @@ export class CollisionTracker {
       for (let s = firstReaching(minX); s < count; s++) {
         const q = order[s] as number;
         if ((bounds[q * 4] as number) >= maxX) break;
-        if (q === m || !((bounds[q * 4 + 2] as number) > minX && minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
+        if (
+          q === m ||
+          !((bounds[q * 4 + 2] as number) > minX && minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))
+        )
+          continue;
         const idQ = ids[q] as number;
         if (touching.has(idM < idQ ? pairKey(idM, idQ) : pairKey(idQ, idM))) oldFlat.push(q);
       }
@@ -880,7 +885,8 @@ export class CollisionTracker {
         const q = order[s] as number;
         if ((bounds[q * 4] as number) >= maxX) break;
         if (q === m || (isMoved[q] === 1 && q < m)) continue;
-        if (!((bounds[q * 4 + 2] as number) > minX && minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number))) continue;
+        if (!((bounds[q * 4 + 2] as number) > minX && minY < (bounds[q * 4 + 3] as number) && maxY > (bounds[q * 4 + 1] as number)))
+          continue;
         if (parent === (boxColliders[q] as Collider).parent) continue;
         const hitsQ = hitsOf[q];
         if ((hitsM !== undefined && !hitsM.includes(layers[q] as string)) || (hitsQ !== undefined && !hitsQ.includes(layerM))) continue;

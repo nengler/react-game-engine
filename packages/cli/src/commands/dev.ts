@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { loadGame, UsageError } from "../config.ts";
 
 /** `rge dev [folder] [--no-watch]`: compile, open the window and hot reload. */
@@ -14,6 +15,10 @@ export function devCommand(args: readonly string[]): number {
   if (play === undefined) throw new Error("@rge/player-node has no play script");
   // The window's image and sound paths are relative to the game's folder.
   // With source maps an error in the window names the component's own line (`src/Play.tsx:20:3`), not the generated file's.
-  const result = spawnSync(process.execPath, ["--enable-source-maps", play, game.entry, ...(args.includes("--no-watch") ? ["--no-watch"] : [])], { cwd: game.dir, stdio: "inherit" });
+  const result = spawnSync(
+    process.execPath,
+    ["--enable-source-maps", play, game.entry, ...(args.includes("--no-watch") ? ["--no-watch"] : [])],
+    { cwd: game.dir, stdio: "inherit" }
+  );
   return result.status ?? 1;
 }

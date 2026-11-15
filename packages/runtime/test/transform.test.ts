@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Camera, Entity, GameObject, Screen, Shape, Sprite, Text, World } from "../src/index.ts";
 
 function close(actual: number, expected: number): void {

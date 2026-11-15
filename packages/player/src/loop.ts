@@ -1,15 +1,52 @@
-import { activeProfiler, Flex, Game, WIDGET_NONE, World, captureHotState, objectAt, pathIn, setTextDefaults, getSoundSink, getStorage, setStorage, restoreHotState, setSoundSink, resetGameState, setGameTree, type Controls, type GameObject, type HotState, type Pressable, type SoundSink, type StorageSink, type ViewTransform } from "@rge/runtime";
+import {
+  activeProfiler,
+  Flex,
+  Game,
+  WIDGET_NONE,
+  World,
+  captureHotState,
+  objectAt,
+  pathIn,
+  setTextDefaults,
+  getSoundSink,
+  getStorage,
+  setStorage,
+  restoreHotState,
+  setSoundSink,
+  resetGameState,
+  setGameTree,
+  type Controls,
+  type GameObject,
+  type HotState,
+  type Pressable,
+  type SoundSink,
+  type StorageSink,
+  type ViewTransform,
+} from "@rge/runtime";
+
 import type { Backend, WindowConfig } from "./backend.ts";
-import { MAGENTA, parseColor } from "./color.ts";
 import { CollisionTracker } from "./collide.ts";
+import { MAGENTA, parseColor } from "./color.ts";
 import { DrawList, estimateTextWidth, FrameBuilder, rootScreen, type BuiltFrame } from "./draw.ts";
 import { FixedDriver, MAX_STEPS_PER_FRAME } from "./fixed.ts";
-import { drawOverlay } from "./overlay.ts";
 import { HOST_RUN_KEY } from "./host.ts";
 import { PlayerInput } from "./input.ts";
 import { borderRoom } from "./layout.ts";
+import { drawOverlay } from "./overlay.ts";
+import {
+  KEYS,
+  RGE_IN_DT,
+  RGE_IN_HEIGHT,
+  RGE_IN_MOUSE_X,
+  RGE_IN_MOUSE_Y,
+  RGE_IN_QUIT,
+  RGE_IN_WHEEL,
+  RGE_IN_WIDTH,
+  RGE_KEY_DOWN,
+  RGE_KEY_PRESSED,
+  KEY_INDEX,
+} from "./protocol.ts";
 import { onScreen, type ScreenPlacement } from "./screen.ts";
-import { KEYS, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_MOUSE_X, RGE_IN_MOUSE_Y, RGE_IN_QUIT, RGE_IN_WHEEL, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, KEY_INDEX } from "./protocol.ts";
 import { Warner } from "./warn.ts";
 
 /** The window a game gets when neither its `<Game>` root nor the player's config say otherwise. */
@@ -144,7 +181,11 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   // values, whatever an earlier player in this process left behind.
   const preload: string[] = [];
   const preloadMusic: string[] = [];
-  const collector: SoundSink = { load: (name) => void preload.push(name), play: () => {}, loadMusic: (name) => void preloadMusic.push(name) };
+  const collector: SoundSink = {
+    load: (name) => void preload.push(name),
+    play: () => {},
+    loadMusic: (name) => void preloadMusic.push(name),
+  };
   setSoundSink(collector);
   resetGameState();
   const showErrors = config.showErrors ?? false;
@@ -165,7 +206,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   // Each setting: the `<Game>` prop where it is written, else the player's config, else the default.
   // With nothing set, a game with a `<Screen>` opens at 3 × its resolution, so each game pixel is 3 × 3 window pixels.
   const screen0 = root === null ? null : rootScreen(root);
-  const fromScreen = screen0 !== null && screen0.width > 0 && screen0.height > 0 && Number.isFinite(screen0.width) && Number.isFinite(screen0.height);
+  const fromScreen =
+    screen0 !== null && screen0.width > 0 && screen0.height > 0 && Number.isFinite(screen0.width) && Number.isFinite(screen0.height);
   const width = game?.width ?? config.width ?? (fromScreen ? Math.round(screen0.width * DEFAULT_SCREEN_SCALE) : DEFAULT_WINDOW.width);
   const height = game?.height ?? config.height ?? (fromScreen ? Math.round(screen0.height * DEFAULT_SCREEN_SCALE) : DEFAULT_WINDOW.height);
   const assets = game?.assets ?? config.assets ?? "assets";
@@ -200,8 +242,13 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
           return fullscreen === on;
         },
       };
-    } else warner.once("storage", `Saved data is not available: the folder for the game id '${gameId}' could not be opened (the id is 1 to 64 letters, digits, _ and -).`);
-  } else if (gameId !== undefined) warner.once("storage", "This host has no saved data (its backend has no storage): nothing will be kept between runs.");
+    } else
+      warner.once(
+        "storage",
+        `Saved data is not available: the folder for the game id '${gameId}' could not be opened (the id is 1 to 64 letters, digits, _ and -).`
+      );
+  } else if (gameId !== undefined)
+    warner.once("storage", "This host has no saved data (its backend has no storage): nothing will be kept between runs.");
   const deadzone = game?.gamepadDeadzone ?? config.gamepadDeadzone;
   if (deadzone !== undefined) backend.setGamepadDeadzone?.(deadzone);
   const stepHz = game?.fixedStep ?? config.fixedStep;
@@ -224,7 +271,12 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const sink = createSoundSink(backend, assets, warner);
   const world = new World();
   // The host's broad phase when it has one; the tracker sweeps in script otherwise.
-  let collisions = new CollisionTracker(undefined, true, true, backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined);
+  let collisions = new CollisionTracker(
+    undefined,
+    true,
+    true,
+    backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined
+  );
   /** The last step's walk, kept to be drawn when nothing has changed since; `stale` once a collision callback ran after it. */
   let lastBuilt: BuiltFrame | null = null;
   let stale = false;
@@ -266,7 +318,10 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   const fullscreenSetting = game?.fullscreenKey ?? config.fullscreenKey ?? "F11";
   const fullscreenKey = fullscreenSetting === false ? undefined : KEY_INDEX.get(fullscreenSetting);
   if (typeof fullscreenSetting === "string" && fullscreenKey === undefined) {
-    warner.once(`fullscreenKey:${fullscreenSetting}`, `Unknown fullscreenKey '${fullscreenSetting}': only Alt + Enter toggles full screen.`);
+    warner.once(
+      `fullscreenKey:${fullscreenSetting}`,
+      `Unknown fullscreenKey '${fullscreenSetting}': only Alt + Enter toggles full screen.`
+    );
   }
 
   /** The full-screen key (or Alt + Enter) was pressed last frame: switch, and keep the switch only if the window did. */
@@ -323,15 +378,18 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
   // The error screen: the error's lines, wrapped to the window, drawn in window pixels over a dark red background.
   const errorList = new DrawList();
   let errorLayout: { readonly key: string; readonly lines: readonly ErrorLine[] } | null = null;
-  const measure = (text: string, size: number): number => (backend.measureText ? backend.measureText(text, size).width : estimateTextWidth(text, size));
+  const measure = (text: string, size: number): number =>
+    backend.measureText ? backend.measureText(text, size).width : estimateTextWidth(text, size);
   const drawError = (shown: { error: unknown; note: string }): void => {
     const width = input.width;
     const height = input.height;
     const key = `${width}x${height}`;
-    if (errorLayout === null || errorLayout.key !== key) errorLayout = { key, lines: layoutError(shown.error, shown.note, width, height, measure) };
+    if (errorLayout === null || errorLayout.key !== key)
+      errorLayout = { key, lines: layoutError(shown.error, shown.note, width, height, measure) };
     errorList.reset();
     errorList.view({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
-    for (const line of errorLayout.lines) errorList.text({ x: line.x, y: line.y, rotation: 0, scaleX: 1, scaleY: 1 }, line.text, line.size, line.color);
+    for (const line of errorLayout.lines)
+      errorList.text({ x: line.x, y: line.y, rotation: 0, scaleX: 1, scaleY: 1 }, line.text, line.size, line.color);
     backend.frame(ERROR_BACKGROUND, errorList.records, errorList.length, errorList.texts, input.values, input.keys);
   };
   const fail = (error: unknown, note: string = defaultNote): { error: unknown; note: string } => {
@@ -381,7 +439,7 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     const hudAt = input.pointThrough(hudView, input.screenX, input.screenY);
     for (let i = scrollers.length - 1; i >= 0; i--) {
       const box = scrollers[i] as Flex;
-      if (box.world !== world || (world.isInert(box))) continue;
+      if (box.world !== world || world.isInert(box)) continue;
       const point = i >= hudScrollersFrom ? hudAt : at;
       if (!box.contains(point.x, point.y) || clippedOff(box, point.x, point.y)) continue;
       const max = box.box.scrollMax;
@@ -406,7 +464,8 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     if (((input.keys[LEFT_BUTTON] as number) & RGE_KEY_DOWN) === 0) return;
     const index = pointers.indexOf(held);
     if (index < 0) return;
-    const point = index >= hudPointersFrom ? input.pointThrough(hudView, input.screenX, input.screenY) : input.worldPoint(input.screenX, input.screenY);
+    const point =
+      index >= hudPointersFrom ? input.pointThrough(hudView, input.screenX, input.screenY) : input.worldPoint(input.screenX, input.screenY);
     held.onDrag(point.x, point.y);
   };
 
@@ -419,7 +478,12 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       for (let i = pointers.length - 1; i >= 0 && hovered === null; i--) {
         const pointer = pointers[i] as Pressable;
         const point = i >= hudPointersFrom ? hudAt : at;
-        if (pointer.world === world && pointer.contains(point.x, point.y) && !clippedOff(pointer as unknown as GameObject, point.x, point.y)) hovered = pointer;
+        if (
+          pointer.world === world &&
+          pointer.contains(point.x, point.y) &&
+          !clippedOff(pointer as unknown as GameObject, point.x, point.y)
+        )
+          hovered = pointer;
       }
     }
     world.reportHover(hovered);
@@ -435,7 +499,14 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     },
     snapshotClock(): PlayerClock {
       const hovered = world.hovered as unknown as GameObject | null;
-      return { driver: driver?.clone() ?? null, animationTime, frozen: world.frozenSteps, values: input.values.slice(), keys: input.keys.slice(), hovered: hovered !== null && current !== null ? pathIn(current, hovered) : null };
+      return {
+        driver: driver?.clone() ?? null,
+        animationTime,
+        frozen: world.frozenSteps,
+        values: input.values.slice(),
+        keys: input.keys.slice(),
+        hovered: hovered !== null && current !== null ? pathIn(current, hovered) : null,
+      };
     },
     restoreTo(next: PlayerConfig, hot: HotState, clock: PlayerClock): boolean {
       if (closed) throw new Error("The player is closed.");
@@ -461,7 +532,12 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
       input.values.set(clock.values);
       input.keys.set(clock.keys);
       // What touches now was touching when the snapshot was taken: a tracker that starts from it reports no enter for it.
-      collisions = new CollisionTracker(undefined, true, true, backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined);
+      collisions = new CollisionTracker(
+        undefined,
+        true,
+        true,
+        backend.overlaps ? (boxes, count, order, pairs) => backend.overlaps!(boxes, count, order, pairs) : undefined
+      );
       const settled = builder.build(world.root, input.width, input.height, animationTime);
       collisions.update({ reportCollision() {}, reportCollisionExit() {} } as unknown as World, settled.colliders);
       // The pointer the mouse was over when the snapshot was taken is the hovered one again, and nobody hears it enter.
@@ -496,7 +572,10 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
           const old = current;
           // A timer's callback closes over the instance that set it, which the reload replaces: pending timers do not carry over.
           const timers = countTimers(old);
-          if (timers > 0) config.warn?.(`Hot reload dropped ${timers} pending timer${timers === 1 ? "" : "s"} (after, every): a timer calls code of the components it replaced. State is kept; set the timer again if it is still wanted.`);
+          if (timers > 0)
+            config.warn?.(
+              `Hot reload dropped ${timers} pending timer${timers === 1 ? "" : "s"} (after, every): a timer calls code of the components it replaced. State is kept; set the timer again if it is still wanted.`
+            );
           current = null;
           world.root.removeChild(old);
         }
@@ -588,13 +667,26 @@ export function createPlayer(backend: Backend, config: PlayerConfig): Player {
     hudView = built.hudView;
     screen = built.screen;
     input.view = built.view;
-    if (overlay) drawOverlay(built.list, built, builder.inspected, input.values[RGE_IN_MOUSE_X] as number, input.values[RGE_IN_MOUSE_Y] as number, input.width);
+    if (overlay)
+      drawOverlay(
+        built.list,
+        built,
+        builder.inspected,
+        input.values[RGE_IN_MOUSE_X] as number,
+        input.values[RGE_IN_MOUSE_Y] as number,
+        input.width
+      );
     if (showFps) {
       const ms = clock() - started;
       smoothMs = smoothMs === 0 ? ms : smoothMs * 0.9 + ms * 0.1;
       const shown = built.list;
       shown.view({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
-      shown.text({ x: 3, y: 3, rotation: 0, scaleX: 1, scaleY: 1 }, `${smoothDt > 0 ? Math.round(1 / smoothDt) : 0} fps  ${smoothMs.toFixed(1)} ms`, 8, 0xffe14dff);
+      shown.text(
+        { x: 3, y: 3, rotation: 0, scaleX: 1, scaleY: 1 },
+        `${smoothDt > 0 ? Math.round(1 / smoothDt) : 0} fps  ${smoothMs.toFixed(1)} ms`,
+        8,
+        0xffe14dff
+      );
     }
     const drawStarted = profiler?.now() ?? 0;
     backend.frame(background, built.list.records, built.list.length, built.list.texts, input.values, input.keys);
@@ -668,7 +760,13 @@ export function describeError(error: unknown): { readonly title: string; readonl
  * Where each line of the error screen goes: a heading, the error's title, its stack (dimmer), and `note` at the bottom. Text
  * is sized to the window and long lines are wrapped; what does not fit is cut, with a line that says so.
  */
-export function layoutError(error: unknown, note: string, width: number, height: number, measure: (text: string, size: number) => number): ErrorLine[] {
+export function layoutError(
+  error: unknown,
+  note: string,
+  width: number,
+  height: number,
+  measure: (text: string, size: number) => number
+): ErrorLine[] {
   // Whole multiples of 10: the hosts draw text with raylib's built-in 10-pixel font, scaled without smoothing, and at other
   // sizes its one-pixel strokes (an "i", a ".") can vanish.
   const size = height >= 360 && width >= 480 ? 20 : 10;

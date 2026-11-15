@@ -1,8 +1,9 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+
 import { KEYS, PROTOCOL } from "../src/protocol.ts";
 
 const header = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../native/include/rge.h"), "utf8");
@@ -20,7 +21,11 @@ function headerKeys(): { kind: string; code: string; name: string }[] {
   assert.ok(start >= 0, "RGE_KEYS is missing from rge.h");
   const end = header.indexOf("\n\n", start);
   const block = header.slice(start, end);
-  return [...block.matchAll(/X\((K|M|G|S),\s*(\w+),\s*"([^"]+)"\)/g)].map((m) => ({ kind: m[1] as string, code: m[2] as string, name: m[3] as string }));
+  return [...block.matchAll(/X\((K|M|G|S),\s*(\w+),\s*"([^"]+)"\)/g)].map((m) => ({
+    kind: m[1] as string,
+    code: m[2] as string,
+    name: m[3] as string,
+  }));
 }
 
 describe("protocol.ts mirrors native/include/rge.h", () => {
@@ -40,12 +45,17 @@ describe("protocol.ts mirrors native/include/rge.h", () => {
 
   it("lists the same keys in the same order", () => {
     const keys = headerKeys();
-    assert.deepEqual(KEYS, keys.map((key) => key.name));
+    assert.deepEqual(
+      KEYS,
+      keys.map((key) => key.name)
+    );
     assert.equal(new Set(KEYS).size, KEYS.length, "key names are unique");
   });
 
   it("puts only the three mouse buttons in the mouse kind", () => {
-    const mouse = headerKeys().filter((key) => key.kind === "M").map((key) => key.name);
+    const mouse = headerKeys()
+      .filter((key) => key.kind === "M")
+      .map((key) => key.name);
     assert.deepEqual(mouse, ["MouseLeft", "MouseRight", "MouseMiddle"]);
   });
 

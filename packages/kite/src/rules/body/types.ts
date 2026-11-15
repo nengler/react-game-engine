@@ -100,7 +100,16 @@ export interface Controls {
   grab: boolean;
 }
 
-export const NO_CONTROLS: Controls = { left: false, right: false, up: false, down: false, jumpHeld: false, jumpPressed: false, dashPressed: false, grab: false };
+export const NO_CONTROLS: Controls = {
+  left: false,
+  right: false,
+  up: false,
+  down: false,
+  jumpHeld: false,
+  jumpPressed: false,
+  dashPressed: false,
+  grab: false,
+};
 
 /** Whether the pixel at (x, y), in the room, is solid. */
 export type SolidAt = (x: number, y: number) => boolean;
@@ -108,11 +117,45 @@ export type SolidAt = (x: number, y: number) => boolean;
 /** A body standing still at (x, y) (the standing hitbox's top left) with a dash ready. */
 export function newBody(x: number, y: number): Body {
   return {
-    x, y, rx: 0, ry: 0, vx: 0, vy: 0, facing: 1, state: "normal", onGround: false, ducking: false, sliding: false,
-    dashes: K.DASH_COUNT, dashStarting: false, dashX: 0, dashY: 0, beforeDashX: 0, dashStartedOnGround: false, autoJump: false,
-    maxFall: K.MAX_FALL, varJumpSpeed: 0, forceMoveX: 0, wallSpeedRetained: 0,
-    stamina: K.CLIMB_MAX_STAMINA, wallBoostDir: 0, hopWaitX: 0, hopWaitXSpeed: 0, lastClimbMove: 0,
-    coyote: 0, buffer: 0, dashBuffer: 0, varJump: 0, dashTime: 0, dashCooldown: 0, dashRefillCooldown: 0, dashAttack: 0, forceMoveTime: 0,
-    wallSlideTimer: K.WALL_SLIDE_TIME, wallSpeedTimer: 0, wallBoostTimer: 0, climbNoMove: 0,
+    x,
+    y,
+    rx: 0,
+    ry: 0,
+    vx: 0,
+    vy: 0,
+    facing: 1,
+    state: "normal",
+    onGround: false,
+    ducking: false,
+    sliding: false,
+    dashes: K.DASH_COUNT,
+    dashStarting: false,
+    dashX: 0,
+    dashY: 0,
+    beforeDashX: 0,
+    dashStartedOnGround: false,
+    autoJump: false,
+    maxFall: K.MAX_FALL,
+    varJumpSpeed: 0,
+    forceMoveX: 0,
+    wallSpeedRetained: 0,
+    stamina: K.CLIMB_MAX_STAMINA,
+    wallBoostDir: 0,
+    hopWaitX: 0,
+    hopWaitXSpeed: 0,
+    lastClimbMove: 0,
+    coyote: 0,
+    buffer: 0,
+    dashBuffer: 0,
+    varJump: 0,
+    dashTime: 0,
+    dashCooldown: 0,
+    dashRefillCooldown: 0,
+    dashAttack: 0,
+    forceMoveTime: 0,
+    wallSlideTimer: K.WALL_SLIDE_TIME,
+    wallSpeedTimer: 0,
+    wallBoostTimer: 0,
+    climbNoMove: 0,
   };
 }

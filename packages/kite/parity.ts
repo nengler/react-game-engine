@@ -6,6 +6,7 @@
  *   node packages/kite/parity.ts
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+
 import { bindings, gameConfig } from "./game.ts";
 import { REPLAYS } from "./test/replays.ts";
 
@@ -18,4 +19,9 @@ for (let i = 0; i < frames.length + 1; i++) player.step();
 player.close();
 
 const round = (_key: string, value: unknown): unknown => (typeof value === "number" ? Math.round(value * 1e9) / 1e9 : value);
-console.log(JSON.stringify({ frames: backend.frames, plays: backend.plays, soundLoads: backend.soundLoads, textureLoads: backend.textureLoads, warnings }, round));
+console.log(
+  JSON.stringify(
+    { frames: backend.frames, plays: backend.plays, soundLoads: backend.soundLoads, textureLoads: backend.textureLoads, warnings },
+    round
+  )
+);

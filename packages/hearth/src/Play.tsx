@@ -1,21 +1,22 @@
 import { Entity, Hud, ParticleLayer, useInput, useMutable, useUpdate } from "@rge/runtime/jsx";
+
 import { hpOf, type Built, type Fired, type Foe, type InFlight } from "./battle.ts";
-import { Enemy } from "./Enemy.tsx";
 import { fx, sfx } from "./effects.ts";
+import { Enemy } from "./Enemy.tsx";
 import { Field } from "./Field.tsx";
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
 import { MenuButton } from "./MenuButton.tsx";
 import { Modal } from "./Modal.tsx";
 import { Pad } from "./Pad.tsx";
-import { Shot } from "./Shot.tsx";
-import { SidePanel } from "./SidePanel.tsx";
 import { LANE_SPREAD, START_GOLD, START_LIVES, WAVE_BONUS } from "./rules/constants.ts";
 import { ENEMIES } from "./rules/enemies.ts";
 import { MAP } from "./rules/map.ts";
 import { rollSigned } from "./rules/rng.ts";
 import { refundOf, TOWERS, upgradeCost, type TowerKind } from "./rules/towers.ts";
 import { spawnsOf, WAVE_COUNT } from "./rules/waves.ts";
+import { Shot } from "./Shot.tsx";
+import { SidePanel } from "./SidePanel.tsx";
 
 /** No towers yet: one empty place per pad. */
 const NO_TOWERS: readonly (Built | null)[] = MAP.pads.map(() => null);
@@ -162,7 +163,17 @@ export function Play({ startGold = START_GOLD, seed = 1 }: PlayProps) {
       ))}
       <ParticleLayer particles={fx} />
       <Hud>
-        <SidePanel gold={s.gold} lives={s.lives} wave={s.wave} active={s.active} tower={s.towers[cursor] ?? null} onStartWave={startWave} onBuild={build} onUpgrade={upgrade} onSell={sell} />
+        <SidePanel
+          gold={s.gold}
+          lives={s.lives}
+          wave={s.wave}
+          active={s.active}
+          tower={s.towers[cursor] ?? null}
+          onStartWave={startWave}
+          onBuild={build}
+          onUpgrade={upgrade}
+          onSell={sell}
+        />
         {paused && (
           <Modal title="PAUSED">
             <MenuButton onPress={resume}>

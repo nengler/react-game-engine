@@ -1,6 +1,7 @@
+import assert from "node:assert/strict";
 // `inert` and `modal` on a container: which subtrees hear input, as the HTML attribute and a `<dialog>` opened with `showModal()`.
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Pointer, World, createInputState, type InputState } from "../src/index.ts";
 
 /** An entity that writes what its `onInput` and `onUpdate` heard of Enter. */

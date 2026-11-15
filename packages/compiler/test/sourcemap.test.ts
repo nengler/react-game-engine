@@ -1,9 +1,10 @@
-/** Source maps from generated code to the component source (`compile(…, { file, source })`, `rge-compile --source-maps`). */
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+/** Source maps from generated code to the component source (`compile(…, { file, source })`, `rge-compile --source-maps`). */
+import { after, describe, it } from "node:test";
+
 import { cleanOutput, closeCompiler, compile, getCompiler, OUTPUT_ROOT, typeCheck, withAuthoringImports } from "./helpers.ts";
 
 after(() => {
@@ -56,7 +57,10 @@ function decode(mappings: string): (number | null)[] {
 function withMap() {
   const result = getCompiler().compile("Shelf.tsx", SOURCE, { file: "Shelf.ts", source: "../src/Shelf.tsx" });
   assert.ok(result.ok && result.sourceMap, result.diagnostics.map((d) => d.message).join("\n"));
-  return { code: result.code, map: JSON.parse(result.sourceMap) as { version: number; file: string; sources: string[]; sourcesContent: string[]; mappings: string } };
+  return {
+    code: result.code,
+    map: JSON.parse(result.sourceMap) as { version: number; file: string; sources: string[]; sourcesContent: string[]; mappings: string },
+  };
 }
 
 const lineOf = (text: string, needle: string): number => text.split("\n").findIndex((l) => l.includes(needle));
@@ -108,11 +112,17 @@ describe("rge-compile --source-maps", () => {
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(join(root, "src", "Shelf.tsx"), SOURCE);
     const cli = resolve(import.meta.dirname, "../src/cli.ts");
-    const r = spawnSync(process.execPath, [cli, join(root, "src"), join(root, "out"), "--source-maps", "--no-check"], { encoding: "utf8", cwd: resolve(import.meta.dirname, "../../..") });
+    const r = spawnSync(process.execPath, [cli, join(root, "src"), join(root, "out"), "--source-maps", "--no-check"], {
+      encoding: "utf8",
+      cwd: resolve(import.meta.dirname, "../../.."),
+    });
     assert.equal(r.status, 0, r.stderr);
     assert.ok(existsSync(join(root, "out", "Shelf.ts.map")));
     assert.deepEqual(JSON.parse(readFileSync(join(root, "out", "Shelf.ts.map"), "utf8")).sources, ["../src/Shelf.tsx"]);
-    const plain = spawnSync(process.execPath, [cli, join(root, "src"), join(root, "plain"), "--no-check"], { encoding: "utf8", cwd: resolve(import.meta.dirname, "../../..") });
+    const plain = spawnSync(process.execPath, [cli, join(root, "src"), join(root, "plain"), "--no-check"], {
+      encoding: "utf8",
+      cwd: resolve(import.meta.dirname, "../../.."),
+    });
     assert.equal(plain.status, 0, plain.stderr);
     assert.ok(!existsSync(join(root, "plain", "Shelf.ts.map")), "no map without the flag");
   });

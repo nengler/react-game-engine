@@ -1,12 +1,17 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Flex, GameObject, Shape, Text } from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 /** A backend that measures the built-in font as 6 pixels a character and a line as `size` tall (so tests can count). */
-function build(root: GameObject, options: { font?: string; sizes?: Record<string, { width: number; height: number }> } = {}): { records: DecodedRecord[]; builder: FrameBuilder; measured: string[] } {
+function build(
+  root: GameObject,
+  options: { font?: string; sizes?: Record<string, { width: number; height: number }> } = {}
+): { records: DecodedRecord[]; builder: FrameBuilder; measured: string[] } {
   const backend = new RecordingBackend({ textureSizes: options.sizes ?? {} });
   const measured: string[] = [];
   const builder = new FrameBuilder({
@@ -29,19 +34,41 @@ describe("<Text maxWidth>: the built-in font", () => {
     text.transform.x = 5;
     text.transform.y = 7;
     const out = lines(build(text).records);
-    assert.deepEqual(out.map((l) => l.text), ["the quick", "brown fox", "jumps"]);
-    assert.deepEqual(out.map((l) => [l.x, l.y]), [[5, 7], [5, 17], [5, 27]]);
+    assert.deepEqual(
+      out.map((l) => l.text),
+      ["the quick", "brown fox", "jumps"]
+    );
+    assert.deepEqual(
+      out.map((l) => [l.x, l.y]),
+      [
+        [5, 7],
+        [5, 17],
+        [5, 27],
+      ]
+    );
   });
 
   it("puts lineGap between lines", () => {
     const text = new Text({ text: "aa bb cc dd", size: 10, maxWidth: 30, lineGap: 3 });
     const out = lines(build(text).records);
-    assert.deepEqual(out.map((l) => [l.text, l.y]), [["aa bb", 0], ["cc dd", 13]]);
+    assert.deepEqual(
+      out.map((l) => [l.text, l.y]),
+      [
+        ["aa bb", 0],
+        ["cc dd", 13],
+      ]
+    );
   });
 
   it("always breaks at a newline, with or without a maxWidth", () => {
-    assert.deepEqual(lines(build(new Text({ text: "one\\ntwo".replace("\\n", "\n"), size: 10 })).records).map((l) => l.text), ["one", "two"]);
-    assert.deepEqual(lines(build(new Text({ text: "a b\nc", size: 10, maxWidth: 100 })).records).map((l) => l.text), ["a b", "c"]);
+    assert.deepEqual(
+      lines(build(new Text({ text: "one\\ntwo".replace("\\n", "\n"), size: 10 })).records).map((l) => l.text),
+      ["one", "two"]
+    );
+    assert.deepEqual(
+      lines(build(new Text({ text: "a b\nc", size: 10, maxWidth: 100 })).records).map((l) => l.text),
+      ["a b", "c"]
+    );
   });
 
   it("breaks inside a word only when the word alone is wider than maxWidth", () => {
@@ -53,9 +80,21 @@ describe("<Text maxWidth>: the built-in font", () => {
 
   it("aligns each line by itself, inside width when there is one, else inside maxWidth", () => {
     const centred = lines(build(new Text({ text: "aaaa bb", size: 10, maxWidth: 30, align: "center" })).records);
-    assert.deepEqual(centred.map((l) => [l.text, l.x]), [["aaaa", 3], ["bb", 9]]);
+    assert.deepEqual(
+      centred.map((l) => [l.text, l.x]),
+      [
+        ["aaaa", 3],
+        ["bb", 9],
+      ]
+    );
     const right = lines(build(new Text({ text: "aaaa bb", size: 10, maxWidth: 30, width: 50, align: "right" })).records);
-    assert.deepEqual(right.map((l) => [l.text, l.x]), [["aaaa", 26], ["bb", 38]]);
+    assert.deepEqual(
+      right.map((l) => [l.text, l.x]),
+      [
+        ["aaaa", 26],
+        ["bb", 38],
+      ]
+    );
   });
 
   it("is wrapped once, however many frames draw it", () => {
@@ -72,7 +111,10 @@ describe("<Text reveal>", () => {
     const text = new Text({ text: "the quick brown fox", size: 10, maxWidth: 60, reveal: 12 });
     const out = lines(build(text).records);
     // "the quick" is characters 0..8, its separator is 9, "brown fox" starts at 10: 12 characters show "br".
-    assert.deepEqual(out.map((l) => l.text), ["the quick", "br"]);
+    assert.deepEqual(
+      out.map((l) => l.text),
+      ["the quick", "br"]
+    );
   });
 
   it("shows nothing at 0 and everything at or past the end, and never rewraps as it grows", () => {
@@ -80,14 +122,23 @@ describe("<Text reveal>", () => {
     assert.deepEqual(lines(build(new Text({ text: "the quick brown fox", size: 10, maxWidth: 60, reveal: 0 })).records), []);
     for (const n of [5, 9, 10, 15, 19, 99]) {
       const part = lines(build(new Text({ text: "the quick brown fox", size: 10, maxWidth: 60, reveal: n })).records).map((l) => l.text);
-      assert.ok(part.every((p, i) => (full[i] as string).startsWith(p)), `reveal ${n}: ${JSON.stringify(part)} are the starts of ${JSON.stringify(full)}`);
+      assert.ok(
+        part.every((p, i) => (full[i] as string).startsWith(p)),
+        `reveal ${n}: ${JSON.stringify(part)} are the starts of ${JSON.stringify(full)}`
+      );
     }
-    assert.deepEqual(lines(build(new Text({ text: "the quick brown fox", size: 10, maxWidth: 60, reveal: 99 })).records).map((l) => l.text), full);
+    assert.deepEqual(
+      lines(build(new Text({ text: "the quick brown fox", size: 10, maxWidth: 60, reveal: 99 })).records).map((l) => l.text),
+      full
+    );
   });
 
   it("a text without maxWidth can be revealed too, aligned as if it were whole", () => {
     const out = lines(build(new Text({ text: "abcd", size: 10, width: 60, align: "center", reveal: 2 })).records);
-    assert.deepEqual(out.map((l) => [l.text, l.x]), [["ab", 18]]);
+    assert.deepEqual(
+      out.map((l) => [l.text, l.x]),
+      [["ab", 18]]
+    );
   });
 });
 
@@ -100,7 +151,10 @@ describe("a wrapped <Text> in a <Flex>", () => {
     column.addChild(below);
     const { records } = build(column);
     // Three lines of 10 with two gaps of 1 is 32 tall; the shape sits 2 below it.
-    assert.deepEqual(lines(records).map((l) => l.y), [0, 11, 22]);
+    assert.deepEqual(
+      lines(records).map((l) => l.y),
+      [0, 11, 22]
+    );
     const rect = records.find((r) => r.op === "rect");
     assert.equal(rect?.op === "rect" ? rect.y : NaN, 34);
   });
@@ -121,7 +175,8 @@ describe("a wrapped <Text> in a <Flex>", () => {
 describe("<Text maxWidth>: a bitmap font", () => {
   // A 16 × 6 grid of 5 × 8 glyph cells.
   const sizes = { "assets/font.png": { width: 80, height: 48 } };
-  const regions = (records: readonly DecodedRecord[]) => records.flatMap((r) => (r.op === "spriteRegion" ? [{ x: r.x, y: r.y, src: r.srcX }] : []));
+  const regions = (records: readonly DecodedRecord[]) =>
+    records.flatMap((r) => (r.op === "spriteRegion" ? [{ x: r.x, y: r.y, src: r.srcX }] : []));
 
   it("breaks at spaces by cell width, one run of glyphs a line", () => {
     // 8 pixels high at size 8, 5 wide: "the quick" is 9 characters, 45 px; maxWidth 25 is 5 characters.
@@ -154,4 +209,3 @@ describe("<Text maxWidth>: a bitmap font", () => {
     assert.equal(flex(undefined), 24, "three lines of 8");
   });
 });
-

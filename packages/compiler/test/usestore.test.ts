@@ -1,9 +1,11 @@
-/** `useStore(store, read)`: a value from a store outside the game state, kept up to date (REACT_FEEL_PLAN.md, B5). */
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+/** `useStore(store, read)`: a value from a store outside the game state, kept up to date (REACT_FEEL_PLAN.md, B5). */
+import { after, describe, it } from "node:test";
+
 import { Entity, Text, World, keepIfEqual, sameData } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -88,7 +90,6 @@ describe("useStore", () => {
     world.flush();
     assert.equal(store.settings.listening(), 0, "the subscription ends with the component");
   });
-
 });
 
 describe("keepIfEqual and sameData", () => {

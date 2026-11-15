@@ -1,12 +1,28 @@
+import assert from "node:assert/strict";
 /**
  * `<Flex>`: the layout container (U2 in docs/UI_PLAN.md). The compiler learns its props from the runtime manifest, adds
  * only the size check and the `flex-start` hint, and what layout means is the player's, tested in packages/player; these
  * tests compile real components and lay them out through the frame builder.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { Button, createControls, createInputState, Flex, Menu as MenuBox, Shape, Slider, Text, TextInput, Toggle, Tooltip, World, type GameObject } from "@rge/runtime";
+
 import { FrameBuilder } from "@rge/player";
+import {
+  Button,
+  createControls,
+  createInputState,
+  Flex,
+  Menu as MenuBox,
+  Shape,
+  Slider,
+  Text,
+  TextInput,
+  Toggle,
+  Tooltip,
+  World,
+  type GameObject,
+} from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -64,7 +80,14 @@ before(async () => {
   ({ Shelf, Menu } = await load<{ Shelf: typeof Shelf; Menu: typeof Menu }>(compile(SOURCE, "FlexGame.tsx")));
 });
 
-function layOut(root: GameObject, builder = new FrameBuilder({ loadTexture: () => 0, measureText: (text, size) => ({ width: text.length * 10, height: size }), textureSize: () => ({ width: 16, height: 16 }) })): FrameBuilder {
+function layOut(
+  root: GameObject,
+  builder = new FrameBuilder({
+    loadTexture: () => 0,
+    measureText: (text, size) => ({ width: text.length * 10, height: size }),
+    textureSize: () => ({ width: 16, height: 16 }),
+  })
+): FrameBuilder {
   builder.build(root, 640, 360);
   return builder;
 }
@@ -74,7 +97,10 @@ describe("Flex: a compiled component", () => {
     const shelf = new Shelf();
     new World().mount(shelf);
     assert.ok(shelf instanceof Flex);
-    assert.deepEqual([shelf.direction, shelf.alignItems, shelf.justifyContent, shelf.gap, shelf.padding, shelf.background], ["row", "center", "start", 2, 1, "purple"]);
+    assert.deepEqual(
+      [shelf.direction, shelf.alignItems, shelf.justifyContent, shelf.gap, shelf.padding, shelf.background],
+      ["row", "center", "start", 2, 1, "purple"]
+    );
   });
 
   it("lays its children out, and lays them out again when state changes the spacing", () => {
@@ -85,7 +111,7 @@ describe("Flex: a compiled component", () => {
     const [a, b] = shelf.children as [Shape, Shape];
     assert.deepEqual([a.layoutX, b.layoutX], [1, 1 + 10 + 2]);
     assert.deepEqual([a.layoutY, b.layoutY], [1, 1], "centred: the tallest child (4) fills the inner height");
-    shelf.s.spacing = (10);
+    shelf.s.spacing = 10;
     world.flush();
     layOut(shelf, builder);
     assert.deepEqual([a.layoutX, b.layoutX], [1, 21]);
@@ -97,14 +123,14 @@ describe("Flex: a compiled component", () => {
     world.mount(shelf);
     const builder = layOut(shelf);
     assert.equal(shelf.children.length, 2);
-    shelf.s.open = (true);
+    shelf.s.open = true;
     world.flush();
     layOut(shelf, builder);
     const [extra, a, b] = shelf.children as [Shape, Shape, Shape];
     assert.equal(extra.width, 5);
     assert.deepEqual([extra.layoutX, a.layoutX, b.layoutX], [1, 1 + 5 + 2, 1 + 5 + 2 + 10 + 2]);
     assert.equal(shelf.box.size[0], 1 + 5 + 2 + 10 + 2 + 20 + 1);
-    shelf.s.open = (false);
+    shelf.s.open = false;
     world.flush();
     layOut(shelf, builder);
     assert.deepEqual([a.layoutX, b.layoutX], [1, 13], "the ones after it close up");
@@ -115,10 +141,21 @@ describe("Flex: a compiled component", () => {
     const shelf = new Shelf();
     world.mount(shelf);
     const builder = layOut(shelf);
-    shelf.s.rows = ([{ id: "b", width: 20 }, { id: "c", width: 7 }, { id: "a", width: 10 }]);
+    shelf.s.rows = [
+      { id: "b", width: 20 },
+      { id: "c", width: 7 },
+      { id: "a", width: 10 },
+    ];
     world.flush();
     layOut(shelf, builder);
-    assert.deepEqual((shelf.children as Shape[]).map((s) => [s.width, s.layoutX]), [[20, 1], [7, 1 + 20 + 2], [10, 1 + 20 + 2 + 7 + 2]]);
+    assert.deepEqual(
+      (shelf.children as Shape[]).map((s) => [s.width, s.layoutX]),
+      [
+        [20, 1],
+        [7, 1 + 20 + 2],
+        [10, 1 + 20 + 2 + 7 + 2],
+      ]
+    );
   });
 
   it("draws the background behind the children, the size of the box", () => {
@@ -160,7 +197,11 @@ describe("Flex: the video's context menu", () => {
   it("stops at its maximum width, letting a longer label overflow until text wraps", () => {
     const menu = new Menu();
     new World().mount(menu);
-    const builder = new FrameBuilder({ loadTexture: () => 0, measureText: (text, size) => ({ width: text.length * 10, height: size }), textureSize: () => ({ width: 16, height: 16 }) });
+    const builder = new FrameBuilder({
+      loadTexture: () => 0,
+      measureText: (text, size) => ({ width: text.length * 10, height: size }),
+      textureSize: () => ({ width: 16, height: 16 }),
+    });
     const [, second] = menu.children as [Flex, Flex];
     const label = second.children[0] as Flex;
     (label.children[0] as unknown as { text: string }).text = "x".repeat(60);
@@ -186,7 +227,9 @@ function Counter() {
 
 describe("Flex onPress and Text align", () => {
   it("presses a Flex through the world, running the handler against the component's state", async () => {
-    const { Counter } = await load<{ Counter: new () => Flex & { readonly text: { text: string; width: number | undefined; align: string } } }>(compile(PRESS, "Press.tsx"));
+    const { Counter } = await load<{
+      Counter: new () => Flex & { readonly text: { text: string; width: number | undefined; align: string } };
+    }>(compile(PRESS, "Press.tsx"));
     const world = new World();
     const counter = new Counter();
     world.mount(counter);
@@ -203,7 +246,10 @@ describe("Flex onPress and Text align", () => {
     assert.deepEqual(typeCheck(compile(PRESS, "Press.tsx")), []);
     const check = (element: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/Press${Math.random()}.tsx`, text: `import { Flex, Text } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/Press${Math.random()}.tsx`,
+          text: `import { Flex, Text } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
+        },
       ]);
     assert.deepEqual(check(`<Flex onPress={() => {}}><Text width={40} align={wide ? "left" : "right"}>x</Text></Flex>`), []);
     assert.ok(check(`<Text align={wide ? "left" : "middle"}>x</Text>`).length > 0);
@@ -212,18 +258,27 @@ describe("Flex onPress and Text align", () => {
   it("type-checks a Text's shadow and outline: colours and numbers, from state too", async () => {
     const check = (element: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/TextFx${Math.random()}.tsx`, text: `import { Text } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/TextFx${Math.random()}.tsx`,
+          text: `import { Text } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
+        },
       ]);
-    assert.deepEqual(check(`<Text shadow="black" shadowX={big ? 2 : 1} shadowY={1} outline="white" outlineWidth={big ? 2 : 1}>Hi</Text>`), []);
+    assert.deepEqual(
+      check(`<Text shadow="black" shadowX={big ? 2 : 1} shadowY={1} outline="white" outlineWidth={big ? 2 : 1}>Hi</Text>`),
+      []
+    );
     assert.ok(check(`<Text shadow={3}>Hi</Text>`).length > 0, "a shadow is a colour");
     assert.ok(check(`<Text outlineWidth="thick">Hi</Text>`).length > 0, "an outline width is a number");
     const { Label } = await load<{ Label: new () => Text & { s: { [field: string]: unknown } } }>(
-      compile(`function Label() { const s = useMutable({ on: false }); return <Text shadow="black" shadowX={s.on ? 3 : 1} outline={s.on ? "red" : "blue"} outlineWidth={2}>Hi</Text>; }`, "TextFx.tsx"),
+      compile(
+        `function Label() { const s = useMutable({ on: false }); return <Text shadow="black" shadowX={s.on ? 3 : 1} outline={s.on ? "red" : "blue"} outlineWidth={2}>Hi</Text>; }`,
+        "TextFx.tsx"
+      )
     );
     const label = new Label();
     new World().mount(label);
     assert.deepEqual([label.shadow, label.shadowX, label.shadowY, label.outline, label.outlineWidth], ["black", 1, 1, "blue", 2]);
-    label.s.on = (true);
+    label.s.on = true;
     label.world!.flush();
     assert.deepEqual([label.shadowX, label.outline], [3, "red"]);
   });
@@ -286,7 +341,14 @@ function Options({ onClose }: { onClose: () => void }) {
     const world = new World();
     world.mount(options);
     world.flush();
-    const controls = createControls({ left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"], confirm: ["Z"], back: ["X"] });
+    const controls = createControls({
+      left: ["ArrowLeft"],
+      right: ["ArrowRight"],
+      up: ["ArrowUp"],
+      down: ["ArrowDown"],
+      confirm: ["Z"],
+      back: ["X"],
+    });
     const press = (...pressed: string[]) => {
       world.tick(1 / 60, createInputState({ pressed }, controls));
       world.flush();
@@ -303,12 +365,26 @@ function Options({ onClose }: { onClose: () => void }) {
   });
 
   it("type-checks a Slider's and a Toggle's props and the parameter of onChange, in the source and the generated module", () => {
-    assert.deepEqual(typeCheck(compile(`function C() { const s = useMutable({ v: 1 }); return <Slider value={s.v} onChange={(x) => { s.v = x; }} />; }`, "SliderOk.tsx")), []);
+    assert.deepEqual(
+      typeCheck(
+        compile(
+          `function C() { const s = useMutable({ v: 1 }); return <Slider value={s.v} onChange={(x) => { s.v = x; }} />; }`,
+          "SliderOk.tsx"
+        )
+      ),
+      []
+    );
     const check = (element: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/Widget${Math.random()}.tsx`, text: `import { Slider, Toggle } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/Widget${Math.random()}.tsx`,
+          text: `import { Slider, Toggle } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
+        },
       ]);
-    assert.deepEqual(check(`<Slider value={n} min={0} max={10} step={2} thumbWidth={6} fillColor="red" onChange={(v) => v.toFixed(1)} />`), []);
+    assert.deepEqual(
+      check(`<Slider value={n} min={0} max={10} step={2} thumbWidth={6} fillColor="red" onChange={(v) => v.toFixed(1)} />`),
+      []
+    );
     assert.deepEqual(check(`<Toggle checked={n > 1} onColor="green" onChange={(on) => !on} />`), []);
     assert.ok(check(`<Slider value="loud" />`).length > 0, "a value is a number");
     assert.ok(check(`<Slider onChange={(v: string) => v} />`).length > 0, "onChange is given a number");
@@ -316,9 +392,17 @@ function Options({ onClose }: { onClose: () => void }) {
     assert.ok(check(`<Toggle onChange={(on: number) => on} />`).length > 0, "onChange is given a flag");
     const checkMenu = (element: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/MenuCheck${Math.random()}.tsx`, text: `import { Button, Menu, Text } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/MenuCheck${Math.random()}.tsx`,
+          text: `import { Button, Menu, Text } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return ${element}; }`,
+        },
       ]);
-    assert.deepEqual(checkMenu(`<Menu loop={false} onBack={() => n}><Button onAdjust={(d) => d.toFixed(0)} focusBackground="red"><Text>Go</Text></Button></Menu>`), []);
+    assert.deepEqual(
+      checkMenu(
+        `<Menu loop={false} onBack={() => n}><Button onAdjust={(d) => d.toFixed(0)} focusBackground="red"><Text>Go</Text></Button></Menu>`
+      ),
+      []
+    );
     assert.ok(checkMenu(`<Button onAdjust={(d: string) => d} />`).length > 0, "onAdjust is given a number");
     assert.ok(checkMenu(`<Menu loop="yes" />`).length > 0, "loop is a boolean");
   });
@@ -360,7 +444,10 @@ function Name() {
     assert.equal((tip.children[0] as Text).text, "Send ADA");
     const check = (element: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/TextCheck${Math.random()}.tsx`, text: `import { Flex, Text, TextInput, Tooltip } from "@rge/runtime/jsx";\nfunction C({ n }: { n: string }) { return ${element}; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/TextCheck${Math.random()}.tsx`,
+          text: `import { Flex, Text, TextInput, Tooltip } from "@rge/runtime/jsx";\nfunction C({ n }: { n: string }) { return ${element}; }`,
+        },
       ]);
     assert.deepEqual(check(`<TextInput value={n} onChange={(v) => v.trim()} onSubmit={(v) => v.length} textSize={8} />`), []);
     assert.ok(check(`<TextInput value={3} />`).length > 0, "a value is a string");
@@ -371,16 +458,25 @@ function Name() {
 
   it("lets state take a widget's names, kept in `$name` fields", () => {
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
-    for (const [tag, names] of [["Slider", ["value", "min", "max", "step", "fillColor", "thumbColor", "thumbWidth", "moveTo", "fraction"]], ["Toggle", ["checked", "onColor", "offColor", "thumbColor", "flip"]]] as const) {
+    for (const [tag, names] of [
+      ["Slider", ["value", "min", "max", "step", "fillColor", "thumbColor", "thumbWidth", "moveTo", "fraction"]],
+      ["Toggle", ["checked", "onColor", "offColor", "thumbColor", "flip"]],
+    ] as const) {
       for (const name of names) {
-        assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <${tag} />; }`).code.includes(`get $${name}()`), `${tag} ${name}`);
+        assert.ok(
+          compile(`function C() { const ${name} = useMutable({ n: 1 }); return <${tag} />; }`).code.includes(`get $${name}()`),
+          `${tag} ${name}`
+        );
       }
     }
   });
 
   it("checks a Text's align literal with a suggestion", () => {
     const errors = compileErrors(`function C() { return <Text align="centre">x</Text>; }`);
-    assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.InvalidPropValue]);
+    assert.deepEqual(
+      errors.map((d) => d.code),
+      [DiagnosticCode.InvalidPropValue]
+    );
     assert.match(errors[0]!.message, /<Text align> must be one of "left", "center", "right", not 'centre' \(did you mean "center"\?\)/);
     assert.doesNotThrow(() => compile(`function C() { return <Text align="right" width={30}>x</Text>; }`));
   });
@@ -388,10 +484,16 @@ function Name() {
   it("lets state take the new names, kept in `$name` fields", () => {
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     for (const name of ["onPress", "contains"]) {
-      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`), `Flex ${name}`);
+      assert.ok(
+        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`),
+        `Flex ${name}`
+      );
     }
     for (const name of ["align", "width"]) {
-      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Text>x</Text>; }`).code.includes(`get $${name}()`), `Text ${name}`);
+      assert.ok(
+        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Text>x</Text>; }`).code.includes(`get $${name}()`),
+        `Text ${name}`
+      );
     }
   });
 });
@@ -400,15 +502,25 @@ describe("Flex: diagnostics", () => {
   it("checks the keyword props against their choices, with a suggestion, and explains CSS's spelling", () => {
     for (const [attribute, expected] of [
       [`direction="colum"`, /<Flex direction> must be one of "row", "column", not 'colum' \(did you mean "column"\?\)/],
-      [`alignItems="flex-start"`, /<Flex alignItems> must be one of "start", "center", "end", "stretch", not 'flex-start' \(did you mean "start"\?\)/],
+      [
+        `alignItems="flex-start"`,
+        /<Flex alignItems> must be one of "start", "center", "end", "stretch", not 'flex-start' \(did you mean "start"\?\)/,
+      ],
       [`justifyContent="flex-end"`, /did you mean "end"\?/],
       [`justifyContent="space-betwen"`, /did you mean "space-between"\?/],
-      [`anchor="middle"`, /<Flex anchor> must be one of "top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right", not 'middle'/],
+      [
+        `anchor="middle"`,
+        /<Flex anchor> must be one of "top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right", not 'middle'/,
+      ],
       [`to="top-righ"`, /<Flex to> must be one of .*did you mean "top-right"\?/],
       [`overflow="scrol"`, /<Flex overflow> must be one of "visible", "hidden", "scroll", not 'scrol' \(did you mean "scroll"\?\)/],
     ] as const) {
       const errors = compileErrors(`function C() { return <Flex ${attribute} />; }`);
-      assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.InvalidPropValue], attribute);
+      assert.deepEqual(
+        errors.map((d) => d.code),
+        [DiagnosticCode.InvalidPropValue],
+        attribute
+      );
       assert.match(errors[0]!.message, expected);
     }
   });
@@ -417,9 +529,20 @@ describe("Flex: diagnostics", () => {
     for (const value of [`{120}`, `"fit"`, `"grow"`, `"50%"`, `"12.5%"`, `"100%"`, `"0%"`]) {
       assert.doesNotThrow(() => compile(`function C() { return <Flex width=${value} height=${value} />; }`), value);
     }
-    for (const [value, hint] of [[`"grwo"`, `did you mean "grow"`], [`"fill"`, ""], [`"101%"`, ""], [`"50"`, ""], [`"50 %"`, ""], [`{true}`, ""]] as const) {
+    for (const [value, hint] of [
+      [`"grwo"`, `did you mean "grow"`],
+      [`"fill"`, ""],
+      [`"101%"`, ""],
+      [`"50"`, ""],
+      [`"50 %"`, ""],
+      [`{true}`, ""],
+    ] as const) {
       const errors = compileErrors(`function C() { return <Flex width=${value} />; }`);
-      assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.InvalidPropValue], value);
+      assert.deepEqual(
+        errors.map((d) => d.code),
+        [DiagnosticCode.InvalidPropValue],
+        value
+      );
       assert.match(errors[0]!.message, /<Flex width> must be a number of pixels, "fit", "grow", or a percentage/);
       if (hint) assert.ok(errors[0]!.message.includes(hint), errors[0]!.message);
     }
@@ -428,16 +551,24 @@ describe("Flex: diagnostics", () => {
   it("leaves an expression to the type-check, which knows the type of a size", () => {
     const check = (element: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/Flex${Math.random()}.tsx`, text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/Flex${Math.random()}.tsx`,
+          text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
+        },
       ]);
-    assert.deepEqual(check(`<Flex width={big ? "grow" : 120} height={big ? "50%" : "fit"} gap={4} padding={2} paddingX={3} minWidth={10} />`), []);
+    assert.deepEqual(
+      check(`<Flex width={big ? "grow" : 120} height={big ? "50%" : "fit"} gap={4} padding={2} paddingX={3} minWidth={10} />`),
+      []
+    );
     assert.ok(check(`<Flex width={big ? "grwo" : 120} />`).length > 0, "a bad keyword inside an expression");
     assert.ok(check(`<Flex direction={big ? "row" : "diagonal"} />`).length > 0);
     assert.ok(check(`<Flex gap="wide" />`).length > 0);
   });
 
   it("is a container, can be placed with transform, takes elements as children, and type-checks generated", () => {
-    assert.doesNotThrow(() => compile(`function C() { return <Flex transform={{ x: 4 }}><Shape kind="rect" width={1} height={1} /></Flex>; }`));
+    assert.doesNotThrow(() =>
+      compile(`function C() { return <Flex transform={{ x: 4 }}><Shape kind="rect" width={1} height={1} /></Flex>; }`)
+    );
     assert.deepEqual(typeCheck(compile(SOURCE, "FlexGame.tsx")), []);
   });
 
@@ -471,7 +602,9 @@ function Menu() {
 
 describe("Flex: floating props", () => {
   it("accepts float as a bare attribute, with anchors and offsets, and sets them on the box", () => {
-    const out = compile(`function C() { return <Flex width={40} height={20}><Flex float anchor="top-right" to="top-right" offsetX={-4} offsetY={4} width={8} height={8} /></Flex>; }`);
+    const out = compile(
+      `function C() { return <Flex width={40} height={20}><Flex float anchor="top-right" to="top-right" offsetX={-4} offsetY={4} width={8} height={8} /></Flex>; }`
+    );
     assert.match(JSON.stringify(out), /float: true, anchor: \\"top-right\\"|float: true, anchor: "top-right"/);
   });
 });
@@ -523,18 +656,33 @@ function Tile() {
     const tile = new Tile();
     world.mount(tile);
     assert.deepEqual(
-      [tile.background, tile.borderWidth, tile.borderColor, tile.borderRadius, tile.hoverBackground, tile.hoverBorderColor, tile.focusBackground, tile.focusBorderColor],
-      ["navy", 2, "gold", 4, "#334", "white", "#223", "yellow"],
+      [
+        tile.background,
+        tile.borderWidth,
+        tile.borderColor,
+        tile.borderRadius,
+        tile.hoverBackground,
+        tile.hoverBorderColor,
+        tile.focusBackground,
+        tile.focusBorderColor,
+      ],
+      ["navy", 2, "gold", 4, "#334", "white", "#223", "yellow"]
     );
-    assert.deepEqual([tile.pressedBackground, tile.pressedBorderColor, tile.disabled, tile.disabledBackground, tile.disabledBorderColor], ["#112", "orange", false, "gray", "silver"]);
+    assert.deepEqual(
+      [tile.pressedBackground, tile.pressedBorderColor, tile.disabled, tile.disabledBackground, tile.disabledBorderColor],
+      ["#112", "orange", false, "gray", "silver"]
+    );
     assert.equal(tile.transition, 0.15);
     assert.deepEqual([tile.overflow, tile.scrollX, tile.scrollY], ["hidden", 0, 4]);
     assert.equal(tile.opacity, 1);
     assert.deepEqual([tile.wrap, tile.rowGap, tile.columnGap], [true, 4, 2]);
     assert.deepEqual([tile.backgroundImage, tile.slice, tile.sliceBottom, tile.sliceTop], ["skin.png", 8, 4, undefined]);
-    assert.deepEqual([tile.hoverBackgroundImage, tile.focusBackgroundImage, tile.pressedBackgroundImage, tile.disabledBackgroundImage], ["skin-hover.png", "skin-focus.png", "skin-down.png", "skin-off.png"]);
-    tile.s.accent = ("red");
-    tile.s.round = (800);
+    assert.deepEqual(
+      [tile.hoverBackgroundImage, tile.focusBackgroundImage, tile.pressedBackgroundImage, tile.disabledBackgroundImage],
+      ["skin-hover.png", "skin-focus.png", "skin-down.png", "skin-off.png"]
+    );
+    tile.s.accent = "red";
+    tile.s.round = 800;
     world.flush();
     assert.deepEqual([tile.borderColor, tile.borderRadius, tile.disabled], ["red", 800, true], "disabled follows state");
     assert.deepEqual([tile.overflow, tile.scrollY, tile.opacity], ["scroll", 800, 0.5], "and overflow, the scroll offset and the opacity");
@@ -544,9 +692,17 @@ function Tile() {
     assert.deepEqual(typeCheck(compile(STYLED, "FlexStyled.tsx")), []);
     const check = (element: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/Styled${Math.random()}.tsx`, text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/Styled${Math.random()}.tsx`,
+          text: `import { Flex } from "@rge/runtime/jsx";\nfunction C({ wide }: { wide: boolean }) { return ${element}; }`,
+        },
       ]);
-    assert.deepEqual(check(`<Flex borderWidth={wide ? 2 : 0} borderColor="red" borderRadius={4} hoverBackground="blue" focusBorderColor="white" pressedBackground="navy" disabled={wide} disabledBorderColor="gray" transition={wide ? 0.2 : 0} />`), []);
+    assert.deepEqual(
+      check(
+        `<Flex borderWidth={wide ? 2 : 0} borderColor="red" borderRadius={4} hoverBackground="blue" focusBorderColor="white" pressedBackground="navy" disabled={wide} disabledBorderColor="gray" transition={wide ? 0.2 : 0} />`
+      ),
+      []
+    );
     assert.ok(check(`<Flex transition="slow" />`).length > 0, "a transition is a number of seconds");
     assert.deepEqual(check(`<Flex overflow={wide ? "scroll" : "hidden"} scrollX={0} scrollY={wide ? 9999 : 0} />`), []);
     assert.ok(check(`<Flex overflow="auto" />`).length > 0, "overflow is one of three words");
@@ -566,7 +722,40 @@ function Tile() {
   });
 
   it("lets state take the new names too, kept in `$name` fields", () => {
-    for (const name of ["borderWidth", "borderColor", "borderRadius", "hoverBackground", "hoverBorderColor", "focusBackground", "focusBorderColor", "pressedBackground", "pressedBorderColor", "disabledBackground", "disabledBorderColor", "disabled", "transition", "transitionState", "overflow", "scrollX", "scrollY", "backgroundImage", "slice", "sliceTop", "sliceRight", "sliceBottom", "sliceLeft", "hoverBackgroundImage", "focusBackgroundImage", "pressedBackgroundImage", "disabledBackgroundImage", "opacity", "drawnAlpha", "wrap", "rowGap", "columnGap"]) {
+    for (const name of [
+      "borderWidth",
+      "borderColor",
+      "borderRadius",
+      "hoverBackground",
+      "hoverBorderColor",
+      "focusBackground",
+      "focusBorderColor",
+      "pressedBackground",
+      "pressedBorderColor",
+      "disabledBackground",
+      "disabledBorderColor",
+      "disabled",
+      "transition",
+      "transitionState",
+      "overflow",
+      "scrollX",
+      "scrollY",
+      "backgroundImage",
+      "slice",
+      "sliceTop",
+      "sliceRight",
+      "sliceBottom",
+      "sliceLeft",
+      "hoverBackgroundImage",
+      "focusBackgroundImage",
+      "pressedBackgroundImage",
+      "disabledBackgroundImage",
+      "opacity",
+      "drawnAlpha",
+      "wrap",
+      "rowGap",
+      "columnGap",
+    ]) {
       assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`), name);
     }
   });

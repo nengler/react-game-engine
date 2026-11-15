@@ -28,7 +28,9 @@ export function UpgradePanel({ tower, gold, onUpgrade, onSell }: UpgradePanelPro
         <Label color={canUpgrade ? COLOR.text : COLOR.dim}>{cost < 0 ? "MAXED" : `${keyLabel("upgrade")} UPGRADE ${cost}`}</Label>
       </MenuButton>
       <MenuButton pressKey="sell" onPress={onSell}>
-        <Label>{keyLabel("sell")} SELL {refundOf(tower.spent)}</Label>
+        <Label>
+          {keyLabel("sell")} SELL {refundOf(tower.spent)}
+        </Label>
       </MenuButton>
     </Panel>
   );

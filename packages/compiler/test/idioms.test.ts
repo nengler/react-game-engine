@@ -1,13 +1,15 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 /**
  * React written as React (PAIN_POINTS.md, section 8): an early return, a props type written in the parameter, an object state
  * whose type is its literal's, and a module imported whole. Each compiles, type-checks and runs as it would in React.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+
 import { Entity, Text, World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -89,7 +91,10 @@ export function Heart({ hp, max = 3 }: { hp: number; max?: number }) {
 export function Heart({ hp, colour }: { hp: number }) {
   return <Text>{hp}</Text>;
 }`);
-    assert.deepEqual(wrong.map((d) => d.message), ["'colour' is not a prop of HeartProps."]);
+    assert.deepEqual(
+      wrong.map((d) => d.message),
+      ["'colour' is not a prop of HeartProps."]
+    );
   });
 });
 
@@ -133,7 +138,10 @@ describe("a module imported whole", () => {
     mkdirSync(join(repo, ".test-output"), { recursive: true });
     const dir = mkdtempSync(join(repo, ".test-output", "ns-"));
     mkdirSync(join(dir, "src"));
-    writeFileSync(join(dir, "src/constants.ts"), `export const SPEED = 3;\nexport function twice(n: number): number {\n  return n * 2;\n}\n`);
+    writeFileSync(
+      join(dir, "src/constants.ts"),
+      `export const SPEED = 3;\nexport function twice(n: number): number {\n  return n * 2;\n}\n`
+    );
     writeFileSync(
       join(dir, "src/Mover.tsx"),
       `import { Entity, useMutable, useUpdate } from "@rge/runtime/jsx";
@@ -143,9 +151,12 @@ export function Mover() {
   useUpdate((dt) => { s.x += K.SPEED * dt; });
   return <Entity x={K.twice(s.x)} />;
 }
-`,
+`
     );
-    const run = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], { cwd: repo, encoding: "utf8" });
+    const run = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], {
+      cwd: repo,
+      encoding: "utf8",
+    });
     assert.equal(run.status, 0, run.stdout + run.stderr);
     const out = readFileSync(join(dir, "out/Mover.ts"), "utf8");
     assert.match(out, /^import \* as K from "\.\.\/src\/constants\.ts";$/m);

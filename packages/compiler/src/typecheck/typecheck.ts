@@ -1,6 +1,7 @@
-import { DiagnosticCategory, JsxEmit, ModuleKind, ModuleResolutionKind, type API, type Diagnostic } from "typescript/sync";
-import { createFileSystemLayer } from "typescript/fs";
 import { ScriptTarget } from "typescript/ast";
+import { createFileSystemLayer } from "typescript/fs";
+import { DiagnosticCategory, JsxEmit, ModuleKind, ModuleResolutionKind, type API, type Diagnostic } from "typescript/sync";
+
 import { DiagnosticCode, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 
 export interface VirtualFile {
@@ -54,7 +55,7 @@ function checkFiles(
   api: API,
   files: readonly VirtualFile[],
   compilerOptions: Parameters<API["createProgram"]>[1],
-  code: DiagnosticCode,
+  code: DiagnosticCode
 ): CompilerDiagnostic[] {
   const snapshot = api.createSnapshot({
     fileSystem: createFileSystemLayer(files.map((f) => [f.fileName, f.text] as const)),
@@ -73,7 +74,6 @@ function checkFiles(
     snapshot.dispose();
   }
 }
-
 
 function toCompilerDiagnostic(d: Diagnostic, code: DiagnosticCode): CompilerDiagnostic {
   const message = [d.text, ...(d.messageChain ?? []).map((m) => m.text)].join(" ");

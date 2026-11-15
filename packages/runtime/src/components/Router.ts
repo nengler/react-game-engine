@@ -143,7 +143,8 @@ export class Router<P extends object = {}> extends GameObject<P> {
 
   #find(name: string): Route {
     const route = this.#routes.get(name);
-    if (route === undefined) throw new Error(`<Router route="${name}">: there is no <Route name="${name}"> (routes: ${[...this.#routes.keys()].join(", ")}).`);
+    if (route === undefined)
+      throw new Error(`<Router route="${name}">: there is no <Route name="${name}"> (routes: ${[...this.#routes.keys()].join(", ")}).`);
     return route;
   }
 

@@ -1,7 +1,9 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Entity, Shape, type InputState } from "@rge/runtime";
+import { describe, it } from "node:test";
+
 import { parseInputScript, type PlayerConfig } from "@rge/player";
+import { Entity, Shape, type InputState } from "@rge/runtime";
+
 import { contactSheet, decodePng, encodePng, findNativeLibrary, renderRun, type Pixels } from "../src/index.ts";
 
 const library = findNativeLibrary("headless");
@@ -23,7 +25,12 @@ describe("PNG encoding", () => {
   });
 
   it("lays frames out in a grid with labels and gaps", () => {
-    const sheet = contactSheet([solid(8, 6, [255, 0, 0]), solid(8, 6, [0, 255, 0]), solid(8, 6, [0, 0, 255])], { columns: 2, gap: 2, scale: 2, labels: [0, 10, 20] });
+    const sheet = contactSheet([solid(8, 6, [255, 0, 0]), solid(8, 6, [0, 255, 0]), solid(8, 6, [0, 0, 255])], {
+      columns: 2,
+      gap: 2,
+      scale: 2,
+      labels: [0, 10, 20],
+    });
     assert.deepEqual([sheet.width, sheet.height], [2 * 16 + 3 * 2, 2 * 12 + 3 * 2]);
     const at = (x: number, y: number): number[] => [...sheet.rgba.subarray((y * sheet.width + x) * 4, (y * sheet.width + x) * 4 + 3)];
     assert.deepEqual(at(2 + 15, 2 + 11), [255, 0, 0], "the bottom right of the first frame, enlarged");
@@ -57,7 +64,10 @@ describe("renderRun", { skip }, () => {
 
   it("renders the steps asked for, the game having played its script", () => {
     const shots = renderRun(config(), parseInputScript("_, Space*4, _*2"), { at: [0, 4, 6] });
-    assert.deepEqual(shots.map((s) => s.step), [0, 4, 6]);
+    assert.deepEqual(
+      shots.map((s) => s.step),
+      [0, 4, 6]
+    );
     const white = (shot: Pixels): number => {
       for (let x = 0; x < shot.width; x++) if (shot.rgba[(2 * shot.width + x) * 4] === 255) return x;
       return -1;
@@ -83,10 +93,11 @@ describe("sharp upscaling, through librge", { skip }, () => {
           },
         },
         [{ dt: 1 / 60, down: [], pressed: [], released: [] }],
-        { at: [0], library },
+        { at: [0], library }
       );
       const p = shot!.pixels;
-      const red = (x: number, y: number): boolean => (p.rgba[(y * p.width + x) * 4] as number) > 200 && (p.rgba[(y * p.width + x) * 4 + 1] as number) < 50;
+      const red = (x: number, y: number): boolean =>
+        (p.rgba[(y * p.width + x) * 4] as number) > 200 && (p.rgba[(y * p.width + x) * 4 + 1] as number) < 50;
       return [red(20, 20), red(20, p.height - 20)];
     };
     assert.deepEqual(topLeftIsRed("nearest"), [true, false]);

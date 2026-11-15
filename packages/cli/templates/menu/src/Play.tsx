@@ -1,4 +1,5 @@
 import { Entity, Text, useInput } from "@rge/runtime/jsx";
+
 import { useGame } from "./GameState.ts";
 import { Hero } from "./Hero.tsx";
 import { Pause } from "./Pause.tsx";
@@ -13,7 +14,9 @@ export function Play() {
   return (
     <Entity>
       <Hero />
-      <Text x={8} y={8} color="#a7b0c8">Esc: pause</Text>
+      <Text x={8} y={8} color="#a7b0c8">
+        Esc: pause
+      </Text>
       {paused && <Pause />}
     </Entity>
   );

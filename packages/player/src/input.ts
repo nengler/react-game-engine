@@ -1,4 +1,5 @@
 import type { Controls, InputState, Point, ViewTransform } from "@rge/runtime";
+
 import {
   KEYS,
   KEY_INDEX,
@@ -114,7 +115,8 @@ export class PlayerInput implements InputState {
   #flags(name: string, flag: number): boolean {
     const keys = this.controls?.keysOf(name);
     if (keys === undefined) return this.#keyFlags(name, flag);
-    if (flag === RGE_KEY_RELEASED) return keys.some((k) => this.#keyFlags(k, RGE_KEY_RELEASED)) && !keys.some((k) => this.#keyFlags(k, RGE_KEY_DOWN));
+    if (flag === RGE_KEY_RELEASED)
+      return keys.some((k) => this.#keyFlags(k, RGE_KEY_RELEASED)) && !keys.some((k) => this.#keyFlags(k, RGE_KEY_DOWN));
     return keys.some((k) => this.#keyFlags(k, flag));
   }
 
@@ -122,7 +124,10 @@ export class PlayerInput implements InputState {
     const index = KEY_INDEX.get(key);
     if (index === undefined) {
       const actions = this.controls ? Object.keys(this.controls.bindings) : [];
-      this.#warner.once(`key:${key}`, `Unknown key '${key}': it is never pressed. ${actions.length > 0 ? `Actions: ${actions.join(", ")}. ` : ""}Known keys: ${KEYS.join(", ")}.`);
+      this.#warner.once(
+        `key:${key}`,
+        `Unknown key '${key}': it is never pressed. ${actions.length > 0 ? `Actions: ${actions.join(", ")}. ` : ""}Known keys: ${KEYS.join(", ")}.`
+      );
       return false;
     }
     return ((this.handlerKeys[index] as number) & flag) !== 0;

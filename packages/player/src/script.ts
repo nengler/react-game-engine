@@ -1,6 +1,7 @@
-import type { InputFrame } from "./recording.ts";
-import { KEY_INDEX } from "./protocol.ts";
 import type { ScreenFit } from "@rge/runtime";
+
+import { KEY_INDEX } from "./protocol.ts";
+import type { InputFrame } from "./recording.ts";
 import { fitScreen } from "./screen.ts";
 
 /** A frame of a script: an `InputFrame` with every key list filled in. */
@@ -26,7 +27,13 @@ export interface ScriptOptions {
    * `<Screen>`'s size) and are turned into window points through the same fit the player uses. Without it a game pixel is a
    * window pixel.
    */
-  readonly screen?: { readonly width: number; readonly height: number; readonly windowWidth: number; readonly windowHeight: number; readonly fit?: ScreenFit };
+  readonly screen?: {
+    readonly width: number;
+    readonly height: number;
+    readonly windowWidth: number;
+    readonly windowHeight: number;
+    readonly fit?: ScreenFit;
+  };
 }
 
 /** The empty frame names: no key at all for that long, as in `_*10`. */
@@ -110,8 +117,12 @@ interface Term {
 
 function parseTerm(text: string, item: string): Term {
   const point = /^(click|mouse)@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(text);
-  if (point !== null) return { name: point[1] as string, count: 1, mouse: { x: Number(point[2]), y: Number(point[3]) }, click: point[1] === "click" };
-  if (/^(click|mouse)@/.test(text)) throw new Error(`Cannot read '${text}' in the input script item '${item}': ${text.includes("*") ? "click@ and mouse@ take no count; repeat the item instead" : "expected click@x,y or mouse@x,y"}.`);
+  if (point !== null)
+    return { name: point[1] as string, count: 1, mouse: { x: Number(point[2]), y: Number(point[3]) }, click: point[1] === "click" };
+  if (/^(click|mouse)@/.test(text))
+    throw new Error(
+      `Cannot read '${text}' in the input script item '${item}': ${text.includes("*") ? "click@ and mouse@ take no count; repeat the item instead" : "expected click@x,y or mouse@x,y"}.`
+    );
   const match = /^([A-Za-z_][A-Za-z0-9_]*)(?:\*(\d+))?$/.exec(text);
   if (match === null) throw new Error(`Cannot read '${text}' in the input script item '${item}': expected a name or name*count.`);
   const count = match[2] === undefined ? 1 : Number(match[2]);
@@ -124,5 +135,7 @@ function keysOf(name: string, bindings: InputBindings, item: string): readonly s
   if (bound !== undefined) return typeof bound === "string" ? [bound] : bound;
   if (KEY_INDEX.has(name)) return [name];
   const known = Object.keys(bindings);
-  throw new Error(`Unknown name '${name}' in the input script item '${item}': it is neither a key name nor an action${known.length > 0 ? ` (actions: ${known.join(", ")})` : ""}.`);
+  throw new Error(
+    `Unknown name '${name}' in the input script item '${item}': it is neither a key name nor an action${known.length > 0 ? ` (actions: ${known.join(", ")})` : ""}.`
+  );
 }

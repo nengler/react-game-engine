@@ -21,10 +21,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
 import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@rge/player";
 import { contactSheet, encodePng, renderRun, type Pixels } from "@rge/player-node";
 
-const usage = 'usage: rge screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N]';
+const usage =
+  'usage: rge screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N]';
 
 function enlarge(pixels: Pixels, scale: number): Pixels {
   if (scale <= 1) return pixels;
@@ -60,9 +62,14 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     return 2;
   }
   const gameDir = resolve(folder);
-  const mod = (await import(pathToFileURL(join(gameDir, "game.ts")).href)) as { gameConfig: PlayerConfig; bindings?: InputBindings; screen?: ScriptOptions["screen"] };
+  const mod = (await import(pathToFileURL(join(gameDir, "game.ts")).href)) as {
+    gameConfig: PlayerConfig;
+    bindings?: InputBindings;
+    screen?: ScriptOptions["screen"];
+  };
   process.chdir(gameDir);
-  const script = flags.get("script-file") !== undefined ? readFileSync(flags.get("script-file") as string, "utf8") : (flags.get("script") ?? "_");
+  const script =
+    flags.get("script-file") !== undefined ? readFileSync(flags.get("script-file") as string, "utf8") : (flags.get("script") ?? "_");
   const frames = parseInputScript(script, { bindings: mod.bindings, screen: mod.screen });
   let at: number[] | undefined;
   if (flags.has("at")) at = (flags.get("at") as string).split(",").map(Number);
@@ -79,11 +86,15 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
   const scale = Math.max(1, Number(flags.get("scale") ?? 1));
   const out = resolve(flags.get("out") ?? "shots");
   mkdirSync(out, { recursive: true });
-  for (const shot of shots) writeFileSync(join(out, `step-${shot.step}.png`), encodePng(enlarge(shot.pixels, shot.pixels.width * scale > 1600 ? 1 : scale)));
+  for (const shot of shots)
+    writeFileSync(join(out, `step-${shot.step}.png`), encodePng(enlarge(shot.pixels, shot.pixels.width * scale > 1600 ? 1 : scale)));
   const written = shots.map((shot) => `step-${shot.step}.png`);
   const sheetName = flags.get("sheet");
   if (sheetName !== undefined) {
-    const sheet = contactSheet(shots.map((shot) => shot.pixels), { columns: Number(flags.get("columns") ?? 4), scale, labels: shots.map((shot) => shot.step) });
+    const sheet = contactSheet(
+      shots.map((shot) => shot.pixels),
+      { columns: Number(flags.get("columns") ?? 4), scale, labels: shots.map((shot) => shot.step) }
+    );
     writeFileSync(join(out, `${sheetName}.png`), encodePng(sheet));
     written.push(`${sheetName}.png`);
   }

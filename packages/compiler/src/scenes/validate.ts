@@ -5,7 +5,15 @@
  * message carries its JSON path (`entities[1].props.speed`).
  */
 import { SyntaxKind, type Expression, type Node, type ObjectLiteralExpression, type SourceFile } from "typescript/ast";
-import { isArrayLiteralExpression, isNumericLiteral, isObjectLiteralExpression, isPrefixUnaryExpression, isPropertyAssignment, isStringLiteral } from "typescript/ast/is";
+import {
+  isArrayLiteralExpression,
+  isNumericLiteral,
+  isObjectLiteralExpression,
+  isPrefixUnaryExpression,
+  isPropertyAssignment,
+  isStringLiteral,
+} from "typescript/ast/is";
+
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import type { PropTypeIR } from "../ir/types.ts";
 import { spanOf, type TsxParser } from "../parser/parser.ts";
@@ -17,7 +25,12 @@ const TRANSFORM_NUMBERS = ["x", "y", "z", "rotation", "scaleX", "scaleY", "opaci
 
 type Code = (typeof DiagnosticCode)[keyof typeof DiagnosticCode];
 
-export function validateScene(parser: TsxParser, fileName: string, text: string, prefabs: ReadonlyMap<string, PrefabSchema>): CompilerDiagnostic[] {
+export function validateScene(
+  parser: TsxParser,
+  fileName: string,
+  text: string,
+  prefabs: ReadonlyMap<string, PrefabSchema>
+): CompilerDiagnostic[] {
   try {
     JSON.parse(text);
   } catch (e) {
@@ -50,15 +63,24 @@ class SceneValidator {
 
   validate(): CompilerDiagnostic[] {
     const statement = this.#sf.statements[0];
-    const root = statement && statement.kind === SyntaxKind.ExpressionStatement ? (statement as unknown as { expression: Expression }).expression : null;
+    const root =
+      statement && statement.kind === SyntaxKind.ExpressionStatement
+        ? (statement as unknown as { expression: Expression }).expression
+        : null;
     if (!root || !isObjectLiteralExpression(root)) {
-      this.#report(DiagnosticCode.SceneShape, "A scene is an object: { \"version\": 1, \"entities\": [ … ] }.", statement ?? this.#sf, "$");
+      this.#report(DiagnosticCode.SceneShape, 'A scene is an object: { "version": 1, "entities": [ … ] }.', statement ?? this.#sf, "$");
       return this.#diagnostics;
     }
     let sawEntities = false;
     for (const [key, value] of this.#members(root, ["version", "entities"], "$")) {
       if (key === "version") {
-        if (!isNumericLiteral(value) || Number(value.text) !== SCENE_VERSION) this.#report(DiagnosticCode.SceneShape, `Unsupported scene version ${value.getText(this.#sf)}: this compiler reads version ${SCENE_VERSION}.`, value, "version");
+        if (!isNumericLiteral(value) || Number(value.text) !== SCENE_VERSION)
+          this.#report(
+            DiagnosticCode.SceneShape,
+            `Unsupported scene version ${value.getText(this.#sf)}: this compiler reads version ${SCENE_VERSION}.`,
+            value,
+            "version"
+          );
       } else {
         sawEntities = true;
         this.#entities(value, "entities");
@@ -78,25 +100,44 @@ class SceneValidator {
 
   #entity(node: Expression, path: string): void {
     if (!isObjectLiteralExpression(node)) {
-      this.#report(DiagnosticCode.SceneShape, "An entity is an object: { \"id\": …, \"prefab\": … }.", node, path);
+      this.#report(DiagnosticCode.SceneShape, 'An entity is an object: { "id": …, "prefab": … }.', node, path);
       return;
     }
     const members = new Map(this.#members(node, ENTITY_KEYS, path));
     const id = members.get("id");
-    if (!id) this.#report(DiagnosticCode.SceneShape, "An entity needs an `id`: a string that stays the same when the scene is edited.", node, path);
-    else if (!isStringLiteral(id) || id.text === "") this.#report(DiagnosticCode.SceneShape, `${path}.id must be a non-empty string.`, id, `${path}.id`);
-    else if (this.#ids.has(id.text)) this.#report(DiagnosticCode.DuplicateSceneId, `Duplicate id '${id.text}' (first used at ${this.#ids.get(id.text)}).`, id, `${path}.id`);
+    if (!id)
+      this.#report(
+        DiagnosticCode.SceneShape,
+        "An entity needs an `id`: a string that stays the same when the scene is edited.",
+        node,
+        path
+      );
+    else if (!isStringLiteral(id) || id.text === "")
+      this.#report(DiagnosticCode.SceneShape, `${path}.id must be a non-empty string.`, id, `${path}.id`);
+    else if (this.#ids.has(id.text))
+      this.#report(
+        DiagnosticCode.DuplicateSceneId,
+        `Duplicate id '${id.text}' (first used at ${this.#ids.get(id.text)}).`,
+        id,
+        `${path}.id`
+      );
     else this.#ids.set(id.text, `${path}.id`);
 
     const prefabNode = members.get("prefab");
     let prefab: PrefabSchema | undefined;
     if (!prefabNode) this.#report(DiagnosticCode.SceneShape, "An entity needs a `prefab`: the name of an exported component.", node, path);
-    else if (!isStringLiteral(prefabNode)) this.#report(DiagnosticCode.SceneShape, `${path}.prefab must be a string.`, prefabNode, `${path}.prefab`);
+    else if (!isStringLiteral(prefabNode))
+      this.#report(DiagnosticCode.SceneShape, `${path}.prefab must be a string.`, prefabNode, `${path}.prefab`);
     else {
       prefab = this.#prefabs.get(prefabNode.text);
       if (!prefab) {
         const known = [...this.#prefabs.keys()].sort();
-        this.#report(DiagnosticCode.UnknownPrefab, `Unknown prefab '${prefabNode.text}'. Prefabs: ${known.join(", ") || "none (export a component)"}.`, prefabNode, `${path}.prefab`);
+        this.#report(
+          DiagnosticCode.UnknownPrefab,
+          `Unknown prefab '${prefabNode.text}'. Prefabs: ${known.join(", ") || "none (export a component)"}.`,
+          prefabNode,
+          `${path}.prefab`
+        );
       }
     }
 
@@ -120,9 +161,19 @@ class SceneValidator {
       if (!prefab) continue;
       const prop = prefab.props.find((p) => p.name === name);
       if (!prop) {
-        this.#report(DiagnosticCode.UnknownPrefabProp, `${prefab.name} has no prop '${name}'${prefab.props.length ? ` (props: ${prefab.props.map((p) => p.name).join(", ")})` : " (it takes no props)"}. Callback props cannot be set from data.`, value, `${path}.${name}`);
+        this.#report(
+          DiagnosticCode.UnknownPrefabProp,
+          `${prefab.name} has no prop '${name}'${prefab.props.length ? ` (props: ${prefab.props.map((p) => p.name).join(", ")})` : " (it takes no props)"}. Callback props cannot be set from data.`,
+          value,
+          `${path}.${name}`
+        );
       } else if (!prop.settable) {
-        this.#report(DiagnosticCode.PropNotSettable, `Prop '${name}' of ${prefab.name} is typed ${describeType(prop.type)}, which data cannot express, so it can only be set from code.`, value, `${path}.${name}`);
+        this.#report(
+          DiagnosticCode.PropNotSettable,
+          `Prop '${name}' of ${prefab.name} is typed ${describeType(prop.type)}, which data cannot express, so it can only be set from code.`,
+          value,
+          `${path}.${name}`
+        );
       } else {
         this.#value(value, prop.type, `${path}.${name}`);
       }
@@ -132,7 +183,13 @@ class SceneValidator {
 
   #missing(prefab: PrefabSchema, given: ReadonlySet<string>, at: Node, path: string): void {
     for (const prop of prefab.props) {
-      if (!prop.optional && !given.has(prop.name)) this.#report(DiagnosticCode.MissingPrefabProp, `${prefab.name} needs the prop '${prop.name}' (${describeType(prop.type)}).`, at, path);
+      if (!prop.optional && !given.has(prop.name))
+        this.#report(
+          DiagnosticCode.MissingPrefabProp,
+          `${prefab.name} needs the prop '${prop.name}' (${describeType(prop.type)}).`,
+          at,
+          path
+        );
     }
   }
 
@@ -142,16 +199,28 @@ class SceneValidator {
       return;
     }
     for (const [name, value] of this.#members(node, [...TRANSFORM_NUMBERS, "global"], path)) {
-      this.#value(value, name === "global" ? { kind: "Primitive", name: "boolean" } : { kind: "Primitive", name: "number" }, `${path}.${name}`);
+      this.#value(
+        value,
+        name === "global" ? { kind: "Primitive", name: "boolean" } : { kind: "Primitive", name: "number" },
+        `${path}.${name}`
+      );
     }
   }
 
   /** A JSON value against a prop type, reporting on the offending node. */
   #value(node: Expression, type: PropTypeIR, path: string): void {
-    const wrong = (expected: string): void => this.#report(DiagnosticCode.WrongPropType, `Expected ${expected}, got ${this.#describe(node)}.`, node, path);
+    const wrong = (expected: string): void =>
+      this.#report(DiagnosticCode.WrongPropType, `Expected ${expected}, got ${this.#describe(node)}.`, node, path);
     switch (type.kind) {
       case "Primitive":
-        if (type.name === "number" ? numberValue(node) === null : type.name === "string" ? !isStringLiteral(node) : node.kind !== SyntaxKind.TrueKeyword && node.kind !== SyntaxKind.FalseKeyword) wrong(type.name === "number" ? "a number" : type.name === "string" ? "a string" : "true or false");
+        if (
+          type.name === "number"
+            ? numberValue(node) === null
+            : type.name === "string"
+              ? !isStringLiteral(node)
+              : node.kind !== SyntaxKind.TrueKeyword && node.kind !== SyntaxKind.FalseKeyword
+        )
+          wrong(type.name === "number" ? "a number" : type.name === "string" ? "a string" : "true or false");
         return;
       case "Literals": {
         const value = isStringLiteral(node) ? node.text : numberValue(node);
@@ -174,7 +243,7 @@ class SceneValidator {
     const seen = new Set<string>();
     for (const member of node.properties) {
       if (!isPropertyAssignment(member) || !isStringLiteral(member.name)) {
-        this.#report(DiagnosticCode.SceneShape, "Expected a \"name\": value pair.", member, path);
+        this.#report(DiagnosticCode.SceneShape, 'Expected a "name": value pair.', member, path);
         continue;
       }
       const name = member.name.text;
@@ -210,16 +279,22 @@ class SceneValidator {
 /** A JSON number literal, including a negative one (`-3` is a prefix operator and a literal). */
 function numberValue(node: Expression): number | null {
   if (isNumericLiteral(node)) return Number(node.text);
-  if (isPrefixUnaryExpression(node) && node.operator === SyntaxKind.MinusToken && isNumericLiteral(node.operand)) return -Number(node.operand.text);
+  if (isPrefixUnaryExpression(node) && node.operator === SyntaxKind.MinusToken && isNumericLiteral(node.operand))
+    return -Number(node.operand.text);
   return null;
 }
 
 function describeType(type: PropTypeIR): string {
   switch (type.kind) {
-    case "Primitive": return type.name;
-    case "Literals": return type.values.map((v) => JSON.stringify(v)).join(" | ");
-    case "Array": return `${describeType(type.element)}[]`;
-    case "Function": return "a function";
-    case "SourceText": return type.text;
+    case "Primitive":
+      return type.name;
+    case "Literals":
+      return type.values.map((v) => JSON.stringify(v)).join(" | ");
+    case "Array":
+      return `${describeType(type.element)}[]`;
+    case "Function":
+      return "a function";
+    case "SourceText":
+      return type.text;
   }
 }

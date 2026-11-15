@@ -1,5 +1,5 @@
-import { MAP } from "../src/rules/map.ts";
 import { BEST } from "../src/rules/coverage.ts";
+import { MAP } from "../src/rules/map.ts";
 
 /**
  * Input scripts that play the whole game: they click pads to build and upgrade, start the waves and wait them out. The pad
@@ -37,5 +37,9 @@ export const REPLAYS = {
   /** A good build wins all ten waves with lives left. */
   good: rounds(MIXED, 10, 1600, UPGRADES),
   /** Three bolt towers lose. */
-  thin: rounds(BEST.slice(0, 3).map((pad) => build(pad, "bolt")), 10, 800),
+  thin: rounds(
+    BEST.slice(0, 3).map((pad) => build(pad, "bolt")),
+    10,
+    800
+  ),
 } as const;

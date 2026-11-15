@@ -1,9 +1,10 @@
+import assert from "node:assert/strict";
 /**
  * The game's data and the pure helpers its components use: the map, the path, the generator, the wave tables and the towers'
  * numbers. What the game does with them (walking, firing, paying) is tested as components, in `battle.test.ts`.
  */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { hpOf } from "../src/battle.ts";
 import { MAP } from "../src/rules/map.ts";
 import { makePath, pathAt } from "../src/rules/path.ts";
@@ -22,7 +23,10 @@ describe("the map", () => {
   });
 
   it("numbers pads in reading order, none on the path, each within reach of it", () => {
-    assert.deepEqual(MAP.pads.map((p) => p.id), MAP.pads.map((_, i) => i));
+    assert.deepEqual(
+      MAP.pads.map((p) => p.id),
+      MAP.pads.map((_, i) => i)
+    );
     const sorted = [...MAP.pads].sort((a, b) => a.y - b.y || a.x - b.x);
     assert.deepEqual(MAP.pads, sorted);
     for (const p of MAP.pads) {
@@ -37,7 +41,11 @@ describe("the map", () => {
 });
 
 describe("path", () => {
-  const path = makePath([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 20 }]);
+  const path = makePath([
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 10, y: 20 },
+  ]);
   it("finds a position and a direction at a distance, clamped to its ends", () => {
     assert.deepEqual(pathAt(path, 4), { x: 4, y: 0, dx: 1, dy: 0 });
     assert.deepEqual(pathAt(path, 20), { x: 10, y: 10, dx: 0, dy: 1 });
@@ -70,7 +78,12 @@ describe("waves", () => {
   });
 
   it("turns groups into a timed list", () => {
-    const table: Group[][] = [[{ kind: "runner", count: 3, gap: 1, delay: 2 }, { kind: "grunt", count: 2, gap: 2, delay: 3 }]];
+    const table: Group[][] = [
+      [
+        { kind: "runner", count: 3, gap: 1, delay: 2 },
+        { kind: "grunt", count: 2, gap: 2, delay: 3 },
+      ],
+    ];
     assert.deepEqual(spawnsOf(0, table), [
       { at: 2, kind: "runner" },
       { at: 3, kind: "runner" },

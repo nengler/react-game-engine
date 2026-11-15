@@ -1,8 +1,6 @@
 // Shared declarations of the component generator: the mount helpers, names, and the small text helpers used by generator.ts and its layers.
 import { assertNever, type ChildIR, type ElementIR, type ParamIR, type TypeIR, type StateIR } from "../ir/types.ts";
 
-
-
 /**
  * What children attach to. A built-in takes them by position among its
  * children (slot); a component takes the children its parent passes at its
@@ -20,11 +18,15 @@ export function mountOf(el: ElementIR, ref: string): Mount {
 }
 
 export function addChild(mount: Mount, child: string, siblings: readonly ChildIR[], index: number): string {
-  return mount.passed ? `${mount.ref}.attachPassedChild(${child}, ${index})` : `${mount.ref}.addChild(${child}${slotArgument(siblings, index)})`;
+  return mount.passed
+    ? `${mount.ref}.attachPassedChild(${child}, ${index})`
+    : `${mount.ref}.addChild(${child}${slotArgument(siblings, index)})`;
 }
 
 export function queueAddChild(mount: Mount, child: string, siblings: readonly ChildIR[], index: number): string {
-  return mount.passed ? `${mount.ref}.queueAttachPassedChild(${child}, ${index})` : `${mount.ref}.queueAddChild(${child}${slotArgument(siblings, index)})`;
+  return mount.passed
+    ? `${mount.ref}.queueAttachPassedChild(${child}, ${index})`
+    : `${mount.ref}.queueAddChild(${child}${slotArgument(siblings, index)})`;
 }
 
 export function queueRemoveChild(mount: Mount, child: string): string {
@@ -32,7 +34,10 @@ export function queueRemoveChild(mount: Mount, child: string): string {
 }
 
 /** The container holding `{children}` and the slot's index among its children, found through static elements (`{children}` is only allowed there). */
-export function findChildrenSlot(children: readonly ChildIR[], host: string): { host: string; index: number } | { forward: string; at: number } | null {
+export function findChildrenSlot(
+  children: readonly ChildIR[],
+  host: string
+): { host: string; index: number } | { forward: string; at: number } | null {
   for (const [index, child] of children.entries()) {
     if (child.kind === "ChildrenSlot") return { host, index };
   }

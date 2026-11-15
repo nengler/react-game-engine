@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Every loop, `try` and `throw` in a handler (REACT_FEEL_PLAN.md, A1): what a React author writes in a function works in a
  * `useUpdate`, a `useInput`, a callback prop and an updater's handler.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Text, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -45,7 +47,7 @@ describe("loops in handlers", () => {
       text += \`\${i}:\${j} \`;
     }
     s.out = text;`),
-      "0:10 2:6 3:4 4:2 ",
+      "0:10 2:6 3:4 4:2 "
     );
   });
 
@@ -62,7 +64,7 @@ describe("loops in handlers", () => {
       text += "!";
     } while (false);
     s.out = text;`),
-      "31-1!",
+      "31-1!"
     );
   });
 
@@ -75,7 +77,7 @@ describe("loops in handlers", () => {
       if (n === 3) break;
     }
     s.out = String(n);`),
-      "3",
+      "3"
     );
   });
 
@@ -97,7 +99,7 @@ describe("loops in handlers", () => {
       text += "never";
     }
     s.out = text;`),
-      "aboom!b",
+      "aboom!b"
     );
   });
 });

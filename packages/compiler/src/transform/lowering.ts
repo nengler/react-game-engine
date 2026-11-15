@@ -1,14 +1,47 @@
+import { type RuntimeManifest } from "@rge/runtime";
 // The base of the component lowering: fields, names, diagnostics and type helpers. Layer 0 of ComponentLowering (see transform.ts).
 import { SyntaxKind, type Expression, type PropertyAccessExpression, type Node, type SourceFile } from "typescript/ast";
-import { isPropertyAccessExpression, isIdentifier, isArrayTypeNode, isUnionTypeNode, isBindingElement, isFunctionDeclaration, isImportClause, isImportSpecifier, isNamespaceImport, isParameterDeclaration, isVariableDeclaration } from "typescript/ast/is";
+import {
+  isPropertyAccessExpression,
+  isIdentifier,
+  isArrayTypeNode,
+  isUnionTypeNode,
+  isBindingElement,
+  isFunctionDeclaration,
+  isImportClause,
+  isImportSpecifier,
+  isNamespaceImport,
+  isParameterDeclaration,
+  isVariableDeclaration,
+} from "typescript/ast/is";
+
 import { unwrapParens, type TypeDeclarationAnalysis, type ComponentAnalysis } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type OwnFunctionIR, type TypeIR, type ParamIR, type ValuePropIR, type PropIR, readsParam, functionReadsParam, collectDependencies, type SoundIR, type PropDeclIR, type PropTypeIR, type ElementIR, type ExprIR, type ParamReadIR, type SourceSpan, type StateId, type ValueType, type StateIR, type HookIR } from "../ir/types.ts";
-import { spanOf } from "../parser/parser.ts";
 import { type GameStateDefinition } from "../gamestate/schema.ts";
-import { type RuntimeManifest } from "@rge/runtime";
-import { Scope } from "./scope.ts";
+import {
+  type OwnFunctionIR,
+  type TypeIR,
+  type ParamIR,
+  type ValuePropIR,
+  type PropIR,
+  readsParam,
+  functionReadsParam,
+  collectDependencies,
+  type SoundIR,
+  type PropDeclIR,
+  type PropTypeIR,
+  type ElementIR,
+  type ExprIR,
+  type ParamReadIR,
+  type SourceSpan,
+  type StateId,
+  type ValueType,
+  type StateIR,
+  type HookIR,
+} from "../ir/types.ts";
+import { spanOf } from "../parser/parser.ts";
 import { type AuthoringImports, rootTag, unwrapTypeParens, literalValue, nearest } from "./helpers.ts";
+import { Scope } from "./scope.ts";
 
 /** The CSS names of keyword values that the runtime spells differently. */
 const CSS_ALIASES: Readonly<Record<string, string>> = { "flex-start": "start", "flex-end": "end" };
@@ -115,7 +148,12 @@ export class LoweringBase {
     this.intrinsics = module.intrinsics;
     this.imported = module.imported;
     // A component extends its root element's class, so it may not reuse that class's own field names.
-    this.usedNames = new Set([...module.manifest.reservedMembers, ...(module.intrinsics.has(rootTag(component.jsx, module.manifest.hostIntrinsic)) ? (module.manifest.intrinsicMembers[rootTag(component.jsx, module.manifest.hostIntrinsic)] ?? []) : [])]);
+    this.usedNames = new Set([
+      ...module.manifest.reservedMembers,
+      ...(module.intrinsics.has(rootTag(component.jsx, module.manifest.hostIntrinsic))
+        ? (module.manifest.intrinsicMembers[rootTag(component.jsx, module.manifest.hostIntrinsic)] ?? [])
+        : []),
+    ]);
     this.locals = module.locals;
     this.hostIntrinsic = module.manifest.hostIntrinsic;
     this.diagnostics = module.diagnostics;
@@ -127,9 +165,12 @@ export class LoweringBase {
     if (node === null) return { kind: "SourceText", text: "unknown" };
     const t = unwrapTypeParens(node);
     switch (t.kind) {
-      case SyntaxKind.NumberKeyword: return { kind: "Primitive", name: "number" };
-      case SyntaxKind.StringKeyword: return { kind: "Primitive", name: "string" };
-      case SyntaxKind.BooleanKeyword: return { kind: "Primitive", name: "boolean" };
+      case SyntaxKind.NumberKeyword:
+        return { kind: "Primitive", name: "number" };
+      case SyntaxKind.StringKeyword:
+        return { kind: "Primitive", name: "string" };
+      case SyntaxKind.BooleanKeyword:
+        return { kind: "Primitive", name: "boolean" };
     }
     if (isArrayTypeNode(t)) {
       const element = this.propType(t.elementType);
@@ -144,9 +185,12 @@ export class LoweringBase {
   typeFromNode(node: Node): TypeIR {
     const t = unwrapTypeParens(node);
     switch (t.kind) {
-      case SyntaxKind.NumberKeyword: return { kind: "Primitive", name: "number" };
-      case SyntaxKind.StringKeyword: return { kind: "Primitive", name: "string" };
-      case SyntaxKind.BooleanKeyword: return { kind: "Primitive", name: "boolean" };
+      case SyntaxKind.NumberKeyword:
+        return { kind: "Primitive", name: "number" };
+      case SyntaxKind.StringKeyword:
+        return { kind: "Primitive", name: "string" };
+      case SyntaxKind.BooleanKeyword:
+        return { kind: "Primitive", name: "boolean" };
     }
     if (isArrayTypeNode(t)) return { kind: "Array", element: this.typeFromNode(t.elementType) };
     return { kind: "SourceType", text: t.getText(this.sourceFile) };
@@ -160,12 +204,16 @@ export class LoweringBase {
    */
   protected inferType(expr: ExprIR): ValueType | null {
     switch (expr.kind) {
-      case "NumberLiteral": return "number";
+      case "NumberLiteral":
+        return "number";
       case "StringLiteral":
-      case "TemplateLiteral": return "string";
-      case "BooleanLiteral": return "boolean";
+      case "TemplateLiteral":
+        return "string";
+      case "BooleanLiteral":
+        return "boolean";
       /** `Math.PI`, `Math.E`: the constants a component may write. */
-      case "PlainRef": return /^Math\.[A-Z][A-Z0-9_]*$/.test(expr.name) ? "number" : null;
+      case "PlainRef":
+        return /^Math\.[A-Z][A-Z0-9_]*$/.test(expr.name) ? "number" : null;
       case "StateRead": {
         const type = this.stateTypes.get(expr.state);
         return type?.kind === "Primitive" ? (type.name as ValueType) : null;
@@ -174,28 +222,54 @@ export class LoweringBase {
         const decl = this.propDecls.find((p) => p.name === expr.name);
         return decl?.role === "value" && decl.type.kind === "Primitive" ? decl.type.name : null;
       }
-      case "Unary": return expr.operator === "!" ? "boolean" : expr.operator === "typeof" ? "string" : this.inferType(expr.operand) === "number" ? "number" : null;
+      case "Unary":
+        return expr.operator === "!"
+          ? "boolean"
+          : expr.operator === "typeof"
+            ? "string"
+            : this.inferType(expr.operand) === "number"
+              ? "number"
+              : null;
       case "Binary": {
         switch (expr.operator) {
-          case "<": case "<=": case ">": case ">=": case "===": case "!==": case "==": case "!=": case "instanceof": case "in": return "boolean";
-          case "-": case "*": case "/": case "%": case "**": return this.inferType(expr.left) === "number" && this.inferType(expr.right) === "number" ? "number" : null;
+          case "<":
+          case "<=":
+          case ">":
+          case ">=":
+          case "===":
+          case "!==":
+          case "==":
+          case "!=":
+          case "instanceof":
+          case "in":
+            return "boolean";
+          case "-":
+          case "*":
+          case "/":
+          case "%":
+          case "**":
+            return this.inferType(expr.left) === "number" && this.inferType(expr.right) === "number" ? "number" : null;
           case "+": {
             const [left, right] = [this.inferType(expr.left), this.inferType(expr.right)];
             if (left === "string" || right === "string") return left && right ? "string" : null;
             return left === "number" && right === "number" ? "number" : null;
           }
-          case "&&": case "||": case "??": {
+          case "&&":
+          case "||":
+          case "??": {
             const [left, right] = [this.inferType(expr.left), this.inferType(expr.right)];
             return left !== null && left === right ? left : null;
           }
-          default: return null;
+          default:
+            return null;
         }
       }
       case "Conditional": {
         const [a, b] = [this.inferType(expr.whenTrue), this.inferType(expr.whenFalse)];
         return a !== null && a === b ? a : null;
       }
-      default: return null;
+      default:
+        return null;
     }
   }
 
@@ -216,14 +290,25 @@ export class LoweringBase {
     const readsItem = (e: ExprIR): boolean => readsParam(e, item.id) || (index !== null && readsParam(e, index.id));
     const dynamic = <T extends ValuePropIR>(p: T): T => {
       if (!readsItem(p.value)) return p;
-      return { kind: "DynamicProp", name: p.name, value: p.value, dependencies: [...collectDependencies(p.value), { kind: "Item" }] } as unknown as T;
+      return {
+        kind: "DynamicProp",
+        name: p.name,
+        value: p.value,
+        dependencies: [...collectDependencies(p.value), { kind: "Item" }],
+      } as unknown as T;
     };
     let ok = true;
     const props = el.props.map((p): PropIR => {
       if (p.kind === "SpreadProp") return readsItem(p.value) ? { ...p, dependencies: [...p.dependencies, { kind: "Item" }] } : p;
       if (p.kind !== "CallbackProp") return dynamic(p);
       if (index !== null && functionReadsParam(p.handler, index.id)) {
-        this.diagnostics.push(error(DiagnosticCode.InvalidList, `Callback '${p.name}' cannot read the index '${index.name}': it changes when items move. Read the item (\`${item.name}.id\`) instead.`, el.span));
+        this.diagnostics.push(
+          error(
+            DiagnosticCode.InvalidList,
+            `Callback '${p.name}' cannot read the index '${index.name}': it changes when items move. Read the item (\`${item.name}.id\`) instead.`,
+            el.span
+          )
+        );
         this.errorCount++;
         ok = false;
       }
@@ -243,7 +328,8 @@ export class LoweringBase {
     const allowed = this.manifest.intrinsicLiterals[tag]?.[name];
     if (!allowed) return true;
     if (value.kind === "StringLiteral" && allowed.includes(value.value)) return true;
-    if (value.kind !== "StringLiteral" && value.kind !== "NumberLiteral" && value.kind !== "BooleanLiteral" && value.kind !== "NullLiteral") return true;
+    if (value.kind !== "StringLiteral" && value.kind !== "NumberLiteral" && value.kind !== "BooleanLiteral" && value.kind !== "NullLiteral")
+      return true;
     const given = value.kind === "StringLiteral" ? `'${value.value}'` : value.kind === "NullLiteral" ? "null" : String(value.value);
     // CSS spells start and end `flex-start` and `flex-end`; say so rather than guess from the letters.
     const css = value.kind === "StringLiteral" ? CSS_ALIASES[value.value] : undefined;
@@ -251,7 +337,7 @@ export class LoweringBase {
     this.report(
       DiagnosticCode.InvalidPropValue,
       `<${tag} ${name}> must be one of ${allowed.map((v) => `"${v}"`).join(", ")}, not ${given}${near ? ` (did you mean "${near}"?)` : ""}.`,
-      at,
+      at
     );
     return false;
   }
@@ -273,7 +359,7 @@ export class LoweringBase {
     this.report(
       DiagnosticCode.InvalidPropValue,
       `<${tag} ${name}> must be a number of pixels, "fit", "grow", or a percentage from "0%" to "100%", not ${given}${near ? ` (did you mean "${near}"?)` : ""}.`,
-      at,
+      at
     );
     return false;
   }
@@ -289,15 +375,26 @@ export class LoweringBase {
   }
 
   /** Checks that `{children}` is somewhere a slot can be. A slot must be in a container that is always there, once. */
-  protected lowerChildrenSlot(at: Node, context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean }): boolean {
+  protected lowerChildrenSlot(
+    at: Node,
+    context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean }
+  ): boolean {
     const code = DiagnosticCode.UnsupportedJsxChild;
     this.slotRejected = true;
     if (context.passed && !context.forward) {
-      this.report(code, "`{children}` can be forwarded to a component only when that component is always present: not inside a condition, a list, or another component's children.", at);
+      this.report(
+        code,
+        "`{children}` can be forwarded to a component only when that component is always present: not inside a condition, a list, or another component's children.",
+        at
+      );
       return false;
     }
     if (!context.slot && !context.passed) {
-      this.report(code, "`{children}` must be a direct child of a container that is always present: not inside a condition, a list, or another component's children.", at);
+      this.report(
+        code,
+        "`{children}` must be a direct child of a container that is always present: not inside a condition, a list, or another component's children.",
+        at
+      );
       return false;
     }
     if (this.slotSeen) {
@@ -320,11 +417,19 @@ export class LoweringBase {
     if (binding?.kind !== "propsObject") return undefined;
     const decl = this.propDecls.find((p) => p.name === node.name.text);
     if (!decl && node.name.text === "children" && this.declaredChildren) {
-      this.report(DiagnosticCode.UnsupportedExpression, "`children` can only be used as a JSX child, `{props.children}`: it is the elements a parent passes, not a value.", node.name);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        "`children` can only be used as a JSX child, `{props.children}`: it is the elements a parent passes, not a value.",
+        node.name
+      );
       return null;
     }
     if (!decl) {
-      this.report(DiagnosticCode.UnsupportedExpression, `'${node.name.text}' is not a prop of ${this.component.props?.typeName ?? "this component"}.`, node.name);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `'${node.name.text}' is not a prop of ${this.component.props?.typeName ?? "this component"}.`,
+        node.name
+      );
       return null;
     }
     return { name: decl.name, role: decl.role };
@@ -342,7 +447,11 @@ export class LoweringBase {
     const id = binding.fields.get(node.name.text);
     if (id === undefined) {
       const near = nearest(node.name.text, [...binding.fields.keys()]);
-      this.report(DiagnosticCode.UnknownIdentifier, `'${binding.name}' has no field '${node.name.text}'${near ? ` (did you mean '${near}'?)` : ""}. Its fields: ${[...binding.fields.keys()].join(", ")}.`, node.name);
+      this.report(
+        DiagnosticCode.UnknownIdentifier,
+        `'${binding.name}' has no field '${node.name.text}'${near ? ` (did you mean '${near}'?)` : ""}. Its fields: ${[...binding.fields.keys()].join(", ")}.`,
+        node.name
+      );
       return "error";
     }
     return id;
@@ -377,7 +486,11 @@ export class LoweringBase {
   protected requireImport(name: string, at: Node): void {
     if (this.authoring.names.has(name) || this.authoring.reported.has(name)) return;
     this.authoring.reported.add(name);
-    this.report(DiagnosticCode.MissingImport, `'${name}' is not imported: add \`import { ${name} } from "${this.manifest.authoringModule}"\`.`, at);
+    this.report(
+      DiagnosticCode.MissingImport,
+      `'${name}' is not imported: add \`import { ${name} } from "${this.manifest.authoringModule}"\`.`,
+      at
+    );
   }
 
   protected claimName(name: string, at: Node, code: CompilerDiagnostic["code"] = DiagnosticCode.InvalidUseState): boolean {
@@ -408,7 +521,10 @@ export class LoweringBase {
 
   /** A member of the runtime's object (`name` of an `<Entity>` root, `render`), as opposed to a name this component declared. */
   protected isRuntimeMember(name: string): boolean {
-    return this.manifest.reservedMembers.includes(name) || (this.manifest.intrinsicMembers[rootTag(this.component.jsx, this.manifest.hostIntrinsic)] ?? []).includes(name);
+    return (
+      this.manifest.reservedMembers.includes(name) ||
+      (this.manifest.intrinsicMembers[rootTag(this.component.jsx, this.manifest.hostIntrinsic)] ?? []).includes(name)
+    );
   }
 
   /** A free field name for an element; with a suffix (a list's `enemyItems`), the suffixed name is claimed too. */
@@ -493,7 +609,15 @@ export class LoweringBase {
     if (this.#declared === null) {
       const names = new Set<string>();
       const visit = (node: Node): void => {
-        if (isVariableDeclaration(node) || isParameterDeclaration(node) || isBindingElement(node) || isFunctionDeclaration(node) || isImportClause(node) || isNamespaceImport(node) || isImportSpecifier(node)) {
+        if (
+          isVariableDeclaration(node) ||
+          isParameterDeclaration(node) ||
+          isBindingElement(node) ||
+          isFunctionDeclaration(node) ||
+          isImportClause(node) ||
+          isNamespaceImport(node) ||
+          isImportSpecifier(node)
+        ) {
           const name = (node as { name?: Node }).name;
           if (name !== undefined && isIdentifier(name)) names.add(name.text);
         }

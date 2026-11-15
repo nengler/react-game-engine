@@ -104,6 +104,8 @@ Requires Node.js ≥ 22.18 (TypeScript files run directly via type stripping).
 npm install
 npm test            # full pipeline tests
 npm run typecheck   # tsc 7.1 over compiler, runtime, tests and generated example
+npm run lint        # oxlint
+npm run format      # oxfmt --write (format:check to only verify)
 npm run example     # recompile packages/example/src → packages/example/generated, and check its scenes
 
 # The native player (needs cmake and a C compiler; on Linux, the X11/GL dev packages for a real window)

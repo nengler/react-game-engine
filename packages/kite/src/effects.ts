@@ -1,4 +1,5 @@
 import { createParticles, createSounds, freeze, type Vector2 } from "@rge/runtime";
+
 import type { GameEvent } from "./rules/events.ts";
 import { freezeFor } from "./rules/freeze.ts";
 
@@ -9,11 +10,34 @@ import { freezeFor } from "./rules/freeze.ts";
  */
 export const fx = createParticles({
   /** Dust thrown up where the character lands. */
-  dust: { burst: 9, lifetime: 0.4, speed: 55, angle: 270, spread: 75, size: 3, fade: true, shrink: true, color: "#e6e0d2", gravity: 160, max: 48 },
+  dust: {
+    burst: 9,
+    lifetime: 0.4,
+    speed: 55,
+    angle: 270,
+    spread: 75,
+    size: 3,
+    fade: true,
+    shrink: true,
+    color: "#e6e0d2",
+    gravity: 160,
+    max: 48,
+  },
   /** A puff at the feet as a jump leaves the ground (or a wall). */
   kick: { burst: 6, lifetime: 0.3, speed: 40, angle: 90, spread: 60, size: 2, fade: true, color: "#e6e0d2", max: 32 },
   /** Sparks where the character died. */
-  death: { burst: 18, lifetime: 0.6, speed: 85, spread: 180, size: 3, shrink: true, color: "#fff1d6", endColor: "#ff7a59", gravity: 140, max: 36 },
+  death: {
+    burst: 18,
+    lifetime: 0.6,
+    speed: 85,
+    spread: 180,
+    size: 3,
+    shrink: true,
+    color: "#fff1d6",
+    endColor: "#ff7a59",
+    gravity: 140,
+    max: 36,
+  },
 });
 
 export const sfx = createSounds({
@@ -24,7 +48,6 @@ export const sfx = createSounds({
   death: { src: "death.wav", volume: 0.8 },
   start: "start.wav",
 });
-
 
 /**
  * Answer what the rules say happened in a step: a sound, a burst at the place it happened, a freeze (the camera's shake is the

@@ -1,5 +1,5 @@
-import { GameObject } from "../GameObject.ts";
 import type { BurstOptions, ParticleRenderer, ParticleStore } from "../effects.ts";
+import { GameObject } from "../GameObject.ts";
 import { Particles } from "./Particles.ts";
 
 export interface ParticleLayerProps {

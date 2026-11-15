@@ -1,6 +1,8 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { Entity, Flex, Hud, Slider, Toggle, getSoundSink, type GameObject, type SliderProps, type ToggleProps } from "@rge/runtime";
+
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord, type InputFrame } from "../src/recording.ts";
 
@@ -28,7 +30,8 @@ function play(root: () => GameObject) {
 
 const slider = (props: SliderProps = {}): Slider => new Slider({ width: 100, height: 14, ...props });
 const toggle = (props: ToggleProps = {}): Toggle => new Toggle(props);
-const near = (actual: number, expected: number, message?: string): void => assert.ok(Math.abs(actual - expected) < 1e-6, `${message ?? ""} ${actual} is not ${expected}`);
+const near = (actual: number, expected: number, message?: string): void =>
+  assert.ok(Math.abs(actual - expected) < 1e-6, `${message ?? ""} ${actual} is not ${expected}`);
 
 describe("<Slider> drawing", () => {
   afterEach(() => {
@@ -39,12 +42,18 @@ describe("<Slider> drawing", () => {
     const { p, step, backend, boxes } = play(() => slider({ value: 0.5 }));
     step({});
     const rects = backend.lastFrame.records.filter((r) => r.op === "rect");
-    assert.deepEqual(rects.map((r) => r.op === "rect" && [r.width, r.height, r.color]), [[100, 14, "#3a3f4bff"]]);
+    assert.deepEqual(
+      rects.map((r) => r.op === "rect" && [r.width, r.height, r.color]),
+      [[100, 14, "#3a3f4bff"]]
+    );
     // 8 wide thumb on a 100 wide track: 92 of travel, half of it is 46; the fill runs to the thumb's middle, 46 + 4
-    assert.deepEqual(boxes().map((b) => [b.x, b.y, b.width, b.height, b.fill, b.borderWidth, b.radius]), [
-      [0, 0, 50, 14, "#5b9bd5ff", 0, 0],
-      [46, 0, 8, 14, "#ffffffff", 0, 0],
-    ]);
+    assert.deepEqual(
+      boxes().map((b) => [b.x, b.y, b.width, b.height, b.fill, b.borderWidth, b.radius]),
+      [
+        [0, 0, 50, 14, "#5b9bd5ff", 0, 0],
+        [46, 0, 8, 14, "#ffffffff", 0, 0],
+      ]
+    );
     p.close();
   });
 
@@ -79,11 +88,21 @@ describe("<Slider> drawing", () => {
     const { p, step, boxes } = play(() => slider({ value: 0.5, fillColor: "red", thumbColor: "yellow", thumbWidth: 20 }));
     step({});
     // a 20 wide thumb leaves 80 of travel: the thumb is at 40, and the fill runs to its middle, 50
-    assert.deepEqual(boxes().map((b) => [b.width, b.fill]), [[50, "#ff0000ff"], [20, "#ffff00ff"]]);
+    assert.deepEqual(
+      boxes().map((b) => [b.width, b.fill]),
+      [
+        [50, "#ff0000ff"],
+        [20, "#ffff00ff"],
+      ]
+    );
     p.close();
     const transparent = play(() => slider({ value: 0.5, fillColor: "" }));
     transparent.step({});
-    assert.deepEqual(transparent.boxes().map((b) => b.fill), ["#ffffffff"], "only the thumb");
+    assert.deepEqual(
+      transparent.boxes().map((b) => b.fill),
+      ["#ffffffff"],
+      "only the thumb"
+    );
     transparent.p.close();
   });
 
@@ -138,7 +157,11 @@ describe("<Slider> and the mouse", () => {
     step({ mouse: { x: 80, y: 5 } });
     step({ mouse: { x: 20, y: 5 } });
     step({ mouse: { x: 20, y: 5 } });
-    assert.deepEqual(changes, [50, 100, 0, 50], "a press at the start is not a change; then the middle, the end, the start (the mouse far off to the left) and the middle again");
+    assert.deepEqual(
+      changes,
+      [50, 100, 0, 50],
+      "a press at the start is not a change; then the middle, the end, the start (the mouse far off to the left) and the middle again"
+    );
     assert.equal(Math.round(s.value), 50, "and it stayed where the button was let go");
     p.close();
   });
@@ -173,9 +196,38 @@ describe("<Slider> and the mouse", () => {
       p.close();
       return s.value;
     };
-    near(place((s) => { s.transform.x = 100; s.transform.y = 40; }, { x: 150, y: 45 }), 0.5, "moved");
-    near(place((s) => { s.transform.scaleX = 2; }, { x: 100, y: 5 }), 0.5, "doubled in width");
-    near(place((s) => { s.transform.x = 50; s.transform.rotation = Math.PI / 2; }, { x: 50, y: 50 }), 0.5, "turned a quarter, so the track runs down");
+    near(
+      place(
+        (s) => {
+          s.transform.x = 100;
+          s.transform.y = 40;
+        },
+        { x: 150, y: 45 }
+      ),
+      0.5,
+      "moved"
+    );
+    near(
+      place(
+        (s) => {
+          s.transform.scaleX = 2;
+        },
+        { x: 100, y: 5 }
+      ),
+      0.5,
+      "doubled in width"
+    );
+    near(
+      place(
+        (s) => {
+          s.transform.x = 50;
+          s.transform.rotation = Math.PI / 2;
+        },
+        { x: 50, y: 50 }
+      ),
+      0.5,
+      "turned a quarter, so the track runs down"
+    );
   });
 
   it("is pressed in a Hud, where the mouse is in the HUD's own coordinates", () => {
@@ -314,14 +366,23 @@ describe("<Toggle>", () => {
     const off = play(() => toggle());
     off.step({});
     // 36 × 18: the track is the whole box, round; the knob is 14, 2 in from each side, a circle
-    assert.deepEqual(off.boxes().map((b) => [b.x, b.y, b.width, b.height, b.fill, b.radius]), [
-      [0, 0, 36, 18, "#555a66ff", 9],
-      [2, 2, 14, 14, "#ffffffff", 7],
-    ]);
+    assert.deepEqual(
+      off.boxes().map((b) => [b.x, b.y, b.width, b.height, b.fill, b.radius]),
+      [
+        [0, 0, 36, 18, "#555a66ff", 9],
+        [2, 2, 14, 14, "#ffffffff", 7],
+      ]
+    );
     off.p.close();
     const on = play(() => toggle({ checked: true }));
     on.step({});
-    assert.deepEqual(on.boxes().map((b) => [b.x, b.width, b.fill]), [[0, 36, "#4caf50ff"], [20, 14, "#ffffffff"]]);
+    assert.deepEqual(
+      on.boxes().map((b) => [b.x, b.width, b.fill]),
+      [
+        [0, 36, "#4caf50ff"],
+        [20, 14, "#ffffffff"],
+      ]
+    );
     on.p.close();
   });
 
@@ -329,10 +390,22 @@ describe("<Toggle>", () => {
     const t = toggle({ width: 50, height: 20, onColor: "blue", offColor: "gray", thumbColor: "yellow" });
     const { p, step, boxes } = play(() => t);
     step({});
-    assert.deepEqual(boxes().map((b) => [b.width, b.fill]), [[50, "#808080ff"], [16, "#ffff00ff"]]);
+    assert.deepEqual(
+      boxes().map((b) => [b.width, b.fill]),
+      [
+        [50, "#808080ff"],
+        [16, "#ffff00ff"],
+      ]
+    );
     t.checked = true;
     step({});
-    assert.deepEqual(boxes().map((b) => [b.width, b.fill]), [[50, "#0000ffff"], [16, "#ffff00ff"]]);
+    assert.deepEqual(
+      boxes().map((b) => [b.width, b.fill]),
+      [
+        [50, "#0000ffff"],
+        [16, "#ffff00ff"],
+      ]
+    );
     p.close();
   });
 
@@ -388,7 +461,8 @@ describe("<Toggle>", () => {
     const t = toggle({ borderWidth: 2, focusBorderColor: "gold" });
     const { p, act, backend } = play(() => t);
     act({ mouse: { x: 300, y: 200 } });
-    const ring = (): string | undefined => backend.lastFrame.records.find((r): r is Box => r.op === "box" && r.borderWidth === 2)?.borderColor;
+    const ring = (): string | undefined =>
+      backend.lastFrame.records.find((r): r is Box => r.op === "box" && r.borderWidth === 2)?.borderColor;
     assert.equal(ring(), undefined, "no ring until it has the focus");
     p.world.focus(t);
     act({ mouse: { x: 300, y: 200 } });

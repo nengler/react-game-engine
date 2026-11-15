@@ -19,7 +19,12 @@ function gameOf(file) {
     if (existsSync(manifest)) {
       try {
         const pkg = JSON.parse(readFileSync(manifest, "utf8"));
-        if (pkg.rge !== undefined || (pkg.dependencies && pkg.dependencies["@rge/runtime"]) || (pkg.devDependencies && pkg.devDependencies["@rge/runtime"])) return dir;
+        if (
+          pkg.rge !== undefined ||
+          (pkg.dependencies && pkg.dependencies["@rge/runtime"]) ||
+          (pkg.devDependencies && pkg.devDependencies["@rge/runtime"])
+        )
+          return dir;
       } catch {
         // A package.json that does not parse: keep looking above it.
       }
@@ -67,11 +72,16 @@ class Server {
     this.child.stderr.on("data", (chunk) => output.append(chunk.toString()));
     this.child.on("error", (error) => output.appendLine(`rge lsp could not start (${node} ${cli}): ${error.message}`));
     this.child.on("exit", (code) => {
-      if (!this.stopped) output.appendLine(`rge lsp stopped (status ${code}). Run "react-game-engine: Restart the language server" to start it again.`);
+      if (!this.stopped)
+        output.appendLine(`rge lsp stopped (status ${code}). Run "react-game-engine: Restart the language server" to start it again.`);
       for (const { fail } of this.pending.values()) fail(new Error("the server stopped"));
       this.pending.clear();
     });
-    this.ready = this.request("initialize", { processId: process.pid, rootUri: null, capabilities: { textDocument: { publishDiagnostics: {}, codeAction: {} } } }).then(() => this.notify("initialized", {}));
+    this.ready = this.request("initialize", {
+      processId: process.pid,
+      rootUri: null,
+      capabilities: { textDocument: { publishDiagnostics: {}, codeAction: {} } },
+    }).then(() => this.notify("initialized", {}));
   }
 
   read(chunk) {
@@ -122,14 +132,19 @@ class Server {
     await this.ready;
     const uri = document.uri.toString();
     this.opened.add(uri);
-    this.notify("textDocument/didOpen", { textDocument: { uri, languageId: document.languageId, version: document.version, text: document.getText() } });
+    this.notify("textDocument/didOpen", {
+      textDocument: { uri, languageId: document.languageId, version: document.version, text: document.getText() },
+    });
   }
 
   async change(document) {
     await this.ready;
     const uri = document.uri.toString();
     if (!this.opened.has(uri)) return this.open(document);
-    this.notify("textDocument/didChange", { textDocument: { uri, version: document.version }, contentChanges: [{ text: document.getText() }] });
+    this.notify("textDocument/didChange", {
+      textDocument: { uri, version: document.version },
+      contentChanges: [{ text: document.getText() }],
+    });
   }
 
   async close(document) {
@@ -166,11 +181,15 @@ function activate(context) {
     collection.set(
       uri,
       params.diagnostics.map((d) => {
-        const diagnostic = new vscode.Diagnostic(toRange(d.range), d.message, d.severity === 2 ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error);
+        const diagnostic = new vscode.Diagnostic(
+          toRange(d.range),
+          d.message,
+          d.severity === 2 ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error
+        );
         diagnostic.source = "rge";
         diagnostic.code = d.code;
         return diagnostic;
-      }),
+      })
     );
   };
 
@@ -223,25 +242,37 @@ function activate(context) {
           if (ours.length === 0) return [];
           const server = serverFor(document);
           if (server === null) return [];
-          const toLsp = (r) => ({ start: { line: r.start.line, character: r.start.character }, end: { line: r.end.line, character: r.end.character } });
+          const toLsp = (r) => ({
+            start: { line: r.start.line, character: r.start.character },
+            end: { line: r.end.line, character: r.end.character },
+          });
           let actions;
           try {
-            actions = await server.request("textDocument/codeAction", { textDocument: { uri: document.uri.toString() }, range: toLsp(range), context: { diagnostics: [] } });
+            actions = await server.request("textDocument/codeAction", {
+              textDocument: { uri: document.uri.toString() },
+              range: toLsp(range),
+              context: { diagnostics: [] },
+            });
           } catch {
             return [];
           }
           return (actions || []).map((a) => {
             const action = new vscode.CodeAction(a.title, vscode.CodeActionKind.QuickFix);
             action.isPreferred = a.isPreferred === true;
-            action.diagnostics = ours.filter((d) => a.diagnostics.some((x) => x.code === d.code && x.range.start.line === d.range.start.line && x.range.start.character === d.range.start.character));
+            action.diagnostics = ours.filter((d) =>
+              a.diagnostics.some(
+                (x) => x.code === d.code && x.range.start.line === d.range.start.line && x.range.start.character === d.range.start.character
+              )
+            );
             const edit = new vscode.WorkspaceEdit();
-            for (const [uri, edits] of Object.entries(a.edit.changes)) for (const e of edits) edit.replace(vscode.Uri.parse(uri), toRange(e.range), e.newText);
+            for (const [uri, edits] of Object.entries(a.edit.changes))
+              for (const e of edits) edit.replace(vscode.Uri.parse(uri), toRange(e.range), e.newText);
             action.edit = edit;
             return action;
           });
         },
       },
-      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }
     ),
     vscode.commands.registerCommand("rge.restart", async () => {
       for (const server of servers.values()) await server.stop();
@@ -252,7 +283,7 @@ function activate(context) {
         if (server) report(server.open(document));
       }
     }),
-    { dispose: () => [...servers.values()].forEach((server) => server.stop()) },
+    { dispose: () => [...servers.values()].forEach((server) => server.stop()) }
   );
 }
 

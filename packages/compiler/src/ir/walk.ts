@@ -1,11 +1,9 @@
-// Walking and querying the IR: children of an expression, dependencies and parameter reads.
-import { type StateId, type LocalId } from "./ids.ts";
-import { type FunctionIR } from "./values.ts";
-import { type StatementIR } from "./statements.ts";
 import { type DependencyIR } from "./elements.ts";
 import { type ExprIR } from "./expressions.ts";
-
-
+// Walking and querying the IR: children of an expression, dependencies and parameter reads.
+import { type StateId, type LocalId } from "./ids.ts";
+import { type StatementIR } from "./statements.ts";
+import { type FunctionIR } from "./values.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,7 +47,9 @@ export function childExpressions(e: ExprIR): readonly ExprIR[] {
     case "Block":
       return []; // its body is statements, which `walkExpr` walks
     case "Call":
-      return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod" ? [e.callee.receiver, ...e.args] : e.args;
+      return e.callee.kind === "Method" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod"
+        ? [e.callee.receiver, ...e.args]
+        : e.args;
     case "TemplateLiteral":
       return e.expressions;
     case "Unary":
@@ -87,10 +87,14 @@ export function collectDependencies(expr: ExprIR): DependencyIR[] {
 
 export function sameDependency(a: DependencyIR, b: DependencyIR): boolean {
   switch (a.kind) {
-    case "State": return b.kind === "State" && a.state === b.state;
-    case "Prop": return b.kind === "Prop" && a.name === b.name;
-    case "Item": return b.kind === "Item";
-    default: return assertNever(a, "dependency");
+    case "State":
+      return b.kind === "State" && a.state === b.state;
+    case "Prop":
+      return b.kind === "Prop" && a.name === b.name;
+    case "Item":
+      return b.kind === "Item";
+    default:
+      return assertNever(a, "dependency");
   }
 }
 
@@ -107,11 +111,25 @@ export function walkStatements(body: readonly StatementIR[], visit: (e: ExprIR) 
   for (const stmt of body) {
     visitStatement?.(stmt);
     switch (stmt.kind) {
-      case "ExpressionStatement": walkExpr(stmt.expression, visit); break;
-      case "LocalConst": walkExpr(stmt.value, visit); break;
-      case "If": walkExpr(stmt.test, visit); walkStatements(stmt.then, visit, visitStatement); walkStatements(stmt.else, visit, visitStatement); break;
-      case "ForOf": walkExpr(stmt.iterable, visit); walkStatements(stmt.body, visit, visitStatement); break;
-      case "While": walkExpr(stmt.test, visit); walkStatements(stmt.body, visit, visitStatement); break;
+      case "ExpressionStatement":
+        walkExpr(stmt.expression, visit);
+        break;
+      case "LocalConst":
+        walkExpr(stmt.value, visit);
+        break;
+      case "If":
+        walkExpr(stmt.test, visit);
+        walkStatements(stmt.then, visit, visitStatement);
+        walkStatements(stmt.else, visit, visitStatement);
+        break;
+      case "ForOf":
+        walkExpr(stmt.iterable, visit);
+        walkStatements(stmt.body, visit, visitStatement);
+        break;
+      case "While":
+        walkExpr(stmt.test, visit);
+        walkStatements(stmt.body, visit, visitStatement);
+        break;
       case "For":
         walkStatements(stmt.init, visit, visitStatement);
         if (stmt.test) walkExpr(stmt.test, visit);
@@ -123,8 +141,12 @@ export function walkStatements(body: readonly StatementIR[], visit: (e: ExprIR) 
         if (stmt.handler) walkStatements(stmt.handler.body, visit, visitStatement);
         if (stmt.finalizer) walkStatements(stmt.finalizer, visit, visitStatement);
         break;
-      case "Throw": walkExpr(stmt.value, visit); break;
-      case "Block": walkStatements(stmt.body, visit, visitStatement); break;
+      case "Throw":
+        walkExpr(stmt.value, visit);
+        break;
+      case "Block":
+        walkStatements(stmt.body, visit, visitStatement);
+        break;
       case "Switch":
         walkExpr(stmt.discriminant, visit);
         for (const c of stmt.cases) {
@@ -132,13 +154,27 @@ export function walkStatements(body: readonly StatementIR[], visit: (e: ExprIR) 
           walkStatements(c.body, visit, visitStatement);
         }
         break;
-      case "Break": case "Continue": break;
-      case "Return": if (stmt.value) walkExpr(stmt.value, visit); break;
-      case "SetState": walkExpr(stmt.value, visit); break;
-      case "Assign": if (stmt.target.kind === "Path") walkExpr(stmt.target.target, visit); walkExpr(stmt.value, visit); break;
-      case "PlaySound": if (stmt.volume) walkExpr(stmt.volume, visit); break;
-      case "CallAction": for (const arg of stmt.args) walkExpr(arg, visit); break;
-      default: assertNever(stmt, "statement");
+      case "Break":
+      case "Continue":
+        break;
+      case "Return":
+        if (stmt.value) walkExpr(stmt.value, visit);
+        break;
+      case "SetState":
+        walkExpr(stmt.value, visit);
+        break;
+      case "Assign":
+        if (stmt.target.kind === "Path") walkExpr(stmt.target.target, visit);
+        walkExpr(stmt.value, visit);
+        break;
+      case "PlaySound":
+        if (stmt.volume) walkExpr(stmt.volume, visit);
+        break;
+      case "CallAction":
+        for (const arg of stmt.args) walkExpr(arg, visit);
+        break;
+      default:
+        assertNever(stmt, "statement");
     }
   }
 }

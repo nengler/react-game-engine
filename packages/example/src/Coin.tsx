@@ -1,4 +1,4 @@
-import { useMutable, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, Sprite } from "@rge/runtime/jsx";
 
 interface CoinProps {
   value: number;

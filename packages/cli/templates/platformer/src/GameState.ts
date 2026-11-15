@@ -13,5 +13,5 @@ export const useGame = createGameState(
     jumped(s) {
       s.jumps += 1;
     },
-  },
+  }
 );

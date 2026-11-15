@@ -1,14 +1,44 @@
 // Layer 2 of ComponentLowering: props declarations, hooks (useMutable, useSound, useGameState, handlers) and state types.
 import { SyntaxKind, type ArrowFunction, type Node } from "typescript/ast";
-import { isArrowFunction, isBlock, isIdentifier, isFunctionTypeNode, isTypeLiteralNode, isInterfaceDeclaration, isStringLiteral, isNoSubstitutionTemplateLiteral } from "typescript/ast/is";
-import { unwrapParens, type TypeDeclarationAnalysis, type UseMutableCallAnalysis, type UseSoundCallAnalysis, type UseStoreCallAnalysis, type UseContextCallAnalysis } from "../analyzer/analyzer.ts";
+import {
+  isArrowFunction,
+  isBlock,
+  isIdentifier,
+  isFunctionTypeNode,
+  isTypeLiteralNode,
+  isInterfaceDeclaration,
+  isStringLiteral,
+  isNoSubstitutionTemplateLiteral,
+} from "typescript/ast/is";
+
+import {
+  unwrapParens,
+  type TypeDeclarationAnalysis,
+  type UseMutableCallAnalysis,
+  type UseSoundCallAnalysis,
+  type UseStoreCallAnalysis,
+  type UseContextCallAnalysis,
+} from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { type StateId, type TypeIR, collectDependencies, childExpressions, soundId, stateId, type PropDeclIR, type PropTypeIR, type ExprIR, type HookIR, type MutableFieldIR, type StateIR } from "../ir/types.ts";
 import { type GameStateEntry } from "../gamestate/schema.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
-import { lowerFunction, lowerRenderBlock } from "./statements.ts";
-import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
+import {
+  type StateId,
+  type TypeIR,
+  collectDependencies,
+  childExpressions,
+  soundId,
+  stateId,
+  type PropDeclIR,
+  type PropTypeIR,
+  type ExprIR,
+  type HookIR,
+  type MutableFieldIR,
+  type StateIR,
+} from "../ir/types.ts";
 import { ExpressionLowering } from "./expressions.ts";
+import { HANDLER_KIND, RESERVED_PROP_NAMES, unwrapTypeParens, nearest, propTypeToType } from "./helpers.ts";
+import { lowerFunction, lowerRenderBlock } from "./statements.ts";
 
 export class HookLowering extends ExpressionLowering {
   /** Render blocks lowered so far, to name their memos (`$block1`). */
@@ -28,7 +58,11 @@ export class HookLowering extends ExpressionLowering {
     const code = DiagnosticCode.InvalidProps;
     const decl = this.typeDecls.get(analysis.typeName);
     if (!decl) {
-      this.report(code, `Props type '${analysis.typeName}' is not declared in this file (declare an \`interface ${analysis.typeName} { … }\`).`, analysis.typeNode);
+      this.report(
+        code,
+        `Props type '${analysis.typeName}' is not declared in this file (declare an \`interface ${analysis.typeName} { … }\`).`,
+        analysis.typeNode
+      );
       return [];
     }
     const members = this.propMembers(decl);
@@ -46,12 +80,17 @@ export class HookLowering extends ExpressionLowering {
     for (const [name, member] of members) {
       // `children: TextChild | readonly TextChild[]`: the words between the component's tags, passed as one string (a text
       // wrapper: `<Label>Coins: {coins}</Label>`). An ordinary value prop, which its `<Text>{children}</Text>` reads.
-      const textChildren = name === "children" && member.role === "value" && member.type.kind === "SourceText" && isTextChildrenType(member.type.text);
+      const textChildren =
+        name === "children" && member.role === "value" && member.type.kind === "SourceText" && isTextChildrenType(member.type.text);
       if (name === "children" && !textChildren) {
         // Not a value prop: the elements a parent passes mount at `{children}`. Typed `Child` so the TSX type-checks.
         const binding = bindings.get(name);
         if (member.role !== "value" || member.type.kind !== "SourceText" || member.type.text !== "Child") {
-          this.report(code, `\`children\` must be typed \`Child\` (elements: \`children: Child;\`) or \`TextChild | readonly TextChild[]\` (text, as \`<Text>\` takes it), with \`import { type Child, type TextChild } from "${this.manifest.authoringModule}"\`.`, member.node);
+          this.report(
+            code,
+            `\`children\` must be typed \`Child\` (elements: \`children: Child;\`) or \`TextChild | readonly TextChild[]\` (text, as \`<Text>\` takes it), with \`import { type Child, type TextChild } from "${this.manifest.authoringModule}"\`.`,
+            member.node
+          );
         } else if (binding?.defaultValue) {
           this.report(code, "`children` cannot have a default value.", binding.node);
         } else {
@@ -77,7 +116,14 @@ export class HookLowering extends ExpressionLowering {
           }
         }
       }
-      out.push({ kind: "PropDecl", name, optional: member.optional || binding?.defaultValue != null, defaultValue, role: member.role, type: member.type });
+      out.push({
+        kind: "PropDecl",
+        name,
+        optional: member.optional || binding?.defaultValue != null,
+        defaultValue,
+        role: member.role,
+        type: member.type,
+      });
       if (binding) {
         if (this.componentScope.hasOwn(binding.local)) {
           this.report(code, `'${binding.local}' is already declared in this component.`, binding.node);
@@ -90,7 +136,9 @@ export class HookLowering extends ExpressionLowering {
   }
 
   /** The members of a props type: an `interface` or a `type` alias of an object type, with plain named members. */
-  protected propMembers(decl: TypeDeclarationAnalysis): Map<string, { optional: boolean; role: "value" | "callback"; type: PropTypeIR; node: Node }> | null {
+  protected propMembers(
+    decl: TypeDeclarationAnalysis
+  ): Map<string, { optional: boolean; role: "value" | "callback"; type: PropTypeIR; node: Node }> | null {
     const code = DiagnosticCode.InvalidProps;
     const node = decl.node;
     let elements: readonly Node[];
@@ -142,7 +190,11 @@ export class HookLowering extends ExpressionLowering {
           const signature = HANDLER_SIGNATURES[kind];
           // In `useUnmount` the component is going away: it can no longer render, so there is nothing for a setter to do.
           const handler = this.within({ inHandler: true, inUnmount: hook.kind === "useUnmount" }, () =>
-            lowerFunction(this, hook.handler, { paramTypes: signature.params.map((p) => p.type), returns: hook.kind === "useMount" ? "cleanup" : "void", what: `${hook.kind} handler` }),
+            lowerFunction(this, hook.handler, {
+              paramTypes: signature.params.map((p) => p.type),
+              returns: hook.kind === "useMount" ? "cleanup" : "void",
+              what: `${hook.kind} handler`,
+            })
           );
           if (handler) hooks.push({ kind, handler, span: this.span(hook.statement) });
           break;
@@ -168,11 +220,23 @@ export class HookLowering extends ExpressionLowering {
           };
           for (const name of hook.names) {
             if (this.componentScope.hasOwn(name) || this.isCallableName(name)) {
-              this.report(DiagnosticCode.InvalidComponentBody, `'${name}' is already declared in this component (or reserved).`, hook.first);
+              this.report(
+                DiagnosticCode.InvalidComponentBody,
+                `'${name}' is already declared in this component (or reserved).`,
+                hook.first
+              );
               continue;
             }
             const pick = (object: ExprIR): ExprIR => ({ kind: "MemberRead", object, name, optional: false });
-            this.componentScope.declare(name, { kind: "derived", name, value: pick(value), relower: () => { const live = relowerBlock(); return live && pick(live); } });
+            this.componentScope.declare(name, {
+              kind: "derived",
+              name,
+              value: pick(value),
+              relower: () => {
+                const live = relowerBlock();
+                return live && pick(live);
+              },
+            });
           }
           break;
         }
@@ -188,7 +252,11 @@ export class HookLowering extends ExpressionLowering {
           const target = hook.pattern === null && isIdentifier(aliased) ? this.componentScope.get(aliased.text) : undefined;
           if (target?.kind === "mutable") {
             if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
-              this.report(DiagnosticCode.InvalidComponentBody, `'${hook.name}' is already declared in this component (or reserved).`, hook.declaration.name);
+              this.report(
+                DiagnosticCode.InvalidComponentBody,
+                `'${hook.name}' is already declared in this component (or reserved).`,
+                hook.declaration.name
+              );
               break;
             }
             this.componentScope.declare(hook.name, { ...target, name: hook.name });
@@ -207,19 +275,47 @@ export class HookLowering extends ExpressionLowering {
           };
           if (hook.pattern === null) {
             if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {
-              this.report(DiagnosticCode.InvalidComponentBody, `'${hook.name}' is already declared in this component (or reserved).`, hook.declaration.name);
+              this.report(
+                DiagnosticCode.InvalidComponentBody,
+                `'${hook.name}' is already declared in this component (or reserved).`,
+                hook.declaration.name
+              );
               break;
             }
             this.componentScope.declare(hook.name, { kind: "derived", name: hook.name, value, relower: relowerValue });
             break;
           }
           // `const { x, y } = heroOf(run)`: each name is a member of the one value, which is worked out once (a memo) when it calls something.
-          const entries = hook.pattern.kind === "object"
-            ? hook.pattern.entries.map((e) => ({ name: e.name, node: e.node, pick: (object: ExprIR): ExprIR => ({ kind: "MemberRead", object, name: e.key, optional: false }) }))
-            : hook.pattern.entries.flatMap((e, i) => (e === null ? [] : [{ name: e.name, node: e.node, pick: (object: ExprIR): ExprIR => ({ kind: "IndexRead", object, index: { kind: "NumberLiteral", value: i }, optional: false }) }]));
+          const entries =
+            hook.pattern.kind === "object"
+              ? hook.pattern.entries.map((e) => ({
+                  name: e.name,
+                  node: e.node,
+                  pick: (object: ExprIR): ExprIR => ({ kind: "MemberRead", object, name: e.key, optional: false }),
+                }))
+              : hook.pattern.entries.flatMap((e, i) =>
+                  e === null
+                    ? []
+                    : [
+                        {
+                          name: e.name,
+                          node: e.node,
+                          pick: (object: ExprIR): ExprIR => ({
+                            kind: "IndexRead",
+                            object,
+                            index: { kind: "NumberLiteral", value: i },
+                            optional: false,
+                          }),
+                        },
+                      ]
+                );
           for (const entry of entries) {
             if (this.componentScope.hasOwn(entry.name) || this.isCallableName(entry.name)) {
-              this.report(DiagnosticCode.InvalidComponentBody, `'${entry.name}' is already declared in this component (or reserved).`, entry.node);
+              this.report(
+                DiagnosticCode.InvalidComponentBody,
+                `'${entry.name}' is already declared in this component (or reserved).`,
+                entry.node
+              );
               continue;
             }
             const relower = (): ExprIR | null => {
@@ -271,7 +367,13 @@ export class HookLowering extends ExpressionLowering {
    * One field of a `useMutable`: kept in `$s_vx`, set by `$set_s_vx`, and not in scope by a name of its own (it is read as `s.vx`).
    * The state's id, or null after reporting.
    */
-  protected lowerMutableField(hook: UseMutableCallAnalysis, source: UseMutableCallAnalysis["fields"][number], state: StateIR[], hooks: HookIR[], mutable: MutableFieldIR): StateId | null {
+  protected lowerMutableField(
+    hook: UseMutableCallAnalysis,
+    source: UseMutableCallAnalysis["fields"][number],
+    state: StateIR[],
+    hooks: HookIR[],
+    mutable: MutableFieldIR
+  ): StateId | null {
     const field = this.claimField(`$${mutable.view}_${mutable.field}`, hook.declaration);
     if (field === null) return null;
     const setterMethod = this.claimField(`$set_${mutable.view}_${mutable.field}`, hook.declaration);
@@ -288,7 +390,11 @@ export class HookLowering extends ExpressionLowering {
     let initializer = source.initializer;
     if (isArrowFunction(lazy)) {
       if (lazy.parameters.length > 0 || isBlock(lazy.body)) {
-        this.report(DiagnosticCode.InvalidUseState, "A field's lazy initial value is an arrow with no parameters returning the value: `squash: () => createSquash()`.", lazy);
+        this.report(
+          DiagnosticCode.InvalidUseState,
+          "A field's lazy initial value is an arrow with no parameters returning the value: `squash: () => createSquash()`.",
+          lazy
+        );
         return null;
       }
       initializer = lazy.body as typeof initializer;
@@ -300,7 +406,10 @@ export class HookLowering extends ExpressionLowering {
     // which is when the initial value is taken, as in a React first render. (The scope holds only what is declared above.)
     const type = this.hookStateType(source.typeNode, initialValue, hook.call);
     if (!type) return null;
-    const handle = type.kind === "SourceType" && initialValue.kind === "Call" && (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain");
+    const handle =
+      type.kind === "SourceType" &&
+      initialValue.kind === "Call" &&
+      (initialValue.callee.kind === "Function" || initialValue.callee.kind === "Plain");
     if (handle) this.handleStates.add(id);
     state.push({ kind: "State", id, name: field, type, initialValue, ...(handle ? { handle: true as const } : {}), mutable });
     this.stateTypes.set(id, type);
@@ -322,7 +431,11 @@ export class HookLowering extends ExpressionLowering {
     if (!definition || !this.storeImports.has(hook.storeName)) return; // already reported where the import was checked
     if (hook.body !== null) {
       if (this.componentScope.hasOwn(hook.valueName) || this.isCallableName(hook.valueName)) {
-        this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared in this component (or reserved).`, hook.declaration);
+        this.report(
+          DiagnosticCode.InvalidUseState,
+          `'${hook.valueName}' is already declared in this component (or reserved).`,
+          hook.declaration
+        );
         return;
       }
       const body = hook.body;
@@ -330,7 +443,8 @@ export class HookLowering extends ExpressionLowering {
         scope.declare(hook.parameter, { kind: "storeRoot", name: hook.parameter });
         return this.within({ storeReads: { state, hooks, storeName: hook.storeName } }, () => this.lowerNode(body));
       });
-      if (value) this.componentScope.declare(hook.valueName, { kind: "derived", name: hook.valueName, value: memoized(hook.valueName, value) });
+      if (value)
+        this.componentScope.declare(hook.valueName, { kind: "derived", name: hook.valueName, value: memoized(hook.valueName, value) });
       return;
     }
     if (this.componentScope.hasOwn(hook.valueName)) {
@@ -347,7 +461,7 @@ export class HookLowering extends ExpressionLowering {
         known
           ? `'${first}' is a value of the game state, not an action: read it with \`const ${hook.valueName} = ${hook.storeName}((s) => s.${first})\`.`
           : `'${first}' is not an action of the game state${near ? ` (did you mean "${near}"?)` : ""}. Actions: ${definition.actions.length > 0 ? definition.actions.join(", ") : "none"}.`,
-        hook.declaration,
+        hook.declaration
       );
       return;
     }
@@ -360,7 +474,7 @@ export class HookLowering extends ExpressionLowering {
       const diagnostic = warning(
         DiagnosticCode.InvalidGameState,
         `Take actions with \`const { ${names.join(", ")} } = ${hook.storeName}.actions()\` rather than from the whole state (\`${hook.storeName}((s) => s)\`).`,
-        span,
+        span
       );
       if (earlier) this.diagnostics[earlier.index] = diagnostic;
       else this.diagnostics.push(diagnostic);
@@ -377,7 +491,11 @@ export class HookLowering extends ExpressionLowering {
     let field = hook.valueName;
     if (this.usedNames.has(field)) {
       if (!this.isRuntimeMember(field)) {
-        this.report(DiagnosticCode.InvalidUseState, `'${hook.valueName}' is already declared or is reserved by the runtime.`, hook.declaration);
+        this.report(
+          DiagnosticCode.InvalidUseState,
+          `'${hook.valueName}' is already declared or is reserved by the runtime.`,
+          hook.declaration
+        );
         return;
       }
       field = `$${field}`;
@@ -409,7 +527,7 @@ export class HookLowering extends ExpressionLowering {
         this.report(
           DiagnosticCode.InvalidGameState,
           `'${[...walked, key].join(".")}' is not in the game state${near ? ` (did you mean "${[...walked, near].join(".")}"?)` : ""}. ${walked.length === 0 ? "State" : `'${walked.join(".")}' has`}: ${options.length > 0 ? options.join(", ") : "nothing"}.`,
-          at,
+          at
         );
         return null;
       }
@@ -421,8 +539,21 @@ export class HookLowering extends ExpressionLowering {
     // A leaf the schema knows keeps its primitive type; an object, an array or a computed value is typed by TypeScript, from
     // the store itself: it re-renders when any value under it changes.
     const leaf = node.kind === "leaf" && walked.length === path.length ? node : null;
-    const initialValue: ExprIR = leaf === null ? { kind: "NullLiteral" } : leaf.type === "number" ? { kind: "NumberLiteral", value: leaf.initial as number } : leaf.type === "string" ? { kind: "StringLiteral", value: leaf.initial as string } : { kind: "BooleanLiteral", value: leaf.initial as boolean };
-    const type: TypeIR = leaf === null ? { kind: "SourceType", text: `ReturnType<typeof ${definition.name}.getState>${path.map((k) => `[${JSON.stringify(k)}]`).join("")}` } : { kind: "Primitive", name: leaf.type };
+    const initialValue: ExprIR =
+      leaf === null
+        ? { kind: "NullLiteral" }
+        : leaf.type === "number"
+          ? { kind: "NumberLiteral", value: leaf.initial as number }
+          : leaf.type === "string"
+            ? { kind: "StringLiteral", value: leaf.initial as string }
+            : { kind: "BooleanLiteral", value: leaf.initial as boolean };
+    const type: TypeIR =
+      leaf === null
+        ? {
+            kind: "SourceType",
+            text: `ReturnType<typeof ${definition.name}.getState>${path.map((k) => `[${JSON.stringify(k)}]`).join("")}`,
+          }
+        : { kind: "Primitive", name: leaf.type };
     const globalKey = path.join(".");
     state.push({ kind: "State", id, name, type, initialValue, globalKey });
     this.stateTypes.set(id, type);
@@ -446,7 +577,11 @@ export class HookLowering extends ExpressionLowering {
       return array && { kind: "MemberRead", object: array, name: "length", optional: false };
     }
     if (path.length === 1 && this.gameState!.actions.includes(path[0]!)) {
-      this.report(DiagnosticCode.UnsupportedExpression, `'${path[0]}' is an action: select it by itself (\`const ${path[0]} = ${reads.storeName}((s) => s.${path[0]})\`) and call it in a handler.`, at);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `'${path[0]}' is an action: select it by itself (\`const ${path[0]} = ${reads.storeName}((s) => s.${path[0]})\`) and call it in a handler.`,
+        at
+      );
       return null;
     }
     const key = path.join(".");
@@ -469,7 +604,7 @@ export class HookLowering extends ExpressionLowering {
     const code = DiagnosticCode.InvalidUseSound;
     const argument = hook.arguments.length === 1 ? unwrapParens(hook.arguments[0]!) : null;
     if (!argument || !(isStringLiteral(argument) || isNoSubstitutionTemplateLiteral(argument))) {
-      this.report(code, "useSound takes one file path, written as a string literal: `const playHit = useSound(\"hit.wav\")`.", hook.call);
+      this.report(code, 'useSound takes one file path, written as a string literal: `const playHit = useSound("hit.wav")`.', hook.call);
       return;
     }
     if (!this.checkHandleName(hook.name, code, hook.declaration.name)) return;
@@ -493,7 +628,9 @@ export class HookLowering extends ExpressionLowering {
     const field = this.claimField(name, at, DiagnosticCode.InvalidComponentBody);
     if (field === null) return;
     this.componentScope.declare(name, { kind: "function", name, field });
-    const fn = this.within({ inHandler: true }, () => lowerFunction(this, arrow, { paramTypes: "declared", returns: "any", what: `The function '${name}'` }));
+    const fn = this.within({ inHandler: true }, () =>
+      lowerFunction(this, arrow, { paramTypes: "declared", returns: "any", what: `The function '${name}'` })
+    );
     if (fn) this.functions.push({ kind: "OwnFunction", name: field, fn });
   }
 
@@ -507,7 +644,11 @@ export class HookLowering extends ExpressionLowering {
     const context = this.lowerNode(hook.context);
     if (!context) return;
     if (context.kind !== "PlainRef") {
-      this.report(code, "useContext takes a context made with `createContext` in a `.ts` file and imported: `useContext(Theme)`.", hook.context);
+      this.report(
+        code,
+        "useContext takes a context made with `createContext` in a `.ts` file and imported: `useContext(Theme)`.",
+        hook.context
+      );
       return;
     }
     const n = ++this.contexts;
@@ -516,10 +657,13 @@ export class HookLowering extends ExpressionLowering {
     const readerId = stateId(this.component.name, readerField);
     const valueType: TypeIR = { kind: "SourceType", text: `(typeof ${context.name})["default"]` };
     state.push({
-      kind: "State", id: readerId, name: readerField,
+      kind: "State",
+      id: readerId,
+      name: readerField,
       type: { kind: "SourceType", text: `{ readonly value: (typeof ${context.name})["default"] }` },
       initialValue: { kind: "Call", callee: { kind: "Function", name: "readContext" }, args: [context] },
-      handle: true, transient: true,
+      handle: true,
+      transient: true,
     });
     const read: ExprIR = { kind: "MemberRead", object: { kind: "StateRead", state: readerId }, name: "value", optional: false };
     const valueName = hook.name ?? `$contextValue${n}`;
@@ -542,7 +686,11 @@ export class HookLowering extends ExpressionLowering {
         this.report(code, `'${entry.name}' is already declared in this component.`, hook.declaration);
         continue;
       }
-      this.componentScope.declare(entry.name, { kind: "derived", name: entry.name, value: { kind: "MemberRead", object: { kind: "StateRead", state: valueId }, name: entry.key, optional: false } });
+      this.componentScope.declare(entry.name, {
+        kind: "derived",
+        name: entry.name,
+        value: { kind: "MemberRead", object: { kind: "StateRead", state: valueId }, name: entry.key, optional: false },
+      });
     }
   }
 
@@ -575,7 +723,11 @@ export class HookLowering extends ExpressionLowering {
       if (type) return type;
     }
     // Made by a function (a runtime factory, or one from a .ts file): typed by what the function returns.
-    if (initial.kind === "Call" && (initial.callee.kind === "Function" || initial.callee.kind === "Plain") && !initial.callee.name.startsWith("Math.")) {
+    if (
+      initial.kind === "Call" &&
+      (initial.callee.kind === "Function" || initial.callee.kind === "Plain") &&
+      !initial.callee.name.startsWith("Math.")
+    ) {
       return { kind: "SourceType", text: `ReturnType<typeof ${initial.callee.name}>` };
     }
     // `pos: { x: 0, y: 0 }`: the literal's type, as TypeScript infers it (`{ x: number; y: number }`).
@@ -588,7 +740,7 @@ export class HookLowering extends ExpressionLowering {
         initial.kind === "ArrayLiteral" && initial.elements.length === 0
           ? "An empty array needs its type, as in TypeScript, where `[]` alone is `never[]`: `enemies: [] as EnemyData[]`."
           : `This ${initial.kind === "ArrayLiteral" ? "array" : "object"}'s type cannot be worked out from its values: write it, \`${initial.kind === "ArrayLiteral" ? "enemies: [] as EnemyData[]" : "enemy: { … } as EnemyData"}\`, with the type declared in this file.`,
-        at,
+        at
       );
     } else {
       this.report(code, "Cannot infer the type; use a number/string/boolean literal or a prop, or give it: `angle: start as number`.", at);
@@ -640,12 +792,17 @@ function memoized(key: string, value: ExprIR): ExprIR {
   if (value.kind === "Memo") return value;
   // A call inside another memo (`const cost = focus.upgrade`, `focus` being one) is already worked out once: reading it costs nothing.
   const calls = (e: ExprIR): boolean =>
-    e.kind !== "Memo" && ((e.kind === "Call" && (e.callee.kind === "Plain" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod")) || childExpressions(e).some(calls));
+    e.kind !== "Memo" &&
+    ((e.kind === "Call" && (e.callee.kind === "Plain" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod")) ||
+      childExpressions(e).some(calls));
   return calls(value) ? { kind: "Memo", key, value } : value;
 }
 
 /** `TextChild | readonly TextChild[]` (either order, either alone, `string` too): a props type's text children. */
 export function isTextChildrenType(text: string): boolean {
   const parts = text.split("|").map((part) => part.replace(/\s+/g, " ").trim());
-  return parts.length > 0 && parts.every((part) => ["TextChild", "readonly TextChild[]", "TextChild[]", "string", "readonly string[]", "string[]"].includes(part));
+  return (
+    parts.length > 0 &&
+    parts.every((part) => ["TextChild", "readonly TextChild[]", "TextChild[]", "string", "readonly string[]", "string[]"].includes(part))
+  );
 }

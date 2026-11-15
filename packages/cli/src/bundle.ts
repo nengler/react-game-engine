@@ -5,6 +5,7 @@
  */
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+
 import { build } from "esbuild";
 
 const FORBIDDEN = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["'](?:node:|koffi["'/])/;

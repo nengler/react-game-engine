@@ -1,7 +1,9 @@
+import assert from "node:assert/strict";
 /** `<Tooltip>` (shown while its box has the mouse or the focus), scroll bars on a scroll box, and a scroll box keeping the focus in view. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Flex, Hud, Shape, Text, Tooltip, World, type FlexProps, type GameObject } from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
@@ -98,8 +100,15 @@ describe("scroll bars", () => {
   it("draws none for content that fits, a box that does not scroll, or scrollbar={false}; and takes a colour and a width", () => {
     assert.deepEqual(boxes(frames(flex({ direction: "column", width: 40, height: 20, overflow: "scroll" }, ...rows(2))).draw()), []);
     assert.deepEqual(boxes(frames(flex({ direction: "column", width: 40, height: 20, overflow: "hidden" }, ...rows(4))).draw()), []);
-    assert.deepEqual(boxes(frames(flex({ direction: "column", width: 40, height: 20, overflow: "scroll", scrollbar: false }, ...rows(4))).draw()), []);
-    const [bar] = boxes(frames(flex({ direction: "column", width: 40, height: 20, overflow: "scroll", scrollbarWidth: 5, scrollbarColor: "#ff0000" }, ...rows(4))).draw());
+    assert.deepEqual(
+      boxes(frames(flex({ direction: "column", width: 40, height: 20, overflow: "scroll", scrollbar: false }, ...rows(4))).draw()),
+      []
+    );
+    const [bar] = boxes(
+      frames(
+        flex({ direction: "column", width: 40, height: 20, overflow: "scroll", scrollbarWidth: 5, scrollbarColor: "#ff0000" }, ...rows(4))
+      ).draw()
+    );
     assert.equal(bar?.width, 5);
     assert.equal(bar?.fill, "#ff0000ff");
   });

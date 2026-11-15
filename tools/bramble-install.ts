@@ -8,9 +8,13 @@
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { packAll } from "./pack.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tarballs = packAll(join(root, "dist", "packs"));
-execFileSync("npm", ["install", "--no-save", "--no-audit", "--no-fund", ...tarballs], { cwd: join(root, "games/bramble"), stdio: "inherit" });
+execFileSync("npm", ["install", "--no-save", "--no-audit", "--no-fund", ...tarballs], {
+  cwd: join(root, "games/bramble"),
+  stdio: "inherit",
+});
 console.log("installed the packs into games/bramble: `cd games/bramble && npm run check`");

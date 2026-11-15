@@ -9,8 +9,20 @@
  * from those edits; it reads the tree's shape and the selected component a few times a second, not every object every frame.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+
 import type { Rewind } from "@rge/player";
-import { activeProfiler, asData, editState, inspectObject, inspectTree, inspectedObject, startProfiling, stopProfiling, type GameObject, type GameStore } from "@rge/runtime";
+import {
+  activeProfiler,
+  asData,
+  editState,
+  inspectObject,
+  inspectTree,
+  inspectedObject,
+  startProfiling,
+  stopProfiling,
+  type GameObject,
+  type GameStore,
+} from "@rge/runtime";
 
 export interface InspectorOptions {
   /** The game's current root (it changes on a hot reload). */
@@ -63,14 +75,29 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
     if (force) last.tree = last.object = last.stores = last.rewind = last.profile = "";
     if (force && activeProfiler() === null) broadcast("profile", "null", "profile");
     const rewind = options.rewind;
-    if (rewind) broadcast("rewind", JSON.stringify({ paused: rewind.paused, ...rewind.range, snapshots: rewind.snapshotFrames, divergence: rewind.divergence }), "rewind");
+    if (rewind)
+      broadcast(
+        "rewind",
+        JSON.stringify({ paused: rewind.paused, ...rewind.range, snapshots: rewind.snapshotFrames, divergence: rewind.divergence }),
+        "rewind"
+      );
     const root = options.root();
     broadcast("tree", JSON.stringify(root === null ? null : inspectTree(root)), "tree");
     const object = selected === null ? null : inspectedObject(selected);
     broadcast("object", JSON.stringify(object === null ? null : inspectObject(object)), "object");
     const stores = [...options.stores()].map(([key, store]) => {
-      const state = Object.fromEntries(Object.entries(store.getState() as Record<string, unknown>).filter(([, v]) => typeof v !== "function"));
-      return { key, name: storeName(key), state: asData(state), history: store.history.slice(-20).map((h) => ({ action: h.action, changes: h.changes.map((c) => ({ path: c.path, before: asData(c.before), after: asData(c.after) })) })) };
+      const state = Object.fromEntries(
+        Object.entries(store.getState() as Record<string, unknown>).filter(([, v]) => typeof v !== "function")
+      );
+      return {
+        key,
+        name: storeName(key),
+        state: asData(state),
+        history: store.history.slice(-20).map((h) => ({
+          action: h.action,
+          changes: h.changes.map((c) => ({ path: c.path, before: asData(c.before), after: asData(c.after) })),
+        })),
+      };
     });
     broadcast("stores", JSON.stringify(stores), "stores");
   };
@@ -94,7 +121,9 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
       const object = inspectedObject(edit["id"]);
       if (object === null) return "that component is gone";
       if (!editState(object, edit["name"], edit["value"])) return `${object.constructor.name} has no state '${edit["name"]}'`;
-      log(`inspector: ${object.constructor.name}.${edit["name"]} = ${JSON.stringify(edit["value"])} (an edit from the inspector, not input: a replay does not repeat it)`);
+      log(
+        `inspector: ${object.constructor.name}.${edit["name"]} = ${JSON.stringify(edit["value"])} (an edit from the inspector, not input: a replay does not repeat it)`
+      );
       return "ok";
     }
     if (edit["target"] === "store" && typeof edit["key"] === "string" && typeof edit["path"] === "string") {
@@ -106,11 +135,15 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
         if (depth === keys.length) return edit["value"];
         const key = keys[depth] as string;
         const object = (typeof at === "object" && at !== null ? at : {}) as Record<string, unknown>;
-        return Array.isArray(object) ? object.map((v, i) => (String(i) === key ? setIn(v, depth + 1) : v)) : { ...object, [key]: setIn(object[key], depth + 1) };
+        return Array.isArray(object)
+          ? object.map((v, i) => (String(i) === key ? setIn(v, depth + 1) : v))
+          : { ...object, [key]: setIn(object[key], depth + 1) };
       };
       const top = keys[0] as string;
       store.setState({ [top]: setIn(state[top], 1) } as never);
-      log(`inspector: ${storeName(edit["key"])} ${edit["path"]} = ${JSON.stringify(edit["value"])} (an edit from the inspector, not input: a replay does not repeat it)`);
+      log(
+        `inspector: ${storeName(edit["key"])} ${edit["path"]} = ${JSON.stringify(edit["value"])} (an edit from the inspector, not input: a replay does not repeat it)`
+      );
       return "ok";
     }
     return "not an edit the inspector knows";
@@ -156,8 +189,7 @@ export function startInspector(options: InspectorOptions): Promise<Inspector> {
             stopProfiling();
             log("inspector: profiling off");
           }
-        }
-        else if (url === "/rewind") answer = applyRewind(data);
+        } else if (url === "/rewind") answer = applyRewind(data);
         else answer = applyEdit(data);
         res.writeHead(answer === "ok" ? 200 : 400, { "content-type": "text/plain" });
         res.end(answer);

@@ -10,14 +10,29 @@
  * differs.
  */
 import { captureHotState, type GameStore, type HotState } from "@rge/runtime";
+
 import type { Backend } from "./backend.ts";
 import { DrawList } from "./draw.ts";
 import { FixedDriver } from "./fixed.ts";
 import { createPlayer } from "./loop.ts";
+import type { Player, PlayerClock, PlayerConfig } from "./loop.ts";
+import {
+  KEYS,
+  KEY_INDEX,
+  RGE_IN_DT,
+  RGE_IN_HEIGHT,
+  RGE_IN_LEN,
+  RGE_IN_MOUSE_X,
+  RGE_IN_MOUSE_Y,
+  RGE_IN_QUIT,
+  RGE_IN_WHEEL,
+  RGE_IN_WIDTH,
+  RGE_KEY_DOWN,
+  RGE_KEY_PRESSED,
+  RGE_KEY_RELEASED,
+} from "./protocol.ts";
 import { RecordingBackend } from "./recording.ts";
 import type { InputFrame } from "./recording.ts";
-import type { Player, PlayerClock, PlayerConfig } from "./loop.ts";
-import { KEYS, KEY_INDEX, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_LEN, RGE_IN_MOUSE_X, RGE_IN_MOUSE_Y, RGE_IN_QUIT, RGE_IN_WHEEL, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, RGE_KEY_RELEASED } from "./protocol.ts";
 
 export interface RewindOptions {
   /** The game's config now (a hot reload changes it). */
@@ -52,7 +67,14 @@ export interface Moment {
   readonly frame: number;
   readonly stores: Readonly<Record<string, Record<string, unknown>>>;
   readonly tree: readonly (readonly [string, Record<string, unknown>])[];
-  readonly clock: { readonly driver: ReturnType<FixedDriver["toJSON"]> | null; readonly animationTime: number; readonly frozen: number; readonly values: readonly number[]; readonly keys: readonly number[]; readonly hovered: string | null };
+  readonly clock: {
+    readonly driver: ReturnType<FixedDriver["toJSON"]> | null;
+    readonly animationTime: number;
+    readonly frozen: number;
+    readonly values: readonly number[];
+    readonly keys: readonly number[];
+    readonly hovered: string | null;
+  };
   /** The input of each frame after it, in the format of a recording (`InputFrame`). */
   readonly frames: readonly InputFrame[];
 }
@@ -247,7 +269,9 @@ export class Rewind {
     if (this.#paused !== null) {
       const at = this.#paused;
       this.seek(at);
-      this.#options.log?.(`rewind: frame ${at} again, with the new code${this.divergence !== null ? ` (it plays differently from frame ${this.divergence})` : ""}`);
+      this.#options.log?.(
+        `rewind: frame ${at} again, with the new code${this.divergence !== null ? ` (it plays differently from frame ${this.divergence})` : ""}`
+      );
     }
   }
 
@@ -265,7 +289,14 @@ export class Rewind {
       frame: snapshot.frame,
       stores: Object.fromEntries(snapshot.stores),
       tree: [...snapshot.hot].map(([path, saved]) => [path, { ...saved }] as const),
-      clock: { driver: snapshot.clock.driver?.toJSON() ?? null, animationTime: snapshot.clock.animationTime, frozen: snapshot.clock.frozen, values: [...snapshot.clock.values], keys: [...snapshot.clock.keys], hovered: snapshot.clock.hovered },
+      clock: {
+        driver: snapshot.clock.driver?.toJSON() ?? null,
+        animationTime: snapshot.clock.animationTime,
+        frozen: snapshot.clock.frozen,
+        values: [...snapshot.clock.values],
+        keys: [...snapshot.clock.keys],
+        hovered: snapshot.clock.hovered,
+      },
       frames,
     };
   }
@@ -327,7 +358,9 @@ export class Rewind {
       const recorded = this.#hashes[k - this.#base];
       if (this.divergence === null && recorded !== undefined && recorded !== this.#hash()) {
         this.divergence = k;
-        this.#options.log?.(`rewind: frame ${k} plays differently from when it was recorded. Something it depends on is not a function of the input: Math.random or Date.now in the game's code, a timer, or a useMount that changes state when the tree is rebuilt.`);
+        this.#options.log?.(
+          `rewind: frame ${k} plays differently from when it was recorded. Something it depends on is not a function of the input: Math.random or Date.now in the game's code, a timer, or a useMount that changes state when the tree is rebuilt.`
+        );
       }
     }
     this.#feed = null;
@@ -420,7 +453,11 @@ function inputFrame(values: Float64Array, keys: Uint8Array): InputFrame {
  * export name, its tree by path), and stepped through the moment's input on a recording backend. `observe` is called after each
  * frame. This is how a moment saved in `rge dev` (F4 while paused) becomes a replay test.
  */
-export function replayMoment<T>(config: PlayerConfig, moment: Moment, options: { readonly stores?: Readonly<Record<string, GameStore<unknown>>>; readonly observe: (player: Player) => T }): T[] {
+export function replayMoment<T>(
+  config: PlayerConfig,
+  moment: Moment,
+  options: { readonly stores?: Readonly<Record<string, GameStore<unknown>>>; readonly observe: (player: Player) => T }
+): T[] {
   const backend = new RecordingBackend();
   const player = createPlayer(backend, { ...config, warn: () => {} });
   try {
@@ -436,7 +473,8 @@ export function replayMoment<T>(config: PlayerConfig, moment: Moment, options: {
       keys: Uint8Array.from(moment.clock.keys),
       hovered: moment.clock.hovered,
     };
-    if (!player.restoreTo(config, new Map(moment.tree.map(([path, saved]) => [path, { ...saved }])), clock)) throw player.failure?.error ?? new Error("The moment's game did not build.");
+    if (!player.restoreTo(config, new Map(moment.tree.map(([path, saved]) => [path, { ...saved }])), clock))
+      throw player.failure?.error ?? new Error("The moment's game did not build.");
     // The first frame's input is the restored clock's; each frame then writes the next one's, as the recording did.
     for (const frame of moment.frames.slice(1)) backend.queueInput(frame);
     const states: T[] = [];

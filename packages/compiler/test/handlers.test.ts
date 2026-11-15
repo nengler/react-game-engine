@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * M1 (function / statement IR) and M2 (useInput / useUpdate, and collision callbacks):
  * lowering, diagnostics, type-checking of generated code, and runtime behaviour.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Collider, Entity, GameObject, Sprite, World, createInputState } from "@rge/runtime";
+
 import { DiagnosticCode, isHandlerHook, type ComponentIR, type FunctionIR, type StatementIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, stripSpans, typeCheck } from "./helpers.ts";
 
@@ -53,8 +55,7 @@ function Hero() {
 interface HeroInstance extends Entity {
   readonly sprite: Sprite;
   readonly collider: Collider;
-  s: { health: number;
-  poisoned: boolean };
+  s: { health: number; poisoned: boolean };
 }
 
 let Hero: new () => HeroInstance;
@@ -87,17 +88,25 @@ function handlerOf(component: ComponentIR, index = 1): FunctionIR {
 
 describe("M1: function and statement IR", () => {
   it("lowers every statement kind", () => {
-    const fn = handlerOf(irOf(`useUpdate((dt) => {
+    const fn = handlerOf(
+      irOf(`useUpdate((dt) => {
       const next = s.n + dt;
       if (next > 10) { s.n = 0; return; } else { s.n = next; }
       s.n += 1;
       Math.abs(dt);
-    });`));
+    });`)
+    );
     const kinds = fn.body.map((s) => s.kind);
     assert.deepEqual(kinds, ["LocalConst", "If", "SetState", "ExpressionStatement"]);
     const ifStmt = fn.body[1]! as Extract<StatementIR, { kind: "If" }>;
-    assert.deepEqual(ifStmt.then.map((s) => s.kind), ["SetState", "Return"]);
-    assert.deepEqual(ifStmt.else.map((s) => s.kind), ["SetState"]);
+    assert.deepEqual(
+      ifStmt.then.map((s) => s.kind),
+      ["SetState", "Return"]
+    );
+    assert.deepEqual(
+      ifStmt.else.map((s) => s.kind),
+      ["SetState"]
+    );
   });
 
   it("lowers a compound write to a SetState of the field, from its value as it is now", () => {
@@ -201,7 +210,7 @@ function C() {
     s.n += 1;
   });
   return <Entity name="Counter" />;
-}`),
+}`)
     );
     const world = new World();
     const counter = new Counter();
@@ -233,10 +242,7 @@ function C() {
   });
 
   it("scopes locals to their block", () => {
-    assert.deepEqual(
-      codes("useUpdate(() => { if (s.n > 0) { const x = 1; s.n = x; } s.n = x; });"),
-      [DiagnosticCode.UnknownIdentifier],
-    );
+    assert.deepEqual(codes("useUpdate(() => { if (s.n > 0) { const x = 1; s.n = x; } s.n = x; });"), [DiagnosticCode.UnknownIdentifier]);
   });
 
   it("rejects handlers that return values", () => {
@@ -255,7 +261,12 @@ function C() {
   it("rejects bad handler shapes", () => {
     assert.deepEqual(codes("useUpdate(5);"), [DiagnosticCode.InvalidHandler]);
     assert.deepEqual(codes("useUpdate((a, b, c) => { s.n = 1; });"), [DiagnosticCode.InvalidHandler]);
-    assert.ok(compile(`function C() { const s = useMutable({ n: 0 }); useUpdate((dt, input) => { if (input.down("Space")) s.n = 1; }); return <Entity name="C" />; }`), "an update handler may take the input too");
+    assert.ok(
+      compile(
+        `function C() { const s = useMutable({ n: 0 }); useUpdate((dt, input) => { if (input.down("Space")) s.n = 1; }); return <Entity name="C" />; }`
+      ),
+      "an update handler may take the input too"
+    );
     assert.deepEqual(codes("useUpdate(({ a }) => { s.n = 1; });"), [DiagnosticCode.InvalidHandler]);
   });
 
@@ -277,7 +288,11 @@ describe("M2: hooks and the frame loop", () => {
     const { code } = compile(HERO, "Hero.tsx");
     assert.equal(code.match(/override onUpdate\(/g)?.length, 1);
     assert.match(code, /override onInput\(input: InputState\): void/);
-    assert.match(code, /new Collider\(\{ width: 16, height: 24, onCollisionEnter: \(\) => \{/, "a collider's callback is created with the collider");
+    assert.match(
+      code,
+      /new Collider\(\{ width: 16, height: 24, onCollisionEnter: \(\) => \{/,
+      "a collider's callback is created with the collider"
+    );
     assert.doesNotMatch(code, /override onCollisionEnter/, "collision is not a component-wide hook any more");
     assert.match(code, /this\.#onUpdate0\(dt\);\n\s+this\.#onUpdate1\(dt\);/);
   });
@@ -288,10 +303,19 @@ describe("M2: hooks and the frame loop", () => {
     const originalInput = hero.onInput.bind(hero);
     const originalUpdate = hero.onUpdate.bind(hero);
     const originalRender = hero.render.bind(hero);
-    hero.onInput = (i) => { order.push("input"); originalInput(i); };
-    hero.onUpdate = (dt) => { order.push("update"); originalUpdate(dt); };
-    hero.render = () => { order.push("render"); originalRender(); };
-    hero.s.poisoned = (true);
+    hero.onInput = (i) => {
+      order.push("input");
+      originalInput(i);
+    };
+    hero.onUpdate = (dt) => {
+      order.push("update");
+      originalUpdate(dt);
+    };
+    hero.render = () => {
+      order.push("render");
+      originalRender();
+    };
+    hero.s.poisoned = true;
     world.tick(1, createInputState());
     assert.deepEqual(order, ["input", "update", "render"]);
   });
@@ -316,8 +340,8 @@ describe("M2: hooks and the frame loop", () => {
 
   it("clamps and stops through return", () => {
     const { world, object: hero } = mount(new Hero());
-    hero.s.poisoned = (true);
-    hero.s.health = (0);
+    hero.s.poisoned = true;
+    hero.s.health = 0;
     world.flush();
     world.tick(1000);
     assert.equal(hero.s.health, 0); // clamp(…, 0, 100); second handler returned early
@@ -327,7 +351,10 @@ describe("M2: hooks and the frame loop", () => {
     const { world, object: hero } = mount(new Hero());
     let renders = 0;
     const original = hero.render.bind(hero);
-    hero.render = () => { renders++; original(); };
+    hero.render = () => {
+      renders++;
+      original();
+    };
     world.reportCollision(hero.collider, hero.collider); // two setters per notification
     assert.equal(renders, 0); // dispatch alone does not render
     world.tick(1);
@@ -336,7 +363,7 @@ describe("M2: hooks and the frame loop", () => {
 
   it("does not run hooks on objects that are not mounted", () => {
     const hero = new Hero();
-    hero.s.poisoned = (true);
+    hero.s.poisoned = true;
     new World().tick(1);
     assert.equal(hero.s.health, 100);
   });
@@ -346,7 +373,9 @@ describe("M2: hooks and the frame loop", () => {
     const calls: string[] = [];
     class Plain extends Entity {}
     class Ticking extends Entity {
-      override onUpdate(): void { calls.push("ticking"); }
+      override onUpdate(): void {
+        calls.push("ticking");
+      }
     }
     world.mount(new Plain());
     world.mount(new Ticking());
@@ -356,7 +385,8 @@ describe("M2: hooks and the frame loop", () => {
 
   it("starts hooks for a conditional child the frame after it appears, and stops after removal", async () => {
     const mod = await load<{ Spawner: new () => Entity & { s: { on: boolean } } }>(
-      compile(`
+      compile(
+        `
 function Counter() {
   const s = useMutable({ ticks: 0 });
   useUpdate(() => { s.ticks += 1; });
@@ -365,19 +395,21 @@ function Counter() {
 function Spawner() {
   const s = useMutable({ on: false });
   return <Entity name="Spawner">{s.on && <Counter />}</Entity>;
-}`, "Spawner.tsx"),
+}`,
+        "Spawner.tsx"
+      )
     );
     const { world, object: spawner } = mount(new mod.Spawner());
     const counter = (): (Entity & { s: { ticks: number } }) | undefined =>
       spawner.children.find((c): c is Entity & { s: { ticks: number } } => c instanceof Entity && "s" in c);
-    spawner.s.on = (true);
+    spawner.s.on = true;
     world.tick(1); // renders and attaches the Counter at the end of this frame
     assert.equal(counter()?.s.ticks, 0);
     world.tick(1);
     world.tick(1);
     const attached = counter()!;
     assert.equal(attached.s.ticks, 2);
-    spawner.s.on = (false);
+    spawner.s.on = false;
     world.tick(1); // removal commits at the end of this frame; the hook ran at its start
     assert.equal(counter(), undefined);
     const before = attached.s.ticks;
@@ -386,8 +418,11 @@ function Spawner() {
   });
 
   it("calls the callback of each collider that was hit, so a component can tell its colliders apart", async () => {
-    const mod = await load<{ Fighter: new () => Entity & { readonly hitbox: Collider; readonly shield: Collider; s: { hurt: number; blocked: number } } }>(
-      compile(`
+    const mod = await load<{
+      Fighter: new () => Entity & { readonly hitbox: Collider; readonly shield: Collider; s: { hurt: number; blocked: number } };
+    }>(
+      compile(
+        `
 function Fighter() {
   const s = useMutable({ hurt: 0, blocked: 0 });
   return (
@@ -396,7 +431,9 @@ function Fighter() {
       <Collider width={12} height={4} onCollisionEnter={() => { s.blocked += 1; }} />
     </Entity>
   );
-}`, "Fighter.tsx"),
+}`,
+        "Fighter.tsx"
+      )
     );
     const world = new World();
     const fighter = new mod.Fighter();

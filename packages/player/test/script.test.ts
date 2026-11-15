@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { parseInputScript, scriptLength } from "../src/index.ts";
 
 const bindings = { left: "ArrowLeft", right: ["ArrowRight", "D"], jump: "Z", dash: "X" };
@@ -30,9 +31,15 @@ describe("parseInputScript", () => {
 
   it("treats a key held across two items as one hold, and two taps in a row as one hold too", () => {
     const hold = parseInputScript("right*2, right*2", { bindings });
-    assert.deepEqual(hold.map((f) => f.pressed.length), [2, 0, 0, 0]);
+    assert.deepEqual(
+      hold.map((f) => f.pressed.length),
+      [2, 0, 0, 0]
+    );
     const taps = parseInputScript("jump, jump, _, jump", { bindings });
-    assert.deepEqual(taps.map((f) => f.pressed.length), [1, 0, 0, 1]);
+    assert.deepEqual(
+      taps.map((f) => f.pressed.length),
+      [1, 0, 0, 1]
+    );
   });
 
   it("accepts key names without a binding, and reports an unknown name with the actions it could have meant", () => {

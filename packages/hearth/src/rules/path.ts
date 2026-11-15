@@ -1,4 +1,5 @@
 import type { TileGrid } from "@rge/runtime";
+
 import { TILE } from "./constants.ts";
 
 export interface Point {
@@ -75,6 +76,9 @@ export function readMap(grid: TileGrid): BattleMap {
     if (found === undefined) break;
     corners.push(centre(found[0], found[1]));
   }
-  const pads = grid.find("Markers", MARK.pad).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([col, row], id) => ({ id, ...centre(col, row) }));
+  const pads = grid
+    .find("Markers", MARK.pad)
+    .sort((a, b) => a[1] - b[1] || a[0] - b[0])
+    .map(([col, row], id) => ({ id, ...centre(col, row) }));
   return { path: makePath([centre(spawn[0], spawn[1]), ...corners, centre(hearth[0], hearth[1])]), pads };
 }

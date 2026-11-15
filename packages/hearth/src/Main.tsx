@@ -1,9 +1,10 @@
 import { Game, Music, Route, Router, Screen } from "@rge/runtime/jsx";
+
 import { End } from "./End.tsx";
 import { useGame } from "./GameState.ts";
 import { Play } from "./Play.tsx";
-import { Title } from "./Title.tsx";
 import { controls } from "./rules/controls.ts";
+import { Title } from "./Title.tsx";
 
 /**
  * The game's root (its bitmap font is every text's): a 320 × 180 screen showing the title, the play screen, or the end, with the
@@ -15,7 +16,20 @@ export default function Main() {
   const paused = useGame((s) => s.paused);
 
   return (
-    <Game vsync={false} controls={controls} upscale="sharp" title="Hearth" width={960} height={540} background="#12151f" assets="assets" font="font.png" fixedStep={60} timeScale={speed} paused={paused}>
+    <Game
+      vsync={false}
+      controls={controls}
+      upscale="sharp"
+      title="Hearth"
+      width={960}
+      height={540}
+      background="#12151f"
+      assets="assets"
+      font="font.png"
+      fixedStep={60}
+      timeScale={speed}
+      paused={paused}
+    >
       <Screen width={320} height={180} fit="contain">
         <Router route={screen}>
           <Route name="title">

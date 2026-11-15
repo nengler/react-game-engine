@@ -47,7 +47,9 @@ function check(engine: string, output: string, results: Map<string, number>, bud
     const ms = results.get(scene);
     const ok = ms !== undefined && ms <= limit;
     if (!ok) failures++;
-    console.log(`${scene.padEnd(45)} ${(ms === undefined ? "missing" : ms.toFixed(2)).padStart(8)} ${limit.toFixed(2).padStart(8)}${ok ? "" : "   FAIL"}`);
+    console.log(
+      `${scene.padEnd(45)} ${(ms === undefined ? "missing" : ms.toFixed(2)).padStart(8)} ${limit.toFixed(2).padStart(8)}${ok ? "" : "   FAIL"}`
+    );
   }
   for (const ratio of budget.ratios) {
     const larger = results.get(ratio.larger);
@@ -62,12 +64,15 @@ function check(engine: string, output: string, results: Map<string, number>, bud
     const value = larger / smaller;
     const ok = value <= ratio["at most"];
     if (!ok) failures++;
-    console.log(`${`${ratio.larger} / ${ratio.smaller}`.padEnd(62)} ${value.toFixed(1).padStart(5)}x (at most ${ratio["at most"]}x)${ok ? "" : "   FAIL"}`);
+    console.log(
+      `${`${ratio.larger} / ${ratio.smaller}`.padEnd(62)} ${value.toFixed(1).padStart(5)}x (at most ${ratio["at most"]}x)${ok ? "" : "   FAIL"}`
+    );
   }
   console.log();
 }
 
-const run = (command: string, commandArgs: string[]): string => execFileSync(command, commandArgs, { cwd: root, encoding: "utf8", maxBuffer: 1 << 24 });
+const run = (command: string, commandArgs: string[]): string =>
+  execFileSync(command, commandArgs, { cwd: root, encoding: "utf8", maxBuffer: 1 << 24 });
 
 /**
  * A shared runner has noisy neighbours, and a scene that takes hundredths of a millisecond can be slowed several times over by
@@ -88,7 +93,9 @@ for (let attempt = 1; attempt < attempts; attempt++) {
 check("Node", output, results, budget.node);
 
 if (failures > 0) {
-  console.error(`${failures} bench check(s) failed. If a change made a scene slower on purpose, raise its budget in packages/player/bench/budget.json and say why.`);
+  console.error(
+    `${failures} bench check(s) failed. If a change made a scene slower on purpose, raise its budget in packages/player/bench/budget.json and say why.`
+  );
   process.exit(1);
 }
 console.log("All bench scenes are within budget.");

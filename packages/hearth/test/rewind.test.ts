@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Rewind (REACT_FEEL_PLAN.md D1) on a real game: Hearth's battle, in components, played from its winning replay through rewind,
  * then sent back and played again from a snapshot. A replay that differed from the recording would name the frame.
  */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { createPlayer, parseInputScript, RecordingBackend, replayMoment, Rewind, type Player } from "@rge/player";
+
 import { bindings, gameConfig, screen } from "../game.ts";
 import { useGame } from "../src/GameState.ts";
 import { battleOf, findPlay } from "./battle-state.ts";
@@ -43,7 +45,10 @@ describe("rewind on Hearth", () => {
       // The moment from the snapshot before frame 431 to it, played again as a test would.
       const moment = rewind.moment();
       assert.equal(moment.frame, 420);
-      const states = replayMoment(gameConfig, JSON.parse(JSON.stringify(moment)), { stores: { useGame: useGame.store }, observe: () => JSON.stringify(battle()) });
+      const states = replayMoment(gameConfig, JSON.parse(JSON.stringify(moment)), {
+        stores: { useGame: useGame.store },
+        observe: () => JSON.stringify(battle()),
+      });
       assert.equal(states.at(-1), seen[430], "a saved moment replays to the same battle");
     } finally {
       player.close();

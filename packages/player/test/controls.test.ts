@@ -1,7 +1,9 @@
+import assert from "node:assert/strict";
 /** Named input actions: createControls, <Game controls>, and input.pressed("jump") meaning any of the action's keys. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Game, createControls, createInputState, type InputState } from "@rge/runtime";
+
 import { createPlayer, parseInputScript, RecordingBackend } from "../src/index.ts";
 
 const controls = createControls({ jump: ["Z", "Space", "PadA"], left: ["ArrowLeft", "A"] });
@@ -44,6 +46,10 @@ describe("createControls", () => {
     for (let i = 0; i < 6; i++) player.step();
     player.close();
     assert.deepEqual(seen, ["jump", "left", "left"]);
-    assert.deepEqual(parseInputScript("jump", { bindings: controls.bindings })[0]?.down.sort(), ["PadA", "Space", "Z"], "a script's 'jump' holds the action's keys");
+    assert.deepEqual(
+      parseInputScript("jump", { bindings: controls.bindings })[0]?.down.sort(),
+      ["PadA", "Space", "Z"],
+      "a script's 'jump' holds the action's keys"
+    );
   });
 });

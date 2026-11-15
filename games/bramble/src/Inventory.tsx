@@ -1,4 +1,5 @@
 import { Entity, Shape, Text } from "@rge/runtime/jsx";
+
 import { useGame } from "./GameState.ts";
 import { slotsOf } from "./rules/run.ts";
 
@@ -12,8 +13,12 @@ export function Inventory() {
           <Shape kind="rect" width={42} height={36} color="#1b2036" />
           {slot.filled && (
             <>
-              <Text x={3} y={4}>{slot.name}</Text>
-              <Text x={3} y={20} color="#a7b0c8">{slot.label}</Text>
+              <Text x={3} y={4}>
+                {slot.name}
+              </Text>
+              <Text x={3} y={20} color="#a7b0c8">
+                {slot.label}
+              </Text>
             </>
           )}
         </Entity>

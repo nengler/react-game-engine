@@ -60,10 +60,14 @@ export function constantValue(expr: ExprIR): { readonly value: JsonValue } | nul
   const none = Symbol("not constant");
   const evaluate = (e: ExprIR): JsonValue | typeof none => {
     switch (e.kind) {
-      case "NumberLiteral": return e.value;
-      case "StringLiteral": return e.value;
-      case "BooleanLiteral": return e.value;
-      case "NullLiteral": return null;
+      case "NumberLiteral":
+        return e.value;
+      case "StringLiteral":
+        return e.value;
+      case "BooleanLiteral":
+        return e.value;
+      case "NullLiteral":
+        return null;
       case "ArrayLiteral": {
         const out: JsonValue[] = [];
         for (const element of e.elements) {
@@ -110,23 +114,39 @@ export function constantValue(expr: ExprIR): { readonly value: JsonValue } | nul
         if (l === none || r === none) return none;
         const compare = (a: JsonValue, b: JsonValue): boolean => JSON.stringify(a) === JSON.stringify(b);
         switch (e.operator) {
-          case "===": case "==": return compare(l, r);
-          case "!==": case "!=": return !compare(l, r);
-          case "&&": return l ? r : l;
-          case "||": return l ? l : r;
-          case "??": return l ?? r;
+          case "===":
+          case "==":
+            return compare(l, r);
+          case "!==":
+          case "!=":
+            return !compare(l, r);
+          case "&&":
+            return l ? r : l;
+          case "||":
+            return l ? l : r;
+          case "??":
+            return l ?? r;
         }
         if (typeof l === "number" && typeof r === "number") {
           switch (e.operator) {
-            case "+": return l + r;
-            case "-": return l - r;
-            case "*": return l * r;
-            case "/": return l / r;
-            case "%": return l % r;
-            case "<": return l < r;
-            case "<=": return l <= r;
-            case ">": return l > r;
-            case ">=": return l >= r;
+            case "+":
+              return l + r;
+            case "-":
+              return l - r;
+            case "*":
+              return l * r;
+            case "/":
+              return l / r;
+            case "%":
+              return l % r;
+            case "<":
+              return l < r;
+            case "<=":
+              return l <= r;
+            case ">":
+              return l > r;
+            case ">=":
+              return l >= r;
           }
         }
         return e.operator === "+" && typeof l === "string" && typeof r === "string" ? l + r : none;

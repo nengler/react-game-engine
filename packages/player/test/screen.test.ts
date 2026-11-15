@@ -1,6 +1,20 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Entity, GameObject, Pointer, Screen, Shape, getSoundSink, World, type InputState, type ScreenProps, type ViewTransform } from "@rge/runtime";
+import { afterEach, describe, it } from "node:test";
+
+import {
+  Camera,
+  Entity,
+  GameObject,
+  Pointer,
+  Screen,
+  Shape,
+  getSoundSink,
+  World,
+  type InputState,
+  type ScreenProps,
+  type ViewTransform,
+} from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
@@ -21,12 +35,23 @@ function screen(props: Partial<ScreenProps> = {}, ...children: GameObject[]): Sc
   return root;
 }
 
-function draw(root: GameObject, width: number, height: number): { records: DecodedRecord[]; warnings: string[]; built: ReturnType<FrameBuilder["build"]> } {
+function draw(
+  root: GameObject,
+  width: number,
+  height: number
+): { records: DecodedRecord[]; warnings: string[]; built: ReturnType<FrameBuilder["build"]> } {
   const backend = new RecordingBackend();
   const warnings: string[] = [];
   const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), warn: (m) => warnings.push(m) });
   const built = builder.build(root, width, height);
-  backend.frame(0x000000ff, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  backend.frame(
+    0x000000ff,
+    built.list.records,
+    built.list.length,
+    built.list.texts,
+    new Float64Array(RGE_IN_LEN),
+    new Uint8Array(KEYS.length)
+  );
   return { records: [...backend.lastFrame.records], warnings, built };
 }
 
@@ -59,7 +84,14 @@ describe("fitScreen", () => {
   });
 
   it("stretches each axis to fill the window", () => {
-    assert.deepEqual(fitScreen(320, 180, 1000, 600, "stretch"), { width: 320, height: 180, scaleX: 3.125, scaleY: 600 / 180, left: 0, top: 0 });
+    assert.deepEqual(fitScreen(320, 180, 1000, 600, "stretch"), {
+      width: 320,
+      height: 180,
+      scaleX: 3.125,
+      scaleY: 600 / 180,
+      left: 0,
+      top: 0,
+    });
   });
 
   it("keeps a scale of 1 for a window with no area, so the mouse can still be mapped", () => {
@@ -73,7 +105,10 @@ describe("fitScreen: expand", () => {
     // 21:9 monitor: 2560 × 1080 is ×6 and 426 game pixels wide, centred (4 spare window pixels).
     const wide = fitScreen(320, 180, 2560, 1080, "expand");
     assert.deepEqual(wide, { width: 426, height: 180, scaleX: 6, scaleY: 6, left: 2, top: 0 });
-    assert.deepEqual(borderRects(wide, 2560, 1080).map((r) => r.width), [2, 2]);
+    assert.deepEqual(
+      borderRects(wide, 2560, 1080).map((r) => r.width),
+      [2, 2]
+    );
   });
 
   it("never narrows the game: a window taller than 16:9 gets bars top and bottom, like integer", () => {
@@ -156,7 +191,11 @@ describe("FrameBuilder: a root <Screen>", () => {
   });
 
   it("draws bars in the border colour over the window outside the game, last", () => {
-    const { records } = draw(screen({ border: "navy", pixelPerfect: false }, new Shape({ kind: "rect", width: 400, height: 400 })), 1000, 600);
+    const { records } = draw(
+      screen({ border: "navy", pixelPerfect: false }, new Shape({ kind: "rect", width: 400, height: 400 })),
+      1000,
+      600
+    );
     const bars = records.slice(3);
     assert.equal(records[1]?.op, "rect", "the game's own shape comes first");
     assert.deepEqual(records[2], { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, "then a view in window pixels");
@@ -179,9 +218,13 @@ describe("FrameBuilder: a root <Screen>", () => {
       const bars = records.slice(2);
       assert.deepEqual(records[1], { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
       assert.deepEqual(
-        bars.map((bar) => (bar.op === "rect" ? { x: bar.x, y: bar.y, width: bar.width, height: bar.height, rotation: bar.rotation, scaleX: bar.scaleX, scaleY: bar.scaleY } : null)),
+        bars.map((bar) =>
+          bar.op === "rect"
+            ? { x: bar.x, y: bar.y, width: bar.width, height: bar.height, rotation: bar.rotation, scaleX: bar.scaleX, scaleY: bar.scaleY }
+            : null
+        ),
         expected.map((r) => ({ ...r, rotation: 0, scaleX: 1, scaleY: 1 })),
-        fit,
+        fit
       );
     }
   });
@@ -255,7 +298,16 @@ describe("FrameBuilder: fit expand", () => {
     const camera = new Camera();
     const { records, built } = draw(screen({ fit: "expand" }, camera), 1280 + 160, 720);
     // ×4, so 1440 / 4 = 360 game pixels wide.
-    assert.deepEqual(records[0], { op: "canvas", width: 360, height: 180, destX: 0, destY: 0, destW: 1440, destH: 720, borderColor: "#000000ff" });
+    assert.deepEqual(records[0], {
+      op: "canvas",
+      width: 360,
+      height: 180,
+      destX: 0,
+      destY: 0,
+      destW: 1440,
+      destH: 720,
+      borderColor: "#000000ff",
+    });
     assert.equal(built.screen?.width, 360);
     assert.deepEqual(built.view, { a: 4, b: 0, c: 0, d: 4, e: 720, f: 360 }, "the camera is on the middle of the wider game");
   });

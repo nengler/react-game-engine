@@ -1,17 +1,19 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const packages = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function sources(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? sources(join(dir, entry.name)) : entry.name.endsWith(".ts") ? [join(dir, entry.name)] : []));
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? sources(join(dir, entry.name)) : entry.name.endsWith(".ts") ? [join(dir, entry.name)] : []
+  );
 }
 
 /** The player and the runtime also run inside QuickJS, which has no Node: they may import only each other and themselves. */
-const FORBIDDEN = /(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)["'](?:node:|(?:koffi|fs|path|os|child_process)["'\/])/;
+const FORBIDDEN = /(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)["'](?:node:|(?:koffi|fs|path|os|child_process)["'/])/;
 
 describe("portability", () => {
   for (const name of ["player", "runtime"]) {

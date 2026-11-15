@@ -1,12 +1,13 @@
 import { Camera, Entity, Hud, ParticleLayer, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
-import { fx } from "./effects.ts";
+
 import { Dialogue } from "./Dialogue.tsx";
-import { Notice } from "./Notice.tsx";
+import { fx } from "./effects.ts";
 import { useGame } from "./GameState.ts";
+import { Notice } from "./Notice.tsx";
 import { Pause } from "./Pause.tsx";
 import { BELLS_NEEDED, MAX_HEARTS } from "./rules/constants.ts";
-import { mapPixels } from "./rules/maps.ts";
 import { readInput } from "./rules/controls.ts";
+import { mapPixels } from "./rules/maps.ts";
 import { heroOf } from "./rules/view.ts";
 import { World } from "./World.tsx";
 
@@ -32,7 +33,15 @@ export function Play() {
     <Entity>
       <World />
       <Camera bounds={[0, 0, width, height]} deadzone={[24, 16]} smoothing={0.12}>
-        <Sprite image="things.png" frameWidth={16} frameHeight={16} frame={frame} tint={run.invuln > 0 ? "#ffffff99" : "#ffffffff"} x={x} y={y} />
+        <Sprite
+          image="things.png"
+          frameWidth={16}
+          frameHeight={16}
+          frame={frame}
+          tint={run.invuln > 0 ? "#ffffff99" : "#ffffffff"}
+          x={x}
+          y={y}
+        />
       </Camera>
       <ParticleLayer particles={fx} />
       <Hud>

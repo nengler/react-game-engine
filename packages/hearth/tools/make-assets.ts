@@ -6,6 +6,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { encodePng } from "@rge/player-node";
 
 const assets = join(dirname(fileURLToPath(import.meta.url)), "../assets");
@@ -32,7 +33,8 @@ class Canvas {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, c);
   }
   disc(cx: number, cy: number, r: number, c: Rgb): void {
-    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r) this.set(x, y, c);
+    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
+      for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r) this.set(x, y, c);
   }
   write(name: string): void {
     writeFileSync(join(assets, name), encodePng({ width: this.width, height: this.height, rgba: this.rgba }));
@@ -76,7 +78,15 @@ function tiles(): void {
     }
   }
   // A tuft of grass blades.
-  for (const [x, y] of [[13, 5], [14, 4], [15, 5], [14, 6], [17, 2], [18, 1]] as const) c.set(x, y, TUFT);
+  for (const [x, y] of [
+    [13, 5],
+    [14, 4],
+    [15, 5],
+    [14, 6],
+    [17, 2],
+    [18, 1],
+  ] as const)
+    c.set(x, y, TUFT);
   // The pad: a round stone plate.
   c.disc(35, 5, 4.4, PLATE_DARK);
   c.disc(35, 4.6, 4, PLATE);
@@ -186,7 +196,18 @@ function shots(): void {
   c.disc(12, 4, 3, m.dark);
   c.disc(11.6, 3.6, 2, m.main);
   c.set(11, 3, m.light);
-  for (const [x, y] of [[20, 4], [19, 4], [21, 4], [20, 3], [20, 5], [18, 2], [22, 2], [18, 6], [22, 6]] as const) c.set(x, y, WHITE);
+  for (const [x, y] of [
+    [20, 4],
+    [19, 4],
+    [21, 4],
+    [20, 3],
+    [20, 5],
+    [18, 2],
+    [22, 2],
+    [18, 6],
+    [22, 6],
+  ] as const)
+    c.set(x, y, WHITE);
   c.disc(28, 4, 1.4, [0xff, 0xdd, 0x7a]);
   c.write("shots.png");
 }
@@ -212,7 +233,12 @@ function hearth(): void {
 // -- the cursor: four corner brackets around a 14 × 14 square ----------------------------------------------------------------------
 function cursor(): void {
   const c = new Canvas(14, 14);
-  for (const [x, y, dx, dy] of [[0, 0, 1, 1], [13, 0, -1, 1], [0, 13, 1, -1], [13, 13, -1, -1]] as const) {
+  for (const [x, y, dx, dy] of [
+    [0, 0, 1, 1],
+    [13, 0, -1, 1],
+    [0, 13, 1, -1],
+    [13, 13, -1, -1],
+  ] as const) {
     for (let i = 0; i < 4; i++) {
       c.set(x + dx * i, y, WHITE);
       c.set(x, y + dy * i, WHITE);
@@ -243,7 +269,7 @@ function wav(samples: Float32Array, rate = RATE): Buffer {
   return Buffer.concat([header, data]);
 }
 
-const square = (phase: number, duty = 0.5): number => ((phase % 1) < duty ? 1 : -1);
+const square = (phase: number, duty = 0.5): number => (phase % 1 < duty ? 1 : -1);
 const saw = (phase: number): number => 2 * (phase % 1) - 1;
 const sine = (phase: number): number => Math.sin(phase * 2 * Math.PI);
 let seed = 4242;
@@ -298,20 +324,96 @@ function melody(notes: readonly (readonly [number, number])[], shape: (p: number
 
 function sfx(): void {
   const put = (name: string, samples: Float32Array): void => writeFileSync(join(assets, name), wav(samples));
-  put("build.wav", mix(melody([[330, 0.06], [494, 0.1]], (p) => square(p, 0.4), 0.3), noiseBurst(0.08, 0.25, 0.3)));
-  put("upgrade.wav", melody([[392, 0.07], [523, 0.07], [659, 0.12]], (p) => square(p, 0.25), 0.28));
-  put("sell.wav", melody([[784, 0.06], [523, 0.06], [392, 0.1]], sine, 0.4));
+  put(
+    "build.wav",
+    mix(
+      melody(
+        [
+          [330, 0.06],
+          [494, 0.1],
+        ],
+        (p) => square(p, 0.4),
+        0.3
+      ),
+      noiseBurst(0.08, 0.25, 0.3)
+    )
+  );
+  put(
+    "upgrade.wav",
+    melody(
+      [
+        [392, 0.07],
+        [523, 0.07],
+        [659, 0.12],
+      ],
+      (p) => square(p, 0.25),
+      0.28
+    )
+  );
+  put(
+    "sell.wav",
+    melody(
+      [
+        [784, 0.06],
+        [523, 0.06],
+        [392, 0.1],
+      ],
+      sine,
+      0.4
+    )
+  );
   put("deny.wav", sweep(0.14, 150, 110, square, 0.25, 2));
-  put("bolt.wav", sweep(0.07, 900, 500, (p) => square(p, 0.3), 0.18, 3));
+  put(
+    "bolt.wav",
+    sweep(0.07, 900, 500, (p) => square(p, 0.3), 0.18, 3)
+  );
   put("mortar.wav", mix(sweep(0.18, 160, 50, sine, 0.7, 3), noiseBurst(0.12, 0.25, 0.2)));
   put("frost.wav", mix(sweep(0.25, 1500, 2200, sine, 0.22, 3), sweep(0.25, 2000, 3000, sine, 0.12, 4)));
   put("hit.wav", sweep(0.04, 600, 300, saw, 0.15, 4));
   put("boom.wav", mix(noiseBurst(0.25, 0.8, 0.25), sweep(0.25, 120, 40, sine, 0.5, 3)));
   put("death.wav", mix(sweep(0.16, 500, 200, saw, 0.22, 3), noiseBurst(0.1, 0.25, 0.4)));
   put("leak.wav", sweep(0.3, 260, 90, square, 0.3, 2));
-  put("wave.wav", melody([[262, 0.12], [262, 0.12], [392, 0.3]], (p) => square(p, 0.5), 0.26, 1.5));
-  put("win.wav", melody([[523, 0.12], [659, 0.12], [784, 0.12], [1047, 0.4]], (p) => square(p, 0.25), 0.28, 1.5));
-  put("lose.wav", melody([[392, 0.2], [330, 0.2], [262, 0.2], [196, 0.5]], saw, 0.26, 1.5));
+  put(
+    "wave.wav",
+    melody(
+      [
+        [262, 0.12],
+        [262, 0.12],
+        [392, 0.3],
+      ],
+      (p) => square(p, 0.5),
+      0.26,
+      1.5
+    )
+  );
+  put(
+    "win.wav",
+    melody(
+      [
+        [523, 0.12],
+        [659, 0.12],
+        [784, 0.12],
+        [1047, 0.4],
+      ],
+      (p) => square(p, 0.25),
+      0.28,
+      1.5
+    )
+  );
+  put(
+    "lose.wav",
+    melody(
+      [
+        [392, 0.2],
+        [330, 0.2],
+        [262, 0.2],
+        [196, 0.5],
+      ],
+      saw,
+      0.26,
+      1.5
+    )
+  );
   put("click.wav", sweep(0.03, 800, 800, square, 0.15, 4));
 }
 
@@ -325,8 +427,14 @@ function music(): void {
   const note = (midi: number): number => 440 * Math.pow(2, (midi - 69) / 12);
   const bass = [36, 36, 43, 36, 33, 33, 40, 33, 38, 38, 45, 38, 31, 31, 38, 31];
   const lead = [
-    [72, 0, 76, 79], [76, 0, 74, 72], [69, 0, 72, 76], [74, 0, 72, 0],
-    [79, 0, 76, 74], [72, 0, 74, 76], [74, 0, 71, 67], [72, 0, 0, 0],
+    [72, 0, 76, 79],
+    [76, 0, 74, 72],
+    [69, 0, 72, 76],
+    [74, 0, 72, 0],
+    [79, 0, 76, 74],
+    [72, 0, 74, 76],
+    [74, 0, 71, 67],
+    [72, 0, 0, 0],
   ];
   const place = (start: number, length: number, hz: number, volume: number, shape: (p: number) => number): void => {
     const s = Math.round(start * rate);
@@ -338,7 +446,10 @@ function music(): void {
     }
   };
   for (let b = 0; b < bars * 2; b++) place(b * 2 * beat, beat * 1.7, note(bass[b % bass.length] as number), 0.24, (p) => sine(p));
-  for (let b = 0; b < bars; b++) (lead[b % lead.length] as number[]).forEach((midi, k) => midi !== 0 && place((b * 4 + k) * beat, beat * 0.9, note(midi), 0.13, (p) => square(p, 0.3)));
+  for (let b = 0; b < bars; b++)
+    (lead[b % lead.length] as number[]).forEach(
+      (midi, k) => midi !== 0 && place((b * 4 + k) * beat, beat * 0.9, note(midi), 0.13, (p) => square(p, 0.3))
+    );
   for (let k = 0; k < bars * 4; k++) {
     const s = Math.round((k * beat + beat / 2) * rate);
     for (let i = 0; i < 500 && s + i < total; i++) out[s + i] = (out[s + i] as number) + random() * 0.04 * (1 - i / 500);

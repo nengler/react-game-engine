@@ -1,7 +1,9 @@
+import assert from "node:assert/strict";
 /** Motion (REACT_FEEL_PLAN.md, C1): `useSpring` and `useTween`, shipped hooks that step in the component's update. */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, EASINGS, World, freeze, springFrom, startSpring, stepSpring, type InputState } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
 after(() => {

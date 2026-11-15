@@ -4,6 +4,7 @@
  * be identical, and two runs under Node to be identical too.
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+
 import { bindings, gameConfig } from "./game.ts";
 
 const frames = parseInputScript("_*3, right*30, Z, down*20", { bindings });

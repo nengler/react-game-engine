@@ -1,11 +1,15 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+
 import { table } from "../tools/balance.ts";
 
-const expected = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "balance.expected.json"), "utf8")) as Record<string, (number | null)[]>;
+const expected = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "balance.expected.json"), "utf8")) as Record<
+  string,
+  (number | null)[]
+>;
 
 describe("balance", () => {
   const now = table();

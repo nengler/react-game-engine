@@ -1,3 +1,14 @@
+import {
+  CollisionTracker,
+  createPlayer,
+  FrameBuilder,
+  HOST_BACKEND_KEY,
+  PlayerInput,
+  RGE_IN_DT,
+  RGE_IN_QUIT,
+  Warner,
+  type Backend,
+} from "@rge/player";
 /**
  * How long a frame of script takes: `createPlayer(...).step()` with `n` moving entities, each drawn as a
  * rectangle, against a backend that draws nothing, so only the engine (hooks, renders, the tree walk, the
@@ -13,7 +24,6 @@
  * `npm run bench:check` runs it under Node and fails when a scene is over its budget in `budget.json` (CI does).
  */
 import { findPath, AnimatedSprite, Camera, Collider, Entity, Shape, Sprite, Tilemap, World, registerTilemaps } from "@rge/runtime";
-import { CollisionTracker, createPlayer, FrameBuilder, HOST_BACKEND_KEY, PlayerInput, RGE_IN_DT, RGE_IN_QUIT, Warner, type Backend } from "@rge/player";
 
 /**
  * The host's broad phase for collisions, when the bench runs under a host that has one (the Rust host): a player there asks
@@ -107,7 +117,15 @@ class StateMover extends Entity {
  * sprite's `flipX` and `tint` (a hit flash), the way `<AnimatedSprite flipX={left} tint={flash > 0 ? … : …} />` does.
  */
 class AnimatedMover extends StateMover {
-  readonly sprite = new AnimatedSprite({ sheet: "walk.png", frameWidth: 14, frameHeight: 14, animations: "walk:0-3@8", animation: "walk", originX: 7, originY: 7 });
+  readonly sprite = new AnimatedSprite({
+    sheet: "walk.png",
+    frameWidth: 14,
+    frameHeight: 14,
+    animations: "walk:0-3@8",
+    animation: "walk",
+    originX: 7,
+    originY: 7,
+  });
   constructor() {
     super();
     this.addChild(this.sprite);
@@ -180,7 +198,17 @@ class Scroller extends Entity {
 }
 
 function buildMapScene(side: number): Entity {
-  registerTilemaps({ bench: { width: side, height: side, tileWidth: 16, tileHeight: 16, firstGid: 1, solid: [], layers: [{ name: "Ground", visible: true, data: Array.from({ length: side * side }, (_, i) => 1 + (i % 3)) }] } });
+  registerTilemaps({
+    bench: {
+      width: side,
+      height: side,
+      tileWidth: 16,
+      tileHeight: 16,
+      firstGid: 1,
+      solid: [],
+      layers: [{ name: "Ground", visible: true, data: Array.from({ length: side * side }, (_, i) => 1 + (i % 3)) }],
+    },
+  });
   const root = new Entity();
   root.addChild(new Tilemap({ map: "bench", image: "tiles.png" }));
   const camera = new Camera();
@@ -192,7 +220,16 @@ function buildMapScene(side: number): Entity {
   return root;
 }
 
-function buildScene({ n, animated = false, tower = false, colliders: withColliders = false, state = false, pile = false, map = false, moving = n }: Scene): Entity {
+function buildScene({
+  n,
+  animated = false,
+  tower = false,
+  colliders: withColliders = false,
+  state = false,
+  pile = false,
+  map = false,
+  moving = n,
+}: Scene): Entity {
   if (tower) return buildTowerScene(n);
   if (map) return buildMapScene(n);
   const root = new Entity();
@@ -216,7 +253,12 @@ function buildScene({ n, animated = false, tower = false, colliders: withCollide
 
 function measure(scene: Scene): number {
   const { n } = scene;
-  const player = createPlayer(scene.scriptSweep ? { ...nothing, overlaps: undefined } : nothing, { width: 800, height: 600, title: "bench", root: () => buildScene(scene) });
+  const player = createPlayer(scene.scriptSweep ? { ...nothing, overlaps: undefined } : nothing, {
+    width: 800,
+    height: 600,
+    title: "bench",
+    root: () => buildScene(scene),
+  });
   for (let i = 0; i < 10; i++) player.step(); // warm up
   // The fastest of a few batches: a shared CI runner adds pauses (a collection, another job) that are not the engine's, and a
   // scene that costs a few hundredths of a millisecond a frame would otherwise pass or fail its budget by chance.
@@ -293,7 +335,8 @@ function mount(scene: Scene): number {
 function pathSearches(): number {
   const width = 80;
   const height = 48;
-  const solid = (x: number, y: number): boolean => (x % 8 === 4 && y % 12 !== (Math.floor(x / 8) % 2 === 0 ? 3 : 8)) || (y % 12 === 6 && x % 10 !== 2);
+  const solid = (x: number, y: number): boolean =>
+    (x % 8 === 4 && y % 12 !== (Math.floor(x / 8) % 2 === 0 ? 3 : 8)) || (y % 12 === 6 && x % 10 !== 2);
   const grid = { width, height };
   const start = Date.now();
   let found = 0;

@@ -50,7 +50,8 @@ export function findPath(grid: PathGrid, from: Cell, to: Cell, options: PathOpti
   const diagonal = options.diagonal ?? false;
   const maxNodes = options.maxNodes ?? DEFAULT_MAX_NODES;
   const solid = options.blocked ?? ((x: number, y: number) => grid.solidAt?.(x, y) ?? false);
-  const inside = (x: number, y: number): boolean => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < width && y < height;
+  const inside = (x: number, y: number): boolean =>
+    Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < width && y < height;
   if (!inside(from.x, from.y) || !inside(to.x, to.y) || solid(from.x, from.y) || solid(to.x, to.y)) return null;
   if (from.x === to.x && from.y === to.y) return [];
 
@@ -69,7 +70,9 @@ export function findPath(grid: PathGrid, from: Cell, to: Cell, options: PathOpti
 
   // A binary heap of [priority, order, cell], smallest first.
   const heap: number[] = [];
-  const less = (a: number, b: number): boolean => (heap[a * 3] as number) < (heap[b * 3] as number) || ((heap[a * 3] as number) === (heap[b * 3] as number) && (heap[a * 3 + 1] as number) < (heap[b * 3 + 1] as number));
+  const less = (a: number, b: number): boolean =>
+    (heap[a * 3] as number) < (heap[b * 3] as number) ||
+    ((heap[a * 3] as number) === (heap[b * 3] as number) && (heap[a * 3 + 1] as number) < (heap[b * 3 + 1] as number));
   const swap = (a: number, b: number): void => {
     for (let k = 0; k < 3; k++) {
       const t = heap[a * 3 + k] as number;
@@ -111,8 +114,22 @@ export function findPath(grid: PathGrid, from: Cell, to: Cell, options: PathOpti
 
   // Right, down, left, up, then the diagonals: a fixed order.
   const steps: readonly (readonly [number, number])[] = diagonal
-    ? [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [-1, -1], [1, -1]]
-    : [[1, 0], [0, 1], [-1, 0], [0, -1]];
+    ? [
+        [1, 0],
+        [0, 1],
+        [-1, 0],
+        [0, -1],
+        [1, 1],
+        [-1, 1],
+        [-1, -1],
+        [1, -1],
+      ]
+    : [
+        [1, 0],
+        [0, 1],
+        [-1, 0],
+        [0, -1],
+      ];
   let serial = 0;
   cost[start] = 0;
   push(heuristic(start), serial++, start);

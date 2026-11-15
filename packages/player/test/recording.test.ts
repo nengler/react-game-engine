@@ -1,9 +1,24 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { KEY_INDEX, KEYS, RGE_IN_DT, RGE_IN_HEIGHT, RGE_IN_LEN, RGE_IN_MOUSE_X, RGE_IN_MOUSE_Y, RGE_IN_QUIT, RGE_IN_WHEEL, RGE_IN_WIDTH, RGE_KEY_DOWN, RGE_KEY_PRESSED, RGE_KEY_RELEASED } from "../src/protocol.ts";
+import { describe, it } from "node:test";
+
 import { DrawList } from "../src/draw.ts";
-import { RecordingBackend } from "../src/recording.ts";
+import {
+  KEY_INDEX,
+  KEYS,
+  RGE_IN_DT,
+  RGE_IN_HEIGHT,
+  RGE_IN_LEN,
+  RGE_IN_MOUSE_X,
+  RGE_IN_MOUSE_Y,
+  RGE_IN_QUIT,
+  RGE_IN_WHEEL,
+  RGE_IN_WIDTH,
+  RGE_KEY_DOWN,
+  RGE_KEY_PRESSED,
+  RGE_KEY_RELEASED,
+} from "../src/protocol.ts";
 import { RGE_OP_CANVAS, RGE_OP_CANVAS_LEN, RGE_OP_RECT, RGE_OP_SCISSOR, RGE_OP_SCISSOR_END, RGE_OP_VIEW } from "../src/protocol.ts";
+import { RecordingBackend } from "../src/recording.ts";
 
 function present(backend: RecordingBackend, list = new DrawList()): { input: Float64Array; keys: Uint8Array } {
   const input = new Float64Array(RGE_IN_LEN);
@@ -17,10 +32,48 @@ describe("RecordingBackend", () => {
     const backend = new RecordingBackend();
     backend.open({ width: 10, height: 10, title: "t" });
     const view = [RGE_OP_VIEW, 1, 0, 0, 1, 5, 6];
-    const records = new Float64Array([RGE_OP_CANVAS, 32, 18, 0, 6, 128, 72, 0x000000ff, ...view, RGE_OP_SCISSOR, 1, 2, 3, 4, RGE_OP_RECT, 0, 0, 0, 1, 1, 2, 2, 0xff0000ff, RGE_OP_SCISSOR_END, ...view]);
+    const records = new Float64Array([
+      RGE_OP_CANVAS,
+      32,
+      18,
+      0,
+      6,
+      128,
+      72,
+      0x000000ff,
+      ...view,
+      RGE_OP_SCISSOR,
+      1,
+      2,
+      3,
+      4,
+      RGE_OP_RECT,
+      0,
+      0,
+      0,
+      1,
+      1,
+      2,
+      2,
+      0xff0000ff,
+      RGE_OP_SCISSOR_END,
+      ...view,
+    ]);
     backend.frame(0, records, records.length, [], new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
-    assert.deepEqual(backend.lastFrame.records.map((record) => record.op), ["canvas", "view", "scissor", "rect", "scissorEnd", "view"]);
-    assert.deepEqual(backend.lastFrame.records[0], { op: "canvas", width: 32, height: 18, destX: 0, destY: 6, destW: 128, destH: 72, borderColor: "#000000ff" });
+    assert.deepEqual(
+      backend.lastFrame.records.map((record) => record.op),
+      ["canvas", "view", "scissor", "rect", "scissorEnd", "view"]
+    );
+    assert.deepEqual(backend.lastFrame.records[0], {
+      op: "canvas",
+      width: 32,
+      height: 18,
+      destX: 0,
+      destY: 6,
+      destW: 128,
+      destH: 72,
+      borderColor: "#000000ff",
+    });
     assert.deepEqual(backend.lastFrame.records[2], { op: "scissor", x: 1, y: 2, width: 3, height: 4 });
   });
 
@@ -28,7 +81,10 @@ describe("RecordingBackend", () => {
     const backend = new RecordingBackend();
     backend.open({ width: 10, height: 10, title: "t" });
     const records = new Float64Array([RGE_OP_VIEW, 1, 0, 0, 1, 0, 0, RGE_OP_CANVAS, 32, 18, 0, 0, 32, 18, 0]);
-    assert.throws(() => backend.frame(0, records, records.length, [], new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length)), /first record/);
+    assert.throws(
+      () => backend.frame(0, records, records.length, [], new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length)),
+      /first record/
+    );
     assert.equal(RGE_OP_CANVAS_LEN, 8);
   });
 
@@ -58,14 +114,20 @@ describe("RecordingBackend", () => {
     backend.queueInput({ dt: 0.5, mouse: { x: 3, y: 4 }, wheel: -1, pressed: ["Space"], down: ["A"], released: ["MouseLeft"] });
     backend.queueInput({ quit: true });
     const first = present(backend);
-    assert.deepEqual([first.input[RGE_IN_DT], first.input[RGE_IN_MOUSE_X], first.input[RGE_IN_MOUSE_Y], first.input[RGE_IN_WHEEL]], [0.5, 3, 4, -1]);
+    assert.deepEqual(
+      [first.input[RGE_IN_DT], first.input[RGE_IN_MOUSE_X], first.input[RGE_IN_MOUSE_Y], first.input[RGE_IN_WHEEL]],
+      [0.5, 3, 4, -1]
+    );
     assert.equal(first.keys[KEY_INDEX.get("Space")!], RGE_KEY_DOWN | RGE_KEY_PRESSED, "a pressed key is also down");
     assert.equal(first.keys[KEY_INDEX.get("A")!], RGE_KEY_DOWN);
     assert.equal(first.keys[KEY_INDEX.get("MouseLeft")!], RGE_KEY_RELEASED);
     assert.equal(present(backend).input[RGE_IN_QUIT], 1);
     const third = present(backend);
     assert.equal(third.input[RGE_IN_QUIT], 0);
-    assert.ok(third.keys.every((flags) => flags === 0), "keys do not carry over");
+    assert.ok(
+      third.keys.every((flags) => flags === 0),
+      "keys do not carry over"
+    );
   });
 
   it("rejects a key name it does not know, listing the valid ones", () => {

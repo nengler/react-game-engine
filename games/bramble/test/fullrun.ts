@@ -5,6 +5,7 @@
  * held. The route is made with no enemies (the replay of the whole game is about the world; enemies have their own tests).
  */
 import { findPath } from "@rge/runtime";
+
 import { cellAt, findDoor, MAPS, type MapId } from "../src/rules/maps.ts";
 import { bodyAt, bushKey, newRun, type Run } from "../src/rules/run.ts";
 import { route, type Leg } from "./replays.ts";
@@ -20,11 +21,14 @@ function walkTo(run: Run, to: Cell): Leg[] {
   const from = { x: Math.floor((run.x + 5) / 16), y: Math.floor((run.y + 5) / 16) };
   const solid = (x: number, y: number): boolean => {
     const ch = cellAt(run.map, x, y);
-    if (ch === "#" || ch === "~" || (ch === "b" && !run.cut.includes(bushKey(run.map, x, y)))) return !(x === to.x && y === to.y && def.doors.some((d) => d.col === x && d.row === y));
+    if (ch === "#" || ch === "~" || (ch === "b" && !run.cut.includes(bushKey(run.map, x, y))))
+      return !(x === to.x && y === to.y && def.doors.some((d) => d.col === x && d.row === y));
     return def.npcs.some((n) => n.col === x && n.row === y);
   };
   const doorCells = def.doors.filter((d) => !(d.col === to.x && d.row === to.y));
-  const path = findPath({ width: def.rows[0]!.length, height: def.rows.length }, from, to, { blocked: (x, y) => solid(x, y) || doorCells.some((d) => d.col === x && d.row === y) });
+  const path = findPath({ width: def.rows[0]!.length, height: def.rows.length }, from, to, {
+    blocked: (x, y) => solid(x, y) || doorCells.some((d) => d.col === x && d.row === y),
+  });
   if (path === null) throw new Error(`no way on ${run.map} from ${from.x},${from.y} to ${to.x},${to.y}`);
   const legs: Leg[] = [];
   for (const cell of path) {

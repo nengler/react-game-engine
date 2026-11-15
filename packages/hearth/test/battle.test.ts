@@ -1,12 +1,14 @@
+import assert from "node:assert/strict";
 /**
  * The battle, tested as components (`@rge/testing`): an enemy walks and takes its hits, a tower aims and fires, a shot lands, and
  * `Play` keeps the gold, the lives and the waves. Each is mounted alone in a headless world, as React Testing Library mounts one
  * React component.
  */
 import { describe, it, mock } from "node:test";
-import assert from "node:assert/strict";
+
 import { Collider } from "@rge/runtime";
 import { render } from "@rge/testing";
+
 import { Enemy } from "../generated/Enemy.ts";
 import { Play } from "../generated/Play.ts";
 import { Shot } from "../generated/Shot.ts";
@@ -15,9 +17,9 @@ import { sfx } from "../src/effects.ts";
 import { useGame } from "../src/GameState.ts";
 import { START_GOLD, START_LIVES, WAVE_BONUS } from "../src/rules/constants.ts";
 import { controls } from "../src/rules/controls.ts";
+import { BEST } from "../src/rules/coverage.ts";
 import { ENEMIES } from "../src/rules/enemies.ts";
 import { MAP } from "../src/rules/map.ts";
-import { BEST } from "../src/rules/coverage.ts";
 import { pathAt } from "../src/rules/path.ts";
 import { TOWERS, type TowerKind } from "../src/rules/towers.ts";
 
@@ -36,7 +38,10 @@ function enemy(kind: "runner" | "grunt" | "brute" = "brute", maxHp = 1000) {
 const fields = (t: { state(): Record<string, unknown> }) => t.state().s as Record<string, number | boolean>;
 
 /** What lands on an enemy: a blast at (x, y) (its middle, by default the path's start, where a new enemy stands). */
-const blast = (over: Partial<ColliderData["blast"]> = {}) => ({ tag: "blast", data: { target: -1, x: START.x, y: START.y, radius: 14, damage: 18, slow: 0, ...over } });
+const blast = (over: Partial<ColliderData["blast"]> = {}) => ({
+  tag: "blast",
+  data: { target: -1, x: START.x, y: START.y, radius: 14, damage: 18, slow: 0, ...over },
+});
 
 describe("an enemy", () => {
   it("walks the path at its kind's speed", () => {
@@ -94,7 +99,8 @@ describe("an enemy", () => {
 function tower(kind: TowerKind, level = 0) {
   const onFire = mock.fn();
   const t = render(Tower, { seed: 1, kind, level, x: 0, y: 0, ring: false, onFire });
-  const near = (id: number, x: number, y: number, dist: number, hp = 10) => t.place({ tag: "enemy", data: { id, dist, x, y, hp }, x: x - 5, y: y - 5, width: 10, height: 10 });
+  const near = (id: number, x: number, y: number, dist: number, hp = 10) =>
+    t.place({ tag: "enemy", data: { id, dist, x, y, hp }, x: x - 5, y: y - 5, width: 10, height: 10 });
   return { t, onFire, near };
 }
 
@@ -106,7 +112,18 @@ describe("a tower", () => {
     assert.equal(onFire.mock.callCount(), 0);
     t.step(2);
     assert.equal(onFire.mock.callCount(), 1);
-    assert.deepEqual(onFire.mock.calls[0]?.arguments[0], { kind: "bolt", x: 0, y: 0, tx: 20, ty: 0, flight: 0.12, target: 1, damage: 6, radius: 0, slow: 0 });
+    assert.deepEqual(onFire.mock.calls[0]?.arguments[0], {
+      kind: "bolt",
+      x: 0,
+      y: 0,
+      tx: 20,
+      ty: 0,
+      flight: 0.12,
+      target: 1,
+      damage: 6,
+      radius: 0,
+      slow: 0,
+    });
     t.step(STEPS_A_SECOND * 2);
     // 0.2 s, then every 0.4 s (24 steps, or 25 where the sum of steps falls a hair short), to 2.2 s.
     const shots = onFire.mock.callCount();
@@ -119,7 +136,7 @@ describe("a tower", () => {
     near(2, 0, 30, 80);
     near(3, 44, 0, 120); // inside the box it asks about, outside its 40 px reach
     t.step(13);
-    assert.equal((onFire.mock.calls[0]?.arguments[0] as { target: number }).target, 2);
+    assert.equal((onFire.mock.calls[0]!.arguments[0] as { target: number }).target, 2);
     assert.ok(Math.abs((fields(t).angle as number) - Math.PI / 2) < 1e-9);
   });
 
@@ -135,8 +152,18 @@ describe("a tower", () => {
     const { t, onFire, near } = tower("mortar");
     near(1, 30, 10, 50);
     t.step(13);
-    const shell = onFire.mock.calls[0]?.arguments[0] as { tx: number; ty: number; flight: number; radius: number; damage: number; target: number };
-    assert.ok(Math.abs(shell.tx - 30) <= 3 && Math.abs(shell.ty - 10) <= 3 && (shell.tx !== 30 || shell.ty !== 10), `${shell.tx}, ${shell.ty}`);
+    const shell = onFire.mock.calls[0]?.arguments[0] as {
+      tx: number;
+      ty: number;
+      flight: number;
+      radius: number;
+      damage: number;
+      target: number;
+    };
+    assert.ok(
+      Math.abs(shell.tx - 30) <= 3 && Math.abs(shell.ty - 10) <= 3 && (shell.tx !== 30 || shell.ty !== 10),
+      `${shell.tx}, ${shell.ty}`
+    );
     assert.deepEqual([shell.flight, shell.radius, shell.damage, shell.target], [0.5, 14, 18, -1]);
   });
 

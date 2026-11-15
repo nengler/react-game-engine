@@ -1,10 +1,11 @@
 import { createGameState, createSave } from "@rge/runtime";
+
 import "./tilemaps.ts";
 import { answer } from "./effects.ts";
-import { settings } from "./settings.ts";
 import { controls } from "./rules/controls.ts";
 import { stepVolume, titleRows } from "./rules/menu.ts";
 import { loadRun, newRun, saveOf, step, type GameEvent, type Input, type Run, type SaveData } from "./rules/run.ts";
+import { settings } from "./settings.ts";
 
 type Screen = "title" | "settings" | "play" | "end";
 

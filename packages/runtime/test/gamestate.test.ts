@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Entity, World, createGameState, resetGameState } from "../src/index.ts";
 
 interface State {
@@ -147,12 +148,14 @@ describe("carrying a game state across a hot reload", () => {
     older.getState().add();
     older.setState({ player: { hp: 3, name: "b" } });
 
-    const newer = createGameState<{ coins: number; player: { hp: number; name: number; mp: number }; list: number[]; add: () => void }>()((set) => ({
-      coins: 0,
-      player: { hp: 10, name: 0, mp: 5 },
-      list: [1],
-      add: () => set((s) => ({ coins: s.coins + 10 })),
-    }));
+    const newer = createGameState<{ coins: number; player: { hp: number; name: number; mp: number }; list: number[]; add: () => void }>()(
+      (set) => ({
+        coins: 0,
+        player: { hp: 10, name: 0, mp: 5 },
+        list: [1],
+        add: () => set((s) => ({ coins: s.coins + 10 })),
+      })
+    );
     newer.store.carryFrom(older.store as never);
     const state = newer.getState();
     assert.equal(state.coins, 1);

@@ -1,7 +1,8 @@
 import { getTilemap, registerTilemaps, type TileGrid } from "@rge/runtime";
+
 import { tilemaps } from "../../generated/tilemaps.ts";
-import type { Body } from "./body/types.ts";
 import { heightOf } from "./body/step.ts";
+import type { Body } from "./body/types.ts";
 import { BODY_H, BODY_W, ROOM_COLS, ROOM_H, ROOM_ROWS, ROOM_W, TILE, VOID_MARGIN } from "./constants.ts";
 
 /**
@@ -28,7 +29,16 @@ const GID_START = 8;
 const GID_END = 9;
 
 /** What each room is called, for the screen. */
-export const ROOM_NAMES: readonly string[] = ["First steps", "Stepping stones", "Dash across", "Dash up", "The shaft", "Spikes on the wall", "Gem ledge", "Summit"];
+export const ROOM_NAMES: readonly string[] = [
+  "First steps",
+  "Stepping stones",
+  "Dash across",
+  "Dash up",
+  "The shaft",
+  "Spikes on the wall",
+  "Gem ledge",
+  "Summit",
+];
 
 /** One room, with the world position it sits at. */
 export interface Room {
@@ -55,19 +65,26 @@ function charAt(grid: TileGrid, col: number, row: number): string {
   if (marker === GID_START) return "@";
   switch (grid.tileAt("Tiles", col, row)) {
     case GID_STONE:
-    case GID_SURFACE: return "#";
-    case GID_SPIKE_UP: return "^";
-    case GID_SPIKE_DOWN: return "v";
-    case GID_SPIKE_LEFT: return "<";
-    case GID_SPIKE_RIGHT: return ">";
-    default: return ".";
+    case GID_SURFACE:
+      return "#";
+    case GID_SPIKE_UP:
+      return "^";
+    case GID_SPIKE_DOWN:
+      return "v";
+    case GID_SPIKE_LEFT:
+      return "<";
+    case GID_SPIKE_RIGHT:
+      return ">";
+    default:
+      return ".";
   }
 }
 
 function roomFrom(index: number, ox: number, oy: number): Room {
   const map = `room${index + 1}`;
   const grid = getTilemap(map);
-  if (grid.width !== ROOM_COLS || grid.height !== ROOM_ROWS || grid.tileWidth !== TILE) throw new Error(`${map}.tmj must be ${ROOM_COLS} × ${ROOM_ROWS} tiles of ${TILE} pixels.`);
+  if (grid.width !== ROOM_COLS || grid.height !== ROOM_ROWS || grid.tileWidth !== TILE)
+    throw new Error(`${map}.tmj must be ${ROOM_COLS} × ${ROOM_ROWS} tiles of ${TILE} pixels.`);
   const rows: string[] = [];
   for (let r = 0; r < ROOM_ROWS; r++) {
     let row = "";
@@ -122,11 +139,16 @@ export function hazardRect(ch: string, col: number, row: number): { x: number; y
   const y = row * TILE;
   const half = TILE / 2;
   switch (ch) {
-    case "^": return { x, y: y + half, w: TILE, h: half };
-    case "v": return { x, y, w: TILE, h: half };
-    case "<": return { x: x + half, y, w: half, h: TILE };
-    case ">": return { x, y, w: half, h: TILE };
-    default: return null;
+    case "^":
+      return { x, y: y + half, w: TILE, h: half };
+    case "v":
+      return { x, y, w: TILE, h: half };
+    case "<":
+      return { x: x + half, y, w: half, h: TILE };
+    case ">":
+      return { x, y, w: half, h: TILE };
+    default:
+      return null;
   }
 }
 
@@ -145,7 +167,8 @@ function touching(room: Room, b: Body, want: (ch: string, col: number, row: numb
   const h = heightOf(b);
   const c1 = Math.floor((b.x + BODY_W - 1) / TILE);
   const r1 = Math.floor((b.y + h - 1) / TILE);
-  for (let r = Math.floor(b.y / TILE); r <= r1; r++) for (let c = Math.floor(b.x / TILE); c <= c1; c++) if (want(tileAt(room, c, r), c, r)) return true;
+  for (let r = Math.floor(b.y / TILE); r <= r1; r++)
+    for (let c = Math.floor(b.x / TILE); c <= c1; c++) if (want(tileAt(room, c, r), c, r)) return true;
   return false;
 }
 

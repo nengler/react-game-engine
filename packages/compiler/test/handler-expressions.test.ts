@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Any expression in a handler (REACT_FEEL_PLAN.md, A1 step b): `new`, `typeof`, `instanceof`, `in`, the standard library, and any
  * method of, or assignment into, a value the handler made itself. State and props stay immutable.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Text, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck, withAuthoringImports } from "./helpers.ts";
 
@@ -47,7 +49,7 @@ describe("expressions in handlers", () => {
     }
     alive.sort((a, b) => a.hp - b.hp);
     s.out = \`\${alive.map((e) => e.id).join(",")} \${tally.hits}\`;`),
-      "a 6",
+      "a 6"
     );
   });
 
@@ -61,7 +63,7 @@ describe("expressions in handlers", () => {
       seen.add(e.id);
     }
     s.out = \`\${byId.get("a")} \${seen.has("b")} \${seen.size}\`;`),
-      "3 true 2",
+      "3 true 2"
     );
   });
 
@@ -77,7 +79,7 @@ describe("expressions in handlers", () => {
     const record: Record<string, number> = { a: 1 };
     text += \` \${"a" in record} \${Object.keys(record).join("")} \${JSON.stringify([1])} \${Math.floor(2.5)} \${Number.isFinite(1)} \${parseInt("7", 10)}\`;
     s.out = text;`),
-      "number boom true a [1] 2 true 7",
+      "number boom true a [1] 2 true 7"
     );
   });
 
@@ -87,7 +89,7 @@ describe("expressions in handlers", () => {
     const grid = Array.from({ length: 2 }, () => [0, 0]);
     grid[1]![0] = 5;
     s.out = grid.flat().join("");`),
-      "0050",
+      "0050"
     );
   });
 });
@@ -115,7 +117,10 @@ function C() {
   });
 
   it("warns about Math.random", () => {
-    const result = getCompiler().compile("Random.tsx", withAuthoringImports(`function C() { const s = useMutable({ n: 0 }); useUpdate(() => { s.n = Math.random(); }); return <Entity />; }`));
+    const result = getCompiler().compile(
+      "Random.tsx",
+      withAuthoringImports(`function C() { const s = useMutable({ n: 0 }); useUpdate(() => { s.n = Math.random(); }); return <Entity />; }`)
+    );
     assert.ok(result.ok);
     assert.ok(result.diagnostics.some((d) => d.severity === "warning" && /Math\.random\(\)/.test(d.message)));
   });

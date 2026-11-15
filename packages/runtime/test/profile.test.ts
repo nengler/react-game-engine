@@ -1,6 +1,7 @@
+import assert from "node:assert/strict";
 /** The development profiler: each component's input, update and render time per frame, and the player's phases. */
 import { afterEach, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { activeProfiler, Entity, startProfiling, stopProfiling, World, type InputState } from "../src/index.ts";
 
 /** Work that takes a measurable time. */

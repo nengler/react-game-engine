@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * A root `<Entity>` with no `name` is named after its component (REACT_FEEL_PLAN.md, B1), so `<Entity name="Player">` need not
  * repeat what the function is called, and `other.owner` in a collision still says which component it touched.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Collider, Entity, Game, Sprite, Text, World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -33,11 +35,9 @@ describe("a root's name", () => {
   it("is the one written, static or dynamic", async () => {
     const fixed = await mount(`export function Player() { return <Entity name="Hero" />; }`, "Player");
     assert.equal(fixed.name, "Hero");
-    const dynamic = await mount(
-      `interface P { id: string; } export function Enemy({ id }: P) { return <Entity name={id} />; }`,
-      "Enemy",
-      { id: "beetle-3" },
-    );
+    const dynamic = await mount(`interface P { id: string; } export function Enemy({ id }: P) { return <Entity name={id} />; }`, "Enemy", {
+      id: "beetle-3",
+    });
     assert.equal(dynamic.name, "beetle-3");
   });
 

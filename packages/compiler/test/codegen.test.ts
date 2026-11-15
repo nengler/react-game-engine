@@ -1,5 +1,6 @@
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { after, describe, it } from "node:test";
+
 import { DiagnosticCode, formatDiagnostic } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, typeCheck } from "./helpers.ts";
 
@@ -91,7 +92,7 @@ export class WarningIcon extends Entity {
     super({ name: "Warning" });
   }
 }
-`,
+`
     );
   });
 
@@ -137,7 +138,7 @@ export class WarningIcon extends Entity {
     // Written only when it differs, and then the sprite is told: a render that changes nothing reports nothing.
     assert.match(
       code,
-      /override render\(\): void \{\n {4}const \$1 = \(this\.\$s_health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/,
+      /override render\(\): void \{\n {4}const \$1 = \(this\.\$s_health > 50\) \? "normal\.png" : "hurt\.png";\n {4}if \(this\.sprite\.image !== \$1\) \{\n {6}this\.sprite\.image = \$1;\n {6}this\.sprite\.markChanged\(\);\n {4}\}\n {2}\}/
     );
     // The sprite is only ever constructed in its field initialiser.
     assert.equal(code.match(/new Sprite/g)?.length, 1);
@@ -198,6 +199,9 @@ describe("type-checking generated code", () => {
   it("reports missing required intrinsic props", () => {
     const compiled = compile(`function P() { return <Entity><Collider width={1} /></Entity>; }`);
     const messages = typeCheck(compiled).map((d) => d.message);
-    assert.ok(messages.some((m) => m.includes("'height'")), messages.join("\n"));
+    assert.ok(
+      messages.some((m) => m.includes("'height'")),
+      messages.join("\n")
+    );
   });
 });

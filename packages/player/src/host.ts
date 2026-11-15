@@ -10,7 +10,9 @@ export const HOST_BACKEND_KEY = "__rgeBackend";
 export function hostBackend(): Backend {
   const backend = (globalThis as Record<string, unknown>)[HOST_BACKEND_KEY];
   if (backend === undefined || backend === null) {
-    throw new Error(`No host backend: this game must be started by a host (the Node launcher or the native executable), which sets globalThis.${HOST_BACKEND_KEY} first.`);
+    throw new Error(
+      `No host backend: this game must be started by a host (the Node launcher or the native executable), which sets globalThis.${HOST_BACKEND_KEY} first.`
+    );
   }
   return backend as Backend;
 }

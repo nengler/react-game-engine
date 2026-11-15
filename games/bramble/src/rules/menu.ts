@@ -11,7 +11,11 @@ export interface Row {
 
 /** The title's choices: "Continue" only when there is a save. */
 export function titleRows(hasSave: boolean): Row[] {
-  return [...(hasSave ? [{ id: "continue", label: "Continue", value: "" }] : []), { id: "new", label: "New game", value: "" }, { id: "settings", label: "Settings", value: "" }];
+  return [
+    ...(hasSave ? [{ id: "continue", label: "Continue", value: "" }] : []),
+    { id: "new", label: "New game", value: "" },
+    { id: "settings", label: "Settings", value: "" },
+  ];
 }
 
 /** The actions a player can rebind, and what the settings screen calls them. */
@@ -48,7 +52,11 @@ export function settingsRows(values: SettingsView, bindings: Readonly<Record<str
     { id: "music", label: "Music", value: percent(values.music) },
     { id: "effects", label: "Effects", value: percent(values.effects) },
     { id: "fullscreen", label: "Full screen", value: values.fullscreen ? "On" : "Off" },
-    ...BINDABLE.map(({ action, label }) => ({ id: `bind:${action}`, label, value: capturing === action ? "press a key..." : (bindings[action] ?? []).map(keyLabel).join(" / ") })),
+    ...BINDABLE.map(({ action, label }) => ({
+      id: `bind:${action}`,
+      label,
+      value: capturing === action ? "press a key..." : (bindings[action] ?? []).map(keyLabel).join(" / "),
+    })),
     { id: "reset", label: "Reset to defaults", value: "" },
     { id: "back", label: "Back", value: "" },
   ];
@@ -66,4 +74,3 @@ export function pauseRows(): Row[] {
     { id: "quit", label: "Save and quit", value: "" },
   ];
 }
-

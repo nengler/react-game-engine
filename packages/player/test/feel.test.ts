@@ -1,11 +1,37 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Entity, Fade, Hud, NO_SHAKE, Particles, Screen, Text, Tilemap, World, freeze, registerTilemaps, shakeOn, type TilemapData } from "@rge/runtime";
+import { describe, it } from "node:test";
+
+import {
+  Camera,
+  Entity,
+  Fade,
+  Hud,
+  NO_SHAKE,
+  Particles,
+  Screen,
+  Text,
+  Tilemap,
+  World,
+  freeze,
+  registerTilemaps,
+  shakeOn,
+  type TilemapData,
+} from "@rge/runtime";
+
 import { createPlayer, RecordingBackend, type DecodedRecord, type PlayerConfig } from "../src/index.ts";
 
-const SIZES = { "assets/tiles.png": { width: 30, height: 20 }, "assets/font.png": { width: 80, height: 48 }, "assets/props.png": { width: 64, height: 40 } };
+const SIZES = {
+  "assets/tiles.png": { width: 30, height: 20 },
+  "assets/font.png": { width: 80, height: 48 },
+  "assets/props.png": { width: 64, height: 40 },
+};
 
-function run(root: PlayerConfig["root"], steps: number, config: Partial<PlayerConfig> = {}, dts: number[] = []): { backend: RecordingBackend; warnings: string[] } {
+function run(
+  root: PlayerConfig["root"],
+  steps: number,
+  config: Partial<PlayerConfig> = {},
+  dts: number[] = []
+): { backend: RecordingBackend; warnings: string[] } {
   const backend = new RecordingBackend({ textureSizes: SIZES });
   const warnings: string[] = [];
   for (const dt of dts) backend.queueInput({ dt });
@@ -14,7 +40,8 @@ function run(root: PlayerConfig["root"], steps: number, config: Partial<PlayerCo
   player.close();
   return { backend, warnings };
 }
-const ofOp = <T extends DecodedRecord["op"]>(frame: readonly DecodedRecord[], op: T): Extract<DecodedRecord, { op: T }>[] => frame.filter((r): r is Extract<DecodedRecord, { op: T }> => r.op === op);
+const ofOp = <T extends DecodedRecord["op"]>(frame: readonly DecodedRecord[], op: T): Extract<DecodedRecord, { op: T }>[] =>
+  frame.filter((r): r is Extract<DecodedRecord, { op: T }> => r.op === op);
 
 const MAP: TilemapData = {
   width: 4,
@@ -48,9 +75,17 @@ describe("<Tilemap>", () => {
     assert.equal(tiles.length, 6);
     const [first, , third] = tiles;
     assert.deepEqual([first?.x, first?.y, first?.srcX, first?.srcY, first?.srcW, first?.srcH], [100, 50, 0, 0, 10, 10]);
-    assert.deepEqual([third?.x, third?.y, third?.srcX, third?.srcY], [130, 50, 20, 0], "the 4th column, and tile 3 is the third in the sheet's first row");
+    assert.deepEqual(
+      [third?.x, third?.y, third?.srcX, third?.srcY],
+      [130, 50, 20, 0],
+      "the 4th column, and tile 3 is the third in the sheet's first row"
+    );
     const frontOne = tiles[3] as (typeof tiles)[number];
-    assert.deepEqual([frontOne.x, frontOne.y, frontOne.srcX, frontOne.srcY], [100 + 5, 50 + 10 + 5, 10, 10], "a flipped tile is placed by its middle: tile 5 is the second of the sheet's second row (3 columns)");
+    assert.deepEqual(
+      [frontOne.x, frontOne.y, frontOne.srcX, frontOne.srcY],
+      [100 + 5, 50 + 10 + 5, 10, 10],
+      "a flipped tile is placed by its middle: tile 5 is the second of the sheet's second row (3 columns)"
+    );
     assert.deepEqual([frontOne.flipX, frontOne.flipY, frontOne.originX, frontOne.originY], [true, false, 5, 5]);
     assert.deepEqual([tiles[4]?.flipX, tiles[4]?.flipY], [false, true], "vertical flip");
     assert.equal(tiles[5]?.rotation.toFixed(4), (Math.PI / 2).toFixed(4), "diagonal alone: a quarter turn and a mirror");
@@ -98,7 +133,10 @@ describe("<Tilemap>", () => {
     assert.deepEqual([c?.x, c?.y, c?.srcX, c?.srcY, c?.srcW, c?.srcH], [10, 0, 13, 23, 10, 20]);
     // With `image`, the map's tilesets are ignored and every tile is cut from that one sheet, as before.
     const one = run(() => new Tilemap({ map: "sets", image: "tiles.png" }), 1);
-    assert.equal(ofOp(one.backend.lastFrame.records, "spriteRegion").every((r) => r.srcH === 10), true);
+    assert.equal(
+      ofOp(one.backend.lastFrame.records, "spriteRegion").every((r) => r.srcH === 10),
+      true
+    );
   });
 
   it("without `image` and with no sheet in the map, draws nothing and warns once", () => {
@@ -160,14 +198,30 @@ describe("<Particles>", () => {
   });
 
   it("is drawn as squares that shrink, fade and move with gravity, in whole pixels", () => {
-    const { backend } = run(() => {
-      const root = new Entity();
-      const e = particles({ burst: 4, lifetime: 1, speed: 20, spread: 0, angle: 270, gravity: 100, color: "#ff0000", fade: true, shrink: true, size: 4 });
-      e.transform.x = 50;
-      e.transform.y = 60;
-      root.addChild(e);
-      return root;
-    }, 40, {}, Array.from({ length: 40 }, () => 1 / 30));
+    const { backend } = run(
+      () => {
+        const root = new Entity();
+        const e = particles({
+          burst: 4,
+          lifetime: 1,
+          speed: 20,
+          spread: 0,
+          angle: 270,
+          gravity: 100,
+          color: "#ff0000",
+          fade: true,
+          shrink: true,
+          size: 4,
+        });
+        e.transform.x = 50;
+        e.transform.y = 60;
+        root.addChild(e);
+        return root;
+      },
+      40,
+      {},
+      Array.from({ length: 40 }, () => 1 / 30)
+    );
     const first = ofOp(backend.frames[1]?.records ?? [], "rect");
     const later = ofOp(backend.frames[20]?.records ?? [], "rect");
     assert.equal(first.length, 4);
@@ -290,7 +344,10 @@ describe("<Camera> bounds, slide and shake", () => {
       c.onUpdate(1 / 60);
       seen.push(-c.viewTransform().e);
     }
-    assert.ok(seen.every((x, i) => i === 0 || x >= (seen[i - 1] as number)), "moves one way, never back");
+    assert.ok(
+      seen.every((x, i) => i === 0 || x >= (seen[i - 1] as number)),
+      "moves one way, never back"
+    );
     assert.equal(seen.at(-1), 480, "and arrives");
     assert.ok(seen[10]! > 160 && seen[10]! < 480, "partway after ten steps");
     const none = camera({ bounds: [0, 0, 320, 180] });
@@ -313,11 +370,17 @@ describe("<Camera> bounds, slide and shake", () => {
     };
     const a = run1();
     assert.deepEqual(a, run1());
-    assert.ok(a.slice(0, 2).every((e) => e === 0), "still before it is set");
+    assert.ok(
+      a.slice(0, 2).every((e) => e === 0),
+      "still before it is set"
+    );
     assert.ok(a.slice(2, 6).some((e) => e !== 0));
     assert.ok(a.every((e) => Number.isInteger(e) || e === 0));
     assert.ok(Math.max(...a.slice(2, 5).map(Math.abs)) <= 4);
-    assert.ok(a.slice(-4).every((e) => e === 0), "over by the end");
+    assert.ok(
+      a.slice(-4).every((e) => e === 0),
+      "over by the end"
+    );
     assert.equal(shakeOn(NO_SHAKE, 0.1), NO_SHAKE, "no shake: the same object, so a state holding it does not change");
   });
 });
@@ -381,7 +444,10 @@ describe("bitmap fonts", () => {
     const glyphs = ofOp(backend.lastFrame.records, "spriteRegion");
     // The sheet is 80 × 48: cells of 5 × 8. A size of 16 is a scale of 2, so a glyph advances 10.
     assert.equal(glyphs.length, 2);
-    assert.deepEqual([glyphs[0]?.srcX, glyphs[0]?.srcY, glyphs[0]?.srcW, glyphs[0]?.srcH], [(65 - 32) % 16 * 5, Math.floor((65 - 32) / 16) * 8, 5, 8]);
+    assert.deepEqual(
+      [glyphs[0]?.srcX, glyphs[0]?.srcY, glyphs[0]?.srcW, glyphs[0]?.srcH],
+      [((65 - 32) % 16) * 5, Math.floor((65 - 32) / 16) * 8, 5, 8]
+    );
     assert.deepEqual([glyphs[0]?.x, glyphs[1]?.x], [0, 20], "the space is skipped but still takes room");
     assert.equal(glyphs[0]?.scaleX, 2);
     assert.equal(glyphs[0]?.tint, "#ffcc00ff");
@@ -396,6 +462,6 @@ describe("bitmap fonts", () => {
   it("show anything outside the font as a question mark", () => {
     const { backend } = run(() => new Text({ text: "é", font: "font.png", size: 8 }), 1);
     const g = ofOp(backend.lastFrame.records, "spriteRegion")[0];
-    assert.equal(g?.srcX, (63 - 32) % 16 * 5);
+    assert.equal(g?.srcX, ((63 - 32) % 16) * 5);
   });
 });

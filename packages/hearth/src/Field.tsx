@@ -1,4 +1,5 @@
 import { Entity, Sprite, Tilemap } from "@rge/runtime/jsx";
+
 import { HEARTH } from "./rules/map.ts";
 
 /** The ground: the map's tiles, and the hearth where the path ends. */

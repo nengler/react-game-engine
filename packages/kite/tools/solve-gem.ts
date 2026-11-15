@@ -7,7 +7,9 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { parseInputScript } from "@rge/player";
+
 import { NO_CONTROLS } from "../src/rules/body.ts";
 import { newSim } from "../src/rules/level.ts";
 import { playFrame, startPlayback } from "../src/rules/playback.ts";
@@ -23,7 +25,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   let prev: readonly string[] = [];
   for (const script of REPLAYS.slice(0, 6)) {
     for (const f of parseInputScript(script, { bindings })) {
-      play = playFrame(play, { ...NO_CONTROLS, left: down(f.down, "ArrowLeft"), right: down(f.down, "ArrowRight"), up: down(f.down, "ArrowUp"), down: down(f.down, "ArrowDown"), jumpHeld: down(f.down, "Z"), jumpPressed: down(f.down, "Z") && !down(prev, "Z"), dashPressed: down(f.down, "X") && !down(prev, "X") }, 1 / 60);
+      play = playFrame(
+        play,
+        {
+          ...NO_CONTROLS,
+          left: down(f.down, "ArrowLeft"),
+          right: down(f.down, "ArrowRight"),
+          up: down(f.down, "ArrowUp"),
+          down: down(f.down, "ArrowDown"),
+          jumpHeld: down(f.down, "Z"),
+          jumpPressed: down(f.down, "Z") && !down(prev, "Z"),
+          dashPressed: down(f.down, "X") && !down(prev, "X"),
+        },
+        1 / 60
+      );
       prev = f.down;
     }
   }
@@ -34,6 +49,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
   console.log(found.script);
-  const header = "/**\n * From the start of room 7 (after REPLAYS[0..5]), a way to the gem. Found by tools/solve-gem.ts; test/rooms.test.ts plays it.\n */\n";
-  writeFileSync(join(dirname(fileURLToPath(import.meta.url)), "../test/gem-replay.ts"), `${header}export const GEM_REPLAY = ${JSON.stringify(found.script)};\n`);
+  const header =
+    "/**\n * From the start of room 7 (after REPLAYS[0..5]), a way to the gem. Found by tools/solve-gem.ts; test/rooms.test.ts plays it.\n */\n";
+  writeFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../test/gem-replay.ts"),
+    `${header}export const GEM_REPLAY = ${JSON.stringify(found.script)};\n`
+  );
 }

@@ -1,6 +1,8 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { Entity, Flex, Hud, Shape, getSoundSink, type FlexProps, type GameObject } from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
 import { KEYS, RGE_IN_LEN, RGE_OP_BOX_LEN } from "../src/protocol.ts";
@@ -32,18 +34,49 @@ describe("<Flex> border and borderRadius", () => {
   it("draws a background alone as the plain rect it always was", () => {
     const records = draw(button({ background: "red" }));
     assert.equal(boxes(records).length, 0);
-    assert.deepEqual(rects(records)[0], { op: "rect", x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, width: 40, height: 20, color: "#ff0000ff" });
+    assert.deepEqual(rects(records)[0], {
+      op: "rect",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      width: 40,
+      height: 20,
+      color: "#ff0000ff",
+    });
   });
 
   it("draws a box record for a border, the size of the box, with the fill, the border colour, its width and the radius", () => {
     const records = draw(button({ background: "red", borderWidth: 2, borderColor: "blue", borderRadius: 4 }));
-    assert.deepEqual(boxes(records), [{ op: "box", x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, width: 40, height: 20, fill: "#ff0000ff", borderColor: "#0000ffff", borderWidth: 2, radius: 4 }]);
+    assert.deepEqual(boxes(records), [
+      {
+        op: "box",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        scaleX: 1,
+        scaleY: 1,
+        width: 40,
+        height: 20,
+        fill: "#ff0000ff",
+        borderColor: "#0000ffff",
+        borderWidth: 2,
+        radius: 4,
+      },
+    ]);
     assert.equal(rects(records).length, 1, "only the child's rect: the box replaces the background's");
   });
 
   it("draws a border with no background (a transparent fill), and a radius with no border", () => {
-    assert.deepEqual(boxes(draw(button({ borderWidth: 1, borderColor: "white" }))).map((b) => [b.fill, b.borderColor, b.borderWidth, b.radius]), [["#00000000", "#ffffffff", 1, 0]]);
-    assert.deepEqual(boxes(draw(button({ background: "red", borderRadius: 6 }))).map((b) => [b.fill, b.borderColor, b.borderWidth, b.radius]), [["#ff0000ff", "#00000000", 0, 6]]);
+    assert.deepEqual(
+      boxes(draw(button({ borderWidth: 1, borderColor: "white" }))).map((b) => [b.fill, b.borderColor, b.borderWidth, b.radius]),
+      [["#00000000", "#ffffffff", 1, 0]]
+    );
+    assert.deepEqual(
+      boxes(draw(button({ background: "red", borderRadius: 6 }))).map((b) => [b.fill, b.borderColor, b.borderWidth, b.radius]),
+      [["#ff0000ff", "#00000000", 0, 6]]
+    );
   });
 
   it("draws no border without a colour, or without a width", () => {
@@ -59,7 +92,11 @@ describe("<Flex> border and borderRadius", () => {
     f.transform.x = 30;
     layer.addChild(f);
     const records = draw(layer);
-    assert.deepEqual(records.map((r) => r.op), ["view", "view", "box", "rect"], "the world's view, then the HUD's");
+    assert.deepEqual(
+      records.map((r) => r.op),
+      ["view", "view", "box", "rect"],
+      "the world's view, then the HUD's"
+    );
     assert.ok(records[2]?.op === "box");
     assert.equal(records[2].x, 30);
   });
@@ -69,7 +106,10 @@ describe("<Flex> border and borderRadius", () => {
     const f = new Flex({ padding: 2, borderWidth: 3, borderColor: "blue" });
     f.addChild(child);
     const records = draw(f);
-    assert.deepEqual(boxes(records).map((b) => [b.width, b.height]), [[10 + 2 * 5, 6 + 2 * 5]]);
+    assert.deepEqual(
+      boxes(records).map((b) => [b.width, b.height]),
+      [[10 + 2 * 5, 6 + 2 * 5]]
+    );
     assert.deepEqual([child.layoutX, child.layoutY], [5, 5]);
   });
 
@@ -82,7 +122,11 @@ describe("<Flex> border and borderRadius", () => {
     };
     assert.deepEqual(fit({ borderWidth: 4 }), [10, 10]);
     assert.deepEqual(fit({ borderWidth: 4, borderColor: "red" }), [18, 18]);
-    assert.deepEqual(fit({ borderWidth: 4, hoverBorderColor: "red" }), [18, 18], "the room is kept while the border is not shown, so nothing moves on hover");
+    assert.deepEqual(
+      fit({ borderWidth: 4, hoverBorderColor: "red" }),
+      [18, 18],
+      "the room is kept while the border is not shown, so nothing moves on hover"
+    );
   });
 });
 
@@ -92,7 +136,11 @@ describe("<Flex> hover and focus props, in the loop", () => {
   });
 
   /** A window with one 40 × 20 button at its top left; `queue` is the mouse of each step. */
-  function run(props: FlexProps, mice: readonly ({ x: number; y: number } | null)[], setup?: (flex: Flex, world: ReturnType<typeof createPlayer>["world"]) => void) {
+  function run(
+    props: FlexProps,
+    mice: readonly ({ x: number; y: number } | null)[],
+    setup?: (flex: Flex, world: ReturnType<typeof createPlayer>["world"]) => void
+  ) {
     const backend = new RecordingBackend();
     const root = new Entity();
     const f = button(props);
@@ -116,7 +164,13 @@ describe("<Flex> hover and focus props, in the loop", () => {
   const OUT = { x: 150, y: 80 };
 
   it("draws hoverBackground and hoverBorderColor while the mouse is over the box, and the plain colours again after", () => {
-    const shown = run({ background: "red", borderWidth: 1, borderColor: "blue", hoverBackground: "#00ff00", hoverBorderColor: "white" }, [OUT, IN, IN, OUT, OUT]);
+    const shown = run({ background: "red", borderWidth: 1, borderColor: "blue", hoverBackground: "#00ff00", hoverBorderColor: "white" }, [
+      OUT,
+      IN,
+      IN,
+      OUT,
+      OUT,
+    ]);
     assert.deepEqual(shown.at(0), ["#ff0000ff", "#0000ffff"]);
     // Hover is read at the start of a step and drawn in the same step's frame or the next, so look at where it settled.
     assert.deepEqual(shown.at(2), ["#00ff00ff", "#ffffffff"]);
@@ -131,7 +185,11 @@ describe("<Flex> hover and focus props, in the loop", () => {
   it("can give a background where there was none, and a border colour where there was none", () => {
     assert.deepEqual(run({ hoverBackground: "#00ff00" }, [OUT, IN, IN]).at(2), ["#00ff00ff"]);
     assert.deepEqual(run({ borderWidth: 2, hoverBorderColor: "white" }, [IN, IN, IN]).at(2), ["#00000000", "#ffffffff"]);
-    assert.deepEqual(run({ borderWidth: 2, hoverBorderColor: "white" }, [OUT, OUT, OUT]).at(2), ["#ffffffff"], "and the box draws nothing while it is not hovered: this is only its child's rect");
+    assert.deepEqual(
+      run({ borderWidth: 2, hoverBorderColor: "white" }, [OUT, OUT, OUT]).at(2),
+      ["#ffffffff"],
+      "and the box draws nothing while it is not hovered: this is only its child's rect"
+    );
   });
 
   it("makes the box take the mouse, and lets a press through to what is under it", () => {
@@ -149,13 +207,23 @@ describe("<Flex> hover and focus props, in the loop", () => {
     }
     p.close();
     assert.deepEqual(presses, ["under"]);
-    assert.ok(boxes(backend.lastFrame.records).length === 0 && rects(backend.lastFrame.records).some((r) => r.color === "#00ff00ff"), "and it is drawn hovered");
+    assert.ok(
+      boxes(backend.lastFrame.records).length === 0 && rects(backend.lastFrame.records).some((r) => r.color === "#00ff00ff"),
+      "and it is drawn hovered"
+    );
   });
 
   it("draws focusBackground and focusBorderColor while the box has the focus", () => {
     const backend = new RecordingBackend();
     const root = new Entity();
-    const f = button({ background: "red", borderWidth: 1, borderColor: "blue", focusable: true, focusBackground: "yellow", focusBorderColor: "white" });
+    const f = button({
+      background: "red",
+      borderWidth: 1,
+      borderColor: "blue",
+      focusable: true,
+      focusBackground: "yellow",
+      focusBorderColor: "white",
+    });
     root.addChild(f);
     const p = createPlayer(backend, { ...WINDOW, root: () => root, warn: () => {} });
     const look = (): string[] => {
@@ -174,7 +242,15 @@ describe("<Flex> hover and focus props, in the loop", () => {
   it("shows the hover colours over the focus colours when both apply, and the focus colours where hover names none", () => {
     const backend = new RecordingBackend();
     const root = new Entity();
-    const f = button({ background: "red", borderWidth: 1, borderColor: "blue", focusable: true, focusBackground: "yellow", focusBorderColor: "white", hoverBackground: "#00ff00" });
+    const f = button({
+      background: "red",
+      borderWidth: 1,
+      borderColor: "blue",
+      focusable: true,
+      focusBackground: "yellow",
+      focusBorderColor: "white",
+      hoverBackground: "#00ff00",
+    });
     root.addChild(f);
     const p = createPlayer(backend, { ...WINDOW, root: () => root, warn: () => {} });
     p.world.focus(f);
@@ -232,13 +308,18 @@ describe("<Flex> pressed and disabled props, in the loop", () => {
       p.step();
       const frame = backend.lastFrame.records;
       const b = boxes(frame)[0];
-      fills.push(b !== undefined ? b.fill : rects(frame)[0]?.color ?? "none");
+      fills.push(b !== undefined ? b.fill : (rects(frame)[0]?.color ?? "none"));
     }
     p.close();
     return { fills, presses };
   }
 
-  const STYLED: FlexProps = { background: "#111111", hoverBackground: "#222222", pressedBackground: "#333333", disabledBackground: "#444444" };
+  const STYLED: FlexProps = {
+    background: "#111111",
+    hoverBackground: "#222222",
+    pressedBackground: "#333333",
+    disabledBackground: "#444444",
+  };
 
   it("draws pressedBackground while the button is held on the box, and the hover colour again once it is let go", () => {
     const { fills, presses } = run(STYLED, [
@@ -286,7 +367,12 @@ describe("<Flex> pressed and disabled props, in the loop", () => {
   });
 
   it("without a disabled colour, a disabled box looks plain, not hovered or pressed", () => {
-    const { fills } = run({ background: "#111111", hoverBackground: "#222222", pressedBackground: "#333333", disabled: true }, [{ mouse: IN }, { mouse: IN }, { mouse: IN, pressed: ["MouseLeft"] }, { mouse: IN, down: ["MouseLeft"] }]);
+    const { fills } = run({ background: "#111111", hoverBackground: "#222222", pressedBackground: "#333333", disabled: true }, [
+      { mouse: IN },
+      { mouse: IN },
+      { mouse: IN, pressed: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+    ]);
     assert.deepEqual(new Set(fills), new Set(["#111111ff"]));
   });
 

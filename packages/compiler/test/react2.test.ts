@@ -1,13 +1,25 @@
+import assert from "node:assert/strict";
 /**
  * Writing components the way a React author does (found by the second game, Hearth): constants and helpers beside the
  * components, index reads, `Math.PI`, a component whose root is another component, an action or callback passed as a value,
  * and a component that renders nothing (`return null`, `cond ? <X/> : null`).
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { createInputState, Entity, Flex, Pointer, Shape, Sprite, Text, World } from "@rge/runtime";
+
 import { checkAssets, DiagnosticCode } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, compileProject, load, loadProject, typeCheck, typeCheckProject } from "./helpers.ts";
+import {
+  cleanOutput,
+  closeCompiler,
+  compile,
+  compileErrors,
+  compileProject,
+  load,
+  loadProject,
+  typeCheck,
+  typeCheckProject,
+} from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -41,13 +53,21 @@ export function Labels({ dim }: LabelsProps) {
     world.mount(labels);
     world.flush();
     const texts = labels.children.map((c) => c as Text);
-    assert.deepEqual(texts.map((t) => [t.text, t.size, t.color]), [["BOLT 0", 8, "#8e9ac2"], ["FROST 1", 12, "#8e9ac2"]]);
+    assert.deepEqual(
+      texts.map((t) => [t.text, t.size, t.color]),
+      [
+        ["BOLT 0", 8, "#8e9ac2"],
+        ["FROST 1", 12, "#8e9ac2"],
+      ]
+    );
   });
 
   it("rejects `let`, JSX and the game state outside a component", () => {
     const codes = (source: string) => compileErrors(source).map((d) => d.code);
     assert.deepEqual(codes(`let n = 1; function A() { return <Entity />; }`), [DiagnosticCode.UnsupportedSyntax]);
-    assert.deepEqual(codes(`function icon() { return <Entity />; } function A() { return <Entity />; }`), [DiagnosticCode.UnsupportedSyntax]);
+    assert.deepEqual(codes(`function icon() { return <Entity />; } function A() { return <Entity />; }`), [
+      DiagnosticCode.UnsupportedSyntax,
+    ]);
   });
 });
 
@@ -92,7 +112,10 @@ export function Menu({ title }: MenuProps) {
     });
     assert.deepEqual(typeCheckProject(project), []);
     assert.match(project["Menu.tsx"]!.code, /override readonly layoutContents = true;/);
-    const { Menu } = await loadProject<{ Menu: new (p: { title: string }) => Entity & { updateProps(p: { title: string }): void } }>(project, "Menu.tsx");
+    const { Menu } = await loadProject<{ Menu: new (p: { title: string }) => Entity & { updateProps(p: { title: string }): void } }>(
+      project,
+      "Menu.tsx"
+    );
     const world = new World();
     const menu = new Menu({ title: "BUILD" });
     world.mount(menu);
@@ -100,14 +123,18 @@ export function Menu({ title }: MenuProps) {
     assert.equal(menu.layoutContents, true);
     const panel = menu.children[0] as Flex;
     assert.ok(panel instanceof Flex);
-    assert.deepEqual(panel.children.map((c) => (c as Text).text), ["BUILD", "item"]);
+    assert.deepEqual(
+      panel.children.map((c) => (c as Text).text),
+      ["BUILD", "item"]
+    );
     menu.updateProps({ title: "SELL" });
     world.flush();
     assert.equal((panel.children[0] as Text).text, "SELL");
   });
 
   it("renders a condition of elements, or nothing", async () => {
-    const compiled = compile(`
+    const compiled = compile(
+      `
 interface FlashProps { on: boolean; big: boolean; }
 export function Flash({ on, big }: FlashProps) {
   return on ? <Text size={big ? 16 : 8}>on</Text> : null;
@@ -120,7 +147,9 @@ export function Either({ on }: FlashProps) {
 }
 export function Nothing() {
   return null;
-}`, "Flash.tsx");
+}`,
+      "Flash.tsx"
+    );
     assert.deepEqual(typeCheck(compiled), []);
     type C = new (p?: { on: boolean; big: boolean }) => Entity & { updateProps(p: { on: boolean; big: boolean }): void };
     const { Flash, Spark, Either, Nothing } = await load<{ Flash: C; Spark: C; Either: C; Nothing: C }>(compiled);
@@ -132,7 +161,10 @@ export function Nothing() {
     for (const c of [flash, spark, either, nothing]) world.mount(c);
     world.flush();
     assert.equal(flash.children.length, 0);
-    assert.deepEqual(spark.children.map((c) => (c as Text).text), ["spark"]);
+    assert.deepEqual(
+      spark.children.map((c) => (c as Text).text),
+      ["spark"]
+    );
     assert.ok(either.children[0] instanceof Text);
     assert.equal(nothing.children.length, 0);
     flash.updateProps({ on: true, big: true });
@@ -155,7 +187,10 @@ export function Plain(props: ButtonProps) {
   return <Pointer width={4} height={4} onPress={props.onPress} />;
 }`);
     assert.deepEqual(typeCheck(compiled), []);
-    const { Button, Plain } = await load<{ Button: new (p: { onPress: () => void; label: string }) => Flex; Plain: new (p: { onPress: () => void; label: string }) => Entity & { onPress?: () => void } }>(compiled);
+    const { Button, Plain } = await load<{
+      Button: new (p: { onPress: () => void; label: string }) => Flex;
+      Plain: new (p: { onPress: () => void; label: string }) => Entity & { onPress?: () => void };
+    }>(compiled);
     let presses = 0;
     const world = new World();
     const button = new Button({ onPress: () => presses++, label: "go" });
@@ -225,7 +260,10 @@ export function Tip({ onPointerEnter }: TipProps) {
     const compiled = compile(`export function Main() { return <Game font="font.png"><Text size={8}>hi</Text></Game>; }`);
     assert.deepEqual(typeCheck(compiled), []);
     const found = checkAssets([compiled.ir], { folder: "assets", exists: (name) => name === "fonts.png", list: () => ["fonts.png"] });
-    assert.deepEqual(found.map((d) => d.code), [DiagnosticCode.MissingAsset]);
+    assert.deepEqual(
+      found.map((d) => d.code),
+      [DiagnosticCode.MissingAsset]
+    );
     assert.match(found[0]!.message, /font 'font.png'.*did you mean 'fonts.png'/);
   });
 });

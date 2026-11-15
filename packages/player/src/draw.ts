@@ -38,8 +38,8 @@ import {
   type Slider,
   type Toggle,
 } from "@rge/runtime";
+
 import { MAGENTA, mixColors, parseColor, type PackedColor } from "./color.ts";
-import { stepTransition, type ShownColors } from "./transition.ts";
 import { borderRoom, Layouter, type MeasuredSize } from "./layout.ts";
 import {
   RGE_OP_BOX,
@@ -66,6 +66,7 @@ import {
   RGE_OP_CANVAS_LEN,
 } from "./protocol.ts";
 import { borderRects, fitScreen, viewToWindow, type ScreenPlacement, type WindowRect } from "./screen.ts";
+import { stepTransition, type ShownColors } from "./transition.ts";
 import { Warner } from "./warn.ts";
 
 /** A sheet a `<Tilemap>` cuts tiles from: the tiles from `firstGid` on, `columns` across, each `tw` × `th`. A handle of -1 draws nothing. */
@@ -99,7 +100,7 @@ export function walkTree(
   parentSpace: WorldTransform = IDENTITY_TRANSFORM,
   parentZ = 0,
   intoHuds = false,
-  leave: ((object: GameObject, kind: number) => void) | null = null,
+  leave: ((object: GameObject, kind: number) => void) | null = null
 ): void {
   walk(root, visit, parentSpace, parentZ, intoHuds, leave);
 }
@@ -117,7 +118,7 @@ function walk(
   parentSpace: WorldTransform,
   parentZ: number,
   intoHuds: boolean,
-  leave: ((object: GameObject, kind: number) => void) | null,
+  leave: ((object: GameObject, kind: number) => void) | null
 ): void {
   const transform = root.transform;
   const placement = root.placement;
@@ -125,17 +126,25 @@ function walk(
   const laidOut = root.layoutX === 0 && root.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, root.layoutX, root.layoutY);
   // Almost every placement is the identity, and then composing it gives `laidOut` back: skip the call.
   let world = composeTransforms(
-    placement.x === 0 && placement.y === 0 && placement.rotation === 0 && placement.scaleX === 1 && placement.scaleY === 1 && !placement.global
+    placement.x === 0 &&
+      placement.y === 0 &&
+      placement.rotation === 0 &&
+      placement.scaleX === 1 &&
+      placement.scaleY === 1 &&
+      !placement.global
       ? laidOut
       : composeTransforms(laidOut, placement),
-    transform,
+    transform
   );
   // Nearly nothing has a z, and then none of the three terms or the `global` flags matter: the answer is 0.
   const z =
-    parentZ === 0 && transform.z === 0 && placement.z === 0 ? 0
-    : transform.global ? transform.z
-    : placement.global ? placement.z + transform.z
-    : parentZ + placement.z + transform.z;
+    parentZ === 0 && transform.z === 0 && placement.z === 0
+      ? 0
+      : transform.global
+        ? transform.z
+        : placement.global
+          ? placement.z + transform.z
+          : parentZ + placement.z + transform.z;
   const kind = kindOf(root);
   // A visit may return the world to use for the children instead: a floating layout root is placed by the layout it has just run.
   const replaced = visit(root, world, z, kind);
@@ -154,17 +163,28 @@ function walk(
 /** How many doubles the record starting with this op takes. */
 function recordLength(op: number): number {
   switch (op) {
-    case RGE_OP_VIEW: return RGE_OP_VIEW_LEN;
-    case RGE_OP_SPRITE: return RGE_OP_SPRITE_LEN;
-    case RGE_OP_SPRITE_REGION: return RGE_OP_SPRITE_REGION_LEN;
-    case RGE_OP_RECT: return RGE_OP_RECT_LEN;
-    case RGE_OP_ELLIPSE: return RGE_OP_ELLIPSE_LEN;
-    case RGE_OP_BOX: return RGE_OP_BOX_LEN;
-    case RGE_OP_TEXT: return RGE_OP_TEXT_LEN;
-    case RGE_OP_SCISSOR: return RGE_OP_SCISSOR_LEN;
-    case RGE_OP_SCISSOR_END: return RGE_OP_SCISSOR_END_LEN;
-    case RGE_OP_CANVAS: return RGE_OP_CANVAS_LEN;
-    default: throw new Error(`Unknown draw op ${op}.`);
+    case RGE_OP_VIEW:
+      return RGE_OP_VIEW_LEN;
+    case RGE_OP_SPRITE:
+      return RGE_OP_SPRITE_LEN;
+    case RGE_OP_SPRITE_REGION:
+      return RGE_OP_SPRITE_REGION_LEN;
+    case RGE_OP_RECT:
+      return RGE_OP_RECT_LEN;
+    case RGE_OP_ELLIPSE:
+      return RGE_OP_ELLIPSE_LEN;
+    case RGE_OP_BOX:
+      return RGE_OP_BOX_LEN;
+    case RGE_OP_TEXT:
+      return RGE_OP_TEXT_LEN;
+    case RGE_OP_SCISSOR:
+      return RGE_OP_SCISSOR_LEN;
+    case RGE_OP_SCISSOR_END:
+      return RGE_OP_SCISSOR_END_LEN;
+    case RGE_OP_CANVAS:
+      return RGE_OP_CANVAS_LEN;
+    default:
+      throw new Error(`Unknown draw op ${op}.`);
   }
 }
 
@@ -418,7 +438,8 @@ export class DrawList {
       let top = Math.round(y0);
       let right = Math.round(x1);
       let bottom = Math.round(y1);
-      if (!(Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(right) && Number.isFinite(bottom))) left = top = right = bottom = 0;
+      if (!(Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(right) && Number.isFinite(bottom)))
+        left = top = right = bottom = 0;
       const parent = data[o + CLIP_PARENT] as number;
       if (parent !== 0) {
         const p = (parent - 1) * 4;
@@ -558,12 +579,53 @@ export class DrawList {
   }
 
   /** One region of a texture (a frame of a sheet), with its origin, mirroring and tint: the record `RGE_OP_SPRITE_REGION`. */
-  spriteRegion(world: WorldTransform, texture: number, srcX: number, srcY: number, srcW: number, srcH: number, originX: number, originY: number, flags: number, tint: PackedColor): void {
-    this.spriteRegionAt(world.x, world.y, world.rotation, world.scaleX, world.scaleY, texture, srcX, srcY, srcW, srcH, originX, originY, flags, tint);
+  spriteRegion(
+    world: WorldTransform,
+    texture: number,
+    srcX: number,
+    srcY: number,
+    srcW: number,
+    srcH: number,
+    originX: number,
+    originY: number,
+    flags: number,
+    tint: PackedColor
+  ): void {
+    this.spriteRegionAt(
+      world.x,
+      world.y,
+      world.rotation,
+      world.scaleX,
+      world.scaleY,
+      texture,
+      srcX,
+      srcY,
+      srcW,
+      srcH,
+      originX,
+      originY,
+      flags,
+      tint
+    );
   }
 
   /** `spriteRegion` with the transform as numbers, for a tilemap's many records (no object per tile). */
-  spriteRegionAt(x: number, y: number, rotation: number, scaleX: number, scaleY: number, texture: number, srcX: number, srcY: number, srcW: number, srcH: number, originX: number, originY: number, flags: number, tint: PackedColor): void {
+  spriteRegionAt(
+    x: number,
+    y: number,
+    rotation: number,
+    scaleX: number,
+    scaleY: number,
+    texture: number,
+    srcX: number,
+    srcY: number,
+    srcW: number,
+    srcH: number,
+    originX: number,
+    originY: number,
+    flags: number,
+    tint: PackedColor
+  ): void {
     if (this.alpha !== 1) {
       if (this.alpha === 0) return;
       tint = fadeColor(tint, this.alpha);
@@ -611,7 +673,15 @@ export class DrawList {
   }
 
   /** A box with a border inside its edge and rounded corners: the record `RGE_OP_BOX`. A fill or border colour of 0 (no alpha) draws nothing. */
-  box(world: WorldTransform, width: number, height: number, fill: PackedColor, border: PackedColor, borderWidth: number, radius: number): void {
+  box(
+    world: WorldTransform,
+    width: number,
+    height: number,
+    fill: PackedColor,
+    border: PackedColor,
+    borderWidth: number,
+    radius: number
+  ): void {
     if (this.alpha !== 1) {
       if (this.alpha === 0) return;
       fill = fadeColor(fill, this.alpha);
@@ -642,7 +712,16 @@ export class DrawList {
 
 /** A `<Flex>` takes the mouse when it has a press or a hover callback, or a prop that is drawn while the mouse is over it. */
 function hoverable(flex: Flex): boolean {
-  return flex.onPress !== undefined || flex.onPointerEnter !== undefined || flex.onPointerLeave !== undefined || flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined || flex.hoverBackgroundImage !== undefined || flex.widget !== WIDGET_NONE || hasTooltip(flex);
+  return (
+    flex.onPress !== undefined ||
+    flex.onPointerEnter !== undefined ||
+    flex.onPointerLeave !== undefined ||
+    flex.hoverBackground !== undefined ||
+    flex.hoverBorderColor !== undefined ||
+    flex.hoverBackgroundImage !== undefined ||
+    flex.widget !== WIDGET_NONE ||
+    hasTooltip(flex)
+  );
 }
 
 /** Whether a box holds a `<Tooltip>`, which shows while the mouse is over the box: so the box takes the mouse. */
@@ -660,14 +739,24 @@ function hasScrollbars(flex: Flex): boolean {
 /** Whether a `<Flex>` draws anything of its own, in any state: a background or a border, or a colour for one in a state. */
 function paints(flex: Flex): boolean {
   return (
-    flex.background !== undefined || flex.borderColor !== undefined ||
-    flex.hoverBackground !== undefined || flex.hoverBorderColor !== undefined ||
-    flex.focusBackground !== undefined || flex.focusBorderColor !== undefined ||
-    flex.pressedBackground !== undefined || flex.pressedBorderColor !== undefined ||
-    flex.disabledBackground !== undefined || flex.disabledBorderColor !== undefined ||
-    flex.backgroundImage !== undefined || flex.hoverBackgroundImage !== undefined || flex.focusBackgroundImage !== undefined ||
-    flex.pressedBackgroundImage !== undefined || flex.disabledBackgroundImage !== undefined ||
-    flex.widget !== WIDGET_NONE || flex.opacity !== 1 || (flex.transitionState !== null && (flex.transitionState.fromAlpha !== 1 || flex.transitionState.toAlpha !== 1))
+    flex.background !== undefined ||
+    flex.borderColor !== undefined ||
+    flex.hoverBackground !== undefined ||
+    flex.hoverBorderColor !== undefined ||
+    flex.focusBackground !== undefined ||
+    flex.focusBorderColor !== undefined ||
+    flex.pressedBackground !== undefined ||
+    flex.pressedBorderColor !== undefined ||
+    flex.disabledBackground !== undefined ||
+    flex.disabledBorderColor !== undefined ||
+    flex.backgroundImage !== undefined ||
+    flex.hoverBackgroundImage !== undefined ||
+    flex.focusBackgroundImage !== undefined ||
+    flex.pressedBackgroundImage !== undefined ||
+    flex.disabledBackgroundImage !== undefined ||
+    flex.widget !== WIDGET_NONE ||
+    flex.opacity !== 1 ||
+    (flex.transitionState !== null && (flex.transitionState.fromAlpha !== 1 || flex.transitionState.toAlpha !== 1))
   );
 }
 
@@ -775,31 +864,54 @@ function classCode(object: GameObject): number {
   let code = KINDS.get(object.constructor);
   if (code === undefined) {
     const kind =
-      object instanceof Sprite || object instanceof AnimatedSprite ? KIND_SPRITE
-      : object instanceof Shape ? KIND_SHAPE
-      : object instanceof Text ? KIND_TEXT
-      : object instanceof Camera ? KIND_CAMERA
-      : object instanceof Pointer ? KIND_POINTER
-      : object instanceof Collider ? KIND_COLLIDER
-      : object instanceof Screen ? KIND_SCREEN
-      : object instanceof Hud ? KIND_HUD
-      : object instanceof Flex ? KIND_FLEX
-      : object instanceof Tilemap ? KIND_TILEMAP
-      : object instanceof Particles ? KIND_PARTICLES
-      : object instanceof Fade ? KIND_FADE
-      : object instanceof Route ? KIND_ROUTE
-      : object instanceof Router ? KIND_ROUTER
-      : KIND_NONE;
+      object instanceof Sprite || object instanceof AnimatedSprite
+        ? KIND_SPRITE
+        : object instanceof Shape
+          ? KIND_SHAPE
+          : object instanceof Text
+            ? KIND_TEXT
+            : object instanceof Camera
+              ? KIND_CAMERA
+              : object instanceof Pointer
+                ? KIND_POINTER
+                : object instanceof Collider
+                  ? KIND_COLLIDER
+                  : object instanceof Screen
+                    ? KIND_SCREEN
+                    : object instanceof Hud
+                      ? KIND_HUD
+                      : object instanceof Flex
+                        ? KIND_FLEX
+                        : object instanceof Tilemap
+                          ? KIND_TILEMAP
+                          : object instanceof Particles
+                            ? KIND_PARTICLES
+                            : object instanceof Fade
+                              ? KIND_FADE
+                              : object instanceof Route
+                                ? KIND_ROUTE
+                                : object instanceof Router
+                                  ? KIND_ROUTER
+                                  : KIND_NONE;
     code = kind;
     // A tilemap writes only the cells the view shows, so its records change when the camera moves without anything stamping it.
-    if (kind === KIND_CAMERA || kind === KIND_POINTER || kind === KIND_HUD || kind === KIND_FLEX || kind === KIND_ROUTER || kind === KIND_TILEMAP) code |= FLAG_VOLATILE;
+    if (
+      kind === KIND_CAMERA ||
+      kind === KIND_POINTER ||
+      kind === KIND_HUD ||
+      kind === KIND_FLEX ||
+      kind === KIND_ROUTER ||
+      kind === KIND_TILEMAP
+    )
+      code |= FLAG_VOLATILE;
     if (kind === KIND_FLEX) code |= FLAG_OPAQUE;
     // A class that overrides a per-tick hook may write its own transform or colour from it, which nothing reports, unless it is
     // a built-in or a compiled component (the compiler marks those `managed`; the marker is an own property, so a hand-written subclass of one is not).
     const ownProperty = (name: string): boolean => Object.prototype.hasOwnProperty.call(object.constructor, name);
     // Compared with the built-in it extends, whose own hooks (a sprite springing back its squash) report what they change.
     let builtIn = Object.getPrototypeOf(object) as { constructor: unknown; onInput: unknown; onUpdate: unknown } | null;
-    while (builtIn !== null && !Object.prototype.hasOwnProperty.call(builtIn.constructor, "intrinsic")) builtIn = Object.getPrototypeOf(builtIn) as typeof builtIn;
+    while (builtIn !== null && !Object.prototype.hasOwnProperty.call(builtIn.constructor, "intrinsic"))
+      builtIn = Object.getPrototypeOf(builtIn) as typeof builtIn;
     const base = builtIn ?? GameObjectPrototype;
     const hooked = object.onInput !== base.onInput || object.onUpdate !== base.onUpdate;
     if (hooked && !ownProperty("intrinsic") && !ownProperty("managed")) code |= FLAG_VOLATILE | FLAG_OPAQUE;
@@ -815,16 +927,23 @@ function worldIn(parentSpace: WorldTransform, object: GameObject): WorldTransfor
   const placement = object.placement;
   const laidOut = object.layoutX === 0 && object.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, object.layoutX, object.layoutY);
   return composeTransforms(
-    placement.x === 0 && placement.y === 0 && placement.rotation === 0 && placement.scaleX === 1 && placement.scaleY === 1 && !placement.global
+    placement.x === 0 &&
+      placement.y === 0 &&
+      placement.rotation === 0 &&
+      placement.scaleX === 1 &&
+      placement.scaleY === 1 &&
+      !placement.global
       ? laidOut
       : composeTransforms(laidOut, placement),
-    object.transform,
+    object.transform
   );
 }
 
 /** A sprite that is drawn as a region of its image, with options, instead of as the whole image at its top left. */
 function styledSprite(node: Sprite | AnimatedSprite): boolean {
-  return node instanceof AnimatedSprite ? node.styled : node.frameWidth !== undefined || node.frameHeight !== undefined || node.frame !== 0 || isStyled(node);
+  return node instanceof AnimatedSprite
+    ? node.styled
+    : node.frameWidth !== undefined || node.frameHeight !== undefined || node.frame !== 0 || isStyled(node);
 }
 
 /** A rect and an ellipse are records of one length, which the walk relies on when it writes a shape in place: this line stops compiling if they ever differ. */
@@ -1078,7 +1197,12 @@ export class FrameBuilder {
     this.#culledWith = undefined;
     const borderColor = screen === null ? 0 : this.#color(screen.border);
     if (screen !== null && placement !== null && pixelPerfect) {
-      list.canvas(placement.width, placement.height, { x: placement.left, y: placement.top, width: placement.width * placement.scaleX, height: screen.height * placement.scaleY }, borderColor);
+      list.canvas(
+        placement.width,
+        placement.height,
+        { x: placement.left, y: placement.top, width: placement.width * placement.scaleX, height: screen.height * placement.scaleY },
+        borderColor
+      );
     }
     const worldStart = list.length;
     list.view(IDENTITY_VIEW);
@@ -1120,7 +1244,18 @@ export class FrameBuilder {
      * adjacent last frame too), then return the index of the last one. Colliders and texts go with them; each member's offsets
      * are moved to where it now starts, which leaves everything inside it valid.
      */
-    const copyRun = (children: GameObject[], first: number, info: DrawInfo, anc: number, oldStart: number, oldCol: number, oldText: number, startRel: number, colStart: number, textStart: number): number => {
+    const copyRun = (
+      children: GameObject[],
+      first: number,
+      info: DrawInfo,
+      anc: number,
+      oldStart: number,
+      oldCol: number,
+      oldText: number,
+      startRel: number,
+      colStart: number,
+      textStart: number
+    ): number => {
       const count = children.length;
       let end = info.rel + info.len;
       let colEnd = info.colRel + info.colLen;
@@ -1129,7 +1264,14 @@ export class FrameBuilder {
       while (last + 1 < count) {
         const next = children[last + 1] as GameObject;
         const nextInfo = next.drawCache as DrawInfo | null;
-        if (nextInfo === null || nextInfo.owner !== token || !nextInfo.ok || !(nextInfo.built > anc) || next.subtreeChangedAt >= nextInfo.built) break;
+        if (
+          nextInfo === null ||
+          nextInfo.owner !== token ||
+          !nextInfo.ok ||
+          !(nextInfo.built > anc) ||
+          next.subtreeChangedAt >= nextInfo.built
+        )
+          break;
         if (nextInfo.rel !== end || nextInfo.colRel !== colEnd || nextInfo.textRel !== textEnd) break;
         end += nextInfo.len;
         colEnd += nextInfo.colLen;
@@ -1173,21 +1315,37 @@ export class FrameBuilder {
      * current only if they were made after it. `oldStart`, `oldCol` and `oldText` say where this object's records, colliders and
      * texts were in last frame's lists, or -1 when they are not known. (A closure, not a method: QuickJS makes a private-method call slow, and this runs per object.)
      */
-    const walk = (node: GameObject, parentSpace: WorldTransform, parentZ: number, anc: number, oldStart: number, oldCol: number, oldText: number): number => {
+    const walk = (
+      node: GameObject,
+      parentSpace: WorldTransform,
+      parentZ: number,
+      anc: number,
+      oldStart: number,
+      oldCol: number,
+      oldText: number
+    ): number => {
       const transform = node.transform;
       const placement = node.placement;
       const laidOut = node.layoutX === 0 && node.layoutY === 0 ? parentSpace : offsetTransform(parentSpace, node.layoutX, node.layoutY);
       let at = composeTransforms(
-        placement.x === 0 && placement.y === 0 && placement.rotation === 0 && placement.scaleX === 1 && placement.scaleY === 1 && !placement.global
+        placement.x === 0 &&
+          placement.y === 0 &&
+          placement.rotation === 0 &&
+          placement.scaleX === 1 &&
+          placement.scaleY === 1 &&
+          !placement.global
           ? laidOut
           : composeTransforms(laidOut, placement),
-        transform,
+        transform
       );
       const z =
-        parentZ === 0 && transform.z === 0 && placement.z === 0 ? 0
-        : transform.global ? transform.z
-        : placement.global ? placement.z + transform.z
-        : parentZ + placement.z + transform.z;
+        parentZ === 0 && transform.z === 0 && placement.z === 0
+          ? 0
+          : transform.global
+            ? transform.z
+            : placement.global
+              ? placement.z + transform.z
+              : parentZ + placement.z + transform.z;
       const code = node.drawKind >= 0 ? node.drawKind : kindCode(node);
       const kind = code & 15;
       const children = node.children;
@@ -1256,7 +1414,11 @@ export class FrameBuilder {
           colliders.push({ collider: node as Collider, world: at });
           break;
         case KIND_SCREEN:
-          if (node !== gameRoot) this.#warner.once("screen-not-root", "A <Screen> only sets the game's resolution as the root of the game: this one is drawn as a plain container.");
+          if (node !== gameRoot)
+            this.#warner.once(
+              "screen-not-root",
+              "A <Screen> only sets the game's resolution as the root of the game: this one is drawn as a plain container."
+            );
           break;
         case KIND_HUD:
           huds.push({ world: at, object: node });
@@ -1279,7 +1441,8 @@ export class FrameBuilder {
           if ((node as Flex).overflow !== "visible") {
             if ((node as Flex).overflow === "scroll") scrollers.push(node as Flex);
             // Only a box with children is paired with the pop below (a leaf returns before it).
-            if (count > 0) list.pushClip(at, (node as Flex).box.size[0] as number, (node as Flex).box.size[1] as number, borderRoom(node as Flex));
+            if (count > 0)
+              list.pushClip(at, (node as Flex).box.size[0] as number, (node as Flex).box.size[1] as number, borderRoom(node as Flex));
             anyClips = true;
           }
           break;
@@ -1287,7 +1450,8 @@ export class FrameBuilder {
       }
 
       // An entity, sprite, shape or collider writes what it writes at `at`; a text may shift it, and the rest are not plain drawing.
-      const plainKind = (kind < KIND_TEXT && !(kind === KIND_SPRITE && styledSprite(node as Sprite | AnimatedSprite))) || kind === KIND_COLLIDER;
+      const plainKind =
+        (kind < KIND_TEXT && !(kind === KIND_SPRITE && styledSprite(node as Sprite | AnimatedSprite))) || kind === KIND_COLLIDER;
       if (count === 0) {
         flatWalk = plainKind && !faded;
         if (faded) {
@@ -1299,7 +1463,23 @@ export class FrameBuilder {
       const childAnc = (code & FLAG_OPAQUE) !== 0 || faded ? Infinity : node.selfChangedAt > anc ? node.selfChangedAt : anc;
       // Nothing above changed this frame: what is under is worth copying from last frame, and worth writing down for the next.
       if (reuse && childAnc < lastSerial) {
-        const result = walkChildren(children, count, kind, code, at, z, parentSpace, parentZ, childAnc, oldStart, oldCol, oldText, startRel, colStart, textStart);
+        const result = walkChildren(
+          children,
+          count,
+          kind,
+          code,
+          at,
+          z,
+          parentSpace,
+          parentZ,
+          childAnc,
+          oldStart,
+          oldCol,
+          oldText,
+          startRel,
+          colStart,
+          textStart
+        );
         flatWalk = false; // not looked into: its children may have been copied
         return result;
       }
@@ -1317,13 +1497,32 @@ export class FrameBuilder {
         // A leaf that draws or collides where its parent put it (the `<Shape>`, `<Sprite>` and `<Collider>` of a component that
         // moves) is most of what is here, so it is dealt with in place: what `walk` would do for it, without the call.
         // (Not under a faded box: the records below are written as they are, with no opacity in them.)
-        if (childZ === 0 && list.alpha === 1 && child.children.length === 0 && child.layoutX === 0 && child.layoutY === 0 && child.transform.opacity === 1) {
+        if (
+          childZ === 0 &&
+          list.alpha === 1 &&
+          child.children.length === 0 &&
+          child.layoutX === 0 &&
+          child.layoutY === 0 &&
+          child.transform.opacity === 1
+        ) {
           const leaf = child.drawKind >= 0 ? child.drawKind : kindCode(child);
           if (leaf === KIND_SHAPE || leaf === KIND_COLLIDER || (leaf === KIND_SPRITE && !styledSprite(child as Sprite | AnimatedSprite))) {
             const own = child.transform;
             const placed = child.placement;
-            if (own.z === 0 && placed.z === 0 && placed.x === 0 && placed.y === 0 && placed.rotation === 0 && placed.scaleX === 1 && placed.scaleY === 1 && !placed.global) {
-              const world = own.x === 0 && own.y === 0 && own.rotation === 0 && own.scaleX === 1 && own.scaleY === 1 && !own.global ? childSpace : composeTransforms(childSpace, own);
+            if (
+              own.z === 0 &&
+              placed.z === 0 &&
+              placed.x === 0 &&
+              placed.y === 0 &&
+              placed.rotation === 0 &&
+              placed.scaleX === 1 &&
+              placed.scaleY === 1 &&
+              !placed.global
+            ) {
+              const world =
+                own.x === 0 && own.y === 0 && own.rotation === 0 && own.scaleX === 1 && own.scaleY === 1 && !own.global
+                  ? childSpace
+                  : composeTransforms(childSpace, own);
               if (world !== childSpace) flat = false;
               if (leaf === KIND_COLLIDER) colliders.push({ collider: child as Collider, world });
               else {
@@ -1401,7 +1600,23 @@ export class FrameBuilder {
      * apart so that the other objects do not pay for its many locals (QuickJS sets up every local of a function at each call).
      * `childAnc` is `anc` for the children: the newest stamp on this object or above it.
      */
-    const walkChildren = (children: GameObject[], count: number, kind: number, code: number, at: WorldTransform, z: number, parentSpace: WorldTransform, parentZ: number, childAnc: number, oldStart: number, oldCol: number, oldText: number, startRel: number, colStart: number, textStart: number): number => {
+    const walkChildren = (
+      children: GameObject[],
+      count: number,
+      kind: number,
+      code: number,
+      at: WorldTransform,
+      z: number,
+      parentSpace: WorldTransform,
+      parentZ: number,
+      childAnc: number,
+      oldStart: number,
+      oldCol: number,
+      oldText: number,
+      startRel: number,
+      colStart: number,
+      textStart: number
+    ): number => {
       let volatile = z !== 0 || code >= FLAG_VOLATILE;
       const own = (code & FLAG_OPAQUE) !== 0 ? WALK_OPAQUE : volatile ? WALK_VOLATILE : WALK_CLEAN;
       const isCamera = kind === KIND_CAMERA;
@@ -1425,7 +1640,14 @@ export class FrameBuilder {
             // It only moved since (nothing else of it, and nothing under it, changed), and everything it wrote is at its own
             // world transform: last frame's records with the new transform in each, and its colliders at the new transform.
             // (Not when it is faded now: its records were made at full opacity, and an opacity change is reported as a move.)
-            if (info.flat && child.contentChangedAt < info.built && childZ === 0 && child.transform.z === 0 && child.placement.z === 0 && child.transform.opacity === 1) {
+            if (
+              info.flat &&
+              child.contentChangedAt < info.built &&
+              childZ === 0 &&
+              child.transform.z === 0 &&
+              child.placement.z === 0 &&
+              child.transform.opacity === 1
+            ) {
               const world = worldIn(childSpace, child);
               const destRel = list.length - region - startRel;
               const destColRel = colliders.length - colStart;
@@ -1435,7 +1657,7 @@ export class FrameBuilder {
                 list.grow(size);
                 const r = list.records;
                 let to = list.length;
-                for (let from = oldStart + info.rel, end = from + size; from < end; ) {
+                for (let from = oldStart + info.rel, end = from + size; from < end;) {
                   // Only sprites and shapes are in such a run: a header, then a texture, or a width, a height and a colour.
                   const op = prevTree[from] as number;
                   r[to] = op;
@@ -1458,7 +1680,8 @@ export class FrameBuilder {
                 list.length = to;
                 moved += size;
               }
-              for (let k = oldCol + info.colRel, stop = k + info.colLen; k < stop; k++) colliders.push({ collider: (prevColliders[k] as ColliderEntry).collider, world });
+              for (let k = oldCol + info.colRel, stop = k + info.colLen; k < stop; k++)
+                colliders.push({ collider: (prevColliders[k] as ColliderEntry).collider, world });
               info.rel = destRel;
               info.colRel = destColRel;
               info.textRel = list.texts.length - textStart;
@@ -1596,7 +1819,12 @@ export class FrameBuilder {
                       if (hasScrollbars(object as Flex)) this.#scrollbarAt.set(object as Flex, { world: { ...(placed ?? world) }, z });
                     }
                     // Every box pushed here is popped by `leave` below, which runs for a leaf too.
-                    list.pushClip(placed ?? world, (object as Flex).box.size[0] as number, (object as Flex).box.size[1] as number, borderRoom(object as Flex));
+                    list.pushClip(
+                      placed ?? world,
+                      (object as Flex).box.size[0] as number,
+                      (object as Flex).box.size[1] as number,
+                      borderRoom(object as Flex)
+                    );
                     anyClips = true;
                   }
                   return placed;
@@ -1624,7 +1852,7 @@ export class FrameBuilder {
                 if ((object as Flex).drawnAlpha !== 1) list.popAlpha();
               }
               if (object.transform.opacity !== 1) list.popAlpha();
-            },
+            }
           );
         }
         list.sortByZ(layerStart, pixelPerfect ? IDENTITY_VIEW : hudView);
@@ -1652,7 +1880,19 @@ export class FrameBuilder {
 
     // Bars around a game that is not pixel-perfect: window pixels, drawn last. (A pixel-perfect game's canvas record clears them.)
     if (placement !== null && !pixelPerfect) this.#borders(placement, width, height, borderColor);
-    const built: BuiltFrame = { list, view, hudView, screen: placement, camera, pointers, hudPointersFrom, scrollers, hudScrollersFrom, hasClips: anyClips, colliders };
+    const built: BuiltFrame = {
+      list,
+      view,
+      hudView,
+      screen: placement,
+      camera,
+      pointers,
+      hudPointersFrom,
+      scrollers,
+      hudScrollersFrom,
+      hasClips: anyClips,
+      colliders,
+    };
     return built;
   }
 
@@ -1661,7 +1901,9 @@ export class FrameBuilder {
     this.#reference ??= new FrameBuilder({ ...this.#options, retain: false, warn: () => {} });
     const expected = this.#reference.build(root, width, height, this.#time);
     const fail = (what: string): never => {
-      throw new Error(`Reused draw records differ from a full rebuild (${what}): something changed an object without reporting it (see GameObject.markChanged).`);
+      throw new Error(
+        `Reused draw records differ from a full rebuild (${what}): something changed an object without reporting it (see GameObject.markChanged).`
+      );
     };
     const a = built.list;
     const b = expected.list;
@@ -1674,9 +1916,18 @@ export class FrameBuilder {
     for (let i = 0; i < built.colliders.length; i++) {
       const x = built.colliders[i] as ColliderEntry;
       const y = expected.colliders[i] as ColliderEntry;
-      if (x.collider !== y.collider || x.world.x !== y.world.x || x.world.y !== y.world.y || x.world.rotation !== y.world.rotation || x.world.scaleX !== y.world.scaleX || x.world.scaleY !== y.world.scaleY) fail(`collider ${i}`);
+      if (
+        x.collider !== y.collider ||
+        x.world.x !== y.world.x ||
+        x.world.y !== y.world.y ||
+        x.world.rotation !== y.world.rotation ||
+        x.world.scaleX !== y.world.scaleX ||
+        x.world.scaleY !== y.world.scaleY
+      )
+        fail(`collider ${i}`);
     }
-    if (built.pointers.length !== expected.pointers.length || built.pointers.some((pointer, i) => pointer !== expected.pointers[i])) fail("pointers");
+    if (built.pointers.length !== expected.pointers.length || built.pointers.some((pointer, i) => pointer !== expected.pointers[i]))
+      fail("pointers");
   }
 
   /**
@@ -1716,7 +1967,10 @@ export class FrameBuilder {
         out.height = wrapped.lines.length * lineHeight + (wrapped.lines.length - 1) * object.lineGap;
         return true;
       }
-      size = font === undefined ? this.#textSize(object.text, object.size) : this.#bitmapSize(font, object.text, this.#bitmapHeight(object, font));
+      size =
+        font === undefined
+          ? this.#textSize(object.text, object.size)
+          : this.#bitmapSize(font, object.text, this.#bitmapHeight(object, font));
       if (object.width !== undefined) {
         out.width = object.width;
         out.height = size.height;
@@ -1724,9 +1978,17 @@ export class FrameBuilder {
       }
     } else if (object instanceof AnimatedSprite) {
       // A sheet measures as one frame, a set of files as the first of them (so layout does not jitter as frames change).
-      if (object.isSheet) size = object.frameWidth !== undefined && object.frameHeight !== undefined ? { width: object.frameWidth, height: object.frameHeight } : this.#imageSize(object.image);
+      if (object.isSheet)
+        size =
+          object.frameWidth !== undefined && object.frameHeight !== undefined
+            ? { width: object.frameWidth, height: object.frameHeight }
+            : this.#imageSize(object.image);
       else size = this.#imageSize(object.frames[0] ?? "");
-    } else if (object instanceof Sprite) size = object.frameWidth !== undefined && object.frameHeight !== undefined ? { width: object.frameWidth, height: object.frameHeight } : this.#imageSize(object.image);
+    } else if (object instanceof Sprite)
+      size =
+        object.frameWidth !== undefined && object.frameHeight !== undefined
+          ? { width: object.frameWidth, height: object.frameHeight }
+          : this.#imageSize(object.image);
     else return false;
     out.width = size.width;
     out.height = size.height;
@@ -1786,7 +2048,15 @@ export class FrameBuilder {
     if (fading) {
       // Fading: the colours are numbers with an alpha, so a colour that is going away fades out instead of vanishing, and the opacity goes with them.
       const shown = this.#fadeColors;
-      flex.transitionState = stepTransition(flex.transitionState, background === undefined ? 0 : this.#color(background), borderColor === undefined ? 0 : this.#color(borderColor), alpha, flex.transition, this.#time as number, shown);
+      flex.transitionState = stepTransition(
+        flex.transitionState,
+        background === undefined ? 0 : this.#color(background),
+        borderColor === undefined ? 0 : this.#color(borderColor),
+        alpha,
+        flex.transition,
+        this.#time as number,
+        shown
+      );
       alpha = shown.alpha;
     }
     // The box's own drawing is at its opacity, and so is everything under it: pushed here, popped when the walk has left the box
@@ -1814,7 +2084,8 @@ export class FrameBuilder {
       const filled = (shown.fill & 255) !== 0;
       if (edgeWidth === 0 && round === 0) {
         if (filled) this.#list.rect(world, width, height, shown.fill);
-      } else if (filled || edgeWidth > 0) this.#list.box(world, width, height, shown.fill, edgeWidth === 0 ? 0 : shown.edge, edgeWidth, round);
+      } else if (filled || edgeWidth > 0)
+        this.#list.box(world, width, height, shown.fill, edgeWidth === 0 ? 0 : shown.edge, edgeWidth, round);
       return;
     }
     const borderWidth = flex.borderWidth > 0 && borderColor !== undefined ? flex.borderWidth : 0;
@@ -1824,7 +2095,15 @@ export class FrameBuilder {
       return;
     }
     if (background === undefined && borderWidth === 0) return;
-    this.#list.box(world, width, height, background === undefined ? 0 : this.#color(background), borderWidth === 0 || borderColor === undefined ? 0 : this.#color(borderColor), borderWidth, radius);
+    this.#list.box(
+      world,
+      width,
+      height,
+      background === undefined ? 0 : this.#color(background),
+      borderWidth === 0 || borderColor === undefined ? 0 : this.#color(borderColor),
+      borderWidth,
+      radius
+    );
   }
 
   /** Where a part of a box is, `ox` and `oy` pixels in from its top-left corner, taken through the box's own rotation and scale: a scratch transform, good until the next call. */
@@ -1888,7 +2167,8 @@ export class FrameBuilder {
       const thumb = slider.thumbSize();
       const x = edge + slider.fraction() * Math.max(width - thumb, 0);
       const fill = x + thumb / 2 - edge;
-      if (fill > 0 && slider.fillColor !== "") list.box(this.#partAt(world, edge, edge), fill, height, this.#color(slider.fillColor), 0, 0, radius);
+      if (fill > 0 && slider.fillColor !== "")
+        list.box(this.#partAt(world, edge, edge), fill, height, this.#color(slider.fillColor), 0, 0, radius);
       if (thumb > 0) list.box(this.#partAt(world, x, edge), thumb, height, this.#color(slider.thumbColor), 0, 0, radius);
     } else if (flex.widget === WIDGET_TEXT) {
       // The caret, while the field has the focus: one pixel wide (scaled with the box), the label's height, after the text (where
@@ -1897,16 +2177,35 @@ export class FrameBuilder {
       if (flex.world === null || flex.world.focused !== (flex as unknown) || field.disabled === true) return;
       if (this.#time !== undefined && Math.floor(this.#time * 2) % 2 === 1) return;
       const label = field.label;
-      const x = field.showsPlaceholder() ? label.layoutX : (flex.box.contentEnd[0] as number) - (flex.paddingRight ?? flex.paddingX ?? flex.padding ?? 0) - flex.scrollX;
+      const x = field.showsPlaceholder()
+        ? label.layoutX
+        : (flex.box.contentEnd[0] as number) - (flex.paddingRight ?? flex.paddingX ?? flex.padding ?? 0) - flex.scrollX;
       const top = label.layoutY;
       const tall = Math.max((flex.box.size[1] as number) - top - (flex.paddingBottom ?? flex.paddingY ?? flex.padding ?? 0) - edge, 1);
       list.box(this.#partAt(world, Math.min(x, edge + width - 1), top), 1, tall, this.#color(field.caretColor), 0, 0, 0);
     } else if (flex.widget === WIDGET_TOGGLE) {
       const toggle = flex as unknown as Toggle;
-      list.box(this.#partAt(world, edge, edge), width, height, this.#color(toggle.checked ? toggle.onColor : toggle.offColor), 0, 0, height / 2);
+      list.box(
+        this.#partAt(world, edge, edge),
+        width,
+        height,
+        this.#color(toggle.checked ? toggle.onColor : toggle.offColor),
+        0,
+        0,
+        height / 2
+      );
       const gap = Math.min(2, height / 4);
       const knob = Math.max(height - 2 * gap, 0);
-      if (knob > 0) list.box(this.#partAt(world, toggle.checked ? edge + width - gap - knob : edge + gap, edge + gap), knob, knob, this.#color(toggle.thumbColor), 0, 0, knob / 2);
+      if (knob > 0)
+        list.box(
+          this.#partAt(world, toggle.checked ? edge + width - gap - knob : edge + gap, edge + gap),
+          knob,
+          knob,
+          this.#color(toggle.thumbColor),
+          0,
+          0,
+          knob / 2
+        );
     }
   }
 
@@ -2010,7 +2309,7 @@ export class FrameBuilder {
           0,
           0,
           0,
-          0xffffffff,
+          0xffffffff
         );
       }
     }
@@ -2137,14 +2436,20 @@ export class FrameBuilder {
   /** A root `<Screen>` with a size it can be drawn at, or null (warning once) to draw the game at the window's size. */
   #usableScreen(screen: Screen): Screen | null {
     if (screen.width > 0 && screen.height > 0 && Number.isFinite(screen.width) && Number.isFinite(screen.height)) return screen;
-    this.#warner.once(`screen-size:${screen.width}x${screen.height}`, `A <Screen> needs a positive width and height, not ${screen.width} × ${screen.height}: drawing at the window's size instead.`);
+    this.#warner.once(
+      `screen-size:${screen.width}x${screen.height}`,
+      `A <Screen> needs a positive width and height, not ${screen.width} × ${screen.height}: drawing at the window's size instead.`
+    );
     return null;
   }
 
   #fit(screen: Screen): ScreenFit {
     const fit = screen.fit;
     if (fit === "integer" || fit === "contain" || fit === "stretch" || fit === "expand") return fit;
-    this.#warner.once(`screen-fit:${String(fit)}`, `Unknown <Screen fit> '${String(fit)}': using "integer". The choices are "integer", "contain", "stretch" and "expand".`);
+    this.#warner.once(
+      `screen-fit:${String(fit)}`,
+      `Unknown <Screen fit> '${String(fit)}': using "integer". The choices are "integer", "contain", "stretch" and "expand".`
+    );
     return "integer";
   }
 
@@ -2185,7 +2490,11 @@ export class FrameBuilder {
     const handle = this.#texture(font);
     const sheet = this.#imageSize(font);
     if (handle < 0 || sheet.width === 0 || sheet.height === 0) {
-      if (handle >= 0) this.#warner.once(`font-size:${font}`, `The font '${font}' has no known size (this backend cannot report texture sizes): its text is not drawn.`);
+      if (handle >= 0)
+        this.#warner.once(
+          `font-size:${font}`,
+          `The font '${font}' has no known size (this backend cannot report texture sizes): its text is not drawn.`
+        );
       return;
     }
     const cellW = sheet.width / FONT_COLUMNS;
@@ -2215,7 +2524,22 @@ export class FrameBuilder {
         if (glyph !== 0) {
           const lx = x * at.scaleX;
           const ly = y * at.scaleY;
-          this.#list.spriteRegionAt(at.x + cos * lx - sin * ly, at.y + sin * lx + cos * ly, at.rotation, at.scaleX * scale, at.scaleY * scale, handle, (glyph % FONT_COLUMNS) * cellW, Math.floor(glyph / FONT_COLUMNS) * cellH, cellW, cellH, 0, 0, 0, color);
+          this.#list.spriteRegionAt(
+            at.x + cos * lx - sin * ly,
+            at.y + sin * lx + cos * ly,
+            at.rotation,
+            at.scaleX * scale,
+            at.scaleY * scale,
+            handle,
+            (glyph % FONT_COLUMNS) * cellW,
+            Math.floor(glyph / FONT_COLUMNS) * cellH,
+            cellW,
+            cellH,
+            0,
+            0,
+            0,
+            color
+          );
         }
         x += cellW * scale;
       }
@@ -2299,7 +2623,18 @@ export class FrameBuilder {
         }
         const lx = shift * world.scaleX;
         const ly = i * (lineHeight + text.lineGap) * world.scaleY;
-        this.#list.text({ x: world.x + cos * lx - sin * ly, y: world.y + sin * lx + cos * ly, rotation: world.rotation, scaleX: world.scaleX, scaleY: world.scaleY }, shown, text.size, color);
+        this.#list.text(
+          {
+            x: world.x + cos * lx - sin * ly,
+            y: world.y + sin * lx + cos * ly,
+            rotation: world.rotation,
+            scaleX: world.scaleX,
+            scaleY: world.scaleY,
+          },
+          shown,
+          text.size,
+          color
+        );
       }
       return;
     }
@@ -2310,7 +2645,13 @@ export class FrameBuilder {
       const shift = text.align === "center" ? Math.round(room / 2) : text.align === "right" ? Math.round(room) : 0;
       if (shift !== 0) {
         const along = shift * world.scaleX;
-        at = { x: world.x + Math.cos(world.rotation) * along, y: world.y + Math.sin(world.rotation) * along, rotation: world.rotation, scaleX: world.scaleX, scaleY: world.scaleY };
+        at = {
+          x: world.x + Math.cos(world.rotation) * along,
+          y: world.y + Math.sin(world.rotation) * along,
+          rotation: world.rotation,
+          scaleX: world.scaleX,
+          scaleY: world.scaleY,
+        };
       }
     }
     this.#list.text(at, text.text, text.size, color);
@@ -2351,7 +2692,7 @@ export class FrameBuilder {
     let tint = node.tint === undefined ? 0xffffffff : this.#color(node.tint);
     const opacity = node.opacity;
     if (opacity !== 1) {
-      const alpha = Math.round(((tint & 255) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity))));
+      const alpha = Math.round((tint & 255) * Math.min(1, Math.max(0, opacity !== opacity ? 1 : opacity)));
       tint = ((tint & 0xffffff00) | alpha) >>> 0;
     }
     const at = world;
@@ -2362,8 +2703,17 @@ export class FrameBuilder {
 
   /** One frame of an image (or all of it), as a sprite-region record. */
   #region(
-    image: string, sheet: boolean, sheetWidth: number | undefined, sheetHeight: number | undefined, frame: number,
-    originX: number, originY: number, flipX: boolean, flipY: boolean, tint: number, at: WorldTransform,
+    image: string,
+    sheet: boolean,
+    sheetWidth: number | undefined,
+    sheetHeight: number | undefined,
+    frame: number,
+    originX: number,
+    originY: number,
+    flipX: boolean,
+    flipY: boolean,
+    tint: number,
+    at: WorldTransform
   ): void {
     if (image === "") return;
     const handle = this.#texture(image);
@@ -2382,10 +2732,24 @@ export class FrameBuilder {
       srcY = Math.floor(frame / columns) * frameHeight;
     }
     if (!(frameWidth > 0 && frameHeight > 0)) {
-      this.#warner.once(`sprite-size:${image}`, `The sprite '${image}' has no known size (this backend cannot report texture sizes and no frameWidth and frameHeight are set): it is not drawn.`);
+      this.#warner.once(
+        `sprite-size:${image}`,
+        `The sprite '${image}' has no known size (this backend cannot report texture sizes and no frameWidth and frameHeight are set): it is not drawn.`
+      );
       return;
     }
-    this.#list.spriteRegion(at, handle, srcX, srcY, frameWidth, frameHeight, originX, originY, (flipX ? RGE_SPRITE_FLIP_X : 0) | (flipY ? RGE_SPRITE_FLIP_Y : 0), tint);
+    this.#list.spriteRegion(
+      at,
+      handle,
+      srcX,
+      srcY,
+      frameWidth,
+      frameHeight,
+      originX,
+      originY,
+      (flipX ? RGE_SPRITE_FLIP_X : 0) | (flipY ? RGE_SPRITE_FLIP_Y : 0),
+      tint
+    );
   }
 
   /**
@@ -2430,7 +2794,10 @@ export class FrameBuilder {
   }
 
   /** Each tilemap's records from the last time it was drawn, and what they were made from (see `#tilemap`). */
-  readonly #tileCache = new WeakMap<Tilemap, { grid: object; layer: string | undefined; handles: string; key: Float64Array; records: Float64Array }>();
+  readonly #tileCache = new WeakMap<
+    Tilemap,
+    { grid: object; layer: string | undefined; handles: string; key: Float64Array; records: Float64Array }
+  >();
   readonly #tileKey = new Float64Array(11);
 
   /**
@@ -2441,7 +2808,10 @@ export class FrameBuilder {
   #tilemap(node: Tilemap, at: WorldTransform, cull: boolean): void {
     const grid = findTilemap(node.map);
     if (grid === undefined) {
-      this.#warner.once(`tilemap:${node.map}`, `<Tilemap map="${node.map}">: no map of that name is registered (registerTilemaps(tilemaps) with the compiler's generated table, before the game starts).`);
+      this.#warner.once(
+        `tilemap:${node.map}`,
+        `<Tilemap map="${node.map}">: no map of that name is registered (registerTilemaps(tilemaps) with the compiler's generated table, before the game starts).`
+      );
       return;
     }
     const tw = grid.tileWidth;
@@ -2497,7 +2867,14 @@ export class FrameBuilder {
     key[9] = tint;
     key[10] = list.alpha;
     const cached = this.#tileCache.get(node);
-    if (this.#retain && cached !== undefined && cached.grid === grid && cached.layer === node.layer && cached.handles === handles && sameNumbers(cached.key, key)) {
+    if (
+      this.#retain &&
+      cached !== undefined &&
+      cached.grid === grid &&
+      cached.layer === node.layer &&
+      cached.handles === handles &&
+      sameNumbers(cached.key, key)
+    ) {
       list.appendRecords(cached.records);
       return;
     }
@@ -2562,7 +2939,14 @@ export class FrameBuilder {
         }
       }
     }
-    if (this.#retain) this.#tileCache.set(node, { grid, layer: node.layer, handles, key: Float64Array.from(key), records: list.records.slice(start, list.length) });
+    if (this.#retain)
+      this.#tileCache.set(node, {
+        grid,
+        layer: node.layer,
+        handles,
+        key: Float64Array.from(key),
+        records: list.records.slice(start, list.length),
+      });
   }
 
   /**
@@ -2578,19 +2962,33 @@ export class FrameBuilder {
       if (handle < 0) return [];
       const size = this.#imageSize(node.image);
       if (!(size.width >= tw)) {
-        this.#warner.once(`tilemap-sheet:${node.image}`, `The tile sheet '${node.image}' (${size.width} × ${size.height}) is smaller than one ${tw} × ${th} tile (or this backend cannot report texture sizes): the map is not drawn.`);
+        this.#warner.once(
+          `tilemap-sheet:${node.image}`,
+          `The tile sheet '${node.image}' (${size.width} × ${size.height}) is smaller than one ${tw} × ${th} tile (or this backend cannot report texture sizes): the map is not drawn.`
+        );
         return [];
       }
       return [{ firstGid: map.firstGid, handle, columns: Math.floor(size.width / tw), tw, th, margin: 0, spacing: 0 }];
     }
     const sets = map.tilesets ?? [];
     if (!sets.some((set) => set.image !== "")) {
-      this.#warner.once(`tilemap-no-sheet:${node.map}`, `<Tilemap map="${node.map}"> has no \`image\`, and the map names no tile sheet in the assets folder: the map is not drawn. Give it an \`image\`, or keep the tilesets' images in the assets folder.`);
+      this.#warner.once(
+        `tilemap-no-sheet:${node.map}`,
+        `<Tilemap map="${node.map}"> has no \`image\`, and the map names no tile sheet in the assets folder: the map is not drawn. Give it an \`image\`, or keep the tilesets' images in the assets folder.`
+      );
       return [];
     }
     return sets.map((set) => {
       const handle = set.image === "" || !(set.columns > 0) ? -1 : this.#texture(set.image);
-      return { firstGid: set.firstGid, handle, columns: Math.max(1, set.columns), tw: set.tileWidth, th: set.tileHeight, margin: set.margin, spacing: set.spacing };
+      return {
+        firstGid: set.firstGid,
+        handle,
+        columns: Math.max(1, set.columns),
+        tw: set.tileWidth,
+        th: set.tileHeight,
+        margin: set.margin,
+        spacing: set.spacing,
+      };
     });
   }
 

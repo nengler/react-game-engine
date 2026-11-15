@@ -12,7 +12,9 @@ interface BannerProps {
  */
 export function Banner({ text, onDone }: BannerProps) {
   const s = useMutable({ shown: false });
-  useMount(() => { s.shown = true; });
+  useMount(() => {
+    s.shown = true;
+  });
   useUnmount(() => onDone?.());
   return <Sprite image={s.shown ? `banner-${text}.png` : "banner-hidden.png"} />;
 }

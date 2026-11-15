@@ -1,8 +1,17 @@
 // Base of the component generator: the fields, the expression and field-reference emitters. Layer 0 of ComponentGenerator (see generator.ts).
-import { assertNever, type ComponentIR, type ExprIR, type FunctionIR, type SoundId, type StateId, type StateIR, type LocalId } from "../ir/types.ts";
+import {
+  assertNever,
+  type ComponentIR,
+  type ExprIR,
+  type FunctionIR,
+  type SoundId,
+  type StateId,
+  type StateIR,
+  type LocalId,
+} from "../ir/types.ts";
 import { collectDependencies, walkExpr } from "../ir/walk.ts";
-import { CodeWriter } from "./writer.ts";
 import { param, escapeTemplate, mutableObject, pendingRef, propertyKey, typeText } from "./helpers.ts";
+import { CodeWriter } from "./writer.ts";
 
 /** How some IR is written where the emitter is. Each field is set for a stretch of emitting with `within`. */
 export interface EmitMode {
@@ -79,7 +88,16 @@ export class ExpressionEmitter {
   protected w: CodeWriter;
   protected readonly stateById: ReadonlyMap<StateId, StateIR>;
   /** Where the emitter is now, and so how some IR is written. Changed only through `within`. */
-  protected mode: EmitMode = { itemLookups: [], inCallback: false, inlineMemos: false, fieldBase: "this", conditions: [], memoLocals: new Map(), renderMemos: new Map(), guard: null };
+  protected mode: EmitMode = {
+    itemLookups: [],
+    inCallback: false,
+    inlineMemos: false,
+    fieldBase: "this",
+    conditions: [],
+    memoLocals: new Map(),
+    renderMemos: new Map(),
+    guard: null,
+  };
   /** Whether a callback was written with `$assume`, so the module declares it. */
   usesAssume = false;
   /** The `useMutable`s a handler has passed whole (`takeHit(s)`), by view name: the class gets an object for each (see the generator). */
@@ -94,7 +112,7 @@ export class ExpressionEmitter {
     writer: CodeWriter,
     requiredHostProps: Readonly<Record<string, readonly string[]>>,
     intrinsicHooks: Readonly<Record<string, readonly string[]>>,
-    storeName: string,
+    storeName: string
   ) {
     this.storeName = storeName;
     this.requiredHostProps = requiredHostProps;
@@ -131,7 +149,14 @@ export class ExpressionEmitter {
             unknown = true;
             break;
           case "Call":
-            if (e.callee.kind === "Own" || e.callee.kind === "Prop" || e.callee.kind === "Local" || e.callee.kind === "Action" || e.callee.kind === "Method") unknown = true;
+            if (
+              e.callee.kind === "Own" ||
+              e.callee.kind === "Prop" ||
+              e.callee.kind === "Local" ||
+              e.callee.kind === "Action" ||
+              e.callee.kind === "Method"
+            )
+              unknown = true;
             break;
           default:
             break;
@@ -216,34 +241,49 @@ export class ExpressionEmitter {
   protected expr(e: ExprIR, top = false): string {
     const wrap = (s: string): string => (top ? s : `(${s})`);
     switch (e.kind) {
-      case "PlainRef": return e.name;
-      case "ActionRef": return `${this.storeName}.getState().${e.name}`;
-      case "ElementRead": return `this.${e.field}.${e.member}`;
-      case "NumberLiteral": return String(e.value);
-      case "StringLiteral": return JSON.stringify(e.value);
-      case "BooleanLiteral": return String(e.value);
-      case "NullLiteral": return "null";
-      case "StateRead": return e.live ? pendingRef(this.state(e.state)) : `this.${this.state(e.state).name}`;
-      case "LocalRead": return e.name;
+      case "PlainRef":
+        return e.name;
+      case "ActionRef":
+        return `${this.storeName}.getState().${e.name}`;
+      case "ElementRead":
+        return `this.${e.field}.${e.member}`;
+      case "NumberLiteral":
+        return String(e.value);
+      case "StringLiteral":
+        return JSON.stringify(e.value);
+      case "BooleanLiteral":
+        return String(e.value);
+      case "NullLiteral":
+        return "null";
+      case "StateRead":
+        return e.live ? pendingRef(this.state(e.state)) : `this.${this.state(e.state).name}`;
+      case "LocalRead":
+        return e.name;
       case "ParamRead":
         return (this.mode.inCallback && this.mode.itemLookups.find((l) => l.id === e.param)?.text) || e.name;
-      case "PropertyRead": return `${e.object.name}.${e.name}`;
+      case "PropertyRead":
+        return `${e.object.name}.${e.name}`;
       case "PropRead": {
         // A prop with a default is never undefined (the runtime applies the default at construction and on update),
         // but its declared type is optional; `!` says what the runtime guarantees.
         const guaranteed = this.c.props.find((p) => p.name === e.name)?.defaultValue != null;
         return `${e.live ? `this.$live.${e.name}` : `this.props.${e.name}`}${guaranteed ? "!" : ""}`;
       }
-      case "MemberRead": return `${this.expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
-      case "NonNull": return `${this.expr(e.expression)}!`;
-      case "IndexRead": return `${this.expr(e.object)}${e.optional ? "?." : ""}[${this.expr(e.index, true)}]`;
-      case "ArrayLiteral": return `[${e.elements.map((el) => `${el.spread ? "..." : ""}${this.expr(el.value, true)}`).join(", ")}]`;
+      case "MemberRead":
+        return `${this.expr(e.object)}${e.optional ? "?." : "."}${e.name}`;
+      case "NonNull":
+        return `${this.expr(e.expression)}!`;
+      case "IndexRead":
+        return `${this.expr(e.object)}${e.optional ? "?." : ""}[${this.expr(e.index, true)}]`;
+      case "ArrayLiteral":
+        return `[${e.elements.map((el) => `${el.spread ? "..." : ""}${this.expr(el.value, true)}`).join(", ")}]`;
       case "ObjectLiteral": {
         if (e.properties.length === 0) return "{}";
         // A `useMutable` read whole in a handler: the component's own object for it (see `mutableObject` in the generator).
         if (e.mutableCopy && e.live) {
           const first = e.properties[0]!;
-          const view = first.kind === "Property" && first.value.kind === "StateRead" ? this.state(first.value.state).mutable?.view : undefined;
+          const view =
+            first.kind === "Property" && first.value.kind === "StateRead" ? this.state(first.value.state).mutable?.view : undefined;
           if (view !== undefined) {
             this.mutableObjects.add(view);
             return `this.${mutableObject(view)}`;
@@ -253,33 +293,58 @@ export class ExpressionEmitter {
         if (!e.mutableCopy) return literal;
         // A `useMutable` read whole in render: a copy, typed as its fields (so it is not checked as a fresh literal: `total(s)` with
         // more fields than `total` takes is fine in the source, where `s` is a variable) and `Readonly`, since render writes nothing.
-        const fields = e.properties.map((p) => (p.kind === "Property" && p.value.kind === "StateRead" ? `${propertyKey(p.name)}: ${typeText(this.state(p.value.state).type)}` : ""));
+        const fields = e.properties.map((p) =>
+          p.kind === "Property" && p.value.kind === "StateRead" ? `${propertyKey(p.name)}: ${typeText(this.state(p.value.state).type)}` : ""
+        );
         return `(${literal} as Readonly<{ ${fields.join("; ")} }>)`;
       }
-      case "Arrow": return wrap(`(${e.params.map(param).join(", ")}) => ${this.arrowBody(e.body)}`);
-      case "Callback": return this.callback(e.fn);
-      case "Block": return `(${this.callback(e.fn)})()`;
+      case "Arrow":
+        return wrap(`(${e.params.map(param).join(", ")}) => ${this.arrowBody(e.body)}`);
+      case "Callback":
+        return this.callback(e.fn);
+      case "Block":
+        return `(${this.callback(e.fn)})()`;
       case "Call": {
         const args = e.args.map((a) => this.expr(a, true)).join(", ");
         switch (e.callee.kind) {
-          case "Function": return `${e.callee.name}(${args})`;
-          case "Plain": return `${e.callee.name}(${args})`;
-          case "Local": return `${e.callee.name}(${args})`;
-          case "Method": return `${e.callee.receiver.name}.${e.callee.name}(${args})`;
-          case "Prop": return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
-          case "ArrayMethod": return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;
-          case "ValueMethod": return `${this.expr(e.callee.receiver)}${e.callee.optional ? "?." : "."}${e.callee.name}(${args})`;
-          case "Action": return `${this.storeName}.getState().${e.callee.name}(${args})`;
-          case "Own": return `this.${e.callee.name}(${args})`;
-          default: return assertNever(e.callee, "callee");
+          case "Function":
+            return `${e.callee.name}(${args})`;
+          case "Plain":
+            return `${e.callee.name}(${args})`;
+          case "Local":
+            return `${e.callee.name}(${args})`;
+          case "Method":
+            return `${e.callee.receiver.name}.${e.callee.name}(${args})`;
+          case "Prop":
+            return `this.props.${e.callee.name}${e.callee.optional ? "?." : ""}(${args})`;
+          case "ArrayMethod":
+            return `${this.expr(e.callee.receiver)}.${e.callee.name}(${args})`;
+          case "ValueMethod":
+            return `${this.expr(e.callee.receiver)}${e.callee.optional ? "?." : "."}${e.callee.name}(${args})`;
+          case "Action":
+            return `${this.storeName}.getState().${e.callee.name}(${args})`;
+          case "Own":
+            return `this.${e.callee.name}(${args})`;
+          default:
+            return assertNever(e.callee, "callee");
         }
       }
       case "TemplateLiteral":
-        return "`" + e.quasis.map((q, i) => escapeTemplate(q) + (i < e.expressions.length ? `\${${this.expr(e.expressions[i]!, true)}}` : "")).join("") + "`";
-      case "Unary": return wrap(e.operator === "typeof" ? `typeof ${this.expr(e.operand)}` : `${e.operator}${this.expr(e.operand)}`);
-      case "New": return `new ${e.callee}${e.typeArguments ?? ""}(${e.args.map((a) => this.expr(a, true)).join(", ")})`;
-      case "Binary": return wrap(`${this.expr(e.left)} ${e.operator} ${this.expr(e.right)}`);
-      case "Conditional": return wrap(`${this.expr(e.test)} ? ${this.expr(e.whenTrue)} : ${this.expr(e.whenFalse)}`);
+        return (
+          "`" +
+          e.quasis
+            .map((q, i) => escapeTemplate(q) + (i < e.expressions.length ? `\${${this.expr(e.expressions[i]!, true)}}` : ""))
+            .join("") +
+          "`"
+        );
+      case "Unary":
+        return wrap(e.operator === "typeof" ? `typeof ${this.expr(e.operand)}` : `${e.operator}${this.expr(e.operand)}`);
+      case "New":
+        return `new ${e.callee}${e.typeArguments ?? ""}(${e.args.map((a) => this.expr(a, true)).join(", ")})`;
+      case "Binary":
+        return wrap(`${this.expr(e.left)} ${e.operator} ${this.expr(e.right)}`);
+      case "Conditional":
+        return wrap(`${this.expr(e.test)} ? ${this.expr(e.whenTrue)} : ${this.expr(e.whenFalse)}`);
       case "Memo": {
         if (this.mode.inlineMemos) return this.expr(e.value, top);
         const local = this.mode.memoLocals.get(e.key) ?? (this.mode.inCallback ? undefined : this.mode.renderMemos.get(e.key));
@@ -293,7 +358,15 @@ export class ExpressionEmitter {
           if (x.kind === "PropRead" && x.live) liveProps.add(x.name);
         });
         const deps = collectDependencies(e.value).map((d) =>
-          d.kind === "State" ? (live.has(d.state) ? pendingRef(this.state(d.state)) : `this.${this.state(d.state).name}`) : d.kind === "Prop" ? (liveProps.has(d.name) ? `this.$live.${d.name}` : `this.props.${d.name}`) : null,
+          d.kind === "State"
+            ? live.has(d.state)
+              ? pendingRef(this.state(d.state))
+              : `this.${this.state(d.state).name}`
+            : d.kind === "Prop"
+              ? liveProps.has(d.name)
+                ? `this.$live.${d.name}`
+                : `this.props.${d.name}`
+              : null
         );
         if (deps.includes(null)) throw new Error(`A memo of ${this.c.name} reads a list item`);
         // Read under a condition (`return hero ? <Hp value={hp} /> : null` from `if (!hero) return null;`): TypeScript does not carry
@@ -304,7 +377,8 @@ export class ExpressionEmitter {
         }
         return `this.$memo(${JSON.stringify(e.key)}, [${deps.join(", ")}], () => ${this.arrowBody(e.value)})`;
       }
-      default: return assertNever(e, "expression");
+      default:
+        return assertNever(e, "expression");
     }
   }
 }

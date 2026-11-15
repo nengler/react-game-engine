@@ -27,6 +27,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+
 import {
   Compiler,
   checkProject,
@@ -80,7 +81,11 @@ function main(argv: readonly string[]): number {
     console.error(usage);
     return 2;
   }
-  for (const [what, dir] of [["source", srcDir], ...(scenesDir === undefined ? [] : [["scenes", scenesDir]]), ...(assetsDir === undefined ? [] : [["assets", assetsDir]])] as const) {
+  for (const [what, dir] of [
+    ["source", srcDir],
+    ...(scenesDir === undefined ? [] : [["scenes", scenesDir]]),
+    ...(assetsDir === undefined ? [] : [["assets", assetsDir]]),
+  ] as const) {
     if (!existsSync(dir) || !statSync(dir).isDirectory()) {
       console.error(`The ${what} directory '${dir}' does not exist or is not a directory.`);
       return 2;
@@ -103,7 +108,10 @@ function main(argv: readonly string[]): number {
     mkdirSync(outDir, { recursive: true });
     const statePath = resolve(srcDir, "GameState.ts");
     if (existsSync(statePath)) {
-      const { schema, diagnostics: stateDiagnostics } = compiler.parseGameState(relative(process.cwd(), statePath), readFileSync(statePath, "utf8"));
+      const { schema, diagnostics: stateDiagnostics } = compiler.parseGameState(
+        relative(process.cwd(), statePath),
+        readFileSync(statePath, "utf8")
+      );
       diagnostics.push(...stateDiagnostics);
       if (schema) {
         // Generated files import the store from where it is: the path from the output directory to the source file.
@@ -115,7 +123,9 @@ function main(argv: readonly string[]): number {
     // Tilemaps come first: the game's own code (its rules, its game state) imports `tilemaps.ts`, so it must exist when the sources are type-checked.
     if (scenesDir !== undefined && !diagnostics.some((d) => d.severity === "error")) {
       const maps = new Map<string, TilemapOut>();
-      for (const name of readdirSync(scenesDir).filter((f) => f.endsWith(".tmj")).sort()) {
+      for (const name of readdirSync(scenesDir)
+        .filter((f) => f.endsWith(".tmj"))
+        .sort()) {
         const imported = importTilemap(relative(process.cwd(), resolve(scenesDir, name)), readFileSync(resolve(scenesDir, name), "utf8"), {
           readFile: (path) => {
             try {
@@ -141,13 +151,17 @@ function main(argv: readonly string[]): number {
       }
     }
 
-    const sourceNames = readdirSync(srcDir).filter((f) => f.endsWith(".tsx")).sort();
+    const sourceNames = readdirSync(srcDir)
+      .filter((f) => f.endsWith(".tsx"))
+      .sort();
     let sourceTypesOk = true;
     if (check && sourceNames.length > 0) {
-      const found = compiler.typeCheckSources(sourceNames.map((name) => {
-        const sourcePath = resolve(srcDir, name);
-        return { fileName: sourcePath, text: readFileSync(sourcePath, "utf8") };
-      }));
+      const found = compiler.typeCheckSources(
+        sourceNames.map((name) => {
+          const sourcePath = resolve(srcDir, name);
+          return { fileName: sourcePath, text: readFileSync(sourcePath, "utf8") };
+        })
+      );
       sourceTypesOk = !found.some((d) => d.severity === "error");
       diagnostics.push(...found);
     }
@@ -155,7 +169,9 @@ function main(argv: readonly string[]): number {
       const sourcePath = resolve(srcDir, name);
       // Use a cwd-relative name so generated headers and IR spans are machine-independent.
       const outPath = resolve(outDir, generatedFileName(name));
-      const map = sourceMaps ? { file: generatedFileName(name), source: relative(dirname(outPath), sourcePath).split(sep).join("/") } : undefined;
+      const map = sourceMaps
+        ? { file: generatedFileName(name), source: relative(dirname(outPath), sourcePath).split(sep).join("/") }
+        : undefined;
       const sourceText = readFileSync(sourcePath, "utf8");
       const result = compiler.compile(relative(process.cwd(), sourcePath), sourceText, map);
       diagnostics.push(...result.diagnostics);
@@ -173,9 +189,16 @@ function main(argv: readonly string[]): number {
     if (assetsDir !== undefined) {
       const root = resolve(assetsDir);
       const all = (dir: string, prefix = ""): string[] =>
-        readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? all(join(dir, e.name), `${prefix}${e.name}/`) : [`${prefix}${e.name}`]));
+        readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+          e.isDirectory() ? all(join(dir, e.name), `${prefix}${e.name}/`) : [`${prefix}${e.name}`]
+        );
       const options = { exists: (name: string) => existsSync(join(root, name)), list: () => all(root), folder: assetsDir };
-      diagnostics.push(...checkAssets(modules.map((m) => m.ir), options));
+      diagnostics.push(
+        ...checkAssets(
+          modules.map((m) => m.ir),
+          options
+        )
+      );
       // Sound stores are made in plain modules (`effects.ts`), anywhere under the source folder: read those too.
       const sources = sourceFiles(srcDir).map((file) => ({ fileName: relative(process.cwd(), file), text: readFileSync(file, "utf8") }));
       diagnostics.push(...compiler.checkSoundStores(sources, options));
@@ -183,7 +206,8 @@ function main(argv: readonly string[]): number {
     // The registry and schema describe the whole project. With a file that failed to compile they would silently leave a
     // component out (and a stale one from an earlier run would be left as it was), so they are only written when all compiled.
     const complete = modules.length === sourceNames.length;
-    if (!complete && modules.length > 0) console.error("skipped prefabs.ts and prefabs.json: not every file compiled, so they would be missing a component");
+    if (!complete && modules.length > 0)
+      console.error("skipped prefabs.ts and prefabs.json: not every file compiled, so they would be missing a component");
     if (complete && modules.length > 0) {
       const registryPath = resolve(outDir, "prefabs.ts");
       const registry = prefabsIndexSource(modules);
@@ -197,12 +221,16 @@ function main(argv: readonly string[]): number {
     // no generated module, or an old one, so the others would report it missing) and for the source check to pass (each of its errors
     // would come back from the generated code too, at the same line).
     if (check && outputs.length > 0) {
-      if (!complete) console.error("skipped type-checking the generated code: fix the errors above first (a file that did not compile has no generated module)");
+      if (!complete)
+        console.error(
+          "skipped type-checking the generated code: fix the errors above first (a file that did not compile has no generated module)"
+        );
       else if (!sourceTypesOk) console.error("skipped type-checking the generated code: fix the type errors above first");
       else diagnostics.push(...mapToSource(compiler.typeCheck(outputs), generated));
     }
     if (scenesDir !== undefined) {
-      if (diagnostics.some((d) => d.severity === "error")) console.error("skipped scene validation: fix the errors above first (scenes are checked against the compiled prefabs)");
+      if (diagnostics.some((d) => d.severity === "error"))
+        console.error("skipped scene validation: fix the errors above first (scenes are checked against the compiled prefabs)");
       else diagnostics.push(...checkScenes(compiler, scenesDir, outDir, projectSchemas(modules)));
     }
   } finally {
@@ -216,13 +244,23 @@ function main(argv: readonly string[]): number {
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
     .sort((a, b) => (a.name < b.name ? -1 : 1))
-    .flatMap((e) => (e.isDirectory() ? (e.name === "node_modules" ? [] : sourceFiles(join(dir, e.name))) : /\.tsx?$/.test(e.name) ? [join(dir, e.name)] : []));
+    .flatMap((e) =>
+      e.isDirectory()
+        ? e.name === "node_modules"
+          ? []
+          : sourceFiles(join(dir, e.name))
+        : /\.tsx?$/.test(e.name)
+          ? [join(dir, e.name)]
+          : []
+    );
 }
 
 /** Validate the scenes in `dir`; a Tiled map is imported to `<outDir>/scenes/` first and the result validated. */
 function checkScenes(compiler: Compiler, dir: string, outDir: string, prefabs: ReturnType<typeof projectSchemas>): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const files = readdirSync(dir).filter((f) => f.endsWith(".json") || f.endsWith(".tmj")).sort();
+  const files = readdirSync(dir)
+    .filter((f) => f.endsWith(".json") || f.endsWith(".tmj"))
+    .sort();
   for (const name of files) {
     const path = resolve(dir, name);
     const text = readFileSync(path, "utf8");

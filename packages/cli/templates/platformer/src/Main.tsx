@@ -1,6 +1,7 @@
 import { Game, Screen, Text } from "@rge/runtime/jsx";
-import { useGame } from "./GameState.ts";
+
 import { Block } from "./Block.tsx";
+import { useGame } from "./GameState.ts";
 import { Hero } from "./Hero.tsx";
 import { BLOCKS, START } from "./level.ts";
 

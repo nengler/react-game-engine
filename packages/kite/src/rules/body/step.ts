@@ -32,7 +32,14 @@ export function hits(solid: SolidAt, x: number, y: number, h: number = BODY_H): 
   const midY = y + (h >> 1);
   const midX = x + (BODY_W >> 1);
   return (
-    solid(x, y) || solid(right, y) || solid(x, bottom) || solid(right, bottom) || solid(x, midY) || solid(right, midY) || solid(midX, y) || solid(midX, bottom)
+    solid(x, y) ||
+    solid(right, y) ||
+    solid(x, bottom) ||
+    solid(right, bottom) ||
+    solid(x, midY) ||
+    solid(right, midY) ||
+    solid(midX, y) ||
+    solid(midX, bottom)
   );
 }
 

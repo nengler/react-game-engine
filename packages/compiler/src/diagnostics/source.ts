@@ -1,5 +1,6 @@
 // Moving a diagnostic found in generated code (a type error, RGE9001) back to the component source it was written for.
 import { relative, resolve } from "node:path";
+
 import type { LineOrigin } from "../generator/writer.ts";
 import type { CompilerDiagnostic } from "./diagnostics.ts";
 
@@ -18,7 +19,11 @@ export interface GeneratedFile {
  * (a line-level map, so the column is that construct's). The message keeps where it was found in the generated file. A
  * diagnostic on a line written for no construct (an import, the class header), or in another file, is left as it is.
  */
-export function mapToSource(diagnostics: readonly CompilerDiagnostic[], files: readonly GeneratedFile[], cwd: string = process.cwd()): CompilerDiagnostic[] {
+export function mapToSource(
+  diagnostics: readonly CompilerDiagnostic[],
+  files: readonly GeneratedFile[],
+  cwd: string = process.cwd()
+): CompilerDiagnostic[] {
   const byPath = new Map(files.map((f) => [resolve(cwd, f.fileName), f]));
   return diagnostics.map((d) => {
     const file = d.span ? byPath.get(resolve(cwd, d.span.fileName)) : undefined;
@@ -30,7 +35,13 @@ export function mapToSource(diagnostics: readonly CompilerDiagnostic[], files: r
     return {
       ...d,
       message: `${d.message} (in the generated ${relative(cwd, resolve(cwd, d.span.fileName))}:${d.span.line}:${d.span.column})`,
-      span: { fileName: file.sourceFile, start, end: lineEnd === -1 ? file.sourceText.length : lineEnd, line: origin.source.line, column: origin.source.column },
+      span: {
+        fileName: file.sourceFile,
+        start,
+        end: lineEnd === -1 ? file.sourceText.length : lineEnd,
+        line: origin.source.line,
+        column: origin.source.column,
+      },
     };
   });
 }

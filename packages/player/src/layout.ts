@@ -107,7 +107,10 @@ export class Layouter {
   /** How far along the axis a named point is: 0 at the start, 0.5 in the middle, 1 at the end. An unknown name warns once and is the top-left. */
   #fraction(point: FlexAnchor, axis: number): number {
     if (!FLEX_ANCHORS.includes(point)) {
-      this.#host.warn(`flex-anchor:${String(point)}`, `A <Flex> anchor must be one of ${FLEX_ANCHORS.join(", ")}, not ${JSON.stringify(point)}: using "top-left".`);
+      this.#host.warn(
+        `flex-anchor:${String(point)}`,
+        `A <Flex> anchor must be one of ${FLEX_ANCHORS.join(", ")}, not ${JSON.stringify(point)}: using "top-left".`
+      );
       return 0;
     }
     if (axis === X) return point.endsWith("left") ? 0 : point.endsWith("right") ? 1 : 0.5;
@@ -132,7 +135,10 @@ export class Layouter {
         box.sizingMode[axis] = PERCENT;
         box.sizingValue[axis] = percent / 100;
       } else {
-        this.#host.warn(`flex-size:${String(raw)}`, `A <Flex> size must be a number, "fit", "grow" or a percentage such as "50%", not ${JSON.stringify(raw)}: using "fit".`);
+        this.#host.warn(
+          `flex-size:${String(raw)}`,
+          `A <Flex> size must be a number, "fit", "grow" or a percentage such as "50%", not ${JSON.stringify(raw)}: using "fit".`
+        );
         box.sizingMode[axis] = FIT;
       }
     }
@@ -186,7 +192,8 @@ export class Layouter {
   /** Fill in each child's kind, and for a leaf its size and where its own drawing starts, on both axes. */
   #measureChildren(f: Flex): void {
     const box = f.box;
-    if (f.wrap === true && f.direction === "column") this.#host.warn("flex-wrap-column", `A <Flex wrap> must be a row: a column does not wrap, and lays its children out in one line.`);
+    if (f.wrap === true && f.direction === "column")
+      this.#host.warn("flex-wrap-column", `A <Flex wrap> must be a row: a column does not wrap, and lays its children out in one line.`);
     let see = false;
     for (let i = 0; i < f.children.length; i++) if ((f.children[i] as GameObject).layoutContents) see = true;
     if (see) {
@@ -205,7 +212,11 @@ export class Layouter {
         continue;
       }
       box.childKind[i] = LEAF;
-      if (kid instanceof Camera) this.#host.warn("flex-camera", "A <Camera> inside a <Flex> takes no space and is not laid out: it almost certainly belongs outside it.");
+      if (kid instanceof Camera)
+        this.#host.warn(
+          "flex-camera",
+          "A <Camera> inside a <Flex> takes no space and is not laid out: it almost certainly belongs outside it."
+        );
       const e = this.#extent4;
       e[0] = Infinity;
       e[1] = Infinity;
@@ -308,7 +319,12 @@ export class Layouter {
     const content = edges + gaps + (along ? sum : stacked);
     // A box that scrolls can be made as small as its edges: what does not fit is scrolled to, so it asks its parent for no more.
     // A wrapping row can be as narrow as its widest child.
-    const contentMinimum = f.overflow === "scroll" ? edges : wraps ? edges + (axis === Y ? stacked : largestMinimum) : edges + gaps + (along ? sumMinimum : largestMinimum);
+    const contentMinimum =
+      f.overflow === "scroll"
+        ? edges
+        : wraps
+          ? edges + (axis === Y ? stacked : largestMinimum)
+          : edges + gaps + (along ? sumMinimum : largestMinimum);
     const mode = box.sizingMode[axis] as number;
     if (mode === FIXED) {
       box.preferred[axis] = box.sizingValue[axis] as number;
@@ -331,7 +347,8 @@ export class Layouter {
     const mode = box.sizingMode[axis] as number;
     let size = box.preferred[axis] as number;
     if (mode === GROW) size = Math.max(box.minimum[axis] as number, Math.min(Math.max(available, 0), this.#maxProp(root, axis)));
-    else if (mode === PERCENT) size = Math.min(Math.max(box.sizingValue[axis] as number * available, this.#minProp(root, axis)), this.#maxProp(root, axis));
+    else if (mode === PERCENT)
+      size = Math.min(Math.max((box.sizingValue[axis] as number) * available, this.#minProp(root, axis)), this.#maxProp(root, axis));
     box.size[axis] = size;
   }
 
@@ -395,7 +412,8 @@ export class Layouter {
         // Sized against the parent's whole inner size, as if it were the only child.
         const mode = kid.box.sizingMode[axis] as number;
         if (mode === FIXED) sizes[i] = kid.box.sizingValue[axis] as number;
-        else if (mode === PERCENT) sizes[i] = Math.min(Math.max((kid.box.sizingValue[axis] as number) * inner, this.#minProp(kid, axis)), this.#maxProp(kid, axis));
+        else if (mode === PERCENT)
+          sizes[i] = Math.min(Math.max((kid.box.sizingValue[axis] as number) * inner, this.#minProp(kid, axis)), this.#maxProp(kid, axis));
         else if (mode === GROW) sizes[i] = Math.max(Math.min(inner, this.#maxProp(kid, axis)), minimums[i] as number);
       }
       kid.box.size[axis] = sizes[i] as number;
@@ -531,12 +549,29 @@ export class Layouter {
     let lead = 0;
     let between = 0;
     switch (f.justifyContent) {
-      case "center": lead = free / 2; break;
-      case "end": lead = free; break;
-      case "space-between": if (free > 0 && flow > 1) between = free / (flow - 1); break;
-      case "space-around": if (free > 0 && flow > 0) { between = free / flow; lead = between / 2; } break;
-      case "space-evenly": if (free > 0 && flow > 0) { between = free / (flow + 1); lead = between; } break;
-      default: break;
+      case "center":
+        lead = free / 2;
+        break;
+      case "end":
+        lead = free;
+        break;
+      case "space-between":
+        if (free > 0 && flow > 1) between = free / (flow - 1);
+        break;
+      case "space-around":
+        if (free > 0 && flow > 0) {
+          between = free / flow;
+          lead = between / 2;
+        }
+        break;
+      case "space-evenly":
+        if (free > 0 && flow > 0) {
+          between = free / (flow + 1);
+          lead = between;
+        }
+        break;
+      default:
+        break;
     }
 
     let cursor = padMainStart + lead;
@@ -618,7 +653,8 @@ export class Layouter {
     for (let line = 0; line < box.lineCount; line++) {
       const end = box.lineEnd[line] as number;
       let tallest = 0;
-      for (let i = start; i < end; i++) if (box.childKind[i] !== FLOATING && (heights[i] as number) > tallest) tallest = heights[i] as number;
+      for (let i = start; i < end; i++)
+        if (box.childKind[i] !== FLOATING && (heights[i] as number) > tallest) tallest = heights[i] as number;
       box.lineCross[line] = tallest;
       total += tallest;
       start = end;
@@ -641,7 +677,8 @@ export class Layouter {
         if (box.childKind[i] !== IN_FLOW) continue;
         const kid = kids[i] as Flex;
         const mode = kid.box.sizingMode[axis] as number;
-        if (mode === GROW || (mode === FIT && f.alignItems === "stretch")) sizes[i] = Math.max(Math.min(height, this.#maxProp(kid, axis)), minimums[i] as number);
+        if (mode === GROW || (mode === FIT && f.alignItems === "stretch"))
+          sizes[i] = Math.max(Math.min(height, this.#maxProp(kid, axis)), minimums[i] as number);
         else if (mode === FIT) sizes[i] = Math.max(Math.min(sizes[i] as number, height), minimums[i] as number);
       }
       start = end;
@@ -680,12 +717,29 @@ export class Layouter {
       let lead = 0;
       let between = 0;
       switch (f.justifyContent) {
-        case "center": lead = free / 2; break;
-        case "end": lead = free; break;
-        case "space-between": if (free > 0 && flow > 1) between = free / (flow - 1); break;
-        case "space-around": if (free > 0 && flow > 0) { between = free / flow; lead = between / 2; } break;
-        case "space-evenly": if (free > 0 && flow > 0) { between = free / (flow + 1); lead = between; } break;
-        default: break;
+        case "center":
+          lead = free / 2;
+          break;
+        case "end":
+          lead = free;
+          break;
+        case "space-between":
+          if (free > 0 && flow > 1) between = free / (flow - 1);
+          break;
+        case "space-around":
+          if (free > 0 && flow > 0) {
+            between = free / flow;
+            lead = between / 2;
+          }
+          break;
+        case "space-evenly":
+          if (free > 0 && flow > 0) {
+            between = free / (flow + 1);
+            lead = between;
+          }
+          break;
+        default:
+          break;
       }
       let cursor = padStart + lead;
       for (let i = start; i < end; i++) {

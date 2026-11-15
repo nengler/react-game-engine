@@ -1,6 +1,8 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { Camera, Entity, Flex, Hud, Shape, getSoundSink, type FlexProps, type GameObject } from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { Layouter, type MeasuredSize } from "../src/layout.ts";
 import { createPlayer } from "../src/loop.ts";
@@ -54,14 +56,23 @@ function draw(root: GameObject, width = 200, height = 100, check = false): Decod
   return [...backend.lastFrame.records];
 }
 
-const names = (records: readonly DecodedRecord[]): string[] => records.map((r) => (r.op === "rect" ? `rect${r.width}x${r.height}@${r.x},${r.y}` : r.op === "scissor" ? `scissor(${r.x},${r.y},${r.width},${r.height})` : r.op));
+const names = (records: readonly DecodedRecord[]): string[] =>
+  records.map((r) =>
+    r.op === "rect"
+      ? `rect${r.width}x${r.height}@${r.x},${r.y}`
+      : r.op === "scissor"
+        ? `scissor(${r.x},${r.y},${r.width},${r.height})`
+        : r.op
+  );
 
 describe("overflow: layout", () => {
-  const list = (props: FlexProps, count = 5) => flex({ direction: "column", width: 40, height: 20, ...props }, ...Array.from({ length: count }, () => row(30, 10)));
+  const list = (props: FlexProps, count = 5) =>
+    flex({ direction: "column", width: 40, height: 20, ...props }, ...Array.from({ length: count }, () => row(30, 10)));
 
   it("does not shrink the children of a scroll box, so there is something to scroll, and shrinks those of a hidden one as before", () => {
     const squishy = (): Squishy => new Squishy(10, 10, 4);
-    const column = (overflow: FlexProps["overflow"]): Flex => lay(flex({ direction: "column", height: 20, overflow }, flex({}, squishy()), flex({}, squishy()), flex({}, squishy())));
+    const column = (overflow: FlexProps["overflow"]): Flex =>
+      lay(flex({ direction: "column", height: 20, overflow }, flex({}, squishy()), flex({}, squishy()), flex({}, squishy())));
     const sizes = (f: Flex): number[] => (f.children as Flex[]).map((k) => k.box.size[1] as number);
     for (const size of sizes(column("hidden"))) assert.ok(Math.abs(size - 20 / 3) < 1e-9, `a hidden box squeezes them into it (${size})`);
     assert.deepEqual(sizes(column("scroll")), [10, 10, 10], "a scroll box lets them keep their size");
@@ -85,7 +96,10 @@ describe("overflow: layout", () => {
   it("moves the children by the scroll offset, clamps it to the content, and writes the clamped value back", () => {
     const f = list({ overflow: "scroll", scrollY: 12 });
     lay(f);
-    assert.deepEqual((f.children as Shape[]).map((k) => k.layoutY), [-12, -2, 8, 18, 28]);
+    assert.deepEqual(
+      (f.children as Shape[]).map((k) => k.layoutY),
+      [-12, -2, 8, 18, 28]
+    );
     f.scrollY = 9999;
     lay(f);
     assert.equal(f.scrollY, 30, "clamped to the end");
@@ -98,7 +112,12 @@ describe("overflow: layout", () => {
   });
 
   it("scrolls along x for a row, and does not scroll a floating child", () => {
-    const f = flex({ width: 25, height: 10, overflow: "scroll", scrollX: 10 }, row(20, 10), row(20, 10), flex({ float: true, anchor: "top-left", to: "top-left", width: 5, height: 5 }));
+    const f = flex(
+      { width: 25, height: 10, overflow: "scroll", scrollX: 10 },
+      row(20, 10),
+      row(20, 10),
+      flex({ float: true, anchor: "top-left", to: "top-left", width: 5, height: 5 })
+    );
     lay(f);
     assert.equal(f.box.scrollMax[0], 15);
     const [a, b, floating] = f.children as GameObject[];
@@ -127,7 +146,10 @@ describe("overflow: clip records", () => {
     const bordered = flex({ width: 40, height: 20, overflow: "hidden", borderWidth: 3, borderColor: "white" }, row(100, 100));
     assert.ok(names(draw(bordered)).includes("scissor(3,3,34,14)"), "in 3 pixels from every edge: inside the border");
     const hoverOnly = flex({ width: 40, height: 20, overflow: "hidden", borderWidth: 3, hoverBorderColor: "white" }, row(100, 100));
-    assert.ok(names(draw(hoverOnly)).includes("scissor(3,3,34,14)"), "the room is kept while no border shows, so the clip does not move when one does");
+    assert.ok(
+      names(draw(hoverOnly)).includes("scissor(3,3,34,14)"),
+      "the room is kept while no border shows, so the clip does not move when one does"
+    );
     const none = flex({ width: 40, height: 20, overflow: "hidden", borderWidth: 3 }, row(100, 100));
     assert.ok(names(draw(none)).includes("scissor(0,0,40,20)"), "no colour in any state: no border, no room");
   });
@@ -171,7 +193,16 @@ describe("overflow: clip records", () => {
     root.addChild(box);
     root.addChild(row(13, 13, 1));
     const records = names(draw(root));
-    assert.deepEqual(records, ["view", "scissor(0,0,40,20)", "rect12x12@11,0", "scissorEnd", "rect13x13@0,0", "scissor(0,0,40,20)", "rect11x11@0,0", "scissorEnd"]);
+    assert.deepEqual(records, [
+      "view",
+      "scissor(0,0,40,20)",
+      "rect12x12@11,0",
+      "scissorEnd",
+      "rect13x13@0,0",
+      "scissor(0,0,40,20)",
+      "rect11x11@0,0",
+      "scissorEnd",
+    ]);
   });
 
   it("works inside a Hud, and does not carry a clip into the next layer", () => {
@@ -222,7 +253,8 @@ describe("overflow: the mouse", () => {
     return { p, step, act, backend };
   }
 
-  const scrollBox = (props: FlexProps = {}): Flex => flex({ direction: "column", width: 40, height: 20, overflow: "scroll", ...props }, ...Array.from({ length: 5 }, () => row(30, 10)));
+  const scrollBox = (props: FlexProps = {}): Flex =>
+    flex({ direction: "column", width: 40, height: 20, overflow: "scroll", ...props }, ...Array.from({ length: 5 }, () => row(30, 10)));
 
   it("scrolls the box under the mouse by the wheel, by a notch of 32 pixels, to its ends and no further", () => {
     const box = scrollBox();
@@ -263,7 +295,10 @@ describe("overflow: the mouse", () => {
   it("scrolls along x when it cannot scroll along y, and does nothing for a box that fits or is not a scroll box", () => {
     const wide = flex({ width: 25, height: 10, overflow: "scroll" }, row(20, 10), row(20, 10));
     const fits = flex({ direction: "column", width: 40, height: 100, overflow: "scroll" }, row(30, 10));
-    const hidden = flex({ direction: "column", width: 40, height: 20, overflow: "hidden" }, ...Array.from({ length: 5 }, () => row(30, 10)));
+    const hidden = flex(
+      { direction: "column", width: 40, height: 20, overflow: "hidden" },
+      ...Array.from({ length: 5 }, () => row(30, 10))
+    );
     const root = new Entity();
     fits.transform.x = 60;
     hidden.transform.x = 120;
@@ -307,7 +342,13 @@ describe("overflow: the mouse", () => {
 
   it("does not press or hover a child where the box clips it, and does where it shows", () => {
     const log: string[] = [];
-    const button = flex({ width: 40, height: 20, onPress: () => log.push("press"), onPointerEnter: () => log.push("enter"), onPointerLeave: () => log.push("leave") });
+    const button = flex({
+      width: 40,
+      height: 20,
+      onPress: () => log.push("press"),
+      onPointerEnter: () => log.push("enter"),
+      onPointerLeave: () => log.push("leave"),
+    });
     button.transform.x = 20;
     const clip = flex({ width: 30, height: 20, overflow: "hidden" }, button);
     const { p, act } = play(() => clip);

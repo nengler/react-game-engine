@@ -70,7 +70,8 @@ export class TextInput<P extends object = {}> extends Flex<P> {
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: TextInputProps = {}, props?: P, defaults?: Partial<P>) {
     const given: Partial<TextInputProps> = {};
-    for (const key of Object.keys(hostProps) as (keyof TextInputProps)[]) if (hostProps[key] !== undefined) (given as Record<string, unknown>)[key] = hostProps[key];
+    for (const key of Object.keys(hostProps) as (keyof TextInputProps)[])
+      if (hostProps[key] !== undefined) (given as Record<string, unknown>)[key] = hostProps[key];
     super({ ...TEXT_INPUT_DEFAULTS, ...given }, props, defaults);
     this.widget = WIDGET_TEXT;
     this.label = new Text({ text: " " });

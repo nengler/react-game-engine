@@ -1,4 +1,5 @@
 import { type Child, Flex } from "@rge/runtime/jsx";
+
 import { COLOR } from "./theme.ts";
 
 interface MenuButtonProps {
@@ -13,7 +14,16 @@ interface MenuButtonProps {
 /** A row in a menu: whatever it is given (an icon and a label, usually) on a background that takes a press. */
 export function MenuButton({ onPress, pressKey, enabled = true, children }: MenuButtonProps) {
   return (
-    <Flex direction="row" alignItems="center" gap={3} padding={3} width="grow" background={enabled ? COLOR.button : COLOR.buttonOff} onPress={onPress} pressKey={pressKey}>
+    <Flex
+      direction="row"
+      alignItems="center"
+      gap={3}
+      padding={3}
+      width="grow"
+      background={enabled ? COLOR.button : COLOR.buttonOff}
+      onPress={onPress}
+      pressKey={pressKey}
+    >
       {children}
     </Flex>
   );

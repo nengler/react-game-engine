@@ -1,4 +1,5 @@
 import { Entity, Sprite, Tilemap } from "@rge/runtime/jsx";
+
 import { useGame } from "./GameState.ts";
 import { spotsOf } from "./rules/view.ts";
 

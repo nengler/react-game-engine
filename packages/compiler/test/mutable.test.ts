@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * `useMutable`: state written directly (`s.vx += 1`) and read back at once in a handler. Each field is an ordinary state slot underneath,
  * so what a field is saved as, how it renders and what hot reload keeps are `useState`'s; what differs is the handler's view of it.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, setDevelopmentWarnings, Text, World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -39,7 +41,7 @@ describe("useMutable: what a handler reads", () => {
          });
          return <Entity />;
        }`,
-      "Hero",
+      "Hero"
     );
     assert.deepEqual(hero.s, { n: 5, big: true });
   });
@@ -56,7 +58,7 @@ describe("useMutable: what a handler reads", () => {
          });
          return <Entity />;
        }`,
-      "Hero",
+      "Hero"
     );
     assert.deepEqual(hero.s, { pressed: 1, seen: 1 });
   });
@@ -72,7 +74,7 @@ describe("useMutable: what a handler reads", () => {
          });
          return <Entity />;
        }`,
-      "Hero",
+      "Hero"
     );
     assert.deepEqual(hero.s, { n: 10, out: 20 });
   });
@@ -94,7 +96,7 @@ describe("useMutable: what a handler reads", () => {
          });
          return <Entity />;
        }`,
-      "Hero",
+      "Hero"
     );
     assert.deepEqual(hero.s, { n: 10, half: 5, twice: 20, up: 11, down: 9 });
   });
@@ -114,7 +116,7 @@ describe("useMutable: what a handler reads", () => {
          });
          return <Entity />;
        }`,
-      "Hero",
+      "Hero"
     );
     assert.deepEqual(hero.s, { n: 10, big: true, total: 55 });
   });
@@ -151,7 +153,7 @@ describe("useMutable: what a handler reads", () => {
          return <Entity><Text>{s.n}</Text></Entity>;
        }`,
       "Hero",
-      3,
+      3
     );
     assert.equal((hero.children[0] as Text).text, "6");
   });
@@ -170,7 +172,7 @@ describe("useMutable: what a handler reads", () => {
          });
          return <Entity />;
        }`,
-      "Hero",
+      "Hero"
     );
     assert.deepEqual(hero.s, { a: 2, b: 6, c: 15, d: 4, e: 6, f: 8 });
   });
@@ -188,13 +190,17 @@ describe("useMutable: what a handler reads", () => {
          return <Entity />;
        }`,
       "Hero",
-      3,
+      3
     );
     assert.deepEqual(hero.s, { foes: [{ id: 1 }, { id: 3 }], next: 4 });
   });
 
   it("keeps the fields in hot state as `s.n`, which no state's own name can be", async () => {
-    const hero = await run(`export function Hero() { const s = useMutable({ n: 0 }); useUpdate(() => { s.n += 1; }); return <Entity />; }`, "Hero", 2);
+    const hero = await run(
+      `export function Hero() { const s = useMutable({ n: 0 }); useUpdate(() => { s.n += 1; }); return <Entity />; }`,
+      "Hero",
+      2
+    );
     assert.deepEqual(hero.saveHotState(), { "Hero.s.n": 2 });
   });
 });
@@ -215,11 +221,14 @@ describe("useMutable: read whole, and handed back by a hook", () => {
            s.after = s.hp;
          });
          return <Entity />;
-       }`,
+       }`
     );
     assert.deepEqual(typeCheck(compiled), []);
     // One object per useMutable, made with the component: a handler hands it over rather than a copy.
-    assert.match(compiled.code, /get #sObject\(\): \{[^}]*\} \{ const self = this; return \(this\.#sObjectCache \?\?= \{ get a\(\) \{ return self\.#\$s_aNext; \}/);
+    assert.match(
+      compiled.code,
+      /get #sObject\(\): \{[^}]*\} \{ const self = this; return \(this\.#sObjectCache \?\?= \{ get a\(\) \{ return self\.#\$s_aNext; \}/
+    );
     assert.match(compiled.code, /total\(this\.#sObject\)/);
     const module = await load<Record<string, new () => Entity & { s: Record<string, unknown> }>>(compiled);
     const world = new World();
@@ -227,7 +236,11 @@ describe("useMutable: read whole, and handed back by a hook", () => {
     world.mount(hero);
     world.flush();
     world.tick(1 / 60);
-    assert.deepEqual(hero.s, { a: 10, b: 99, sum: 12, hp: 7, hits: 1, after: 7 }, "the helper's writes are the component's, and the handler reads them back at once");
+    assert.deepEqual(
+      hero.s,
+      { a: 10, b: 99, sum: 12, hp: 7, hits: 1, after: 7 },
+      "the helper's writes are the component's, and the handler reads them back at once"
+    );
     world.tick(1 / 60);
     world.flush();
     assert.deepEqual([hero.s.hp, hero.s.hits, hero.s.after], [4, 2, 4]);
@@ -240,7 +253,7 @@ describe("useMutable: read whole, and handed back by a hook", () => {
          const s = useMutable({ hp: 3 });
          useUpdate(() => { s.hp -= 1; });
          return <Entity><Text>{label(s)}</Text></Entity>;
-       }`,
+       }`
     );
     assert.deepEqual(typeCheck(compiled), []);
     assert.match(compiled.code, /\(\{ hp: this\.\$s_hp \} as Readonly<\{ hp: number \}>\)/);
@@ -253,7 +266,7 @@ describe("useMutable: read whole, and handed back by a hook", () => {
          return <Entity><Text>{label(s)}</Text></Entity>;
        }`,
       "Hero",
-      2,
+      2
     );
     assert.equal((hero.children[0] as Text).text, "hp 1");
   });
@@ -265,12 +278,17 @@ describe("useMutable: read whole, and handed back by a hook", () => {
          const s = useMutable({ hp: 10 });
          useMount(() => { onReady?.(s); });
          return <Entity />;
-       }`,
+       }`
     );
     assert.deepEqual(typeCheck(compiled), []);
-    const module = await load<Record<string, new (props: { onReady?: (s: { hp: number }) => void }) => Entity & { s: { hp: number } }>>(compiled);
+    const module =
+      await load<Record<string, new (props: { onReady?: (s: { hp: number }) => void }) => Entity & { s: { hp: number } }>>(compiled);
     let kept: { hp: number } | null = null;
-    const hero = new module.Hero!({ onReady: (s) => { kept = s; } });
+    const hero = new module.Hero!({
+      onReady: (s) => {
+        kept = s;
+      },
+    });
     const world = new World();
     world.mount(hero);
     world.flush();
@@ -348,7 +366,7 @@ describe("useMutable: its name", () => {
          useUpdate(() => { name.n += 1; });
          return <Entity />;
        }`,
-      "Hero",
+      "Hero"
     );
     assert.equal(hero.name, "Hero", "the entity's own name is untouched");
     assert.deepEqual((hero as unknown as { $name: unknown }).$name, { n: 1 });
@@ -376,7 +394,7 @@ describe("useMutable: its name", () => {
         useUpdate(() => { a$b.x$y += 1; s.n = a$b.x$y; });
         return <Entity />;
       }`,
-      "Hero",
+      "Hero"
     );
     assert.deepEqual(hero.saveHotState(), { "Hero.a$b.x$y": 2, "Hero.s.n": 2 });
     assert.deepEqual({ ...(hero as unknown as { a$b: object }).a$b }, { x$y: 2 });
@@ -410,11 +428,17 @@ describe("useMutable: what it refuses", () => {
 
   it("a list method used as a value, with the statement to write and the new array", () => {
     const header = "interface Foe { id: number }\n";
-    const push = errors("const s = useMutable({ enemies: [] as readonly Foe[], n: 0 }); useUpdate(() => { const n = s.enemies.push({ id: 1 }); s.n = n; });", header);
+    const push = errors(
+      "const s = useMutable({ enemies: [] as readonly Foe[], n: 0 }); useUpdate(() => { const n = s.enemies.push({ id: 1 }); s.n = n; });",
+      header
+    );
     assert.equal(push.length, 1);
     assert.match(push[0]!, /`push` changes `s\.enemies` in place: write it as a statement of its own \(`s\.enemies\.push\(…\);`\)/);
     assert.match(push[0]!, /`s\.enemies = \[\.\.\.s\.enemies, \{ id: 1 \}\]`/);
-    const sort = errors("const s = useMutable({ enemies: [] as readonly Foe[] }); useUpdate(() => { s.enemies = s.enemies.sort((a, b) => a.id - b.id); });", header);
+    const sort = errors(
+      "const s = useMutable({ enemies: [] as readonly Foe[] }); useUpdate(() => { s.enemies = s.enemies.sort((a, b) => a.id - b.id); });",
+      header
+    );
     assert.match(sort[0] ?? "", /`s\.enemies = s\.enemies\.toSorted\(…\)`/);
   });
 
@@ -424,8 +448,7 @@ describe("useMutable: what it refuses", () => {
 });
 
 describe("useMutable: changing a list or an object in place", () => {
-  const errors = (body: string, header = ""): string[] =>
-    compileErrors(`${header}${body}`).map((d) => `${d.code}: ${d.message}`);
+  const errors = (body: string, header = ""): string[] => compileErrors(`${header}${body}`).map((d) => `${d.code}: ${d.message}`);
   const foes = (body: string, extra = "") => `interface Foe { id: number; hp: number; tags: string[] }
 export function Hero() {
   const s = useMutable({ foes: [{ id: 1, hp: 3, tags: [] }, { id: 2, hp: 5, tags: ["a"] }] as Foe[], pos: { x: 0, y: 0 }, n: 0${extra} });
@@ -453,39 +476,59 @@ export function Hero() {
          });
          return <Entity />;
        }`,
-      "Hero",
+      "Hero"
     );
     assert.deepEqual(hero.s, { list: [0, 8, 3, 2, 1], queue: [20], seen: 5, last: 0 });
   });
 
   it("writes through an index and a property copy what they pass, and share the rest", async () => {
-    const compiled = compile(foes(`
+    const compiled = compile(
+      foes(`
       s.foes[1]!.hp -= 2;
       s.foes[0]!.hp++;
       s.pos.x = 9;
       s.pos.y += 4;
-      s.n = s.foes[1]!.hp + s.pos.x;`));
+      s.n = s.foes[1]!.hp + s.pos.x;`)
+    );
     assert.deepEqual(typeCheck(compiled), []);
     const module = await load<Record<string, new () => Entity>>(compiled);
     const world = new World();
-    const hero = new module.Hero!() as Entity & { s: { foes: { id: number; hp: number; tags: string[] }[]; pos: { x: number; y: number }; n: number } };
+    const hero = new module.Hero!() as Entity & {
+      s: { foes: { id: number; hp: number; tags: string[] }[]; pos: { x: number; y: number }; n: number };
+    };
     const before = hero.s.foes;
     const first = before[0]!;
     const second = before[1]!;
     world.mount(hero);
     world.flush();
-    assert.deepEqual(hero.s.foes.map((f) => f.hp), [4, 3]);
+    assert.deepEqual(
+      hero.s.foes.map((f) => f.hp),
+      [4, 3]
+    );
     assert.deepEqual(hero.s.pos, { x: 9, y: 4 });
     assert.equal(hero.s.n, 12, "read back at once, including the property write before it");
-    assert.deepEqual(before.map((f) => f.hp), [3, 5], "the list the frame began with is untouched");
+    assert.deepEqual(
+      before.map((f) => f.hp),
+      [3, 5],
+      "the list the frame began with is untouched"
+    );
     assert.deepEqual([first.hp, second.hp], [3, 5], "and so are its items");
     assert.notEqual(hero.s.foes, before);
     assert.notEqual(hero.s.foes[1], second);
   });
 
   it("goes as deep as the path does: a list inside an item", async () => {
-    const hero = await run(foes(`const i = 1; s.foes[i]!.tags.push("b", "c"); s.foes[0]!.tags = ["z"]; s.foes[i + 0 - 1]!.tags.unshift("y");`), "Hero");
-    assert.deepEqual((hero.s.foes as { tags: string[] }[]).map((f) => f.tags), [["y", "z"], ["a", "b", "c"]]);
+    const hero = await run(
+      foes(`const i = 1; s.foes[i]!.tags.push("b", "c"); s.foes[0]!.tags = ["z"]; s.foes[i + 0 - 1]!.tags.unshift("y");`),
+      "Hero"
+    );
+    assert.deepEqual(
+      (hero.s.foes as { tags: string[] }[]).map((f) => f.tags),
+      [
+        ["y", "z"],
+        ["a", "b", "c"],
+      ]
+    );
   });
 
   it("changes the handlers of a step see in the order they run, and compounds over several steps", async () => {
@@ -497,15 +540,27 @@ export function Hero() {
          return <Entity />;
        }`,
       "Hero",
-      3,
+      3
     );
     assert.deepEqual(hero.s.hp, [0, 3 + 2 + 1 + 0]);
   });
 
   it("refuses a write the compiler would have to follow: an alias, a loop variable, an index with a call, `?.`", () => {
-    assert.match(errors(foes("const f = s.foes[0]!; f.hp = 0;"))[0] ?? "", /write through its `useMutable` field \(`s\.foes\[i\]\.hp = 0`/, "an alias");
-    assert.match(errors(foes("for (const f of s.foes) { f.hp = 0; }"))[0] ?? "", /a loop variable is a read, not a way to write/, "a loop variable");
-    assert.match(errors(foes("const f = s.foes[0]!; f.hp++;"))[0] ?? "", /`\+\+` and `--` are statements of their own/, "an alias, counted");
+    assert.match(
+      errors(foes("const f = s.foes[0]!; f.hp = 0;"))[0] ?? "",
+      /write through its `useMutable` field \(`s\.foes\[i\]\.hp = 0`/,
+      "an alias"
+    );
+    assert.match(
+      errors(foes("for (const f of s.foes) { f.hp = 0; }"))[0] ?? "",
+      /a loop variable is a read, not a way to write/,
+      "a loop variable"
+    );
+    assert.match(
+      errors(foes("const f = s.foes[0]!; f.hp++;"))[0] ?? "",
+      /`\+\+` and `--` are statements of their own/,
+      "an alias, counted"
+    );
     assert.match(errors(foes("s.foes[Math.floor(1)]!.hp = 0;"))[0] ?? "", /index written through a field .* plain value/);
     assert.match(errors(foes("s.foes[0]?.tags.push('x');"))[0] ?? "", /cannot use `\?\.`/);
   });
@@ -514,12 +569,13 @@ export function Hero() {
     assert.match(
       errors(`interface Foe { id: number }
 export function Hero() { const s = useMutable({ list: [] as Foe[] }); s.list.push({ id: 1 }); return <Entity />; }`)[0] ?? "",
-      /cannot be written in the component body/,
+      /cannot be written in the component body/
     );
     assert.match(
       errors(`interface Foe { id: number }
-export function Hero() { const s = useMutable({ list: [] as Foe[] }); useUnmount(() => { s.list.push({ id: 1 }); }); return <Entity />; }`)[0] ?? "",
-      /cannot be written in `useUnmount`/,
+export function Hero() { const s = useMutable({ list: [] as Foe[] }); useUnmount(() => { s.list.push({ id: 1 }); }); return <Entity />; }`)[0] ??
+        "",
+      /cannot be written in `useUnmount`/
     );
   });
 });

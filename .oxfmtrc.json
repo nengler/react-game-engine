@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 140,
+  "singleQuote": false,
+  "trailingComma": "es5",
+  "semi": true,
+  "sortPackageJson": false,
+  "sortImports": {
+    "order": "asc"
+  },
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "docs",
+    "**/generated",
+    "**/*.html",
+    "**/*.md",
+    "**/*.json",
+    "**/*.tmj",
+    "**/*.yml"
+  ]
+}

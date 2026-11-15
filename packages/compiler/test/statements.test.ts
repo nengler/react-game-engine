@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * Handler statements beyond `if` and `const`: `for…of` loops with `break` and `continue`, `let` locals (with an optional type),
  * every compound assignment and `++` / `--` on locals and refs, `**`, refs that hold any value, and the "did you mean"
  * suggestions for unknown names. Each is lowered, type-checked as generated code, and run against the runtime.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, World } from "@rge/runtime";
+
 import { DiagnosticCode, type StatementIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -85,14 +87,19 @@ describe("for…of, let and compound assignment in handlers", () => {
     assert.ok(loop.kind === "ForOf" && loop.binding.kind === "Name" && loop.binding.name === "e" && loop.iterable.kind === "StateRead");
     const kinds = loop.body.flatMap((s) => (s.kind === "If" ? s.then.map((t) => t.kind) : [s.kind]));
     assert.deepEqual(kinds, ["Continue", "Assign", "Assign", "Break"]);
-    const increment = body.find((s): s is Extract<StatementIR, { kind: "Assign" }> => s.kind === "Assign" && s.target.kind === "Local" && s.target.name === "count");
+    const increment = body.find(
+      (s): s is Extract<StatementIR, { kind: "Assign" }> => s.kind === "Assign" && s.target.kind === "Local" && s.target.name === "count"
+    );
     assert.ok(increment);
-    assert.deepEqual({ ...increment, target: { ...increment.target, local: "" } }, {
-      kind: "Assign",
-      target: { kind: "Local", local: "", name: "count" },
-      operator: "+=",
-      value: { kind: "NumberLiteral", value: 1 },
-    });
+    assert.deepEqual(
+      { ...increment, target: { ...increment.target, local: "" } },
+      {
+        kind: "Assign",
+        target: { kind: "Local", local: "", name: "count" },
+        operator: "+=",
+        value: { kind: "NumberLiteral", value: 1 },
+      }
+    );
     const operators = body.flatMap((s) => (s.kind === "Assign" ? [s.operator] : []));
     assert.deepEqual(operators, ["+=", "**=", "%=", "??=", "||=", "&&="]);
   });
@@ -200,7 +207,10 @@ function C() {
     assert.ok(hook?.kind === "OnUpdate");
     const loop = hook.handler.body[1]!;
     assert.ok(loop.kind === "ForOf" && loop.binding.kind === "Array");
-    assert.deepEqual(loop.binding.elements.map((e) => (e?.kind === "Name" ? e.name : e?.kind)), ["i", "Object"]);
+    assert.deepEqual(
+      loop.binding.elements.map((e) => (e?.kind === "Name" ? e.name : e?.kind)),
+      ["i", "Object"]
+    );
     assert.match(compiled.code, /for \(const \[i, \{ id, hp: health, kind \}\] of this\.#\$s_enemiesNext\.entries\(\)\) \{/);
     assert.match(compiled.code, /switch \(kind\) \{\s*case "ghost":\s*continue;\s*case "boss":/);
     assert.match(compiled.code, /for \(const \[, second\] of/);
@@ -220,7 +230,9 @@ function C() {
 describe("diagnostics for the new statements", () => {
   it("rejects `continue` in a switch outside a loop, and two `const`s of one name across its cases (they share a scope)", () => {
     assert.deepEqual(codes(handler(`switch (s.n) { case 1: continue; }`)), [DiagnosticCode.UnsupportedStatement]);
-    assert.deepEqual(codes(handler(`switch (s.n) { case 1: { const a = 1; break; } case 2: const b = 1; const b = 2; }`)), [DiagnosticCode.InvalidHandler]);
+    assert.deepEqual(codes(handler(`switch (s.n) { case 1: { const a = 1; break; } case 2: const b = 1; const b = 2; }`)), [
+      DiagnosticCode.InvalidHandler,
+    ]);
   });
 
   it("rejects `break` and `continue` outside a loop, and labels", () => {
@@ -232,7 +244,13 @@ describe("diagnostics for the new statements", () => {
 
   it("rejects a `for…of` that is not `for (const x of …)`, and `for…in`", () => {
     // `while` and C-style `for` are handler code since REACT_FEEL_PLAN.md A1 (loops.test.ts).
-    for (const loop of ["for (let x of [1]) { }", "for (const [a, ...rest] of [[1, 2]]) { }", "for (const { a = 1 } of [{ a: 2 }]) { }", "for (const x: number of [1]) { }", "for (const k in { a: 1 }) { }"]) {
+    for (const loop of [
+      "for (let x of [1]) { }",
+      "for (const [a, ...rest] of [[1, 2]]) { }",
+      "for (const { a = 1 } of [{ a: 2 }]) { }",
+      "for (const x: number of [1]) { }",
+      "for (const k in { a: 1 }) { }",
+    ]) {
       assert.ok(codes(handler(loop)).includes(DiagnosticCode.UnsupportedStatement), loop);
     }
     assert.ok(compile(handler("while (dt > 0) { break; }")).code.includes("while (dt > 0)"));
@@ -285,7 +303,14 @@ function C() {
   });
 
   it("points the in-place methods at their copying forms", () => {
-    assert.match(compileErrors(handler("s.n = 0;", "const s = useMutable({ xs: [] as number[], n: 0 }); const sorted = s.xs.sort();"))[0]!.message, /toSorted/);
-    assert.match(compileErrors(handler("s.n = 0;", "const s = useMutable({ xs: [] as number[], n: 0 }); const reversed = s.xs.reverse();"))[0]!.message, /toReversed/);
+    assert.match(
+      compileErrors(handler("s.n = 0;", "const s = useMutable({ xs: [] as number[], n: 0 }); const sorted = s.xs.sort();"))[0]!.message,
+      /toSorted/
+    );
+    assert.match(
+      compileErrors(handler("s.n = 0;", "const s = useMutable({ xs: [] as number[], n: 0 }); const reversed = s.xs.reverse();"))[0]!
+        .message,
+      /toReversed/
+    );
   });
 });

@@ -1,13 +1,17 @@
-/** Functions imported from relative .ts files: opaque to the compiler, callable in any expression and handler, and passable as values. */
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+/** Functions imported from relative .ts files: opaque to the compiler, callable in any expression and handler, and passable as values. */
+import { describe, it } from "node:test";
 
 const repo = resolve(import.meta.dirname, "../../..");
 
-function project(files: Record<string, string>): { dir: string; out: (name: string) => string; run: () => { status: number | null; stderr: string } } {
+function project(files: Record<string, string>): {
+  dir: string;
+  out: (name: string) => string;
+  run: () => { status: number | null; stderr: string };
+} {
   mkdirSync(join(repo, ".test-output"), { recursive: true });
   const dir = mkdtempSync(join(repo, ".test-output", "plain-"));
   mkdirSync(join(dir, "src"));
@@ -16,7 +20,10 @@ function project(files: Record<string, string>): { dir: string; out: (name: stri
     dir,
     out: (name) => readFileSync(join(dir, "out", name), "utf8"),
     run: () => {
-      const r = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], { cwd: repo, encoding: "utf8" });
+      const r = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], {
+        cwd: repo,
+        encoding: "utf8",
+      });
       return { status: r.status, stderr: r.stderr };
     },
   };
@@ -153,7 +160,9 @@ export default function Main() { return <Game controls={controls}><Hero /></Game
     } finally {
       rmSync(p.dir, { recursive: true, force: true });
     }
-    const wrong = project({ "Main.tsx": `import { Game } from "@rge/runtime/jsx";\nexport default function Main() { return <Game controls={5}></Game>; }\n` });
+    const wrong = project({
+      "Main.tsx": `import { Game } from "@rge/runtime/jsx";\nexport default function Main() { return <Game controls={5}></Game>; }\n`,
+    });
     try {
       const r = wrong.run();
       assert.equal(r.status, 1);
@@ -176,10 +185,17 @@ export function B() {
     });
     try {
       assert.equal(p.run().status, 0);
-      const ir = JSON.parse(p.out("B.ir.json")) as { components: { root: { children: { element: { props: { name: string; kind: string; dependencies?: { state: string }[] }[] } }[] } }[] };
+      const ir = JSON.parse(p.out("B.ir.json")) as {
+        components: {
+          root: { children: { element: { props: { name: string; kind: string; dependencies?: { state: string }[] }[] } }[] };
+        }[];
+      };
       const color = ir.components[0]!.root.children[0]!.element.props.find((x) => x.name === "color")!;
       assert.equal(color.kind, "DynamicProp");
-      assert.deepEqual(color.dependencies?.map((d) => d.state), ["B.s.n"]);
+      assert.deepEqual(
+        color.dependencies?.map((d) => d.state),
+        ["B.s.n"]
+      );
     } finally {
       rmSync(p.dir, { recursive: true, force: true });
     }

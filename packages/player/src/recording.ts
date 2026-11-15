@@ -49,10 +49,27 @@ interface Placed {
 
 /** A draw record in readable form; colours are `#rrggbbaa` and textures are the path they were loaded from. */
 export type DecodedRecord =
-  | { readonly op: "canvas"; readonly width: number; readonly height: number; readonly destX: number; readonly destY: number; readonly destW: number; readonly destH: number; readonly borderColor: string }
+  | {
+      readonly op: "canvas";
+      readonly width: number;
+      readonly height: number;
+      readonly destX: number;
+      readonly destY: number;
+      readonly destW: number;
+      readonly destH: number;
+      readonly borderColor: string;
+    }
   | { readonly op: "scissor"; readonly x: number; readonly y: number; readonly width: number; readonly height: number }
   | { readonly op: "scissorEnd" }
-  | { readonly op: "view"; readonly a: number; readonly b: number; readonly c: number; readonly d: number; readonly e: number; readonly f: number }
+  | {
+      readonly op: "view";
+      readonly a: number;
+      readonly b: number;
+      readonly c: number;
+      readonly d: number;
+      readonly e: number;
+      readonly f: number;
+    }
   | ({ readonly op: "sprite"; readonly texture: string } & Placed)
   | ({
       readonly op: "spriteRegion";
@@ -69,7 +86,15 @@ export type DecodedRecord =
     } & Placed)
   | ({ readonly op: "rect"; readonly width: number; readonly height: number; readonly color: string } & Placed)
   | ({ readonly op: "ellipse"; readonly width: number; readonly height: number; readonly color: string } & Placed)
-  | ({ readonly op: "box"; readonly width: number; readonly height: number; readonly fill: string; readonly borderColor: string; readonly borderWidth: number; readonly radius: number } & Placed)
+  | ({
+      readonly op: "box";
+      readonly width: number;
+      readonly height: number;
+      readonly fill: string;
+      readonly borderColor: string;
+      readonly borderWidth: number;
+      readonly radius: number;
+    } & Placed)
   | ({ readonly op: "text"; readonly text: string; readonly size: number; readonly color: string } & Placed);
 
 export interface RecordedFrame {
@@ -277,7 +302,8 @@ export class RecordingBackend implements Backend {
         return decode();
       },
     });
-    if (this.#keepFrames !== undefined && this.frames.length > this.#keepFrames) this.frames.splice(0, this.frames.length - this.#keepFrames);
+    if (this.#keepFrames !== undefined && this.frames.length > this.#keepFrames)
+      this.frames.splice(0, this.frames.length - this.#keepFrames);
 
     const next = this.#queue.shift() ?? {};
     this.#typed = next.typed ?? "";
@@ -286,22 +312,45 @@ export class RecordingBackend implements Backend {
 
   /** Check the frame's records, and when `out` is given, read them into it. */
   #decode(records: Float64Array, length: number, texts: readonly string[], out: DecodedRecord[] | null): void {
-    for (let at = 0; at < length; ) {
+    for (let at = 0; at < length;) {
       const op = records[at] as number;
-      const placed = (): Placed => ({ x: records[at + 1] as number, y: records[at + 2] as number, rotation: records[at + 3] as number, scaleX: records[at + 4] as number, scaleY: records[at + 5] as number });
+      const placed = (): Placed => ({
+        x: records[at + 1] as number,
+        y: records[at + 2] as number,
+        rotation: records[at + 3] as number,
+        scaleX: records[at + 4] as number,
+        scaleY: records[at + 5] as number,
+      });
       const need = (count: number): void => {
         if (at + count > length) throw new Error(`Record at ${at} (op ${op}) runs past the end of the buffer.`);
       };
       switch (op) {
         case RGE_OP_VIEW:
           need(RGE_OP_VIEW_LEN);
-          out?.push({ op: "view", a: records[at + 1]!, b: records[at + 2]!, c: records[at + 3]!, d: records[at + 4]!, e: records[at + 5]!, f: records[at + 6]! });
+          out?.push({
+            op: "view",
+            a: records[at + 1]!,
+            b: records[at + 2]!,
+            c: records[at + 3]!,
+            d: records[at + 4]!,
+            e: records[at + 5]!,
+            f: records[at + 6]!,
+          });
           at += RGE_OP_VIEW_LEN;
           break;
         case RGE_OP_CANVAS:
           need(RGE_OP_CANVAS_LEN);
           if (at !== 0) throw new Error(`A canvas record must be the first record of a frame, not at ${at}.`);
-          out?.push({ op: "canvas", width: records[at + 1]!, height: records[at + 2]!, destX: records[at + 3]!, destY: records[at + 4]!, destW: records[at + 5]!, destH: records[at + 6]!, borderColor: colorToHex(records[at + 7]!) });
+          out?.push({
+            op: "canvas",
+            width: records[at + 1]!,
+            height: records[at + 2]!,
+            destX: records[at + 3]!,
+            destY: records[at + 4]!,
+            destW: records[at + 5]!,
+            destH: records[at + 6]!,
+            borderColor: colorToHex(records[at + 7]!),
+          });
           at += RGE_OP_CANVAS_LEN;
           break;
         case RGE_OP_SCISSOR:
@@ -349,7 +398,13 @@ export class RecordingBackend implements Backend {
         case RGE_OP_RECT:
         case RGE_OP_ELLIPSE: {
           need(RGE_OP_RECT_LEN);
-          out?.push({ op: op === RGE_OP_RECT ? "rect" : "ellipse", ...placed(), width: records[at + 6]!, height: records[at + 7]!, color: colorToHex(records[at + 8]!) });
+          out?.push({
+            op: op === RGE_OP_RECT ? "rect" : "ellipse",
+            ...placed(),
+            width: records[at + 6]!,
+            height: records[at + 7]!,
+            color: colorToHex(records[at + 8]!),
+          });
           at += op === RGE_OP_RECT ? RGE_OP_RECT_LEN : RGE_OP_ELLIPSE_LEN;
           break;
         }

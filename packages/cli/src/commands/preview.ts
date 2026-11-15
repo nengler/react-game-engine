@@ -12,7 +12,9 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
+
 import { compareScreenshots, createNodeBackend, loadPreviews, previewWithReload, writeScreenshots } from "@rge/player-node";
+
 import { loadGame, UsageError } from "../config.ts";
 import { findLibrary } from "../native.ts";
 
@@ -39,14 +41,18 @@ export async function previewCommand(argv: readonly string[]): Promise<number> {
   if (flags.has("screenshot") || flags.has("compare")) {
     const library = findLibrary("headless");
     if (library === null) {
-      console.error("rge preview: the headless librge was not found (npm run native:build:headless in this repository, or install @rge/native).");
+      console.error(
+        "rge preview: the headless librge was not found (npm run native:build:headless in this repository, or install @rge/native)."
+      );
       return 1;
     }
     process.env["RGE_NATIVE_LIB"] ??= library;
     const previews = await loadPreviews(game.dir);
     if (flags.has("screenshot")) {
       const written = writeScreenshots(game.dir, previews, story);
-      console.log(`wrote ${written.length} screenshot${written.length === 1 ? "" : "s"} to ${relative(process.cwd(), join(game.dir, "stories", "screenshots")) || "."}`);
+      console.log(
+        `wrote ${written.length} screenshot${written.length === 1 ? "" : "s"} to ${relative(process.cwd(), join(game.dir, "stories", "screenshots")) || "."}`
+      );
       return 0;
     }
     const out = resolve(typeof flags.get("out") === "string" ? (flags.get("out") as string) : mkdtempSync(join(tmpdir(), "rge-previews-")));

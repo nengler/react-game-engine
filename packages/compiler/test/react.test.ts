@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * React idioms the compiler accepts: values derived in the component body,
  * ternary children, snapshot state reads, and JS shadowing in updaters (see
  * handlers.test.ts).
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Collider, Entity, Sprite, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, elementOf } from "./helpers.ts";
 
@@ -73,7 +75,8 @@ describe("React idioms", () => {
     const world = new World();
     const status = new Status();
     world.mount(status);
-    const describe = () => status.children.filter((c) => !(c instanceof Collider)).map((c) => (c instanceof Sprite ? c.image : (c as Entity).name));
+    const describe = () =>
+      status.children.filter((c) => !(c instanceof Collider)).map((c) => (c instanceof Sprite ? c.image : (c as Entity).name));
     assert.deepEqual(describe(), ["ok.png", "fine", "sparkle.png"]);
     hit(world, status);
     hit(world, status);
@@ -143,7 +146,7 @@ function Pickup() {
     s.seenBySecond = s.n; // a later handler sees the earlier one's writes
   });
   return <Entity name="Snap" />;
-}`),
+}`)
     );
     const world = new World();
     const snap = new Snap();
@@ -160,7 +163,7 @@ function Pickup() {
   const s = useMutable({ n: 5 });
   useUpdate(() => { s.n = 5; });
   return <Entity name="Same" />;
-}`),
+}`)
     );
     const world = new World();
     world.mount(new Same());

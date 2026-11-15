@@ -7,11 +7,12 @@
  *   node packages/hearth/parity.ts
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+
 import { bindings, gameConfig, screen } from "./game.ts";
-import { MAP } from "./src/rules/map.ts";
 import { Enemy } from "./generated/Enemy.ts";
 import { Pad } from "./generated/Pad.ts";
 import { Tower } from "./generated/Tower.ts";
+import { MAP } from "./src/rules/map.ts";
 import { findPlay } from "./test/battle-state.ts";
 
 const at = (i: number): string => `click@${MAP.pads[i]!.x},${MAP.pads[i]!.y}`;
@@ -28,7 +29,9 @@ for (let i = 0; i < frames.length + 1; i++) {
     const play = findPlay();
     if (play !== null) {
       const enemies = play.children.flatMap((c) => (c instanceof Enemy ? [[c.props.id, c.dist, c.hp]] : []));
-      const towers = play.children.flatMap((c) => (c instanceof Pad ? c.children.flatMap((t) => (t instanceof Tower ? [[c.props.id, t.props.level, t.angle]] : [])) : []));
+      const towers = play.children.flatMap((c) =>
+        c instanceof Pad ? c.children.flatMap((t) => (t instanceof Tower ? [[c.props.id, t.props.level, t.angle]] : [])) : []
+      );
       states.push({ i, gold: play.gold, lives: play.lives, wave: play.wave, enemies, towers });
     }
   }
@@ -37,4 +40,9 @@ const records = backend.lastFrame.records.length;
 player.close();
 
 const round = (_key: string, value: unknown): unknown => (typeof value === "number" ? Math.round(value * 1e9) / 1e9 : value);
-console.log(JSON.stringify({ states, plays: backend.plays, soundLoads: backend.soundLoads, textureLoads: backend.textureLoads, records, warnings }, round));
+console.log(
+  JSON.stringify(
+    { states, plays: backend.plays, soundLoads: backend.soundLoads, textureLoads: backend.textureLoads, records, warnings },
+    round
+  )
+);

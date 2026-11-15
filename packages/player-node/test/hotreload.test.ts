@@ -1,14 +1,16 @@
+import assert from "node:assert/strict";
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 /**
  * Hot reload under Node, end to end: a copy of the demo is played with `playWithReload` against a recording backend, its
  * source is edited on disk, and the open game is checked after each reload. Needs no native library.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { RecordingBackend, type Player } from "@rge/player";
 import { Text, type GameObject } from "@rge/runtime";
+
 import { compileErrors, playWithReload } from "../src/dev.ts";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -20,7 +22,14 @@ after(() => rmSync(gameDir, { recursive: true, force: true }));
 /** A recording backend that keeps only the last frame and takes a millisecond per frame, as a window with vsync takes longer. */
 class PacedBackend extends RecordingBackend {
   readonly #pause = new Int32Array(new SharedArrayBuffer(4));
-  override frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
+  override frame(
+    clearColor: number,
+    records: Float64Array,
+    length: number,
+    texts: readonly string[],
+    input: Float64Array,
+    keys: Uint8Array
+  ): void {
     super.frame(clearColor, records, length, texts, input, keys);
     if (this.frames.length > 1) this.frames.shift();
     Atomics.wait(this.#pause, 0, 0, 1);
@@ -49,7 +58,8 @@ function texts(root: GameObject): string[] {
 describe("playWithReload", () => {
   it("swaps in each new build, keeps component and game state, and shows a compile error until it is fixed", async () => {
     mkdirSync(gameDir, { recursive: true });
-    for (const name of ["src", "assets", "main.ts", "game.ts", "package.json", "tsconfig.json"]) cpSync(join(repo, "packages/demo", name), join(gameDir, name), { recursive: true });
+    for (const name of ["src", "assets", "main.ts", "game.ts", "package.json", "tsconfig.json"])
+      cpSync(join(repo, "packages/demo", name), join(gameDir, name), { recursive: true });
     const counterFile = join(gameDir, "src/CoinCounter.tsx");
     const original = readFileSync(counterFile, "utf8");
     assert.ok(original.includes("Coins: {coins}"));
@@ -111,7 +121,10 @@ describe("playWithReload", () => {
   });
 
   it("keeps only the compiler's error lines for the window", () => {
-    assert.equal(compileErrors("read GameState.ts (2 actions)\nwrote Main.ts\nsrc/A.tsx(1,2): error RGE1: bad\n"), "src/A.tsx(1,2): error RGE1: bad");
+    assert.equal(
+      compileErrors("read GameState.ts (2 actions)\nwrote Main.ts\nsrc/A.tsx(1,2): error RGE1: bad\n"),
+      "src/A.tsx(1,2): error RGE1: bad"
+    );
     assert.equal(compileErrors("wrote Main.ts\n"), "wrote Main.ts");
   });
 });

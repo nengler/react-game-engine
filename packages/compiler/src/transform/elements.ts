@@ -1,13 +1,72 @@
 // Layer 3 of ComponentLowering: the JSX tree (elements, props, transforms, children, keyed lists) into ElementIR.
-import { SyntaxKind, type CallExpression, type Expression, type JsxAttribute, type PropertyAccessExpression, type JsxAttributes, type JsxChild, type JsxFragment, type JsxSelfClosingElement, type Node } from "typescript/ast";
-import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isConditionalExpression, isIdentifier, isJsxAttribute, isJsxSpreadAttribute, isJsxElement, isJsxExpression, isJsxSelfClosingElement, isJsxText, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isJsxFragment, isStringLiteral, isBlock, isReturnStatement } from "typescript/ast/is";
+import {
+  SyntaxKind,
+  type CallExpression,
+  type Expression,
+  type JsxAttribute,
+  type PropertyAccessExpression,
+  type JsxAttributes,
+  type JsxChild,
+  type JsxFragment,
+  type JsxSelfClosingElement,
+  type Node,
+} from "typescript/ast";
+import {
+  isBinaryExpression,
+  isCallExpression,
+  isPropertyAccessExpression,
+  isConditionalExpression,
+  isIdentifier,
+  isJsxAttribute,
+  isJsxSpreadAttribute,
+  isJsxElement,
+  isJsxExpression,
+  isJsxSelfClosingElement,
+  isJsxText,
+  isObjectLiteralExpression,
+  isPropertyAssignment,
+  isShorthandPropertyAssignment,
+  isArrowFunction,
+  isJsxFragment,
+  isStringLiteral,
+  isBlock,
+  isReturnStatement,
+} from "typescript/ast/is";
+
 import { unwrapParens, type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, warning } from "../diagnostics/diagnostics.ts";
-import { localId, type KeyedListChildIR, type ParamIR, readsParam, collectDependencies, elementId, TRANSFORM_FIELDS, type TransformField, type TransformPropIR, type ValuePropIR, type CallbackPropIR, type ChildIR, type ComponentRef, type ElementIR, type ExprIR, type HostElementIR, type PropIR, type StatementIR } from "../ir/types.ts";
-import { checkFreshName, lowerFunction } from "./statements.ts";
-import { GAME_TAG, type JsxElementNode, HTML_ENTITY, cleanJsxText, SPECIAL_ATTRIBUTES, TRANSFORM_SHORTHAND, findAttribute, nearest } from "./helpers.ts";
+import {
+  localId,
+  type KeyedListChildIR,
+  type ParamIR,
+  readsParam,
+  collectDependencies,
+  elementId,
+  TRANSFORM_FIELDS,
+  type TransformField,
+  type TransformPropIR,
+  type ValuePropIR,
+  type CallbackPropIR,
+  type ChildIR,
+  type ComponentRef,
+  type ElementIR,
+  type ExprIR,
+  type HostElementIR,
+  type PropIR,
+  type StatementIR,
+} from "../ir/types.ts";
+import {
+  GAME_TAG,
+  type JsxElementNode,
+  HTML_ENTITY,
+  cleanJsxText,
+  SPECIAL_ATTRIBUTES,
+  TRANSFORM_SHORTHAND,
+  findAttribute,
+  nearest,
+} from "./helpers.ts";
 import { HookLowering } from "./hooks.ts";
-
+import { checkFreshName, lowerFunction } from "./statements.ts";
 
 /** `<Game>` props the player reads every frame, not only before the tree is built: these may be state (`timeScale={speed}`). */
 const LIVE_GAME_SETTINGS: ReadonlySet<string> = new Set(["timeScale", "paused"]);
@@ -16,7 +75,9 @@ const LIVE_GAME_SETTINGS: ReadonlySet<string> = new Set(["timeScale", "paused"])
  * The type of a built-in callback prop's parameter, from the manifest: a plain value (a slider's `onChange(value: number)`) is a
  * primitive, which a handler uses as any number, flag or string; anything else is a handle type, which it can only call methods on.
  */
-function callbackParamType(type: string): { readonly kind: "Primitive"; readonly name: "number" | "boolean" | "string" } | { readonly kind: "Named"; readonly name: string } {
+function callbackParamType(
+  type: string
+): { readonly kind: "Primitive"; readonly name: "number" | "boolean" | "string" } | { readonly kind: "Named"; readonly name: string } {
   return type === "number" || type === "boolean" || type === "string" ? { kind: "Primitive", name: type } : { kind: "Named", name: type };
 }
 
@@ -29,14 +90,14 @@ export class ElementLowering extends HookLowering {
   protected lowerCallback(
     name: string,
     fn: Node & { kind: SyntaxKind.ArrowFunction },
-    params?: readonly { readonly name: string; readonly type: string }[],
+    params?: readonly { readonly name: string; readonly type: string }[]
   ): CallbackPropIR | null {
     const handler = this.within({ inHandler: true }, () =>
       lowerFunction(this, fn as unknown as Parameters<typeof lowerFunction>[1], {
         paramTypes: params ? params.map((p) => callbackParamType(p.type)) : "contextual",
         returns: "void",
         what: `${name} callback`,
-      }),
+      })
     );
     return handler && { kind: "CallbackProp", name, handler };
   }
@@ -67,7 +128,13 @@ export class ElementLowering extends HookLowering {
     // sees through (`layoutContents`), holding that one child, so a `<Flex>` above it lays out the panel as its own child.
     const isElement = isJsxElement(jsx) || isJsxSelfClosingElement(jsx);
     const elementTag = isElement ? (isJsxElement(jsx) ? jsx.openingElement : jsx).tagName : null;
-    if (!isElement && !isJsxFragment(jsx) || (elementTag !== null && isIdentifier(elementTag) && !this.intrinsics.has(elementTag.text) && (this.locals.has(elementTag.text) || this.imported.has(elementTag.text)))) {
+    if (
+      (!isElement && !isJsxFragment(jsx)) ||
+      (elementTag !== null &&
+        isIdentifier(elementTag) &&
+        !this.intrinsics.has(elementTag.text) &&
+        (this.locals.has(elementTag.text) || this.imported.has(elementTag.text)))
+    ) {
       const children: ChildIR[] = [];
       const expression = unwrapParens(jsx as Expression);
       if (isElement) children.push(...this.lowerChildren([jsx as JsxElementNode], [], { slot: true, passed: false }));
@@ -75,7 +142,15 @@ export class ElementLowering extends HookLowering {
         let index = 1;
         this.lowerExpressionChild(expression, jsx, [0], () => [index++], { slot: true, passed: false }, children);
       }
-      return { kind: "HostElement", component: { kind: "Intrinsic", name: this.hostIntrinsic }, props: [], transform: [], children, layoutContents: true, span: this.span(jsx) };
+      return {
+        kind: "HostElement",
+        component: { kind: "Intrinsic", name: this.hostIntrinsic },
+        props: [],
+        transform: [],
+        children,
+        layoutContents: true,
+        span: this.span(jsx),
+      };
     }
     if (isJsxFragment(jsx)) {
       return {
@@ -93,7 +168,7 @@ export class ElementLowering extends HookLowering {
       this.report(
         DiagnosticCode.RootMustBeEntity,
         `The root of component '${this.component.name}' must be a built-in element (${this.manifest.intrinsics.map((t) => `<${t}>`).join(", ")}), a component, a fragment \`<>…</>\`, a condition (\`open ? <Menu /> : null\`) or \`null\`.`,
-        tag,
+        tag
       );
       return null;
     }
@@ -159,7 +234,11 @@ export class ElementLowering extends HookLowering {
     for (const child of children) {
       if (isJsxText(child)) {
         if (HTML_ENTITY.test(child.text)) {
-          this.report(code, `<${tag}> text cannot contain HTML entities like \`&amp;\`: write the character itself, or an expression such as {"&"}.`, child);
+          this.report(
+            code,
+            `<${tag}> text cannot contain HTML entities like \`&amp;\`: write the character itself, or an expression such as {"&"}.`,
+            child
+          );
           ok = false;
           continue;
         }
@@ -194,18 +273,30 @@ export class ElementLowering extends HookLowering {
     if (!ok) return [];
     const given = props.some((p) => p.name === prop);
     if (given && any) {
-      this.report(DiagnosticCode.UnsupportedAttribute, `<${tag}> takes its content as text between its tags or as \`${prop}\`, not both.`, at);
+      this.report(
+        DiagnosticCode.UnsupportedAttribute,
+        `<${tag}> takes its content as text between its tags or as \`${prop}\`, not both.`,
+        at
+      );
       return [];
     }
     if (given) return [];
     if (!any) {
-      this.report(DiagnosticCode.UnsupportedJsxChild, `<${tag}> needs content: the text between its tags (\`<${tag}>Score: {score}</${tag}>\`).`, at);
+      this.report(
+        DiagnosticCode.UnsupportedJsxChild,
+        `<${tag}> needs content: the text between its tags (\`<${tag}>Score: {score}</${tag}>\`).`,
+        at
+      );
       return [];
     }
     // `{`Score: ${score}`}` alone is already a template: use it as it is.
     const only = expressions.length === 1 && quasis.every((q) => q === "") ? expressions[0]! : null;
     const value: ExprIR =
-      expressions.length === 0 ? { kind: "StringLiteral", value: quasis[0]! } : only && only.kind === "TemplateLiteral" ? only : { kind: "TemplateLiteral", quasis, expressions };
+      expressions.length === 0
+        ? { kind: "StringLiteral", value: quasis[0]! }
+        : only && only.kind === "TemplateLiteral"
+          ? only
+          : { kind: "TemplateLiteral", quasis, expressions };
     return [valueProp(prop, value)];
   }
 
@@ -232,7 +323,8 @@ export class ElementLowering extends HookLowering {
     }
     let returned: Expression | null = null;
     if (!isBlock(fn.body)) returned = fn.body;
-    else if (fn.body.statements.length === 1 && isReturnStatement(fn.body.statements[0]!) && fn.body.statements[0].expression) returned = fn.body.statements[0].expression;
+    else if (fn.body.statements.length === 1 && isReturnStatement(fn.body.statements[0]!) && fn.body.statements[0].expression)
+      returned = fn.body.statements[0].expression;
     // The callback returns one element, or a condition choosing: `cond && <El />`, `cond ? <A /> : <B />`, `cond ? <A /> : null`.
     const body = returned ? unwrapParens(returned) : null;
     let conditionNode: Expression | null = null;
@@ -249,7 +341,11 @@ export class ElementLowering extends HookLowering {
     }
     const isJsx = (e: Expression | null): e is JsxElementNode => e !== null && (isJsxElement(e) || isJsxSelfClosingElement(e));
     if (!isJsx(jsx) || (otherJsx !== null && !isJsx(otherJsx))) {
-      this.report(code, `${shape}: the callback returns one element, or \`cond && <El …/>\`, or \`cond ? <A …/> : <B …/>\` (no fragments or other statements).`, fn.body);
+      this.report(
+        code,
+        `${shape}: the callback returns one element, or \`cond && <El …/>\`, or \`cond ? <A …/> : <B …/>\` (no fragments or other statements).`,
+        fn.body
+      );
       return null;
     }
     if (fn.parameters.length < 1 || fn.parameters.length > 2) {
@@ -295,7 +391,11 @@ export class ElementLowering extends HookLowering {
       let alternate: ElementIR | null = null;
       if (conditionNode !== null) {
         if (index !== null) {
-          this.report(code, "A list whose items are conditional cannot take the index (`(item, index) => cond && …`): the index would count the items that are left out. Use the item's own id.", fn.parameters[1]!);
+          this.report(
+            code,
+            "A list whose items are conditional cannot take the index (`(item, index) => cond && …`): the index would count the items that are left out. Use the item's own id.",
+            fn.parameters[1]!
+          );
           return null;
         }
         condition = this.lowerNode(conditionNode);
@@ -304,14 +404,19 @@ export class ElementLowering extends HookLowering {
       if (otherJsx !== null) {
         const otherOpening = isJsxElement(otherJsx) ? otherJsx.openingElement : otherJsx;
         const otherKey = findAttribute(otherOpening.attributes, "key")?.initializer;
-        const otherKeyNode = otherKey && isJsxExpression(otherKey) && otherKey.expression && !otherKey.dotDotDotToken ? otherKey.expression : null;
+        const otherKeyNode =
+          otherKey && isJsxExpression(otherKey) && otherKey.expression && !otherKey.dotDotDotToken ? otherKey.expression : null;
         const otherKeyIr = otherKeyNode ? this.lowerNode(otherKeyNode) : null;
         if (!otherKeyIr) {
           if (!otherKeyNode) this.report(code, "Both branches of a conditional item need a `key`, and the same one.", otherOpening);
           return null;
         }
         if (JSON.stringify(otherKeyIr) !== JSON.stringify(key)) {
-          this.report(code, "Both branches of a conditional item need the same `key` expression: an item keeps its place when it switches from one to the other.", otherKeyNode!);
+          this.report(
+            code,
+            "Both branches of a conditional item need the same `key` expression: an item keeps its place when it switches from one to the other.",
+            otherKeyNode!
+          );
           return null;
         }
         alternate = this.lowerElement(otherJsx, [...path, 1], true);
@@ -320,16 +425,28 @@ export class ElementLowering extends HookLowering {
       const readsItem = readsParam(key, item.id);
       const readsIndex = index !== null && readsParam(key, index.id);
       if (!readsItem && !readsIndex) {
-        this.report(code, `\`key\` must read the item (\`key={${item.name}.id}\`): a key that is the same for every item is always a duplicate.`, keyNode);
+        this.report(
+          code,
+          `\`key\` must read the item (\`key={${item.name}.id}\`): a key that is the same for every item is always a duplicate.`,
+          keyNode
+        );
         return null;
       }
       if (!readsItem) {
         this.diagnostics.push(
-          warning(code, `\`key\` reads only the index, so an item keeps its instance by position, not by identity: removing or reordering items moves state between them. Prefer an id from the item.`, this.span(keyNode)),
+          warning(
+            code,
+            `\`key\` reads only the index, so an item keeps its instance by position, not by identity: removing or reordering items moves state between them. Prefer an id from the item.`,
+            this.span(keyNode)
+          )
         );
       }
       if (alternate !== null && alternate.children.length > 0) {
-        this.report(code, "A list item that switches between two elements cannot have children yet: make the branch a component that renders them.", jsx);
+        this.report(
+          code,
+          "A list item that switches between two elements cannot have children yet: make the branch a component that renders them.",
+          jsx
+        );
         return null;
       }
       const children = this.listItemChildren(lowered.children, item, index, jsx);
@@ -364,7 +481,11 @@ export class ElementLowering extends HookLowering {
       if (c.kind === "ChildrenSlot" || (c.element.component.kind === "Intrinsic" && c.element.component.name === ROUTE_TAG)) {
         const what = c.kind === "ChildrenSlot" ? "`{children}`" : "a <Route>";
         const holder = isKeyedElement({ item }) ? "A keyed element" : "A list item";
-        this.report(DiagnosticCode.InvalidList, `${holder} cannot hold ${what} among its children yet: make it a component that renders it.`, at);
+        this.report(
+          DiagnosticCode.InvalidList,
+          `${holder} cannot hold ${what} among its children yet: make it a component that renders it.`,
+          at
+        );
         return null;
       }
       const grand = this.listItemChildren(c.element.children, item, index, at);
@@ -388,9 +509,18 @@ export class ElementLowering extends HookLowering {
     const opening = isJsxElement(jsx) ? jsx.openingElement : jsx;
     const keyAttribute = findAttribute(opening.attributes, "key")!;
     const init = keyAttribute.initializer;
-    const keyNode = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? init.expression : init && isStringLiteral(init) ? init : null;
+    const keyNode =
+      init && isJsxExpression(init) && init.expression && !init.dotDotDotToken
+        ? init.expression
+        : init && isStringLiteral(init)
+          ? init
+          : null;
     if (!keyNode) {
-      this.report(DiagnosticCode.UnsupportedAttribute, "`key` takes a value that identifies what the element shows: `key={talk.id}`.", keyAttribute);
+      this.report(
+        DiagnosticCode.UnsupportedAttribute,
+        "`key` takes a value that identifies what the element shows: `key={talk.id}`.",
+        keyAttribute
+      );
       return null;
     }
     const keyValue = this.lowerNode(keyNode);
@@ -404,7 +534,17 @@ export class ElementLowering extends HookLowering {
     const source: ExprIR = { kind: "ArrayLiteral", elements: [{ spread: false, value: keyValue }] };
     const key: ExprIR = { kind: "ParamRead", param: id, name: KEYED_ITEM };
     const dependencies = [...collectDependencies(source), ...(condition ? collectDependencies(condition) : [])];
-    return { kind: "KeyedListChild", source, item, index: null, key, element: { ...lowered, children }, condition, alternate: null, dependencies };
+    return {
+      kind: "KeyedListChild",
+      source,
+      item,
+      index: null,
+      key,
+      element: { ...lowered, children },
+      condition,
+      alternate: null,
+      dependencies,
+    };
   }
 
   /** `slotOk`: a `{children}` slot may appear in this element's children (it is in a static chain from the root). */
@@ -419,22 +559,28 @@ export class ElementLowering extends HookLowering {
     if (this.intrinsics.has(tag.text)) {
       this.requireImport(tag.text, tag);
       component = { kind: "Intrinsic", name: tag.text };
-    }
-    else if (this.locals.has(tag.text)) component = { kind: "Local", name: tag.text };
+    } else if (this.locals.has(tag.text)) component = { kind: "Local", name: tag.text };
     else if (this.imported.has(tag.text)) {
       const { module, isDefault } = this.imported.get(tag.text)!;
       component = { kind: "Imported", name: tag.text, module, isDefault };
-    }
-    else {
+    } else {
       // A component declared where it cannot be (inside another): that error is already said.
       if (this.declaredAfterError(tag.text)) return null;
       const near = nearest(tag.text, [...this.intrinsics, ...this.locals, ...this.imported.keys()]);
-      this.report(DiagnosticCode.UnknownComponent, `Unknown component <${tag.text}>${near ? ` (did you mean <${near}>?)` : ""}. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`, tag);
+      this.report(
+        DiagnosticCode.UnknownComponent,
+        `Unknown component <${tag.text}>${near ? ` (did you mean <${near}>?)` : ""}. Declare it in this file, import it from a .tsx file, or use a runtime intrinsic.`,
+        tag
+      );
       return null;
     }
 
     if (component.kind === "Intrinsic" && tag.text === GAME_TAG) {
-      this.report(DiagnosticCode.RootMustBeEntity, `<${GAME_TAG}> is the root of a component, never a child: it configures the whole game. Make it the root of your main component.`, tag);
+      this.report(
+        DiagnosticCode.RootMustBeEntity,
+        `<${GAME_TAG}> is the root of a component, never a child: it configures the whole game. Make it the root of your main component.`,
+        tag
+      );
       return null;
     }
     const isComponent = component.kind !== "Intrinsic";
@@ -450,13 +596,18 @@ export class ElementLowering extends HookLowering {
       this.report(
         DiagnosticCode.UnsupportedJsxChild,
         `<${tag.text}> was given text and elements together. A component takes text between its tags when its props say \`children: TextChild | readonly TextChild[]\` (\`<Label>Coins: {coins}</Label>\`), or elements when they say \`children: Child\`: not both. Put the text in a <Text> or a text component of its own.`,
-        jsx,
+        jsx
       );
     } else if (given === "text") {
       // A text wrapper (`<Label>Coins: {coins}</Label>`): the words become one string, passed as its `children` prop, as
       // <Text> takes its own. Type-checking says whether the component takes text.
       props.push(...this.lowerTextContent(isJsxElement(jsx) ? jsx.children : [], "children", props, tag.text, jsx));
-    } else if (isJsxElement(jsx)) children = this.lowerChildren(jsx.children, path, { slot: slotOk && !isComponent, passed: isComponent, forward: slotOk && isComponent });
+    } else if (isJsxElement(jsx))
+      children = this.lowerChildren(jsx.children, path, {
+        slot: slotOk && !isComponent,
+        passed: isComponent,
+        forward: slotOk && isComponent,
+      });
     if (!isComponent) this.checkContainer(tag.text, children.length, jsx);
 
     const fieldName = this.allocateFieldName(tag.text, listItem ? "Items" : null);
@@ -489,11 +640,19 @@ export class ElementLowering extends HookLowering {
     const attribute = findAttribute(attributes, "transform");
     const code = DiagnosticCode.InvalidTransformAttribute;
     // `<Sprite x={…} y={…} />`: the shorthand, on a built-in only (on a component, `x` is one of its props).
-    const shorthand = isComponent ? [] : attributes.properties.filter((a): a is JsxAttribute => isJsxAttribute(a) && isIdentifier(a.name) && TRANSFORM_SHORTHAND.has(a.name.text));
+    const shorthand = isComponent
+      ? []
+      : attributes.properties.filter(
+          (a): a is JsxAttribute => isJsxAttribute(a) && isIdentifier(a.name) && TRANSFORM_SHORTHAND.has(a.name.text)
+        );
     if (!attribute && shorthand.length === 0) return [];
     if (!isComponent && !this.manifest.transformIntrinsics.includes(tag)) {
       const what = attribute ? "`transform`" : `\`${(shorthand[0]!.name as { text: string }).text}\``;
-      this.report(code, `<${tag}> cannot be placed with ${what} (it is not in the runtime's transformIntrinsics). Wrap it in an <${this.hostIntrinsic}> to position it.`, attribute ?? shorthand[0]!);
+      this.report(
+        code,
+        `<${tag}> cannot be placed with ${what} (it is not in the runtime's transformIntrinsics). Wrap it in an <${this.hostIntrinsic}> to position it.`,
+        attribute ?? shorthand[0]!
+      );
       return [];
     }
     const out: TransformPropIR[] = [];
@@ -525,7 +684,11 @@ export class ElementLowering extends HookLowering {
         field = property.name.text;
         valueNode = property.name;
       } else {
-        this.report(code, "Transform fields must be written `field: value` or `field` (shorthand); no spreads or computed names.", property);
+        this.report(
+          code,
+          "Transform fields must be written `field: value` or `field` (shorthand); no spreads or computed names.",
+          property
+        );
         continue;
       }
       if (!(TRANSFORM_FIELDS as readonly string[]).includes(field)) {
@@ -538,7 +701,7 @@ export class ElementLowering extends HookLowering {
           shorthand.some((a) => (a.name as { text: string }).text === field)
             ? `'${field}' is written twice: as a prop (\`${field}={…}\`) and in \`transform\`. Keep one.`
             : `Duplicate transform field '${field}'.`,
-          property,
+          property
         );
         continue;
       }
@@ -562,7 +725,11 @@ export class ElementLowering extends HookLowering {
     for (const attribute of attributes.properties) {
       if (isJsxSpreadAttribute(attribute)) {
         if (!toComponent) {
-          this.report(DiagnosticCode.UnsupportedAttribute, `Spreading props onto a built-in (<${tag} {...props} />) is not supported yet: a built-in's props are written to its fields one by one, so name them. Spreading onto a component works.`, attribute);
+          this.report(
+            DiagnosticCode.UnsupportedAttribute,
+            `Spreading props onto a built-in (<${tag} {...props} />) is not supported yet: a built-in's props are written to its fields one by one, so name them. Spreading onto a component works.`,
+            attribute
+          );
           continue;
         }
         const value = this.lowerNode(attribute.expression);
@@ -587,7 +754,7 @@ export class ElementLowering extends HookLowering {
         this.report(
           DiagnosticCode.UnsupportedAttribute,
           `Write the text as the children of <${tag}>, not as a \`${name}\` attribute: \`<${tag}>Score: {score}</${tag}>\`, or \`<${tag}>{label}</${tag}>\`.`,
-          attribute,
+          attribute
         );
         continue;
       }
@@ -597,12 +764,16 @@ export class ElementLowering extends HookLowering {
           name === "key"
             ? "`key` goes where the component is used, not on its root: `<Dialogue key={talk.id} />` starts it over when the key changes."
             : "`children` cannot be passed yet.",
-          attribute,
+          attribute
         );
         continue;
       }
       if (name === "ref") {
-        this.report(DiagnosticCode.ElementRef, "Elements cannot be referenced: what is on screen is driven by state and props. Keep what you need from an element (a position, a count) in a `useMutable` field.", attribute);
+        this.report(
+          DiagnosticCode.ElementRef,
+          "Elements cannot be referenced: what is on screen is driven by state and props. Keep what you need from an element (a position, a count) in a `useMutable` field.",
+          attribute
+        );
         continue;
       }
       const init = attribute.initializer;
@@ -620,7 +791,11 @@ export class ElementLowering extends HookLowering {
         if (isArrowFunction(expression)) {
           const params = toComponent ? undefined : this.manifest.intrinsicCallbacks[tag]?.[name];
           if (!toComponent && !params) {
-            this.report(DiagnosticCode.UnsupportedAttribute, `<${tag}> has no callback prop '${name}': callbacks can be passed to components, and to the built-in callback props the runtime lists.`, attribute);
+            this.report(
+              DiagnosticCode.UnsupportedAttribute,
+              `<${tag}> has no callback prop '${name}': callbacks can be passed to components, and to the built-in callback props the runtime lists.`,
+              attribute
+            );
             continue;
           }
           const callback = this.lowerCallback(name, expression, params);
@@ -643,25 +818,41 @@ export class ElementLowering extends HookLowering {
           } else {
             const params = this.manifest.intrinsicCallbacks[tag]?.[name];
             if (!params) {
-              this.report(DiagnosticCode.UnsupportedAttribute, `<${tag}> has no callback prop '${name}': callbacks can be passed to components, and to the built-in callback props the runtime lists.`, attribute);
+              this.report(
+                DiagnosticCode.UnsupportedAttribute,
+                `<${tag}> has no callback prop '${name}': callbacks can be passed to components, and to the built-in callback props the runtime lists.`,
+                attribute
+              );
               continue;
             }
             // Written as the arrow an author would write by hand: `onPress={() => resume()}`.
-            const handlerParams = params.map((p) => ({ id: localId(this.component.name, p.name, this.nextSerial()), name: p.name, type: callbackParamType(p.type) }));
+            const handlerParams = params.map((p) => ({
+              id: localId(this.component.name, p.name, this.nextSerial()),
+              name: p.name,
+              type: callbackParamType(p.type),
+            }));
             const args: ExprIR[] = handlerParams.map((p) => ({ kind: "ParamRead", param: p.id, name: p.name }));
             const body: StatementIR[] =
               passed.kind === "action"
                 ? [{ kind: "CallAction", action: passed.action, args }]
                 : passed.kind === "function"
                   ? [{ kind: "ExpressionStatement", expression: { kind: "Call", callee: { kind: "Own", name: passed.field }, args } }]
-                  : [{ kind: "ExpressionStatement", expression: { kind: "Call", callee: { kind: "Prop", name: passed.name, optional: true }, args } }];
+                  : [
+                      {
+                        kind: "ExpressionStatement",
+                        expression: { kind: "Call", callee: { kind: "Prop", name: passed.name, optional: true }, args },
+                      },
+                    ];
             props.push({ kind: "CallbackProp", name, handler: { kind: "Function", params: handlerParams, body } });
             continue;
           }
         }
         // `onX={onX}` forwards a callback prop whole.
         const forwarded = init.expression;
-        value = this.within({ allowCallbackRead: toComponent && (isIdentifier(expression) || isPropertyAccessExpression(expression)) }, () => this.lowerNode(forwarded));
+        value = this.within(
+          { allowCallbackRead: toComponent && (isIdentifier(expression) || isPropertyAccessExpression(expression)) },
+          () => this.lowerNode(forwarded)
+        );
       } else {
         this.report(DiagnosticCode.UnsupportedAttribute, `Unsupported value for attribute '${name}'.`, init);
         continue;
@@ -677,7 +868,9 @@ export class ElementLowering extends HookLowering {
    * A function passed whole as an attribute: a game-state action (`resume`) or a callback prop (`onPress`, `props.onPress`).
    * Undefined when the expression is neither; null when it is a callback prop that cannot be read (reported).
    */
-  protected functionValue(expression: Expression): { kind: "action"; action: string } | { kind: "prop"; name: string } | { kind: "function"; field: string } | null | undefined {
+  protected functionValue(
+    expression: Expression
+  ): { kind: "action"; action: string } | { kind: "prop"; name: string } | { kind: "function"; field: string } | null | undefined {
     if (isIdentifier(expression)) {
       const binding = this.scope.get(expression.text);
       if (binding?.kind === "action") return { kind: "action", action: binding.action };
@@ -704,7 +897,11 @@ export class ElementLowering extends HookLowering {
       // loads, so it exists before the tree is built, as a literal does.
       const expression = init && isJsxExpression(init) && init.expression && !init.dotDotDotToken ? unwrapParens(init.expression) : null;
       if (!expression || !isIdentifier(expression) || !this.plainImports.has(expression.text) || this.scope.has(expression.text)) {
-        this.report(DiagnosticCode.InvalidPropValue, `<${GAME_TAG} controls> takes the game's controls, imported from a .ts module: \`export const controls = createControls({ jump: ["Z", "PadA"] })\`, then \`controls={controls}\`.`, at);
+        this.report(
+          DiagnosticCode.InvalidPropValue,
+          `<${GAME_TAG} controls> takes the game's controls, imported from a .ts module: \`export const controls = createControls({ jump: ["Z", "PadA"] })\`, then \`controls={controls}\`.`,
+          at
+        );
         return null;
       }
       return { kind: "PlainRef", name: expression.text };
@@ -712,7 +909,11 @@ export class ElementLowering extends HookLowering {
     const allowed = this.manifest.intrinsicMembers[GAME_TAG] ?? [];
     if (!allowed.includes(name) || name === "name") {
       if (name === "name") return this.gameLiteral(name, init, at);
-      this.report(DiagnosticCode.UnsupportedAttribute, `<${GAME_TAG}> has no prop '${name}'. Its settings: ${allowed.filter((m) => m !== "name").join(", ")}.`, at);
+      this.report(
+        DiagnosticCode.UnsupportedAttribute,
+        `<${GAME_TAG}> has no prop '${name}'. Its settings: ${allowed.filter((m) => m !== "name").join(", ")}.`,
+        at
+      );
       return null;
     }
     return this.gameLiteral(name, init, at);
@@ -727,9 +928,18 @@ export class ElementLowering extends HookLowering {
       if (!lowered) return null;
       value = lowered;
     }
-    const literal = value && (value.kind === "NumberLiteral" || value.kind === "StringLiteral" || value.kind === "BooleanLiteral" || (value.kind === "Unary" && value.operator === "-" && value.operand.kind === "NumberLiteral"));
+    const literal =
+      value &&
+      (value.kind === "NumberLiteral" ||
+        value.kind === "StringLiteral" ||
+        value.kind === "BooleanLiteral" ||
+        (value.kind === "Unary" && value.operator === "-" && value.operand.kind === "NumberLiteral"));
     if (!value || !literal) {
-      this.report(DiagnosticCode.InvalidPropValue, `<${GAME_TAG} ${name}> must be a literal (a number, string or true/false): the player reads it before the tree is built, so it cannot depend on state or props.`, at);
+      this.report(
+        DiagnosticCode.InvalidPropValue,
+        `<${GAME_TAG} ${name}> must be a literal (a number, string or true/false): the player reads it before the tree is built, so it cannot depend on state or props.`,
+        at
+      );
       return null;
     }
     return value;
@@ -739,7 +949,11 @@ export class ElementLowering extends HookLowering {
    * `slot`: a `{children}` may appear here (a container reachable through static elements). `passed`: these are
    * children passed to a component, which mount at its slot.
    */
-  protected lowerChildren(children: readonly JsxChild[], parentPath: readonly number[], context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean }): ChildIR[] {
+  protected lowerChildren(
+    children: readonly JsxChild[],
+    parentPath: readonly number[],
+    context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean }
+  ): ChildIR[] {
     const out: ChildIR[] = [];
     let index = 0;
     for (const child of children) {
@@ -785,7 +999,7 @@ export class ElementLowering extends HookLowering {
     path: readonly number[],
     next: () => readonly number[],
     context: { readonly slot: boolean; readonly passed: boolean; readonly forward?: boolean },
-    out: ChildIR[],
+    out: ChildIR[]
   ): void {
     if (this.isChildrenReference(expression)) {
       if (this.lowerChildrenSlot(child, context)) out.push({ kind: "ChildrenSlot" });
@@ -817,7 +1031,9 @@ export class ElementLowering extends HookLowering {
       // second on `!c`. Each branch keeps its own identity, so switching recreates, as React does
       // for different element types.
       const branches = [unwrapParens(expression.whenTrue), unwrapParens(expression.whenFalse)];
-      const usable = branches.every((b) => isJsxElement(b) || isJsxSelfClosingElement(b) || isJsxFragment(b) || b.kind === SyntaxKind.NullKeyword);
+      const usable = branches.every(
+        (b) => isJsxElement(b) || isJsxSelfClosingElement(b) || isJsxFragment(b) || b.kind === SyntaxKind.NullKeyword
+      );
       if (usable) {
         const condition = this.lowerNode(expression.condition);
         if (!condition) return;
@@ -837,7 +1053,11 @@ export class ElementLowering extends HookLowering {
         return;
       }
     }
-    this.report(DiagnosticCode.UnsupportedJsxChild, "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`, and an element may be a fragment `<>…</>`) or `{items.map((item) => <Element key={item.id} />)}`.", child);
+    this.report(
+      DiagnosticCode.UnsupportedJsxChild,
+      "Expression children must have the form `{condition && <Element />}`, `{condition ? <A /> : <B />}` (a branch may be `null`, and an element may be a fragment `<>…</>`) or `{items.map((item) => <Element key={item.id} />)}`.",
+      child
+    );
   }
 }
 

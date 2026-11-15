@@ -1,13 +1,14 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 /**
  * What a component owns and does itself: a per-instance object (`useState(() => makeTally())`) whose methods a handler calls, the
  * engine's `useSquash` and `useShake` hooks, and a game-state action whose result the handler uses (`const blow = strike(power)`).
  */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
 import { createInputState, Entity, World, type ShakeState } from "@rge/runtime";
 
 const repo = resolve(import.meta.dirname, "../../..");
@@ -17,7 +18,10 @@ function project(files: Record<string, string>) {
   const dir = mkdtempSync(join(repo, ".test-output", "inst-"));
   mkdirSync(join(dir, "src"));
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, "src", name), text);
-  const r = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], { cwd: repo, encoding: "utf8" });
+  const r = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], {
+    cwd: repo,
+    encoding: "utf8",
+  });
   return { dir, status: r.status, stderr: r.stderr, out: (name: string) => readFileSync(join(dir, "out", name), "utf8") };
 }
 
@@ -82,9 +86,13 @@ describe("what a component owns and does itself", () => {
       assert.match(code, /springBack\(/, "useSquash was inlined: its spring back is this component's own update");
       assert.match(code, /shakeOn\(/, "and so was useShake");
       const { Enemy } = (await import(pathToFileURL(join(p.dir, "out", "Enemy.ts")).href)) as {
-        Enemy: new (props: { power: number }) => Entity & { st: { tally: { count: number }; hp: number }; shake: ShakeState; squash: { x: number; y: number } };
+        Enemy: new (props: {
+          power: number;
+        }) => Entity & { st: { tally: { count: number }; hp: number }; shake: ShakeState; squash: { x: number; y: number } };
       };
-      const { useGame } = (await import(pathToFileURL(join(p.dir, "src", "GameState.ts")).href)) as { useGame: { getState(): { hits: number } } };
+      const { useGame } = (await import(pathToFileURL(join(p.dir, "src", "GameState.ts")).href)) as {
+        useGame: { getState(): { hits: number } };
+      };
       const world = new World();
       const root = new Entity();
       const a = new Enemy({ power: 1 });

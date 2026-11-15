@@ -44,21 +44,31 @@ export function fixesFor(source: string, diagnostic: CompilerDiagnostic, convert
     case "RGE1004": {
       // A name the module does not export, or a hook it no longer has (`useLayoutEffect`), imported and never called: the span is the name.
       const spanned = source.slice(span.start, span.end);
-      const name = /^'([A-Za-z_$][\w$]*)' is not exported by/.exec(diagnostic.message)?.[1] ?? (/^[A-Za-z_$][\w$]*$/.test(spanned) ? spanned : undefined);
+      const name =
+        /^'([A-Za-z_$][\w$]*)' is not exported by/.exec(diagnostic.message)?.[1] ??
+        (/^[A-Za-z_$][\w$]*$/.test(spanned) ? spanned : undefined);
       if (name === undefined) return [];
       const edits = removeImport(source, name);
       return edits.length === 0 ? [] : [{ title: `Remove '${name}' from the import`, edits }];
     }
     case "RGE1203":
-      return /^Write the text as the children of <Text>/.test(diagnostic.message) ? textToChildren(source, span.start, span.end) : [];
+      return diagnostic.message.startsWith("Write the text as the children of <Text>") ? textToChildren(source, span.start, span.end) : [];
     case "RGE1108":
-      return /^Take actions with/.test(diagnostic.message) ? wholeStateToActions(source, span.start, span.end) : [];
+      return diagnostic.message.startsWith("Take actions with") ? wholeStateToActions(source, span.start, span.end) : [];
     case "RGE1102": {
       const replaced = /^`(useState|useRef)` is replaced by `useMutable`/.exec(diagnostic.message)?.[1];
       if (replaced !== undefined) {
         if (converter === undefined) return [];
         const converted = converter.convertToMutable(span.fileName, source);
-        return converted.changed ? [{ title: `Move this file's ${replaced} to useMutable`, edits: [{ start: 0, end: source.length, text: converted.text }], preferred: true }] : [];
+        return converted.changed
+          ? [
+              {
+                title: `Move this file's ${replaced} to useMutable`,
+                edits: [{ start: 0, end: source.length, text: converted.text }],
+                preferred: true,
+              },
+            ]
+          : [];
       }
       return replaceReactHook(source, span.start, span.end);
     }
@@ -95,7 +105,10 @@ function skipLiteral(source: string, i: number): number {
  * A call's arguments, from the `(` at `open`: each argument's range (trimmed), and the index of the closing `)`. Null when the
  * brackets do not close.
  */
-export function callArguments(source: string, open: number): { readonly args: { start: number; end: number }[]; readonly close: number } | null {
+export function callArguments(
+  source: string,
+  open: number
+): { readonly args: { start: number; end: number }[]; readonly close: number } | null {
   if (source[open] !== "(") return null;
   const args: { start: number; end: number }[] = [];
   let depth = 0;
@@ -161,7 +174,8 @@ function namedImport(source: string, module: string, containing?: string): Named
 
 /** `type Child` and `Child` sort as `Child`. */
 const sortKey = (name: string): string => name.replace(/^type\s+/, "").toLowerCase();
-const isSorted = (names: readonly string[]): boolean => names.every((name, i) => i === 0 || sortKey(names[i - 1] as string) <= sortKey(name));
+const isSorted = (names: readonly string[]): boolean =>
+  names.every((name, i) => i === 0 || sortKey(names[i - 1] as string) <= sortKey(name));
 
 function withNames(names: readonly string[], add: readonly string[], remove: readonly string[] = []): string[] {
   const kept = names.filter((name) => !remove.includes(name.replace(/^type\s+/, "")));
@@ -203,7 +217,13 @@ function fromReact(source: string, start: number, end: number): Fix[] {
   const existing = namedImport(source, AUTHORING_MODULE);
   const lineEnd = source[end] === "\n" ? end + 1 : end;
   if (existing === null) {
-    return [{ title: `Import from "${AUTHORING_MODULE}" instead of "react"`, edits: [{ start, end, text: `import { ${names.join(", ")} } from "${AUTHORING_MODULE}";` }], preferred: true }];
+    return [
+      {
+        title: `Import from "${AUTHORING_MODULE}" instead of "react"`,
+        edits: [{ start, end, text: `import { ${names.join(", ")} } from "${AUTHORING_MODULE}";` }],
+        preferred: true,
+      },
+    ];
   }
   return [
     {
@@ -267,7 +287,13 @@ function wholeStateToActions(source: string, start: number, end: number): Fix[] 
   const match = /([A-Za-z_$][\w$]*)\(\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*\2\s*\)/.exec(text);
   if (match === null) return [];
   const at = start + match.index;
-  return [{ title: `Use ${match[1]}.actions()`, edits: [{ start: at, end: at + match[0].length, text: `${match[1]}.actions()` }], preferred: true }];
+  return [
+    {
+      title: `Use ${match[1]}.actions()`,
+      edits: [{ start: at, end: at + match[0].length, text: `${match[1]}.actions()` }],
+      preferred: true,
+    },
+  ];
 }
 
 // -- React's hooks --------------------------------------------------------------------------------------------------------
@@ -290,13 +316,21 @@ function replaceReactHook(source: string, start: number, end: number): Fix[] {
     return [
       {
         title: `Use useMount (an effect with [] runs once, when the component comes)`,
-        edits: [...removeImport(source, hook, ["useMount"]), { start, end: callEnd, text: `useMount(${fnText})` }].sort((a, b) => a.start - b.start),
+        edits: [...removeImport(source, hook, ["useMount"]), { start, end: callEnd, text: `useMount(${fnText})` }].sort(
+          (a, b) => a.start - b.start
+        ),
         preferred: true,
       },
     ];
   }
   if (hook === "useCallback") {
-    return [{ title: "Use the function itself (a component's functions need no useCallback)", edits: [...removeImport(source, hook), { start, end: callEnd, text: fnText }].sort((a, b) => a.start - b.start), preferred: true }];
+    return [
+      {
+        title: "Use the function itself (a component's functions need no useCallback)",
+        edits: [...removeImport(source, hook), { start, end: callEnd, text: fnText }].sort((a, b) => a.start - b.start),
+        preferred: true,
+      },
+    ];
   }
   // useMemo: an arrow with an expression body becomes that expression, a derived `const`, worked out when what it reads changes.
   const arrow = /^\(\s*\)\s*=>\s*/.exec(fnText);
@@ -304,7 +338,13 @@ function replaceReactHook(source: string, start: number, end: number): Fix[] {
   let body = fnText.slice(arrow[0].length).trim();
   if (body.startsWith("{")) return [];
   if (body.startsWith("(") && callArguments(body, 0)?.close === body.length - 1) body = body.slice(1, -1).trim();
-  return [{ title: "Use the value itself (a derived const needs no useMemo)", edits: [...removeImport(source, hook), { start, end: callEnd, text: body }].sort((a, b) => a.start - b.start), preferred: true }];
+  return [
+    {
+      title: "Use the value itself (a derived const needs no useMemo)",
+      edits: [...removeImport(source, hook), { start, end: callEnd, text: body }].sort((a, b) => a.start - b.start),
+      preferred: true,
+    },
+  ];
 }
 
 /** Apply edits (none overlapping) to a text: what the editor will do, for tests. */

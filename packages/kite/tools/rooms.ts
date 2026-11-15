@@ -37,7 +37,10 @@ class Draft {
   }
   /** The walls, ceiling and floor of a room, with the floor `floor` rows thick. */
   frame(floor = 3): this {
-    return this.rect(0, 0, ROOM_COLS - 1, 0, "#").rect(0, 0, 0, ROOM_ROWS - 1, "#").rect(ROOM_COLS - 1, 0, ROOM_COLS - 1, ROOM_ROWS - 1, "#").rect(0, ROOM_ROWS - floor, ROOM_COLS - 1, ROOM_ROWS - 1, "#");
+    return this.rect(0, 0, ROOM_COLS - 1, 0, "#")
+      .rect(0, 0, 0, ROOM_ROWS - 1, "#")
+      .rect(ROOM_COLS - 1, 0, ROOM_COLS - 1, ROOM_ROWS - 1, "#")
+      .rect(0, ROOM_ROWS - floor, ROOM_COLS - 1, ROOM_ROWS - 1, "#");
   }
   rows(): string[] {
     return this.#cells.map((row) => row.join(""));
@@ -81,13 +84,7 @@ const ROOMS: readonly RoomSpec[] = [
     // 3. The dash: a gap of eight tiles, too wide to jump (a jump clears about six and a half).
     name: "Dash across",
     exit: "right",
-    rows: draft()
-      .rect(9, 15, 16, 17, ".")
-      .rect(9, 17, 16, 17, "^")
-      .rect(0, 8, 0, 10, ".")
-      .rect(31, 11, 31, 14, "E")
-      .set(2, 14, "@")
-      .rows(),
+    rows: draft().rect(9, 15, 16, 17, ".").rect(9, 17, 16, 17, "^").rect(0, 8, 0, 10, ".").rect(31, 11, 31, 14, "E").set(2, 14, "@").rows(),
   },
   {
     // 4. Dash up, twice: a ledge four tiles up on the right (too high to jump to), then a second five tiles above it on the left, with the opening in the ceiling over that.

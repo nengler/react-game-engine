@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Entity, Flex, Shape, Sprite, Text, type FlexProps, type GameObject } from "@rge/runtime";
+
 import { Layouter, type MeasuredSize } from "../src/layout.ts";
 
 /** A shape that can be laid out smaller than it is, as a wrapping text can (its minimum is its widest word). */
@@ -280,52 +282,112 @@ describe("layout: shrinking", () => {
 });
 
 describe("layout: positions", () => {
-  const gather = (direction: "row" | "column", alignItems: FlexProps["alignItems"], justifyContent: FlexProps["justifyContent"]): [number, number][] => {
+  const gather = (
+    direction: "row" | "column",
+    alignItems: FlexProps["alignItems"],
+    justifyContent: FlexProps["justifyContent"]
+  ): [number, number][] => {
     const kids = [box(10, 4), box(20, 8), box(10, 6)];
     lay(flex({ direction, alignItems, justifyContent, width: 100, height: 60, gap: 5 }, ...kids));
     return kids.map(at);
   };
 
   it("places a row's children by justifyContent along x (inner 100, used 40 + 10 gaps = 50, free 50)", () => {
-    assert.deepEqual(gather("row", "start", "start").map((p) => p[0]), [0, 15, 40]);
-    assert.deepEqual(gather("row", "start", "center").map((p) => p[0]), [25, 40, 65]);
-    assert.deepEqual(gather("row", "start", "end").map((p) => p[0]), [50, 65, 90]);
-    assert.deepEqual(gather("row", "start", "space-between").map((p) => p[0]), [0, 40, 90]);
+    assert.deepEqual(
+      gather("row", "start", "start").map((p) => p[0]),
+      [0, 15, 40]
+    );
+    assert.deepEqual(
+      gather("row", "start", "center").map((p) => p[0]),
+      [25, 40, 65]
+    );
+    assert.deepEqual(
+      gather("row", "start", "end").map((p) => p[0]),
+      [50, 65, 90]
+    );
+    assert.deepEqual(
+      gather("row", "start", "space-between").map((p) => p[0]),
+      [0, 40, 90]
+    );
     // Offsets are whole pixels: 50 / 6 = 8.33 -> 8, 8.33 + 10 + 16.67 + 5 = 40 and so on.
-    assert.deepEqual(gather("row", "start", "space-around").map((p) => p[0]), [Math.round(50 / 6), Math.round(50 / 6 + 10 + 50 / 3 + 5), Math.round(50 / 6 + 10 + 5 + 20 + 2 * (50 / 3) + 5)]);
-    assert.deepEqual(gather("row", "start", "space-evenly").map((p) => p[0]), [13, Math.round(12.5 + 10 + 12.5 + 5), Math.round(12.5 + 10 + 5 + 12.5 + 20 + 12.5 + 5)]);
+    assert.deepEqual(
+      gather("row", "start", "space-around").map((p) => p[0]),
+      [Math.round(50 / 6), Math.round(50 / 6 + 10 + 50 / 3 + 5), Math.round(50 / 6 + 10 + 5 + 20 + 2 * (50 / 3) + 5)]
+    );
+    assert.deepEqual(
+      gather("row", "start", "space-evenly").map((p) => p[0]),
+      [13, Math.round(12.5 + 10 + 12.5 + 5), Math.round(12.5 + 10 + 5 + 12.5 + 20 + 12.5 + 5)]
+    );
   });
 
   it("places a column's children by justifyContent along y (inner 60, used 18 + 10 = 28, free 32)", () => {
-    assert.deepEqual(gather("column", "start", "start").map((p) => p[1]), [0, 9, 22]);
-    assert.deepEqual(gather("column", "start", "center").map((p) => p[1]), [16, 25, 38]);
-    assert.deepEqual(gather("column", "start", "end").map((p) => p[1]), [32, 41, 54]);
-    assert.deepEqual(gather("column", "start", "space-between").map((p) => p[1]), [0, 9 + 16, 22 + 32]);
+    assert.deepEqual(
+      gather("column", "start", "start").map((p) => p[1]),
+      [0, 9, 22]
+    );
+    assert.deepEqual(
+      gather("column", "start", "center").map((p) => p[1]),
+      [16, 25, 38]
+    );
+    assert.deepEqual(
+      gather("column", "start", "end").map((p) => p[1]),
+      [32, 41, 54]
+    );
+    assert.deepEqual(
+      gather("column", "start", "space-between").map((p) => p[1]),
+      [0, 9 + 16, 22 + 32]
+    );
   });
 
   it("places children across the main axis by alignItems", () => {
-    assert.deepEqual(gather("row", "start", "start").map((p) => p[1]), [0, 0, 0]);
-    assert.deepEqual(gather("row", "stretch", "start").map((p) => p[1]), [0, 0, 0], "a leaf keeps its size, so stretch puts it at the start");
-    assert.deepEqual(gather("row", "center", "start").map((p) => p[1]), [28, 26, 27]);
-    assert.deepEqual(gather("row", "end", "start").map((p) => p[1]), [56, 52, 54]);
-    assert.deepEqual(gather("column", "center", "start").map((p) => p[0]), [45, 40, 45]);
-    assert.deepEqual(gather("column", "end", "start").map((p) => p[0]), [90, 80, 90]);
+    assert.deepEqual(
+      gather("row", "start", "start").map((p) => p[1]),
+      [0, 0, 0]
+    );
+    assert.deepEqual(
+      gather("row", "stretch", "start").map((p) => p[1]),
+      [0, 0, 0],
+      "a leaf keeps its size, so stretch puts it at the start"
+    );
+    assert.deepEqual(
+      gather("row", "center", "start").map((p) => p[1]),
+      [28, 26, 27]
+    );
+    assert.deepEqual(
+      gather("row", "end", "start").map((p) => p[1]),
+      [56, 52, 54]
+    );
+    assert.deepEqual(
+      gather("column", "center", "start").map((p) => p[0]),
+      [45, 40, 45]
+    );
+    assert.deepEqual(
+      gather("column", "end", "start").map((p) => p[0]),
+      [90, 80, 90]
+    );
   });
 
   it("falls back to start for space-between, -around and -evenly when there is no free space, and overflows centred or ended content", () => {
     const kids = [box(60, 1), box(60, 1)];
     lay(flex({ width: 100, justifyContent: "space-between" }, ...kids));
-    assert.deepEqual(kids.map((k) => k.layoutX), [0, 60]);
+    assert.deepEqual(
+      kids.map((k) => k.layoutX),
+      [0, 60]
+    );
     const overflow = [box(60, 1), box(60, 1)];
     lay(flex({ width: 100, justifyContent: "center" }, ...overflow));
-    assert.deepEqual(overflow.map((k) => k.layoutX), [-10, 50]);
+    assert.deepEqual(
+      overflow.map((k) => k.layoutX),
+      [-10, 50]
+    );
   });
 
   it("covers every direction, alignItems and justifyContent combination without producing a non-number", () => {
     for (const direction of ["row", "column"] as const) {
       for (const alignItems of ["start", "center", "end", "stretch"] as const) {
         for (const justifyContent of ["start", "center", "end", "space-between", "space-around", "space-evenly"] as const) {
-          for (const p of gather(direction, alignItems, justifyContent)) assert.ok(Number.isFinite(p[0]) && Number.isFinite(p[1]), `${direction} ${alignItems} ${justifyContent}`);
+          for (const p of gather(direction, alignItems, justifyContent))
+            assert.ok(Number.isFinite(p[0]) && Number.isFinite(p[1]), `${direction} ${alignItems} ${justifyContent}`);
         }
       }
     }
@@ -382,13 +444,24 @@ describe("layout: whole pixels", () => {
     const kids = [box(1, 3), box(1, 3), box(1, 3), box(1, 3)];
     lay(flex({ width: 103, justifyContent: "space-between" }, ...kids));
     // Free space 99 in three gaps of 33 -> exactly on pixels, no drift.
-    assert.deepEqual(kids.map((k) => k.layoutX), [0, 34, 68, 102]);
+    assert.deepEqual(
+      kids.map((k) => k.layoutX),
+      [0, 34, 68, 102]
+    );
     const more = [box(1, 3), box(1, 3), box(1, 3)];
     lay(flex({ width: 11, justifyContent: "space-between" }, ...more));
-    assert.deepEqual(more.map((k) => k.layoutX), [0, 5, 10], "(11 - 3) / 2 = 4 between each: 0, 5, 10");
+    assert.deepEqual(
+      more.map((k) => k.layoutX),
+      [0, 5, 10],
+      "(11 - 3) / 2 = 4 between each: 0, 5, 10"
+    );
     const odd = [box(1, 3), box(1, 3), box(1, 3)];
     lay(flex({ width: 10, justifyContent: "space-between" }, ...odd));
-    assert.deepEqual(odd.map((k) => k.layoutX), [0, 5, 9], "3.5 between each: 0, 4.5 -> 5, 9");
+    assert.deepEqual(
+      odd.map((k) => k.layoutX),
+      [0, 5, 9],
+      "3.5 between each: 0, 4.5 -> 5, 9"
+    );
   });
 
   it("leaves sizes exact: only positions are snapped", () => {
@@ -479,20 +552,36 @@ describe("layout: floating boxes", () => {
     const parent = flex({ gap: 5, padding: 2 }, box(20, 10), badge({ width: 100, height: 100 }), box(30, 10));
     lay(parent);
     assert.deepEqual(size(parent), size(plain));
-    assert.deepEqual(at(parent.children[2] as GameObject), at(plain.children[1] as GameObject), "the second box sits where it would without the badge");
+    assert.deepEqual(
+      at(parent.children[2] as GameObject),
+      at(plain.children[1] as GameObject),
+      "the second box sits where it would without the badge"
+    );
   });
 
   it("does not count as a child for justifyContent", () => {
     const parent = flex({ width: 100, height: 20, justifyContent: "space-between" }, box(10, 10), badge(), box(10, 10));
     lay(parent);
-    assert.deepEqual([parent.children[0], parent.children[2]].map((c) => at(c as GameObject)), [[0, 0], [90, 0]]);
+    assert.deepEqual(
+      [parent.children[0], parent.children[2]].map((c) => at(c as GameObject)),
+      [
+        [0, 0],
+        [90, 0],
+      ]
+    );
   });
 
   it("is attached by each of its nine points to each of the parent's nine", () => {
     const points = [
-      ["top-left", 0, 0], ["top-center", 0.5, 0], ["top-right", 1, 0],
-      ["center-left", 0, 0.5], ["center", 0.5, 0.5], ["center-right", 1, 0.5],
-      ["bottom-left", 0, 1], ["bottom-center", 0.5, 1], ["bottom-right", 1, 1],
+      ["top-left", 0, 0],
+      ["top-center", 0.5, 0],
+      ["top-right", 1, 0],
+      ["center-left", 0, 0.5],
+      ["center", 0.5, 0.5],
+      ["center-right", 1, 0.5],
+      ["bottom-left", 0, 1],
+      ["bottom-center", 0.5, 1],
+      ["bottom-right", 1, 1],
     ] as const;
     for (const [to, tx, ty] of points) {
       for (const [anchor, ax, ay] of points) {

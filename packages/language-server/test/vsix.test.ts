@@ -1,10 +1,11 @@
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { crc32, inflateRawSync } from "node:zlib";
+
 import { packVscode } from "../../../tools/pack-vscode.ts";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -42,11 +43,21 @@ describe("the VS Code extension's .vsix", () => {
   it("holds the extension's files and a manifest that names it, and is the same for the same files", () => {
     const path = packVscode(out);
     const files = unzip(readFileSync(path));
-    assert.deepEqual([...files.keys()], ["[Content_Types].xml", "extension.vsixmanifest", "extension/package.json", "extension/extension.js", "extension/README.md"]);
-    const manifest = JSON.parse(readFileSync(join(repo, "editors/vscode/package.json"), "utf8")) as { name: string; version: string; publisher: string };
+    assert.deepEqual(
+      [...files.keys()],
+      ["[Content_Types].xml", "extension.vsixmanifest", "extension/package.json", "extension/extension.js", "extension/README.md"]
+    );
+    const manifest = JSON.parse(readFileSync(join(repo, "editors/vscode/package.json"), "utf8")) as {
+      name: string;
+      version: string;
+      publisher: string;
+    };
     assert.equal(path, join(out, `rge-vscode-${manifest.version}.vsix`));
     assert.deepEqual(files.get("extension/extension.js"), readFileSync(join(repo, "editors/vscode/extension.js")));
-    assert.match(files.get("extension.vsixmanifest")!.toString(), new RegExp(`<Identity Language="en-US" Id="${manifest.name}" Version="${manifest.version}" Publisher="${manifest.publisher}" />`));
+    assert.match(
+      files.get("extension.vsixmanifest")!.toString(),
+      new RegExp(`<Identity Language="en-US" Id="${manifest.name}" Version="${manifest.version}" Publisher="${manifest.publisher}" />`)
+    );
     const first = readFileSync(path);
     assert.deepEqual(readFileSync(packVscode(out)), first);
   });

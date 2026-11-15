@@ -1,12 +1,14 @@
+import assert from "node:assert/strict";
 /**
  * M3: the `transform` attribute and value refs: lowering, diagnostics,
  * type-checking of generated code, and runtime behaviour. Position is ordinary
  * state written to `transform={{ ... }}`; refs hold values that never render.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, GameObject, Sprite, Transform, World } from "@rge/runtime";
 import { runtimeManifest } from "@rge/runtime";
+
 import { Compiler, DiagnosticCode, type ComponentIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, withAuthoringImports, elementOf } from "./helpers.ts";
 
@@ -84,14 +86,22 @@ describe("M3: IR shape", () => {
     const c = ir(RUNNER);
     assert.deepEqual(
       c.root.transform.map((p) => [p.name, p.kind]),
-      [["x", "DynamicProp"], ["y", "StaticProp"], ["rotation", "DynamicProp"], ["scaleX", "StaticProp"]],
+      [
+        ["x", "DynamicProp"],
+        ["y", "StaticProp"],
+        ["rotation", "DynamicProp"],
+        ["scaleX", "StaticProp"],
+      ]
     );
     const x = c.root.transform[0]!;
     assert.ok(x.kind === "DynamicProp" && x.value.kind === "StateRead");
     assert.deepEqual(x.dependencies, [{ kind: "State", state: "Runner.s.x" }]);
     assert.ok(!c.root.props.some((p) => p.name === "transform"), "transform is not a prop");
     const shadow = elementOf(c.root.children[2]!);
-    assert.deepEqual(shadow.transform.map((p) => [p.name, p.kind]), [["y", "StaticProp"]]);
+    assert.deepEqual(
+      shadow.transform.map((p) => [p.name, p.kind]),
+      [["y", "StaticProp"]]
+    );
   });
 });
 
@@ -101,7 +111,11 @@ describe("M3: generated code", () => {
     const constructor = code.slice(code.indexOf("constructor()"), code.indexOf("override render"));
     assert.match(constructor, /this\.transform\.y = -5;/);
     assert.match(constructor, /this\.transform\.scaleX = 2;/);
-    assert.match(constructor, /this\.entity\.transform\.y = 4;\n\s*this\.addChild\(this\.entity\);/, "a child's transform is set before it is attached");
+    assert.match(
+      constructor,
+      /this\.entity\.transform\.y = 4;\n\s*this\.addChild\(this\.entity\);/,
+      "a child's transform is set before it is attached"
+    );
     const render = code.slice(code.indexOf("override render"));
     assert.match(render, /const (\$\d+) = this\.\$s_x;[^]*?this\.transform\.x = \1;/);
     assert.match(render, /const (\$\d+) = \(?this\.\$s_x \/ 100\)?;[^]*?this\.transform\.rotation = \1;/);
@@ -164,16 +178,16 @@ describe("M3: runtime behaviour", () => {
       compile(`function Spawner() {
   const s = useMutable({ on: false, y: 3 });
   return <Entity name="S">{s.on && <Entity name="marker" transform={{ x: 7, y: s.y }} />}</Entity>;
-}`),
+}`)
     );
     const world = new World();
     const spawner = new Spawner();
     world.mount(spawner);
-    spawner.s.on = (true);
+    spawner.s.on = true;
     world.flush();
     const marker = spawner.children[0] as Entity;
     assert.deepEqual([marker.transform.x, marker.transform.y], [7, 3]);
-    spawner.s.y = (9);
+    spawner.s.y = 9;
     world.flush();
     assert.equal(spawner.children[0], marker);
     assert.equal(marker.transform.y, 9);
@@ -189,7 +203,7 @@ describe("M3: runtime behaviour", () => {
       <Entity name="hud" transform={{ x: 5, y: 5, global: s.pinned }} />
     </Entity>
   );
-}`),
+}`)
     );
     const world = new World();
     const ship = new Ship();
@@ -199,12 +213,12 @@ describe("M3: runtime behaviour", () => {
     assert.deepEqual([turret.worldTransform().x, turret.worldTransform().y], [110, 50]);
     assert.deepEqual([hud.worldTransform().x, hud.worldTransform().y], [5, 5]);
 
-    ship.s.x = (200);
+    ship.s.x = 200;
     world.flush();
     assert.equal(turret.worldTransform().x, 210, "the child follows its parent");
     assert.equal(hud.worldTransform().x, 5, "a global child does not");
 
-    ship.s.pinned = (false);
+    ship.s.pinned = false;
     world.flush();
     assert.deepEqual([hud.worldTransform().x, hud.worldTransform().y], [205, 55], "`global` can come from state");
   });
@@ -224,16 +238,22 @@ describe("M3: runtime behaviour", () => {
     const world = new World();
     const coin = new Coin();
     world.mount(coin);
-    assert.deepEqual([coin.sprite.worldTransform().x, coin.sprite.worldTransform().y, coin.sprite.worldTransform().rotation], [50, 20, 0.5]);
+    assert.deepEqual(
+      [coin.sprite.worldTransform().x, coin.sprite.worldTransform().y, coin.sprite.worldTransform().rotation],
+      [50, 20, 0.5]
+    );
     assert.deepEqual([coin.collider.worldTransform().x, coin.collider.worldTransform().y], [46, 16]);
-    coin.s.bob = (3);
+    coin.s.bob = 3;
     world.flush();
     assert.equal(coin.sprite.worldTransform().y, 23);
   });
 
   it("type-checks `global` as a boolean", () => {
     const bad = compile(`function C() { return <Entity name="C" transform={{ global: 1 }} />; }`);
-    assert.deepEqual(typeCheck(bad).map((d) => d.code), [DiagnosticCode.GeneratedTypeError]);
+    assert.deepEqual(
+      typeCheck(bad).map((d) => d.code),
+      [DiagnosticCode.GeneratedTypeError]
+    );
   });
 });
 
@@ -252,9 +272,9 @@ function C() {
       "<Entity transform={{ w: 1 }} />",
       "<Entity transform={{ x: 1, x: 2 }} />",
       "<Entity transform={5} />",
-      "<Entity transform=\"x\" />",
+      '<Entity transform="x" />',
       "<Entity transform={{ ...other }} />",
-      "<Entity transform={{ [\"x\"]: 1 }} />",
+      '<Entity transform={{ ["x"]: 1 }} />',
     ]) {
       assert.ok(jsxCodes(jsx).includes(DiagnosticCode.InvalidTransformAttribute), jsx);
     }
@@ -264,8 +284,14 @@ function C() {
   it("rejects the attribute on an intrinsic the manifest does not list as transformable", () => {
     const compiler = new Compiler({ manifest: { ...runtimeManifest, transformIntrinsics: ["Entity"] } });
     try {
-      const result = compiler.compile("C.tsx", withAuthoringImports(`function C() { return <Entity name="C"><Sprite image="a" transform={{ x: 1 }} /></Entity>; }`));
-      assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.InvalidTransformAttribute]);
+      const result = compiler.compile(
+        "C.tsx",
+        withAuthoringImports(`function C() { return <Entity name="C"><Sprite image="a" transform={{ x: 1 }} /></Entity>; }`)
+      );
+      assert.deepEqual(
+        result.diagnostics.map((d) => d.code),
+        [DiagnosticCode.InvalidTransformAttribute]
+      );
     } finally {
       compiler.close();
     }
@@ -279,16 +305,21 @@ function C() {
   });
 
   it("rejects `ref={…}` on any element", () => {
-    assert.deepEqual(jsxCodes("<Sprite ref={r} image=\"a\" />", "const r = useMutable({ n: 0 });"), [DiagnosticCode.ElementRef]);
+    assert.deepEqual(jsxCodes('<Sprite ref={r} image="a" />', "const r = useMutable({ n: 0 });"), [DiagnosticCode.ElementRef]);
     assert.deepEqual(jsxCodes("<Child ref={r} />", "const r = useMutable({ n: 0 });"), [DiagnosticCode.ElementRef]);
     assert.ok(
-      compileErrors(`function C() { const r = useMutable({ n: 0 }); return <Entity ref={r} name="C" />; }`).some((d) => d.code === DiagnosticCode.ElementRef),
+      compileErrors(`function C() { const r = useMutable({ n: 0 }); return <Entity ref={r} name="C" />; }`).some(
+        (d) => d.code === DiagnosticCode.ElementRef
+      )
     );
   });
 
   it("a type that disagrees with the initial value fails the type-check", () => {
     const mismatched = compile(`function C() { const s = useMutable({ r: "a" as number }); return <Entity name="C" />; }`);
-    assert.deepEqual(typeCheck(mismatched).map((d) => d.code), [DiagnosticCode.GeneratedTypeError]);
+    assert.deepEqual(
+      typeCheck(mismatched).map((d) => d.code),
+      [DiagnosticCode.GeneratedTypeError]
+    );
   });
 
   it("rejects hooks that are not at the top level", () => {

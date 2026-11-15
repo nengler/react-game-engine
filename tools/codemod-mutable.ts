@@ -9,11 +9,13 @@
  */
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { type Node } from "typescript/ast";
 import { isNoSubstitutionTemplateLiteral, isTemplateExpression } from "typescript/ast/is";
-import { TsxParser } from "../packages/compiler/src/parser/parser.ts";
-import { applyEdits, type Edit } from "../packages/compiler/src/hooks/edits.ts";
+
 import { convertToMutable, type Converted } from "../packages/compiler/src/codemod/mutable.ts";
+import { applyEdits, type Edit } from "../packages/compiler/src/hooks/edits.ts";
+import { TsxParser } from "../packages/compiler/src/parser/parser.ts";
 
 /** Each child of `node`, in order. */
 function children(node: Node): Node[] {
@@ -95,7 +97,9 @@ export function convertTestFile(parser: TsxParser, fileName: string, text: strin
 
 function filesUnder(path: string): string[] {
   if (statSync(path).isFile()) return [path];
-  return readdirSync(path).flatMap((name) => (name === "node_modules" || name === "generated" || name.startsWith(".") ? [] : filesUnder(join(path, name))));
+  return readdirSync(path).flatMap((name) =>
+    name === "node_modules" || name === "generated" || name.startsWith(".") ? [] : filesUnder(join(path, name))
+  );
 }
 
 if (process.argv[1]?.endsWith("codemod-mutable.ts")) {
@@ -107,7 +111,11 @@ if (process.argv[1]?.endsWith("codemod-mutable.ts")) {
   try {
     for (const file of args.filter((a) => !a.startsWith("--")).flatMap(filesUnder)) {
       const text = readFileSync(file, "utf8");
-      const result = file.endsWith(".tsx") ? convertToMutable(parser, file, text) : file.endsWith(".ts") && /use(State|Ref)\b/.test(text) ? convertTestFile(parser, file, text) : null;
+      const result = file.endsWith(".tsx")
+        ? convertToMutable(parser, file, text)
+        : file.endsWith(".ts") && /use(State|Ref)\b/.test(text)
+          ? convertTestFile(parser, file, text)
+          : null;
       if (result === null) continue;
       for (const p of result.problems) console.log(`${file}:${p}`);
       problems += result.problems.length;

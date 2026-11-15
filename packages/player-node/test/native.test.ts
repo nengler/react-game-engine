@@ -1,11 +1,13 @@
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { after, describe, it } from "node:test";
 import { crc32, deflateSync } from "node:zlib";
-import { Camera, Collider, Entity, Flex, Hud, Screen, Shape, Sprite, Text, type World } from "@rge/runtime";
+
 import { CollisionTracker, createPlayer, KEYS, RGE_ABI_VERSION, type PlayerConfig } from "@rge/player";
+import { Camera, Collider, Entity, Flex, Hud, Screen, Shape, Sprite, Text, type World } from "@rge/runtime";
+
 import { NodeBackend, checkAbi, createNodeBackend, findNativeLibrary, loadNative, type Pixels } from "../src/index.ts";
 
 /**
@@ -36,7 +38,15 @@ function writePng(path: string, size: number, [r, g, b]: [number, number, number
   header[9] = 2; // RGB
   const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: size }, () => [r, g, b]).flat())]);
   const raw = Buffer.concat(Array.from({ length: size }, () => row));
-  writeFileSync(path, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]));
+  writeFileSync(
+    path,
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk("IHDR", header),
+      chunk("IDAT", deflateSync(raw)),
+      chunk("IEND", Buffer.alloc(0)),
+    ])
+  );
 }
 
 function pixel(frame: Pixels, x: number, y: number): string {
@@ -48,7 +58,16 @@ function pixel(frame: Pixels, x: number, y: number): string {
 function render(root: PlayerConfig["root"], options: Partial<PlayerConfig> = {}): Pixels {
   const backend = createNodeBackend(library);
   const warnings: string[] = [];
-  const player = createPlayer(backend, { width: 64, height: 48, title: "test", hidden: true, vsync: false, root, warn: (m) => warnings.push(m), ...options });
+  const player = createPlayer(backend, {
+    width: 64,
+    height: 48,
+    title: "test",
+    hidden: true,
+    vsync: false,
+    root,
+    warn: (m) => warnings.push(m),
+    ...options,
+  });
   try {
     player.step();
     player.step();
@@ -100,14 +119,17 @@ describe("librge through koffi", { skip }, () => {
   });
 
   it("draws a rect where the player put it, over the background", () => {
-    const frame = render(() => {
-      const root = new Entity();
-      const rect = new Shape({ kind: "rect", width: 20, height: 10, color: "red" });
-      rect.transform.x = 10;
-      rect.transform.y = 5;
-      root.addChild(rect);
-      return root;
-    }, { background: "#102030" });
+    const frame = render(
+      () => {
+        const root = new Entity();
+        const rect = new Shape({ kind: "rect", width: 20, height: 10, color: "red" });
+        rect.transform.x = 10;
+        rect.transform.y = 5;
+        root.addChild(rect);
+        return root;
+      },
+      { background: "#102030" }
+    );
     assert.equal(frame.width, 64);
     assert.equal(frame.height, 48);
     assert.equal(pixel(frame, 15, 8), "ff0000ff", "inside the rect");
@@ -165,9 +187,21 @@ describe("librge through koffi", { skip }, () => {
     });
     assert.equal(pixel(frame, 2, 6), "ff0000ff", "the game's top-left pixel");
     assert.equal(pixel(frame, 61, 41), "ff0000ff", "the game's bottom-right pixel");
-    for (const [x, y] of [[17, 18], [19, 20]] as const) assert.equal(pixel(frame, x, y), "00ff00ff", `game pixel (5, 4) covers window (${x}, ${y})`);
+    for (const [x, y] of [
+      [17, 18],
+      [19, 20],
+    ] as const)
+      assert.equal(pixel(frame, x, y), "00ff00ff", `game pixel (5, 4) covers window (${x}, ${y})`);
     assert.equal(pixel(frame, 20, 18), "ff0000ff", "and stops after three window pixels");
-    for (const [x, y] of [[1, 20], [62, 20], [30, 5], [30, 42], [0, 0], [63, 47]] as const) assert.equal(pixel(frame, x, y), "0000ffff", `border at (${x}, ${y})`);
+    for (const [x, y] of [
+      [1, 20],
+      [62, 20],
+      [30, 5],
+      [30, 42],
+      [0, 0],
+      [63, 47],
+    ] as const)
+      assert.equal(pixel(frame, x, y), "0000ffff", `border at (${x}, ${y})`);
   });
 
   it("keeps a turned shape on the game's pixel grid when the game is pixel-perfect, and not when it is not", () => {
@@ -185,7 +219,16 @@ describe("librge through koffi", { skip }, () => {
     for (let gy = 0; gy < 12; gy++) {
       for (let gx = 0; gx < 20; gx++) {
         const first = pixel(chunky, 2 + gx * 3, 6 + gy * 3);
-        for (const [dx, dy] of [[1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]] as const) {
+        for (const [dx, dy] of [
+          [1, 0],
+          [2, 0],
+          [0, 1],
+          [1, 1],
+          [2, 1],
+          [0, 2],
+          [1, 2],
+          [2, 2],
+        ] as const) {
           assert.equal(pixel(chunky, 2 + gx * 3 + dx, 6 + gy * 3 + dy), first, `game pixel (${gx}, ${gy}) is one colour`);
         }
       }
@@ -196,7 +239,8 @@ describe("librge through koffi", { skip }, () => {
     const smooth = render(make(false));
     let blocky = true;
     for (let gy = 0; gy < 12 && blocky; gy++) {
-      for (let gx = 0; gx < 20 && blocky; gx++) blocky = pixel(smooth, 2 + gx * 3, 6 + gy * 3) === pixel(smooth, 2 + gx * 3 + 2, 6 + gy * 3 + 2);
+      for (let gx = 0; gx < 20 && blocky; gx++)
+        blocky = pixel(smooth, 2 + gx * 3, 6 + gy * 3) === pixel(smooth, 2 + gx * 3 + 2, 6 + gy * 3 + 2);
     }
     assert.ok(!blocky, "drawn at the window's resolution, the diamond's edge is finer than a game pixel");
   });
@@ -254,7 +298,15 @@ describe("librge through koffi", { skip }, () => {
     const label = new Text({ text: "Score: 100", size: 20, color: "white" });
     const row = new Flex({ background: "navy", padding: 3 });
     row.addChild(label);
-    const player = createPlayer(backend, { width: 200, height: 100, title: "t", hidden: true, vsync: false, root: () => row, warn: (m) => warnings.push(m) });
+    const player = createPlayer(backend, {
+      width: 200,
+      height: 100,
+      title: "t",
+      hidden: true,
+      vsync: false,
+      root: () => row,
+      warn: (m) => warnings.push(m),
+    });
     try {
       player.step();
       const width = backend.measureText("Score: 100", 20);
@@ -276,7 +328,12 @@ describe("librge through koffi", { skip }, () => {
     };
     const whiteColumns = (frame: Pixels): number[] => {
       const columns: number[] = [];
-      for (let x = 0; x < 64; x++) for (let y = 0; y < 48; y++) if (pixel(frame, x, y) === "ffffffff") { columns.push(x); break; }
+      for (let x = 0; x < 64; x++)
+        for (let y = 0; y < 48; y++)
+          if (pixel(frame, x, y) === "ffffffff") {
+            columns.push(x);
+            break;
+          }
       return columns;
     };
     const left = whiteColumns(render(make("left")));
@@ -356,7 +413,12 @@ describe("librge through koffi", { skip }, () => {
     const backend = createNodeBackend(library);
     const warnings: string[] = [];
     const player = createPlayer(backend, {
-      width: 64, height: 48, title: "t", hidden: true, vsync: false, assets: scratch,
+      width: 64,
+      height: 48,
+      title: "t",
+      hidden: true,
+      vsync: false,
+      assets: scratch,
       warn: (m) => warnings.push(m),
       root: () => {
         const root = new Entity();
@@ -397,7 +459,7 @@ describe("librge through koffi", { skip }, () => {
 describe("librge's broad phase through koffi", { skip }, () => {
   const random = (seed: number): (() => number) => {
     let state = seed * 7919;
-    return () => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+    return () => (state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff;
   };
 
   it("finds the pairs that testing every pair finds, keeps the order it is handed, and counts past the room it is given", () => {
@@ -416,16 +478,31 @@ describe("librge's broad phase through koffi", { skip }, () => {
       const expected: string[] = [];
       for (let a = 0; a < count; a++) {
         for (let b = a + 1; b < count; b++) {
-          if (boxes[a * 4]! < boxes[b * 4 + 2]! && boxes[a * 4 + 2]! > boxes[b * 4]! && boxes[a * 4 + 1]! < boxes[b * 4 + 3]! && boxes[a * 4 + 3]! > boxes[b * 4 + 1]!) expected.push(`${a} ${b}`);
+          if (
+            boxes[a * 4]! < boxes[b * 4 + 2]! &&
+            boxes[a * 4 + 2]! > boxes[b * 4]! &&
+            boxes[a * 4 + 1]! < boxes[b * 4 + 3]! &&
+            boxes[a * 4 + 3]! > boxes[b * 4 + 1]!
+          )
+            expected.push(`${a} ${b}`);
         }
       }
       const found = backend.overlaps(boxes, count, order, pairs);
       assert.equal(found, expected.length, `frame ${frame}`);
-      const got = Array.from({ length: found }, (_, k) => [pairs[k * 2]!, pairs[k * 2 + 1]!].sort((a, b) => a - b)).sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!);
-      assert.deepEqual(got.map((pair) => pair.join(" ")), expected, `frame ${frame}`);
+      const got = Array.from({ length: found }, (_, k) => [pairs[k * 2]!, pairs[k * 2 + 1]!].sort((a, b) => a - b)).sort(
+        (a, b) => a[0]! - b[0]! || a[1]! - b[1]!
+      );
+      assert.deepEqual(
+        got.map((pair) => pair.join(" ")),
+        expected,
+        `frame ${frame}`
+      );
       // The order comes back written into the caller's array: every box once, by left edge.
       const sorted = [...order.subarray(0, count)];
-      assert.deepEqual([...sorted].sort((a, b) => a - b), Array.from({ length: count }, (_, i) => i));
+      assert.deepEqual(
+        [...sorted].sort((a, b) => a - b),
+        Array.from({ length: count }, (_, i) => i)
+      );
       for (let i = 1; i < count; i++) assert.ok(boxes[sorted[i - 1]! * 4]! <= boxes[sorted[i]! * 4]!, `frame ${frame}: order at ${i}`);
       assert.equal(order[count], -7, "nothing past the boxes is touched");
       // Less room than pairs: what fits is written, and the answer is still how many there are.
@@ -443,7 +520,12 @@ describe("librge's broad phase through koffi", { skip }, () => {
     const names = new Map<Collider, string>();
     const parents = Array.from({ length: 60 }, () => new Entity());
     const make = (label: string) => {
-      const collider = new Collider({ width: 4 + next() * 16, height: 4 + next() * 16, layer: next() < 0.3 ? "a" : "", hits: next() < 0.2 ? ["a"] : undefined });
+      const collider = new Collider({
+        width: 4 + next() * 16,
+        height: 4 + next() * 16,
+        layer: next() < 0.3 ? "a" : "",
+        hits: next() < 0.2 ? ["a"] : undefined,
+      });
       names.set(collider, label);
       parents[Math.floor(next() * parents.length)]!.addChild(collider);
       return { collider, world: { x: next() * 250, y: next() * 250, rotation: 0, scaleX: 1, scaleY: 1 } };
@@ -456,16 +538,23 @@ describe("librge's broad phase through koffi", { skip }, () => {
         ({
           reportCollision: (a: Collider, b: Collider) => void log.push(`in ${names.get(a)} ${names.get(b)}`),
           reportCollisionExit: (a: Collider, b: Collider) => void log.push(`out ${names.get(a)} ${names.get(b)}`),
-        }) as unknown as World,
+        }) as unknown as World
     );
-    const overlaps = (boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array): number => backend.overlaps(boxes, count, order, pairs);
+    const overlaps = (boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array): number =>
+      backend.overlaps(boxes, count, order, pairs);
     // The host's broad phase with and without the frames that look only at what moved, against the script's sweep.
-    const trackers = [new CollisionTracker(undefined, true, true, overlaps), new CollisionTracker(undefined, false, true, overlaps), new CollisionTracker(undefined, false, false)];
+    const trackers = [
+      new CollisionTracker(undefined, true, true, overlaps),
+      new CollisionTracker(undefined, false, true, overlaps),
+      new CollisionTracker(undefined, false, false),
+    ];
     let reports = 0;
     for (let frame = 0; frame < 120; frame++) {
-      const kind = frame === 0 ? "same" : (["drift", "drift", "few", "few", "few", "jump", "add", "remove", "same"] as const)[Math.floor(next() * 9)];
+      const kind =
+        frame === 0 ? "same" : (["drift", "drift", "few", "few", "few", "jump", "add", "remove", "same"] as const)[Math.floor(next() * 9)];
       entries = entries.slice();
-      const move = (i: number, x: number, y: number): void => void (entries[i] = { collider: entries[i]!.collider, world: { ...entries[i]!.world, x, y } });
+      const move = (i: number, x: number, y: number): void =>
+        void (entries[i] = { collider: entries[i]!.collider, world: { ...entries[i]!.world, x, y } });
       if (kind === "drift") entries.forEach((e, i) => move(i, e.world.x + next() * 6 - 3, e.world.y + next() * 6 - 3));
       else if (kind === "few") for (let k = 0; k < 5; k++) move(Math.floor(next() * entries.length), next() * 250, next() * 250);
       else if (kind === "jump") entries.forEach((_, i) => move(i, next() * 250, next() * 250));
@@ -488,7 +577,11 @@ describe("librge's broad phase through koffi", { skip }, () => {
     const real = backend.overlaps.bind(backend);
     backend.overlaps = (...args: Parameters<NodeBackend["overlaps"]>) => (asked++, real(...args));
     const player = createPlayer(backend, {
-      width: 64, height: 48, title: "test", hidden: true, vsync: false,
+      width: 64,
+      height: 48,
+      title: "test",
+      hidden: true,
+      vsync: false,
       root: () => {
         const root = new Entity();
         for (const x of [0, 5]) {
@@ -523,8 +616,14 @@ describe("loading the library", () => {
   });
 
   it("rejects a library whose ABI version or key count differs, naming both", () => {
-    assert.throws(() => checkAbi({ abiVersion: () => RGE_ABI_VERSION + 1, keyCount: () => KEYS.length }), new RegExp(`version ${RGE_ABI_VERSION + 1}.*expects ${RGE_ABI_VERSION}`));
-    assert.throws(() => checkAbi({ abiVersion: () => RGE_ABI_VERSION, keyCount: () => KEYS.length - 1 }), new RegExp(`has ${KEYS.length - 1} keys.*expects ${KEYS.length}`));
+    assert.throws(
+      () => checkAbi({ abiVersion: () => RGE_ABI_VERSION + 1, keyCount: () => KEYS.length }),
+      new RegExp(`version ${RGE_ABI_VERSION + 1}.*expects ${RGE_ABI_VERSION}`)
+    );
+    assert.throws(
+      () => checkAbi({ abiVersion: () => RGE_ABI_VERSION, keyCount: () => KEYS.length - 1 }),
+      new RegExp(`has ${KEYS.length - 1} keys.*expects ${KEYS.length}`)
+    );
     assert.doesNotThrow(() => checkAbi({ abiVersion: () => RGE_ABI_VERSION, keyCount: () => KEYS.length }));
   });
 });

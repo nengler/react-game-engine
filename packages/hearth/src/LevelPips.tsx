@@ -1,4 +1,5 @@
 import { Entity, Shape } from "@rge/runtime/jsx";
+
 import { COLOR } from "./theme.ts";
 
 /** The three pips' places, one for each level a tower can have. */

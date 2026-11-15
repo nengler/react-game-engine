@@ -14,4 +14,3 @@ export function coverage(pad: number, kind: TowerKind): number {
 }
 
 export const BEST = [...MAP.pads].map((p) => p.id).sort((a, b) => coverage(b, "bolt") - coverage(a, "bolt") || a - b);
-

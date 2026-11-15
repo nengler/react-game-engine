@@ -1,8 +1,10 @@
+import assert from "node:assert/strict";
 /** The development inspector (REACT_FEEL_PLAN.md C4): `rge dev`'s page of the tree, a component's state and the game state. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { Entity, World, createGameState } from "@rge/runtime";
+
 import { createPlayer, RecordingBackend, Rewind } from "@rge/player";
+import { Entity, World, createGameState } from "@rge/runtime";
+
 import { startInspector } from "../src/inspector.ts";
 
 /** A component as the compiler writes one, as far as the inspector looks: a `managed` class with state it saves and loads. */
@@ -79,9 +81,16 @@ describe("the inspector", () => {
 
       assert.equal((await post(inspector.url, "/edit", { target: "state", id: listed.id, name: "hp", value: 9 })).status, 200);
       assert.equal(enemy.hp, 9);
-      assert.equal((await post(inspector.url, "/edit", { target: "store", key: "/game/src/GameState.ts#useGame", path: "player.hp", value: 1 })).status, 200);
+      assert.equal(
+        (await post(inspector.url, "/edit", { target: "store", key: "/game/src/GameState.ts#useGame", path: "player.hp", value: 1 }))
+          .status,
+        200
+      );
       assert.deepEqual(game.getState().player, { hp: 1 });
-      assert.ok(logged.some((m) => /Enemy\.hp = 9 .*not input: a replay does not repeat it/.test(m)), logged.join("\n"));
+      assert.ok(
+        logged.some((m) => /Enemy\.hp = 9 .*not input: a replay does not repeat it/.test(m)),
+        logged.join("\n")
+      );
 
       game.getState().collect();
       const after = await events(inspector.url, (seen) => seen.has("stores"));
@@ -145,7 +154,10 @@ describe("the inspector", () => {
       const report = (await seen).get("profile") as { frames: number; phases: Record<string, number>; components: { name: string }[] };
       assert.equal(report.frames, 60);
       assert.deepEqual(Object.keys(report.phases).sort(), ["build", "collisions", "draw", "steps"]);
-      assert.ok(report.components.some((c) => c.name === "Walker"), JSON.stringify(report.components));
+      assert.ok(
+        report.components.some((c) => c.name === "Walker"),
+        JSON.stringify(report.components)
+      );
       assert.ok(logged.some((m) => /profiling on/.test(m)));
       await post(inspector.url, "/profile", { on: false });
       assert.ok(logged.some((m) => /profiling off/.test(m)));

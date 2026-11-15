@@ -1,4 +1,5 @@
 import { type Child, Flex } from "@rge/runtime/jsx";
+
 import { Label } from "./Label.tsx";
 import { COLOR } from "./theme.ts";
 

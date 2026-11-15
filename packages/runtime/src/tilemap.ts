@@ -150,7 +150,10 @@ export function registerTilemaps(maps: Readonly<Record<string, TilemapData>>): v
 /** The grid of a registered map. Throws, naming the maps there are, for a name that was never registered. */
 export function getTilemap(name: string): TileGrid {
   const grid = registry.get(name);
-  if (grid === undefined) throw new Error(`No tilemap named '${name}' is registered (registered: ${[...registry.keys()].join(", ") || "none"}). Call registerTilemaps(tilemaps) with the compiler's generated table before the game starts.`);
+  if (grid === undefined)
+    throw new Error(
+      `No tilemap named '${name}' is registered (registered: ${[...registry.keys()].join(", ") || "none"}). Call registerTilemaps(tilemaps) with the compiler's generated table before the game starts.`
+    );
   return grid;
 }
 

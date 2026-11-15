@@ -1,14 +1,16 @@
+import assert from "node:assert/strict";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 /**
  * Component state in saves (REACT_FEEL_PLAN.md, A5): `createSave({ tree: true })` keeps each component's own state, found again by
  * its path, and a list item by its key.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
 import { Compiler, formatDiagnostic } from "@rge/compiler";
 import { createMemoryStorage, createSave, setStorage, type GameObject } from "@rge/runtime";
+
 import { render } from "../src/index.ts";
 
 const OUT = resolve(import.meta.dirname, "../../../.test-output", `save-tree-${process.pid}`);

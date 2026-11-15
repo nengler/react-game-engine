@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * M15: `useSound`. `const playHit = useSound("hit.wav")` binds a sound, and
  * calling `playHit()` in a handler plays it. Playing is an effect, not state:
  * it happens at once and never renders. The mock `Sound` records plays.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Collider, Entity, Sound, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -59,7 +61,13 @@ describe("M15: IR and generated code", () => {
 
   it("records each sound with its path, and the plays as statements", () => {
     const hero = compiled.ir.components[0]!;
-    assert.deepEqual(hero.sounds.map((s) => [s.name, s.path]), [["playHit", "hit.wav"], ["playDing", "ding.wav"]]);
+    assert.deepEqual(
+      hero.sounds.map((s) => [s.name, s.path]),
+      [
+        ["playHit", "hit.wav"],
+        ["playDing", "ding.wav"],
+      ]
+    );
     assert.ok(JSON.stringify(hero).includes('"kind":"PlaySound"'));
   });
 
@@ -117,16 +125,26 @@ function loadSync(): { Twin: new () => { first: Sound; second: Sound } } {
 }
 let twin: { Twin: new () => { first: Sound; second: Sound } };
 before(async () => {
-  twin = await load(compile(`function Twin() { const first = useSound("a.wav"); const second = useSound("a.wav"); return <Entity name="T" />; }`, "Twin.tsx"));
+  twin = await load(
+    compile(
+      `function Twin() { const first = useSound("a.wav"); const second = useSound("a.wav"); return <Entity name="T" />; }`,
+      "Twin.tsx"
+    )
+  );
 });
 
 describe("M15: diagnostics", () => {
-  const codes = (body: string, extra = "") => compileErrors(`function C() { const play = useSound("a.wav"); ${extra} return <Entity name="C">${body}</Entity>; }`).map((d) => d.code);
+  const codes = (body: string, extra = "") =>
+    compileErrors(`function C() { const play = useSound("a.wav"); ${extra} return <Entity name="C">${body}</Entity>; }`).map((d) => d.code);
 
   it("rejects a call in JSX, a derived value, or an expression", () => {
     assert.deepEqual(codes(`<Collider width={play()} height={1} />`), [DiagnosticCode.SoundOutsideHandler]);
     assert.deepEqual(codes(``, `const x = play();`), [DiagnosticCode.SoundOutsideHandler]);
-    assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={() => { const x = play(); }} />`), [DiagnosticCode.SoundOutsideHandler], "a call that is not a statement");
+    assert.deepEqual(
+      codes(`<Collider width={1} height={1} onCollisionEnter={() => { const x = play(); }} />`),
+      [DiagnosticCode.SoundOutsideHandler],
+      "a call that is not a statement"
+    );
   });
 
   it("rejects using the function as a value", () => {
@@ -134,7 +152,9 @@ describe("M15: diagnostics", () => {
   });
 
   it("plays a sound next to a write", () => {
-    const fine = compile(`function C() { const play = useSound("a.wav"); const s = useMutable({ n: 0 }); return <Entity name="C"><Collider width={1} height={1} onCollisionEnter={() => { play(); s.n += 1; }} /></Entity>; }`);
+    const fine = compile(
+      `function C() { const play = useSound("a.wav"); const s = useMutable({ n: 0 }); return <Entity name="C"><Collider width={1} height={1} onCollisionEnter={() => { play(); s.n += 1; }} /></Entity>; }`
+    );
     assert.deepEqual(typeCheck(fine), []);
   });
 
@@ -143,28 +163,55 @@ describe("M15: diagnostics", () => {
   });
 
   it("keeps the runtime's Sound class name for itself", () => {
-    assert.deepEqual(compileErrors(`function Sound() { return <Entity name="S" />; }`).map((d) => d.code), [DiagnosticCode.DuplicateComponent]);
+    assert.deepEqual(
+      compileErrors(`function Sound() { return <Entity name="S" />; }`).map((d) => d.code),
+      [DiagnosticCode.DuplicateComponent]
+    );
   });
 
   it("requires one string literal path", () => {
     for (const call of [`useSound()`, `useSound(path)`, `useSound("a", "b")`, "useSound(`a${1}`)", `useSound(3)`]) {
-      assert.deepEqual(compileErrors(`function C() { const path = "x"; const play = ${call}; return <Entity name="C" />; }`).map((d) => d.code), [DiagnosticCode.InvalidUseSound], call);
+      assert.deepEqual(
+        compileErrors(`function C() { const path = "x"; const play = ${call}; return <Entity name="C" />; }`).map((d) => d.code),
+        [DiagnosticCode.InvalidUseSound],
+        call
+      );
     }
   });
 
   it("rejects a name that is taken, and a binding that is not a plain const", () => {
-    assert.deepEqual(compileErrors(`function C() { const play = useMutable({ n: 0 }); const play2 = useSound("a.wav"); const play = useSound("b.wav"); return <Entity name="C" />; }`).length > 0, true);
-    assert.deepEqual(compileErrors(`function C() { let play = useSound("a.wav"); return <Entity name="C" />; }`).map((d) => d.code), [DiagnosticCode.InvalidUseSound]);
+    assert.deepEqual(
+      compileErrors(
+        `function C() { const play = useMutable({ n: 0 }); const play2 = useSound("a.wav"); const play = useSound("b.wav"); return <Entity name="C" />; }`
+      ).length > 0,
+      true
+    );
+    assert.deepEqual(
+      compileErrors(`function C() { let play = useSound("a.wav"); return <Entity name="C" />; }`).map((d) => d.code),
+      [DiagnosticCode.InvalidUseSound]
+    );
   });
 
   it("is only valid at the top level, and must be imported", () => {
-    assert.ok(compileErrors(`function C() { useUpdate(() => { const p = useSound("a.wav"); }); return <Entity name="C" />; }`).some((d) => d.code === DiagnosticCode.HookNotAtTopLevel));
-    const result = getCompiler().compile("C.tsx", `import { Entity } from "@rge/runtime/jsx";\nfunction C() { const play = useSound("a.wav"); return <Entity name="C" />; }`);
-    assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
+    assert.ok(
+      compileErrors(`function C() { useUpdate(() => { const p = useSound("a.wav"); }); return <Entity name="C" />; }`).some(
+        (d) => d.code === DiagnosticCode.HookNotAtTopLevel
+      )
+    );
+    const result = getCompiler().compile(
+      "C.tsx",
+      `import { Entity } from "@rge/runtime/jsx";\nfunction C() { const play = useSound("a.wav"); return <Entity name="C" />; }`
+    );
+    assert.deepEqual(
+      result.diagnostics.map((d) => d.code),
+      [DiagnosticCode.MissingImport]
+    );
   });
 
   it("can be called in a nested if, and in useMount", () => {
-    const compiled = compile(`function C() { const play = useSound("a.wav"); useMount(() => { if (true) { play(); } }); return <Entity name="C" />; }`);
+    const compiled = compile(
+      `function C() { const play = useSound("a.wav"); useMount(() => { if (true) { play(); } }); return <Entity name="C" />; }`
+    );
     assert.deepEqual(typeCheck(compiled), []);
   });
 });
@@ -172,7 +219,10 @@ describe("M15: diagnostics", () => {
 describe("M15: authored source type-checks", () => {
   const check = (body: string) =>
     getCompiler().typeCheckSources([
-      { fileName: `${process.cwd()}/.test-output/M15${Math.random()}.tsx`, text: `import { Entity, useSound } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }` },
+      {
+        fileName: `${process.cwd()}/.test-output/M15${Math.random()}.tsx`,
+        text: `import { Entity, useSound } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`,
+      },
     ]);
 
   it("accepts a path and a call without arguments", () => {

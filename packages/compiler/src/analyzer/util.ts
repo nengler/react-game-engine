@@ -12,7 +12,8 @@ export const RELATIVE_TS = /^\.\.?\/.*\.ts$/;
 export function relativeTsImportNames(sourceFile: SourceFile): Set<string> {
   const names = new Set<string>();
   for (const statement of sourceFile.statements) {
-    if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || !RELATIVE_TS.test(statement.moduleSpecifier.text)) continue;
+    if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || !RELATIVE_TS.test(statement.moduleSpecifier.text))
+      continue;
     const bindings = statement.importClause?.namedBindings;
     if (bindings && isNamedImports(bindings)) for (const element of bindings.elements) names.add(element.name.text);
   }

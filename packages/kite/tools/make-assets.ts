@@ -6,6 +6,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { encodePng } from "@rge/player-node";
 
 const assets = join(dirname(fileURLToPath(import.meta.url)), "../assets");
@@ -97,7 +98,10 @@ function hero(): void {
     draw((x, y, color) => c.set(ox + x, oy + y, color));
   };
   /** The body: a rounded bean, `squash` rows shorter and `lean` pixels shifted, with an eye and a scarf blowing back. */
-  const bean = (put: (x: number, y: number, color: Rgb) => void, opts: { top?: number; lean?: number; scarf?: number; feet?: number } = {}): void => {
+  const bean = (
+    put: (x: number, y: number, color: Rgb) => void,
+    opts: { top?: number; lean?: number; scarf?: number; feet?: number } = {}
+  ): void => {
     const top = opts.top ?? 2;
     const lean = opts.lean ?? 0;
     const bottom = 11 - (opts.feet ?? 0);
@@ -117,7 +121,8 @@ function hero(): void {
   };
   frame(0, (p) => bean(p));
   frame(1, (p) => bean(p, { top: 3 }));
-  for (let i = 0; i < 6; i++) frame(2 + i, (p) => bean(p, { top: 2 + (i % 3 === 1 ? 1 : 0), lean: 1, scarf: i % 2, feet: i % 3 === 1 ? 0 : 0 }));
+  for (let i = 0; i < 6; i++)
+    frame(2 + i, (p) => bean(p, { top: 2 + (i % 3 === 1 ? 1 : 0), lean: 1, scarf: i % 2, feet: i % 3 === 1 ? 0 : 0 }));
   frame(8, (p) => bean(p, { top: 0, scarf: -1 })); // stretched up
   frame(9, (p) => bean(p, { top: 1, scarf: 1 }));
   frame(10, (p) => bean(p, { top: 2, lean: -1, scarf: 0 })); // against the wall
@@ -192,7 +197,7 @@ const GLYPHS: Record<string, string> = {
   "=": G(".....", ".....", "#####", ".....", "#####", ".....", "....."),
   ">": G("#....", ".#...", "..#..", "...#.", "..#..", ".#...", "#...."),
   "<": G("....#", "...#.", "..#..", ".#...", "..#..", "...#.", "....#"),
-  "_": G(".....", ".....", ".....", ".....", ".....", ".....", "#####"),
+  _: G(".....", ".....", ".....", ".....", ".....", ".....", "#####"),
 };
 function font(): void {
   const c = new Canvas(80, 48);
@@ -229,12 +234,12 @@ function wav(samples: Float32Array, rate = RATE): Buffer {
   return Buffer.concat([header, data]);
 }
 
-const square = (phase: number, duty = 0.5): number => ((phase % 1) < duty ? 1 : -1);
+const square = (phase: number, duty = 0.5): number => (phase % 1 < duty ? 1 : -1);
 const saw = (phase: number): number => 2 * (phase % 1) - 1;
 let seed = 12345;
 const random = (): number => {
   seed = (seed * 1664525 + 1013904223) >>> 0;
-  return seed / 4294967296 * 2 - 1;
+  return (seed / 4294967296) * 2 - 1;
 };
 
 /** A tone sweeping from `from` to `to` Hz over `seconds`, with a volume envelope. */
@@ -291,8 +296,14 @@ function music(): void {
   // A minor pentatonic: A C D E G.
   const bass = [45, 45, 52, 45, 43, 43, 50, 43, 48, 48, 55, 48, 40, 40, 47, 40];
   const lead = [
-    [69, 0, 72, 74], [76, 0, 74, 72], [74, 0, 72, 69], [67, 0, 69, 0],
-    [72, 0, 74, 76], [79, 0, 76, 74], [72, 0, 69, 67], [69, 0, 0, 0],
+    [69, 0, 72, 74],
+    [76, 0, 74, 72],
+    [74, 0, 72, 69],
+    [67, 0, 69, 0],
+    [72, 0, 74, 76],
+    [79, 0, 76, 74],
+    [72, 0, 69, 67],
+    [69, 0, 0, 0],
   ];
   const place = (start: number, length: number, hz: number, volume: number, shape: (p: number) => number): void => {
     const s = Math.round(start * rate);

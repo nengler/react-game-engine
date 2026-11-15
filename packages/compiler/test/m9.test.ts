@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * M9: `useMount` and `useUnmount`. A component runs `useMount` once when it
  * joins a World (children first) and `useUnmount` once when it leaves (parent
  * first). Unmount cannot set state: the component is going away.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Sprite, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -84,7 +86,10 @@ describe("M9: IR and generated code", () => {
 
   it("overrides onMount and onUnmount", () => {
     const { code } = compile(BOARD, "Board.tsx");
-    assert.match(code, /override onMount\(\): void \{\n\s+this\.\$set_s_ready\(true\);\n\s+this\.\$set_s_mounted\(this\.#\$s_mountedNext \+ 1\);\n\s+\}/);
+    assert.match(
+      code,
+      /override onMount\(\): void \{\n\s+this\.\$set_s_ready\(true\);\n\s+this\.\$set_s_mounted\(this\.#\$s_mountedNext \+ 1\);\n\s+\}/
+    );
     assert.match(code, /override onUnmount\(\): void \{\n\s+this\.props\.onGone\?\.\(\);\n\s+\}/);
   });
 
@@ -105,7 +110,10 @@ describe("M9: IR and generated code", () => {
   it("type-checks authored source: a handler takes no arguments", () => {
     const check = (body: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/M9${Math.random()}.tsx`, text: `import { Entity, useMount, useUnmount } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/M9${Math.random()}.tsx`,
+          text: `import { Entity, useMount, useUnmount } from "@rge/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`,
+        },
       ]);
     assert.deepEqual(check("useMount(() => {}); useUnmount(() => {});"), []);
     assert.ok(check("useMount((x: number) => {});").length > 0);
@@ -118,7 +126,7 @@ describe("M9: runtime behaviour", () => {
     const world = new World();
     const board = new Board();
     world.mount(board);
-    board.s.open = (true);
+    board.s.open = true;
     assert.equal(world.flush(), 2, "the board renders, then the mounted badge renders its new state");
     const solo = board.badge!;
     assert.equal(solo.s.mounted, 1);
@@ -130,11 +138,11 @@ describe("M9: runtime behaviour", () => {
     const world = new World();
     const board = new Board();
     world.mount(board);
-    board.s.items = ([{ id: "a" }, { id: "b" }]);
+    board.s.items = [{ id: "a" }, { id: "b" }];
     world.flush();
     const [a, b] = [board.badge2Items.get("a")!, board.badge2Items.get("b")!];
     assert.deepEqual([a.s.mounted, a.s.ready, b.s.mounted, b.s.ready], [1, true, 1, true]);
-    board.s.items = ([{ id: "a" }, { id: "b" }, { id: "c" }]);
+    board.s.items = [{ id: "a" }, { id: "b" }, { id: "c" }];
     world.flush();
     assert.equal(a.s.mounted, 1, "existing items do not mount again");
     assert.equal(board.badge2Items.get("c")!.s.mounted, 1);
@@ -144,9 +152,9 @@ describe("M9: runtime behaviour", () => {
     const world = new World();
     const board = new Board();
     world.mount(board);
-    board.s.open = (true);
+    board.s.open = true;
     world.flush();
-    board.s.open = (false);
+    board.s.open = false;
     world.flush();
     assert.equal(board.s.gone, "solo", "the callback reached the parent");
     assert.equal(board.badge, null);
@@ -156,9 +164,9 @@ describe("M9: runtime behaviour", () => {
     const world = new World();
     const board = new Board();
     world.mount(board);
-    board.s.items = ([{ id: "a" }, { id: "b" }]);
+    board.s.items = [{ id: "a" }, { id: "b" }];
     world.flush();
-    board.s.items = ([{ id: "b" }]);
+    board.s.items = [{ id: "b" }];
     world.flush();
     assert.equal(board.s.gone, "item:a", "the removed item's record was still readable when its unmount ran");
   });
@@ -179,7 +187,7 @@ function Parent() {
       <Leaf id="b" onUp={(id) => { s.log += id; }} />
     </Entity>
   );
-}`),
+}`)
     );
     const world = new World();
     const parent = new Parent();
@@ -190,7 +198,7 @@ function Parent() {
 
   it("does nothing for a component that is never mounted", () => {
     const board = new Board();
-    board.s.open = (true);
+    board.s.open = true;
     assert.equal(board.badge, null, "no world, no render, no mount");
   });
 });
@@ -205,7 +213,10 @@ describe("M9: diagnostics", () => {
 
   it("rejects setting state in useUnmount, pointing at the alternatives", () => {
     const errors = compileErrors(unmount("s.n = 1;"));
-    assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedStatement]);
+    assert.deepEqual(
+      errors.map((d) => d.code),
+      [DiagnosticCode.UnsupportedStatement]
+    );
     assert.match(errors[0]!.message, /useUnmount/);
     assert.match(errors[0]!.message, /callback prop/);
     assert.deepEqual(codes(unmount("if (s.r > 0) { s.n += 1; }")), [DiagnosticCode.UnsupportedStatement]);
@@ -213,7 +224,9 @@ describe("M9: diagnostics", () => {
 
   it("allows reads and callback props in useUnmount, and state in useMount", () => {
     assert.doesNotThrow(() => compile(unmount("const n = s.n + 1;")));
-    assert.doesNotThrow(() => compile(`function C() { const s = useMutable({ n: 0 }); useMount(() => { s.n = 1; }); return <Entity name="C" />; }`));
+    assert.doesNotThrow(() =>
+      compile(`function C() { const s = useMutable({ n: 0 }); useMount(() => { s.n = 1; }); return <Entity name="C" />; }`)
+    );
   });
 
   it("takes exactly one arrow function with no parameters", () => {
@@ -226,8 +239,17 @@ describe("M9: diagnostics", () => {
 
   it("must be imported, and only at the top level", () => {
     const source = `import { Entity } from "@rge/runtime/jsx";\nfunction C() { useMount(() => {}); return <Entity name="C" />; }`;
-    assert.deepEqual(getCompiler().compile("C.tsx", source).diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
-    assert.ok(codes(`function C() { if (true) { useMount(() => {}); } return <Entity name="C" />; }`).includes(DiagnosticCode.HookNotAtTopLevel));
-    assert.deepEqual(codes(`function C() { useMount(() => { useMount(() => {}); }); return <Entity name="C" />; }`), [DiagnosticCode.HookNotAtTopLevel]);
+    assert.deepEqual(
+      getCompiler()
+        .compile("C.tsx", source)
+        .diagnostics.map((d) => d.code),
+      [DiagnosticCode.MissingImport]
+    );
+    assert.ok(
+      codes(`function C() { if (true) { useMount(() => {}); } return <Entity name="C" />; }`).includes(DiagnosticCode.HookNotAtTopLevel)
+    );
+    assert.deepEqual(codes(`function C() { useMount(() => { useMount(() => {}); }); return <Entity name="C" />; }`), [
+      DiagnosticCode.HookNotAtTopLevel,
+    ]);
   });
 });

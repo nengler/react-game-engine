@@ -1,6 +1,18 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createControls, createMemoryStorage, createSave, createSettings as makeSettings, getVolume, setStorage, setVolume, Sound, setSoundSink, type SoundSink } from "../src/index.ts";
+import { afterEach, describe, it } from "node:test";
+
+import {
+  createControls,
+  createMemoryStorage,
+  createSave,
+  createSettings as makeSettings,
+  getVolume,
+  setStorage,
+  setVolume,
+  Sound,
+  setSoundSink,
+  type SoundSink,
+} from "../src/index.ts";
 
 const made: { dispose(): void }[] = [];
 /** `createSettings`, remembering each store so the next test does not reload it. */
@@ -44,7 +56,10 @@ describe("createSave", () => {
     assert.equal(save.exists(), false);
     assert.equal(save.write(), true);
     assert.equal(save.exists(), true);
-    assert.deepEqual(JSON.parse(memory.entries.get("save") as string), { version: 2, data: { map: "cave", items: ["lantern"], opened: [1] } });
+    assert.deepEqual(JSON.parse(memory.entries.get("save") as string), {
+      version: 2,
+      data: { map: "cave", items: ["lantern"], opened: [1] },
+    });
     state.current = { map: "other", items: [] };
     assert.equal(save.load(), true);
     assert.deepEqual(state.current, { map: "cave", items: ["lantern"], opened: [1] });
@@ -73,7 +88,7 @@ describe("createSave", () => {
   });
 
   it("reads a file that does not parse as no save, saying so once", () => {
-    for (const text of ["{ not json", "[]", '{"version":"two","data":1}', "{\"data\":1}"]) {
+    for (const text of ["{ not json", "[]", '{"version":"two","data":1}', '{"data":1}']) {
       setStorage(createMemoryStorage({ save: text }));
       const warnings: string[] = [];
       const save = makeSave({ current: { map: "", items: [] } }, warnings);
@@ -138,7 +153,9 @@ describe("createSettings", () => {
   });
 
   it("goes full screen through the sink, and ignores wrong types and unknown keys in the file", () => {
-    const memory = createMemoryStorage({ settings: JSON.stringify({ version: 1, data: { music: "loud", effects: 0.1, fullscreen: true, extra: 5 } }) });
+    const memory = createMemoryStorage({
+      settings: JSON.stringify({ version: 1, data: { music: "loud", effects: 0.1, fullscreen: true, extra: 5 } }),
+    });
     const calls: boolean[] = [];
     const settings = createSettings({ name: "settings", defaults });
     setStorage({ ...memory, setFullscreen: (on) => (calls.push(on), true) });
@@ -158,7 +175,14 @@ describe("createSettings", () => {
     settings.reset();
     stop();
     settings.set({ music: 0.9 });
-    assert.deepEqual(seen, [[0.3, "Space"], [0.6, "Z"]], "the controls are already rebound when it is called; nothing after stop");
+    assert.deepEqual(
+      seen,
+      [
+        [0.3, "Space"],
+        [0.6, "Z"],
+      ],
+      "the controls are already rebound when it is called; nothing after stop"
+    );
     settings.dispose();
   });
 

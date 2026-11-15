@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Camera, Entity, Sprite } from "../src/index.ts";
 
 function close(actual: number, expected: number, what = ""): void {
@@ -257,7 +258,12 @@ describe("Camera conversions", () => {
     camera.transform.rotation = 0.7;
     camera.transform.scaleX = 2;
     camera.transform.scaleY = 0.5;
-    for (const [x, y] of [[0, 0], [10, 20], [-33, 7], [100, -100]] as const) {
+    for (const [x, y] of [
+      [0, 0],
+      [10, 20],
+      [-33, 7],
+      [100, -100],
+    ] as const) {
       const view = camera.worldToView(x, y);
       const back = camera.viewToWorld(view.x, view.y);
       close(back.x, x);

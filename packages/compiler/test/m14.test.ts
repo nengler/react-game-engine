@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * M14: `<Pointer>`. A hit area for presses, with an `onPress` callback prop
  * like `<Collider onCollisionEnter>`. The runtime tests the press against the
  * pointer's world transform and size (`pointer.test.ts`).
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Pointer, World, runtimeManifest } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -128,16 +130,32 @@ describe("M14: runtime behaviour", () => {
 
 describe("M14: diagnostics", () => {
   it("rejects a handler with parameters", () => {
-    const codes = compileErrors(`function C() { return <Entity name="C"><Pointer width={1} height={1} onPress={(x) => {}} /></Entity>; }`).map((d) => d.code);
+    const codes = compileErrors(
+      `function C() { return <Entity name="C"><Pointer width={1} height={1} onPress={(x) => {}} /></Entity>; }`
+    ).map((d) => d.code);
     assert.deepEqual(codes, [DiagnosticCode.InvalidHandler]);
   });
 
   it("must be imported, and keeps its fields apart from the state of a component rooted at it", () => {
-    const result = getCompiler().compile("C.tsx", `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Pointer width={1} height={1} /></Entity>; }`);
-    assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
+    const result = getCompiler().compile(
+      "C.tsx",
+      `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Pointer width={1} height={1} /></Entity>; }`
+    );
+    assert.deepEqual(
+      result.diagnostics.map((d) => d.code),
+      [DiagnosticCode.MissingImport]
+    );
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
-    assert.ok(compile(`function C() { const width = useMutable({ n: 1 }); return <Pointer width={width.n} height={1} />; }`).code.includes("get $width()"));
-    assert.ok(compile(`function C() { const contains = useMutable({ n: 1 }); return <Pointer width={1} height={1} />; }`).code.includes("get $contains()"));
+    assert.ok(
+      compile(`function C() { const width = useMutable({ n: 1 }); return <Pointer width={width.n} height={1} />; }`).code.includes(
+        "get $width()"
+      )
+    );
+    assert.ok(
+      compile(`function C() { const contains = useMutable({ n: 1 }); return <Pointer width={1} height={1} />; }`).code.includes(
+        "get $contains()"
+      )
+    );
   });
 
   it("is placed with transform and is a leaf", () => {

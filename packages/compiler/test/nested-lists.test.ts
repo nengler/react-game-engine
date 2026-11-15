@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * A list inside a list item (`{rows.map((row) => <Row key={row.id}>{row.cells.map((cell) => <Cell key={cell.id} … />)}</Row>)}`): each
  * item has a list of its own, kept in the item's record, which may read the item around it, its callbacks reading both items' current
  * values. A keyed element inside a list item is one too.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Pointer, World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -107,7 +109,10 @@ function grid(g: Entity): [string, string[], string[] | null, string[]][] {
 describe("a list inside a list item", () => {
   it("type-checks, and keeps the inner list's state in the item's record", () => {
     assert.deepEqual(typeCheck(compiled), []);
-    assert.match(compiled.code, /kids: \{ entity2: Entity \| null; entityItems: Map<string \| number, Entity>; entityOrder: \(string \| number\)\[\]; entityRecords: /);
+    assert.match(
+      compiled.code,
+      /kids: \{ entity2: Entity \| null; entityItems: Map<string \| number, Entity>; entityOrder: \(string \| number\)\[\]; entityRecords: /
+    );
     assert.match(compiled.code, /\$entityList\(row: Grid\["\$s_rows"\]\[number\]\) \{ return row\.cells; \}/);
   });
 
@@ -125,7 +130,14 @@ describe("a list inside a list item", () => {
     const two = cells.children[1];
     g.s.rows = [
       { id: "b", open: false, cells: [{ id: 3, on: false }] },
-      { id: "a", open: true, cells: [{ id: 2, on: true }, { id: 4, on: true }] },
+      {
+        id: "a",
+        open: true,
+        cells: [
+          { id: 2, on: true },
+          { id: 4, on: true },
+        ],
+      },
     ];
     world.flush();
     assert.deepEqual(grid(g), [
@@ -153,10 +165,22 @@ describe("a list inside a list item", () => {
     const { world, it: f } = await mounted("Forest");
     const leaves = (): string[] => f.children.flatMap((t) => (t as Entity).children.flatMap((b) => names(b as Entity)));
     assert.deepEqual(leaves(), ["1/10/100", "1/10/101"]);
-    f.s.trees = [{ id: 1, branches: [{ id: 11, leaves: [{ id: 102 }] }, { id: 10, leaves: [{ id: 101 }] }] }, { id: 2, branches: [{ id: 20, leaves: [] }] }];
+    f.s.trees = [
+      {
+        id: 1,
+        branches: [
+          { id: 11, leaves: [{ id: 102 }] },
+          { id: 10, leaves: [{ id: 101 }] },
+        ],
+      },
+      { id: 2, branches: [{ id: 20, leaves: [] }] },
+    ];
     world.flush();
     assert.deepEqual(leaves(), ["1/11/102", "1/10/101"]);
-    assert.deepEqual(f.children.map((t) => names(t as Entity)), [["b11", "b10"], ["b20"]]);
+    assert.deepEqual(
+      f.children.map((t) => names(t as Entity)),
+      [["b11", "b10"], ["b20"]]
+    );
   });
 
   it("takes a keyed element inside a list item, which starts over when its key changes", async () => {
@@ -168,5 +192,4 @@ describe("a list inside a list item", () => {
     assert.deepEqual(names(p.children[0] as Entity), ["page2"]);
     assert.notEqual((p.children[0] as Entity).children[0], first);
   });
-
 });

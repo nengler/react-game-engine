@@ -1,11 +1,11 @@
-import * as K from "./constants.ts";
-import type { GameEvent } from "./events.ts";
 import { climbUpdate } from "./body/climb.ts";
 import { move } from "./body/collide.ts";
 import { dashUpdate } from "./body/dash.ts";
 import { normalUpdate } from "./body/normal.ts";
 import { canUnDuck, hitsAt, sign, unDuck, type Step } from "./body/step.ts";
 import type { Body, Controls, SolidAt } from "./body/types.ts";
+import * as K from "./constants.ts";
+import type { GameEvent } from "./events.ts";
 
 /**
  * The character's body: the whole of how it moves, as a plain function of its state, the buttons held, the room's solid

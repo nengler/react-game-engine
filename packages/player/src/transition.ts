@@ -1,4 +1,5 @@
 import type { FlexTransition } from "@rge/runtime";
+
 import { mixColors, type PackedColor } from "./color.ts";
 
 /** The two colours a transitioning `<Flex>` shows this frame. */
@@ -40,7 +41,15 @@ function shownAt(state: FlexTransition, duration: number, time: number, out: Sho
  * `time` and the state kept on the box, so a frame built twice at one time (the player does, for tilemaps) shows the same thing.
  * Returns the state to keep.
  */
-export function stepTransition(state: FlexTransition | null, fill: PackedColor, edge: PackedColor, alpha: number, duration: number, time: number, out: ShownColors): FlexTransition {
+export function stepTransition(
+  state: FlexTransition | null,
+  fill: PackedColor,
+  edge: PackedColor,
+  alpha: number,
+  duration: number,
+  time: number,
+  out: ShownColors
+): FlexTransition {
   if (state === null) {
     out.fill = fill;
     out.edge = edge;

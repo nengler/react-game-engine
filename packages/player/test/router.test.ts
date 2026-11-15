@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { createInputState, Entity, Route, Router, Shape, World, type InputState, type Transition } from "@rge/runtime";
+
 import { createPlayer, RecordingBackend, type DecodedRecord } from "../src/index.ts";
 
 const box = (color: string): Shape => new Shape({ kind: "rect", width: 4, height: 4, color });
@@ -57,7 +59,11 @@ describe("<Router>", () => {
     world.tick(0.2);
     world.tick(0.4);
     assert.deepEqual(inWorld(a, b), [false, true], "the old screen leaves");
-    assert.deepEqual([b.transform.x, b.visible, router.cover, router.transitioning], [0, true, 0, false], "the new one is where it belongs");
+    assert.deepEqual(
+      [b.transform.x, b.visible, router.cover, router.transitioning],
+      [0, true, 0, false],
+      "the new one is where it belongs"
+    );
   });
 
   it("makes the screen being left inert while the transition runs: it still updates, but hears no buttons", () => {
@@ -135,7 +141,8 @@ describe("<Router>", () => {
 });
 
 describe("<Router> in a frame", () => {
-  const rects = (frame: readonly DecodedRecord[]): Extract<DecodedRecord, { op: "rect" }>[] => frame.filter((r): r is Extract<DecodedRecord, { op: "rect" }> => r.op === "rect");
+  const rects = (frame: readonly DecodedRecord[]): Extract<DecodedRecord, { op: "rect" }>[] =>
+    frame.filter((r): r is Extract<DecodedRecord, { op: "rect" }> => r.op === "rect");
 
   it("draws only the shown screens (a hidden one is skipped), offset where the transition puts it, and a cover over everything", () => {
     const hide: Transition = (t) => ({ fromVisible: t < 0.5, toX: 10, cover: 0.5 });
@@ -145,19 +152,35 @@ describe("<Router> in a frame", () => {
     const player = createPlayer(backend, { root: () => router, retain: "check" });
     player.step(); // warm-up, dt 0
     player.step();
-    assert.deepEqual(rects(backend.lastFrame.records).map((r) => r.color), ["#ff0000ff"], "only a");
+    assert.deepEqual(
+      rects(backend.lastFrame.records).map((r) => r.color),
+      ["#ff0000ff"],
+      "only a"
+    );
     router.route = "b";
     player.step(); // a quarter of the way: both screens, and the cover
     const mid = rects(backend.lastFrame.records);
-    assert.deepEqual(mid.map((r) => r.color.slice(0, 7)), ["#ff0000", "#00ff00", "#000000"], "a, b, then the cover");
+    assert.deepEqual(
+      mid.map((r) => r.color.slice(0, 7)),
+      ["#ff0000", "#00ff00", "#000000"],
+      "a, b, then the cover"
+    );
     assert.equal(mid[1]?.x, 10, "b is where the transition put it");
     assert.equal(mid[2]?.color, "#00000080", "half covered");
     player.step(); // half way: a is hidden
-    assert.deepEqual(rects(backend.lastFrame.records).map((r) => r.color.slice(0, 7)), ["#00ff00", "#000000"], "a is skipped once the transition hides it");
+    assert.deepEqual(
+      rects(backend.lastFrame.records).map((r) => r.color.slice(0, 7)),
+      ["#00ff00", "#000000"],
+      "a is skipped once the transition hides it"
+    );
     player.step();
     player.step();
     player.step();
-    assert.deepEqual(rects(backend.lastFrame.records).map((r) => r.color), ["#00ff00ff"], "settled: only b, in place, no cover");
+    assert.deepEqual(
+      rects(backend.lastFrame.records).map((r) => r.color),
+      ["#00ff00ff"],
+      "settled: only b, in place, no cover"
+    );
     player.close();
   });
 });

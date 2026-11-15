@@ -96,9 +96,18 @@ function springAxis(value: number, velocity: number, target: number, k: number, 
  * the same object once it is at rest on its target, so a state that holds it stops changing (and stops rendering).
  */
 export function stepSpring<T extends Animatable>(spring: SpringState<T>, target: T, options: SpringOptions, dt: number): SpringState<T> {
-  const same = typeof target === "number" ? spring.target === target : (spring.target as Vector2).x === (target as Vector2).x && (spring.target as Vector2).y === (target as Vector2).y;
-  const resting = typeof spring.velocity === "number" ? spring.velocity === 0 : (spring.velocity as Vector2).x === 0 && (spring.velocity as Vector2).y === 0;
-  const there = typeof target === "number" ? spring.value === target : (spring.value as Vector2).x === (target as Vector2).x && (spring.value as Vector2).y === (target as Vector2).y;
+  const same =
+    typeof target === "number"
+      ? spring.target === target
+      : (spring.target as Vector2).x === (target as Vector2).x && (spring.target as Vector2).y === (target as Vector2).y;
+  const resting =
+    typeof spring.velocity === "number"
+      ? spring.velocity === 0
+      : (spring.velocity as Vector2).x === 0 && (spring.velocity as Vector2).y === 0;
+  const there =
+    typeof target === "number"
+      ? spring.value === target
+      : (spring.value as Vector2).x === (target as Vector2).x && (spring.value as Vector2).y === (target as Vector2).y;
   if (same && resting && there) return spring;
   if (!(dt > 0)) return same ? spring : { ...spring, target };
   const { stiffness, damping } = springFrom(options.duration, options.bounce);
@@ -172,7 +181,10 @@ export function startTween(value: Animatable): TweenState<Animatable> {
  * that holds it stops changing.
  */
 export function stepTween<T extends Animatable>(tween: TweenState<T>, target: T, options: TweenOptions, dt: number): TweenState<T> {
-  const same = typeof target === "number" ? tween.target === target : (tween.target as Vector2).x === (target as Vector2).x && (tween.target as Vector2).y === (target as Vector2).y;
+  const same =
+    typeof target === "number"
+      ? tween.target === target
+      : (tween.target as Vector2).x === (target as Vector2).x && (tween.target as Vector2).y === (target as Vector2).y;
   const duration = options.duration !== undefined && options.duration > 0 ? options.duration : 0.25;
   if (same && tween.elapsed >= duration) return tween;
   const start: TweenState<T> = same ? tween : { from: tween.value, target, elapsed: 0, value: tween.value };
@@ -180,8 +192,10 @@ export function stepTween<T extends Animatable>(tween: TweenState<T>, target: T,
   const ease = typeof options.ease === "function" ? options.ease : EASINGS[options.ease ?? "outCubic"];
   const k = elapsed >= duration ? 1 : ease(elapsed / duration);
   const mix = (a: number, b: number): number => (k === 1 ? b : a + (b - a) * k);
-  const value = (typeof target === "number"
-    ? mix(start.from as number, target)
-    : { x: mix((start.from as Vector2).x, (target as Vector2).x), y: mix((start.from as Vector2).y, (target as Vector2).y) }) as T;
+  const value = (
+    typeof target === "number"
+      ? mix(start.from as number, target)
+      : { x: mix((start.from as Vector2).x, (target as Vector2).x), y: mix((start.from as Vector2).y, (target as Vector2).y) }
+  ) as T;
   return { from: start.from, target, elapsed, value };
 }

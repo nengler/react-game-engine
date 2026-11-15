@@ -1,4 +1,5 @@
 import { Entity, Shape, Tilemap, useBody, useMutable, useUpdate } from "@rge/runtime/jsx";
+
 import * as K from "./rules/constants.ts";
 import { readControls } from "./rules/controls.ts";
 import { ROOM_LIST } from "./rules/rooms.ts";
@@ -8,7 +9,8 @@ interface RunnerProps {
   room: number;
 }
 
-const approach = (value: number, target: number, amount: number): number => (value < target ? Math.min(value + amount, target) : Math.max(value - amount, target));
+const approach = (value: number, target: number, amount: number): number =>
+  value < target ? Math.min(value + amount, target) : Math.max(value - amount, target);
 const sign = (n: number): number => (n > 0 ? 1 : n < 0 ? -1 : 0);
 
 /**

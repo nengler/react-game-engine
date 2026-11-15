@@ -27,18 +27,41 @@ export interface DialogueView {
 }
 
 /** Frames of `things.png` (see tools/make-assets.ts). */
-const FRAME = { heroDown: 0, heroUp: 1, heroLeft: 2, heroRight: 3, beetle: 4, wisp: 5, npc: 6, lantern: 7, key: 8, shears: 9, bell: 10, shrine: 11, door: 12, gate: 13, bush: 14, swing: 15 } as const;
+const FRAME = {
+  heroDown: 0,
+  heroUp: 1,
+  heroLeft: 2,
+  heroRight: 3,
+  beetle: 4,
+  wisp: 5,
+  npc: 6,
+  lantern: 7,
+  key: 8,
+  shears: 9,
+  bell: 10,
+  shrine: 11,
+  door: 12,
+  gate: 13,
+  bush: 14,
+  swing: 15,
+} as const;
 const ITEM_FRAME = { lantern: FRAME.lantern, key: FRAME.key, shears: FRAME.shears, bell: FRAME.bell } as const;
 
 /** Which way the character faces, as a frame: the larger of the two axes decides. */
 function heroFrame(run: Run): number {
-  if (Math.abs(run.fx) > Math.abs(run.fy) || (Math.abs(run.fx) === Math.abs(run.fy) && run.fx !== 0 && run.fy === 0)) return run.fx < 0 ? FRAME.heroLeft : FRAME.heroRight;
+  if (Math.abs(run.fx) > Math.abs(run.fy) || (Math.abs(run.fx) === Math.abs(run.fy) && run.fx !== 0 && run.fy === 0))
+    return run.fx < 0 ? FRAME.heroLeft : FRAME.heroRight;
   return run.fy < 0 ? FRAME.heroUp : FRAME.heroDown;
 }
 
 const at = (id: string, col: number, row: number, frame: number): Spot => ({ id, x: col * TILE, y: row * TILE, frame });
 // The sprites are 16 x 16 and the hitboxes 10 x 10, so a sprite sits 3 pixels up and left of its box.
-const onBox = (id: string, x: number, y: number, frame: number): Spot => ({ id, x: x - (TILE - BODY) / 2, y: y - (TILE - BODY) / 2, frame });
+const onBox = (id: string, x: number, y: number, frame: number): Spot => ({
+  id,
+  x: x - (TILE - BODY) / 2,
+  y: y - (TILE - BODY) / 2,
+  frame,
+});
 
 /** The character's sprite. */
 export function heroOf(run: Run): Spot {
@@ -61,7 +84,14 @@ export function spotsOf(run: Run): Spot[] {
   const length = Math.hypot(run.fx, run.fy) || 1;
   const swing: Spot[] =
     run.swing > 0
-      ? [{ id: "swing", x: run.x + BODY / 2 + (run.fx / length) * REACH - TILE / 2, y: run.y + BODY / 2 + (run.fy / length) * REACH - TILE / 2, frame: FRAME.swing }]
+      ? [
+          {
+            id: "swing",
+            x: run.x + BODY / 2 + (run.fx / length) * REACH - TILE / 2,
+            y: run.y + BODY / 2 + (run.fy / length) * REACH - TILE / 2,
+            frame: FRAME.swing,
+          },
+        ]
       : [];
   return [
     ...def.doors.map((d) => at(`door:${d.id}`, d.col, d.row, FRAME.door)),

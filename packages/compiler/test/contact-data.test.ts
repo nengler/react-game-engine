@@ -1,8 +1,10 @@
-/** Contacts carry data (REACT_FEEL_PLAN.md, A3): `<Collider data>` reaches `other.data`, typed by tag through `ColliderData`. */
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
+/** Contacts carry data (REACT_FEEL_PLAN.md, A3): `<Collider data>` reaches `other.data`, typed by tag through `ColliderData`. */
+import { after, describe, it } from "node:test";
+
 import { Collider, Entity, Text, World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, getCompiler, load } from "./helpers.ts";
 
 after(() => {
@@ -38,7 +40,10 @@ describe("contact data", () => {
   it("reaches other.data, and type-checks by tag once the game declares ColliderData", async () => {
     const compiled = compile(PURSE);
     const data = join(dirname(compiled.fileName), "colliders.ts");
-    const typeErrors = getCompiler().typeCheck([{ fileName: compiled.fileName, text: compiled.code }, { fileName: data, text: DATA }]);
+    const typeErrors = getCompiler().typeCheck([
+      { fileName: compiled.fileName, text: compiled.code },
+      { fileName: data, text: DATA },
+    ]);
     assert.deepEqual(typeErrors, []);
     const { Purse, Coin } = await load<{ Purse: new () => Entity; Coin: new () => Collider }>(compiled);
     const world = new World();

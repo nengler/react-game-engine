@@ -1,14 +1,14 @@
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import Module, { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 /**
  * The VS Code extension (`editors/vscode/extension.js`), driven by a stand-in for the `vscode` module: it finds the game's
  * `@rge/cli`, starts `rge lsp`, shows its diagnostics and turns its quick fixes into workspace edits. What VS Code itself does
  * with those (drawing squiggles, the light bulb) is not tested here.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import Module, { createRequire } from "node:module";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -130,7 +130,8 @@ describe("the VS Code extension", () => {
     writeFileSync(file, SOURCE);
 
     const load = (Module as unknown as { _load: (request: string, ...rest: unknown[]) => unknown })._load;
-    (Module as unknown as { _load: unknown })._load = (request: string, ...rest: unknown[]) => (request === "vscode" ? fake : load(request, ...rest));
+    (Module as unknown as { _load: unknown })._load = (request: string, ...rest: unknown[]) =>
+      request === "vscode" ? fake : load(request, ...rest);
     let extension: { activate(context: { subscriptions: { dispose(): void }[] }): void; cliOf(dir: string): string | null };
     try {
       extension = createRequire(import.meta.url)(join(repo, "editors/vscode/extension.js"));
@@ -150,7 +151,7 @@ describe("the VS Code extension", () => {
     assert.equal(shown.uri, pathToFileURL(file).href);
     assert.deepEqual(
       shown.diagnostics.map((d) => [d.code, d.source, d.range.start.line, d.range.start.character]),
-      [["RGE1005", "rge", 3, 12]],
+      [["RGE1005", "rge", 3, 12]]
     );
 
     const actions = await provider!.provideCodeActions(document, shown.diagnostics[0]!.range, { diagnostics: shown.diagnostics });
@@ -159,8 +160,13 @@ describe("the VS Code extension", () => {
     assert.equal(actions[0].isPreferred, true);
     assert.equal(actions[0].diagnostics.length, 1);
     assert.deepEqual(
-      actions[0].edit.replaced.map((r: { range: Range; text: string }) => [r.range.start.line, r.range.start.character, r.range.end.character, r.text]),
-      [[0, 8, 16, " Entity, useMutable "]],
+      actions[0].edit.replaced.map((r: { range: Range; text: string }) => [
+        r.range.start.line,
+        r.range.start.character,
+        r.range.end.character,
+        r.text,
+      ]),
+      [[0, 8, 16, " Entity, useMutable "]]
     );
   });
 });

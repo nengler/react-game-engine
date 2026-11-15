@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * Two answers to "why is there no useEffect" (DESIGN.md): a cleanup returned from `useMount`, run when the component leaves,
  * with a handler able to hand an arrow to a function (`settings.subscribe(() => …)`); and `key` on any element, which starts
  * it over when the key changes.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -84,11 +86,20 @@ describe("useMount returning a cleanup", () => {
   it("keeps what a mount handler returns and inlines one that returns nothing", () => {
     const { code } = compile(WATCHERS, "Watchers.tsx");
     assert.match(code, /override onMount\(\): void \{\n\s+this\.keepCleanup\(this\.#onMount0\(\)\);\n\s+\}/, "Watch keeps its one cleanup");
-    assert.match(code, /#onMount0\(\): \(\(\) => void\) \| void \{\n\s+return this\.props\.listen\(\(n\) => \{ this\.\$set_s_last\(n\); \}\);/);
-    assert.match(code, /this\.keepCleanup\(this\.#onMount0\(\)\);\n\s+this\.keepCleanup\(this\.#onMount1\(\)\);/, "Counted keeps both: an expression body's call is returned, as in React");
+    assert.match(
+      code,
+      /#onMount0\(\): \(\(\) => void\) \| void \{\n\s+return this\.props\.listen\(\(n\) => \{ this\.\$set_s_last\(n\); \}\);/
+    );
+    assert.match(
+      code,
+      /this\.keepCleanup\(this\.#onMount0\(\)\);\n\s+this\.keepCleanup\(this\.#onMount1\(\)\);/,
+      "Counted keeps both: an expression body's call is returned, as in React"
+    );
     assert.match(code, /const stop = this\.props\.listen\(/);
     assert.match(code, /return \(\) => \{\n\s+stop\(\);/);
-    const plain = compile(`function C() { const s = useMutable({ r: 0 }); useMount(() => { s.r = 1; }); return <Entity name="C" />; }`).code;
+    const plain = compile(
+      `function C() { const s = useMutable({ r: 0 }); useMount(() => { s.r = 1; }); return <Entity name="C" />; }`
+    ).code;
     assert.match(plain, /override onMount\(\): void \{\n\s+this\.\$set_s_r\(1\);/);
     assert.doesNotMatch(plain, /keepCleanup/);
   });
@@ -108,14 +119,21 @@ describe("useMount returning a cleanup", () => {
     channel.send(3);
     channel.send(4);
     world.flush();
-    assert.deepEqual(host.children.map((c: { name: string }) => c.name), ["watch:4", "counted:7"]);
-    host.s.open = (false);
+    assert.deepEqual(
+      host.children.map((c: { name: string }) => c.name),
+      ["watch:4", "counted:7"]
+    );
+    host.s.open = false;
     world.flush();
-    assert.deepEqual(channel.log, ["listen", "listen", "mounted", "unmount", "stop", "stop", "cleanup"], "useUnmount first, then each cleanup, once");
+    assert.deepEqual(
+      channel.log,
+      ["listen", "listen", "mounted", "unmount", "stop", "stop", "cleanup"],
+      "useUnmount first, then each cleanup, once"
+    );
     assert.equal(channel.listeners.length, 0);
-    host.s.open = (true);
+    host.s.open = true;
     world.flush();
-    host.s.open = (false);
+    host.s.open = false;
     world.flush();
     assert.equal(channel.listeners.length, 0, "a second stay keeps and runs its own cleanups");
     assert.equal(channel.log.filter((l) => l === "stop").length, 4);
@@ -144,16 +162,40 @@ describe("useMount returning a cleanup", () => {
     holder.removeChild(parent);
     holder.addChild(parent);
     holder.removeChild(parent);
-    assert.deepEqual(log, ["parent first", "parent second", "child first", "child second", "parent first", "parent second", "child first", "child second"]);
+    assert.deepEqual(log, [
+      "parent first",
+      "parent second",
+      "child first",
+      "child second",
+      "parent first",
+      "parent second",
+      "child first",
+      "child second",
+    ]);
   });
 
   it("allows an arrow handed to a function only in a handler, and a returned value only from useMount", () => {
     const fn = `interface P { listen: (fn: () => void) => () => void }`;
-    assert.deepEqual(codes(`${fn} function A({ listen }: P) { const s = useMutable({ n: 0 }); useUpdate(() => { setN((x) => { listen(() => {}); return x; }); }); return <Entity name="A" />; }`), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(`${fn} function A({ listen }: P) { const s = listen(() => {}); return <Entity name="A" />; }`), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(`${fn} function A({ listen }: P) { useUpdate(() => { return listen(() => {}); }); return <Entity name="A" />; }`), [DiagnosticCode.InvalidHandler]);
-    assert.deepEqual(codes(`${fn} function A({ listen }: P) { useUnmount(() => { return () => {}; }); return <Entity name="A" />; }`), [DiagnosticCode.InvalidHandler]);
-    assert.doesNotThrow(() => compile(`${fn} function A({ listen }: P) { useUpdate(() => { listen(() => {}); }); return <Entity name="A" />; }`), "a handler may subscribe (the cleanup is the caller's)");
+    assert.deepEqual(
+      codes(
+        `${fn} function A({ listen }: P) { const s = useMutable({ n: 0 }); useUpdate(() => { setN((x) => { listen(() => {}); return x; }); }); return <Entity name="A" />; }`
+      ),
+      [DiagnosticCode.UnsupportedExpression]
+    );
+    assert.deepEqual(codes(`${fn} function A({ listen }: P) { const s = listen(() => {}); return <Entity name="A" />; }`), [
+      DiagnosticCode.UnsupportedExpression,
+    ]);
+    assert.deepEqual(
+      codes(`${fn} function A({ listen }: P) { useUpdate(() => { return listen(() => {}); }); return <Entity name="A" />; }`),
+      [DiagnosticCode.InvalidHandler]
+    );
+    assert.deepEqual(codes(`${fn} function A({ listen }: P) { useUnmount(() => { return () => {}; }); return <Entity name="A" />; }`), [
+      DiagnosticCode.InvalidHandler,
+    ]);
+    assert.doesNotThrow(
+      () => compile(`${fn} function A({ listen }: P) { useUpdate(() => { listen(() => {}); }); return <Entity name="A" />; }`),
+      "a handler may subscribe (the cleanup is the caller's)"
+    );
   });
 });
 
@@ -213,16 +255,16 @@ describe("key on any element", () => {
     const names = (): string[] => book.children.map((c: { name: string }) => c.name);
     world.tick(0.016);
     world.tick(0.016);
-    book.s.title = ("U");
+    book.s.title = "U";
     world.flush();
     assert.deepEqual(names().slice(0, 2), ["Ua:2", "opena:2"], "same key: the props change, the state stays");
     assert.deepEqual(log, ["mount Ta", "mount opena"]);
-    book.s.page = ("b");
+    book.s.page = "b";
     world.flush();
     assert.deepEqual(names().slice(0, 2), ["Ub:0", "openb:0"], "new key: fresh state");
     // As with list items, the new instance is added before the old one is removed.
     assert.deepEqual(log.slice(2), ["mount Ub", "unmount Ua", "mount openb", "unmount opena"]);
-    book.s.open = (false);
+    book.s.open = false;
     world.flush();
     assert.deepEqual(names().slice(0, 1), ["Ub:0"]);
     assert.equal(log.at(-1), "unmount openb");
@@ -234,21 +276,28 @@ describe("key on any element", () => {
     const world = new World();
     world.mount(book);
     world.flush();
-    const images = (): string[] => book.children.filter((c: { image?: string }) => c.image !== undefined).map((c: { image: string }) => c.image);
+    const images = (): string[] =>
+      book.children.filter((c: { image?: string }) => c.image !== undefined).map((c: { image: string }) => c.image);
     assert.deepEqual(images(), ["left.png"]);
-    book.s.left = (false);
+    book.s.left = false;
     world.flush();
     assert.deepEqual(images(), ["right.png"]);
-    book.s.open = (false);
-    book.s.open = (true);
-    book.s.page = ("c");
+    book.s.open = false;
+    book.s.open = true;
+    book.s.page = "c";
     world.flush();
-    assert.deepEqual(book.children.map((c: { name: string; image?: string }) => c.image ?? c.name.split(":")[0]), ["Tc", "openc", "right.png"]);
+    assert.deepEqual(
+      book.children.map((c: { name: string; image?: string }) => c.image ?? c.name.split(":")[0]),
+      ["Tc", "openc", "right.png"]
+    );
   });
 
   it("refuses key on a component's root, takes one inside a list item, and passes a keyed element beside other children", async () => {
     const root = compileErrors(`function A() { return <Entity name="A" key="x" />; }`);
-    assert.deepEqual(root.map((d) => d.code), [DiagnosticCode.UnsupportedAttribute]);
+    assert.deepEqual(
+      root.map((d) => d.code),
+      [DiagnosticCode.UnsupportedAttribute]
+    );
     assert.match(root[0]!.message, /where the component is used, not on its root/);
     const passed = `import { type Child, Entity, Sprite, useMutable } from "@rge/runtime/jsx";
 interface PanelProps { children: Child }
@@ -264,9 +313,12 @@ export function A() { const s = useMutable({ k: 1 }); return <Panel><Sprite key=
     a.s.k = 2;
     world.flush();
     assert.deepEqual(images(), ["a.png", "b.png"], "the keyed element starts over in its own place");
-    const nested = compile(`interface Item { id: string }
+    const nested = compile(
+      `interface Item { id: string }
 function A() { const s = useMutable({ items: [] as Item[], k: 1 });
-  return <Entity name="A">{s.items.map((i) => <Entity key={i.id}><Sprite key={s.k} image="a.png" /></Entity>)}</Entity>; }`, "KeyedInItem.tsx");
+  return <Entity name="A">{s.items.map((i) => <Entity key={i.id}><Sprite key={s.k} image="a.png" /></Entity>)}</Entity>; }`,
+      "KeyedInItem.tsx"
+    );
     assert.deepEqual(typeCheck(nested), [], "a keyed element inside a list item is a list of the item's own (nested-lists.test.ts)");
   });
 });

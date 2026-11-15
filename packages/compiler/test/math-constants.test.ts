@@ -1,6 +1,7 @@
+import assert from "node:assert/strict";
 // A state's type is inferred through `Math`'s constants, as through any number: `useState(-Math.PI / 2)` is a number.
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { cleanOutput, closeCompiler, compile, typeCheck } from "./helpers.ts";
 
 after(() => {

@@ -1,10 +1,24 @@
+import assert from "node:assert/strict";
 /** Effect stores (particle bursts drawn by a <ParticleLayer>, sounds played by name) and what useSquash does each step. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { Entity, ParticleLayer, World, createParticles, createSounds, freeze, springBack, getSoundSink, setSoundSink, type SoundSink } from "@rge/runtime";
+
+import {
+  Entity,
+  ParticleLayer,
+  World,
+  createParticles,
+  createSounds,
+  freeze,
+  springBack,
+  getSoundSink,
+  setSoundSink,
+  type SoundSink,
+} from "@rge/runtime";
+
 import { createPlayer, RecordingBackend, type DecodedRecord } from "../src/index.ts";
 
-const ofOp = <T extends DecodedRecord["op"]>(frame: readonly DecodedRecord[], op: T): Extract<DecodedRecord, { op: T }>[] => frame.filter((r): r is Extract<DecodedRecord, { op: T }> => r.op === op);
+const ofOp = <T extends DecodedRecord["op"]>(frame: readonly DecodedRecord[], op: T): Extract<DecodedRecord, { op: T }>[] =>
+  frame.filter((r): r is Extract<DecodedRecord, { op: T }> => r.op === op);
 
 describe("createParticles and <ParticleLayer>", () => {
   it("makes a burst where it is asked, in the layer's space, and it plays out after whoever asked has gone", () => {
@@ -58,7 +72,10 @@ describe("createParticles and <ParticleLayer>", () => {
     player.close();
     const rects = ofOp(backend.frames[2]?.records ?? [], "rect");
     assert.equal(rects.length, 4);
-    assert.ok(rects.every((r) => r.x === 39 && r.y === 29 && r.color.startsWith("#ff0000")), JSON.stringify(rects[0]));
+    assert.ok(
+      rects.every((r) => r.x === 39 && r.y === 29 && r.color.startsWith("#ff0000")),
+      JSON.stringify(rects[0])
+    );
   });
 
   it("stops while the world is frozen, as every emitter does, and names the bursts it has when asked for another", () => {
@@ -70,7 +87,10 @@ describe("createParticles and <ParticleLayer>", () => {
     freeze(20);
     for (let i = 0; i < 10; i++) world.tick(1 / 60);
     assert.equal((layer.children[0] as unknown as { count: number }).count, 1, "frozen: still alive");
-    assert.throws(() => (fx as unknown as { burst(n: string, x: number, y: number): void }).burst("smoke", 0, 0), /no particle burst named 'smoke' \(there are: dust\)/);
+    assert.throws(
+      () => (fx as unknown as { burst(n: string, x: number, y: number): void }).burst("smoke", 0, 0),
+      /no particle burst named 'smoke' \(there are: dust\)/
+    );
   });
 });
 
@@ -87,7 +107,11 @@ describe("createSounds", () => {
       sfx.play("land");
       sfx.play("land", 0.5);
       sfx.play("jump");
-      assert.deepEqual(played, [["land-test.wav", 0.5], ["land-test.wav", 0.25], ["jump-test.wav", 1]]);
+      assert.deepEqual(played, [
+        ["land-test.wav", 0.5],
+        ["land-test.wav", 0.25],
+        ["jump-test.wav", 1],
+      ]);
       assert.equal(sfx.plays("land"), 2);
     } finally {
       setSoundSink(before);

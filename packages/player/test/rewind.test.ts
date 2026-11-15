@@ -1,7 +1,9 @@
+import assert from "node:assert/strict";
 /** Rewind in `rge dev` (REACT_FEEL_PLAN.md D1): record, snapshot, go back, play again, and say where a replay differs. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Sound, Text, createGameState, type InputState } from "@rge/runtime";
+
 import { createPlayer, RecordingBackend, Rewind, type PlayerConfig } from "../src/index.ts";
 
 interface State {
@@ -74,7 +76,10 @@ describe("rewind", () => {
     rewind.pause();
     rewind.seek(35);
     assert.ok(rewind.divergence !== null && rewind.divergence > 30 && rewind.divergence <= 35, `diverged at ${rewind.divergence}`);
-    assert.ok(logged.some((m) => new RegExp(`frame ${rewind.divergence} plays differently`).test(m)), logged.join("\n"));
+    assert.ok(
+      logged.some((m) => new RegExp(`frame ${rewind.divergence} plays differently`).test(m)),
+      logged.join("\n")
+    );
     player.close();
   });
 
@@ -85,7 +90,10 @@ describe("rewind", () => {
     rewind.step(); // paused: its frame is drawn again with the bar
     const paused = rewind.paused!;
     assert.ok(paused >= 31, `paused at ${paused}`);
-    assert.ok(backend.lastFrame.records.some((r) => r.op === "text" && /REWIND\s+frame/.test(r.text)), "the timeline's label");
+    assert.ok(
+      backend.lastFrame.records.some((r) => r.op === "text" && /REWIND\s+frame/.test(r.text)),
+      "the timeline's label"
+    );
     backend.queueInput({ dt: 1 / 60, pressed: ["ArrowLeft"] });
     rewind.step();
     assert.equal(rewind.paused, paused - 1, "one frame back");

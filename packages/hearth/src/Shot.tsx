@@ -1,4 +1,5 @@
 import { Collider, Entity, Shape, Sprite, useMutable, useUpdate } from "@rge/runtime/jsx";
+
 import { fx, sfx } from "./effects.ts";
 
 interface ShotProps {
@@ -57,7 +58,8 @@ export function Shot({ id, kind, x, y, tx, ty, flight, target, damage, radius, s
         <Collider
           width={reach * 2}
           height={reach * 2}
-          x={tx - reach} y={ty - reach}
+          x={tx - reach}
+          y={ty - reach}
           tag="blast"
           layer="blast"
           hits={["enemy"]}

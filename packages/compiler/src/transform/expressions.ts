@@ -1,33 +1,91 @@
 // Layer 1 of ComponentLowering: lowers TypeScript expressions into ExprIR (reads, calls, array methods, handles).
-import { SyntaxKind, type Node, type ObjectLiteralExpression, type CallExpression, type Expression, type PropertyAccessExpression } from "typescript/ast";
-import { isBinaryExpression, isCallExpression, isPropertyAccessExpression, isTemplateExpression, isConditionalExpression, isIdentifier, isNumericLiteral, isObjectLiteralExpression, isPropertyAssignment, isShorthandPropertyAssignment, isArrowFunction, isParenthesizedExpression, isPrefixUnaryExpression, isStringLiteral, isNoSubstitutionTemplateLiteral, isArrayLiteralExpression, isSpreadElement, isSpreadAssignment, isBlock, isElementAccessExpression, isNonNullExpression, isTypeOfExpression, isNewExpression } from "typescript/ast/is";
+import {
+  SyntaxKind,
+  type Node,
+  type ObjectLiteralExpression,
+  type CallExpression,
+  type Expression,
+  type PropertyAccessExpression,
+} from "typescript/ast";
+import {
+  isBinaryExpression,
+  isCallExpression,
+  isPropertyAccessExpression,
+  isTemplateExpression,
+  isConditionalExpression,
+  isIdentifier,
+  isNumericLiteral,
+  isObjectLiteralExpression,
+  isPropertyAssignment,
+  isShorthandPropertyAssignment,
+  isArrowFunction,
+  isParenthesizedExpression,
+  isPrefixUnaryExpression,
+  isStringLiteral,
+  isNoSubstitutionTemplateLiteral,
+  isArrayLiteralExpression,
+  isSpreadElement,
+  isSpreadAssignment,
+  isBlock,
+  isElementAccessExpression,
+  isNonNullExpression,
+  isTypeOfExpression,
+  isNewExpression,
+} from "typescript/ast/is";
+
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { assertNever, stateReads, ARRAY_METHODS, GLOBAL_FUNCTIONS, MUTATING_ARRAY_METHODS, VALUE_METHODS, type ArrayMethodName, type ArrayElementIR, type ObjectPropertyIR, type AssignTargetIR, type CalleeIR, type ExprIR, type ParamReadIR } from "../ir/types.ts";
-import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
 import { warning } from "../diagnostics/diagnostics.ts";
+import {
+  assertNever,
+  stateReads,
+  ARRAY_METHODS,
+  GLOBAL_FUNCTIONS,
+  MUTATING_ARRAY_METHODS,
+  VALUE_METHODS,
+  type ArrayMethodName,
+  type ArrayElementIR,
+  type ObjectPropertyIR,
+  type AssignTargetIR,
+  type CalleeIR,
+  type ExprIR,
+  type ParamReadIR,
+} from "../ir/types.ts";
+import { MATH_CONSTANTS, MATH_FUNCTIONS } from "./handles.ts";
 
 /** Constructors a handler may call with `new`, besides classes imported from `.ts` files. Not `Date`: it reads the clock. */
-const HANDLER_CONSTRUCTORS: ReadonlySet<string> = new Set(["Error", "TypeError", "RangeError", "Map", "Set", "WeakMap", "WeakSet", "Array"]);
+const HANDLER_CONSTRUCTORS: ReadonlySet<string> = new Set([
+  "Error",
+  "TypeError",
+  "RangeError",
+  "Map",
+  "Set",
+  "WeakMap",
+  "WeakSet",
+  "Array",
+]);
 /** Namespaces whose functions a handler may call as written. */
 const HANDLER_NAMESPACES: ReadonlySet<string> = new Set(["Object", "JSON", "Number", "Array", "String", "Math", "console"]);
 /** Global functions a handler may call as written. */
 const HANDLER_GLOBALS: ReadonlySet<string> = new Set(["parseInt", "parseFloat", "isNaN", "isFinite"]);
-import { lowerCallbackValue, lowerFunction, lowerFunctionValue } from "./statements.ts";
 import { TIMER_FUNCTIONS, BINARY_OPERATORS, UNARY_OPERATORS, nearest } from "./helpers.ts";
 import { LoweringBase } from "./lowering.ts";
+import { lowerCallbackValue, lowerFunction, lowerFunctionValue } from "./statements.ts";
 
 /** What to write instead of a call the browser or Node has and a component does not: the game's clock and its replays decide. */
-const TIMERS_INSTEAD = "runs on the game's clock in a component: `after(seconds, () => …)` calls once and `every(seconds, () => …)` repeats, both pausing with the game and stopping when the component leaves (`cancelTimers()` stops them sooner).";
+const TIMERS_INSTEAD =
+  "runs on the game's clock in a component: `after(seconds, () => …)` calls once and `every(seconds, () => …)` repeats, both pausing with the game and stopping when the component leaves (`cancelTimers()` stops them sooner).";
 const INSTEAD: Readonly<Record<string, string>> = {
   setTimeout: `There is no \`setTimeout\`: a delay ${TIMERS_INSTEAD}`,
   setInterval: `There is no \`setInterval\`: a repeat ${TIMERS_INSTEAD}`,
   clearTimeout: "There is no `clearTimeout`: `cancelTimers()` stops the component's `after` and `every` timers.",
   clearInterval: "There is no `clearInterval`: `cancelTimers()` stops the component's `after` and `every` timers.",
   requestAnimationFrame: "There is no `requestAnimationFrame`: `useUpdate((dt, input) => …)` runs every step, with the step's time.",
-  "Math.random": "`Math.random` would make every replay and test play differently. Roll from a seed you keep in state, with a function in a `.ts` file (Hearth's `rules/rng.ts`), so the same input plays the same game.",
+  "Math.random":
+    "`Math.random` would make every replay and test play differently. Roll from a seed you keep in state, with a function in a `.ts` file (Hearth's `rules/rng.ts`), so the same input plays the same game.",
   "Date.now": "`Date.now` is the wall clock, which replays do not repeat: add up the `dt` that `useUpdate((dt) => …)` is given.",
-  "performance.now": "`performance.now` is the wall clock, which replays do not repeat: add up the `dt` that `useUpdate((dt) => …)` is given.",
+  "performance.now":
+    "`performance.now` is the wall clock, which replays do not repeat: add up the `dt` that `useUpdate((dt) => …)` is given.",
   fetch: "`fetch` is not available in a game: load data from the `assets` folder, or from a `.ts` file that imports it.",
 };
 
@@ -37,9 +95,12 @@ export class ExpressionLowering extends LoweringBase {
     if (isNumericLiteral(node)) return { kind: "NumberLiteral", value: Number(node.text) };
     if (isStringLiteral(node) || isNoSubstitutionTemplateLiteral(node)) return { kind: "StringLiteral", value: node.text };
     switch (node.kind) {
-      case SyntaxKind.TrueKeyword: return { kind: "BooleanLiteral", value: true };
-      case SyntaxKind.FalseKeyword: return { kind: "BooleanLiteral", value: false };
-      case SyntaxKind.NullKeyword: return { kind: "NullLiteral" };
+      case SyntaxKind.TrueKeyword:
+        return { kind: "BooleanLiteral", value: true };
+      case SyntaxKind.FalseKeyword:
+        return { kind: "BooleanLiteral", value: false };
+      case SyntaxKind.NullKeyword:
+        return { kind: "NullLiteral" };
     }
     if (isIdentifier(node)) {
       const binding = this.scope.get(node.text);
@@ -48,7 +109,8 @@ export class ExpressionLowering extends LoweringBase {
       // `x !== undefined`, `cond ? undefined : x`: the global, which no import or declaration can shadow here.
       if (!binding && node.text === "undefined") return { kind: "PlainRef", name: "undefined" };
       // `e instanceof Error`: a global constructor or namespace a handler may name as a value.
-      if (!binding && this.computes() && (HANDLER_CONSTRUCTORS.has(node.text) || HANDLER_NAMESPACES.has(node.text))) return { kind: "PlainRef", name: node.text };
+      if (!binding && this.computes() && (HANDLER_CONSTRUCTORS.has(node.text) || HANDLER_NAMESPACES.has(node.text)))
+        return { kind: "PlainRef", name: node.text };
       if (!binding) {
         // Declared, but its declaration was refused above: that error is the one to read.
         if (this.declaredAfterError(node.text)) return null;
@@ -56,18 +118,26 @@ export class ExpressionLowering extends LoweringBase {
         const fields = new Map<string, string>();
         for (const name of this.scope.names()) {
           const owner = this.scope.get(name);
-          if (owner?.kind === "mutable") for (const field of owner.fields.keys()) if (!fields.has(field)) fields.set(field, `${name}.${field}`);
+          if (owner?.kind === "mutable")
+            for (const field of owner.fields.keys()) if (!fields.has(field)) fields.set(field, `${name}.${field}`);
         }
         const names = [...new Set([...this.scope.names(), ...this.plainImports])];
         const near = nearest(node.text, [...names, ...[...fields.keys()].filter((f) => !names.includes(f))]);
         const suggestion = near !== null && fields.has(near) && !names.includes(near) ? fields.get(near)! : near;
-        this.report(DiagnosticCode.UnknownIdentifier, `'${node.text}' is not a state value of this component${suggestion ? ` (did you mean '${suggestion}'?)` : ""}.`, node);
+        this.report(
+          DiagnosticCode.UnknownIdentifier,
+          `'${node.text}' is not a state value of this component${suggestion ? ` (did you mean '${suggestion}'?)` : ""}.`,
+          node
+        );
         return null;
       }
       switch (binding.kind) {
-        case "local": return { kind: "LocalRead", local: binding.id, name: binding.name };
-        case "param": return { kind: "ParamRead", param: binding.id, name: binding.name };
-        case "state": return { kind: "StateRead", state: binding.id };
+        case "local":
+          return { kind: "LocalRead", local: binding.id, name: binding.name };
+        case "param":
+          return { kind: "ParamRead", param: binding.id, name: binding.name };
+        case "state":
+          return { kind: "StateRead", state: binding.id };
         // Read whole (`takeHit(s)`, `<Camera shake={shake}>`). In a handler it is the component's own object for this `useMutable`,
         // whose fields read and write the component's (`takeHit(s)` changes them, as `s.hp -= 1` would). In render, where nothing
         // writes, it is a copy of the fields as the frame committed them, typed `Readonly`. The properties say which fields it reads.
@@ -76,20 +146,40 @@ export class ExpressionLowering extends LoweringBase {
             kind: "ObjectLiteral",
             mutableCopy: true,
             ...(this.mode.inHandler ? { live: true as const } : {}),
-            properties: [...binding.fields].map(([name, state]) => ({ kind: "Property" as const, name, value: { kind: "StateRead" as const, state, ...(this.mode.inHandler ? { live: true as const } : {}) } })),
+            properties: [...binding.fields].map(([name, state]) => ({
+              kind: "Property" as const,
+              name,
+              value: { kind: "StateRead" as const, state, ...(this.mode.inHandler ? { live: true as const } : {}) },
+            })),
           };
         case "propsObject":
-          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`, node);
+          this.report(
+            DiagnosticCode.UnsupportedExpression,
+            `'${node.text}' is the props object: read a prop as \`${node.text}.name\`.`,
+            node
+          );
           return null;
         case "children":
-          this.report(DiagnosticCode.UnsupportedExpression, "`children` can only be used as a JSX child, `{children}`: it is the elements a parent passes, not a value.", node);
+          this.report(
+            DiagnosticCode.UnsupportedExpression,
+            "`children` can only be used as a JSX child, `{children}`: it is the elements a parent passes, not a value.",
+            node
+          );
           return null;
         case "prop":
           if (binding.role === "callback" && !this.mode.allowCallbackRead) {
-            this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a callback prop: call it (\`${node.text}?.()\`) or forward it whole (\`onX={${node.text}}\`).`, node);
+            this.report(
+              DiagnosticCode.UnsupportedExpression,
+              `'${node.text}' is a callback prop: call it (\`${node.text}?.()\`) or forward it whole (\`onX={${node.text}}\`).`,
+              node
+            );
             return null;
           }
-          return { kind: "PropRead", name: binding.name, ...(this.mode.inHandler && binding.role === "value" ? { live: true as const } : {}) };
+          return {
+            kind: "PropRead",
+            name: binding.name,
+            ...(this.mode.inHandler && binding.role === "value" ? { live: true as const } : {}),
+          };
         // Inlined: in JSX it re-evaluates on render (its state reads become the prop's dependencies);
         // in a handler it reads the current state, like recomputing it there.
         case "derived": {
@@ -107,16 +197,26 @@ export class ExpressionLowering extends LoweringBase {
           return binding.value;
         }
         case "sound":
-          this.report(DiagnosticCode.SoundOutsideHandler, `'${node.text}' is a sound: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
+          this.report(
+            DiagnosticCode.SoundOutsideHandler,
+            `'${node.text}' is a sound: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`,
+            node
+          );
           return null;
         case "action":
-          this.report(DiagnosticCode.UnsupportedExpression, `'${node.text}' is a game-state action: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`, node);
+          this.report(
+            DiagnosticCode.UnsupportedExpression,
+            `'${node.text}' is a game-state action: call it as a statement in a handler (\`${node.text}();\`). It cannot be read or passed as a value.`,
+            node
+          );
           return null;
         case "storeRoot":
           return this.lowerStoreRead([], node);
         // A function of the component's own, passed as a value (`settings.subscribe(refresh)`, `useEvery(1, tick)`).
-        case "function": return { kind: "PlainRef", name: `this.${binding.field}` };
-        default: return assertNever(binding, "binding");
+        case "function":
+          return { kind: "PlainRef", name: `this.${binding.field}` };
+        default:
+          return assertNever(binding, "binding");
       }
     }
     if (isTypeOfExpression(node)) {
@@ -136,7 +236,11 @@ export class ExpressionLowering extends LoweringBase {
     if (isBinaryExpression(node)) {
       const operator = BINARY_OPERATORS.get(node.operatorToken.kind);
       if (!operator) {
-        this.report(DiagnosticCode.UnsupportedExpression, `Unsupported binary operator '${node.operatorToken.getText(this.sourceFile)}'.`, node);
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          `Unsupported binary operator '${node.operatorToken.getText(this.sourceFile)}'.`,
+          node
+        );
         return null;
       }
       const left = this.lowerNode(node.left);
@@ -186,16 +290,27 @@ export class ExpressionLowering extends LoweringBase {
       this.report(
         DiagnosticCode.UnsupportedExpression,
         "An arrow function can only be a callback prop (`onX={() => …}`) or the argument of an array method (`items.filter((e) => …)`).",
-        node,
+        node
       );
       return null;
     }
     if (node.kind === SyntaxKind.AwaitExpression) {
-      this.report(DiagnosticCode.UnsupportedExpression, "`await` is not supported: a component runs in the game's steps, which do not wait. Wait with `after(seconds, () => …)`, or keep asynchronous work in a `.ts` file and set state when it is done.", node);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        "`await` is not supported: a component runs in the game's steps, which do not wait. Wait with `after(seconds, () => …)`, or keep asynchronous work in a `.ts` file and set state when it is done.",
+        node
+      );
       return null;
     }
-    if ((node.kind === SyntaxKind.PostfixUnaryExpression || node.kind === SyntaxKind.PrefixUnaryExpression) && [SyntaxKind.PlusPlusToken, SyntaxKind.MinusMinusToken].includes((node as unknown as { operator: SyntaxKind }).operator)) {
-      this.report(DiagnosticCode.UnsupportedExpression, "`++` and `--` are statements of their own, on a `let`, a ref property or a `useMutable` field (`s.n++`, `s.foes[i].hp--`); they are not available inside an expression, nor through another name for state's own value.", node);
+    if (
+      (node.kind === SyntaxKind.PostfixUnaryExpression || node.kind === SyntaxKind.PrefixUnaryExpression) &&
+      [SyntaxKind.PlusPlusToken, SyntaxKind.MinusMinusToken].includes((node as unknown as { operator: SyntaxKind }).operator)
+    ) {
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        "`++` and `--` are statements of their own, on a `let`, a ref property or a `useMutable` field (`s.n++`, `s.foes[i].hp--`); they are not available inside an expression, nor through another name for state's own value.",
+        node
+      );
       return null;
     }
     this.report(DiagnosticCode.UnsupportedExpression, `Unsupported expression (${SyntaxKind[node.kind]}).`, node);
@@ -210,17 +325,29 @@ export class ExpressionLowering extends LoweringBase {
     const created = node as unknown as { expression: Expression; typeArguments?: readonly Node[]; arguments?: readonly Expression[] };
     const callee = unwrapParens(created.expression);
     if (!this.computes()) {
-      this.report(DiagnosticCode.UnsupportedExpression, "`new` is only valid in a handler or in statements of the component body (which are worked out again only when what they read changes), not in a single expression: it would run on every render. Make the value once with `useState(() => new …)`, or in a `.ts` file.", node);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        "`new` is only valid in a handler or in statements of the component body (which are worked out again only when what they read changes), not in a single expression: it would run on every render. Make the value once with `useState(() => new …)`, or in a `.ts` file.",
+        node
+      );
       return null;
     }
-    const known = isIdentifier(callee) && !this.scope.has(callee.text) && (HANDLER_CONSTRUCTORS.has(callee.text) || this.plainImports.has(callee.text));
+    const known =
+      isIdentifier(callee) && !this.scope.has(callee.text) && (HANDLER_CONSTRUCTORS.has(callee.text) || this.plainImports.has(callee.text));
     if (!known || !isIdentifier(callee)) {
-      this.report(DiagnosticCode.UnsupportedExpression, `\`new\` takes a class imported from a \`.ts\` file or one of ${[...HANDLER_CONSTRUCTORS].join(", ")}.`, callee);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `\`new\` takes a class imported from a \`.ts\` file or one of ${[...HANDLER_CONSTRUCTORS].join(", ")}.`,
+        callee
+      );
       return null;
     }
     const args = this.lowerPlainArgs(created.arguments ?? []);
     if (!args) return null;
-    const typeArguments = created.typeArguments && created.typeArguments.length > 0 ? `<${created.typeArguments.map((t) => t.getText(this.sourceFile)).join(", ")}>` : null;
+    const typeArguments =
+      created.typeArguments && created.typeArguments.length > 0
+        ? `<${created.typeArguments.map((t) => t.getText(this.sourceFile)).join(", ")}>`
+        : null;
     return { kind: "New", callee: callee.text, typeArguments, args };
   }
 
@@ -281,7 +408,11 @@ export class ExpressionLowering extends LoweringBase {
     const out: ExprIR[] = [];
     for (const node of nodes) {
       const fn = unwrapParens(node);
-      const lowered = isArrowFunction(fn) ? (isBlock(fn.body) ? lowerFunctionValue(this, fn) : this.lowerArrow(fn, "function")) : this.lowerNode(node);
+      const lowered = isArrowFunction(fn)
+        ? isBlock(fn.body)
+          ? lowerFunctionValue(this, fn)
+          : this.lowerArrow(fn, "function")
+        : this.lowerNode(node);
       if (!lowered) return null;
       out.push(lowered);
     }
@@ -304,7 +435,11 @@ export class ExpressionLowering extends LoweringBase {
         const value = this.lowerNode(property.expression);
         entry = value && { kind: "Spread", value };
       } else {
-        this.report(DiagnosticCode.UnsupportedExpression, "Object properties must be `name: value`, `name` (shorthand) or `...spread`; no methods, getters or computed names.", property);
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          "Object properties must be `name: value`, `name` (shorthand) or `...spread`; no methods, getters or computed names.",
+          property
+        );
       }
       if (entry) properties.push(entry);
       else ok = false;
@@ -321,17 +456,26 @@ export class ExpressionLowering extends LoweringBase {
   protected lowerArrow(node: Expression, method: string): ExprIR | null {
     const fn = unwrapParens(node);
     if (!isArrowFunction(fn)) {
-      this.report(DiagnosticCode.UnsupportedExpression, `\`${method}\` takes an inline arrow function: \`items.${method}((item) => …)\`.`, node);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `\`${method}\` takes an inline arrow function: \`items.${method}((item) => …)\`.`,
+        node
+      );
       return null;
     }
     if (isBlock(fn.body)) {
-      this.report(DiagnosticCode.UnsupportedExpression, `The \`${method}\` callback must be a single expression (\`(item) => item.alive\`), not a block.`, fn.body);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `The \`${method}\` callback must be a single expression (\`(item) => item.alive\`), not a block.`,
+        fn.body
+      );
       return null;
     }
     const lowered = lowerFunction(this, fn, { paramTypes: "contextual", returns: "value", what: `${method} callback` });
     if (!lowered) return null;
     const only = lowered.body[0];
-    if (lowered.body.length !== 1 || only?.kind !== "Return" || !only.value) throw new Error("expression-bodied arrow lowered to statements");
+    if (lowered.body.length !== 1 || only?.kind !== "Return" || !only.value)
+      throw new Error("expression-bodied arrow lowered to statements");
     return { kind: "Arrow", params: lowered.params, body: only.value };
   }
 
@@ -346,17 +490,30 @@ export class ExpressionLowering extends LoweringBase {
     }
     if (isIdentifier(root) && this.scope.get(root.text)?.kind === "storeRoot") return this.lowerStoreRead(storePath, node);
     // `Math.PI`: a constant, written as it is.
-    if (isIdentifier(node.expression) && node.expression.text === "Math" && !this.scope.has("Math") && MATH_CONSTANTS.has(`Math.${node.name.text}`)) {
+    if (
+      isIdentifier(node.expression) &&
+      node.expression.text === "Math" &&
+      !this.scope.has("Math") &&
+      MATH_CONSTANTS.has(`Math.${node.name.text}`)
+    ) {
       return { kind: "PlainRef", name: `Math.${node.name.text}` };
     }
     const propsObject = this.propsObjectMember(node);
     if (propsObject !== undefined) {
       if (propsObject === null) return null;
       if (propsObject.role === "callback" && !this.mode.allowCallbackRead) {
-        this.report(DiagnosticCode.UnsupportedExpression, `'${propsObject.name}' is a callback prop: call it (\`props.${propsObject.name}?.()\`) or forward it whole (\`onX={props.${propsObject.name}}\`).`, node);
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          `'${propsObject.name}' is a callback prop: call it (\`props.${propsObject.name}?.()\`) or forward it whole (\`onX={props.${propsObject.name}}\`).`,
+          node
+        );
         return null;
       }
-      return { kind: "PropRead", name: propsObject.name, ...(this.mode.inHandler && propsObject.role === "value" ? { live: true as const } : {}) };
+      return {
+        kind: "PropRead",
+        name: propsObject.name,
+        ...(this.mode.inHandler && propsObject.role === "value" ? { live: true as const } : {}),
+      };
     }
     const mutable = this.mutableField(node);
     if (mutable === "error") return null;
@@ -374,7 +531,11 @@ export class ExpressionLowering extends LoweringBase {
     // Numbers and booleans have no members worth reading, so those are caught here.
     const primitive = this.knownPrimitive(node.expression);
     if (primitive === "number" || primitive === "boolean") {
-      this.report(DiagnosticCode.UnsupportedExpression, `'${node.expression.getText(this.sourceFile)}' is a ${primitive}; it has no member '${name}'.`, node.name);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `'${node.expression.getText(this.sourceFile)}' is a ${primitive}; it has no member '${name}'.`,
+        node.name
+      );
       return null;
     }
     const object = this.lowerNode(node.expression);
@@ -402,17 +563,29 @@ export class ExpressionLowering extends LoweringBase {
     if (isIdentifier(callee)) {
       const binding = this.scope.get(callee.text);
       if (binding?.kind === "sound") {
-        this.report(DiagnosticCode.SoundOutsideHandler, `'${callee.text}()' plays a sound, so it is only valid as a statement in a handler: in JSX, a derived value or an expression it would play on every render.`, node);
+        this.report(
+          DiagnosticCode.SoundOutsideHandler,
+          `'${callee.text}()' plays a sound, so it is only valid as a statement in a handler: in JSX, a derived value or an expression it would play on every render.`,
+          node
+        );
         return null;
       }
       if (binding?.kind === "action") {
-        this.report(DiagnosticCode.UnsupportedExpression, `'${callee.text}()' is a game-state action, so it is only valid as a statement in a handler: in JSX or a derived value it would run on every render.`, node);
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          `'${callee.text}()' is a game-state action, so it is only valid as a statement in a handler: in JSX or a derived value it would run on every render.`,
+          node
+        );
         return null;
       }
       // A function declared in the component body: a handler, so it is called in handlers, not while rendering.
       if (binding?.kind === "function") {
         if (!this.mode.inHandler) {
-          this.report(DiagnosticCode.UnsupportedExpression, `'${callee.text}' is a function of this component, which may set state: call it in a handler or a callback, not while rendering. A value to show goes in a derived \`const\` or a function in a \`.ts\` file.`, node);
+          this.report(
+            DiagnosticCode.UnsupportedExpression,
+            `'${callee.text}' is a function of this component, which may set state: call it in a handler or a callback, not while rendering. A value to show goes in a derived \`const\` or a function in a \`.ts\` file.`,
+            node
+          );
           return null;
         }
         const args = this.lowerPlainArgs(node.arguments);
@@ -457,14 +630,31 @@ export class ExpressionLowering extends LoweringBase {
     // In a handler, the standard library as written: `Object.keys(…)`, `JSON.stringify(…)`, `Number.isFinite(…)`, `Array.from(…)`,
     // any `Math` function, `console.log(…)`, `parseInt(…)`.
     if (this.computes()) {
-      const namespace = isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && HANDLER_NAMESPACES.has(callee.expression.text) && !this.scope.has(callee.expression.text) && !this.plainImports.has(callee.expression.text)
-        ? `${callee.expression.text}.${callee.name.text}`
-        : null;
-      const global = isIdentifier(callee) && HANDLER_GLOBALS.has(callee.text) && !this.scope.has(callee.text) && !this.plainImports.has(callee.text) ? callee.text : null;
+      const namespace =
+        isPropertyAccessExpression(callee) &&
+        isIdentifier(callee.expression) &&
+        HANDLER_NAMESPACES.has(callee.expression.text) &&
+        !this.scope.has(callee.expression.text) &&
+        !this.plainImports.has(callee.expression.text)
+          ? `${callee.expression.text}.${callee.name.text}`
+          : null;
+      const global =
+        isIdentifier(callee) && HANDLER_GLOBALS.has(callee.text) && !this.scope.has(callee.text) && !this.plainImports.has(callee.text)
+          ? callee.text
+          : null;
       const name = namespace ?? global;
-      if (name !== null && !(namespace !== null && callee.kind === SyntaxKind.PropertyAccessExpression && Object.hasOwn(MATH_FUNCTIONS, name))) {
+      if (
+        name !== null &&
+        !(namespace !== null && callee.kind === SyntaxKind.PropertyAccessExpression && Object.hasOwn(MATH_FUNCTIONS, name))
+      ) {
         if (name === "Math.random") {
-          this.diagnostics.push(warning(DiagnosticCode.UnsupportedExpression, "`Math.random()` is different on every run, so replays, tests and the parity between hosts will not repeat it. Seed your own generator in a `.ts` file for game logic.", this.span(node)));
+          this.diagnostics.push(
+            warning(
+              DiagnosticCode.UnsupportedExpression,
+              "`Math.random()` is different on every run, so replays, tests and the parity between hosts will not repeat it. Seed your own generator in a `.ts` file for game logic.",
+              this.span(node)
+            )
+          );
         }
         const args = this.lowerFunctionArgs(node.arguments);
         if (!args) return null;
@@ -472,15 +662,28 @@ export class ExpressionLowering extends LoweringBase {
       }
     }
     // A timer (`after(0.15, () => setFlash(false))`): the component's own, so it is cancelled when the component goes.
-    if (isIdentifier(callee) && Object.hasOwn(TIMER_FUNCTIONS, callee.text) && !this.scope.has(callee.text) && !this.plainImports.has(callee.text)) {
+    if (
+      isIdentifier(callee) &&
+      Object.hasOwn(TIMER_FUNCTIONS, callee.text) &&
+      !this.scope.has(callee.text) &&
+      !this.plainImports.has(callee.text)
+    ) {
       this.requireImport(callee.text, callee);
       if (!this.mode.inHandler) {
-        this.report(DiagnosticCode.UnsupportedExpression, `'${callee.text}()' sets a timer, so it is only valid as a statement in a handler (\`useInput\`, \`useUpdate\`, \`useMount\`, a callback prop), not while rendering.`, node);
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          `'${callee.text}()' sets a timer, so it is only valid as a statement in a handler (\`useInput\`, \`useUpdate\`, \`useMount\`, a callback prop), not while rendering.`,
+          node
+        );
         return null;
       }
       const expected = TIMER_FUNCTIONS[callee.text]!;
       if (node.arguments.length !== expected) {
-        this.report(DiagnosticCode.UnsupportedExpression, `${callee.text} expects ${expected} argument(s)${expected === 2 ? ": the seconds, and the function to call (\`() => …\`)" : ""}.`, node);
+        this.report(
+          DiagnosticCode.UnsupportedExpression,
+          `${callee.text} expects ${expected} argument(s)${expected === 2 ? ": the seconds, and the function to call (`() => …`)" : ""}.`,
+          node
+        );
         return null;
       }
       // The function it calls is a handler of its own, run later: setters, actions and sounds, as in any handler.
@@ -489,11 +692,21 @@ export class ExpressionLowering extends LoweringBase {
       return { kind: "Call", callee: { kind: "Own", name: callee.text }, args };
     }
     let result: { callee: CalleeIR; expected: number; label: string } | null = null;
-    if (isPropertyAccessExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "Math" && !this.scope.has("Math")) {
+    if (
+      isPropertyAccessExpression(callee) &&
+      isIdentifier(callee.expression) &&
+      callee.expression.text === "Math" &&
+      !this.scope.has("Math")
+    ) {
       const name = `Math.${callee.name.text}`;
       const expected = MATH_FUNCTIONS[name];
       if (expected !== undefined) result = { callee: { kind: "Function", name }, expected, label: name };
-    } else if (isIdentifier(callee) && Object.hasOwn(GLOBAL_FUNCTIONS, callee.text) && !this.scope.has(callee.text) && !this.plainImports.has(callee.text)) {
+    } else if (
+      isIdentifier(callee) &&
+      Object.hasOwn(GLOBAL_FUNCTIONS, callee.text) &&
+      !this.scope.has(callee.text) &&
+      !this.plainImports.has(callee.text)
+    ) {
       result = { callee: { kind: "Function", name: callee.text }, expected: GLOBAL_FUNCTIONS[callee.text]!, label: callee.text };
     } else if (isIdentifier(callee) && this.manifest.functions[callee.text] !== undefined && !this.scope.has(callee.text)) {
       this.requireImport(callee.text, callee);
@@ -511,7 +724,11 @@ export class ExpressionLowering extends LoweringBase {
       result = { callee: { kind: "Method", receiver: receiver.read, name: callee.name.text }, expected, label: callee.name.text };
     }
     if (!result) {
-      const said = isIdentifier(callee) ? callee.text : isPropertyAccessExpression(callee) && isIdentifier(callee.expression) ? `${callee.expression.text}.${callee.name.text}` : null;
+      const said = isIdentifier(callee)
+        ? callee.text
+        : isPropertyAccessExpression(callee) && isIdentifier(callee.expression)
+          ? `${callee.expression.text}.${callee.name.text}`
+          : null;
       const instead = said === null ? undefined : INSTEAD[said];
       if (instead !== undefined) {
         this.report(DiagnosticCode.UnsupportedExpression, instead, node);
@@ -519,21 +736,33 @@ export class ExpressionLowering extends LoweringBase {
       }
       if (isIdentifier(callee) && !this.scope.has(callee.text)) {
         if (this.declaredAfterError(callee.text)) return null;
-        const near = nearest(callee.text, [...this.plainImports, ...Object.keys(this.manifest.functions), ...Object.keys(GLOBAL_FUNCTIONS)]);
+        const near = nearest(callee.text, [
+          ...this.plainImports,
+          ...Object.keys(this.manifest.functions),
+          ...Object.keys(GLOBAL_FUNCTIONS),
+        ]);
         this.report(
           DiagnosticCode.UnsupportedExpression,
           `'${callee.text}' is not a function the compiler knows${near !== null ? ` (did you mean '${near}'?)` : ""}. A component calls functions imported from a \`.ts\` file (\`import { ${callee.text} } from "./rules.ts"\`), its own functions, and ${this.allowlistedCalls()}.`,
-          node,
+          node
         );
         return null;
       }
-      this.report(DiagnosticCode.UnsupportedExpression, `Only allowlisted calls are supported: ${this.allowlistedCalls()}, and methods of handler parameters.`, node);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `Only allowlisted calls are supported: ${this.allowlistedCalls()}, and methods of handler parameters.`,
+        node
+      );
       return null;
     }
     const count = node.arguments.length;
     // The manifest's arity: a count, -1 for at least one, -2 for any.
     if (result.expected !== -2 && (result.expected === -1 ? count < 1 : count !== result.expected)) {
-      this.report(DiagnosticCode.UnsupportedExpression, `${result.label} expects ${result.expected === -1 ? "at least one" : result.expected} argument(s).`, node);
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        `${result.label} expects ${result.expected === -1 ? "at least one" : result.expected} argument(s).`,
+        node
+      );
       return null;
     }
     const args = this.lowerAll(node.arguments);
@@ -551,7 +780,16 @@ export class ExpressionLowering extends LoweringBase {
       if (!receiver) return null;
       const args = this.lowerFunctionArgs(node.arguments);
       if (!args) return null;
-      return { kind: "Call", callee: { kind: "ValueMethod", receiver, name, optional: callee.questionDotToken !== undefined || node.questionDotToken !== undefined }, args };
+      return {
+        kind: "Call",
+        callee: {
+          kind: "ValueMethod",
+          receiver,
+          name,
+          optional: callee.questionDotToken !== undefined || node.questionDotToken !== undefined,
+        },
+        args,
+      };
     }
     // A method of a per-instance object (state a factory made, or a `useMutable` field holding one: `b.body.move(dx, dy)`): opaque,
     // like a plain function.
@@ -582,7 +820,11 @@ export class ExpressionLowering extends LoweringBase {
     }
     if (name === "forEach") {
       // It changes nothing itself; its function does, through the variables around it, which the compiler does not follow there.
-      this.report(code, "`forEach` is not supported: write a `for (const item of items) { … }` loop, which works in the component body and in handlers, or `map`, `filter` or `some` for a value.", callee.name);
+      this.report(
+        code,
+        "`forEach` is not supported: write a `for (const item of items) { … }` loop, which works in the component body and in handlers, or `map`, `filter` or `some` for a value.",
+        callee.name
+      );
       return null;
     }
     if (Object.hasOwn(MUTATING_ARRAY_METHODS, name)) {
@@ -607,14 +849,14 @@ export class ExpressionLowering extends LoweringBase {
         this.report(
           code,
           `\`${name}\` changes \`${list}\` in place: write it as a statement of its own (\`${list}.${name}(…);\`), which the compiler turns into a new array. As a value it is not available; for the new array: \`${instead[name] ?? `${list} = …`}\`.`,
-          callee.name,
+          callee.name
         );
         return null;
       }
       this.report(
         code,
         `\`${name}\` changes the array in place, which never re-renders (a setter only renders when it gets a new array). Build a new array instead: ${MUTATING_ARRAY_METHODS[name]}.`,
-        callee.name,
+        callee.name
       );
       return null;
     }
@@ -627,7 +869,7 @@ export class ExpressionLowering extends LoweringBase {
       this.report(
         code,
         `'${name}' is not an allowlisted call. Supported: ${this.allowlistedCalls()}, methods of handler parameters, the array methods ${Object.keys(ARRAY_METHODS).join(", ")}, and the string and number methods ${[...VALUE_METHODS].join(", ")}.`,
-        callee.name,
+        callee.name
       );
       return null;
     }
@@ -662,7 +904,12 @@ export class ExpressionLowering extends LoweringBase {
   /** Resolves an expression that must be a handler parameter of a named runtime type. */
   protected lowerHandle(node: Expression): { type: string; read: ParamReadIR } | null {
     const handle = this.handleParam(node);
-    if (!handle) this.report(DiagnosticCode.UnsupportedExpression, "Members can only be accessed on handler parameters of a runtime type (e.g. `input`).", node);
+    if (!handle)
+      this.report(
+        DiagnosticCode.UnsupportedExpression,
+        "Members can only be accessed on handler parameters of a runtime type (e.g. `input`).",
+        node
+      );
     return handle;
   }
 
@@ -692,12 +939,13 @@ export class ExpressionLowering extends LoweringBase {
     }
     // A name whose declaration was refused already has its error (`useRef`, a failed `const`): the write is not reported again.
     let root: Expression = node;
-    while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root)) root = unwrapParens(root.expression);
+    while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root))
+      root = unwrapParens(root.expression);
     if (isIdentifier(root) && !this.scope.has(root.text) && this.declaredAfterError(root.text)) return null;
     this.report(
       DiagnosticCode.UnsupportedStatement,
       "Only `let` locals and the members of a handler's own values can be assigned. To change state, write through its `useMutable` field (`s.foes[i].hp = 0`, `s.pos.x = 3`) or give the field a new value (`s.foes = s.foes.map(…)`): a name for one of its items (`const e = s.foes[0]`) or a loop variable is a read, not a way to write.",
-      node,
+      node
     );
     return null;
   }

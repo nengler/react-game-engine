@@ -16,6 +16,7 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rea
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { transformSync } from "esbuild";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -81,7 +82,13 @@ export function buildNative(flavor: Flavor, tools: BuildTools = { cmake: true, c
     run("cmake", ["--build", folder, "-j", "--target", "rge"]);
   }
   if (tools.cargo) {
-    const cargo = ["build", "--release", "--manifest-path", "host/Cargo.toml", ...(flavor === "headless" ? ["--features", "headless"] : [])];
+    const cargo = [
+      "build",
+      "--release",
+      "--manifest-path",
+      "host/Cargo.toml",
+      ...(flavor === "headless" ? ["--features", "headless"] : []),
+    ];
     run("cargo", cargo, flavor === "headless" ? { ...process.env, CARGO_TARGET_DIR: join(ROOT, "host/target-headless") } : process.env);
   }
 }
@@ -94,19 +101,34 @@ const WINDOW_LIBRARIES = "libx11-dev libxrandr-dev libxi-dev libxcursor-dev libx
  * `@rge/native` holds (`lib/<platform>/<flavor>/…`, `bin/…`); `tools` is what the machine has.
  */
 export function setupNotes(shipped: readonly string[], tools: BuildTools): string[] {
-  const has = (kind: string, flavor: string): boolean => shipped.some((file) => file.startsWith(`${kind}/`) && file.includes(`/${flavor}/`));
+  const has = (kind: string, flavor: string): boolean =>
+    shipped.some((file) => file.startsWith(`${kind}/`) && file.includes(`/${flavor}/`));
   const lines = ["Write, test and check games: ready. `rge create` and `rge check` need only Node."];
   if (has("lib", "desktop")) lines.push("A window (`rge dev`): ready.");
-  else lines.push("A window (`rge dev`): not built. It needs the platform's windowing libraries (Debian or Ubuntu: sudo apt install " + WINDOW_LIBRARIES + "), then `npm run dist` again.");
+  else
+    lines.push(
+      "A window (`rge dev`): not built. It needs the platform's windowing libraries (Debian or Ubuntu: sudo apt install " +
+        WINDOW_LIBRARIES +
+        "), then `npm run dist` again."
+    );
   if (has("lib", "headless")) lines.push("Screenshots and `rge package --headless`: ready.");
   else {
     const why = tools.cmake ? "the build failed (see above; it needs a C compiler)" : "cmake was not found";
-    lines.push("Screenshots and `rge package`: no librge, because " + why + ". Install cmake and a C compiler (Debian or Ubuntu: sudo apt install build-essential cmake; macOS: xcode-select --install and brew install cmake), then `npm run dist` again.");
+    lines.push(
+      "Screenshots and `rge package`: no librge, because " +
+        why +
+        ". Install cmake and a C compiler (Debian or Ubuntu: sudo apt install build-essential cmake; macOS: xcode-select --install and brew install cmake), then `npm run dist` again."
+    );
   }
-  if (shipped.some((file) => file.startsWith("bin/"))) lines.push("`rge package --engine quickjs`, and `rge check` against the Rust host: ready.");
+  if (shipped.some((file) => file.startsWith("bin/")))
+    lines.push("`rge package --engine quickjs`, and `rge check` against the Rust host: ready.");
   else {
     const why = tools.cargo ? "the build failed (see above)" : "cargo was not found";
-    lines.push("`rge package --engine quickjs`, and `rge check` against the Rust host: no rge-host, because " + why + ". Install Rust (https://rustup.rs), then `npm run dist` again. Until then `rge check` compares against Node only.");
+    lines.push(
+      "`rge package --engine quickjs`, and `rge check` against the Rust host: no rge-host, because " +
+        why +
+        ". Install Rust (https://rustup.rs), then `npm run dist` again. Until then `rge check` compares against Node only."
+    );
   }
   return lines;
 }
@@ -120,9 +142,13 @@ function builtBinaries(): { readonly path: string; readonly from: string }[] {
     // it only counts as the desktop host when a desktop librge exists too.
     // Conversely a headless host may be there (`host:build:headless`) with no desktop librge, so it is shipped as the headless one.
     const desktopLib = find(BUILDS.desktop.lib, libName);
-    const candidates = flavor === "headless" ? [BUILDS.headless.host, ...(desktopLib === null ? [BUILDS.desktop.host] : [])] : [BUILDS.desktop.host];
+    const candidates =
+      flavor === "headless" ? [BUILDS.headless.host, ...(desktopLib === null ? [BUILDS.desktop.host] : [])] : [BUILDS.desktop.host];
     const host = flavor === "desktop" && lib === null ? null : find(candidates, hostName);
-    for (const [kind, from, name] of [["lib", lib, libName], ["bin", host, hostName]] as const) {
+    for (const [kind, from, name] of [
+      ["lib", lib, libName],
+      ["bin", host, hostName],
+    ] as const) {
       if (from !== null) found.push({ path: `${kind}/${platform}/${flavor}/${name}`, from });
     }
   }
@@ -216,9 +242,7 @@ export function stagePackage(name: string, staging: string): string {
     dependencies: pkg.dependencies,
   };
   if (pkg.bin) {
-    built.bin = Object.fromEntries(
-      Object.entries(pkg.bin as Record<string, string>).map(([bin, file]) => [bin, builtPath(file, ".js")]),
-    );
+    built.bin = Object.fromEntries(Object.entries(pkg.bin as Record<string, string>).map(([bin, file]) => [bin, builtPath(file, ".js")]));
   }
   built.files = name === "native" ? ["dist", "lib", "bin"] : name === "cli" ? ["dist", "template", "templates"] : ["dist"];
   if (name === "cli") {
@@ -255,7 +279,7 @@ function emitDeclarations(name: string, stage: string): void {
         outDir: join(stage, "dist"),
       },
       include: [join(source, "src")],
-    }),
+    })
   );
   const tsc = join(ROOT, "node_modules/.bin/tsc");
   try {
@@ -339,7 +363,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   for (const tarball of tarballs) console.log(relative(ROOT, tarball));
   if (build) {
     console.log("");
-    for (const line of setupNotes(builtBinaries().map((b) => b.path), tools)) console.log(line);
+    for (const line of setupNotes(
+      builtBinaries().map((b) => b.path),
+      tools
+    ))
+      console.log(line);
     console.log(`\nNext: node packages/cli/src/cli.ts create ~/my-game --packs ${relative(process.cwd(), out) || "."}`);
   }
 }

@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { parseInputScript, runScript, type Player } from "@rge/player";
 import { createMemoryStorage, setStorage, setVolume, Text, type GameObject } from "@rge/runtime";
+
 import { bindings, gameConfig } from "../game.ts";
 import { save, useGame } from "../src/GameState.ts";
-import { settings } from "../src/settings.ts";
 import { controls } from "../src/rules/controls.ts";
 import { settingsRows, titleRows } from "../src/rules/menu.ts";
+import { settings } from "../src/settings.ts";
 
 /** The rows of the menu on screen, as `label:value`: each row of the `Choices` column holds its label and value texts. */
 function menuRows(player: Player): string[] {
@@ -28,15 +30,26 @@ function menuRows(player: Player): string[] {
 /** Play a script from the title on a backend that starts with `storage`; `backend.stored` is what the run wrote. */
 function run(script: string, storage: Record<string, string> = {}) {
   const frames = parseInputScript(script, { bindings });
-  return runScript(gameConfig, frames, (player) => {
-    const s = useGame.getState();
-    return { screen: s.screen, map: s.run.map, items: { ...s.run.items }, rows: menuRows(player) };
-  }, { storage });
+  return runScript(
+    gameConfig,
+    frames,
+    (player) => {
+      const s = useGame.getState();
+      return { screen: s.screen, map: s.run.map, items: { ...s.run.items }, rows: menuRows(player) };
+    },
+    { storage }
+  );
 }
 
 test("the title offers Continue only when there is a save", () => {
-  assert.deepEqual(titleRows(false).map((r) => r.id), ["new", "settings"]);
-  assert.deepEqual(titleRows(true).map((r) => r.id), ["continue", "new", "settings"]);
+  assert.deepEqual(
+    titleRows(false).map((r) => r.id),
+    ["new", "settings"]
+  );
+  assert.deepEqual(
+    titleRows(true).map((r) => r.id),
+    ["continue", "new", "settings"]
+  );
 });
 
 test("stepping onto a shrine writes the save, and a second run's title offers Continue and returns to where it was kept", () => {
@@ -44,7 +57,7 @@ test("stepping onto a shrine writes the save, and a second run's title offers Co
   const first = run("_, Enter, _*3, right*50, left*50, up*20, _*3");
   const stored = first.backend.stored.get("save");
   assert.ok(stored !== undefined, "the shrine wrote a save");
-  const data = (JSON.parse(stored) as { version: number; data: { items: Record<string, number>; shrine: { map: string } } });
+  const data = JSON.parse(stored) as { version: number; data: { items: Record<string, number>; shrine: { map: string } } };
   assert.equal(data.version, 1);
   assert.equal(data.data.items.lantern, 1, "the save holds what was picked up before the shrine");
 
@@ -86,7 +99,10 @@ test("rebinding: choose a key's row, press a key, and the action means that key 
   // Settings; down to the row of "Up" (after music, effects, full screen); confirm; press W.
   const r = run("_, down, Enter, _*2, down, _, down, _, down, _, Enter, _, W, _*2");
   const states = r.states;
-  assert.ok(states.some((s) => s.rows.includes("Up:press a key...")), "the row waited for a key");
+  assert.ok(
+    states.some((s) => s.rows.includes("Up:press a key...")),
+    "the row waited for a key"
+  );
   assert.ok(!states.at(-1)!.rows.some((row) => row.endsWith("press a key...")));
   assert.deepEqual(controls.keysOf("up"), ["W"], "the Controls were rebound");
   const stored = JSON.parse(r.backend.stored.get("settings") as string) as { data: { bindings: Record<string, string[]> } };
@@ -102,7 +118,10 @@ test("rebinding: Escape while a row waits for a key gives no key, and the menu u
   // Settings; down to "Up"; confirm; Escape. The prompt is modal, so the menu does not take the Escape or the confirm.
   const r = run("_, down, Enter, _*2, down, _, down, _, down, _, Enter, _, Escape, _*2");
   const states = r.states;
-  assert.ok(states.some((s) => s.rows.includes("Up:press a key...")), "the row waited for a key");
+  assert.ok(
+    states.some((s) => s.rows.includes("Up:press a key...")),
+    "the row waited for a key"
+  );
   assert.ok(!states.at(-1)!.rows.some((row) => row.endsWith("press a key...")), "it stopped waiting");
   assert.deepEqual(controls.keysOf("up"), ["ArrowUp", "W", "PadUp"], "no key was given: the defaults stand");
   assert.equal(states.at(-1)!.screen, "settings", "still on the settings screen");
@@ -127,15 +146,24 @@ test("the pause screen is modal: Escape opens it, the world hears no keys while 
   const before = states[opened]!.x;
   assert.ok(before > states[0]!.x, "the character walked before the pause");
   assert.equal(states[closed - 1]!.x, before, "holding right while paused moved nothing");
-  assert.ok(states.slice(opened, closed).some((s) => s.rows.includes("Resume:")), "the pause menu was shown");
+  assert.ok(
+    states.slice(opened, closed).some((s) => s.rows.includes("Resume:")),
+    "the pause menu was shown"
+  );
   assert.ok(states.at(-1)!.x > before, "the character walks again after Escape closes it");
 });
 
 test("settings rows show volumes as percentages and the keys by name", () => {
-  const rows = settingsRows({ music: 0.6, effects: 0.8, fullscreen: true }, { up: ["ArrowUp", "W"], action: ["Z"], confirm: ["Enter"], back: ["Escape"] }, "left");
-  assert.deepEqual(rows.slice(0, 3).map((r) => r.value), ["60%", "80%", "On"]);
+  const rows = settingsRows(
+    { music: 0.6, effects: 0.8, fullscreen: true },
+    { up: ["ArrowUp", "W"], action: ["Z"], confirm: ["Enter"], back: ["Escape"] },
+    "left"
+  );
+  assert.deepEqual(
+    rows.slice(0, 3).map((r) => r.value),
+    ["60%", "80%", "On"]
+  );
   assert.equal(rows.find((r) => r.id === "bind:up")!.value, "Up / W");
   assert.equal(rows.find((r) => r.id === "bind:left")!.value, "press a key...");
   assert.equal(rows.find((r) => r.id === "bind:back")!.value, "Esc");
 });
-

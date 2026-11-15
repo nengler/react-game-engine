@@ -36,7 +36,9 @@ export function getStorage(): StorageSink | null {
 }
 
 /** A sink that keeps its entries in memory: for tests, and for a recording backend that starts from given entries. */
-export function createMemoryStorage(initial: Readonly<Record<string, string>> = {}): StorageSink & { readonly entries: Map<string, string> } {
+export function createMemoryStorage(
+  initial: Readonly<Record<string, string>> = {}
+): StorageSink & { readonly entries: Map<string, string> } {
   const entries = new Map(Object.entries(initial));
   return {
     entries,
@@ -54,8 +56,15 @@ const defaultWarn = (message: string): void => {
 function parseEntry(text: string): { version: number; data: unknown; tree?: Record<string, Record<string, unknown>> } | null {
   try {
     const value = JSON.parse(text) as { version?: unknown; data?: unknown; tree?: unknown } | null;
-    if (typeof value === "object" && value !== null && typeof value.version === "number" && Number.isInteger(value.version) && "data" in value) {
-      const tree = typeof value.tree === "object" && value.tree !== null ? (value.tree as Record<string, Record<string, unknown>>) : undefined;
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      typeof value.version === "number" &&
+      Number.isInteger(value.version) &&
+      "data" in value
+    ) {
+      const tree =
+        typeof value.tree === "object" && value.tree !== null ? (value.tree as Record<string, Record<string, unknown>>) : undefined;
       return { version: value.version, data: value.data, ...(tree ? { tree } : {}) };
     }
   } catch {
@@ -104,7 +113,10 @@ export class Save<Data> {
   /** Keep what `pick` returns. True when it was written. */
   write(): boolean {
     if (sink === null) return false;
-    const entry: { version: number; data: unknown; tree?: Record<string, Record<string, unknown>> } = { version: this.#options.version, data: this.#options.pick?.() ?? null };
+    const entry: { version: number; data: unknown; tree?: Record<string, Record<string, unknown>> } = {
+      version: this.#options.version,
+      data: this.#options.pick?.() ?? null,
+    };
     if (this.#options.tree) entry.tree = this.#plainTree();
     return sink.write(this.#options.name, JSON.stringify(entry));
   }
@@ -124,7 +136,10 @@ export class Save<Data> {
       return false;
     }
     if (entry.version > this.#options.version) {
-      if (!this.#warned) warn(`The save '${this.#options.name}' is from a newer version of the game (save version ${entry.version}, this game reads up to ${this.#options.version}): it is ignored.`);
+      if (!this.#warned)
+        warn(
+          `The save '${this.#options.name}' is from a newer version of the game (save version ${entry.version}, this game reads up to ${this.#options.version}): it is ignored.`
+        );
       this.#warned = true;
       return false;
     }
@@ -136,7 +151,10 @@ export class Save<Data> {
         data = step(data);
       }
     } catch (error) {
-      if (!this.#warned) warn(`The save '${this.#options.name}' cannot be brought up to version ${this.#options.version}: ${error instanceof Error ? error.message : String(error)}.`);
+      if (!this.#warned)
+        warn(
+          `The save '${this.#options.name}' cannot be brought up to version ${this.#options.version}: ${error instanceof Error ? error.message : String(error)}.`
+        );
       this.#warned = true;
       return false;
     }
@@ -158,7 +176,9 @@ export class Save<Data> {
       out[path] = kept;
     }
     if (skipped.length > 0 && !this.#warnedTree) {
-      (this.#options.warn ?? defaultWarn)(`The save '${this.#options.name}' leaves out state that is not plain data (it cannot be written as JSON): ${skipped.join(", ")}.`);
+      (this.#options.warn ?? defaultWarn)(
+        `The save '${this.#options.name}' leaves out state that is not plain data (it cannot be written as JSON): ${skipped.join(", ")}.`
+      );
       this.#warnedTree = true;
     }
     return out;
@@ -264,11 +284,14 @@ export class Settings<S extends EngineSettings> {
       if (entry !== null && typeof entry.data === "object" && entry.data !== null) {
         for (const key of Object.keys(this.#options.defaults)) {
           const value = (entry.data as Record<string, unknown>)[key];
-          if (value !== undefined && typeof value === typeof (this.#options.defaults as Record<string, unknown>)[key]) (this.#values as Record<string, unknown>)[key] = value;
-          else if (value === null && (this.#options.defaults as Record<string, unknown>)[key] === null) (this.#values as Record<string, unknown>)[key] = null;
+          if (value !== undefined && typeof value === typeof (this.#options.defaults as Record<string, unknown>)[key])
+            (this.#values as Record<string, unknown>)[key] = value;
+          else if (value === null && (this.#options.defaults as Record<string, unknown>)[key] === null)
+            (this.#values as Record<string, unknown>)[key] = null;
         }
         const bindings = (entry.data as Record<string, unknown>)["bindings"];
-        if (bindings !== null && typeof bindings === "object") (this.#values as EngineSettings).bindings = bindings as Record<string, string[]>;
+        if (bindings !== null && typeof bindings === "object")
+          (this.#values as EngineSettings).bindings = bindings as Record<string, string[]>;
       } else if (!this.#warned) {
         (this.#options.warn ?? defaultWarn)(`The settings file '${this.#options.name}' cannot be read: the defaults are used.`);
         this.#warned = true;

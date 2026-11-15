@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { hostFileName, libraryFileName, nativeHost, nativeLibrary, type NativeFlavor } from "@rge/native";
 
 export type { NativeFlavor };
@@ -26,6 +27,9 @@ export function findHost(flavor: NativeFlavor, env: NodeJS.ProcessEnv = process.
   if (fromEnv) return existsSync(fromEnv) ? resolve(fromEnv) : null;
   const name = hostFileName();
   // host/target/release is whatever `cargo build` last built there; host/target-headless is what `npm run pack --build` builds.
-  const repo = flavor === "headless" ? [join(REPO, "host/target-headless/release", name), join(REPO, "host/target/release", name)] : [join(REPO, "host/target/release", name)];
+  const repo =
+    flavor === "headless"
+      ? [join(REPO, "host/target-headless/release", name), join(REPO, "host/target/release", name)]
+      : [join(REPO, "host/target/release", name)];
   return nativeHost(flavor) ?? firstExisting(repo);
 }

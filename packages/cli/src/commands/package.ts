@@ -17,7 +17,9 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { createRequire } from "node:module";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { build, type Plugin } from "esbuild";
+
 import { bundleForHost } from "../bundle.ts";
 import { loadGame, UsageError, type Game } from "../config.ts";
 import { findHost, findLibrary, type NativeFlavor } from "../native.ts";
@@ -44,7 +46,9 @@ export async function packageCommand(args: readonly string[]): Promise<number> {
   if (engine === "quickjs") await packageQuickJs(game, entry, name, flavor, out);
   else await packageNode(game, entry, name, flavor, out);
   if (existsSync(join(game.dir, "assets"))) cpSync(join(game.dir, "assets"), join(out, "assets"), { recursive: true });
-  console.log(`\npackaged ${entry} -> ${relative(process.cwd(), out) || out} (${engine === "node" ? "Node/V8" : "QuickJS-ng"}, ${flavor === "headless" ? "headless: no window" : "with a window"})`);
+  console.log(
+    `\npackaged ${entry} -> ${relative(process.cwd(), out) || out} (${engine === "node" ? "Node/V8" : "QuickJS-ng"}, ${flavor === "headless" ? "headless: no window" : "with a window"})`
+  );
   return 0;
 }
 
@@ -57,7 +61,11 @@ function need(path: string | null, what: string, hint: string): string {
 
 async function packageQuickJs(game: Game, entry: string, name: string, flavor: NativeFlavor, out: string): Promise<void> {
   await bundleForHost(join(game.dir, entry), join(out, "game.js"));
-  const host = need(findHost(flavor), "rge-host", `It ships in @rge/native; in the repository, build it with \`npm run host:build${flavor === "headless" ? ":headless" : ""}\`.`);
+  const host = need(
+    findHost(flavor),
+    "rge-host",
+    `It ships in @rge/native; in the repository, build it with \`npm run host:build${flavor === "headless" ? ":headless" : ""}\`.`
+  );
   cpSync(host, join(out, exeName(name)));
 }
 
@@ -68,7 +76,11 @@ async function packageQuickJs(game: Game, entry: string, name: string, flavor: N
  * executable and is loaded from there.
  */
 async function packageNode(game: Game, entry: string, name: string, flavor: NativeFlavor, out: string): Promise<void> {
-  const lib = need(findLibrary(flavor), "librge", `It ships in @rge/native; in the repository, build it with \`npm run native:build${flavor === "headless" ? ":headless" : ""}\`.`);
+  const lib = need(
+    findLibrary(flavor),
+    "librge",
+    `It ships in @rge/native; in the repository, build it with \`npm run native:build${flavor === "headless" ? ":headless" : ""}\`.`
+  );
   const libName = basename(lib);
   mkdirSync(join(out, "lib"));
   cpSync(lib, join(out, "lib", libName));
@@ -80,7 +92,10 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
   while (!existsSync(join(koffiDir, "package.json")) || basename(koffiDir) !== "koffi") koffiDir = dirname(koffiDir);
   const modules = dirname(koffiDir);
   const addon = join(modules, "@koromix", `koffi-${process.platform}-${process.arch}`);
-  for (const [from, to] of [[koffiDir, "koffi"], [addon, join("@koromix", basename(addon))]] as const) {
+  for (const [from, to] of [
+    [koffiDir, "koffi"],
+    [addon, join("@koromix", basename(addon))],
+  ] as const) {
     if (!existsSync(from)) throw new UsageError(`${from} is not installed: run \`npm install\`.`);
     cpSync(from, join(out, "node_modules", to), { recursive: true }); // about 3 MB, next to Node's 100
   }
@@ -104,7 +119,7 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
       `process.chdir(folder);`,
       `(globalThis as Record<string, unknown>)[HOST_BACKEND_KEY] = createNodeBackend(join(folder, "lib", ${JSON.stringify(libName)}));`,
       ``,
-    ].join("\n"),
+    ].join("\n")
   );
   writeFileSync(join(work, "main.ts"), `import "./backend.ts";\nimport ${JSON.stringify(importPath(resolve(game.dir, entry)))};\n`);
 
@@ -156,23 +171,37 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
       `game.paths = Module._nodeModulePaths(dirname(file));`,
       `game._compile(require("node:sea").getAsset("game.cjs", "utf8"), file);`,
       ``,
-    ].join("\n"),
+    ].join("\n")
   );
 
   // The blob Node reads at startup, injected into a copy of this Node binary.
   const blob = join(work, "sea.blob");
   const sh = (command: string, commandArgs: string[]): void => {
     const result = spawnSync(command, commandArgs, { cwd: game.dir, stdio: "inherit" });
-    if (result.status !== 0) throw new Error(`\`${command} ${commandArgs.join(" ")}\` failed${result.error ? `: ${result.error.message}` : ` with status ${result.status}`}.`);
+    if (result.status !== 0)
+      throw new Error(
+        `\`${command} ${commandArgs.join(" ")}\` failed${result.error ? `: ${result.error.message}` : ` with status ${result.status}`}.`
+      );
   };
-  writeFileSync(join(work, "sea-config.json"), JSON.stringify({ main: loader, output: blob, disableExperimentalSEAWarning: true, assets: { "game.cjs": script } }));
+  writeFileSync(
+    join(work, "sea-config.json"),
+    JSON.stringify({ main: loader, output: blob, disableExperimentalSEAWarning: true, assets: { "game.cjs": script } })
+  );
   sh(process.execPath, ["--experimental-sea-config", join(work, "sea-config.json")]);
   const exe = join(out, exeName(name));
   cpSync(process.execPath, exe);
   // Unverified on macOS and Windows: these follow the Node documentation's steps for each.
   if (process.platform === "darwin") sh("codesign", ["--remove-signature", exe]);
   const postject = join(dirname(createRequire(import.meta.url).resolve("postject/package.json")), "dist", "cli.js");
-  sh(process.execPath, [postject, exe, "NODE_SEA_BLOB", blob, "--sentinel-fuse", "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2", ...(process.platform === "darwin" ? ["--macho-segment-name", "NODE_SEA"] : [])]);
+  sh(process.execPath, [
+    postject,
+    exe,
+    "NODE_SEA_BLOB",
+    blob,
+    "--sentinel-fuse",
+    "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2",
+    ...(process.platform === "darwin" ? ["--macho-segment-name", "NODE_SEA"] : []),
+  ]);
   if (process.platform === "darwin") sh("codesign", ["--sign", "-", exe]);
   rmSync(work, { recursive: true, force: true });
 }
@@ -186,9 +215,14 @@ export function relativeSources(script: string, buildDir: string, gameDir: strin
   const marker = "//# sourceMappingURL=data:application/json;base64,";
   const at = script.lastIndexOf(marker);
   if (at < 0) return script;
-  const map = JSON.parse(Buffer.from(script.slice(at + marker.length).trim(), "base64").toString("utf8")) as { sources: string[]; sourceRoot?: string };
+  const map = JSON.parse(Buffer.from(script.slice(at + marker.length).trim(), "base64").toString("utf8")) as {
+    sources: string[];
+    sourceRoot?: string;
+  };
   map.sources = map.sources.map((source) => {
-    const path = relative(gameDir, resolve(buildDir, map.sourceRoot ?? "", source)).split("\\").join("/");
+    const path = relative(gameDir, resolve(buildDir, map.sourceRoot ?? "", source))
+      .split("\\")
+      .join("/");
     if (!path.startsWith("../")) return path;
     // The engine's own files, from outside the game: by package (`@rge/runtime/src/World.ts`), not by a path on this machine.
     const installed = path.lastIndexOf("node_modules/");

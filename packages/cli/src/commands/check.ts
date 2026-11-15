@@ -15,7 +15,9 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { compileArgs, SCREENSHOTS_FOLDER, storyFiles } from "@rge/player-node";
+
 import { bundleForHost } from "../bundle.ts";
 import { loadGame, type Game } from "../config.ts";
 import { findHost, findLibrary } from "../native.ts";
@@ -47,11 +49,15 @@ function cliScript(): string {
 function previews(game: Game): Outcome {
   const files = storyFiles(game.dir);
   if (files.length === 0) return { ok: true, detail: "no stories", output: "" };
-  if (!existsSync(join(game.dir, SCREENSHOTS_FOLDER))) return { ok: true, detail: `${files.length} stories files, no stored screenshots (rge preview --screenshot stores them)`, output: "" };
+  if (!existsSync(join(game.dir, SCREENSHOTS_FOLDER)))
+    return { ok: true, detail: `${files.length} stories files, no stored screenshots (rge preview --screenshot stores them)`, output: "" };
   const library = findLibrary("headless");
   if (library === null) return { ok: true, detail: "not compared: the headless librge was not found", output: "" };
   const r = node([cliScript(), "preview", game.dir, "--compare"], game.dir, { ...process.env, RGE_NATIVE_LIB: library });
-  const last = r.output.trim().split("\n").find((line) => /stories match/.test(line));
+  const last = r.output
+    .trim()
+    .split("\n")
+    .find((line) => /stories match/.test(line));
   return { ok: r.ok, detail: r.ok ? (last ?? "") : "stories differ from their stored screenshots", output: r.output };
 }
 
@@ -60,7 +66,12 @@ async function parity(game: Game): Promise<Outcome> {
   const first = node(["parity.ts"], game.dir);
   if (!first.ok) return { ok: false, detail: "parity.ts failed under Node", output: first.output };
   const second = node(["parity.ts"], game.dir);
-  if (second.stdout !== first.stdout) return { ok: false, detail: "two runs under Node differ", output: "The parity script printed different output on a second run: the game is not deterministic." };
+  if (second.stdout !== first.stdout)
+    return {
+      ok: false,
+      detail: "two runs under Node differ",
+      output: "The parity script printed different output on a second run: the game is not deterministic.",
+    };
   const host = findHost("headless");
   if (host === null) return { ok: true, detail: "Node only (rge-host was not found)", output: "" };
   const dir = mkdtempSync(join(tmpdir(), "rge-check-"));
@@ -72,7 +83,12 @@ async function parity(game: Game): Promise<Outcome> {
     }
     const underHost = run(host, [join(dir, "parity.js")], game.dir);
     if (!underHost.ok) return { ok: false, detail: "the Rust host failed", output: underHost.output };
-    if (underHost.stdout !== first.stdout) return { ok: false, detail: "output under the Rust host differs from Node", output: "The parity script's output differs between Node and the Rust host (QuickJS)." };
+    if (underHost.stdout !== first.stdout)
+      return {
+        ok: false,
+        detail: "output under the Rust host differs from Node",
+        output: "The parity script's output differs between Node and the Rust host (QuickJS).",
+      };
     return { ok: true, detail: "Node and the Rust host agree", output: "" };
   } finally {
     rmSync(dir, { recursive: true, force: true });

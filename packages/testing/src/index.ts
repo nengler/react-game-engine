@@ -97,7 +97,8 @@ export class Rendered<Root extends GameObject = GameObject> {
   input(script: string): this {
     const bindings = this.#controls?.toJSON();
     const frames = parseInputScript(script, { dt: this.#dt, ...(bindings ? { bindings } : {}) });
-    for (const frame of frames) this.#tick(frame.dt, createInputState({ pressed: frame.pressed, down: frame.down, released: frame.released }, this.#controls));
+    for (const frame of frames)
+      this.#tick(frame.dt, createInputState({ pressed: frame.pressed, down: frame.down, released: frame.released }, this.#controls));
     return this;
   }
 
@@ -106,7 +107,13 @@ export class Rendered<Root extends GameObject = GameObject> {
    * near a tower). Returns it, to move (`transform`) or take out (`remove`) later.
    */
   place(spec: PlacedSpec): Collider {
-    const collider = new Collider({ width: spec.width ?? 1, height: spec.height ?? 1, tag: spec.tag ?? "", data: spec.data, layer: spec.layer });
+    const collider = new Collider({
+      width: spec.width ?? 1,
+      height: spec.height ?? 1,
+      tag: spec.tag ?? "",
+      data: spec.data,
+      layer: spec.layer,
+    });
     collider.transform.x = spec.x;
     collider.transform.y = spec.y;
     // In an entity of its own: colliders with the same parent are one thing's, and never touch each other.
@@ -148,7 +155,8 @@ export class Rendered<Root extends GameObject = GameObject> {
     const x = at.x + (typeof size.width === "number" ? size.width / 2 : 0);
     const y = at.y + (typeof size.height === "number" ? size.height / 2 : 0);
     const hit = this.world.reportPress(pressable as never, x, y);
-    if (!hit) throw new Error(`press: ${pressable.constructor.name} did not take a press at its own position (is it pressable, and not inert?)`);
+    if (!hit)
+      throw new Error(`press: ${pressable.constructor.name} did not take a press at its own position (is it pressable, and not inert?)`);
     this.world.flush();
     return this;
   }
@@ -241,7 +249,7 @@ export class Rendered<Root extends GameObject = GameObject> {
 export function render<P extends object, R extends GameObject = GameObject>(
   Component: new (props: P) => R,
   props?: P,
-  options: RenderOptions = {},
+  options: RenderOptions = {}
 ): Rendered<R> {
   if (!options.keepGameState) resetGameState();
   setTextDefaults({}); // no <Game> root here: a <Text> without its own size or colour uses the engine's
@@ -259,11 +267,15 @@ export type ComponentQuery<T extends GameObject> = string | (abstract new (...ar
  * that class, in tree order. Without a `root`, the running game's tree (`createPlayer`, `runScript`, a replay): what a whole-game
  * test, a replay check or a balance tool reads, as `render(…).findAll` does for one component.
  */
-export function findComponents<T extends GameObject = GameObject>(what: ComponentQuery<T>, root: GameObject | null = getGameTree()?.root ?? null): T[] {
+export function findComponents<T extends GameObject = GameObject>(
+  what: ComponentQuery<T>,
+  root: GameObject | null = getGameTree()?.root ?? null
+): T[] {
   const out: T[] = [];
   if (root === null) return out;
   const visit = (object: GameObject): void => {
-    const matches = typeof what === "string" ? (object as { name?: unknown }).name === what || object.constructor.name === what : object instanceof what;
+    const matches =
+      typeof what === "string" ? (object as { name?: unknown }).name === what || object.constructor.name === what : object instanceof what;
     if (matches) out.push(object as T);
     for (const child of object.children) visit(child);
   };
@@ -272,7 +284,10 @@ export function findComponents<T extends GameObject = GameObject>(what: Componen
 }
 
 /** The first of `findComponents`, or null: `findComponent(Play)` is the running game's `Play`, while it is on screen. */
-export function findComponent<T extends GameObject = GameObject>(what: ComponentQuery<T>, root: GameObject | null = getGameTree()?.root ?? null): T | null {
+export function findComponent<T extends GameObject = GameObject>(
+  what: ComponentQuery<T>,
+  root: GameObject | null = getGameTree()?.root ?? null
+): T | null {
   return (findComponents(what, root)[0] as T | undefined) ?? null;
 }
 

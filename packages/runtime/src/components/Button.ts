@@ -37,7 +37,7 @@ export class Button<P extends object = {}> extends Flex<P> {
         ...withoutUndefined(hostProps),
       },
       props,
-      defaults,
+      defaults
     );
   }
 }

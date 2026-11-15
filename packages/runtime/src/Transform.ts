@@ -71,7 +71,13 @@ export function composeTransforms(parent: WorldTransform, local: Transform | Wor
   const sx = local.x * parent.scaleX;
   const sy = local.y * parent.scaleY;
   if (parent.rotation === 0) {
-    return { x: parent.x + sx, y: parent.y + sy, rotation: parent.rotation + local.rotation, scaleX: parent.scaleX * local.scaleX, scaleY: parent.scaleY * local.scaleY };
+    return {
+      x: parent.x + sx,
+      y: parent.y + sy,
+      rotation: parent.rotation + local.rotation,
+      scaleX: parent.scaleX * local.scaleX,
+      scaleY: parent.scaleY * local.scaleY,
+    };
   }
   const cos = Math.cos(parent.rotation);
   const sin = Math.sin(parent.rotation);

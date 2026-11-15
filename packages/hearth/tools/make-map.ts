@@ -10,6 +10,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { FIELD_COLS, FIELD_ROWS, TILE } from "../src/rules/constants.ts";
 import { MARK } from "../src/rules/path.ts";
 
@@ -39,10 +40,23 @@ export const GID = { grass: 1, tuft: 2, path: 3, pad: 4 } as const;
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "../scenes");
 
-const tileset = { firstgid: 1, name: "tiles", image: "../assets/tiles.png", imagewidth: 80, imageheight: 40, tilewidth: TILE, tileheight: TILE, columns: 8, tilecount: 32, margin: 0, spacing: 0 };
+const tileset = {
+  firstgid: 1,
+  name: "tiles",
+  image: "../assets/tiles.png",
+  imagewidth: 80,
+  imageheight: 40,
+  tilewidth: TILE,
+  tileheight: TILE,
+  columns: 8,
+  tilecount: 32,
+  margin: 0,
+  spacing: 0,
+};
 
 export function buildMap(): unknown {
-  if (DRAWING.length !== FIELD_ROWS || DRAWING.some((r) => r.length !== FIELD_COLS)) throw new Error(`The drawing must be ${FIELD_COLS} × ${FIELD_ROWS}.`);
+  if (DRAWING.length !== FIELD_ROWS || DRAWING.some((r) => r.length !== FIELD_COLS))
+    throw new Error(`The drawing must be ${FIELD_COLS} × ${FIELD_ROWS}.`);
   const tiles: number[] = [];
   const markers: number[] = [];
   for (let r = 0; r < FIELD_ROWS; r++) {
@@ -51,17 +65,51 @@ export function buildMap(): unknown {
       const onPath = ch === "=" || ch === "S" || ch === "H" || /[1-8]/.test(ch);
       const tuft = (((c * 73856093) ^ (r * 19349663)) >>> 0) % 9 === 0;
       tiles.push(onPath ? GID.path : ch === "p" ? GID.pad : tuft ? GID.tuft : GID.grass);
-      markers.push(ch === "S" ? MARK.spawn : ch === "H" ? MARK.hearth : ch === "p" ? MARK.pad : /[1-8]/.test(ch) ? MARK.waypoint + Number(ch) - 1 : 0);
+      markers.push(
+        ch === "S" ? MARK.spawn : ch === "H" ? MARK.hearth : ch === "p" ? MARK.pad : /[1-8]/.test(ch) ? MARK.waypoint + Number(ch) - 1 : 0
+      );
     }
   }
   return {
-    type: "map", version: "1.10", tiledversion: "1.10.2", orientation: "orthogonal", renderorder: "right-down", infinite: false,
-    width: FIELD_COLS, height: FIELD_ROWS, tilewidth: TILE, tileheight: TILE, nextlayerid: 3, nextobjectid: 1,
+    type: "map",
+    version: "1.10",
+    tiledversion: "1.10.2",
+    orientation: "orthogonal",
+    renderorder: "right-down",
+    infinite: false,
+    width: FIELD_COLS,
+    height: FIELD_ROWS,
+    tilewidth: TILE,
+    tileheight: TILE,
+    nextlayerid: 3,
+    nextobjectid: 1,
     properties: [{ name: "name", type: "string", value: "The hearth road" }],
     tilesets: [tileset],
     layers: [
-      { id: 1, name: "Tiles", type: "tilelayer", visible: true, opacity: 1, x: 0, y: 0, width: FIELD_COLS, height: FIELD_ROWS, data: tiles },
-      { id: 2, name: "Markers", type: "tilelayer", visible: false, opacity: 1, x: 0, y: 0, width: FIELD_COLS, height: FIELD_ROWS, data: markers },
+      {
+        id: 1,
+        name: "Tiles",
+        type: "tilelayer",
+        visible: true,
+        opacity: 1,
+        x: 0,
+        y: 0,
+        width: FIELD_COLS,
+        height: FIELD_ROWS,
+        data: tiles,
+      },
+      {
+        id: 2,
+        name: "Markers",
+        type: "tilelayer",
+        visible: false,
+        opacity: 1,
+        x: 0,
+        y: 0,
+        width: FIELD_COLS,
+        height: FIELD_ROWS,
+        data: markers,
+      },
     ],
   };
 }

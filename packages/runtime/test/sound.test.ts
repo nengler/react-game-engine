@@ -1,5 +1,6 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { Sound, World, createSounds, getSoundSink, setSoundSink, type SoundSink } from "../src/index.ts";
 
 function recorder(): SoundSink & { log: string[] } {

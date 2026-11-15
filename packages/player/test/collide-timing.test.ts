@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * When collisions are found, relative to steps and frames. Contacts are found after every step (fixed or not), so a handler
  * runs in the step that made the contact, what it changes is drawn in that frame, and a run collides at the same steps
  * whatever the frame rate.
  */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Collider, Entity, Shape, type GameObject } from "@rge/runtime";
+
 import { createPlayer, type PlayerConfig } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
@@ -35,7 +37,7 @@ class Mover extends Entity {
           log.push(`enter ${String(other.tag)} after step ${this.steps}`);
         },
         onCollisionExit: (other) => log.push(`exit ${String(other.tag)} after step ${this.steps}`),
-      }),
+      })
     );
   }
   override onUpdate(): void {
@@ -53,7 +55,13 @@ function zone(x: number, width: number, tag: string): GameObject {
   return at;
 }
 
-function play(frames: number, frameDt: number, speed: number, zones: GameObject[], config: Partial<PlayerConfig> = {}): { log: string[]; mover: Mover; drawn: DecodedRecord[][] } {
+function play(
+  frames: number,
+  frameDt: number,
+  speed: number,
+  zones: GameObject[],
+  config: Partial<PlayerConfig> = {}
+): { log: string[]; mover: Mover; drawn: DecodedRecord[][] } {
   const backend = new RecordingBackend();
   for (let i = 0; i < frames; i++) backend.queueInput({ dt: frameDt });
   const log: string[] = [];

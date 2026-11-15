@@ -51,7 +51,14 @@ declare global {
     /** An enemy, as a tower sees it: who it is, how far along the path, where, and whether it still stands. */
     enemy: { readonly id: number; readonly dist: number; readonly x: number; readonly y: number; readonly hp: number };
     /** A shot landing: what an enemy it touches takes. */
-    blast: { readonly target: number; readonly x: number; readonly y: number; readonly radius: number; readonly damage: number; readonly slow: number };
+    blast: {
+      readonly target: number;
+      readonly x: number;
+      readonly y: number;
+      readonly radius: number;
+      readonly damage: number;
+      readonly slow: number;
+    };
   }
 }
 

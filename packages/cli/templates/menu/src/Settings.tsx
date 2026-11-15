@@ -1,4 +1,5 @@
 import { Button, Flex, Menu, Text } from "@rge/runtime/jsx";
+
 import { useGame } from "./GameState.ts";
 
 /** The settings: left and right change the row with the focus (`onAdjust`), Enter presses it, and Escape goes back (`onBack`). */

@@ -1,7 +1,9 @@
+import assert from "node:assert/strict";
 /** A <Route>'s components are made when it comes and dropped once it has gone, as React Router's are; keepAlive keeps them. */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { createInputState, Entity, World, type GameObject } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compileProject, loadProject, typeCheckProject } from "./helpers.ts";
 
 after(() => {
@@ -44,8 +46,16 @@ describe("<Route> components", () => {
     const project = compileProject(SOURCES);
     assert.deepEqual(typeCheckProject(project), []);
     const main = project["Main.tsx"]!;
-    assert.match(main.code, /counter: Counter \| null = null;[^]*if \(this\.route2\.active\) \{/, "route a's child exists while the route is active");
-    assert.match(main.code, /readonly counter2: Counter = new Counter\(\{ label: "b" \}\);/, "route b is keepAlive: its child is made once");
+    assert.match(
+      main.code,
+      /counter: Counter \| null = null;[^]*if \(this\.route2\.active\) \{/,
+      "route a's child exists while the route is active"
+    );
+    assert.match(
+      main.code,
+      /readonly counter2: Counter = new Counter\(\{ label: "b" \}\);/,
+      "route b is keepAlive: its child is made once"
+    );
     assert.doesNotMatch(main.code, /this\.route3\.active/);
     const { Main } = await loadProject<{ Main: new () => Entity }>(project, "Main.tsx");
     const world = new World();

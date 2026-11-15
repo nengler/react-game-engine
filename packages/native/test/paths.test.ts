@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { hostPathIn, libraryPathIn, nativeHost, nativeLibrary, platformFolder } from "../src/index.ts";
 
 test("paths follow lib/<platform>-<arch>/<flavor>/", () => {

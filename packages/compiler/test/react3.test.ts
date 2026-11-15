@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * Writing components the way a React author does (found by the third game, Bramble): `undefined` in conditions and handlers, and a
  * list's items computed in the component (a member of a value, a mapped array, a helper's result) instead of kept ready in state.
  * Conditions and nested children inside list items are in tier3.test.ts.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { createInputState, Entity, Sprite, Text, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -88,7 +90,13 @@ export function Foes() {
     assert.deepEqual(frames("byHelper"), [4]);
     assert.deepEqual(frames("byMember"), [4, 5]);
     const beetle = foes.children[0]!.children[0];
-    foes.st.run = ({ map: "a", enemies: [{ id: "b1", map: "a", kind: "beetle", x: 9 }, { id: "w1", map: "a", kind: "wisp", x: 2 }] });
+    foes.st.run = {
+      map: "a",
+      enemies: [
+        { id: "b1", map: "a", kind: "beetle", x: 9 },
+        { id: "w1", map: "a", kind: "wisp", x: 2 },
+      ],
+    };
     world.flush();
     assert.deepEqual(frames("byHelper"), [4, 5]);
     assert.equal(foes.children[0]!.children[0], beetle, "an item keeps its instance by key");
@@ -121,16 +129,24 @@ export function Clock({ seconds, label, ids }: ClockProps) {
     const clock = new Clock({ seconds: 65, label: " bells ", ids: ["bind:up", "a"] });
     world.mount(clock);
     world.flush();
-    assert.deepEqual(clock.children.map((c) => (c as Text).text), ["1:05 BELLS 9.3", "bind:up / 7 / a / 1"]);
+    assert.deepEqual(
+      clock.children.map((c) => (c as Text).text),
+      ["1:05 BELLS 9.3", "bind:up / 7 / a / 1"]
+    );
     world.tick(1 / 60, createInputState({ pressed: ["Enter"] }));
     world.flush();
     assert.equal(clock.name, "UP");
   });
 
   it("still refuses what changes an array in place, pointing at the copy, and an unknown method", () => {
-    const sort = compileErrors(`interface P { ids: string[] } export function A({ ids }: P) { return <Entity name={ids.sort().join("")} />; }`);
+    const sort = compileErrors(
+      `interface P { ids: string[] } export function A({ ids }: P) { return <Entity name={ids.sort().join("")} />; }`
+    );
     assert.match(sort[0]!.message, /changes the array in place/);
-    assert.equal(compileErrors(`interface P { id: string } export function A({ id }: P) { return <Entity name={id.frobnicate()} />; }`)[0]!.code, DiagnosticCode.UnsupportedExpression);
+    assert.equal(
+      compileErrors(`interface P { id: string } export function A({ id }: P) { return <Entity name={id.frobnicate()} />; }`)[0]!.code,
+      DiagnosticCode.UnsupportedExpression
+    );
   });
 });
 
@@ -159,7 +175,9 @@ export function Walker() {
     const compiled = compile(SOURCE);
     assert.match(compiled.code, /this\.\$memo\("x,y,f", \[this\.\$s_step\], \(\) => heroOf\(this\.\$s_step\)\)/);
     assert.deepEqual(typeCheck(compiled), []);
-    const { Walker, CALLS } = await load<{ Walker: new () => Entity & { s: { [field: string]: unknown } }; CALLS: { hero: number } }>(compiled);
+    const { Walker, CALLS } = await load<{ Walker: new () => Entity & { s: { [field: string]: unknown } }; CALLS: { hero: number } }>(
+      compiled
+    );
     const world = new World();
     const walker = new Walker();
     world.mount(walker);
@@ -167,11 +185,11 @@ export function Walker() {
     const sprite = walker.children[0] as Sprite;
     assert.deepEqual([sprite.transform.x, sprite.transform.y, sprite.frame, (walker.children[1] as Text).text], [2, 3, 1, "2 1"]);
     assert.equal(CALLS.hero, 1, "three uses, one call");
-    walker.s.blink = (true);
+    walker.s.blink = true;
     world.flush();
     assert.equal(walker.name, "on");
     assert.equal(CALLS.hero, 1, "a render that changes nothing it reads does not call it again");
-    walker.s.step = (2);
+    walker.s.step = 2;
     world.flush();
     assert.deepEqual([sprite.transform.x, sprite.frame], [4, 2]);
     assert.equal(CALLS.hero, 2);
@@ -179,7 +197,9 @@ export function Walker() {
 
   it("refuses a default, a rest or a nested pattern", () => {
     for (const pattern of ["{ x = 1 }", "{ ...rest }", "{ a: { b } }", "[a, ...rest]"]) {
-      const errors = compileErrors(`interface P { v: { x: number; a: { b: number } }; l: number[] } export function A({ v, l }: P) { const ${pattern} = ${pattern.startsWith("[") ? "l" : "v"}; return <Entity />; }`);
+      const errors = compileErrors(
+        `interface P { v: { x: number; a: { b: number } }; l: number[] } export function A({ v, l }: P) { const ${pattern} = ${pattern.startsWith("[") ? "l" : "v"}; return <Entity />; }`
+      );
       assert.equal(errors[0]?.code, DiagnosticCode.InvalidComponentBody, pattern);
     }
   });

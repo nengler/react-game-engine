@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Custom hooks that behave like functions (REACT_FEEL_PLAN.md, B6): a destructured parameter, a returned ref, a callback
  * argument, and the functions a component declares in its body that a callback argument needs.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, GameObject, Pointer, Text, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -47,7 +49,8 @@ export function Pair() {
   });
 
   it("take a callback", async () => {
-    const ticker = await run<Text>(`function useEvery(seconds: number, fn: () => void) {
+    const ticker = await run<Text>(
+      `function useEvery(seconds: number, fn: () => void) {
   const s = useMutable({ elapsed: 0 });
   useUpdate((dt) => {
     s.elapsed += dt;
@@ -61,7 +64,10 @@ export function Ticker() {
   const s = useMutable({ ticks: 0 });
   useEvery(1, () => { s.ticks += 1; });
   return <Text>{s.ticks}</Text>;
-}`, "Ticker", 4);
+}`,
+      "Ticker",
+      4
+    );
     assert.equal(ticker.text, "2", "a tick every second: four half-second steps");
   });
 

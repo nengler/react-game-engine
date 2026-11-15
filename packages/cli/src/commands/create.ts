@@ -9,6 +9,7 @@
 import { cpSync, existsSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { UsageError } from "../config.ts";
 
 /** `template/` is one level below the package root, beside `src/` and `dist/`; each starter's files are in `templates/<name>/`. */
@@ -28,9 +29,13 @@ function option(args: readonly string[], name: string): string | undefined {
 export function createCommand(args: readonly string[]): number {
   const flagValues = new Set(["--name", "--packs", "--template"].map((flag) => args.indexOf(flag) + 1).filter((i) => i > 0));
   const folder = args.find((arg, i) => !arg.startsWith("--") && !flagValues.has(i));
-  if (folder === undefined) throw new UsageError(`usage: rge create <folder> [--name <name>] [--template ${["blank", ...templateNames()].join("|")}] [--packs <dir>]`);
+  if (folder === undefined)
+    throw new UsageError(
+      `usage: rge create <folder> [--name <name>] [--template ${["blank", ...templateNames()].join("|")}] [--packs <dir>]`
+    );
   const template = option(args, "--template") ?? "blank";
-  if (template !== "blank" && !templateNames().includes(template)) throw new UsageError(`no template "${template}": the templates are ${["blank", ...templateNames()].join(", ")}`);
+  if (template !== "blank" && !templateNames().includes(template))
+    throw new UsageError(`no template "${template}": the templates are ${["blank", ...templateNames()].join(", ")}`);
   const target = resolve(folder);
   if (existsSync(target) && readdirSync(target).length > 0) throw new UsageError(`${target} exists and is not empty`);
   const name = option(args, "--name") ?? basename(target);
@@ -64,6 +69,8 @@ export function createCommand(args: readonly string[]): number {
     pkg["devDependencies"] = devDependencies;
     writeFileSync(manifest, `${JSON.stringify(pkg, null, 2)}\n`);
   }
-  console.log(`created ${name}${template === "blank" ? "" : ` (${template})`} in ${target}\n  cd ${folder} && npm install && npm run check`);
+  console.log(
+    `created ${name}${template === "blank" ? "" : ` (${template})`} in ${target}\n  cd ${folder} && npm install && npm run check`
+  );
   return 0;
 }

@@ -1,10 +1,12 @@
-/** The game state: `createGameState(data, actions)` in GameState.ts, read with selectors, changed by actions. */
-import { after, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+/** The game state: `createGameState(data, actions)` in GameState.ts, read with selectors, changed by actions. */
+import { after, before, beforeEach, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
+
 import { Entity, Flex, Text, World, resetGameState, type GameState, type GameStore } from "@rge/runtime";
+
 import { Compiler, DiagnosticCode, formatDiagnostic } from "../src/index.ts";
 import { OUTPUT_ROOT, cleanOutput, closeCompiler, load, withAuthoringImports, type CompiledModule } from "./helpers.ts";
 
@@ -28,7 +30,8 @@ let compiler: Compiler;
 let store: GameStore;
 let useGame: GameState<{ coins: number; player: { hp: number; name: string } }>;
 /** Call an action of the game state, as a handler would. */
-const act = (name: string, ...args: unknown[]): void => (useGame.getState() as unknown as Record<string, (...a: unknown[]) => void>)[name]!(...args);
+const act = (name: string, ...args: unknown[]): void =>
+  (useGame.getState() as unknown as Record<string, (...a: unknown[]) => void>)[name]!(...args);
 let counter = 0;
 
 before(async () => {
@@ -64,7 +67,11 @@ function typeErrors(compiled: CompiledModule) {
   return compiler.typeCheck([{ fileName: g.fileName, text: g.code }]);
 }
 
-function errors(source: string, c: Compiler = compiler, header = `import { useGame } from "./GameState.ts";\n`): { code: string; message: string }[] {
+function errors(
+  source: string,
+  c: Compiler = compiler,
+  header = `import { useGame } from "./GameState.ts";\n`
+): { code: string; message: string }[] {
   const result = c.compile("Invalid.tsx", withAuthoringImports(`${header}${source}`));
   if (result.ok) throw new Error(`Expected compilation to fail, got:\n${result.code}`);
   return result.diagnostics.filter((d) => d.severity === "error").map((d) => ({ code: d.code, message: d.message }));
@@ -98,7 +105,11 @@ describe("GameState.ts", () => {
 
   it("reads a nested state tree with typed leaves, and the actions, in both creator forms", () => {
     const body = `{ coins: 0, player: { hp: -3, "name": "Ada", flags: { muted: false } }, collect() { set({}); }, hurt: () => set({}), heal: function () { set({}); } }`;
-    for (const text of [wrap(body), `export const useGame = createGameState<State>()((set, get) => (${body}));`, `export const useGame = createGameState((set) => { return ${body}; });`]) {
+    for (const text of [
+      wrap(body),
+      `export const useGame = createGameState<State>()((set, get) => (${body}));`,
+      `export const useGame = createGameState((set) => { return ${body}; });`,
+    ]) {
       const { schema, diagnostics } = read(text);
       assert.deepEqual(diagnostics, [], text);
       assert.equal(schema!.name, "useGame");
@@ -132,7 +143,10 @@ describe("GameState.ts", () => {
       kind: "node",
       children: {
         coins: { kind: "leaf", type: "number", initial: 0 },
-        player: { kind: "node", children: { hp: { kind: "leaf", type: "number", initial: -3 }, name: { kind: "leaf", type: "string", initial: "Ada" } } },
+        player: {
+          kind: "node",
+          children: { hp: { kind: "leaf", type: "number", initial: -3 }, name: { kind: "leaf", type: "string", initial: "Ada" } },
+        },
         run: { kind: "value" },
         items: { kind: "value" },
       },
@@ -144,7 +158,10 @@ describe("GameState.ts", () => {
     const cases: [string, RegExp][] = [
       [`export const useGame = createGameState(makeData(), { a(s) {} });`, /data is an object literal/],
       [`export const useGame = createGameState({ a: 1 }, actions);`, /actions are an object literal/],
-      [`export const useGame = createGameState({ a: 1, act: () => 1 }, {});`, /function in the game state's data: actions go in the second argument/],
+      [
+        `export const useGame = createGameState({ a: 1, act: () => 1 }, {});`,
+        /function in the game state's data: actions go in the second argument/,
+      ],
       [`export const useGame = createGameState({ a: 1 }, { a(s) {} });`, /'a' is declared twice/],
       [`export const useGame = createGameState({ a: 1 }, { b: 5 });`, /Each action is/],
       [`export const useGame = createGameState({ a: 1 }, { ...more });`, /Each action is/],
@@ -162,7 +179,13 @@ describe("GameState.ts", () => {
     assert.deepEqual(diagnostics, []);
     assert.deepEqual(schema!.tree, {
       kind: "node",
-      children: { items: { kind: "value" }, run: { kind: "value" }, total: { kind: "value" }, base: { kind: "value" }, nested: { kind: "node", children: { list: { kind: "value" } } } },
+      children: {
+        items: { kind: "value" },
+        run: { kind: "value" },
+        total: { kind: "value" },
+        base: { kind: "value" },
+        nested: { kind: "node", children: { list: { kind: "value" } } },
+      },
     });
   });
 
@@ -256,7 +279,9 @@ export function Counter() {
     world.flush();
     assert.equal(counter.text, "30", "only the first value: it is the component's own state from then on");
     // The component's own state declared above may give the first value too (its value when the component is made).
-    const own = build(`export function A() { const s = useMutable({ a: 7 }); const t = useMutable({ b: s.a * 2 }); return <Text>{t.b}</Text>; }`);
+    const own = build(
+      `export function A() { const s = useMutable({ a: 7 }); const t = useMutable({ b: s.a * 2 }); return <Text>{t.b}</Text>; }`
+    );
     const { A } = await load<{ A: new () => Text }>(generated(own));
     assert.equal(new A().text, "14");
   });
@@ -278,7 +303,10 @@ export function Counter() {
   it("reports a wrong path with the nearest key at the level it went wrong", () => {
     const [top] = errors(`function A() { const c = useGame((s) => s.coin); return <Entity />; }`);
     assert.equal(top!.code, DiagnosticCode.InvalidGameState);
-    assert.match(top!.message, /'coin' is not in the game state \(did you mean "coins"\?\)\. State: coins, player, muted, enemies, collect, spawn, hurt, rename, noop\./);
+    assert.match(
+      top!.message,
+      /'coin' is not in the game state \(did you mean "coins"\?\)\. State: coins, player, muted, enemies, collect, spawn, hurt, rename, noop\./
+    );
     const [nested] = errors(`function A() { const c = useGame((s) => s.player.hpp); return <Entity />; }`);
     assert.match(nested!.message, /'player\.hpp' is not in the game state \(did you mean "player\.hp"\?\)\. 'player' has: hp, name\./);
     const [through] = errors(`function A() { const c = useGame((s) => s.coins.total); return <Entity />; }`);
@@ -294,10 +322,19 @@ export function Badge() {
     const state = compiled.ir.components[0]!.state[0]!;
     assert.equal(state.globalKey, "player");
     assert.deepEqual(state.type, { kind: "SourceType", text: 'ReturnType<typeof useGame.getState>["player"]' });
-    assert.match(compiled.code, /player: ReturnType<typeof useGame\.getState>\["player"\] = useGame\.store\.get<ReturnType<typeof useGame\.getState>\["player"\]>\("player"\);/);
+    assert.match(
+      compiled.code,
+      /player: ReturnType<typeof useGame\.getState>\["player"\] = useGame\.store\.get<ReturnType<typeof useGame\.getState>\["player"\]>\("player"\);/
+    );
     assert.deepEqual(typeErrors(compiled), []);
     const typo = build(`function A() { const p = useGame((s) => s.player); return <Text size={12}>{p.hpp}</Text>; }`);
-    assert.match(typeErrors(typo).map((d) => d.message).join("\n"), /hpp/, "a member the object does not have is a type error");
+    assert.match(
+      typeErrors(typo)
+        .map((d) => d.message)
+        .join("\n"),
+      /hpp/,
+      "a member the object does not have is a type error"
+    );
   });
 
   it("picks several values at once, each its own selector: from a path, an object literal or an array literal", async () => {
@@ -333,7 +370,11 @@ export function Swarm() {
   });
 
   it("accepts one expression-bodied selector, bound with const, at the top level", () => {
-    assert.ok(errors(`function A() { const c = useGame((s) => other.coins); return <Entity />; }`).some((d) => d.code === DiagnosticCode.UnknownIdentifier));
+    assert.ok(
+      errors(`function A() { const c = useGame((s) => other.coins); return <Entity />; }`).some(
+        (d) => d.code === DiagnosticCode.UnknownIdentifier
+      )
+    );
     for (const call of [
       `useGame((s) => { return s.coins; })`,
       `useGame((s, t) => s.coins)`,
@@ -343,32 +384,56 @@ export function Swarm() {
       `useGame<number>((s) => s.coins)`,
     ]) {
       const found = errors(`function A() { const select = null; const c = ${call}; return <Entity />; }`);
-      assert.ok(found.some((d) => d.code === DiagnosticCode.InvalidUseState), `${call}: ${JSON.stringify(found)}`);
+      assert.ok(
+        found.some((d) => d.code === DiagnosticCode.InvalidUseState),
+        `${call}: ${JSON.stringify(found)}`
+      );
     }
-    assert.ok(errors(`function A() { let c = useGame((s) => s.coins); return <Entity />; }`).some((d) => d.code === DiagnosticCode.InvalidUseState));
-    assert.ok(errors(`function A() { if (true) { const c = useGame((s) => s.coins); } return <Entity />; }`).some((d) => d.code === DiagnosticCode.HookNotAtTopLevel));
+    assert.ok(
+      errors(`function A() { let c = useGame((s) => s.coins); return <Entity />; }`).some((d) => d.code === DiagnosticCode.InvalidUseState)
+    );
+    assert.ok(
+      errors(`function A() { if (true) { const c = useGame((s) => s.coins); } return <Entity />; }`).some(
+        (d) => d.code === DiagnosticCode.HookNotAtTopLevel
+      )
+    );
   });
 
   it("keeps an action out of values: it is only called, as a statement", () => {
-    const run = (body: string) => errors(`function A() { const st = useMutable({ n: 0 }); const hurt = useGame((s) => s.hurt); ${body} return <Entity name="A" />; }`).map((d) => d.code);
+    const run = (body: string) =>
+      errors(
+        `function A() { const st = useMutable({ n: 0 }); const hurt = useGame((s) => s.hurt); ${body} return <Entity name="A" />; }`
+      ).map((d) => d.code);
     assert.deepEqual(run(`useUpdate(() => { const x = hurt; });`), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(run(`useUpdate(() => { st.n = hurt(); });`), [DiagnosticCode.UnsupportedExpression]);
     assert.ok(errors(`function A() { const hurt = useGame((s) => s.hurt); return <Text size={hurt}>x</Text>; }`).length > 0);
   });
 
   it("imports only the game state from a .ts module, and needs one to exist", () => {
-    assert.deepEqual(errors(`function A() { return <Entity />; }`, compiler, `import { useOther } from "./GameState.ts";\n`).map((d) => d.code), [DiagnosticCode.InvalidGameState]);
+    assert.deepEqual(
+      errors(`function A() { return <Entity />; }`, compiler, `import { useOther } from "./GameState.ts";\n`).map((d) => d.code),
+      [DiagnosticCode.InvalidGameState]
+    );
     const none = errors(`function A() { const c = useGame((s) => s.coins); return <Entity />; }`, new Compiler());
-    assert.deepEqual(none.map((d) => d.code), [DiagnosticCode.InvalidGameState]);
+    assert.deepEqual(
+      none.map((d) => d.code),
+      [DiagnosticCode.InvalidGameState]
+    );
     assert.match(none[0]!.message, /no game state to import/);
   });
 
   it("is checked in the authored source too: a wrong path, a wrong type, a wrong argument is a type error", () => {
     const file = (text: string) => [{ fileName: join(ROOT, "Src.tsx"), text }];
     const good = `import { Entity, useUpdate } from "@rge/runtime/jsx";\nimport { useGame } from "./GameState.ts";\nexport function A() {\n  const coins = useGame((s) => s.coins);\n  const collect = useGame((s) => s.collect);\n  const n: number = coins;\n  useUpdate(() => collect(n));\n  return <Entity />;\n}`;
-    assert.deepEqual(compiler.typeCheckSources(file(good)).map((d) => d.message), []);
+    assert.deepEqual(
+      compiler.typeCheckSources(file(good)).map((d) => d.message),
+      []
+    );
     assert.ok(compiler.typeCheckSources(file(good.replace("s.coins", "s.coin"))).length > 0, "unknown path");
-    assert.ok(compiler.typeCheckSources(file(good.replace("const n: number = coins", "const n: string = coins"))).length > 0, "coins is a number");
+    assert.ok(
+      compiler.typeCheckSources(file(good.replace("const n: number = coins", "const n: string = coins"))).length > 0,
+      "coins is a number"
+    );
     assert.ok(compiler.typeCheckSources(file(good.replace("collect(n)", 'collect("x")'))).length > 0, "collect takes a number");
     assert.ok(compiler.typeCheckSources(file(good.replace("collect(n)", "collect()"))).length > 0, "collect needs its argument");
   });
@@ -476,16 +541,22 @@ describe("running a game state", () => {
   });
 
   it("re-renders a reader of an object or an array when a value under it changes, and only then", async () => {
-    const { Badge } = await make<{ Badge: new () => Reader }>(`
+    const { Badge } = await make<{ Badge: new () => Reader }>(
+      `
 export function Badge() {
   const player = useGame((s) => s.player);
   return <Text size={12}>{player.name} {player.hp}</Text>;
-}`, "Badge.tsx");
-    const { Count } = await make<{ Count: new () => Reader }>(`
+}`,
+      "Badge.tsx"
+    );
+    const { Count } = await make<{ Count: new () => Reader }>(
+      `
 export function Count() {
   const enemies = useGame((s) => s.enemies);
   return <Text size={12}>{enemies.length} {enemies.filter((e) => e.hp === 3).length}</Text>;
-}`, "Count.tsx");
+}`,
+      "Count.tsx"
+    );
     const world = new World();
     const root = new Entity({ name: "root" });
     const badge = new Badge();
@@ -534,7 +605,16 @@ export function Row({ id }: RowProps) {
   return <Text size={12}>{rich ? "rich" : "poor"} {label} {count}</Text>;
 }`);
     const component = compiled.ir.components[0]!;
-    assert.deepEqual(component.state.map((st) => [st.name, st.globalKey]), [["$coins", "coins"], ["$playerName", "player.name"], ["$playerHp", "player.hp"], ["$enemies", "enemies"]], "one snapshot per path, shared");
+    assert.deepEqual(
+      component.state.map((st) => [st.name, st.globalKey]),
+      [
+        ["$coins", "coins"],
+        ["$playerName", "player.name"],
+        ["$playerHp", "player.hp"],
+        ["$enemies", "enemies"],
+      ],
+      "one snapshot per path, shared"
+    );
     assert.deepEqual(typeErrors(compiled), []);
     const { Row } = await load<{ Row: new (props: { id: number }) => Text }>(generated(compiled));
     const world = new World();
@@ -555,16 +635,25 @@ export function A() {
   const doubled = useGame((s) => s.coins * 2);
   return <Text size={12}>{coins} {doubled}</Text>;
 }`);
-    assert.deepEqual(compiled.ir.components[0]!.state.map((st) => st.name), ["coins"]);
+    assert.deepEqual(
+      compiled.ir.components[0]!.state.map((st) => st.name),
+      ["coins"]
+    );
     assert.deepEqual(typeErrors(compiled), []);
   });
 
   it("may call a function from a .ts file and read props, and its names are checked against the schema", () => {
     const found = errors(`function A() { const c = useGame((s) => s.coinz > 1); return <Entity />; }`);
-    assert.deepEqual(found.map((d) => d.code), [DiagnosticCode.InvalidGameState]);
+    assert.deepEqual(
+      found.map((d) => d.code),
+      [DiagnosticCode.InvalidGameState]
+    );
     assert.match(found[0]!.message, /did you mean "coins"/);
     const action = errors(`function A() { const c = useGame((s) => s.hurt === null); return <Entity />; }`);
-    assert.deepEqual(action.map((d) => d.code), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(
+      action.map((d) => d.code),
+      [DiagnosticCode.UnsupportedExpression]
+    );
     assert.match(action[0]!.message, /select it by itself/);
   });
 });
@@ -630,8 +719,14 @@ export function Shop() {
 
   it("says when a name is a value or is not in the state, and that it must be destructured", () => {
     const value = errors(`function A() { const { coins } = useGame.actions(); return <Entity />; }`);
-    assert.deepEqual(value.map((d) => d.code), [DiagnosticCode.InvalidGameState]);
-    assert.match(value[0]!.message, /'coins' is a value of the game state, not an action: read it with `const coins = useGame\(\(s\) => s\.coins\)`/);
+    assert.deepEqual(
+      value.map((d) => d.code),
+      [DiagnosticCode.InvalidGameState]
+    );
+    assert.match(
+      value[0]!.message,
+      /'coins' is a value of the game state, not an action: read it with `const coins = useGame\(\(s\) => s\.coins\)`/
+    );
     const typo = errors(`function A() { const { colect } = useGame.actions(); return <Entity />; }`);
     assert.match(typo[0]!.message, /'colect' is not an action of the game state \(did you mean "collect"\?\)/);
     const whole = errors(`function A() { const all = useGame.actions(); return <Entity />; }`);
@@ -639,12 +734,15 @@ export function Shop() {
   });
 
   it("warns when an action is taken from the whole state", () => {
-    const result = compiler.compile("Warn.tsx", withAuthoringImports(`import { useGame } from "./GameState.ts";
+    const result = compiler.compile(
+      "Warn.tsx",
+      withAuthoringImports(`import { useGame } from "./GameState.ts";
 export function A() {
   const { coins, collect } = useGame((s) => s);
   useUpdate(() => collect(coins));
   return <Entity />;
-}`));
+}`)
+    );
     assert.ok(result.ok);
     const warnings = result.diagnostics.filter((d) => d.severity === "warning");
     assert.equal(warnings.length, 1, "only the action, not the value");

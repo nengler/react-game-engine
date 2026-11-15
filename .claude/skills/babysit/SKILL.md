@@ -28,7 +28,7 @@ Run what the change touches, and for a CI fix show the failing check passing loc
 
 | Changed | Run |
 | --- | --- |
-| Anything | `npm run generate`, `npm test`, `npm run typecheck` |
+| Anything | `npm run generate`, `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check` |
 | The guide (`docs/*.html`) | `npm run docs:index` (rebuilds the search index in every page; a test fails if it is stale) |
 | A game (`packages/kite`, `packages/hearth`, `packages/demo`) or the engine it uses | `npm run check:<game>` |
 | `games/bramble`, packaging, `packages/cli`, or a package's exports | `npm run native:build:headless`, then `npm run check:outside` |
@@ -40,7 +40,7 @@ built. Bramble is not a workspace: after an engine change, `npm run bramble:inst
 
 ## What the CI jobs run
 
-`.github/workflows/ci.yml`: **check** (`npm test`, typecheck, the bench under Node against budgets), **host** (the Rust host built headless, parity with
+`.github/workflows/ci.yml`: **check** (`npm test`, typecheck, lint and format check, the bench under Node against budgets), **host** (the Rust host built headless, parity with
 Node, packaging the demo), **native** and **native-desktop**
 (`librge`, the C smoke test, the Node host against the real library, packaged builds under a virtual display), and
 **outside** (`check:outside`: Bramble packed, installed and checked from a temporary folder).

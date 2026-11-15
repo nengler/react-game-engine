@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Collider, Entity, GameObject, World } from "@rge/runtime";
+
 import { Hero } from "../../example/generated/Hero.ts";
 import { boundsOverlap, colliderBounds, CollisionTracker, type Overlaps } from "../src/collide.ts";
 import { walkTree, type ColliderEntry } from "../src/draw.ts";
@@ -66,8 +68,16 @@ describe("colliderBounds", () => {
 
   it("is null when the collider has no area or is not finite", () => {
     for (const [w, h, world] of [
-      [0, 10, {}], [10, 0, {}], [-5, 10, {}], [10, -5, {}], [Number.NaN, 10, {}], [Infinity, 10, {}],
-      [10, 10, { scaleX: 0 }], [10, 10, { scaleY: 0 }], [10, 10, { x: Number.NaN }], [10, 10, { x: Infinity }],
+      [0, 10, {}],
+      [10, 0, {}],
+      [-5, 10, {}],
+      [10, -5, {}],
+      [Number.NaN, 10, {}],
+      [Infinity, 10, {}],
+      [10, 10, { scaleX: 0 }],
+      [10, 10, { scaleY: 0 }],
+      [10, 10, { x: Number.NaN }],
+      [10, 10, { x: Infinity }],
     ] as const) {
       assert.equal(colliderBounds(w, h, { ...IDENTITY, ...world }), null, `${w} × ${h} ${JSON.stringify(world)}`);
     }
@@ -201,7 +211,13 @@ describe("CollisionTracker", () => {
     const log: string[] = [];
     const actors = ["a", "b", "c", "d", "e"].map((name, i) => actor(name, i, log));
     for (const { entity } of actors) world.mount(entity);
-    const [, b, c, d] = actors as [typeof actors[number], typeof actors[number], typeof actors[number], typeof actors[number], typeof actors[number]];
+    const [, b, c, d] = actors as [
+      (typeof actors)[number],
+      (typeof actors)[number],
+      (typeof actors)[number],
+      (typeof actors)[number],
+      (typeof actors)[number],
+    ];
     // Infinitely wide, infinitely tall, and nowhere: none of them is a box.
     b.entity.transform.scaleX = Infinity;
     c.entity.transform.scaleY = -Infinity;
@@ -218,7 +234,12 @@ describe("CollisionTracker", () => {
   it("reports every pair among three overlapping colliders, in draw order", () => {
     const world = new World();
     const log: string[] = [];
-    for (const [name, x] of [["a", 0], ["b", 3], ["c", 6]] as const) world.mount(actor(name, x, log).entity);
+    for (const [name, x] of [
+      ["a", 0],
+      ["b", 3],
+      ["c", 6],
+    ] as const)
+      world.mount(actor(name, x, log).entity);
     assert.equal(new CollisionTracker().update(world, collidersOf(world)), 3);
     assert.deepEqual(log, ["a met b", "b met a", "a met c", "c met a", "b met c", "c met b"]);
   });
@@ -270,12 +291,17 @@ describe("CollisionTracker against every-pair testing", () => {
         }
         const parent = parents[parents.length - 1] as Entity;
         const index = colliders.length;
-        const collider = new Collider({ width: next() < 0.05 ? 0 : 4 + next() * 30, height: 4 + next() * 30,
+        const collider = new Collider({
+          width: next() < 0.05 ? 0 : 4 + next() * 30,
+          height: 4 + next() * 30,
           layer: layers[Math.floor(next() * 3)] as string,
           // Often no list (touches everything); otherwise a random subset, sometimes empty.
           hits: next() < 0.5 ? undefined : layers.filter(() => next() < 0.6),
           onCollisionEnter: (other) => reported.push(`${index}>${colliders.indexOf(other as Collider)}`),
-          onCollisionExit: (other) => exited.push(`${Math.min(index, colliders.indexOf(other as Collider))}>${Math.max(index, colliders.indexOf(other as Collider))}`),
+          onCollisionExit: (other) =>
+            exited.push(
+              `${Math.min(index, colliders.indexOf(other as Collider))}>${Math.max(index, colliders.indexOf(other as Collider))}`
+            ),
         });
         collider.transform.x = next() * 120;
         collider.transform.y = next() * 120;
@@ -308,8 +334,16 @@ describe("CollisionTracker against every-pair testing", () => {
           }
         }
         // Pairs that touched last frame and do not now; keys are `from>to` in draw order, so normalise to collider indexes.
-        const normal = (key: string): string => key.split(">").map(Number).sort((x, y) => x - y).join(">");
-        const wantExits = [...touching].filter((key) => !now.has(key)).map(normal).sort();
+        const normal = (key: string): string =>
+          key
+            .split(">")
+            .map(Number)
+            .sort((x, y) => x - y)
+            .join(">");
+        const wantExits = [...touching]
+          .filter((key) => !now.has(key))
+          .map(normal)
+          .sort();
         touching = now;
         reported.length = 0;
         exited.length = 0;
@@ -317,7 +351,10 @@ describe("CollisionTracker against every-pair testing", () => {
         // reportCollision tells both sides; keep one line per pair: the earlier collider's.
         const pairs = reported.filter((line) => {
           const [from, to] = line.split(">").map(Number) as [number, number];
-          return entries.findIndex((e) => colliders.indexOf(e.collider) === from) < entries.findIndex((e) => colliders.indexOf(e.collider) === to);
+          return (
+            entries.findIndex((e) => colliders.indexOf(e.collider) === from) <
+            entries.findIndex((e) => colliders.indexOf(e.collider) === to)
+          );
         });
         totalPairs += expected.length;
         assert.equal(count, expected.length, `seed ${seed} frame ${frame}: how many`);
@@ -338,17 +375,29 @@ describe("CollisionTracker against every-pair testing", () => {
   it("reports a contact again when a full sweep finds last full sweep's pairs after a frame that looked only at what moved ended one", () => {
     // 16 colliders, so a frame with one new entry looks only at what moved, and one with all new entries takes the full sweep.
     const log: string[] = [];
-    const world = { reportCollision: (a: Collider) => void log.push(`in ${a.tag}`), reportCollisionExit: (a: Collider) => void log.push(`out ${a.tag}`) } as unknown as World;
+    const world = {
+      reportCollision: (a: Collider) => void log.push(`in ${a.tag}`),
+      reportCollisionExit: (a: Collider) => void log.push(`out ${a.tag}`),
+    } as unknown as World;
     const colliders = Array.from({ length: 16 }, (_, i) => {
       const c = new Collider({ width: 10, height: 10, tag: `c${i}` });
       new Entity().addChild(c);
       return c;
     });
     // c0 and c1 overlap; the rest are far apart.
-    const at = (i: number, moved = false): ColliderEntry => ({ collider: colliders[i] as Collider, world: { ...IDENTITY, x: i === 1 ? (moved ? 500 : 5) : i * 40, y: 0 } });
+    const at = (i: number, moved = false): ColliderEntry => ({
+      collider: colliders[i] as Collider,
+      world: { ...IDENTITY, x: i === 1 ? (moved ? 500 : 5) : i * 40, y: 0 },
+    });
     const tracker = new CollisionTracker();
-    tracker.update(world, colliders.map((_, i) => at(i)));
-    tracker.update(world, colliders.map((_, i) => at(i))); // the same pairs as the frame before: nothing reported
+    tracker.update(
+      world,
+      colliders.map((_, i) => at(i))
+    );
+    tracker.update(
+      world,
+      colliders.map((_, i) => at(i))
+    ); // the same pairs as the frame before: nothing reported
     assert.deepEqual(log, ["in c0"]);
     const first = colliders.map((_, i) => at(i));
     tracker.update(world, first);
@@ -357,13 +406,24 @@ describe("CollisionTracker against every-pair testing", () => {
     tracker.update(world, moved);
     assert.equal(tracker.incrementalFrames > 0, true, "the move was handled by looking only at what moved");
     assert.deepEqual(log, ["in c0", "out c0"]);
-    tracker.update(world, colliders.map((_, i) => at(i))); // every entry new: a full sweep, whose pairs are the last full sweep's
-    assert.deepEqual(log, ["in c0", "out c0", "in c0"], "touching again is a new contact, though the full sweep's pairs are what they were");
+    tracker.update(
+      world,
+      colliders.map((_, i) => at(i))
+    ); // every entry new: a full sweep, whose pairs are the last full sweep's
+    assert.deepEqual(
+      log,
+      ["in c0", "out c0", "in c0"],
+      "touching again is a new contact, though the full sweep's pairs are what they were"
+    );
   });
 
   it("keeps reporting the same contacts when it runs out of ids and renumbers, while colliders come and go", () => {
     const next = random(7);
-    const reports = (log: string[]) => ({ reportCollision: (a: Collider, b: Collider) => void log.push(`${a.width}|${b.width}`), reportCollisionExit: () => {} }) as unknown as World;
+    const reports = (log: string[]) =>
+      ({
+        reportCollision: (a: Collider, b: Collider) => void log.push(`${a.width}|${b.width}`),
+        reportCollisionExit: () => {},
+      }) as unknown as World;
     const roomy = new CollisionTracker();
     const tight = new CollisionTracker(12); // renumbers every few frames
     const expected: string[] = [];
@@ -388,7 +448,10 @@ describe("CollisionTracker against every-pair testing", () => {
 
   it("still reports each contact once when ids grow past the compact range (more than 2^15)", () => {
     const log: string[] = [];
-    const world = { reportCollision: (a: Collider, b: Collider) => void log.push(`${a.width}|${b.width}`), reportCollisionExit: () => {} } as unknown as World;
+    const world = {
+      reportCollision: (a: Collider, b: Collider) => void log.push(`${a.width}|${b.width}`),
+      reportCollisionExit: () => {},
+    } as unknown as World;
     const tracker = new CollisionTracker();
     const spread = (count: number, first: number): ColliderEntry[] =>
       Array.from({ length: count }, (_, i) => {
@@ -413,7 +476,11 @@ describe("CollisionTracker against every-pair testing", () => {
     assert.deepEqual(log, [`${lowId}|${aId}`, `${lowId}|${bId}`, `${aId}|${bId}`], "each pair once, while it lasts");
     tracker.update(world, frame(false));
     tracker.update(world, frame(true));
-    assert.deepEqual(log.slice(3), [`${lowId}|${aId}`, `${lowId}|${bId}`], "the pairs that parted and met again are reported again; the one that stayed is not");
+    assert.deepEqual(
+      log.slice(3),
+      [`${lowId}|${aId}`, `${lowId}|${bId}`],
+      "the pairs that parted and met again are reported again; the one that stayed is not"
+    );
   });
 });
 
@@ -483,7 +550,10 @@ describe("collisions in the frame loop", () => {
 
 describe("CollisionTracker: layers and exits", () => {
   /** Two colliders in their own named entities: `a` at x = 0 and `b` at x = 5, size 10, so they overlap. */
-  function pair(a: ConstructorParameters<typeof Collider>[0], b: ConstructorParameters<typeof Collider>[0]): { world: World; a: Collider; b: Collider; ea: Entity; eb: Entity } {
+  function pair(
+    a: ConstructorParameters<typeof Collider>[0],
+    b: ConstructorParameters<typeof Collider>[0]
+  ): { world: World; a: Collider; b: Collider; ea: Entity; eb: Entity } {
     const world = new World();
     const ea = new Entity({ name: "ea" });
     const eb = new Entity({ name: "eb" });
@@ -500,7 +570,10 @@ describe("CollisionTracker: layers and exits", () => {
 
   it("gives a handler the other collider's tag and its owner's name", () => {
     const seen: string[] = [];
-    const { world } = pair({ ...box, tag: "coin", onCollisionEnter: (o) => seen.push(`a: ${o.tag}/${o.owner}`) }, { ...box, tag: "player", onCollisionEnter: (o) => seen.push(`b: ${o.tag}/${o.owner}`) });
+    const { world } = pair(
+      { ...box, tag: "coin", onCollisionEnter: (o) => seen.push(`a: ${o.tag}/${o.owner}`) },
+      { ...box, tag: "player", onCollisionEnter: (o) => seen.push(`b: ${o.tag}/${o.owner}`) }
+    );
     new CollisionTracker().update(world, collidersOf(world));
     assert.deepEqual(seen, ["a: player/eb", "b: coin/ea"]);
     const bare = new Collider(box);
@@ -525,7 +598,7 @@ describe("CollisionTracker: layers and exits", () => {
     const log: string[] = [];
     const { world, eb } = pair(
       { ...box, onCollisionEnter: (o) => log.push(`a in ${o.owner}`), onCollisionExit: (o) => log.push(`a out ${o.owner}`) },
-      { ...box, onCollisionEnter: (o) => log.push(`b in ${o.owner}`), onCollisionExit: (o) => log.push(`b out ${o.owner}`) },
+      { ...box, onCollisionEnter: (o) => log.push(`b in ${o.owner}`), onCollisionExit: (o) => log.push(`b out ${o.owner}`) }
     );
     const tracker = new CollisionTracker();
     tracker.update(world, collidersOf(world));
@@ -543,7 +616,10 @@ describe("CollisionTracker: layers and exits", () => {
 
   it("reports an exit when one collider leaves the world, to the one still mounted only", () => {
     const log: string[] = [];
-    const { world, eb } = pair({ ...box, onCollisionExit: (o) => log.push(`a out ${o.owner}`) }, { ...box, onCollisionExit: () => log.push("b out") });
+    const { world, eb } = pair(
+      { ...box, onCollisionExit: (o) => log.push(`a out ${o.owner}`) },
+      { ...box, onCollisionExit: () => log.push("b out") }
+    );
     const tracker = new CollisionTracker();
     tracker.update(world, collidersOf(world));
     eb.parent?.removeChild(eb);
@@ -568,7 +644,10 @@ describe("CollisionTracker: layers and exits", () => {
 
   it("reports exits before enters in a frame, and keeps exits that renumbering would have dropped", () => {
     const log: string[] = [];
-    const world = { reportCollision: (a: Collider) => void log.push(`in ${a.width}`), reportCollisionExit: (a: Collider) => void log.push(`out ${a.width}`) } as unknown as World;
+    const world = {
+      reportCollision: (a: Collider) => void log.push(`in ${a.width}`),
+      reportCollisionExit: (a: Collider) => void log.push(`out ${a.width}`),
+    } as unknown as World;
     const tracker = new CollisionTracker(4);
     const collider = (width: number, x: number): ColliderEntry => {
       const c = new Collider({ width, height: 10 });
@@ -580,13 +659,17 @@ describe("CollisionTracker: layers and exits", () => {
     // Both leave; two fresh colliders arrive, enough of them to force a renumber (compactAt 4).
     const fresh = [collider(12, 0), collider(13, 5), collider(14, 100), collider(15, 200)];
     tracker.update(world, fresh);
-    assert.deepEqual(log, ["in 10", "out 10", "in 12"], "the old pair's exit comes first, though neither of its colliders is in the list now");
+    assert.deepEqual(
+      log,
+      ["in 10", "out 10", "in 12"],
+      "the old pair's exit comes first, though neither of its colliders is in the list now"
+    );
   });
 
   it("reports what the full sweep and testing every pair report, through every kind of change, including frames that look only at what moved", () => {
     for (const seed of [1, 2, 3, 4]) {
       let state = seed * 7919;
-      const next = (): number => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+      const next = (): number => (state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff;
       const pick = <T>(items: readonly T[]): T => items[Math.floor(next() * items.length)] as T;
       const names = new Map<Collider, string>();
       const logs: string[][] = [[], []];
@@ -595,7 +678,7 @@ describe("CollisionTracker: layers and exits", () => {
           ({
             reportCollision: (a: Collider, b: Collider) => void log.push(`in ${names.get(a)} ${names.get(b)}`),
             reportCollisionExit: (a: Collider, b: Collider) => void log.push(`out ${names.get(a)} ${names.get(b)}`),
-          }) as unknown as World,
+          }) as unknown as World
       );
       const incremental = new CollisionTracker();
       const full = new CollisionTracker(undefined, false);
@@ -612,7 +695,12 @@ describe("CollisionTracker: layers and exits", () => {
       for (let frame = 0; frame < 300; frame++) {
         // A collider with no area is put back the frame after, so most frames can take the path that looks only at what moved.
         const restore = entries.findIndex((e) => e.collider.width === 0);
-        const kind = frame < 3 ? "same" : restore >= 0 ? "restore" : pick(["same", "same", "few", "few", "few", "few", "few", "few", "jump", "add", "remove", "area", "layer", "grow", "grow"]);
+        const kind =
+          frame < 3
+            ? "same"
+            : restore >= 0
+              ? "restore"
+              : pick(["same", "same", "few", "few", "few", "few", "few", "few", "jump", "add", "remove", "area", "layer", "grow", "grow"]);
         const replace = (i: number, at: Partial<typeof IDENTITY>, size?: number): void => {
           const old = entries[i] as ColliderEntry;
           if (size !== undefined) old.collider.width = size;
@@ -623,7 +711,10 @@ describe("CollisionTracker: layers and exits", () => {
           for (let k = Math.floor(next() * 12); k > 0; k--) {
             const i = Math.floor(next() * entries.length);
             const e = entries[i] as ColliderEntry;
-            replace(i, next() < 0.7 ? { x: e.world.x + next() * 4 - 2, y: e.world.y + next() * 4 - 2 } : { x: next() * 150, y: next() * 150 });
+            replace(
+              i,
+              next() < 0.7 ? { x: e.world.x + next() * 4 - 2, y: e.world.y + next() * 4 - 2 } : { x: next() * 150, y: next() * 150 }
+            );
           }
         } else if (kind === "jump") entries.forEach((_, i) => replace(i, { x: next() * 150, y: next() * 150 }));
         else if (kind === "add") entries.splice(Math.floor(next() * entries.length), 0, make(`c${serial++}`));
@@ -636,8 +727,7 @@ describe("CollisionTracker: layers and exits", () => {
           const wide = entries[i] as ColliderEntry;
           replace(i, {}, 60 + next() * 30);
           for (let k = 0; k < 2; k++) replace(Math.floor(next() * i), { x: wide.world.x + 25 + next() * 20, y: wide.world.y + next() * 8 });
-        }
-        else if (kind === "area") {
+        } else if (kind === "area") {
           const i = Math.floor(next() * entries.length);
           replace(i, {}, 0); // no area; the next frame puts it back
         } else if (kind === "layer") {
@@ -669,11 +759,22 @@ describe("CollisionTracker: layers and exits", () => {
         const norm = (pair: string): string => pair.split(" ").sort().join(" ");
         const was = new Set([...touching].map(norm));
         const now = new Set([...expected].map(norm));
-        assert.deepEqual(entered.map(norm).sort(), [...now].filter((k) => !was.has(k)).sort(), `seed ${seed} frame ${frame} (${kind}): enters`);
-        assert.deepEqual(exited.map(norm).sort(), [...was].filter((k) => !now.has(k)).sort(), `seed ${seed} frame ${frame} (${kind}): exits`);
+        assert.deepEqual(
+          entered.map(norm).sort(),
+          [...now].filter((k) => !was.has(k)).sort(),
+          `seed ${seed} frame ${frame} (${kind}): enters`
+        );
+        assert.deepEqual(
+          exited.map(norm).sort(),
+          [...was].filter((k) => !now.has(k)).sort(),
+          `seed ${seed} frame ${frame} (${kind}): exits`
+        );
         touching = expected;
       }
-      assert.ok(incremental.incrementalFrames > 30, `seed ${seed}: the frames that look only at what moved ran (${incremental.incrementalFrames})`);
+      assert.ok(
+        incremental.incrementalFrames > 30,
+        `seed ${seed}: the frames that look only at what moved ran (${incremental.incrementalFrames})`
+      );
     }
   });
 });
@@ -681,7 +782,7 @@ describe("CollisionTracker: layers and exits", () => {
 describe("CollisionTracker: the sweep in bands", () => {
   const random = (seed: number): (() => number) => {
     let state = seed * 7919;
-    return () => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+    return () => (state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff;
   };
   /** A world that only writes down what it is told, by the names given to the colliders. */
   const logging = (names: Map<Collider, string>, log: string[]): World =>
@@ -693,7 +794,12 @@ describe("CollisionTracker: the sweep in bands", () => {
   // Where the boxes are, and how big: each puts the bands somewhere awkward.
   const layouts: Record<string, (next: () => number) => { x: number; y: number; width: number; height: number }> = {
     // Mostly small boxes, and a few tall enough to reach through every band.
-    mixed: (next) => ({ x: next() * 300 - 50, y: next() * 300 - 150, width: 4 + next() * 20, height: next() < 0.08 ? 150 + next() * 300 : 4 + next() * 20 }),
+    mixed: (next) => ({
+      x: next() * 300 - 50,
+      y: next() * 300 - 150,
+      width: 4 + next() * 20,
+      height: next() < 0.08 ? 150 + next() * 300 : 4 + next() * 20,
+    }),
     // Tiles on a grid: edges land exactly on band edges, and boxes that only share an edge do not touch.
     tiles: (next) => ({ x: Math.floor(next() * 12) * 16, y: Math.floor(next() * 12) * 16 + (next() < 0.2 ? 8 : 0), width: 16, height: 16 }),
     // Far taller than the most bands there can be, so the bands are stretched and the last one takes the bottom edge.
@@ -714,7 +820,12 @@ describe("CollisionTracker: the sweep in bands", () => {
         const parents: Entity[] = Array.from({ length: 50 }, () => new Entity());
         const make = (label: string): ColliderEntry => {
           const at = place(next);
-          const c = new Collider({ width: at.width, height: at.height, layer: next() < 0.3 ? "a" : "", hits: next() < 0.2 ? ["a"] : undefined });
+          const c = new Collider({
+            width: at.width,
+            height: at.height,
+            layer: next() < 0.3 ? "a" : "",
+            hits: next() < 0.2 ? ["a"] : undefined,
+          });
           names.set(c, label);
           (parents[Math.floor(next() * parents.length)] as Entity).addChild(c);
           return { collider: c, world: { ...IDENTITY, x: at.x, y: at.y } };
@@ -722,15 +833,25 @@ describe("CollisionTracker: the sweep in bands", () => {
         let entries: ColliderEntry[] = Array.from({ length: 140 }, (_, i) => make(`c${i}`));
         let serial = entries.length;
         // In bands whenever two can be made; never; and as the tracker decides for itself, with and without looking only at what moved.
-        const trackers = [new CollisionTracker(undefined, false, "always"), new CollisionTracker(undefined, false, false), new CollisionTracker(undefined, false), new CollisionTracker()];
+        const trackers = [
+          new CollisionTracker(undefined, false, "always"),
+          new CollisionTracker(undefined, false, false),
+          new CollisionTracker(undefined, false),
+          new CollisionTracker(),
+        ];
         const logs: string[][] = trackers.map(() => []);
         const worlds = logs.map((log) => logging(names, log));
         let touching = new Set<string>();
         for (let frame = 0; frame < 40; frame++) {
-          const kind = frame === 0 ? "same" : (["drift", "drift", "drift", "jump", "add", "remove", "resize", "same"] as const)[Math.floor(next() * 8)];
+          const kind =
+            frame === 0
+              ? "same"
+              : (["drift", "drift", "drift", "jump", "add", "remove", "resize", "same"] as const)[Math.floor(next() * 8)];
           entries = entries.slice();
-          const replace = (i: number, world: ColliderEntry["world"]): void => void (entries[i] = { collider: (entries[i] as ColliderEntry).collider, world });
-          if (kind === "drift") entries.forEach((e, i) => replace(i, { ...e.world, x: e.world.x + next() * 6 - 3, y: e.world.y + next() * 6 - 3 }));
+          const replace = (i: number, world: ColliderEntry["world"]): void =>
+            void (entries[i] = { collider: (entries[i] as ColliderEntry).collider, world });
+          if (kind === "drift")
+            entries.forEach((e, i) => replace(i, { ...e.world, x: e.world.x + next() * 6 - 3, y: e.world.y + next() * 6 - 3 }));
           else if (kind === "jump") entries.forEach((_, i) => replace(i, { ...IDENTITY, ...(({ x, y }) => ({ x, y }))(place(next)) }));
           else if (kind === "add") entries.splice(Math.floor(next() * (entries.length + 1)), 0, make(`c${serial++}`));
           else if (kind === "remove") entries.splice(next() < 0.5 ? entries.length - 1 : Math.floor(next() * entries.length), 1);
@@ -742,7 +863,12 @@ describe("CollisionTracker: the sweep in bands", () => {
           }
           logs.forEach((log) => (log.length = 0));
           trackers.forEach((tracker, k) => tracker.update(worlds[k] as World, entries));
-          for (let k = 1; k < trackers.length; k++) assert.deepEqual(logs[k], logs[0], `${layout} seed ${seed} frame ${frame} (${kind}): tracker ${k} reports what the banded sweep reports, in the same order`);
+          for (let k = 1; k < trackers.length; k++)
+            assert.deepEqual(
+              logs[k],
+              logs[0],
+              `${layout} seed ${seed} frame ${frame} (${kind}): tracker ${k} reports what the banded sweep reports, in the same order`
+            );
 
           const expected = new Set<string>();
           for (let i = 0; i < entries.length; i++) {
@@ -760,13 +886,22 @@ describe("CollisionTracker: the sweep in bands", () => {
           const norm = (pair: string): string => pair.split(" ").sort().join(" ");
           const entered = (logs[0] as string[]).filter((l) => l.startsWith("in ")).map((l) => norm(l.slice(3)));
           const exited = (logs[0] as string[]).filter((l) => l.startsWith("out ")).map((l) => norm(l.slice(4)));
-          assert.deepEqual(entered.sort(), [...expected].filter((k) => !touching.has(k)).sort(), `${layout} seed ${seed} frame ${frame} (${kind}): enters`);
-          assert.deepEqual(exited.sort(), [...touching].filter((k) => !expected.has(k)).sort(), `${layout} seed ${seed} frame ${frame} (${kind}): exits`);
+          assert.deepEqual(
+            entered.sort(),
+            [...expected].filter((k) => !touching.has(k)).sort(),
+            `${layout} seed ${seed} frame ${frame} (${kind}): enters`
+          );
+          assert.deepEqual(
+            exited.sort(),
+            [...touching].filter((k) => !expected.has(k)).sort(),
+            `${layout} seed ${seed} frame ${frame} (${kind}): exits`
+          );
           touching = expected;
         }
         const banded = (trackers[0] as CollisionTracker).bandedFrames;
         // (A row or a pile has one band until its boxes drift apart or one grows tall, so nothing is asked of those.)
-        if (layout !== "row" && layout !== "pile") assert.ok(banded >= 35, `${layout} seed ${seed}: the sweep ran in bands (${banded} frames of 40)`);
+        if (layout !== "row" && layout !== "pile")
+          assert.ok(banded >= 35, `${layout} seed ${seed}: the sweep ran in bands (${banded} frames of 40)`);
         assert.equal((trackers[1] as CollisionTracker).bandedFrames, 0, "a tracker told not to never does");
         bandedFrames += banded;
       }
@@ -779,7 +914,10 @@ describe("CollisionTracker: the sweep in bands", () => {
     const entries: ColliderEntry[] = [];
     for (let i = 0; i < side * side; i++) {
       const wobble = Math.sin(frame * 0.3 + i) * 3;
-      entries.push({ collider: colliders[i] as Collider, world: { ...IDENTITY, x: (i % side) * 11 + wobble, y: Math.floor(i / side) * 11 - wobble } });
+      entries.push({
+        collider: colliders[i] as Collider,
+        world: { ...IDENTITY, x: (i % side) * 11 + wobble, y: Math.floor(i / side) * 11 - wobble },
+      });
     }
     return entries.concat(extra);
   };
@@ -852,7 +990,10 @@ describe("CollisionTracker: the sweep in bands", () => {
     // New entries every frame, as when everything moves: the list is the same colliders, and the frame is a full sweep.
     const frame = (...colliders: Collider[]): string[] => {
       log.length = 0;
-      tracker.update(world, colliders.map((collider, i) => ({ collider, world: { ...IDENTITY, x: i } })));
+      tracker.update(
+        world,
+        colliders.map((collider, i) => ({ collider, world: { ...IDENTITY, x: i } }))
+      );
       return log.slice();
     };
     assert.deepEqual(frame(a, b, c), ["in a b", "in a c", "in b c"]);
@@ -881,7 +1022,15 @@ describe("CollisionTracker: a host's broad phase", () => {
     let found = 0;
     for (let a = count - 1; a >= 0; a--) {
       for (let b = 0; b < a; b++) {
-        if (!(boxes[a * 4]! < boxes[b * 4 + 2]! && boxes[a * 4 + 2]! > boxes[b * 4]! && boxes[a * 4 + 1]! < boxes[b * 4 + 3]! && boxes[a * 4 + 3]! > boxes[b * 4 + 1]!)) continue;
+        if (
+          !(
+            boxes[a * 4]! < boxes[b * 4 + 2]! &&
+            boxes[a * 4 + 2]! > boxes[b * 4]! &&
+            boxes[a * 4 + 1]! < boxes[b * 4 + 3]! &&
+            boxes[a * 4 + 3]! > boxes[b * 4 + 1]!
+          )
+        )
+          continue;
         if (found * 2 + 1 < pairs.length) {
           pairs[found * 2] = a;
           pairs[found * 2 + 1] = b;
@@ -897,11 +1046,16 @@ describe("CollisionTracker: a host's broad phase", () => {
 
   it("reports what the tracker's own sweep reports, in the same order, and asks again when the pairs did not fit", () => {
     let state = 99;
-    const next = (): number => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+    const next = (): number => (state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff;
     const names = new Map<Collider, string>();
     const parents: Entity[] = Array.from({ length: 30 }, () => new Entity());
     const make = (label: string): ColliderEntry => {
-      const c = new Collider({ width: 10 + next() * 30, height: 10 + next() * 30, layer: next() < 0.3 ? "a" : "", hits: next() < 0.2 ? ["a"] : undefined });
+      const c = new Collider({
+        width: 10 + next() * 30,
+        height: 10 + next() * 30,
+        layer: next() < 0.3 ? "a" : "",
+        hits: next() < 0.2 ? ["a"] : undefined,
+      });
       names.set(c, label);
       (parents[Math.floor(next() * parents.length)] as Entity).addChild(c);
       return { collider: c, world: { ...IDENTITY, x: next() * 200, y: next() * 200 } };
@@ -914,14 +1068,20 @@ describe("CollisionTracker: a host's broad phase", () => {
         ({
           reportCollision: (a: Collider, b: Collider) => void log.push(`in ${names.get(a)} ${names.get(b)}`),
           reportCollisionExit: (a: Collider, b: Collider) => void log.push(`out ${names.get(a)} ${names.get(b)}`),
-        }) as unknown as World,
+        }) as unknown as World
     );
-    const trackers = [new CollisionTracker(undefined, true, true, overlaps), new CollisionTracker(undefined, false, true, overlaps), new CollisionTracker(undefined, false, false)];
+    const trackers = [
+      new CollisionTracker(undefined, true, true, overlaps),
+      new CollisionTracker(undefined, false, true, overlaps),
+      new CollisionTracker(undefined, false, false),
+    ];
     let reports = 0;
     for (let frame = 0; frame < 150; frame++) {
-      const kind = frame === 0 ? "same" : (["drift", "few", "few", "few", "jump", "add", "remove", "area", "same"] as const)[Math.floor(next() * 9)];
+      const kind =
+        frame === 0 ? "same" : (["drift", "few", "few", "few", "jump", "add", "remove", "area", "same"] as const)[Math.floor(next() * 9)];
       entries = entries.slice();
-      const move = (i: number, x: number, y: number): void => void (entries[i] = { collider: (entries[i] as ColliderEntry).collider, world: { ...IDENTITY, x, y } });
+      const move = (i: number, x: number, y: number): void =>
+        void (entries[i] = { collider: (entries[i] as ColliderEntry).collider, world: { ...IDENTITY, x, y } });
       const lost = entries.findIndex((e) => e.collider.width === 0);
       if (lost >= 0) {
         (entries[lost] as ColliderEntry).collider.width = 12;
@@ -944,7 +1104,10 @@ describe("CollisionTracker: a host's broad phase", () => {
     }
     assert.ok(reports > 3000, `contacts come and go (${reports} reports)`);
     assert.ok(calls.short > 0, "more pairs than the first buffer held, at least once");
-    assert.ok((trackers[0] as CollisionTracker).incrementalFrames > 20, "frames that look only at what moved ran between the host's sweeps");
+    assert.ok(
+      (trackers[0] as CollisionTracker).incrementalFrames > 20,
+      "frames that look only at what moved ran between the host's sweeps"
+    );
     assert.equal((trackers[0] as CollisionTracker).bandedFrames, 0, "the script's bands are not used with a host's broad phase");
   });
 
@@ -955,7 +1118,9 @@ describe("CollisionTracker: a host's broad phase", () => {
       const backend = new RecordingBackend();
       if (withHost) (backend as RecordingBackend & { overlaps?: Overlaps }).overlaps = overlaps;
       const player = createPlayer(backend, {
-        width: 100, height: 100, title: "t",
+        width: 100,
+        height: 100,
+        title: "t",
         root: () => {
           const root = new Entity();
           for (const x of [0, 5]) {

@@ -13,5 +13,5 @@ export const useGame = createGameState(
     step(s) {
       s.steps += 1;
     },
-  },
+  }
 );

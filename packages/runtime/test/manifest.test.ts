@@ -1,11 +1,51 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { AnimatedSprite, Camera, Fade, Music, Provider, Route, Router, createContext, Particles, ParticleLayer, createParticles, Tilemap, Collider, Entity, Flex, Game, GameObject, Hud, Pointer, SCREEN_FITS, SHAPE_KINDS, Screen, Shape, Slider, Sprite, Text, Toggle, Button, Menu, Tooltip, TextInput, CALLBACK_PRIMITIVES, createInputState, runtimeManifest } from "../src/index.ts";
+import { describe, it } from "node:test";
+
+import {
+  AnimatedSprite,
+  Camera,
+  Fade,
+  Music,
+  Provider,
+  Route,
+  Router,
+  createContext,
+  Particles,
+  ParticleLayer,
+  createParticles,
+  Tilemap,
+  Collider,
+  Entity,
+  Flex,
+  Game,
+  GameObject,
+  Hud,
+  Pointer,
+  SCREEN_FITS,
+  SHAPE_KINDS,
+  Screen,
+  Shape,
+  Slider,
+  Sprite,
+  Text,
+  Toggle,
+  Button,
+  Menu,
+  Tooltip,
+  TextInput,
+  CALLBACK_PRIMITIVES,
+  createInputState,
+  runtimeManifest,
+} from "../src/index.ts";
 
 /** Every instance field and prototype member a generated subclass of `host` would inherit, excluding Object.prototype. */
 function inheritedMembers(host: object): Set<string> {
   const names = new Set(Object.getOwnPropertyNames(host));
-  for (let proto = Object.getPrototypeOf(host) as object | null; proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto) as object | null) {
+  for (
+    let proto = Object.getPrototypeOf(host) as object | null;
+    proto && proto !== Object.prototype;
+    proto = Object.getPrototypeOf(proto) as object | null
+  ) {
     for (const name of Object.getOwnPropertyNames(proto)) names.add(name);
   }
   return names;
@@ -62,20 +102,38 @@ describe("runtime manifest", () => {
     for (const tag of runtimeManifest.intrinsics) {
       const instance = instances[tag]!;
       const fields = Object.keys(instance).filter((key) => !(key in base) || key === "name");
-      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(instance) as object).filter((key) => key !== "constructor" && !(key in base));
+      const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(instance) as object).filter(
+        (key) => key !== "constructor" && !(key in base)
+      );
       const declared = [...(runtimeManifest.intrinsicMembers[tag] ?? [])].sort();
-      assert.deepEqual(declared, [...fields, ...methods].sort(), `${tag}: intrinsicMembers must list exactly the fields and methods it adds`);
+      assert.deepEqual(
+        declared,
+        [...fields, ...methods].sort(),
+        `${tag}: intrinsicMembers must list exactly the fields and methods it adds`
+      );
     }
     for (const [tag, required] of Object.entries(runtimeManifest.intrinsicRequired)) {
-      for (const name of required) assert.ok(runtimeManifest.intrinsicMembers[tag]?.includes(name), `${tag}.${name} is required, so it must be one of the intrinsic's members`);
+      for (const name of required)
+        assert.ok(
+          runtimeManifest.intrinsicMembers[tag]?.includes(name),
+          `${tag}.${name} is required, so it must be one of the intrinsic's members`
+        );
     }
-    assert.deepEqual(Object.keys(runtimeManifest.intrinsicRequired).sort(), [...runtimeManifest.intrinsics].sort(), "every intrinsic says what it requires");
+    assert.deepEqual(
+      Object.keys(runtimeManifest.intrinsicRequired).sort(),
+      [...runtimeManifest.intrinsics].sort(),
+      "every intrinsic says what it requires"
+    );
     for (const tag of runtimeManifest.containerIntrinsics) assert.ok(runtimeManifest.intrinsics.includes(tag), tag);
     assert.ok(runtimeManifest.containerIntrinsics.includes(runtimeManifest.hostIntrinsic));
     for (const [tag, callbacks] of Object.entries(runtimeManifest.intrinsicCallbacks)) {
       for (const [name, params] of Object.entries(callbacks)) {
         assert.ok(name in (instances[tag] ?? {}), `${tag}.${name} must be a field`);
-        for (const p of params) assert.ok(p.type in runtimeManifest.handleTypes || (CALLBACK_PRIMITIVES as readonly string[]).includes(p.type), `${tag}.${name}: ${p.type} is neither a handle type nor a plain value`);
+        for (const p of params)
+          assert.ok(
+            p.type in runtimeManifest.handleTypes || (CALLBACK_PRIMITIVES as readonly string[]).includes(p.type),
+            `${tag}.${name}: ${p.type} is neither a handle type nor a plain value`
+          );
       }
     }
   });
@@ -103,10 +161,41 @@ describe("runtime manifest", () => {
 
   it("lists exactly the hooks each intrinsic implements itself, so a component rooted at it can call super", () => {
     const hooks = ["onInput", "onUpdate", "onMount", "onUnmount"];
-    const classes: Record<string, { prototype: object }> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex, Slider, Toggle, Button, Menu, Tooltip, TextInput, Tilemap, Particles, ParticleLayer, Fade, Music, Router, Route, Provider };
+    const classes: Record<string, { prototype: object }> = {
+      Entity,
+      Game,
+      Sprite,
+      Collider,
+      Text,
+      Shape,
+      Camera,
+      AnimatedSprite,
+      Pointer,
+      Screen,
+      Hud,
+      Flex,
+      Slider,
+      Toggle,
+      Button,
+      Menu,
+      Tooltip,
+      TextInput,
+      Tilemap,
+      Particles,
+      ParticleLayer,
+      Fade,
+      Music,
+      Router,
+      Route,
+      Provider,
+    };
     for (const tag of runtimeManifest.intrinsics) {
       const overridden = hooks.filter((hook) => Object.hasOwn(classes[tag]!.prototype, hook)).sort();
-      assert.deepEqual([...(runtimeManifest.intrinsicHooks[tag] ?? [])].sort(), overridden, `${tag}: intrinsicHooks must list the hooks its class overrides`);
+      assert.deepEqual(
+        [...(runtimeManifest.intrinsicHooks[tag] ?? [])].sort(),
+        overridden,
+        `${tag}: intrinsicHooks must list the hooks its class overrides`
+      );
     }
   });
 
@@ -126,7 +215,34 @@ describe("runtime manifest", () => {
 
   it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
     assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
-    const classes: Record<string, unknown> = { Entity, Game, Sprite, Collider, Text, Shape, Camera, AnimatedSprite, Pointer, Screen, Hud, Flex, Slider, Toggle, Button, Menu, Tooltip, TextInput, Tilemap, Particles, ParticleLayer, Fade, Music, Router, Route, Provider };
+    const classes: Record<string, unknown> = {
+      Entity,
+      Game,
+      Sprite,
+      Collider,
+      Text,
+      Shape,
+      Camera,
+      AnimatedSprite,
+      Pointer,
+      Screen,
+      Hud,
+      Flex,
+      Slider,
+      Toggle,
+      Button,
+      Menu,
+      Tooltip,
+      TextInput,
+      Tilemap,
+      Particles,
+      ParticleLayer,
+      Fade,
+      Music,
+      Router,
+      Route,
+      Provider,
+    };
     for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
   });
 
@@ -137,8 +253,16 @@ describe("runtime manifest", () => {
     const methods = Object.keys(input).filter((k) => typeof input[k] === "function" && !internal.has(k));
     const properties = Object.keys(input).filter((k) => typeof input[k] !== "function");
     const known = runtimeManifest.handleTypes["InputState"]!;
-    assert.deepEqual(methods.filter((m) => known.methods[m] === undefined), [], "add these to handleTypes.InputState.methods, with their argument counts");
-    assert.deepEqual(properties.filter((p) => !known.properties.includes(p)), [], "add these to handleTypes.InputState.properties");
+    assert.deepEqual(
+      methods.filter((m) => known.methods[m] === undefined),
+      [],
+      "add these to handleTypes.InputState.methods, with their argument counts"
+    );
+    assert.deepEqual(
+      properties.filter((p) => !known.properties.includes(p)),
+      [],
+      "add these to handleTypes.InputState.properties"
+    );
     for (const m of methods) assert.equal((input[m] as (...a: unknown[]) => unknown).length, known.methods[m], `${m}'s argument count`);
   });
 });

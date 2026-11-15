@@ -8,7 +8,18 @@ export const fx = createParticles({
   /** A small spark where a shot hits. */
   hit: { burst: 4, lifetime: 0.25, speed: 40, spread: 180, size: 2, fade: true, color: "#ffdd7a", max: 64 },
   /** A puff and bits where an enemy dies. */
-  die: { burst: 9, lifetime: 0.45, speed: 45, spread: 180, size: 3, shrink: true, color: "#fff1d6", endColor: "#7a3e8a", gravity: 90, max: 96 },
+  die: {
+    burst: 9,
+    lifetime: 0.45,
+    speed: 45,
+    spread: 180,
+    size: 3,
+    shrink: true,
+    color: "#fff1d6",
+    endColor: "#7a3e8a",
+    gravity: 90,
+    max: 96,
+  },
   /** The mortar's blast. */
   boom: { burst: 14, lifetime: 0.4, speed: 60, spread: 180, size: 3, shrink: true, color: "#f2937a", endColor: "#9a3a2c", max: 64 },
   /** A tower going up, upgraded or sold. */

@@ -1,8 +1,10 @@
+import assert from "node:assert/strict";
 /** Reading a running game: findComponent, findComponents and componentState, outside `render`. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { Entity } from "@rge/runtime";
+
 import { createPlayer, RecordingBackend } from "@rge/player";
+import { Entity } from "@rge/runtime";
+
 import { componentState, findComponent, findComponents } from "../src/index.ts";
 
 /** A component as the compiler writes one, as far as these read: a class with state it saves. */
