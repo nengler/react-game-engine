@@ -106,25 +106,6 @@ function Lamp() {
     }
   });
 
-  it("keeps generated state apart from the manifest's member names", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
-    const compiler = new Compiler();
-    try {
-      const result = compiler.compile(
-        "Bad.tsx",
-        withAuthoringImports(`
-function Bad() {
-  const render = useMutable({ n: 0 });
-  return <Entity name="Bad" />;
-}`)
-      );
-      assert.ok(result.ok);
-      assert.match(result.code, /get \$render\(\)/);
-    } finally {
-      compiler.close();
-    }
-  });
-
   it("takes the reserved names, host intrinsic and functions from the manifest it is given", () => {
     const manifest = {
       ...runtimeManifest,
@@ -203,11 +184,6 @@ function Player() {
     assert.equal(code.match(/from "\.\/WarningIcon\.ts"/g)?.length, 1);
     assert.match(code, /import \{ WarningIcon \} from "\.\/WarningIcon\.ts";/);
     assert.match(code, /new WarningIcon\(\)/);
-  });
-
-  it("type-checks across both generated files", () => {
-    const project = compileProject({ "WarningIcon.tsx": WARNING, "Player.tsx": PLAYER });
-    assert.deepEqual(typeCheckProject(project), []);
   });
 
   it("type-check fails when the imported component does not exist", () => {

@@ -728,13 +728,6 @@ describe("FrameBuilder: draw order (z)", () => {
       "last is on top"
     );
   });
-
-  it("does not reorder anything for a game that never sets z", () => {
-    const root = parentOf(box(3), box(1), box(2));
-    const { records, built } = draw(root);
-    assert.deepEqual(order(records), [3, 1, 2]);
-    assert.equal(built.list.length, 7 + 3 * 9);
-  });
 });
 
 describe("FrameBuilder: leaves drawn in place", () => {

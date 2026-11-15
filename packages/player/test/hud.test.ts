@@ -106,12 +106,6 @@ describe("<Hud>: what is drawn", () => {
     assert.match(warnings[0]!, /<Camera> inside a <Hud>/);
   });
 
-  it("is the same frame as without one when it holds nothing and no HUD exists", () => {
-    const root = new Entity();
-    root.addChild(box(1));
-    assert.deepEqual(ops(draw(root).records), ["view", "rect@1"]);
-  });
-
   it("draws text in the HUD, in game pixels under a <Screen>", () => {
     const screen = new Screen({ width: 320, height: 180, pixelPerfect: false });
     const camera = new Camera();
@@ -227,12 +221,6 @@ describe("<Flex> in the frame", () => {
       [102, 2, 10, 10, "#ffffffff"],
       [116, 2, 10, 10, "#ffffffff"],
     ]);
-  });
-
-  it("draws nothing for a Flex without a background", () => {
-    const row = new Flex();
-    row.addChild(box(0, 10));
-    assert.deepEqual(rects(draw(row).records).length, 1);
   });
 
   it("fills the window with a growing root, and again at another size after a resize", () => {

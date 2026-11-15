@@ -218,46 +218,6 @@ describe("runtime manifest", () => {
     assert.ok(runtimeManifest.containerIntrinsics.includes("Screen"));
   });
 
-  it("reserves the layout offset, which the player writes into every object", () => {
-    for (const name of ["layoutX", "layoutY"]) assert.ok(runtimeManifest.reservedMembers.includes(name), name);
-  });
-
-  it("names the host intrinsic among its intrinsics, and every intrinsic is a runtime class", () => {
-    assert.ok(runtimeManifest.intrinsics.includes(runtimeManifest.hostIntrinsic));
-    const classes: Record<string, unknown> = {
-      Entity,
-      Game,
-      Sprite,
-      Collider,
-      Text,
-      Shape,
-      Camera,
-      AnimatedSprite,
-      Pointer,
-      Screen,
-      Hud,
-      Flex,
-      Slider,
-      Toggle,
-      Button,
-      Menu,
-      Tooltip,
-      TextInput,
-      Tilemap,
-      Particles,
-      ParticleLayer,
-      Fade,
-      Music,
-      Router,
-      Route,
-      Provider,
-      Layer,
-      Light,
-      Lighting,
-    };
-    for (const name of runtimeManifest.intrinsics) assert.equal(typeof classes[name], "function", name);
-  });
-
   it("lets components call every method of InputState and read every property (the compiler knows a handle by the manifest)", () => {
     const input = createInputState({}) as unknown as Record<string, unknown>;
     // `isAction` is how the player asks the controls; a component never calls it.

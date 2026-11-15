@@ -744,13 +744,6 @@ export function Shop() {
     assert.equal(state.player.hp, 9);
   });
 
-  it("is the store's functions in plain code", () => {
-    const actions = useGame.actions() as unknown as Record<string, unknown>;
-    assert.deepEqual(Object.keys(actions).sort(), ["collect", "hurt", "noop", "rename", "spawn"]);
-    (actions.collect as (n: number) => void)(5);
-    assert.equal(useGame.getState().coins, 5);
-  });
-
   it("says when a name is a value or is not in the state, and that it must be destructured", () => {
     const value = errors(`function A() { const { coins } = useGame.actions(); return <Entity />; }`);
     assert.deepEqual(

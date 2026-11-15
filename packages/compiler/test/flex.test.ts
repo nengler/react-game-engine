@@ -456,21 +456,6 @@ function Name() {
     assert.ok(compileErrors(`function C() { return <TextInput><Text>no</Text></TextInput>; }`).length > 0, "a TextInput takes no children");
   });
 
-  it("lets state take a widget's names, kept in `$name` fields", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
-    for (const [tag, names] of [
-      ["Slider", ["value", "min", "max", "step", "fillColor", "thumbColor", "thumbWidth", "moveTo", "fraction"]],
-      ["Toggle", ["checked", "onColor", "offColor", "thumbColor", "flip"]],
-    ] as const) {
-      for (const name of names) {
-        assert.ok(
-          compile(`function C() { const ${name} = useMutable({ n: 1 }); return <${tag} />; }`).code.includes(`get $${name}()`),
-          `${tag} ${name}`
-        );
-      }
-    }
-  });
-
   it("checks a Text's align literal with a suggestion", () => {
     const errors = compileErrors(`function C() { return <Text align="centre">x</Text>; }`);
     assert.deepEqual(
@@ -479,22 +464,6 @@ function Name() {
     );
     assert.match(errors[0]!.message, /<Text align> must be one of "left", "center", "right", not 'centre' \(did you mean "center"\?\)/);
     assert.doesNotThrow(() => compile(`function C() { return <Text align="right" width={30}>x</Text>; }`));
-  });
-
-  it("lets state take the new names, kept in `$name` fields", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
-    for (const name of ["onPress", "contains"]) {
-      assert.ok(
-        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`),
-        `Flex ${name}`
-      );
-    }
-    for (const name of ["align", "width"]) {
-      assert.ok(
-        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Text>x</Text>; }`).code.includes(`get $${name}()`),
-        `Text ${name}`
-      );
-    }
   });
 });
 
@@ -721,44 +690,5 @@ function Tile() {
     assert.ok(check(`<Flex borderWidth="thick" />`).length > 0, "a width is a number");
     assert.ok(check(`<Flex hoverBackground={4} />`).length > 0, "a colour is a string");
     assert.ok(check(`<Flex hoverWidth={4} />`).length > 0, "and a made-up prop is not accepted");
-  });
-
-  it("lets state take the new names too, kept in `$name` fields", () => {
-    for (const name of [
-      "borderWidth",
-      "borderColor",
-      "borderRadius",
-      "hoverBackground",
-      "hoverBorderColor",
-      "focusBackground",
-      "focusBorderColor",
-      "pressedBackground",
-      "pressedBorderColor",
-      "disabledBackground",
-      "disabledBorderColor",
-      "disabled",
-      "transition",
-      "transitionState",
-      "overflow",
-      "scrollX",
-      "scrollY",
-      "backgroundImage",
-      "slice",
-      "sliceTop",
-      "sliceRight",
-      "sliceBottom",
-      "sliceLeft",
-      "hoverBackgroundImage",
-      "focusBackgroundImage",
-      "pressedBackgroundImage",
-      "disabledBackgroundImage",
-      "opacity",
-      "drawnAlpha",
-      "wrap",
-      "rowGap",
-      "columnGap",
-    ]) {
-      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Flex />; }`).code.includes(`get $${name}()`), name);
-    }
   });
 });

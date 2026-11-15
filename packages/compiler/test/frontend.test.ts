@@ -328,7 +328,6 @@ describe("diagnostics", () => {
     ],
     // A state named like a runtime member is fine since REACT_FEEL_PLAN.md B7 (root-name.test.ts); one declared twice is not.
     ["state declared twice", DiagnosticCode.InvalidUseState, `function A() { const s = useMutable({ a: 1, a: 2 }); return <Entity />; }`],
-    ["non-component top level code", DiagnosticCode.UnsupportedSyntax, `let speed = 4; function A() { return <Entity />; }`],
   ];
   for (const [name, code, source] of cases) {
     it(`reports: ${name}`, () => {

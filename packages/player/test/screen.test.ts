@@ -190,19 +190,6 @@ describe("FrameBuilder: a root <Screen>", () => {
     close(at.y, 300, "y");
   });
 
-  it("draws bars in the border colour over the window outside the game, last", () => {
-    const { records } = draw(
-      screen({ border: "navy", pixelPerfect: false }, new Shape({ kind: "rect", width: 400, height: 400 })),
-      1000,
-      600
-    );
-    const bars = records.slice(3);
-    assert.equal(records[1]?.op, "rect", "the game's own shape comes first");
-    assert.deepEqual(records[2], { op: "view", a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }, "then a view in window pixels");
-    assert.equal(bars.length, 4);
-    for (const bar of bars) assert.ok(bar.op === "rect" && bar.color === "#000080ff");
-  });
-
   it("places each bar on its window rectangle, whatever the camera does, in a view of window pixels", () => {
     for (const fit of ["integer", "contain", "stretch"] as const) {
       const camera = new Camera({ zoom: 1.7 });

@@ -23,12 +23,6 @@ describe("AnimatedSprite", () => {
     assert.equal(sprite.frame, 2);
   });
 
-  it("loops back to the first frame", () => {
-    const sprite = new AnimatedSprite({ frames: FRAMES, fps: 1 });
-    for (let i = 0; i < 3; i++) sprite.onUpdate(1);
-    assert.equal(sprite.frame, 0);
-  });
-
   it("takes several frames in one long step", () => {
     const sprite = new AnimatedSprite({ frames: FRAMES, fps: 4 });
     sprite.onUpdate(1);

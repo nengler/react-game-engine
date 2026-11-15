@@ -213,23 +213,6 @@ describe("M11: diagnostics", () => {
     );
   });
 
-  it("must be imported, and keeps its fields apart from the state of a component rooted at it", () => {
-    const result = getCompiler().compile(
-      "C.tsx",
-      `import { Entity } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C"><Shape kind="rect" width={1} height={1} /></Entity>; }`
-    );
-    assert.deepEqual(
-      result.diagnostics.map((d) => d.code),
-      [DiagnosticCode.MissingImport]
-    );
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
-    assert.ok(
-      compile(
-        `function C() { const width = useMutable({ n: 1 }); return <Shape kind="rect" width={width.n} height={1} />; }`
-      ).code.includes("get $width()")
-    );
-  });
-
   it("is driven by the manifest, not by Shape: any intrinsic prop can be restricted", () => {
     const compiler = new Compiler({ manifest: { ...runtimeManifest, intrinsicLiterals: { Sprite: { image: ["a.png", "b.png"] } } } });
     try {

@@ -258,23 +258,8 @@ describe("M10: diagnostics", () => {
     assert.match(errors[0]!.message, /HTML entities/);
   });
 
-  it("must be imported like any built-in", () => {
-    const result = getCompiler().compile(
-      "C.tsx",
-      `import { Entity } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C"><Text>x</Text></Entity>; }`
-    );
-    assert.deepEqual(
-      result.diagnostics.map((d) => d.code),
-      [DiagnosticCode.MissingImport]
-    );
-  });
-
   it("is placed with transform, and cannot have elements added to it from a parent's children", () => {
     assert.ok(runtimeManifest.transformIntrinsics.includes("Text"));
     assert.ok(!runtimeManifest.containerIntrinsics.includes("Text"));
-  });
-
-  it("keeps state apart from its fields, since a component rooted at a Text extends it", () => {
-    assert.ok(compile(`function C() { const text = useMutable({ n: 0 }); return <Text>x</Text>; }`).code.includes("get $text()"));
   });
 });

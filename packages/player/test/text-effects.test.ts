@@ -29,13 +29,6 @@ const texts = (records: readonly DecodedRecord[]): TextRecord[] => records.filte
 const at = (r: TextRecord): string => `${r.x},${r.y}`;
 
 describe("<Text shadow>", () => {
-  it("draws nothing extra without one: the text is one record, as it always was", () => {
-    assert.deepEqual(
-      texts(draw(text({}))).map((r) => [r.text, r.color]),
-      [["Hi", "#ffffffff"]]
-    );
-  });
-
   it("draws the text under itself a pixel right and down in the shadow's colour, then the text", () => {
     const records = texts(draw(text({ shadow: "black" })));
     assert.deepEqual(

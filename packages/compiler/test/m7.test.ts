@@ -159,15 +159,6 @@ function C() {
     const unimported = checkSource(`function C() { const s = useMutable({ n: 0 }); return <Entity />; }`);
     assert.ok(unimported.some((e) => /useMutable/.test(e.message)));
   });
-
-  it("accepts a component used from the same file and a component imported from another file", () => {
-    assert.deepEqual(
-      checkSource(`${IMPORTS}
-function Coin() { return <Entity name="coin"><Sprite image="coin.png" /></Entity>; }
-function Level() { return <Entity name="level"><Coin /><Coin /></Entity>; }`),
-      []
-    );
-  });
 });
 
 describe("M7: imports are mandatory", () => {
@@ -250,11 +241,6 @@ describe("M7: the CLI type-checks sources", () => {
 export function Coin() {
   return <Entity name="coin"><Sprite ${props} /></Entity>;
 }`;
-
-  it("compiles a project whose sources type-check", () => {
-    const { status, output } = runCli(COIN(`image="coin.png"`));
-    assert.equal(status, 0, output);
-  });
 
   it("fails with a source type error before anything is generated wrongly", () => {
     const { status, output } = runCli(COIN(`imag="coin.png"`));

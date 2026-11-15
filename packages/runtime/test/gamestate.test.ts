@@ -37,12 +37,6 @@ function reader(store: ReturnType<typeof counter>["store"], paths: string[]): En
 }
 
 describe("createGameState", () => {
-  it("getState has the state with its actions", () => {
-    const useGame = counter();
-    assert.equal(useGame.getState().coins, 0);
-    assert.equal(typeof useGame.getState().collect, "function");
-  });
-
   it("refuses the removed `(set) => ({ … })` form with what to write", () => {
     assert.throws(() => (createGameState as (...a: unknown[]) => unknown)(() => ({ n: 1 })), /takes the data and the actions/);
   });

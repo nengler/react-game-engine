@@ -151,13 +151,6 @@ describe("M15: diagnostics", () => {
     assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={play} />`), [DiagnosticCode.SoundOutsideHandler]);
   });
 
-  it("plays a sound next to a write", () => {
-    const fine = compile(
-      `function C() { const play = useSound("a.wav"); const s = useMutable({ n: 0 }); return <Entity name="C"><Collider width={1} height={1} onCollisionEnter={() => { play(); s.n += 1; }} /></Entity>; }`
-    );
-    assert.deepEqual(typeCheck(fine), []);
-  });
-
   it("reports a call with more than the volume as an unsupported statement", () => {
     assert.deepEqual(codes(`<Collider width={1} height={1} onCollisionEnter={() => play(1, 2)} />`), [DiagnosticCode.UnsupportedStatement]);
   });

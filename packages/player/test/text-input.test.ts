@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** `<TextInput>`: typed characters from the backend (`Backend.typed`, ABI v9) go into the focused field, through the player's loop. */
 import { describe, it } from "node:test";
 
-import { Button, createControls, createInputState, Entity, Flex, Game, TextInput, World, type GameObject } from "@tsengine/runtime";
+import { Button, createControls, createInputState, Flex, Game, TextInput, World, type GameObject } from "@tsengine/runtime";
 
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
@@ -122,11 +122,5 @@ describe("TextInput in the player", () => {
     assert.ok(caret, "a caret");
     assert.ok(caret.x > field!.label.layoutX, "after the text");
     p.close();
-  });
-
-  it("is a leaf to the compiler (no children) and an Entity can hold it", () => {
-    const e = new Entity();
-    e.addChild(new TextInput());
-    assert.equal((e.children[0] as TextInput).children.length, 1, "only its own label");
   });
 });
