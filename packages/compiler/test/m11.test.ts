@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, SHAPE_KINDS, Shape, World, runtimeManifest } from "@rge/runtime";
+import { Entity, SHAPE_KINDS, Shape, World, runtimeManifest } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode, type PropIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -99,7 +99,7 @@ describe("M11: authored source type-checks", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M11${Math.random()}.tsx`,
-        text: `import { Entity, Shape } from "@rge/runtime/jsx";\nfunction C({ n, big }: { n: number; big: boolean }) { return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, Shape } from "@tsengine/runtime/jsx";\nfunction C({ n, big }: { n: number; big: boolean }) { return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 
@@ -163,7 +163,7 @@ describe("M11: diagnostics", () => {
   const diag = (body: string) => compileErrors(`function C() { return <Entity name="C">${body}</Entity>; }`);
 
   it("rejects an unknown kind literal, naming the choices", () => {
-    const source = `import { Entity, Shape } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Shape kind="triangle" width={1} height={1} /></Entity>; }`;
+    const source = `import { Entity, Shape } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C"><Shape kind="triangle" width={1} height={1} /></Entity>; }`;
     const errors = getCompiler().compile("C.tsx", source).diagnostics;
     assert.deepEqual(
       errors.map((d) => d.code),
@@ -216,7 +216,7 @@ describe("M11: diagnostics", () => {
   it("must be imported, and keeps its fields apart from the state of a component rooted at it", () => {
     const result = getCompiler().compile(
       "C.tsx",
-      `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Shape kind="rect" width={1} height={1} /></Entity>; }`
+      `import { Entity } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C"><Shape kind="rect" width={1} height={1} /></Entity>; }`
     );
     assert.deepEqual(
       result.diagnostics.map((d) => d.code),
@@ -234,7 +234,7 @@ describe("M11: diagnostics", () => {
     const compiler = new Compiler({ manifest: { ...runtimeManifest, intrinsicLiterals: { Sprite: { image: ["a.png", "b.png"] } } } });
     try {
       const source = (image: string) =>
-        `import { Entity, Sprite } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Sprite image="${image}" /></Entity>; }`;
+        `import { Entity, Sprite } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C"><Sprite image="${image}" /></Entity>; }`;
       assert.ok(compiler.compile("C.tsx", source("a.png")).ok);
       const bad = compiler.compile("C.tsx", source("c.png"));
       assert.deepEqual(

@@ -1,4 +1,4 @@
-import { useMutable, useUpdate, Entity, Sprite } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, Entity, Sprite } from "@tsengine/runtime/jsx";
 
 function Mover() {
   const s = useMutable({ x: 0 });

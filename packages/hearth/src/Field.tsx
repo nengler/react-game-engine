@@ -1,4 +1,4 @@
-import { Entity, Sprite, Tilemap } from "@rge/runtime/jsx";
+import { Entity, Sprite, Tilemap } from "@tsengine/runtime/jsx";
 
 import { HEARTH } from "./rules/map.ts";
 

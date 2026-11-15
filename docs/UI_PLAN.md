@@ -1,4 +1,4 @@
-# react-game-engine: UI layout plan
+# tse: UI layout plan
 
 As of 2026-11-09, revised the same day after studying Clay's layout algorithm (see "The model: Clay"). U1 and C1 are built; the rest is a proposal, written to sit next to priority 3 in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md) (the screen-space HUD layer). Push back on any decision below before work starts, as [DESIGN.md](DESIGN.md) asks.
 
@@ -26,14 +26,14 @@ It takes the props a web developer expects (`direction`, `alignItems`, `justifyC
 
 What has to exist first, and why priority 3 comes before or with this:
 
-- **Sizes.** Layout needs to know how big each child is. `Shape`, `Pointer` and `Collider` already have `width` and `height`. A `Text` and a `Sprite` do not: the size of text depends on the font, and the size of a sprite on the image file. Both are known only to librge. So the native library must answer two new questions, "how big is this text at this size?" and "how big is this texture?", which is an ABI change. Priority 3 already bumps the ABI to version 2 for `<Hud>`; these functions go into the **same** version 2, so the ABI moves once.
+- **Sizes.** Layout needs to know how big each child is. `Shape`, `Pointer` and `Collider` already have `width` and `height`. A `Text` and a `Sprite` do not: the size of text depends on the font, and the size of a sprite on the image file. Both are known only to libtse. So the native library must answer two new questions, "how big is this text at this size?" and "how big is this texture?", which is an ABI change. Priority 3 already bumps the ABI to version 2 for `<Hud>`; these functions go into the **same** version 2, so the ABI moves once.
 - **A box to lay out in.** A HUD laid out in world space still drifts with the camera. `<Hud>` gives layout a fixed box: the canvas (or the window, with no `<Screen>`).
 
 So the order is: priority 3 (with U0's additions in ABI v2), then U2–U5. U1 is done. The full order, interleaving these milestones with C2, C3 and the other priorities, is "Order of work" in [NEXT_PRIORITIES.md](NEXT_PRIORITIES.md#order-of-work).
 
 | Milestone | What | Size (estimate) |
 | --- | --- | --- |
-| U0 | ABI v2 also carries `rge_measure_text` (width and line height), `rge_texture_size`, and a scissor record (done as part of priority 3) | \~2 days on top of priority 3 |
+| U0 | ABI v2 also carries `tse_measure_text` (width and line height), `tse_texture_size`, and a scissor record (done as part of priority 3) | \~2 days on top of priority 3 |
 | U1 | A layout offset on every object, and a measuring interface in the player | **Done** |
 | U2 | `<Flex>`: the built-in, the sizing modes, the four passes, alignment, `background` | \~1–1.5 weeks |
 | U3 | The HUD box, shrinking to minimum sizes, and the demo's HUD rewritten with it | \~3–4 days |
@@ -73,7 +73,7 @@ It keeps the CSS vocabulary already decided (`direction`, `alignItems`, `justify
 | `width`, `height` | `"fit"`, `"grow"`, a number, or a percentage such as `"50%"` | `"fit"` | How big the box is on that axis (see "Sizing") |
 | `minWidth`, `maxWidth`, `minHeight`, `maxHeight` | pixels | none | Bounds for `"fit"` and `"grow"` |
 | `background` | a CSS colour | none | Draw a filled rectangle behind the children, the size of the box |
-| `borderWidth`, `borderColor`, `borderRadius` | pixels, a CSS colour, pixels | `0`, none, `0` | A border drawn inside the edge (it counts as padding, so children never sit on it; no colour in any state, no border), with rounded corners on the background and the border. Drawn by `RGE_OP_BOX` (ABI v8); a box with no border and no radius is still a plain `RECT` |
+| `borderWidth`, `borderColor`, `borderRadius` | pixels, a CSS colour, pixels | `0`, none, `0` | A border drawn inside the edge (it counts as padding, so children never sit on it; no colour in any state, no border), with rounded corners on the background and the border. Drawn by `TSE_OP_BOX` (ABI v8); a box with no border and no radius is still a plain `RECT` |
 | `hoverBackground`, `hoverBorderColor` | a CSS colour | none | `background` / `borderColor` while the mouse is over the box (`World.hovered`). The box takes the mouse, and lets a press through to what is under it unless it has an `onPress`. Colours only, so layout never moves on hover |
 | `focusBackground`, `focusBorderColor` | a CSS colour | none | The same while the box has the focus. Hover wins when both apply |
 | `pressedBackground`, `pressedBorderColor` | a CSS colour | none | Drawn while the mouse button is held on the box (`World.pressed`: a press began on it, and the mouse is still over it). Over hover and focus |
@@ -108,7 +108,7 @@ A spacer is `<Flex width="grow" />` in a row (`height="grow"` in a column): a fi
 Coins at the top left, a health bar pushed to the top right, a pause button centred at the bottom. The coin count can grow from `9` to `10` and the row stays right; the label can change and the button resizes around it.
 
 ```tsx
-import { useState, Flex, Hud, Sprite, Text } from "@rge/runtime/jsx";
+import { useState, Flex, Hud, Sprite, Text } from "@tsengine/runtime/jsx";
 import { HealthBar } from "./HealthBar.tsx";
 import { Button } from "./Button.tsx";
 
@@ -165,8 +165,8 @@ Layout asks each child for a box: a width and a height, and where its top-left c
 | Child | Box |
 | --- | --- |
 | `Shape`, `Pointer`, `Collider` | `width` × `height` |
-| `Text` | The measured width × the measured line height, from librge (raylib's `MeasureTextEx`, which is what `DrawTextEx` draws). One line until wrapping exists |
-| `Sprite` | The texture's size, from librge. A texture that failed to load is the 16 × 16 magenta square that is drawn instead |
+| `Text` | The measured width × the measured line height, from libtse (raylib's `MeasureTextEx`, which is what `DrawTextEx` draws). One line until wrapping exists |
+| `Sprite` | The texture's size, from libtse. A texture that failed to load is the 16 × 16 magenta square that is drawn instead |
 | `AnimatedSprite` | The size of its first frame, so the layout does not jitter if frames differ |
 | `Flex` | Its sizing on each axis (see "Sizing"), worked out by the passes below |
 | `Entity` or a component | The bounding box of its children, each at its own `transform` position, ignoring rotation. A `Flex` inside it counts at its fit size. The demo's old button (a 96 × 32 `Shape` with a `Text` inside it) is 96 × 32 |
@@ -235,29 +235,29 @@ interface Backend {
 }
 ```
 
-In `native/include/rge.h`, as part of ABI v2:
+In `native/include/tse.h`, as part of ABI v2:
 
 ```c
-void rge_measure_text(const char *text, float size, float *out); /* out[0] width, out[1] line height: raylib MeasureTextEx, as DrawTextEx draws */
-void rge_texture_size(int32_t handle, int32_t *width, int32_t *height); /* 0 × 0 for -1 */
+void tse_measure_text(const char *text, float size, float *out); /* out[0] width, out[1] line height: raylib MeasureTextEx, as DrawTextEx draws */
+void tse_texture_size(int32_t handle, int32_t *width, int32_t *height); /* 0 × 0 for -1 */
 ```
 
-`rge_measure_text` measures any string, so it also serves wrapping later: Clay wraps by measuring each word once, caching the widths, and adding them up against the available width, and the player can do the same in TypeScript with this one call.
+`tse_measure_text` measures any string, so it also serves wrapping later: Clay wraps by measuring each word once, caching the widths, and adding them up against the available width, and the player can do the same in TypeScript with this one call.
 
-Each function needs: the header, `protocol.ts` (the parity test reads the header), librge's implementation and `smoke.c`, the Node host's koffi binding, the Rust host's `ffi.rs` and its QuickJS binding in `backend.rs`, and the recording backend. `FrameBuilder` caches both answers (U1 already does): texture sizes per handle; text sizes per `(text, size)`, cleared after 1,024 strings so a running timer does not grow the cache without end. A changing score costs one native call per new value, not one per frame.
+Each function needs: the header, `protocol.ts` (the parity test reads the header), libtse's implementation and `smoke.c`, the Node host's koffi binding, the Rust host's `ffi.rs` and its QuickJS binding in `backend.rs`, and the recording backend. `FrameBuilder` caches both answers (U1 already does): texture sizes per handle; text sizes per `(text, size)`, cleared after 1,024 strings so a running timer does not grow the cache without end. A changing score costs one native call per new value, not one per frame.
 
 **A scissor record (decided: in ABI v2).** Clay's renderer needs only rectangles, borders, text, images and scissor regions. This engine's records already cover rectangles, text and images. A scissor (clip) record is what scroll containers, and `overflow: hidden`-style boxes, need:
 
 ```
-RGE_OP_SCISSOR      op, x, y, width, height   (window pixels; the player maps the box through the view)
-RGE_OP_SCISSOR_END  op
+TSE_OP_SCISSOR      op, x, y, width, height   (window pixels; the player maps the box through the view)
+TSE_OP_SCISSOR_END  op
 ```
 
-It is small in librge (raylib's `BeginScissorMode`/`EndScissorMode`), and putting it in ABI v2 avoids a version 3 just for it. Nothing in U2–U5 uses it yet; the first user would be a scrolling list. Borders and rounded corners (Clay's other render commands) wait for a real menu design (see the table at the end).
+It is small in libtse (raylib's `BeginScissorMode`/`EndScissorMode`), and putting it in ABI v2 avoids a version 3 just for it. Nothing in U2–U5 uses it yet; the first user would be a scrolling list. Borders and rounded corners (Clay's other render commands) wait for a real menu design (see the table at the end).
 
 ### What the compiler needs
 
-Little, because the compiler is driven by the runtime manifest. `Flex` is added to `intrinsics`, `containerIntrinsics`, `transformIntrinsics`, `intrinsicMembers`, `intrinsicLiterals` and `intrinsicCallbacks` (`onPress`), and `@rge/runtime/jsx` exports its props type. The runtime test that checks `intrinsicMembers` against the class catches a field left out. `<Flex>{children}</Flex>` in a receiving component works because `{children}` is allowed inside any container intrinsic.
+Little, because the compiler is driven by the runtime manifest. `Flex` is added to `intrinsics`, `containerIntrinsics`, `transformIntrinsics`, `intrinsicMembers`, `intrinsicLiterals` and `intrinsicCallbacks` (`onPress`), and `@tsengine/runtime/jsx` exports its props type. The runtime test that checks `intrinsicMembers` against the class catches a field left out. `<Flex>{children}</Flex>` in a receiving component works because `{children}` is allowed inside any container intrinsic.
 
 The compiler additions are the sizing check (see "Sizing") and the `flex-start` hint, both in the existing literal-choice diagnostic.
 
@@ -271,8 +271,8 @@ Pointers inside a laid-out `<Hud>` need nothing new. A `Pointer` hit-tests throu
 
 Two libraries were considered:
 
-- **Yoga** (the flexbox engine React Native uses) ships as C++ or as WebAssembly. QuickJS-ng has no WebAssembly, and linking C++ into librge breaks its "C + raylib, the C side does no maths" rule from NATIVE_PLAN.
-- **Clay** is a single C header with no dependencies, so it would link into librge. Its author says its layout code is three functions of about 800 lines, which is also why porting the subset this engine needs is reasonable. But it would put layout maths on the C side, it lays out its own element tree rather than the engine's `GameObject`s, and byte-identical output between Node and QuickJS is easy to keep with one pure TypeScript function, while a native layout engine would be a second thing to verify.
+- **Yoga** (the flexbox engine React Native uses) ships as C++ or as WebAssembly. QuickJS-ng has no WebAssembly, and linking C++ into libtse breaks its "C + raylib, the C side does no maths" rule from NATIVE_PLAN.
+- **Clay** is a single C header with no dependencies, so it would link into libtse. Its author says its layout code is three functions of about 800 lines, which is also why porting the subset this engine needs is reasonable. But it would put layout maths on the C side, it lays out its own element tree rather than the engine's `GameObject`s, and byte-identical output between Node and QuickJS is easy to keep with one pure TypeScript function, while a native layout engine would be a second thing to verify.
 
 So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI needs (rows and columns, the four sizing modes, alignment, floating boxes), and keeps Clay as the reference: when a question comes up about an edge case (a percentage child in a fit parent, shrinking below a minimum), Clay's answer is the default one.
 
@@ -282,12 +282,12 @@ So the engine **ports Clay's algorithm** to TypeScript, for the subset a game UI
 
 **Done when**
 
-**Done 2026-11-10**, together with ABI v2's second view record and `RGE_OP_CANVAS`. `Backend.measureText` now returns `{ width, height }`. Scissor rectangles are in target pixels (the canvas's when there is one) and ignore the view; a second `RGE_OP_SCISSOR` replaces the first, they do not nest. The software renderer takes scissor rectangles top-left while OpenGL's origin is bottom-left, so librge flips for OpenGL only (through raylib's `BeginScissorMode`); the OpenGL path is untested in CI, which runs the software renderer, so check clipping in the Linux playtest.
+**Done 2026-11-10**, together with ABI v2's second view record and `TSE_OP_CANVAS`. `Backend.measureText` now returns `{ width, height }`. Scissor rectangles are in target pixels (the canvas's when there is one) and ignore the view; a second `TSE_OP_SCISSOR` replaces the first, they do not nest. The software renderer takes scissor rectangles top-left while OpenGL's origin is bottom-left, so libtse flips for OpenGL only (through raylib's `BeginScissorMode`); the OpenGL path is untested in CI, which runs the software renderer, so check clipping in the Linux playtest.
 
-- [x] `rge_measure_text` (width and line height) and `rge_texture_size` are in `rge.h` as part of ABI v2, and `protocol.ts` and the header-parity test agree
+- [x] `tse_measure_text` (width and line height) and `tse_texture_size` are in `tse.h` as part of ABI v2, and `protocol.ts` and the header-parity test agree
 - [x] `smoke.c` measures a string and a loaded texture
 - [x] Both hosts and the recording backend implement `measureText` and `textureSize`, and `FrameBuilder` uses the measured line height
-- [x] `RGE_OP_SCISSOR`/`RGE_OP_SCISSOR_END` are in `rge.h`, `smoke.c` checks a clipped rectangle, and the recording backend decodes them
+- [x] `TSE_OP_SCISSOR`/`TSE_OP_SCISSOR_END` are in `tse.h`, `smoke.c` checks a clipped rectangle, and the recording backend decodes them
 - [x] The parity test still passes byte for byte
 
 ### U1: the layout offset and the measurer
@@ -395,12 +395,12 @@ Also decided on 2026-11-09, each as recommended:
 
 6. ~~**One prop per axis, or separate props.**~~ One prop: `width={120}`, `width="grow"`, `width="50%"`, as in CSS and Clay, with the compiler's sizing check. Separate props (`growX`, `percentX`) were the alternative.
 7. ~~**Grow weights.**~~ Clay's way only: growing siblings share free space equally, smallest first. A `growWeight` prop can come if a game asks for one.
-8. ~~**Scissor in ABI v2.**~~ Yes: `RGE_OP_SCISSOR` and `RGE_OP_SCISSOR_END` go into ABI v2 with U0, so clipping needs no ABI v3 later.
+8. ~~**Scissor in ABI v2.**~~ Yes: `TSE_OP_SCISSOR` and `TSE_OP_SCISSOR_END` go into ABI v2 with U0, so clipping needs no ABI v3 later.
 9. ~~**Floating props (U5).**~~ Props on `Flex` (`float`, `anchor`, `to`, `offsetX`, `offsetY`), so a floating box is still a `Flex` with all its sizing; no separate `<Float>` built-in.
 
 ## Nine-slice backgrounds
 
-`backgroundImage` with `slice` (PR 4 of the UI follow-ups) needs nothing of the native side. A nine-slice is nine `RGE_OP_SPRITE_REGION` records of the one texture, and a record's own scale does the stretching: each part is the region of the image it is cut from, placed at its corner of the box (taken through the box's own rotation and scale, so a turned or scaled box carries its skin with it) and scaled by dest size ÷ source size. Corners are 1:1 (times the box's scale), edges stretch along one axis, the middle along both.
+`backgroundImage` with `slice` (PR 4 of the UI follow-ups) needs nothing of the native side. A nine-slice is nine `TSE_OP_SPRITE_REGION` records of the one texture, and a record's own scale does the stretching: each part is the region of the image it is cut from, placed at its corner of the box (taken through the box's own rotation and scale, so a turned or scaled box carries its skin with it) and scaled by dest size ÷ source size. Corners are 1:1 (times the box's scale), edges stretch along one axis, the middle along both.
 
 - **Slices** come from `sliceTop` / `sliceRight` / `sliceBottom` / `sliceLeft`, else `slice`, else 0, as padding does. A pair that adds up to more than the image is cut down in proportion; a box smaller than its corners shrinks all of them by one factor (CSS's `border-image` rule), so the picture keeps its proportions. A part with nothing in it (a middle of no width) is not drawn.
 - **Order:** colour and border (`BOX` or `RECT`), then the image, then the children. A transparent pixel shows the colour.
@@ -434,7 +434,7 @@ Also decided on 2026-11-09, each as recommended:
 
 `opacity` on a `<Flex>` (PR 6 of the UI follow-ups) needs nothing of the native side. It is a multiplier the draw list applies to every colour it is given: `DrawList.alpha`, set by `pushAlpha` and `popAlpha` the way a clip is (the Flex pushes it before its own drawing, so its background and border fade too, and the walks pop it once the subtree has been left; `Flex.drawnAlpha` says it was pushed). Every emitter (`rect`, `ellipse`, `box`, `text`, `spriteRegionAt`) multiplies the alpha of the colour or tint it writes, and at an alpha of 0 writes nothing, so a faded-out menu costs no records. A colour's red, green and blue are untouched.
 
-- **A plain sprite** has no colour in its record (`RGE_OP_SPRITE`), so under a faded box it is drawn as the whole texture in a tinted `RGE_OP_SPRITE_REGION` (one more draw record shape, the size from `textureSize`). A backend that cannot report sizes draws it unfaded.
+- **A plain sprite** has no colour in its record (`TSE_OP_SPRITE`), so under a faded box it is drawn as the whole texture in a tinted `TSE_OP_SPRITE_REGION` (one more draw record shape, the size from `textureSize`). A backend that cannot report sizes draws it unfaded.
 - **The leaf fast paths** that write a shape's or sprite's record in place only run at an alpha of 1; below it they take the ordinary path through the emitters.
 - **Nesting** multiplies. A box that fades keeps its own state: `transition` fades `opacity` with the colours, from where the fade had got to, by the same clock and ease (`stepTransition` carries the alpha as a number beside the two packed colours), so an opacity set from 1 to 0 over 0.25 s is a menu fading out.
 - **Why not a layer.** This is PIXI's way (an alpha that multiplies down the tree), not CSS's (the box drawn on its own and blended once). It is exact for a box whose parts do not overlap and for a box at 0 or 1, and slightly different part way for one whose do: a dark button on a panel shows the panel through it, and an outline (copies of the text that overlap) fades slower than the glyphs. Flattening needs a native off-screen layer (a begin and end record, a render texture the size of the box, a blend, and a place in the clip and z order), which is its own ABI step; this PR leaves it open without closing it, since a layer would only change what `opacity` means for the overlaps.
@@ -464,7 +464,7 @@ Also decided on 2026-11-09, each as recommended:
 
 | Item | Why it waits | What would pull it in |
 | --- | --- | --- |
-| Text wrapping inside a box | One-line text covers a HUD; the steps already leave its slot (step 2), and `rge_measure_text` already measures words | A dialogue box, or any text longer than its box |
+| Text wrapping inside a box | One-line text covers a HUD; the steps already leave its slot (step 2), and `tse_measure_text` already measures words | A dialogue box, or any text longer than its box |
 | Aspect-ratio boxes | Nothing in a HUD needs one | A portrait or a minimap frame that must keep its shape while growing |
 | Layout transitions (animating size and position changes) | Clay has them; a game can animate `transform` today | A menu that should slide or resize smoothly |
 | Caching layout of unchanged subtrees | A HUD is small enough to lay out every frame | A menu of hundreds of items showing up in the bench |
@@ -550,7 +550,7 @@ A fourth mode, `"expand"` (C3), keeps the height at 180 game pixels and widens t
 | A sprite turned 10° | Stays made of big, square game pixels | Is turned smoothly at the window's resolution, so its pixels become small diamonds ("mixels") |
 | Moving half a pixel | Snaps to the next game pixel | Moves smoothly at screen resolution |
 | Text | At 320 × 180, raylib's default font is big and blocky | Sharp at any size |
-| Needs | A new draw op in ABI v2, and a render texture in librge | Nothing new in the ABI: it is only a different view matrix |
+| Needs | A new draw op in ABI v2, and a render texture in libtse | Nothing new in the ABI: it is only a different view matrix |
 
 Most pixel-art games want `true`. Games with drawn or vector art, or with lots of small text, want `false`. A HUD with sharp text over chunky pixel art (drawing `<Hud>` at window resolution over a pixel-perfect world) is a reasonable later option; see "Not in this plan".
 
@@ -575,28 +575,28 @@ It then uses them in four places:
 
 1. **The camera's view.** `#view` centres the followed point on the canvas's centre (160, 90), not the window's. Today it adds `width / 2` and `height / 2` of the window; with a canvas, it adds the canvas's.
 2. **`<Hud>`.** Its view is the identity in canvas units (so a HUD at `x: 8` is 8 game pixels in), and its layout box, which a growing `Flex` takes, is 320 × 180.
-3. **Drawing.** With `pixelPerfect={false}`, each `RGE_OP_VIEW` record is multiplied by the canvas-to-window map (`a, b, c, d` by the scale; `e, f` scaled, then offset by `dest`). Then the bars are drawn as up to four rectangle records. C1 places them in world space through the inverse of that one view, since ABI v1 allows only one view record; after priority 3 they can go through a last identity view in window pixels instead. With `pixelPerfect={true}`, the views stay in canvas units, and the frame starts with the new `RGE_OP_CANVAS` record instead (next section).
+3. **Drawing.** With `pixelPerfect={false}`, each `TSE_OP_VIEW` record is multiplied by the canvas-to-window map (`a, b, c, d` by the scale; `e, f` scaled, then offset by `dest`). Then the bars are drawn as up to four rectangle records. C1 places them in world space through the inverse of that one view, since ABI v1 allows only one view record; after priority 3 they can go through a last identity view in window pixels instead. With `pixelPerfect={true}`, the views stay in canvas units, and the frame starts with the new `TSE_OP_CANVAS` record instead (next section).
 4. **The mouse.** `PlayerInput` takes the window position back through the same map: `canvasX = (mouseX − dest.x) / scale`. `input.pointerX` (world) and the press dispatch (`Pointer`s) start from that point. Handlers never see the window's size (`InputState` has none), so it stays the player's business. A press in the border bars is outside the canvas and reaches no `Pointer`.
 
 Without a `<Screen>`, the map is the identity and `dest` is the whole window, so everything behaves exactly as today. That is the test that C1 changes nothing for existing games: every recording test still passes untouched.
 
-### The ABI (C2 only): `RGE_OP_CANVAS`
+### The ABI (C2 only): `TSE_OP_CANVAS`
 
-`pixelPerfect` needs librge to draw into an off-screen texture and then draw that texture into the window. raylib does both (`LoadRenderTexture`, `BeginTextureMode`, `DrawTexturePro`). The proposal is a new record, which must be the first in a frame when present:
+`pixelPerfect` needs libtse to draw into an off-screen texture and then draw that texture into the window. raylib does both (`LoadRenderTexture`, `BeginTextureMode`, `DrawTexturePro`). The proposal is a new record, which must be the first in a frame when present:
 
 ```
-RGE_OP_CANVAS   op, width, height, destX, destY, destW, destH, borderColor
+TSE_OP_CANVAS   op, width, height, destX, destY, destW, destH, borderColor
 ```
 
-When librge sees it:
+When libtse sees it:
 
 1. It makes sure it has a render texture of `width` × `height`, with point filtering, (re)creating it only when the size changes.
 2. It draws every following record into that texture, cleared to the frame's clear colour.
 3. It clears the window to `borderColor` and draws the texture into `dest`, flipped the right way up (raylib render textures are upside down).
 
-The player computes `dest`, so librge does no layout maths: it only copies a rectangle where it is told. Both hosts pass records through without reading them, so neither host changes. The work is in `rge.h`, `protocol.ts` (and its parity test), `rge.c`, `smoke.c` (draw a 32 × 18 canvas into a 128 × 72 hidden window and check a pixel is 4 × 4), and the recording backend's decoder.
+The player computes `dest`, so libtse does no layout maths: it only copies a rectangle where it is told. Both hosts pass records through without reading them, so neither host changes. The work is in `tse.h`, `protocol.ts` (and its parity test), `tse.c`, `smoke.c` (draw a 32 × 18 canvas into a 128 × 72 hidden window and check a pixel is 4 × 4), and the recording backend's decoder.
 
-This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` and U0's two measuring functions. All three should land together.
+This is the third addition to ABI v2, after priority 3's second `TSE_OP_VIEW` and U0's two measuring functions. All three should land together.
 
 ### Where things interact
 
@@ -613,7 +613,7 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 
 **Done 2026-11-09**, with three differences from the text above, all recorded in DESIGN.md's "The game's screen":
 
-- **The bars** are not drawn through a last window-space view, because librge v1 refuses a second view record. Each bar is a rectangle placed in world space by taking its window rectangle back through the frame's one view. Every view the player makes is a scale after a rotation, so a record's rotate-then-scale says it exactly; a pixel test under a turned, zoomed camera checks the border stays solid. Priority 3 can switch to a window-space view.
+- **The bars** are not drawn through a last window-space view, because libtse v1 refuses a second view record. Each bar is a rectangle placed in world space by taking its window rectangle back through the frame's one view. Every view the player makes is a scale after a rotation, so a record's rotate-then-scale says it exactly; a pixel test under a turned, zoomed camera checks the border stays solid. Priority 3 can switch to a window-space view.
 - **`input.width`/`height` still report the window.** Handlers never see either size (`InputState` has no size), so the question did not arise; the player keeps the window's size for itself.
 - **Where the root is.** A `World` keeps what it mounted under a bare root object, so the player looks for the `<Screen>` at the root it builds from or as that root's only child.
 
@@ -635,10 +635,10 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 
 **Done when**
 
-**Done 2026-11-10.** The native half landed with ABI v2; the player writes `RGE_OP_CANVAS` first when the root `<Screen>` is pixel-perfect (the default), draws the world and `<Hud>` through views in game pixels, and leaves the border to the canvas record. `BuiltFrame.view` stays the world → window map for the mouse, so input is unchanged. Without pixel-perfect, the border bars are drawn through a last view in window pixels, replacing the inverse-through-the-camera trick.
+**Done 2026-11-10.** The native half landed with ABI v2; the player writes `TSE_OP_CANVAS` first when the root `<Screen>` is pixel-perfect (the default), draws the world and `<Hud>` through views in game pixels, and leaves the border to the canvas record. `BuiltFrame.view` stays the world → window map for the mouse, so input is unchanged. Without pixel-perfect, the border bars are drawn through a last view in window pixels, replacing the inverse-through-the-camera trick.
 
-- [x] `RGE_OP_CANVAS` is in `rge.h` (ABI v2) and `protocol.ts`, and the header-parity test agrees
-- [x] librge draws into a render texture, recreated only when the size changes, and scales it with point filtering
+- [x] `TSE_OP_CANVAS` is in `tse.h` (ABI v2) and `protocol.ts`, and the header-parity test agrees
+- [x] libtse draws into a render texture, recreated only when the size changes, and scales it with point filtering
 - [x] `smoke.c` checks that one canvas pixel becomes a 4 × 4 block of window pixels
 - [x] A turned shape stays on the game's pixel grid (a pixel test in `native.test.ts`)
 - [x] The parity test passes byte for byte under both hosts
@@ -652,7 +652,7 @@ This is the third addition to ABI v2, after priority 3's second `RGE_OP_VIEW` an
 - [x] The demo's `<Game>` holds a `<Screen width={640} height={360} fit="expand">`, and its HUD is laid out in canvas units
 - [x] `fit="expand"` widens the canvas to the window's shape (a whole-number scale as `"integer"` picks, then the width fills what is left, never below `width`); the placement's `width` is the game's real width, and the HUD's layout and the camera use it each frame
 - [x] When neither `<Game>` nor `PlayerConfig` sets the window's size, the window opens at 3 × the `<Screen>` (each setting on its own)
-- [x] A full-screen toggle: `<Game fullscreenKey>` or `PlayerConfig.fullscreenKey` (default `"F11"`, `false` for none), and Alt + Enter always. `rge_set_fullscreen` (ABI v3) switches to a borderless window at the desktop's size and refuses in a hidden window; `Backend.setFullscreen` is optional
+- [x] A full-screen toggle: `<Game fullscreenKey>` or `PlayerConfig.fullscreenKey` (default `"F11"`, `false` for none), and Alt + Enter always. `tse_set_fullscreen` (ABI v3) switches to a borderless window at the desktop's size and refuses in a hidden window; `Backend.setFullscreen` is optional
 
 ## Decisions
 

@@ -1,9 +1,9 @@
-/** Finding librge and rge-host for a flavor: an environment variable, then @rge/native, then this repository's builds. */
+/** Finding libtse and tse-host for a flavor: an environment variable, then @tsengine/native, then this repository's builds. */
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { hostFileName, libraryFileName, nativeHost, nativeLibrary, type NativeFlavor } from "@rge/native";
+import { hostFileName, libraryFileName, nativeHost, nativeLibrary, type NativeFlavor } from "@tsengine/native";
 
 export type { NativeFlavor };
 
@@ -15,7 +15,7 @@ function firstExisting(paths: readonly string[]): string | null {
 }
 
 export function findLibrary(flavor: NativeFlavor, env: NodeJS.ProcessEnv = process.env): string | null {
-  const fromEnv = env["RGE_NATIVE_LIB"];
+  const fromEnv = env["TSE_NATIVE_LIB"];
   if (fromEnv) return existsSync(fromEnv) ? resolve(fromEnv) : null;
   const name = libraryFileName();
   const folder = flavor === "headless" ? "build-headless" : "build";
@@ -23,7 +23,7 @@ export function findLibrary(flavor: NativeFlavor, env: NodeJS.ProcessEnv = proce
 }
 
 export function findHost(flavor: NativeFlavor, env: NodeJS.ProcessEnv = process.env): string | null {
-  const fromEnv = env["RGE_HOST_BIN"];
+  const fromEnv = env["TSE_HOST_BIN"];
   if (fromEnv) return existsSync(fromEnv) ? resolve(fromEnv) : null;
   const name = hostFileName();
   // host/target/release is whatever `cargo build` last built there; host/target-headless is what `npm run pack --build` builds.

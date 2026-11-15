@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** `<TextInput>`: typed characters from the backend (`Backend.typed`, ABI v9) go into the focused field, through the player's loop. */
 import { describe, it } from "node:test";
 
-import { Button, createControls, createInputState, Entity, Flex, Game, TextInput, World, type GameObject } from "@rge/runtime";
+import { Button, createControls, createInputState, Entity, Flex, Game, TextInput, World, type GameObject } from "@tsengine/runtime";
 
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";

@@ -7,7 +7,7 @@ export interface GameProps extends EntityProps {
    * kept. Without it nothing is saved.
    */
   id?: string;
-  /** The window's title. Default: the player's `title`, else `"react-game-engine"`. */
+  /** The window's title. Default: the player's `title`, else `"tse"`. */
   title?: string;
   /** The window's width in pixels. Not the game's resolution: that is a `<Screen width height>` inside it. Default: the player's, else 640. */
   width?: number;
@@ -67,7 +67,7 @@ export interface GameProps extends EntityProps {
    */
   timeScale?: number;
   /**
-   * The key that turns the development layout overlay on and off, under `rge dev` (outlines of every `<Flex>`, collider and
+   * The key that turns the development layout overlay on and off, under `tse dev` (outlines of every `<Flex>`, collider and
    * pointer). Default `"F1"`; `false` turns the key off. A packaged game never has the overlay.
    */
   overlayKey?: string | false;

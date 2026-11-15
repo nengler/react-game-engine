@@ -1,5 +1,5 @@
 /**
- * The language server: `RGE` diagnostics for a game's components as they are edited, and quick fixes for them, over the Language
+ * The language server: `TSE` diagnostics for a game's components as they are edited, and quick fixes for them, over the Language
  * Server Protocol (JSON-RPC with `Content-Length` headers, on stdin and stdout). It runs beside TypeScript's own server, which
  * keeps doing the types, hovers and completions; this one adds what only the engine's compiler knows.
  *
@@ -10,7 +10,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import type { CompilerDiagnostic } from "@rge/compiler";
+import type { CompilerDiagnostic } from "@tsengine/compiler";
 
 import { fixesFor, type Edit } from "./fixes.ts";
 import { findGame, GameProject, isComponentFile, readFromDisk } from "./project.ts";
@@ -27,7 +27,7 @@ interface LspDiagnostic {
   readonly range: Range;
   readonly severity: 1 | 2;
   readonly code: string;
-  readonly source: "rge";
+  readonly source: "tse";
   readonly message: string;
 }
 interface Message {
@@ -136,7 +136,7 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
       // The compiler should not throw on any input; if it does, say so where the author looks rather than going quiet.
       diagnostics = [
         {
-          code: "RGE1001",
+          code: "TSE1001",
           severity: "error",
           message: `The compiler failed on this file: ${error instanceof Error ? error.message : String(error)}`,
           span: null,
@@ -155,7 +155,7 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
           range: d.span === null ? { start: zero, end: zero } : { start: lines.position(d.span.start), end: lines.position(d.span.end) },
           severity: d.severity === "error" ? 1 : 2,
           code: d.code,
-          source: "rge",
+          source: "tse",
           message: d.message,
         })),
       },
@@ -219,7 +219,7 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
               range: { start: lines.position(d.span.start), end: lines.position(d.span.end) },
               severity: d.severity === "error" ? 1 : 2,
               code: d.code,
-              source: "rge",
+              source: "tse",
               message: d.message,
             },
           ],
@@ -248,7 +248,7 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
             textDocumentSync: { openClose: true, change: 1, save: { includeText: false } },
             codeActionProvider: { codeActionKinds: ["quickfix"] },
           },
-          serverInfo: { name: "rge-language-server", version: "0.0.0" },
+          serverInfo: { name: "tse-language-server", version: "0.0.0" },
         });
         return;
       case "textDocument/didOpen": {

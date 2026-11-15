@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-/** Rewind in `rge dev` (REACT_FEEL_PLAN.md D1): record, snapshot, go back, play again, and say where a replay differs. */
+/** Rewind in `tse dev` (REACT_FEEL_PLAN.md D1): record, snapshot, go back, play again, and say where a replay differs. */
 import { describe, it } from "node:test";
 
-import { Sound, Text, createGameState, type InputState } from "@rge/runtime";
+import { Sound, Text, createGameState, type InputState } from "@tsengine/runtime";
 
 import { createPlayer, RecordingBackend, Rewind, type PlayerConfig } from "../src/index.ts";
 
@@ -136,7 +136,7 @@ describe("rewind", () => {
     rewind.seek(25);
     const before = game.getState().count;
     config = { root: () => new Tripler(), fixedStep: 60 };
-    player.reload(config); // what rge dev does on a save
+    player.reload(config); // what tse dev does on a save
     rewind.reloaded();
     assert.equal(rewind.paused, 25, "still at the same frame");
     // From the snapshot at 20: the presses after it (frames 21 to 25) now add three each.

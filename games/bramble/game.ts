@@ -1,4 +1,4 @@
-import type { InputBindings, PlayerConfig } from "@rge/player";
+import type { InputBindings, PlayerConfig } from "@tsengine/player";
 
 import { Main } from "./generated/Main.ts";
 
@@ -7,7 +7,7 @@ export const gameConfig: PlayerConfig = {
   root: () => new Main(),
 };
 
-/** Names for the input scripts that tests, parity and `rge screenshot` use (`right*30, Z`); anything else is a key name. */
+/** Names for the input scripts that tests, parity and `tse screenshot` use (`right*30, Z`); anything else is a key name. */
 export const bindings: InputBindings = {
   left: ["ArrowLeft"],
   right: ["ArrowRight"],

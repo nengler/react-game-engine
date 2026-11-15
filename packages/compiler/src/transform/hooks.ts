@@ -339,7 +339,7 @@ export class HookLowering extends ExpressionLowering {
    * and `s.vx = …` writes it. What differs is the handler's view: it reads its own writes at once (a `live` read), while render
    * and everything else sees the committed value, as with any state. The name is claimed as a field (`s`, or `$s` where the root
    * built-in has that member), since the class gets a getter of that name (`component.s.vx`). Each slot's id is `Hero.s.vx`: hot
-   * reload, saves, the inspector and `@rge/testing` know it as `s.vx`, and a dot cannot be part of a name, so it is unambiguous.
+   * reload, saves, the inspector and `@tsengine/testing` know it as `s.vx`, and a dot cannot be part of a name, so it is unambiguous.
    */
   protected lowerUseMutable(hook: UseMutableCallAnalysis, state: StateIR[], hooks: HookIR[]): void {
     if (this.componentScope.hasOwn(hook.name) || this.isCallableName(hook.name)) {

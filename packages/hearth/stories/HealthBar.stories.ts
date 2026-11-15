@@ -1,4 +1,4 @@
-import { stories } from "@rge/player";
+import { stories } from "@tsengine/player";
 
 import { HealthBar } from "../generated/HealthBar.ts";
 

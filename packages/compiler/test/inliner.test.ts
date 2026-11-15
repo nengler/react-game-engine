@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { runtimeManifest } from "@rge/runtime";
+import { runtimeManifest } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode, EditMap, TsxParser, expandCustomHooks, type CompilerDiagnostic } from "../src/index.ts";
 import { closeCompiler, getCompiler, withAuthoringImports } from "./helpers.ts";
@@ -86,12 +86,12 @@ describe("parsing", () => {
   it("parses a hook's file once however many times it is called, and a hookless file once", () => {
     const parser = new CountingParser();
     try {
-      const hooks = `import { useState } from "@rge/runtime/jsx";\nexport function useFlag() { const [f, setF] = useState(false); return [f, setF]; }`;
+      const hooks = `import { useState } from "@tsengine/runtime/jsx";\nexport function useFlag() { const [f, setF] = useState(false); return [f, setF]; }`;
       const diagnostics: CompilerDiagnostic[] = [];
       const expanded = expandCustomHooks(
         parser,
         "Main.tsx",
-        `import { Entity } from "@rge/runtime/jsx"; import { useFlag } from "./hooks.tsx";
+        `import { Entity } from "@tsengine/runtime/jsx"; import { useFlag } from "./hooks.tsx";
 function C() { const [a, setA] = useFlag(); const [b, setB] = useFlag(); const [c, setC] = useFlag(); return <Entity name="C" />; }`,
         () => ({ fileName: "hooks.tsx", text: hooks }),
         diagnostics,

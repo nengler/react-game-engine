@@ -1,4 +1,4 @@
-import { type Child, Flex } from "@rge/runtime/jsx";
+import { type Child, Flex } from "@tsengine/runtime/jsx";
 
 import { Panel } from "./Panel.tsx";
 import { COLOR } from "./theme.ts";

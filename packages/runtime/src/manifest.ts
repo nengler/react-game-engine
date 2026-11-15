@@ -179,7 +179,7 @@ const FLEX_FIELDS = [
 ] as const;
 
 export const runtimeManifest: RuntimeManifest = {
-  authoringModule: "@rge/runtime/jsx",
+  authoringModule: "@tsengine/runtime/jsx",
   intrinsics: [
     "Entity",
     "Game",

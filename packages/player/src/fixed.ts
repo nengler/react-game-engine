@@ -1,10 +1,10 @@
-import { RGE_KEY_DOWN, RGE_KEY_PRESSED, RGE_KEY_RELEASED } from "./protocol.ts";
+import { TSE_KEY_DOWN, TSE_KEY_PRESSED, TSE_KEY_RELEASED } from "./protocol.ts";
 
 /** Most steps one frame runs: a stall longer than this many steps is dropped, not caught up. */
 export const MAX_STEPS_PER_FRAME = 8;
 
 /** The edges of a key: pressed and released. They are seen by exactly one step, or by the first one after a freeze. */
-const EDGES = RGE_KEY_PRESSED | RGE_KEY_RELEASED;
+const EDGES = TSE_KEY_PRESSED | TSE_KEY_RELEASED;
 
 /**
  * Runs one step of the game: `input` is what `onInput` sees (this step's key flags), `update` what `onUpdate` sees (the same,
@@ -97,7 +97,7 @@ export class FixedDriver {
       for (let i = 0; i < this.#keys; i++) {
         const edges = this.#edges[i] as number;
         // Down if held now, or if it went down since the last step (a tap that is over by now still counts for one step).
-        const input = ((keys[i] as number) & RGE_KEY_DOWN) | (edges & RGE_KEY_PRESSED ? RGE_KEY_DOWN : 0) | edges;
+        const input = ((keys[i] as number) & TSE_KEY_DOWN) | (edges & TSE_KEY_PRESSED ? TSE_KEY_DOWN : 0) | edges;
         this.#input[i] = input;
         this.#update[i] = input | (this.#carried[i] as number);
         this.#edges[i] = 0;

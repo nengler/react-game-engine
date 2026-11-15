@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** `<Layer>` (ABI v10) in a component: a container whose blend modes are checked literals, and whose props follow state. */
 import { after, describe, it } from "node:test";
 
-import { Layer, Light, Lighting, Shape, World, type Entity } from "@rge/runtime";
+import { Layer, Light, Lighting, Shape, World, type Entity } from "@tsengine/runtime";
 
 import { checkAssets } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -81,7 +81,7 @@ describe("<Layer>", () => {
   });
 
   it("requires a light's radius: the type-check says it is missing", () => {
-    const source = `import { Light, Lighting } from "@rge/runtime/jsx";\nexport function Bad() { return <Lighting><Light /></Lighting>; }`;
+    const source = `import { Light, Lighting } from "@tsengine/runtime/jsx";\nexport function Bad() { return <Lighting><Light /></Lighting>; }`;
     const errors = getCompiler().typeCheckSources([
       { fileName: `${process.cwd()}/.test-output/LightRadius${process.pid}.tsx`, text: source },
     ]);

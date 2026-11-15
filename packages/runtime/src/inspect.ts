@@ -1,5 +1,5 @@
 /**
- * What the development inspector (`rge dev`'s page, REACT_FEEL_PLAN.md C4) shows of a running game: the tree by component, and
+ * What the development inspector (`tse dev`'s page, REACT_FEEL_PLAN.md C4) shows of a running game: the tree by component, and
  * one object's props, state, refs, game-state subscriptions and renders. It only reads; editing goes through `editState`, which
  * sets state as hot reload does.
  */

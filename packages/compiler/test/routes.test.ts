@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** A <Route>'s components are made when it comes and dropped once it has gone, as React Router's are; keepAlive keeps them. */
 import { after, describe, it } from "node:test";
 
-import { createInputState, Entity, World, type GameObject } from "@rge/runtime";
+import { createInputState, Entity, World, type GameObject } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compileProject, loadProject, typeCheckProject } from "./helpers.ts";
 

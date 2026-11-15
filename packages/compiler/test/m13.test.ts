@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { AnimatedSprite, Entity, World, runtimeManifest } from "@rge/runtime";
+import { AnimatedSprite, Entity, World, runtimeManifest } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -148,7 +148,7 @@ describe("M13: authored source type-checks", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M13${Math.random()}.tsx`,
-        text: `import { Entity, AnimatedSprite } from "@rge/runtime/jsx";\nfunction C({ on, names }: { on: boolean; names: string[] }) { return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, AnimatedSprite } from "@tsengine/runtime/jsx";\nfunction C({ on, names }: { on: boolean; names: string[] }) { return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 
@@ -299,7 +299,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
       try {
         const result = compiler.compile(
           "C.tsx",
-          `import { Shape, useUpdate, useMutable } from "@rge/runtime/jsx";\nfunction C() { const s = useMutable({ r: 0 }); useUpdate((dt) => { s.r += dt; }); return <Shape kind="rect" width={1} height={1} />; }`
+          `import { Shape, useUpdate, useMutable } from "@tsengine/runtime/jsx";\nfunction C() { const s = useMutable({ r: 0 }); useUpdate((dt) => { s.r += dt; }); return <Shape kind="rect" width={1} height={1} />; }`
         );
         assert.ok(result.ok, JSON.stringify(result.diagnostics));
         return result.code;
@@ -319,7 +319,7 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
     for (const name of ["frames", "fps", "playing", "frame", "elapsed", "image"]) {
       const result = getCompiler().compile(
         "C.tsx",
-        `import { AnimatedSprite, useMutable } from "@rge/runtime/jsx";\nfunction C() { const ${name} = useMutable({ n: 1 }); return <AnimatedSprite frames={["a.png"]} />; }`
+        `import { AnimatedSprite, useMutable } from "@tsengine/runtime/jsx";\nfunction C() { const ${name} = useMutable({ n: 1 }); return <AnimatedSprite frames={["a.png"]} />; }`
       );
       assert.ok(result.ok && result.code.includes(`get $${name}()`), name);
     }
@@ -331,7 +331,7 @@ describe("sprite sheets and sprite options", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M13s${Math.random()}.tsx`,
-        text: `import { Entity, Sprite, AnimatedSprite, useMutable } from "@rge/runtime/jsx";\nfunction C() { const s = useMutable({ n: 0, left: false, anim: "idle" }); const n = s.n; const left = s.left; const anim = s.anim; return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, Sprite, AnimatedSprite, useMutable } from "@tsengine/runtime/jsx";\nfunction C() { const s = useMutable({ n: 0, left: false, anim: "idle" }); const n = s.n; const left = s.left; const anim = s.anim; return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 

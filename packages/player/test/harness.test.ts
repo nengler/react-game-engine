@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Entity, GameObject } from "@rge/runtime";
+import { Entity, GameObject } from "@tsengine/runtime";
 
 import { parseInputScript, runScript, ScriptedInputBackend, RecordingBackend, type PlayerConfig } from "../src/index.ts";
 

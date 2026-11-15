@@ -73,35 +73,35 @@ The first time the character steps into the cave, `Play` holds the world for 3.4
 field (`intro`, started from `noCutscene()`), so it is not saved: a run loaded from a save plays it again on the next visit, which is
 fine for now. The whole-game replay (`test/fullrun.ts`) waits it out after the cave's door. The stories `Play/Cave` (after it) and
 `Play/CaveIntro` (during it) keep its pictures. Found while writing it: a field started at `null` could not have its methods called,
-and `import type` from `@rge/runtime` is refused in a component (DESIGN.md, "Sequences, for cutscenes").
+and `import type` from `@tsengine/runtime` is refused in a component (DESIGN.md, "Sequences, for cutscenes").
 
 ## Findings while writing
 
 Written down as they were hit, as Kite and Hearth did; the engine is changed only when one is worth it.
 
-1. **Side-effect imports are not allowed in a component file** (`RGE1001`). Registering the Tiled maps (`registerTilemaps`) had
+1. **Side-effect imports are not allowed in a component file** (`TSE1001`). Registering the Tiled maps (`registerTilemaps`) had
    to move into a plain `.ts` file that `GameState.ts` imports. Fair, but the message does not say where such an import can go. *Since:* the message now says where such an import goes.
-2. **A component cannot compute a list** (`RGE1002`, `RGE1209`): the items of a `.map` come from state or props, optionally
+2. **A component cannot compute a list** (`TSE1002`, `TSE1209`): the items of a `.map` come from state or props, optionally
    `.filter`ed, and the body allows only state, refs and derived `const`s. The rules therefore produce the lists (`viewOf`) and the
    game state holds them. This is the main cost of the subset for a map with many kinds of thing on it. *Since:* a list's items are any array (`{spotsOf(run).map(…)}`), so `view` left the game state and the components compute what they draw.
-3. **`x !== undefined` is not a condition** (`RGE1302`): a map that may have a gate became a list of zero or one gates. *Since:* `undefined` is a value; the gate is one of the spots.
+3. **`x !== undefined` is not a condition** (`TSE1302`): a map that may have a gate became a list of zero or one gates. *Since:* `undefined` is a value; the gate is one of the spots.
 4. **The built-in font is not readable under size 10** at 320 × 180 (it is drawn, but letters break up); Kite and Hearth use a
-   bitmap font. Bramble uses multiples of 10 until it has one (M7). *Since 2026-11-15:* `rge create` puts Kite's 5 × 7 pixel font in
+   bitmap font. Bramble uses multiples of 10 until it has one (M7). *Since 2026-11-15:* `tse create` puts Kite's 5 × 7 pixel font in
    a new game's `assets/` and its `<Game font textSize={8}>` uses it, so a new game starts with text that reads at any multiple of 8.
-5. **`rge check` under `node --test`:** the child's test run printed `?` for its counts because `NODE_TEST_CONTEXT` made it
-   report to the outer run. `rge check` now clears it. (An engine-tooling finding, fixed.)
+5. **`tse check` under `node --test`:** the child's test run printed `?` for its counts because `NODE_TEST_CONTEXT` made it
+   report to the outer run. `tse check` now clears it. (An engine-tooling finding, fixed.)
 6. **Compile errors name the generated file** (`generated/Play.ts:9:23 … './World.ts'`) when the real cause is in `src/` (the
    source file had failed to compile, above in the output). Reading the whole output top-down is needed. *Since:* the generated code
    is not type-checked while a file fails to compile, and a type error in generated code is reported at its line in `src/`.
 
-7. **Props need a declared type** (`RGE1208`): `Menu({ top }: { top: number })` is refused; the type is declared in the file. The message
+7. **Props need a declared type** (`TSE1208`): `Menu({ top }: { top: number })` is refused; the type is declared in the file. The message
    says exactly that. Fine.
 8. **A new engine API is not in the authoring types until the manifest says so.** `InputState.lastPressed()` compiled in plain
-   TypeScript but not in a component (`RGE1301`, "no callable method"), because the compiler reads `handleTypes` in
+   TypeScript but not in a component (`TSE1301`, "no callable method"), because the compiler reads `handleTypes` in
    `runtime/src/manifest.ts`. Added there. (Worth a test that every `InputState` method is in the manifest.) *Since:* a runtime test checks every `InputState` method and property is in the manifest.
 9. **`createSettings` takes its type from the defaults**, so `fullscreen: false` became the type `false` and `!s.fullscreen` did not
    type-check. The game gives the type explicitly (`createSettings<Settings>`); the guide's example does too. *Since:* `createSettings` widens a boolean default (`SettingsOf`); the type is no longer given.
-10. **In a handler, `x !== undefined` is not a condition** (`RGE1302`, again). `capture(input.lastPressed())` hands the maybe-undefined
+10. **In a handler, `x !== undefined` is not a condition** (`TSE1302`, again). `capture(input.lastPressed())` hands the maybe-undefined
     value to a game-state action, which tests it in plain TypeScript. *Since:* fixed with 3: `const key = input.lastPressed(); if (key !== undefined) bindKey(capturing, key);`.
 11. **A script holds a key until it changes**, so `right, right` is one press and `right, _, right` is two. It cost three wrong test
     scripts (menus move on a press). Not an engine fault; the replay format says it, but nobody reads that twice.
@@ -116,14 +116,14 @@ Written down as they were hit, as Kite and Hearth did; the engine is changed onl
   "Reset to defaults" puts everything back. They are applied before the first frame and stored at each change.
 - Not yet: "Save and quit" and the pause screen (M4), and `Quit` on the title.
 
-12. **A list item's children cannot hold a condition** (`RGE1209`), which the inventory grid needs (an empty slot shows nothing). The message
+12. **A list item's children cannot hold a condition** (`TSE1209`), which the inventory grid needs (an empty slot shows nothing). The message
     gives the way out: make the item a component (`SlotBox`) that takes the fields as props and holds the `{filled && …}`. That is
     enough, so no engine change was made (plan 4.3: not needed). *Since:* an item's children may be conditional and nested; `SlotBox` is gone.
-13. **`name` is reserved as a `const`** inside a component (`RGE1103`): `const name = useGame(…)` fails. Renamed `speaker`. *Since:* a game-state value keeps its name (its field is `$name`); a `useState` called `name` still is not allowed.
+13. **`name` is reserved as a `const`** inside a component (`TSE1103`): `const name = useGame(…)` fails. Renamed `speaker`. *Since:* a game-state value keeps its name (its field is `$name`); a `useState` called `name` still is not allowed.
 14. **Text wrapping and revealing needed no workaround**: `<Text maxWidth lineGap reveal>` (engine, M4.1/4.2) draws the dialogue box; the rules
     count the typed characters (`talk.shown`, 40 a second *(guess)*; a press finishes the page, the next turns it).
 15. **The scene importer took every Tiled object for a prefab** (M6.2). Moving the doors, people and items into an object layer made
-    `rge check` fail with `RGE1503: Unknown prefab 'door'` for each one, because every map in `scenes/` is also imported as a scene.
+    `tse check` fail with `TSE1503: Unknown prefab 'door'` for each one, because every map in `scenes/` is also imported as a scene.
     *Fixed in the engine:* an object layer with the bool property `data` is the rules' (read into `TilemapData.objects`) and the scene
     importer skips it; Bramble's `Things` layer has it. The tile importer also places objects by their layers' offsets now, as the
     scene importer did.
@@ -161,7 +161,7 @@ whole 80 × 48 map take 1.3 ms each under Node and 20 ms under QuickJS, which is
 ## Run it
 
 ```
-npm install && npm run check      # compile, type-check, test, parity under Node and rge-host
+npm install && npm run check      # compile, type-check, test, parity under Node and tse-host
 npm run dev                       # window with hot reload
 npm run assets                    # rewrite the art and sound in assets/
                                   # the maps are scenes/*.tmj: open and edit them in Tiled

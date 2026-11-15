@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Entity, freeze, Game, type InputState } from "@rge/runtime";
+import { Entity, freeze, Game, type InputState } from "@tsengine/runtime";
 
 import {
   createPlayer,
   FixedDriver,
   MAX_STEPS_PER_FRAME,
   RecordingBackend,
-  RGE_KEY_DOWN,
-  RGE_KEY_PRESSED,
-  RGE_KEY_RELEASED,
+  TSE_KEY_DOWN,
+  TSE_KEY_PRESSED,
+  TSE_KEY_RELEASED,
   type InputFrame,
   type PlayerConfig,
 } from "../src/index.ts";
@@ -144,7 +144,7 @@ describe("<Game timeScale paused>", () => {
 });
 
 describe("FixedDriver, without a player", () => {
-  const PRESSED = RGE_KEY_DOWN | RGE_KEY_PRESSED;
+  const PRESSED = TSE_KEY_DOWN | TSE_KEY_PRESSED;
   /** Runs frames of `dt` through a one-key driver; `frozen` says which steps (counting from 0) are frozen. Returns what each step's input and update saw. */
   function drive(frames: readonly { dt: number; keys: number }[], frozen: (step: number) => boolean = () => false) {
     const driver = new FixedDriver(60, 1);
@@ -176,18 +176,18 @@ describe("FixedDriver, without a player", () => {
       [
         { dt: 1 / 60, keys: 0 },
         { dt: 1 / 60, keys: PRESSED },
-        { dt: 1 / 60, keys: RGE_KEY_DOWN },
+        { dt: 1 / 60, keys: TSE_KEY_DOWN },
         { dt: 1 / 60, keys: 0 },
       ],
       (n) => n < 2
     );
     assert.deepEqual(
-      log.map((l) => (l.input & RGE_KEY_PRESSED) !== 0),
+      log.map((l) => (l.input & TSE_KEY_PRESSED) !== 0),
       [false, true, false, false],
       "input sees it in the step it was made"
     );
     assert.deepEqual(
-      log.map((l) => (l.update & RGE_KEY_PRESSED) !== 0),
+      log.map((l) => (l.update & TSE_KEY_PRESSED) !== 0),
       [false, true, true, false],
       "update sees it in the first step after the freeze, and not again"
     );
@@ -196,14 +196,14 @@ describe("FixedDriver, without a player", () => {
   it("keeps a release made in a freeze too, and drops what is kept once a step has run", () => {
     const log = drive(
       [
-        { dt: 1 / 60, keys: RGE_KEY_RELEASED },
+        { dt: 1 / 60, keys: TSE_KEY_RELEASED },
         { dt: 1 / 60, keys: 0 },
         { dt: 1 / 60, keys: 0 },
       ],
       (n) => n === 0
     );
     assert.deepEqual(
-      log.map((l) => (l.update & RGE_KEY_RELEASED) !== 0),
+      log.map((l) => (l.update & TSE_KEY_RELEASED) !== 0),
       [true, true, false]
     );
   });
@@ -214,10 +214,10 @@ describe("FixedDriver, without a player", () => {
     const b = a.clone();
     let seen = 0;
     a.advance(1 / 120, Uint8Array.of(0), (input) => ((seen = input[0] as number), false));
-    assert.ok((seen & RGE_KEY_PRESSED) !== 0);
+    assert.ok((seen & TSE_KEY_PRESSED) !== 0);
     seen = 0;
     b.advance(1 / 120, Uint8Array.of(0), (input) => ((seen = input[0] as number), false));
-    assert.ok((seen & RGE_KEY_PRESSED) !== 0, "the copy had its own");
+    assert.ok((seen & TSE_KEY_PRESSED) !== 0, "the copy had its own");
   });
 });
 

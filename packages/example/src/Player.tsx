@@ -1,4 +1,4 @@
-import { useMutable, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { useMutable, Entity, Sprite, Collider } from "@tsengine/runtime/jsx";
 
 import { WarningIcon } from "./WarningIcon.tsx";
 

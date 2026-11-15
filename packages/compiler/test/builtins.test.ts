@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 /** Priority 7's built-ins in authored source: Tilemap, Particles, Fade, Camera's bounds, slide and shake, Text's font, `freeze`; and the build-time asset check. */
 import { after, describe, it } from "node:test";
 
-import { Camera, Entity, Fade, Particles, Text, Tilemap, World, createInputState, registerTilemaps } from "@rge/runtime";
+import { Camera, Entity, Fade, Particles, Text, Tilemap, World, createInputState, registerTilemaps } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, getCompiler, load } from "./helpers.ts";
 
@@ -19,7 +19,7 @@ const check = (imports: string, body: string, extra = "") =>
   getCompiler().typeCheckSources([
     {
       fileName: `${process.cwd()}/.test-output/B${Math.random()}.tsx`,
-      text: `import { Entity, Hud, Camera, Tilemap, Particles, Fade, Music, Text, freeze, useSound, useUpdate, useMutable, ${imports} } from "@rge/runtime/jsx";\n${extra}\nfunction C() { const s = useMutable({ on: false, n: 0 }); const on = s.on; const n = s.n; return <Entity name="C">${body}</Entity>; }`,
+      text: `import { Entity, Hud, Camera, Tilemap, Particles, Fade, Music, Text, freeze, useSound, useUpdate, useMutable, ${imports} } from "@tsengine/runtime/jsx";\n${extra}\nfunction C() { const s = useMutable({ on: false, n: 0 }); const on = s.on; const n = s.n; return <Entity name="C">${body}</Entity>; }`,
     },
   ]);
 
@@ -64,7 +64,7 @@ describe("authored source of the new built-ins type-checks, and wrong props do n
       "F.tsx"
     );
     assert.match(ok.code, /freeze\(3\)/);
-    assert.match(ok.code, /import \{[^}]*freeze[^}]*\} from "@rge\/runtime"/);
+    assert.match(ok.code, /import \{[^}]*freeze[^}]*\} from "@tsengine\/runtime"/);
   });
 });
 
@@ -127,10 +127,10 @@ describe("the built-ins in compiled components", () => {
   });
 });
 
-describe("the build-time asset check (rge-compile --assets)", () => {
+describe("the build-time asset check (tse-compile --assets)", () => {
   const repo = resolve(import.meta.dirname, "../../..");
   const compileProject = (source: string, assets: string[]): { status: number | null; stderr: string } => {
-    const dir = mkdtempSync(join(tmpdir(), "rge-assets-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-assets-"));
     try {
       mkdirSync(join(dir, "src"));
       mkdirSync(join(dir, "assets"));
@@ -146,7 +146,7 @@ describe("the build-time asset check (rge-compile --assets)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   };
-  const SOURCE = `import { Entity, Sprite, AnimatedSprite, Tilemap, Text, useSound, useMutable } from "@rge/runtime/jsx";
+  const SOURCE = `import { Entity, Sprite, AnimatedSprite, Tilemap, Text, useSound, useMutable } from "@tsengine/runtime/jsx";
 export function A() {
   const s = useMutable({ on: false });
   const jump = useSound("jump.wav");
@@ -171,7 +171,7 @@ export function A() {
   it("fails, naming each missing image, sound and font, with the nearest file for a typo", () => {
     const r = compileProject(SOURCE, ["jumpp.wav", "hero.png", "sheet.png", "a1.png", "tiles.png"]);
     assert.equal(r.status, 1);
-    assert.match(r.stderr, /RGE1211: The sound 'jump\.wav' is not in .*assets\/ \(did you mean 'jumpp\.wav'\?\)/);
+    assert.match(r.stderr, /TSE1211: The sound 'jump\.wav' is not in .*assets\/ \(did you mean 'jumpp\.wav'\?\)/);
     assert.match(r.stderr, /The image 'a2\.png' is not in/);
     assert.match(r.stderr, /The image 'b1\.png' is not in/);
     assert.match(r.stderr, /The font 'font\.png' is not in/);
@@ -179,7 +179,7 @@ export function A() {
   });
 
   it("checks a Flex's background images like a sprite's: a missing one is named, with the nearest file for a typo", () => {
-    const source = `import { Flex, useMutable } from "@rge/runtime/jsx";
+    const source = `import { Flex, useMutable } from "@tsengine/runtime/jsx";
 export function Panel() {
   const s = useMutable({ on: false });
   return <Flex backgroundImage="panel.png" hoverBackgroundImage={s.on ? "panel-hover.png" : "panel-hoer.png"} disabledBackgroundImage="gone.png" slice={8} />;

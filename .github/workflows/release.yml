@@ -1,13 +1,13 @@
 name: Release
 
 # Pushing a tag like v0.1.0, or running this workflow from the Actions tab with a version (it then tags the commit it runs on,
-# normally main's head), builds the engine's packs (tools/pack.ts --build --strict, stamped with the tag's version) and
-# attaches them to a GitHub release of that tag. A game outside this repository installs them by URL, with no registry and
-# no login, because the repository is public:
+# normally main's head), builds the engine's packs (tools/pack.ts --build --strict, stamped with the tag's version),
+# attaches them to a GitHub release of that tag, and publishes them to npm as @tsengine/* (needs the NPM_TOKEN secret).
+# A game installs them from npm (`npx @tsengine/cli create my-game`), or by the release's URL:
 #
-#   "@rge/runtime": "https://github.com/nengler/react-game-engine/releases/download/v0.1.0/rge-runtime-0.1.0.tgz"
+#   "@tsengine/runtime": "https://github.com/nengler/tse/releases/download/v0.2.0/tsengine-runtime-0.2.0.tgz"
 #
-# @rge/native carries librge and rge-host built on this runner (linux-x64, desktop and headless), so the packs run on
+# @tsengine/native carries libtse and tse-host built on this runner (linux-x64, desktop and headless), so the packs run on
 # Linux x64 only, as the engine does today, with glibc 2.39 or newer (Ubuntu 24.04 and later). CI (ci.yml, including the `outside` job) is what checks the code; this only builds
 # and publishes what the tag points at, so tag a commit CI has passed.
 on:
@@ -22,6 +22,8 @@ on:
 
 permissions:
   contents: write
+  # npm provenance: the registry records that these packages were built by this workflow from this repository.
+  id-token: write
 
 env:
   CARGO_INCREMENTAL: "0"
@@ -33,7 +35,7 @@ concurrency:
 
 jobs:
   packs:
-    # Pinned, not ubuntu-latest: librge and rge-host link against the runner's glibc, and a binary built on a newer one does
+    # Pinned, not ubuntu-latest: libtse and tse-host link against the runner's glibc, and a binary built on a newer one does
     # not load on an older system. v0.1.0 was built on ubuntu-latest and needed glibc 2.43, which Ubuntu 24.04 (2.39) lacks.
     # Raise this only when the oldest system the packs should run on moves.
     runs-on: ubuntu-24.04
@@ -56,14 +58,15 @@ jobs:
         with:
           node-version: "22.18"
           cache: npm
+          registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm run generate
-      # The desktop librge links against the window libraries; without them only the headless one would ship.
+      # The desktop libtse links against the window libraries; without them only the headless one would ship.
       - name: Install the window libraries
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev
-      - name: Build librge and rge-host, and pack (stamped with the tag's version)
+      - name: Build libtse and tse-host, and pack (stamped with the tag's version)
         run: node tools/pack.ts --build --strict --version "$VERSION"
       - name: Attach the packs to the release
         env:
@@ -74,3 +77,20 @@ jobs:
           gh release create "$TAG" dist/packs/*.tgz "${where[@]}" --generate-notes \
             --title "$TAG" \
             --notes "Install a pack by URL: https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/<file>. Linux x64."
+      # Publish each pack to npm, @tsengine/* depending on the others at this version (stamped above), dependencies first so a
+      # pack never names one that is not there yet. NPM_TOKEN is a repository secret: an npm granular access token that may
+      # publish to the @tsengine organization. A version already on npm is skipped, so the workflow can be run again after a
+      # failure part-way. A version with a pre-release part (0.2.0-beta.1) goes to the `next` tag instead of `latest`.
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::error::the NPM_TOKEN secret is not set"; exit 1; fi
+          if [[ "$VERSION" == *-* ]]; then tag=next; else tag=latest; fi
+          for name in runtime compiler player native player-node testing language-server cli; do
+            if npm view "@tsengine/$name@$VERSION" version >/dev/null 2>&1; then
+              echo "@tsengine/$name@$VERSION is already on npm"
+              continue
+            fi
+            npm publish "dist/packs/tsengine-$name-$VERSION.tgz" --provenance --access public --tag "$tag"
+          done

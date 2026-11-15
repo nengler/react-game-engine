@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Entity, Game, type InputState } from "@rge/runtime";
+import { Entity, Game, type InputState } from "@tsengine/runtime";
 
 import { createPlayer, KEYS, parseInputScript, RecordingBackend } from "../src/index.ts";
 
@@ -54,7 +54,7 @@ describe("gamepad keys", () => {
     assert.equal(withConfig.gamepadDeadzone, 0.2);
     const none = new RecordingBackend();
     createPlayer(none, { root: () => new Entity() }).close();
-    assert.equal(none.gamepadDeadzone, null, "left to librge's default (0.35)");
+    assert.equal(none.gamepadDeadzone, null, "left to libtse's default (0.35)");
   });
 });
 

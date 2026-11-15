@@ -1,4 +1,4 @@
-import { geometriesOverlap, geometryOf, type Collider, type GameObject, type World, type WorldTransform } from "@rge/runtime";
+import { geometriesOverlap, geometryOf, type Collider, type GameObject, type World, type WorldTransform } from "@tsengine/runtime";
 
 import type { ColliderEntry } from "./draw.ts";
 
@@ -149,7 +149,7 @@ function sortByLeftEdge(order: Int32Array, ordered: number, count: number, bound
 }
 
 /**
- * A host's own broad phase (`Backend.overlaps`, which is `rge_overlaps` in `librge`): the pairs of boxes in
+ * A host's own broad phase (`Backend.overlaps`, which is `tse_overlaps` in `libtse`): the pairs of boxes in
  * `boxes[0 .. count * 4)` that overlap, written to `pairs` two indices each, as many as fit; returns how many there are.
  * `order[0 .. count)` comes back as the box indices by left edge, ties by index, and may hold anything going in.
  */

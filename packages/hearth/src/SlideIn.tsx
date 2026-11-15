@@ -1,4 +1,4 @@
-import { type Child, Flex, useMount, useSpring, useMutable, useTween } from "@rge/runtime/jsx";
+import { type Child, Flex, useMount, useSpring, useMutable, useTween } from "@tsengine/runtime/jsx";
 
 interface SlideInProps {
   children: Child;

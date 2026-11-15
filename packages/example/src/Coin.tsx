@@ -1,4 +1,4 @@
-import { useMutable, useUpdate, Sprite } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, Sprite } from "@tsengine/runtime/jsx";
 
 interface CoinProps {
   value: number;

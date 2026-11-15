@@ -1,4 +1,4 @@
-import { createPlayer, ScriptedInputBackend, type InputFrame, type PlayerConfig } from "@rge/player";
+import { createPlayer, ScriptedInputBackend, type InputFrame, type PlayerConfig } from "@tsengine/player";
 
 import { createNodeBackend, type Pixels } from "./backend.ts";
 import { findNativeLibrary } from "./ffi.ts";
@@ -6,7 +6,7 @@ import { findNativeLibrary } from "./ffi.ts";
 export interface ShotOptions {
   /** Steps to keep (counted from 0 for the first scripted frame). Default: every step. */
   readonly at?: readonly number[];
-  /** The path of librge; default is the headless build (see `findNativeLibrary`). */
+  /** The path of libtse; default is the headless build (see `findNativeLibrary`). */
   readonly library?: string | null;
   /** Called with a warning the game prints; default collects them in the result. */
   readonly warnings?: string[];

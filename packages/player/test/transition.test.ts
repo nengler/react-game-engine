@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { Entity, Flex, Shape, getSoundSink, type FlexProps, type FlexTransition } from "@rge/runtime";
+import { Entity, Flex, Shape, getSoundSink, type FlexProps, type FlexTransition } from "@tsengine/runtime";
 
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";

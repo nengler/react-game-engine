@@ -6,7 +6,7 @@
  *
  *   node packages/demo/parity.ts
  */
-import { createPlayer, RecordingBackend, type InputFrame } from "@rge/player";
+import { createPlayer, RecordingBackend, type InputFrame } from "@tsengine/player";
 
 import { gameConfig } from "./game.ts";
 

@@ -1,4 +1,4 @@
-# react-game-engine
+# tse
 
 A native-first, code-focused 2D game engine with React-like TSX authoring.
 Components are written as TSX functions, but there is no React and no virtual
@@ -12,14 +12,14 @@ small Rust + QuickJS-ng host. Three games are built on it: [Kite](packages/kite)
 the workspaces). Linux is the supported platform.
 
 **Start with the [authoring guide](docs/index.html)** (open it in a browser): [Getting started](docs/start.html) goes from an
-empty folder to a packaged game (`rge create my-game`, or `--template menu` / `--template platformer`), and
+empty folder to a packaged game (`tse create my-game`, or `--template menu` / `--template platformer`), and
 [Recipes](docs/recipes.html) has a menu, a settings screen, a health bar and other everyday pieces. For how it is built, read
 [docs/DESIGN.md](docs/DESIGN.md) (the compiler, the IR and every design decision) and [docs/NATIVE_PLAN.md](docs/NATIVE_PLAN.md)
 (the player, its ABI and its performance). What is being worked on now is the "Now" table in
 [docs/NEXT_PRIORITIES.md](docs/NEXT_PRIORITIES.md); what still trips a new author is [docs/PAIN_POINTS.md](docs/PAIN_POINTS.md).
 
 ```tsx
-import { useMutable, Entity, Sprite, Collider } from "@rge/runtime/jsx";
+import { useMutable, Entity, Sprite, Collider } from "@tsengine/runtime/jsx";
 import { WarningIcon } from "./WarningIcon.tsx";
 
 function Player() {
@@ -40,14 +40,14 @@ next to it as `Player.ir.json`).
 Game code lives in components, as in React: a component keeps its own state (`useMutable`, written directly as `s.hp -= 1`
 and read back at once in a handler, or `useBody` for a position that walls stop), steps itself in `useUpdate`, takes hits in its collider's `onCollisionEnter`, and tells its parent what happened through
 callback props. [Hearth](packages/hearth) is built that way: its enemies, towers and shots each keep their own state, and each is
-tested alone with [`@rge/testing`](packages/testing), as React Testing Library tests one component. Plain functions in `.ts`
+tested alone with [`@tsengine/testing`](packages/testing), as React Testing Library tests one component. Plain functions in `.ts`
 files are for what you would extract in React too: tables, pure calculations, and code a search runs thousands of times.
 
 UI is laid out, not placed by hand. A `<Hud>` stays on screen while the camera moves, and a `<Flex>` in it places its
 children in a row or a column (see [docs/UI_PLAN.md](docs/UI_PLAN.md)):
 
 ```tsx
-import { useMutable, Flex, Hud, Sprite, Text } from "@rge/runtime/jsx";
+import { useMutable, Flex, Hud, Sprite, Text } from "@tsengine/runtime/jsx";
 
 interface PlayerHudProps {
   coins: number;
@@ -87,21 +87,21 @@ packages/
     src/typecheck/    type-checking generated code with TypeScript 7.1
     src/diagnostics/  diagnostic codes and formatting
     test/             end-to-end tests
-  runtime/    the authoring entry point (`@rge/runtime/jsx`: typed hooks and built-in elements), GameObject and World,
+  runtime/    the authoring entry point (`@tsengine/runtime/jsx`: typed hooks and built-in elements), GameObject and World,
               the built-ins (Entity, Sprite, Text, Flex, Button, Menu, Tilemap, …), the game state, sound, saves,
               `loadScene`, and `runtimeManifest` (what the compiler is told about the runtime)
   player/     the player's pure-TypeScript half: object tree → draw records, layout, collisions, the fixed step, a recording backend
-  player-node/ the Node host: the binding to `librge`, `rge dev` (hot reload, rewind, the inspector), screenshots, previews
-  cli/        `rge`: create, dev, check, build, screenshot, preview, package, lsp; and the game templates
-  testing/    `@rge/testing`: mount one compiled component in a headless world and test it, as React Testing Library does
-  language-server/ `rge lsp`: the compiler's RGE diagnostics in the editor (editors/vscode is the VS Code extension)
-  native/     `@rge/native`: where the built librge and host are found
+  player-node/ the Node host: the binding to `libtse`, `tse dev` (hot reload, rewind, the inspector), screenshots, previews
+  cli/        `tse`: create, dev, check, build, screenshot, preview, package, lsp; and the game templates
+  testing/    `@tsengine/testing`: mount one compiled component in a headless world and test it, as React Testing Library does
+  language-server/ `tse lsp`: the compiler's TSE diagnostics in the editor (editors/vscode is the VS Code extension)
+  native/     `@tsengine/native`: where the built libtse and host are found
   demo/       a small playable game; `npm run play:demo`
   kite/       a precision platformer: `npm run play:kite`, `npm run check:kite`
   hearth/     a tower defense: `npm run play:hearth`, `npm run check:hearth`
   example/    example components (their generated output is not committed: `npm run generate`)
-native/       librge, in C over raylib: the ABI every host calls (native/include/rge.h)
-host/         the small host: Rust + QuickJS-ng, linked statically against librge, for `--engine quickjs`
+native/       libtse, in C over raylib: the ABI every host calls (native/include/tse.h)
+host/         the small host: Rust + QuickJS-ng, linked statically against libtse, for `--engine quickjs`
 games/bramble a top-down adventure made from the template, checked from outside the repository by `npm run check:outside`
 ```
 
@@ -119,7 +119,7 @@ npm run format      # oxfmt --write (format:check to only verify)
 npm run example     # recompile packages/example/src → packages/example/generated, and check its scenes
 
 # The native player (needs cmake and a C compiler; on Linux, the X11/GL dev packages for a real window)
-npm run native:build    # librge with a real window → native/build
+npm run native:build    # libtse with a real window → native/build
 npm run play:demo       # play the demo under Node, with hot reload: save a file under src/ and the window updates
 npm run package         # packages/demo/dist/demo/: the game on Node's V8 as one executable (~125 MB; 10-30x faster script)
 npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host (needs cargo), game.js and assets/; a few MB, no JIT
@@ -128,22 +128,24 @@ npm run package -- --engine quickjs   # packages/demo/dist/demo/: the Rust host 
 ### Releases
 
 Pushing a tag `vX.Y.Z`, or running the Release workflow from the Actions tab with a version (it tags the branch it runs on),
-runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the packs (as
-`npm run dist`, stamped with that version) and attaches them to a GitHub release. A game outside this repository can depend
-on them by URL instead of building the engine itself (Linux x64 only, as the native binaries are built there):
+runs [`.github/workflows/release.yml`](.github/workflows/release.yml): it builds the packs (as `npm run dist`, stamped with
+that version), attaches them to a GitHub release and publishes them to npm as `@tsengine/*`, with provenance (Linux x64
+only, as the native binaries are built there). Publishing needs the `NPM_TOKEN` repository secret: an npm granular access
+token that can publish to the `@tsengine` organization. Once a release is on npm, a game starts with:
 
-```json
-"@rge/runtime": "https://github.com/nengler/react-game-engine/releases/download/v0.1.0/rge-runtime-0.1.0.tgz"
+```sh
+npx @tsengine/cli@latest create my-game     # pins every @tsengine/* package to that release
+cd my-game && npm install && npm run check
 ```
 
-List every `@rge/*` package the game uses at the same release; each pack depends on the others at its own version.
+Every `@tsengine/*` package a game uses should be at the same release; each depends on the others at its own version.
 
 Programmatic use:
 
 ```ts
-import { Compiler } from "@rge/compiler";
+import { Compiler } from "@tsengine/compiler";
 
-const compiler = new Compiler({ runtimeModule: "@rge/runtime" });
+const compiler = new Compiler({ runtimeModule: "@tsengine/runtime" });
 try {
   const result = compiler.compile("Player.tsx", source);
   if (result.ok) {

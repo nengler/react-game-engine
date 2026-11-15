@@ -1,4 +1,4 @@
-import { call, easeOut, sequence, tween, wait, type Sequence } from "@rge/runtime";
+import { call, easeOut, sequence, tween, wait, type Sequence } from "@tsengine/runtime";
 
 /** No cutscene: a sequence with nothing in it, already done. What a component's cutscene field starts as. */
 export function noCutscene(): Sequence {

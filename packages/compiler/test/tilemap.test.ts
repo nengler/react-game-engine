@@ -114,13 +114,13 @@ describe("importTilemap", () => {
     const source = tilemapsSource(new Map([["room", tilemap!]]), "scenes");
     assert.match(source, /export const tilemaps: Record<string, TilemapData> = \{\n  "room": \{/);
     assert.match(source, /flips: \[0,0,0,0,1,6\]/);
-    const dir = mkdtempSync(join(tmpdir(), "rge-tilemap-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-tilemap-"));
     try {
       mkdirSync(join(dir, "src"));
       mkdirSync(join(dir, "scenes"));
       writeFileSync(
         join(dir, "src/A.tsx"),
-        `import { Entity } from "@rge/runtime/jsx";\nexport function A() { return <Entity name="A" />; }\n`
+        `import { Entity } from "@tsengine/runtime/jsx";\nexport function A() { return <Entity name="A" />; }\n`
       );
       writeFileSync(join(dir, "scenes/room.tmj"), map());
       const repo = resolve(import.meta.dirname, "../../..");
@@ -429,12 +429,12 @@ string</property>
   });
 
   it("the CLI names each sheet by its place in the assets folder, and warns for one that is not there", () => {
-    const dir = mkdtempSync(join(tmpdir(), "rge-tilesets-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-tilesets-"));
     try {
       for (const sub of ["src", "scenes", "assets/art"]) mkdirSync(join(dir, sub), { recursive: true });
       writeFileSync(
         join(dir, "src/A.tsx"),
-        `import { Entity } from "@rge/runtime/jsx";\nexport function A() { return <Entity name="A" />; }\n`
+        `import { Entity } from "@tsengine/runtime/jsx";\nexport function A() { return <Entity name="A" />; }\n`
       );
       writeFileSync(join(dir, "assets/art/tiles.png"), "");
       writeFileSync(

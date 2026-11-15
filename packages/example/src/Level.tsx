@@ -1,4 +1,4 @@
-import { useMutable, useUpdate, AnimatedSprite, Camera, Entity, Sprite, Collider, Pointer, Shape, Text } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, AnimatedSprite, Camera, Entity, Sprite, Collider, Pointer, Shape, Text } from "@tsengine/runtime/jsx";
 
 import { Banner } from "./Banner.tsx";
 import Coin, { Trail } from "./Coin.tsx";

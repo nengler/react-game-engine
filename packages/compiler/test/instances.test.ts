@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { createInputState, Entity, World, type ShakeState } from "@rge/runtime";
+import { createInputState, Entity, World, type ShakeState } from "@tsengine/runtime";
 
 const repo = resolve(import.meta.dirname, "../../..");
 
@@ -25,7 +25,7 @@ function project(files: Record<string, string>) {
   return { dir, status: r.status, stderr: r.stderr, out: (name: string) => readFileSync(join(dir, "out", name), "utf8") };
 }
 
-const STATE = `import { createGameState } from "@rge/runtime";
+const STATE = `import { createGameState } from "@tsengine/runtime";
 interface Blow { power: number; crit: boolean }
 export const useGame = createGameState(
   { hits: 0 },
@@ -43,7 +43,7 @@ const TALLY = `export function makeTally() {
 }
 `;
 
-const ENEMY = `import { AnimatedSprite, Camera, Entity, useInput, useShake, useSquash, useMutable } from "@rge/runtime/jsx";
+const ENEMY = `import { AnimatedSprite, Camera, Entity, useInput, useShake, useSquash, useMutable } from "@tsengine/runtime/jsx";
 import { useGame } from "./GameState.ts";
 import { makeTally } from "./tally.ts";
 
@@ -119,7 +119,7 @@ describe("what a component owns and does itself", () => {
 
   it("keeps the message for an array changed in place", () => {
     const p = project({
-      "A.tsx": `import { Entity, useMutable, useUpdate } from "@rge/runtime/jsx";
+      "A.tsx": `import { Entity, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 export function A() { const s = useMutable({ items: [] as number[] }); useUpdate(() => { s.items = s.items.reverse(); }); return <Entity name="A" />; }
 `,
     });

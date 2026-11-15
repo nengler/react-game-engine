@@ -1,14 +1,14 @@
-import type { Backend, StorageBackend, WindowConfig } from "@rge/player";
+import type { Backend, StorageBackend, WindowConfig } from "@tsengine/player";
 import {
-  RGE_IN_HEIGHT,
-  RGE_IN_WIDTH,
-  RGE_TYPED_MAX,
-  RGE_OPEN_HIDDEN,
-  RGE_OPEN_RESIZABLE,
-  RGE_OPEN_SHARP,
-  RGE_OPEN_SMOOTH,
-  RGE_OPEN_VSYNC,
-} from "@rge/player";
+  TSE_IN_HEIGHT,
+  TSE_IN_WIDTH,
+  TSE_TYPED_MAX,
+  TSE_OPEN_HIDDEN,
+  TSE_OPEN_RESIZABLE,
+  TSE_OPEN_SHARP,
+  TSE_OPEN_SMOOTH,
+  TSE_OPEN_VSYNC,
+} from "@tsengine/player";
 
 import { findNativeLibrary, loadNative, type Native } from "./ffi.ts";
 
@@ -19,11 +19,11 @@ export interface Pixels {
   readonly rgba: Uint8Array;
 }
 
-/** A `Backend` over `librge`. Also reads frames back, which only a hidden window keeps. */
+/** A `Backend` over `libtse`. Also reads frames back, which only a hidden window keeps. */
 export class NodeBackend implements Backend {
   readonly #native: Native;
   readonly #encoder = new TextEncoder();
-  readonly #typed = new Uint32Array(RGE_TYPED_MAX);
+  readonly #typed = new Uint32Array(TSE_TYPED_MAX);
   #text = new Uint8Array(256);
   #offsets = new Int32Array(64);
   #width = 0;
@@ -33,7 +33,7 @@ export class NodeBackend implements Backend {
     this.#native = native;
   }
 
-  /** Saved data in librge's folder for the game (see `rge.h`): UTF-8 text, written whole and atomically. */
+  /** Saved data in libtse's folder for the game (see `tse.h`): UTF-8 text, written whole and atomically. */
   readonly storage: StorageBackend = {
     open: (gameId) => this.#native.storageOpen(gameId) === 0,
     read: (name) => {
@@ -53,13 +53,13 @@ export class NodeBackend implements Backend {
 
   open(config: WindowConfig): void {
     let options = 0;
-    if (config.resizable ?? true) options |= RGE_OPEN_RESIZABLE;
-    if (config.vsync ?? true) options |= RGE_OPEN_VSYNC;
-    if (config.hidden ?? false) options |= RGE_OPEN_HIDDEN;
-    if (config.smooth ?? false) options |= RGE_OPEN_SMOOTH;
-    if (config.sharp ?? false) options |= RGE_OPEN_SHARP;
+    if (config.resizable ?? true) options |= TSE_OPEN_RESIZABLE;
+    if (config.vsync ?? true) options |= TSE_OPEN_VSYNC;
+    if (config.hidden ?? false) options |= TSE_OPEN_HIDDEN;
+    if (config.smooth ?? false) options |= TSE_OPEN_SMOOTH;
+    if (config.sharp ?? false) options |= TSE_OPEN_SHARP;
     const code = this.#native.open(config.width, config.height, config.title, options);
-    if (code !== 0) throw new Error(`Could not open the window (librge error ${code}).`);
+    if (code !== 0) throw new Error(`Could not open the window (libtse error ${code}).`);
     this.#width = config.width;
     this.#height = config.height;
   }
@@ -110,13 +110,13 @@ export class NodeBackend implements Backend {
 
   measureText(text: string, size: number): { width: number; height: number } {
     const measured = this.#native.measureText(text, size);
-    if (measured === null) throw new Error(`librge could not measure text at size ${size}.`);
+    if (measured === null) throw new Error(`libtse could not measure text at size ${size}.`);
     return measured;
   }
 
   textureSize(handle: number): { width: number; height: number } {
     const size = this.#native.textureSize(handle);
-    if (size === null) throw new Error(`librge has no texture with handle ${handle}.`);
+    if (size === null) throw new Error(`libtse has no texture with handle ${handle}.`);
     return size;
   }
 
@@ -135,8 +135,8 @@ export class NodeBackend implements Backend {
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
     const count = this.#packTexts(texts);
     this.#native.frame(clearColor, records.subarray(0, length), length, this.#text, this.#offsets, count, input, keys);
-    this.#width = input[RGE_IN_WIDTH] as number;
-    this.#height = input[RGE_IN_HEIGHT] as number;
+    this.#width = input[TSE_IN_WIDTH] as number;
+    this.#height = input[TSE_IN_HEIGHT] as number;
   }
 
   /** What was typed in the last frame (see `Backend.typed`). */
@@ -174,11 +174,11 @@ export class NodeBackend implements Backend {
   }
 }
 
-/** Load `librge` (see `findNativeLibrary`) and wrap it. Throws a helpful error if it has not been built. */
+/** Load `libtse` (see `findNativeLibrary`) and wrap it. Throws a helpful error if it has not been built. */
 export function createNodeBackend(libraryPath: string | null = findNativeLibrary()): NodeBackend {
   if (libraryPath === null) {
     throw new Error(
-      "librge is not built: run `npm run native:build` (needs cmake, a C compiler and the X11/GL development packages on Linux), or set RGE_NATIVE_LIB."
+      "libtse is not built: run `npm run native:build` (needs cmake, a C compiler and the X11/GL development packages on Linux), or set TSE_NATIVE_LIB."
     );
   }
   return new NodeBackend(loadNative(libraryPath));

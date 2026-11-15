@@ -9,7 +9,7 @@ after(() => {
   cleanOutput();
 });
 
-const IMPORT = (names: string) => `import { ${names} } from "@rge/runtime/jsx";\n`;
+const IMPORT = (names: string) => `import { ${names} } from "@tsengine/runtime/jsx";\n`;
 
 function convert(body: string, names = "Entity, useRef, useMutable, useUpdate") {
   const result = getCompiler().convertToMutable("C.tsx", IMPORT(names) + body);

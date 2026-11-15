@@ -1,4 +1,4 @@
-import { FixedDriver, RGE_KEY_DOWN, RGE_KEY_PRESSED } from "@rge/player";
+import { FixedDriver, TSE_KEY_DOWN, TSE_KEY_PRESSED } from "@tsengine/player";
 
 import type { Controls } from "./body.ts";
 import type { GameEvent } from "./events.ts";
@@ -34,8 +34,8 @@ export function startPlayback(sim: Sim): Playback {
 export function playFrame(p: Playback, c: Controls, dt: number): Playback {
   const driver = p.driver.clone();
   const raw = new Uint8Array(PRESSES);
-  if (c.jumpPressed) raw[JUMP] = RGE_KEY_DOWN | RGE_KEY_PRESSED;
-  if (c.dashPressed) raw[DASH] = RGE_KEY_DOWN | RGE_KEY_PRESSED;
+  if (c.jumpPressed) raw[JUMP] = TSE_KEY_DOWN | TSE_KEY_PRESSED;
+  if (c.dashPressed) raw[DASH] = TSE_KEY_DOWN | TSE_KEY_PRESSED;
   let sim: Sim = p;
   let frozen = p.frozen;
   driver.advance(dt, raw, (_input, update, stepDt) => {
@@ -48,8 +48,8 @@ export function playFrame(p: Playback, c: Controls, dt: number): Playback {
       sim,
       {
         ...c,
-        jumpPressed: ((update[JUMP] as number) & RGE_KEY_PRESSED) !== 0,
-        dashPressed: ((update[DASH] as number) & RGE_KEY_PRESSED) !== 0,
+        jumpPressed: ((update[JUMP] as number) & TSE_KEY_PRESSED) !== 0,
+        dashPressed: ((update[DASH] as number) & TSE_KEY_PRESSED) !== 0,
       },
       stepDt,
       events

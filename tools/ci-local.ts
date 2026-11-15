@@ -215,7 +215,7 @@ function main(argv: string[]): number {
   let root = repo;
   let worktree: string | null = null;
   if (ref !== undefined && !list) {
-    worktree = mkdtempSync(join(tmpdir(), "rge-ci-local-"));
+    worktree = mkdtempSync(join(tmpdir(), "tse-ci-local-"));
     git(["worktree", "add", "--detach", worktree, ref], repo);
     root = worktree;
   }
@@ -241,7 +241,7 @@ function main(argv: string[]): number {
       `ci-local: ${jobs.map((job) => job.name).join(", ")} at ${commit}${dirty ? " (with uncommitted changes)" : ""}, Node ${process.version}`
     );
 
-    const outputs = mkdtempSync(join(tmpdir(), "rge-ci-output-"));
+    const outputs = mkdtempSync(join(tmpdir(), "tse-ci-output-"));
     const done = new Set<string>();
     const outcomes: Outcome[] = [];
     for (const job of jobs) {

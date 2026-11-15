@@ -1,4 +1,4 @@
-import { Entity, Pointer, Sprite, useMutable } from "@rge/runtime/jsx";
+import { Entity, Pointer, Sprite, useMutable } from "@tsengine/runtime/jsx";
 
 import type { Built, Fired } from "./battle.ts";
 import { useGame } from "./GameState.ts";

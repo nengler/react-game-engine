@@ -5,7 +5,7 @@
  * What is here: eight-way movement against the map and the people (through the engine's `moveActorX`/`moveActorY`), doors,
  * talking, picking things up, cutting bushes, shrines, hearts and dying, the gate, and the save (`saveOf`, `loadRun`).
  */
-import { moveActorX, moveActorY, type PixelActor } from "@rge/runtime";
+import { moveActorX, moveActorY, type PixelActor } from "@tsengine/runtime";
 
 import {
   BELLS_NEEDED,

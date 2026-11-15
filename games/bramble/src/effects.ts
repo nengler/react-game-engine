@@ -1,4 +1,4 @@
-import { createParticles, createSounds } from "@rge/runtime";
+import { createParticles, createSounds } from "@tsengine/runtime";
 
 import type { GameEvent } from "./rules/run.ts";
 

@@ -1,4 +1,4 @@
-import type { ScreenFit, ViewTransform } from "@rge/runtime";
+import type { ScreenFit, ViewTransform } from "@tsengine/runtime";
 
 /**
  * Where a root `<Screen>` lands in the window: the game's size, the scale on each axis, and the window position

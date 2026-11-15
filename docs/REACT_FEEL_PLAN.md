@@ -29,7 +29,7 @@ or a helper, but they stop being the only way to write a game that can be tested
 | A1 | Handlers are plain TypeScript, and a component body may compute with statements | Compiler | \~2.5–3.5 weeks | — |
 | A2 | Movement and collisions answered in the same step: `useBody` | Runtime, compiler | \~2–3 weeks | — |
 | A3 | Contacts carry data: `<Collider data>`, typed by tag | Runtime, compiler | \~3–4 days | — |
-| A4 | Testing one component without a window (`@rge/testing`) | New package, runtime | \~1–1.5 weeks | B7 |
+| A4 | Testing one component without a window (`@tsengine/testing`) | New package, runtime | \~1–1.5 weeks | B7 |
 | A5 | Component state in saves | Runtime | \~1 week | — |
 | A6 | What a component knows about others: lifting state up, and its timing | Guide, runtime | \~3–4 days | C3 |
 | A7 | Prove it: Hearth rewritten with its game in components | Game | \~2 weeks | A1–A5 |
@@ -48,8 +48,8 @@ or a helper, but they stop being the only way to write a game that can be tested
 | C3 | Context: `createContext`, a provider, `useContext` | Compiler, runtime | \~1.5–2 weeks | — |
 | C4 | A layout overlay and an inspector of the tree and the state | Player, player-node | \~1.5 weeks | — |
 | **D** | **Big wins the design makes cheap** | | | |
-| D1 | Rewind in `rge dev`: scrub back, edit, replay to the same frame | Player, player-node, CLI | \~2–3 weeks | C4 (shares UI) |
-| D2 | `RGE` diagnostics in the editor, as you type | Compiler, new editor package | \~2–3 weeks | — |
+| D1 | Rewind in `tse dev`: scrub back, edit, replay to the same frame | Player, player-node, CLI | \~2–3 weeks | C4 (shares UI) |
+| D2 | `TSE` diagnostics in the editor, as you type | Compiler, new editor package | \~2–3 weeks | — |
 | D3 | A web (canvas) backend, and examples that run in the guide | Player, new web package, guide | \~3–4 weeks | — |
 | D4 | Preview one component on its own, with props, as Storybook does | CLI, player | \~1 week | — |
 | D5 | Dependency-scoped `render()`: use what the compiler knows | Compiler | \~1–1.5 weeks | — |
@@ -106,7 +106,7 @@ each construct has to be added by hand. A React developer writes a `useUpdate` l
 2. **What the compiler still checks in a handler**: that a setter is not called during render, that state is not assigned
    directly (`health = 3` is an error naming `setHealth`), and that a state array or object is not mutated in place
    (`items.push(x)` on state; a local array is fine). The last is checked by type (state arrays are `readonly`) rather than by an
-   allowlist, so the TypeScript error appears in the editor with no `RGE` code needed.
+   allowlist, so the TypeScript error appears in the editor with no `TSE` code needed.
 3. **The component body may hold statements.** Everything before `return` that is not a hook call is a *derived block*: the
    compiler finds what state, props and game-state paths it reads, and runs the block again when any of them change, as it does for
    a derived `const` today. So this compiles:
@@ -192,7 +192,7 @@ function Player() {
   pixel movers in the games already assume.
 
 **Constraints.** `useBody` is a hook that returns an object with methods, which B6 must allow (custom hooks returning functions) or
-which the compiler knows as a built-in hook (as `useGame` is). The tracker needs a query by box (`rge_overlaps` already finds the
+which the compiler knows as a built-in hook (as `useGame` is). The tracker needs a query by box (`tse_overlaps` already finds the
 boxes that overlap, NATIVE_PLAN.md); in script, the sweep it replaces is the fallback. Parity holds because movement is whole pixels
 and order is fixed.
 
@@ -220,7 +220,7 @@ where Kite's rules use one for the constants. The dash, climbing, wall jumps and
 
 ### A3. Contacts carry data
 
-**Built 2026-11-13**, typed through a global `ColliderData` interface rather than `declare module "@rge/runtime"` (DESIGN.md, "What
+**Built 2026-11-13**, typed through a global `ColliderData` interface rather than `declare module "@tsengine/runtime"` (DESIGN.md, "What
 `other` exposes"). Not done: the games still pass values through the game state (the A7 rewrite moves Hearth to `data`).
 
 **Today.** `Contact` has `tag` and `owner`. A player touching a coin knows it is `"coin"` but not that it is worth 5; an enemy
@@ -265,11 +265,11 @@ script (`runScript`, `packages/player/src/harness.ts`) and reading the game stat
 Testing Library for one component, so a component that owns its logic is harder to test than the same logic in `rules/`. That
 alone is a reason authors would keep logic out of components.
 
-**Proposal.** A small package, `@rge/testing`, over the headless `World` the runtime already has (`tick`, `reportCollision`,
+**Proposal.** A small package, `@tsengine/testing`, over the headless `World` the runtime already has (`tick`, `reportCollision`,
 `reportPress`):
 
 ```ts
-import { render } from "@rge/testing";
+import { render } from "@tsengine/testing";
 import { Enemy } from "../generated/Enemy.ts";
 
 test("an enemy dies after three hits", () => {
@@ -295,11 +295,11 @@ test("the player walks right", () => {
 - Queries: `find(nameOrClass)`, `findAll`, `state(Component)` (its `useState` values and refs, read through the accessor B7 adds),
   and `records()` for what would be drawn.
 - Tests import the generated class, as `game.ts` does today; the testing package runs the compiler first if the generated code is
-  older than the source (as `rge check` does).
+  older than the source (as `tse check` does).
 
 **Done when**
 
-- [x] `@rge/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
+- [x] `@tsengine/testing` exists with `render`, `step`, `input`, `collide`, `press`, `setProps` and the queries
 - [x] The template's tests show it (A8: beside a whole-game replay; the template has no rules left to test)
 - [x] A7's Hearth has component tests for its enemies and towers
 
@@ -371,7 +371,7 @@ game state, which means the player's position lives there and not in the player.
 
 **Built 2026-11-13**, in place (the old version is the commit before it, `stepBattle` in `rules/battle.ts`). Findings, the costs and
 what still did not read like React: NEXT_PRIORITIES.md, "Findings from Hearth in components". It took four engine additions:
-`overlapping(tag)` on `useBody`, `<Game timeScale paused>`, `once` sounds, and `collisions` / `place` in `@rge/testing`.
+`overlapping(tag)` on `useBody`, `<Game timeScale paused>`, `once` sounds, and `collisions` / `place` in `@tsengine/testing`.
 
 **Why Hearth.** Its world is a list of things that each have their own state and behaviour: enemies walk a path and take damage,
 towers aim and fire, shots fly and hit. Today all of it is `stepBattle` in `rules/` and the components are views (`Enemy.tsx` takes
@@ -382,7 +382,7 @@ eight props). It has 27 rule tests and replays to compare against.
 - Rewrite Hearth so that `Enemy`, `Tower` and `Shot` own their state and step themselves in `useUpdate`, collide with `A2`/`A3`, and
   report up by callbacks; `Play` keeps the wave, the gold and the lives.
 - Keep the old version on a branch or in a folder for the comparison; do not ship both.
-- Port the rule tests to `@rge/testing` (A4), and keep the whole-game replays.
+- Port the rule tests to `@tsengine/testing` (A4), and keep the whole-game replays.
 - Measure: lines of code, the step cost at wave 10 under V8 and QuickJS (each enemy renders each step either way), and how the
   tests read.
 - Write what still did not read like React, as each game has.
@@ -398,9 +398,9 @@ eight props). It has 27 rule tests and replays to compare against.
 
 **Built 2026-11-13.** The guide's mental model, "Coming from React", "Three places code can go", the recipes and "Custom hooks
 and plain functions" put game code in components and plain functions where React would extract them; "When something goes
-wrong" has the questions A2 and A6 raised. The template's hero is `src/Hero.tsx` with `useBody`, tested alone with `@rge/testing`
+wrong" has the questions A2 and A6 raised. The template's hero is `src/Hero.tsx` with `useBody`, tested alone with `@tsengine/testing`
 (`test/hero.test.ts`), which is now packed (`npm run pack`) and a dev dependency of a new game. Checked by making a game from the
-packs outside the repository and running `rge check` (3 tests, parity with the Rust host).
+packs outside the repository and running `tse check` (3 tests, parity with the Rust host).
 
 **Work.**
 
@@ -408,7 +408,7 @@ packs outside the repository and running `rge check` (3 tests, parity with the R
 - The guide's "mental model" and "Coming from React" say that game code goes in components, as in React, and that a plain function
   in a `.ts` file is for what you would extract in React too (a pure calculation, a table, something a search runs many times).
   The "Three places code can go" table changes to match.
-- The template's `src/rules/move.ts` becomes a component with `useBody`, and its tests use `@rge/testing`.
+- The template's `src/rules/move.ts` becomes a component with `useBody`, and its tests use `@tsengine/testing`.
 - "When something goes wrong" gets the new questions: "my enemy does not see the player" (A6), "my collision is a step late" (A2).
 
 **Done when**
@@ -534,10 +534,10 @@ export function Label({ color = "#fff1d6", children }: LabelProps) {
 
 It fails five ways:
 
-- `RGE1004`: `TextChild` is not exported as a type.
-- `RGE1208`: `children` must be typed `Child`, which means elements.
-- `RGE1302`: `{children}` inside a `<Text>` is not understood.
-- `RGE1202`, twice at the use: a component cannot take text, or `{expressions}` other than conditions and lists, as children.
+- `TSE1004`: `TextChild` is not exported as a type.
+- `TSE1208`: `children` must be typed `Child`, which means elements.
+- `TSE1302`: `{children}` inside a `<Text>` is not understood.
+- `TSE1202`, twice at the use: a component cannot take text, or `{expressions}` other than conditions and lists, as children.
 
 **Decided 2026-11-13: no inherited text style.** A first draft proposed a `<TextStyle>` element whose style every `<Text>` below it
 would inherit, as CSS does. It is dropped. `<Text>` already takes its style as props, and a wrapper component is how React shares
@@ -694,7 +694,7 @@ so. Hooks still cannot be recursive.
 **Open questions.**
 
 1. Whether a hook may return JSX (a "render hook"). Not proposed: components already do that.
-2. Whether the inliner's output should be visible (`rge explain Player.tsx`, printing the component with its hooks inlined).
+2. Whether the inliner's output should be visible (`tse explain Player.tsx`, printing the component with its hooks inlined).
    Useful for debugging; small.
 
 **Done when**
@@ -710,7 +710,7 @@ so. Hooks still cannot be recursive.
 state becoming a private field, so tests and tools that read a component's state keep working. See DESIGN.md, "Roots".
 
 **Today.** The generated class extends its root built-in (DESIGN.md, "Roots and component forms"), so state, refs and props cannot
-reuse the root's member names (`RGE1103`): no `width` prop on a component whose root is a `<Collider>`, no `image` on a `<Sprite>`
+reuse the root's member names (`TSE1103`): no `width` prop on a component whose root is a `<Collider>`, no `image` on a `<Sprite>`
 root, no state called `name` on an `<Entity>` root. There is no React equivalent, and the rule follows from code the author never
 sees. B2's shorthand props would widen the list.
 
@@ -721,14 +721,14 @@ sees. B2's shorthand props would widen the list.
   as fast as plain fields in V8, and are supported by QuickJS-ng.
 - Setters (`setHealth`) become private methods too, or are called directly where the compiler emits them.
 - Handlers and render code change only in the member names they emit; the IR is unchanged.
-- `RGE1103` goes, except for the names the runtime itself calls on every object (`render`, `commitState`, `markDirty`…), which
+- `TSE1103` goes, except for the names the runtime itself calls on every object (`render`, `commitState`, `markDirty`…), which
   stay reserved because a component must not override them by accident. Those names are not ones an author picks for state.
 
 **Constraints.**
 
 - **Hot reload** saves state by name (`"Player.health"` in `saveHotState`); the saved keys are strings and do not change.
 - **Tests and the harness** sometimes read a component's state from outside (`player.find(...).health`). Those reads move to an
-  explicit accessor (`debugState()`, which C4's inspector and A4's `@rge/testing` need anyway).
+  explicit accessor (`debugState()`, which C4's inspector and A4's `@tsengine/testing` need anyway).
   A search of the games' tests sizes this before starting.
 - **Benchmarks.** `npm run bench:check` guards against private fields costing anything under QuickJS.
 
@@ -740,7 +740,7 @@ sees. B2's shorthand props would widen the list.
 **Done when**
 
 - [x] A component rooted in a `<Collider>` can take a `width` prop, and one rooted in an `<Entity>` can have state called `name`
-- [x] `RGE1103` is gone for these names, the runtime's method names included (they are renamed too)
+- [x] `TSE1103` is gone for these names, the runtime's method names included (they are renamed too)
 - [x] Hot reload, parity and the bench pass unchanged
 
 ---
@@ -950,9 +950,9 @@ rather than a WebSocket (Node has no WebSocket server built in; it is the same e
 
 **Today.** There is no way to see the tree or its state while the game runs. `docs/CLAY_NOTES.md` notes Clay's debug overlay
 ("a good tool for this engine too… not planned"). Debugging a `<Flex>` today means reasoning about the layout code or reading
-`rge screenshot` output; debugging state means `console.log`.
+`tse screenshot` output; debugging state means `console.log`.
 
-**Proposal.** A development overlay in `rge dev`, toggled by a key (F1 by default, configurable in `<Game>`), drawn by the player
+**Proposal.** A development overlay in `tse dev`, toggled by a key (F1 by default, configurable in `<Game>`), drawn by the player
 over the game. It is never in a packaged build.
 
 1. **Layout overlay.** Outline every `<Flex>` box, its padding and its gap; outline every `Collider` (by layer colour) and every
@@ -967,7 +967,7 @@ over the game. It is never in a packaged build.
 
 **Where it runs. Decided 2026-11-13: the overlay in the game window, the panels in a browser page.** The overlay (outlines and
 hover labels) draws through the same backend as the game (records after the game's), so it works under Node and in the web backend
-(D3). The tree and game state panels are a local web page that `rge dev` serves on a port and prints the address of, talking to the
+(D3). The tree and game state panels are a local web page that `tse dev` serves on a port and prints the address of, talking to the
 running game over a WebSocket: a browser is far better than raylib at trees, scrolling and text fields, and it keeps the game
 window free of debugging UI. The page does not need D3; it is ordinary HTML that shows what the game sends.
 
@@ -977,7 +977,7 @@ too slow for large trees, so the inspector reads only the selected component eac
 
 **Done when**
 
-- [x] The layout overlay draws `Flex` boxes, colliders and pointers, toggled by a key, in `rge dev` only
+- [x] The layout overlay draws `Flex` boxes, colliders and pointers, toggled by a key, in `tse dev` only
 - [x] The tree inspector shows components with props, state, refs, subscriptions and render counts
 - [x] The game state inspector shows the store and each action's diff
 - [x] Editing a value works and is marked as development-only
@@ -987,9 +987,9 @@ too slow for large trees, so the inspector reads only the selected component eac
 
 ## D. Big wins the design makes cheap
 
-### D1. Rewind in `rge dev`
+### D1. Rewind in `tse dev`
 
-**Built 2026-11-13** (DESIGN.md, "Rewind in `rge dev`"). Tried on Hearth (its winning game, to the end of wave 10, every frame
+**Built 2026-11-13** (DESIGN.md, "Rewind in `tse dev`"). Tried on Hearth (its winning game, to the end of wave 10, every frame
 replays exactly) and on Kite (the first three rooms' jumps), by tests that play the games' replays through rewind and go back;
 not yet tried by a person in a window. Effect stores are not snapshotted: particles in flight and a playing sound are not put back
 (new bursts and sounds in the replayed frames come again, and sounds are muted while replaying).
@@ -1010,7 +1010,7 @@ other tool.
 
 **Proposal.**
 
-1. **Record while playing.** `rge dev` records every step's input (the `InputFrame`s it already builds) in a ring buffer, by
+1. **Record while playing.** `tse dev` records every step's input (the `InputFrame`s it already builds) in a ring buffer, by
    default the last 5 minutes (at 60 steps a second and tens of bytes a step, a few megabytes).
 2. **Snapshots.** Every N steps (one second by default), take a snapshot: the game state (`useGame.getState()`, structurally
    cloned), the component tree's hot state (`captureHotState`), and the effect stores' state (particles in flight, timers from C2,
@@ -1029,7 +1029,7 @@ other tool.
 
 - **Determinism is the whole feature.** Anything a game does that is not a function of the step (reading `Date.now()`, using
   `Math.random` in rules, reading storage mid-play) breaks replay. Kite and Bramble's rules are already deterministic; the
-  template's rules should be too. `rge dev` can detect a divergence (re-run a span twice and compare game state) and say which
+  template's rules should be too. `tse dev` can detect a divergence (re-run a span twice and compare game state) and say which
   step diverged.
 - **Effect stores** (`createParticles`, `createSounds`, `createShake`) hold state outside the game state. Each needs
   `snapshot()` / `restore()`; sounds are muted during re-runs and not restored (a sound that was playing at S is not resumed).
@@ -1045,18 +1045,18 @@ other tool.
 
 **Done when**
 
-- [x] `rge dev` records input and snapshots, and can pause, step back and scrub
+- [x] `tse dev` records input and snapshots, and can pause, step back and scrub
 - [x] Saving a file while paused re-runs to the same step with the new code
 - [x] Sounds are muted while re-running; effect stores are not snapshotted (particles in flight are lost on a restore)
 - [x] A divergence is detected and the step named
 - [x] "Save a moment" writes a replay that a test runs
 - [x] Tried on Kite (a wall-jump timing) and Hearth (a wave), with the cost measured
 
-### D2. `RGE` diagnostics in the editor
+### D2. `TSE` diagnostics in the editor
 
 **Today.** The subset is the biggest cost three games in a row (NEXT_PRIORITIES.md, "Findings from the third game", item 1). Each
-`RGE` message is good, but the author sees it only when the compiler runs: on save in `rge dev`, or in `rge check`. In the editor,
-TypeScript sees the `.tsx` against `@rge/runtime/jsx`'s declarations and is happy with `let`, loops and `.push` in a component
+`TSE` message is good, but the author sees it only when the compiler runs: on save in `tse dev`, or in `tse check`. In the editor,
+TypeScript sees the `.tsx` against `@tsengine/runtime/jsx`'s declarations and is happy with `let`, loops and `.push` in a component
 body. The author writes React, saves, and is told no.
 
 **Why it matters.** Shown as you type, with a quick fix, a subset rule feels like a lint rule; shown after a save in a terminal, it
@@ -1064,16 +1064,16 @@ feels like the engine refusing your code. This is the cheapest way to make the s
 
 **Proposal.**
 
-1. **A language server.** A small LSP server in a new package (`@rge/language-server`) that runs the compiler's front half (parse
+1. **A language server.** A small LSP server in a new package (`@tsengine/language-server`) that runs the compiler's front half (parse
    and analyse, `packages/compiler/src/analyzer` and `transform`) on each change of a `.tsx` under a game's source folder, and
-   publishes `RGE` diagnostics at their source ranges. It runs beside TypeScript's own server, not inside it.
+   publishes `TSE` diagnostics at their source ranges. It runs beside TypeScript's own server, not inside it.
 2. **Quick fixes.** Many messages already say what to write instead; the common ones become code actions:
-   - `RGE1102` `useEffect` → the replacement the message names (`useMount` with a cleanup, a derived `const`).
+   - `TSE1102` `useEffect` → the replacement the message names (`useMount` with a cleanup, a derived `const`).
    - A loop or `let` in a component body → "Move to a function in `rules/`", extracting the block into a plain function in a
      `.ts` file and calling it.
    - A `text=` on `<Text>` → move into children.
    - A whole-state selector → `useGame.actions()` (B4).
-3. **A VS Code extension** that starts the server for folders whose `package.json` has an `"rge"` field or a `@rge/runtime` dependency. Other editors
+3. **A VS Code extension** that starts the server for folders whose `package.json` has an `"tse"` field or a `@tsengine/runtime` dependency. Other editors
    use the server directly through their LSP support.
 4. **Hover help.** Hovering a built-in, hook or diagnostic code shows the guide's reference entry (the guide already has an index:
    `npm run docs:index`).
@@ -1085,23 +1085,23 @@ feels like the engine refusing your code. This is the cheapest way to make the s
   are supported, a plugin is less to install.
 - **Speed.** The compiler holds a TypeScript 7 API process (`typescript/sync`); the server keeps one alive and re-analyses only the
   changed file. Analysis without type checking should be well under 100 ms per file; type checking of generated code stays in
-  `rge check` and `rge dev`.
+  `tse check` and `tse dev`.
 - **Diagnostics that need other files** (a prop's type from another component) use the project's other sources as the compiler
   already does across files.
 
 **Done when**
 
-- [x] The language server publishes `RGE` diagnostics for a game's `.tsx` as it is edited, at the right ranges
+- [x] The language server publishes `TSE` diagnostics for a game's `.tsx` as it is edited, at the right ranges
 - [x] Quick fixes for at least the four messages above
 - [x] A VS Code extension, installable from a local `.vsix` (nothing published, as with the packages)
 - [x] The guide's setup step mentions it
-- [ ] Checked by writing a component from scratch in the editor and never running `rge check` to find a subset error
+- [ ] Checked by writing a component from scratch in the editor and never running `tse check` to find a subset error
 
-**Done (2026-11-13), but for the check in a real editor.** `@rge/language-server`, run as `rge lsp`; `editors/vscode` (`npm run
+**Done (2026-11-13), but for the check in a real editor.** `@tsengine/language-server`, run as `tse lsp`; `editors/vscode` (`npm run
 vscode:pack`). Since A1 a loop or `let` in a component body is allowed, so that fix is not needed; the fixes are a missing import, an
 import from `"react"`, `useEffect(…, [])` to `useMount`, `useMemo` and `useCallback` to the value and the function, `<Text text>`
 to children, a whole-state selector to `useGame.actions()`, and a name the authoring module does not export. Hover help is left
-to TypeScript's own server, which already shows each built-in's and hook's documentation from `@rge/runtime/jsx`. The last box
+to TypeScript's own server, which already shows each built-in's and hook's documentation from `@tsengine/runtime/jsx`. The last box
 needs a person in VS Code: a test takes a component written as for React to one that compiles with the quick fixes alone, and a
 test drives the extension through a stand-in `vscode` module, but no editor was opened. TypeScript 7.1's beta was not checked
 for plugin support: a separate server works whatever it supports. See DESIGN.md, "Diagnostics in the editor".
@@ -1122,10 +1122,10 @@ interface (`packages/player/src/backend.ts`) is 16 members: open and close a win
 
 **Proposal.**
 
-1. **`@rge/player-web`.** A `Backend` over `<canvas>` 2D (WebGL later only if measured): textures from `fetch`ed images, sounds
+1. **`@tsengine/player-web`.** A `Backend` over `<canvas>` 2D (WebGL later only if measured): textures from `fetch`ed images, sounds
    through Web Audio (with an unlock on first input, as browsers require), keyboard, mouse and the Gamepad API mapped to the same
    input arrays, `localStorage` behind the `Storage` interface (NEXT_PRIORITIES.md already notes this).
-2. **`rge build --web`.** Bundles the compiled game (the existing `bundle` step, aimed at the browser) and copies the assets into a
+2. **`tse build --web`.** Bundles the compiled game (the existing `bundle` step, aimed at the browser) and copies the assets into a
    folder that any static server can host.
 3. **Parity.** The draw records are the same, so the recording backend's parity test can compare the web backend's canvas calls
    against the native one's, record for record. Pixel output will differ (fonts, filtering); records will not.
@@ -1144,7 +1144,7 @@ interface (`packages/player/src/backend.ts`) is 16 members: open and close a win
 
 **Done when**
 
-- [ ] `@rge/player-web` implements `Backend`; Kite, Hearth and Bramble play in Chrome and Firefox from `rge build --web`
+- [ ] `@tsengine/player-web` implements `Backend`; Kite, Hearth and Bramble play in Chrome and Firefox from `tse build --web`
 - [ ] Sound, gamepads, full screen and saves work in the browser
 - [ ] Records match the native backend's for the parity replays
 - [ ] At least the guide's start page and five reference entries have examples that run in the page
@@ -1152,7 +1152,7 @@ interface (`packages/player/src/backend.ts`) is 16 members: open and close a win
 
 ### D4. Preview one component on its own
 
-**Today.** `rge screenshot` renders a game after an input script. There is no way to render *one component* with given props, as
+**Today.** `tse screenshot` renders a game after an input script. There is no way to render *one component* with given props, as
 Storybook does for React. Building a `<HealthBar>`, a `<MenuButton>` or a dialogue box means playing the game to the point where it
 shows.
 
@@ -1169,8 +1169,8 @@ shows.
    ```
 
    A story may also set game state (`state: { run: … }`) for a component that reads `useGame`, and an input script to run first.
-2. **`rge preview`.** Opens a window (or, with D3, a browser page) showing one story, with hot reload; arrow keys switch stories.
-3. **`rge preview --screenshot`.** Writes one PNG per story; with a stored baseline, `rge check` fails on a changed image. That is
+2. **`tse preview`.** Opens a window (or, with D3, a browser page) showing one story, with hot reload; arrow keys switch stories.
+3. **`tse preview --screenshot`.** Writes one PNG per story; with a stored baseline, `tse check` fails on a changed image. That is
    visual regression testing, which the games' UI (Hearth's panels, Bramble's menus) has none of today.
 
 **Constraints.** A story renders the component as a root under a minimal `<Game>` with the game's assets and fonts. Components that
@@ -1178,8 +1178,8 @@ need a provider (C3) get it from the story (`wrap`). The compiler compiles stori
 
 **Done when**
 
-- [x] `rge preview` shows a component's stories with hot reload
-- [x] `--screenshot` writes PNGs, and `rge check` compares them with a baseline
+- [x] `tse preview` shows a component's stories with hot reload
+- [x] `--screenshot` writes PNGs, and `tse check` compares them with a baseline
 - [x] Hearth and Bramble have stories for their UI components
 - [x] The guide's testing section shows it
 
@@ -1245,9 +1245,9 @@ Section A is the main track: it is the goal. The rest is grouped around it so ea
 1. **Cheap, visible wins** (about 1 week): B1 (root names), B4 (`useGame.actions()`), B5 (`useStore`). Each removes a line that
    confuses a newcomer, and none depends on another.
 2. **The compiler's foundations for section A** (about 5–6 weeks): A1 (handlers as plain TypeScript, statements in the body), then
-   B7 (no root name clashes, which gives `@rge/testing` its state accessor) and B6 (hooks that may return functions, which
+   B7 (no root name clashes, which gives `@tsengine/testing` its state accessor) and B6 (hooks that may return functions, which
    `useBody` needs unless it is a built-in hook). D5 (dependency-scoped render) fits here if A1's derived blocks are built with it.
-3. **The runtime for section A** (about 5–6 weeks): A2 (`useBody`), A3 (contact data), A4 (`@rge/testing`), A5 (component state in
+3. **The runtime for section A** (about 5–6 weeks): A2 (`useBody`), A3 (contact data), A4 (`@tsengine/testing`), A5 (component state in
    saves), C3 (context) and A6 (sharing state, which leans on C3).
 4. **The proof** (about 2.5 weeks): A7 (Hearth with its game in components), then A8 (the guide, the template and the README).
    What A7 finds may reorder what follows.

@@ -84,11 +84,11 @@ real boilerplate.
 
 ### 4. Render stays pure
 
-No writes in the component body (`RGE1402` today, and #121 keeps it for its fields). A write belongs in a handler.
+No writes in the component body (`TSE1402` today, and #121 keeps it for its fields). A write belongs in a handler.
 
 ## Open: changing a list or an object in place
 
-Today a list is replaced whole: `s.enemies = [...s.enemies, e]`, and `push` is `RGE1301`. Once fields are written directly, authors
+Today a list is replaced whole: `s.enemies = [...s.enemies, e]`, and `push` is `TSE1301`. Once fields are written directly, authors
 will write `s.enemies.push(e)` and `enemy.hp -= 1` inside a list, and refusing it makes the model stop at the first list. This is the
 largest piece of work here, and the question to settle before anything else.
 
@@ -276,7 +276,7 @@ Since written: question 4 is decided (`useRef` is removed), and what is left, wi
 
 Settled:
 
-- **One hook, `useMutable`, and no `useState`** (open question 1). A `useState` is `RGE1102`, whose message writes the conversion
+- **One hook, `useMutable`, and no `useState`** (open question 1). A `useState` is `TSE1102`, whose message writes the conversion
   out in the author's names (`const s = useMutable({ hp: 3 })`, read as `s.hp`, and `setHp(v)` becomes `s.hp = v`), once: not
   again at the import, nor at each read or setter call. The editor's quick fix converts the whole file, and so does
   `node tools/codemod-mutable.ts <files or folders>`; both are `convertToMutable` (`packages/compiler/src/codemod/mutable.ts`). The
@@ -293,7 +293,7 @@ Settled:
   after the component is unmounted a write through it does nothing and warns in development. In render (`total(s)`,
   `<Camera shake={shake}>`) it is a copy of the committed fields, typed `Readonly<…>`.
 - **From outside**, a compiled component's `component.s.vx` reads the committed value and `component.s.vx = 1` writes through the
-  setter, so tests and tools write state the way handlers do. `@rge/testing`'s `state()` shows a mutable as `{ s: { vx } }`.
+  setter, so tests and tools write state the way handlers do. `@tsengine/testing`'s `state()` shows a mutable as `{ s: { vx } }`.
 
 - **In-place writes to lists and objects: option 2, the compiler lowers them to copies** (open question 2). Option 3 (versions) was
   the lean, and was set aside because a version on the slot cannot reach what the engine compares item by item: a keyed list hands

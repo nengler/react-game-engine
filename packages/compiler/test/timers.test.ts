@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** Timers (REACT_FEEL_PLAN.md, C2): `after`, `every` and `cancelTimers` in handlers, the component's own. */
 import { after as afterAll, describe, it } from "node:test";
 
-import { Entity, Text, World, freeze, type InputState } from "@rge/runtime";
+import { Entity, Text, World, freeze, type InputState } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
@@ -12,7 +12,7 @@ afterAll(() => {
   cleanOutput();
 });
 
-const FLASH = `import { Text, after, cancelTimers, every, useInput, useMount, useMutable } from "@rge/runtime/jsx";
+const FLASH = `import { Text, after, cancelTimers, every, useInput, useMount, useMutable } from "@tsengine/runtime/jsx";
 
 export function Flash() {
   const s = useMutable({ flash: false, ticks: 0 });
@@ -94,7 +94,7 @@ describe("after, every and cancelTimers", () => {
   });
 
   it("are refused while rendering, and must be imported", () => {
-    const rendering = compileErrors(`import { Text, after, useMutable } from "@rge/runtime/jsx";
+    const rendering = compileErrors(`import { Text, after, useMutable } from "@tsengine/runtime/jsx";
 export function A() {
   const s = useMutable({ n: 0 });
   const x = after(1, () => { s.n = 1; });
@@ -104,7 +104,7 @@ export function A() {
       rendering.some((d) => d.code === DiagnosticCode.UnsupportedExpression && /only valid as a statement in a handler/.test(d.message)),
       JSON.stringify(rendering)
     );
-    const missing = compileErrors(`import { Text, useMount, useMutable } from "@rge/runtime/jsx";
+    const missing = compileErrors(`import { Text, useMount, useMutable } from "@tsengine/runtime/jsx";
 export function A() {
   const s = useMutable({ n: 0 });
   useMount(() => { after(1, () => { s.n = 1; }); });

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 /** Reading a running game: findComponent, findComponents and componentState, outside `render`. */
 import { describe, it } from "node:test";
 
-import { createPlayer, RecordingBackend } from "@rge/player";
-import { Entity } from "@rge/runtime";
+import { createPlayer, RecordingBackend } from "@tsengine/player";
+import { Entity } from "@tsengine/runtime";
 
 import { componentState, findComponent, findComponents } from "../src/index.ts";
 

@@ -1,4 +1,4 @@
-import { Sprite } from "@rge/runtime/jsx";
+import { Sprite } from "@tsengine/runtime/jsx";
 
 interface MuzzleFlashProps {
   on: boolean;

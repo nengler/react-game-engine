@@ -1,24 +1,24 @@
 /**
- * `rge preview [folder]`: the game's stories (`stories/<Component>.stories.ts`), one component at a time.
+ * `tse preview [folder]`: the game's stories (`stories/<Component>.stories.ts`), one component at a time.
  *
- *   rge preview                       a window showing the stories, with hot reload; F5 and F6 switch story
- *   rge preview --story HealthBar     start at a component's first story (or `HealthBar/Hurt`, one story)
- *   rge preview --screenshot          store a PNG of every story in stories/screenshots/, which `rge check` compares
- *   rge preview --screenshot --story HealthBar/Hurt    store just that one again
- *   rge preview --compare [--out dir] render every story and compare with the stored PNGs; exit 1 if any differ
+ *   tse preview                       a window showing the stories, with hot reload; F5 and F6 switch story
+ *   tse preview --story HealthBar     start at a component's first story (or `HealthBar/Hurt`, one story)
+ *   tse preview --screenshot          store a PNG of every story in stories/screenshots/, which `tse check` compares
+ *   tse preview --screenshot --story HealthBar/Hurt    store just that one again
+ *   tse preview --compare [--out dir] render every story and compare with the stored PNGs; exit 1 if any differ
  *
- * The screenshots and the comparison use the headless (software-rendered) build of librge, as `rge screenshot` does.
+ * The screenshots and the comparison use the headless (software-rendered) build of libtse, as `tse screenshot` does.
  */
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 
-import { compareScreenshots, createNodeBackend, loadPreviews, previewWithReload, writeScreenshots } from "@rge/player-node";
+import { compareScreenshots, createNodeBackend, loadPreviews, previewWithReload, writeScreenshots } from "@tsengine/player-node";
 
 import { loadGame, UsageError } from "../config.ts";
 import { findLibrary } from "../native.ts";
 
-const USAGE = "usage: rge preview [folder] [--story <Component or Component/Story>] [--screenshot | --compare [--out dir]]";
+const USAGE = "usage: tse preview [folder] [--story <Component or Component/Story>] [--screenshot | --compare [--out dir]]";
 
 export async function previewCommand(argv: readonly string[]): Promise<number> {
   const positional: string[] = [];
@@ -42,11 +42,11 @@ export async function previewCommand(argv: readonly string[]): Promise<number> {
     const library = findLibrary("headless");
     if (library === null) {
       console.error(
-        "rge preview: the headless librge was not found (npm run native:build:headless in this repository, or install @rge/native)."
+        "tse preview: the headless libtse was not found (npm run native:build:headless in this repository, or install @tsengine/native)."
       );
       return 1;
     }
-    process.env["RGE_NATIVE_LIB"] ??= library;
+    process.env["TSE_NATIVE_LIB"] ??= library;
     const previews = await loadPreviews(game.dir);
     if (flags.has("screenshot")) {
       const written = writeScreenshots(game.dir, previews, story);
@@ -55,7 +55,7 @@ export async function previewCommand(argv: readonly string[]): Promise<number> {
       );
       return 0;
     }
-    const out = resolve(typeof flags.get("out") === "string" ? (flags.get("out") as string) : mkdtempSync(join(tmpdir(), "rge-previews-")));
+    const out = resolve(typeof flags.get("out") === "string" ? (flags.get("out") as string) : mkdtempSync(join(tmpdir(), "tse-previews-")));
     const tolerance = Number(flags.get("tolerance") ?? 0);
     const differences = compareScreenshots(game.dir, previews, out, tolerance);
     if (differences.length === 0) {
@@ -63,7 +63,7 @@ export async function previewCommand(argv: readonly string[]): Promise<number> {
       return 0;
     }
     for (const difference of differences) console.log(`${difference.kind.padEnd(8)} ${difference.id}: ${difference.detail}`);
-    console.log(`The pictures as they are now are in ${out}. If the change is meant, store them with: rge preview --screenshot`);
+    console.log(`The pictures as they are now are in ${out}. If the change is meant, store them with: tse preview --screenshot`);
     return 1;
   }
 

@@ -1,15 +1,15 @@
 /**
- * `rge package [folder] [--engine node|quickjs] [--headless] [--entry <file>] [--name <name>]`: build a game as a folder you can
+ * `tse package [folder] [--engine node|quickjs] [--headless] [--entry <file>] [--name <name>]`: build a game as a folder you can
  * hand to someone, `dist/<name>/` in the game's folder. `--headless` uses the software renderer (no window; for CI) instead of a
  * real window. `--engine` picks what runs the game's script:
  *
  * - `node` (the default): `<name>` is a Node single executable application (Node's own binary with the bundled game inside it,
- *   so V8 and its JIT), `lib/` (librge as a shared library), `node_modules/` (koffi, which loads it) and `assets/`. About
+ *   so V8 and its JIT), `lib/` (libtse as a shared library), `node_modules/` (koffi, which loads it) and `assets/`. About
  *   100 MB, most of it Node; for desktops, where script time matters more than size.
  * - `quickjs`: `<name>` is the Rust host (which with no arguments runs the `game.js` beside it), `game.js` and `assets/`. A few
  *   MB; an interpreter, so it goes where a JIT is not allowed, but script runs 10 to 30 times slower than under V8.
  *
- * librge and rge-host come from `@rge/native` (or, in this repository, its build folders: `npm run native:build[:headless]`
+ * libtse and tse-host come from `@tsengine/native` (or, in this repository, its build folders: `npm run native:build[:headless]`
  * and `npm run host:build[:headless]`); nothing is compiled here.
  */
 import { spawnSync } from "node:child_process";
@@ -63,14 +63,14 @@ async function packageQuickJs(game: Game, entry: string, name: string, flavor: N
   await bundleForHost(join(game.dir, entry), join(out, "game.js"));
   const host = need(
     findHost(flavor),
-    "rge-host",
-    `It ships in @rge/native; in the repository, build it with \`npm run host:build${flavor === "headless" ? ":headless" : ""}\`.`
+    "tse-host",
+    `It ships in @tsengine/native; in the repository, build it with \`npm run host:build${flavor === "headless" ? ":headless" : ""}\`.`
   );
   cpSync(host, join(out, exeName(name)));
 }
 
 /**
- * The game, `@rge/player-node` and its backend bundled into one CommonJS script, put inside a copy of the running Node binary
+ * The game, `@tsengine/player-node` and its backend bundled into one CommonJS script, put inside a copy of the running Node binary
  * (https://nodejs.org/api/single-executable-applications.html). Such a script can `require` only Node's own modules, so
  * koffi, which finds its native addon by paths relative to its own files, ships unbundled in `node_modules/` beside the
  * executable and is loaded from there.
@@ -78,15 +78,15 @@ async function packageQuickJs(game: Game, entry: string, name: string, flavor: N
 async function packageNode(game: Game, entry: string, name: string, flavor: NativeFlavor, out: string): Promise<void> {
   const lib = need(
     findLibrary(flavor),
-    "librge",
-    `It ships in @rge/native; in the repository, build it with \`npm run native:build${flavor === "headless" ? ":headless" : ""}\`.`
+    "libtse",
+    `It ships in @tsengine/native; in the repository, build it with \`npm run native:build${flavor === "headless" ? ":headless" : ""}\`.`
   );
   const libName = basename(lib);
   mkdirSync(join(out, "lib"));
   cpSync(lib, join(out, "lib", libName));
 
   // koffi and the package with this platform's addon (an optional dependency of koffi's, so it is the one installed).
-  const playerNode = createRequire(fileURLToPath(import.meta.resolve("@rge/player-node")));
+  const playerNode = createRequire(fileURLToPath(import.meta.resolve("@tsengine/player-node")));
   // koffi's "exports" hides its package.json, so find its folder from its main file.
   let koffiDir = dirname(playerNode.resolve("koffi"));
   while (!existsSync(join(koffiDir, "package.json")) || basename(koffiDir) !== "koffi") koffiDir = dirname(koffiDir);
@@ -100,7 +100,7 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
     cpSync(from, join(out, "node_modules", to), { recursive: true }); // about 3 MB, next to Node's 100
   }
 
-  // The script: install the backend over the shipped librge, then run the game. Two modules, because imports run in order and
+  // The script: install the backend over the shipped libtse, then run the game. Two modules, because imports run in order and
   // the game's `hostBackend()` must find the backend when it is evaluated.
   const work = join(out, ".build");
   mkdirSync(work);
@@ -112,8 +112,8 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
     join(work, "backend.ts"),
     [
       `import { dirname, join } from "node:path";`,
-      `import { HOST_BACKEND_KEY } from "@rge/player";`,
-      `import { createNodeBackend } from "@rge/player-node";`,
+      `import { HOST_BACKEND_KEY } from "@tsengine/player";`,
+      `import { createNodeBackend } from "@tsengine/player-node";`,
       `// Like the Rust host run with no arguments: the game's paths (its assets/) are relative to the executable's folder.`,
       `const folder = dirname(process.execPath);`,
       `process.chdir(folder);`,
@@ -143,13 +143,13 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
     platform: "node",
     target: "node22",
     plugins: [koffiBesideExe],
-    // A CommonJS script has no `import.meta`; `@rge/player-node` reads its URL to find the repository's builds, which a packaged
-    // game does not use (it passes librge's path), but the module still works it out when it loads.
-    define: { "import.meta.url": "__rgeModuleUrl" },
-    banner: { js: `const __rgeModuleUrl = require("node:url").pathToFileURL(process.execPath).href;` },
+    // A CommonJS script has no `import.meta`; `@tsengine/player-node` reads its URL to find the repository's builds, which a packaged
+    // game does not use (it passes libtse's path), but the module still works it out when it loads.
+    define: { "import.meta.url": "__tseModuleUrl" },
+    banner: { js: `const __tseModuleUrl = require("node:url").pathToFileURL(process.execPath).href;` },
     legalComments: "none",
     logLevel: "warning",
-    // A crash names the line in src/ (`at Play.onInput (src/Play.tsx:14:3)`), as under `rge dev`: the generated files' own maps
+    // A crash names the line in src/ (`at Play.onInput (src/Play.tsx:14:3)`), as under `tse dev`: the generated files' own maps
     // chain through to the .tsx, and the sources are written relative to the game, so the trace reads the same on any machine.
     sourcemap: "inline",
     sourcesContent: false,
@@ -208,7 +208,7 @@ async function packageNode(game: Game, entry: string, name: string, flavor: Nati
 
 /**
  * The script with its inline source map's `sources` made relative to the game's folder (`src/Play.tsx`, not a path through the
- * build folder), and the engine's by package (`@rge/runtime/src/World.ts`), with no `sourceRoot`: Node resolves them against the
+ * build folder), and the engine's by package (`@tsengine/runtime/src/World.ts`), with no `sourceRoot`: Node resolves them against the
  * script's place, beside the executable.
  */
 export function relativeSources(script: string, buildDir: string, gameDir: string): string {
@@ -224,11 +224,11 @@ export function relativeSources(script: string, buildDir: string, gameDir: strin
       .split("\\")
       .join("/");
     if (!path.startsWith("../")) return path;
-    // The engine's own files, from outside the game: by package (`@rge/runtime/src/World.ts`), not by a path on this machine.
+    // The engine's own files, from outside the game: by package (`@tsengine/runtime/src/World.ts`), not by a path on this machine.
     const installed = path.lastIndexOf("node_modules/");
     if (installed >= 0) return path.slice(installed + "node_modules/".length);
     const workspace = /(?:^|\/)packages\/([^/]+)\/(.*)$/.exec(path);
-    return workspace ? `@rge/${workspace[1]}/${workspace[2]}` : basename(path);
+    return workspace ? `@tsengine/${workspace[1]}/${workspace[2]}` : basename(path);
   });
   delete map.sourceRoot;
   return `${script.slice(0, at)}${marker}${Buffer.from(JSON.stringify(map)).toString("base64")}\n`;

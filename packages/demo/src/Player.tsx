@@ -1,4 +1,4 @@
-import { useMutable, useUpdate, Collider, Entity, Shape } from "@rge/runtime/jsx";
+import { useMutable, useUpdate, Collider, Entity, Shape } from "@tsengine/runtime/jsx";
 
 import { useGame } from "./GameState.ts";
 

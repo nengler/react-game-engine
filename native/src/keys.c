@@ -1,7 +1,7 @@
 #include "internal.h"
-#include "rge.h"
+#include "tse.h"
 
-/* The key table is include/rge.h's RGE_KEYS, expanded here: the order is the keys buffer's order. */
+/* The key table is include/tse.h's TSE_KEYS, expanded here: the order is the keys buffer's order. */
 enum { KIND_K, KIND_M, KIND_G, KIND_S };
 
 #define PAD 0 /* the first gamepad */
@@ -15,7 +15,7 @@ typedef struct {
 } KeyEntry;
 
 #define ENTRY(kind, code, name) { KIND_##kind, code },
-static const KeyEntry KEYS[] = { RGE_KEYS(ENTRY) };
+static const KeyEntry KEYS[] = { TSE_KEYS(ENTRY) };
 #undef ENTRY
 
 #define KEY_TABLE_LENGTH ((int32_t)(sizeof(KEYS) / sizeof(KEYS[0])))
@@ -37,24 +37,24 @@ static int right_partner(int code) {
 /* One key's flags from raylib. */
 static uint8_t key_flags(int code) {
   uint8_t flags = 0;
-  if (IsKeyDown(code)) flags |= RGE_KEY_DOWN;
-  if (IsKeyPressed(code)) flags |= RGE_KEY_PRESSED;
-  if (IsKeyReleased(code)) flags |= RGE_KEY_RELEASED;
+  if (IsKeyDown(code)) flags |= TSE_KEY_DOWN;
+  if (IsKeyPressed(code)) flags |= TSE_KEY_PRESSED;
+  if (IsKeyReleased(code)) flags |= TSE_KEY_RELEASED;
   return flags;
 }
 
 /* Whether a key was down last frame, from its flags this frame: down now and not just pressed, or just released. */
 static bool was_down(uint8_t flags) {
-  return (flags & RGE_KEY_DOWN) ? !(flags & RGE_KEY_PRESSED) : (flags & RGE_KEY_RELEASED) != 0;
+  return (flags & TSE_KEY_DOWN) ? !(flags & TSE_KEY_PRESSED) : (flags & TSE_KEY_RELEASED) != 0;
 }
 
 uint8_t keys_combine(uint8_t left, uint8_t right) {
-  bool down = ((left | right) & RGE_KEY_DOWN) != 0;
+  bool down = ((left | right) & TSE_KEY_DOWN) != 0;
   bool before = was_down(left) || was_down(right);
   uint8_t flags = 0;
-  if (down) flags |= RGE_KEY_DOWN;
-  if (down && !before) flags |= RGE_KEY_PRESSED;
-  if (!down && before) flags |= RGE_KEY_RELEASED;
+  if (down) flags |= TSE_KEY_DOWN;
+  if (down && !before) flags |= TSE_KEY_PRESSED;
+  if (!down && before) flags |= TSE_KEY_RELEASED;
   return flags;
 }
 
@@ -62,7 +62,7 @@ void keys_set_deadzone(double value) {
   deadzone = value >= 0.0 && value < 1.0 ? value : 0.35;
 }
 
-void rge_set_gamepad_deadzone(double value) {
+void tse_set_gamepad_deadzone(double value) {
   keys_set_deadzone(value);
 }
 
@@ -87,9 +87,9 @@ static uint8_t pad_flags(int32_t index, const KeyEntry *entry) {
   bool before = index < MAX_KEYS && pad_was_down[index];
   if (index < MAX_KEYS) pad_was_down[index] = down;
   uint8_t flags = 0;
-  if (down) flags |= RGE_KEY_DOWN;
-  if (down && !before) flags |= RGE_KEY_PRESSED;
-  if (!down && before) flags |= RGE_KEY_RELEASED;
+  if (down) flags |= TSE_KEY_DOWN;
+  if (down && !before) flags |= TSE_KEY_PRESSED;
+  if (!down && before) flags |= TSE_KEY_RELEASED;
   return flags;
 }
 
@@ -99,9 +99,9 @@ uint8_t keys_flags(int32_t index) {
   if (entry->kind == KIND_G || entry->kind == KIND_S) return pad_flags(index, entry);
   if (entry->kind == KIND_M) {
     uint8_t flags = 0;
-    if (IsMouseButtonDown(entry->code)) flags |= RGE_KEY_DOWN;
-    if (IsMouseButtonPressed(entry->code)) flags |= RGE_KEY_PRESSED;
-    if (IsMouseButtonReleased(entry->code)) flags |= RGE_KEY_RELEASED;
+    if (IsMouseButtonDown(entry->code)) flags |= TSE_KEY_DOWN;
+    if (IsMouseButtonPressed(entry->code)) flags |= TSE_KEY_PRESSED;
+    if (IsMouseButtonReleased(entry->code)) flags |= TSE_KEY_RELEASED;
     return flags;
   }
   int partner = right_partner(entry->code);

@@ -1,13 +1,13 @@
 /**
- * `rge check [folder]`: one command that says whether a game is sound. It prints one line per step and a summary, and returns 1
+ * `tse check [folder]`: one command that says whether a game is sound. It prints one line per step and a summary, and returns 1
  * if any step failed (with that step's output).
  *
  * 1. compile    `src` to `generated`, with scenes and assets where the game has them
  * 2. typecheck  `tsc -p tsconfig.json` in the game's folder
  * 3. tests      `node --test test/**` (the output's counts are printed)
- * 4. previews   the game's stories rendered and compared with their stored screenshots (`rge preview --compare`), when it
- *               has stored any and the headless librge is found
- * 5. parity     `parity.ts` twice under Node (identical, so a run is deterministic); and, when rge-host is found, bundled and
+ * 4. previews   the game's stories rendered and compared with their stored screenshots (`tse preview --compare`), when it
+ *               has stored any and the headless libtse is found
+ * 5. parity     `parity.ts` twice under Node (identical, so a run is deterministic); and, when tse-host is found, bundled and
  *               run under it too, which must print the same
  */
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { compileArgs, SCREENSHOTS_FOLDER, storyFiles } from "@rge/player-node";
+import { compileArgs, SCREENSHOTS_FOLDER, storyFiles } from "@tsengine/player-node";
 
 import { bundleForHost } from "../bundle.ts";
 import { loadGame, type Game } from "../config.ts";
@@ -40,7 +40,7 @@ function hasTests(game: Game): boolean {
   return existsSync(dir) && readdirSync(dir, { recursive: true }).some((file) => String(file).endsWith(".test.ts"));
 }
 
-/** This command line's own script, to run `rge preview --compare` in a process of its own. */
+/** This command line's own script, to run `tse preview --compare` in a process of its own. */
 function cliScript(): string {
   const dir = dirname(dirname(fileURLToPath(import.meta.url)));
   return [join(dir, "cli.ts"), join(dir, "cli.js")].find((path) => existsSync(path)) ?? join(dir, "cli.js");
@@ -50,10 +50,10 @@ function previews(game: Game): Outcome {
   const files = storyFiles(game.dir);
   if (files.length === 0) return { ok: true, detail: "no stories", output: "" };
   if (!existsSync(join(game.dir, SCREENSHOTS_FOLDER)))
-    return { ok: true, detail: `${files.length} stories files, no stored screenshots (rge preview --screenshot stores them)`, output: "" };
+    return { ok: true, detail: `${files.length} stories files, no stored screenshots (tse preview --screenshot stores them)`, output: "" };
   const library = findLibrary("headless");
-  if (library === null) return { ok: true, detail: "not compared: the headless librge was not found", output: "" };
-  const r = node([cliScript(), "preview", game.dir, "--compare"], game.dir, { ...process.env, RGE_NATIVE_LIB: library });
+  if (library === null) return { ok: true, detail: "not compared: the headless libtse was not found", output: "" };
+  const r = node([cliScript(), "preview", game.dir, "--compare"], game.dir, { ...process.env, TSE_NATIVE_LIB: library });
   const last = r.output
     .trim()
     .split("\n")
@@ -73,8 +73,8 @@ async function parity(game: Game): Promise<Outcome> {
       output: "The parity script printed different output on a second run: the game is not deterministic.",
     };
   const host = findHost("headless");
-  if (host === null) return { ok: true, detail: "Node only (rge-host was not found)", output: "" };
-  const dir = mkdtempSync(join(tmpdir(), "rge-check-"));
+  if (host === null) return { ok: true, detail: "Node only (tse-host was not found)", output: "" };
+  const dir = mkdtempSync(join(tmpdir(), "tse-check-"));
   try {
     try {
       await bundleForHost(join(game.dir, "parity.ts"), join(dir, "parity.js"));
@@ -104,7 +104,7 @@ export async function checkCommand(args: readonly string[]): Promise<number> {
         const r = node(compileArgs(game.dir), game.dir);
         if (r.ok) return { ok: true, detail: r.output.trim().split("\n").at(-1) ?? "", output: r.output };
         // The errors are printed below, once each: the summary line only counts them.
-        const errors = r.output.split("\n").filter((line) => / - error RGE\d+:/.test(line)).length;
+        const errors = r.output.split("\n").filter((line) => / - error TSE\d+:/.test(line)).length;
         return { ok: false, detail: errors === 1 ? "1 error" : errors > 1 ? `${errors} errors` : "the compiler failed", output: r.output };
       },
     },

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Flex, Shape, type FlexProps, type GameObject } from "@rge/runtime";
+import { Flex, Shape, type FlexProps, type GameObject } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
 import { Layouter, type MeasuredSize } from "../src/layout.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend } from "../src/recording.ts";
 
 const warnings: string[] = [];
@@ -278,7 +278,7 @@ describe("<Flex wrap>", () => {
     const f = flex({ wrap: true, width: 70, columnGap: 4, rowGap: 6, background: "navy" }, ...boxes(3));
     const backend = new RecordingBackend();
     const built = new FrameBuilder({ loadTexture: () => 0 }).build(f, 400, 300);
-    backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+    backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
     const rects = backend.lastFrame.records.flatMap((r) => (r.op === "rect" ? [[r.x, r.y, r.width, r.height]] : []));
     assert.deepEqual(rects, [
       [0, 0, 70, 26],

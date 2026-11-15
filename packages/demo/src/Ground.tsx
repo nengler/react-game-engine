@@ -1,4 +1,4 @@
-import { Entity, Shape, Sprite } from "@rge/runtime/jsx";
+import { Entity, Shape, Sprite } from "@tsengine/runtime/jsx";
 
 /** A few landmarks, so the camera's movement can be seen: shapes, and a plain sprite from the same art as the beacon. */
 export function Ground() {

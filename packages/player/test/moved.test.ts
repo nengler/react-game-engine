@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Collider, Entity, Shape, Sprite, Text, World, type GameObject } from "@rge/runtime";
+import { Collider, Entity, Shape, Sprite, Text, World, type GameObject } from "@tsengine/runtime";
 
 import { CollisionTracker } from "../src/collide.ts";
 import { FrameBuilder, type ColliderEntry } from "../src/draw.ts";
-import { RGE_OP_RECT, RGE_OP_RECT_LEN, RGE_OP_SPRITE, RGE_OP_SPRITE_LEN, RGE_OP_VIEW_LEN } from "../src/protocol.ts";
+import { TSE_OP_RECT, TSE_OP_RECT_LEN, TSE_OP_SPRITE, TSE_OP_SPRITE_LEN, TSE_OP_VIEW_LEN } from "../src/protocol.ts";
 
 interface ActorState {
   x: number;
@@ -90,7 +90,7 @@ class Bullet extends Sprite {
 
 const options = { loadTexture: (path: string): number => (path.includes("missing") ? -1 : path.length), warn: () => {} };
 /** What one actor draws: a rect and a sprite. */
-const ACTOR_DOUBLES = RGE_OP_RECT_LEN + RGE_OP_SPRITE_LEN;
+const ACTOR_DOUBLES = TSE_OP_RECT_LEN + TSE_OP_SPRITE_LEN;
 
 function random(seed: number): () => number {
   let state = seed * 7919;
@@ -146,9 +146,9 @@ describe("a component that only moved", () => {
     const built = frame();
     const records = built.list.records;
     for (const [i, actor] of actors.entries()) {
-      const at = RGE_OP_VIEW_LEN + i * ACTOR_DOUBLES;
-      assert.deepEqual([records[at], records[at + 1], records[at + 2]], [RGE_OP_RECT, actor.transform.x, actor.transform.y]);
-      assert.deepEqual([records[at + 9], records[at + 10], records[at + 11]], [RGE_OP_SPRITE, actor.transform.x, actor.transform.y]);
+      const at = TSE_OP_VIEW_LEN + i * ACTOR_DOUBLES;
+      assert.deepEqual([records[at], records[at + 1], records[at + 2]], [TSE_OP_RECT, actor.transform.x, actor.transform.y]);
+      assert.deepEqual([records[at + 9], records[at + 10], records[at + 11]], [TSE_OP_SPRITE, actor.transform.x, actor.transform.y]);
     }
   });
 
@@ -159,8 +159,8 @@ describe("a component that only moved", () => {
     const built = frame();
     assert.equal(builder.movedRecords, 2 * ACTOR_DOUBLES);
     assert.equal(builder.reusedRecords, 4 * ACTOR_DOUBLES, "the four that stood still are copied as they are");
-    assert.equal(built.list.records[RGE_OP_VIEW_LEN + 3], 0.5, "the turned actor's rect");
-    assert.equal(built.list.records[RGE_OP_VIEW_LEN + ACTOR_DOUBLES + 4], -2, "the flipped actor's rect");
+    assert.equal(built.list.records[TSE_OP_VIEW_LEN + 3], 0.5, "the turned actor's rect");
+    assert.equal(built.list.records[TSE_OP_VIEW_LEN + ACTOR_DOUBLES + 4], -2, "the flipped actor's rect");
   });
 
   it("is drawn again when what it draws changed, and moved again after that", () => {
@@ -187,9 +187,9 @@ describe("a component that only moved", () => {
       const built = frame();
       const expected =
         change.image === ""
-          ? 9 * ACTOR_DOUBLES + RGE_OP_RECT_LEN
+          ? 9 * ACTOR_DOUBLES + TSE_OP_RECT_LEN
           : change.image === "missing.png"
-            ? 9 * ACTOR_DOUBLES + 2 * RGE_OP_RECT_LEN
+            ? 9 * ACTOR_DOUBLES + 2 * TSE_OP_RECT_LEN
             : 10 * ACTOR_DOUBLES;
       assert.equal(builder.movedRecords, expected, `${JSON.stringify(change)}: and the frame after, it only moved`);
       assert.equal(built.colliders.length, 10);
@@ -273,7 +273,7 @@ describe("a component that only moved", () => {
     frame();
     frame();
     frame();
-    assert.equal(builder.movedRecords, 5 * RGE_OP_SPRITE_LEN + RGE_OP_RECT_LEN);
+    assert.equal(builder.movedRecords, 5 * TSE_OP_SPRITE_LEN + TSE_OP_RECT_LEN);
     // Told `markChanged` instead, which is always right, the crate is drawn again.
     crate.transform.y += 2;
     crate.markChanged();

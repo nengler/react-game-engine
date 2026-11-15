@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 /**
- * The battle, tested as components (`@rge/testing`): an enemy walks and takes its hits, a tower aims and fires, a shot lands, and
+ * The battle, tested as components (`@tsengine/testing`): an enemy walks and takes its hits, a tower aims and fires, a shot lands, and
  * `Play` keeps the gold, the lives and the waves. Each is mounted alone in a headless world, as React Testing Library mounts one
  * React component.
  */
 import { describe, it, mock } from "node:test";
 
-import { Collider } from "@rge/runtime";
-import { render } from "@rge/testing";
+import { Collider } from "@tsengine/runtime";
+import { render } from "@tsengine/testing";
 
 import { Enemy } from "../generated/Enemy.ts";
 import { Play } from "../generated/Play.ts";

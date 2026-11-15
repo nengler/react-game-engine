@@ -13,7 +13,7 @@ import {
   getSoundSink,
   setSoundSink,
   type SoundSink,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { createPlayer, RecordingBackend, type DecodedRecord } from "../src/index.ts";
 

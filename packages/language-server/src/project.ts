@@ -1,12 +1,12 @@
 /**
  * A game, as the language server sees it: its folder, its source folder, and a compiler kept alive between edits. `diagnose` runs
- * the compiler's front half on one `.tsx` as it is in the editor (parse, custom hooks, analysis, the IR) and returns its `RGE`
- * diagnostics. Type checking stays with TypeScript's own server in the editor, and with `rge check` and `rge dev`.
+ * the compiler's front half on one `.tsx` as it is in the editor (parse, custom hooks, analysis, the IR) and returns its `TSE`
+ * diagnostics. Type checking stays with TypeScript's own server in the editor, and with `tse check` and `tse dev`.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { Compiler, type CompilerDiagnostic } from "@rge/compiler";
+import { Compiler, type CompilerDiagnostic } from "@tsengine/compiler";
 
 /** Reads a file as the editor has it (an open, unsaved document) or else from disk; null when there is none. */
 export type ReadFile = (path: string) => string | null;
@@ -20,15 +20,15 @@ export const readFromDisk: ReadFile = (path) => {
 };
 
 interface PackageJson {
-  readonly rge?: { readonly src?: string; readonly generated?: string };
+  readonly tse?: { readonly src?: string; readonly generated?: string };
   readonly dependencies?: Record<string, string>;
   readonly devDependencies?: Record<string, string>;
 }
 
-/** A game's folder: one whose package.json has an `"rge"` field or depends on `@rge/runtime`. */
+/** A game's folder: one whose package.json has an `"tse"` field or depends on `@tsengine/runtime`. */
 export interface GameFolder {
   readonly dir: string;
-  /** Where its components are (`src` unless the `"rge"` field says otherwise), absolute. */
+  /** Where its components are (`src` unless the `"tse"` field says otherwise), absolute. */
   readonly src: string;
   readonly generated: string;
 }
@@ -50,9 +50,11 @@ export function findGame(file: string): GameFolder | null {
     const pkg = readPackage(dir);
     if (
       pkg !== null &&
-      (pkg.rge !== undefined || pkg.dependencies?.["@rge/runtime"] !== undefined || pkg.devDependencies?.["@rge/runtime"] !== undefined)
+      (pkg.tse !== undefined ||
+        pkg.dependencies?.["@tsengine/runtime"] !== undefined ||
+        pkg.devDependencies?.["@tsengine/runtime"] !== undefined)
     ) {
-      return { dir, src: resolve(dir, pkg.rge?.src ?? "src"), generated: resolve(dir, pkg.rge?.generated ?? "generated") };
+      return { dir, src: resolve(dir, pkg.tse?.src ?? "src"), generated: resolve(dir, pkg.tse?.generated ?? "generated") };
     }
     const up = dirname(dir);
     if (up === dir) return null;
@@ -110,7 +112,7 @@ export class GameProject {
   }
 
   /**
-   * The `RGE` diagnostics of a component as `text` has it. Each has a span in this file; one the compiler found in another file
+   * The `TSE` diagnostics of a component as `text` has it. Each has a span in this file; one the compiler found in another file
    * (a custom hook it inlined, `GameState.ts`) is put at the start of this one, its message naming where it is.
    */
   diagnose(file: string, text: string): CompilerDiagnostic[] {

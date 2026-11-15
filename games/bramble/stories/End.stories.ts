@@ -1,4 +1,4 @@
-import { stories, story } from "@rge/player";
+import { stories, story } from "@tsengine/player";
 
 import { End } from "../generated/End.ts";
 import { useGame } from "../src/GameState.ts";

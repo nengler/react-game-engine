@@ -23,9 +23,9 @@ or left untouched.
 | Gap | What exists today | Where this game hits it |
 | --- | --- | --- |
 | A large, scrolling world | `<Tilemap>` writes one record per filled cell with no culling; the camera has `bounds` and `slide` but no follow smoothing; a room change costs one ~25 ms step (Kite finding 10); room seams are not continuous (Kite finding 7) | One overworld map about 4 × 3 screens, scrolled continuously with the character, plus interiors entered by doors |
-| Saving and loading | Nothing: no storage call in librge, the Node host or the Rust host | A save slot written at shrines and on quitting; the title offers "Continue"; settings kept apart from the save |
+| Saving and loading | Nothing: no storage call in libtse, the Node host or the Rust host | A save slot written at shrines and on quitting; the title offers "Continue"; settings kept apart from the save |
 | Maps saved by Tiled itself | The importer reads CSV layers, finite maps and one embedded tileset; every map so far was written by a script (Kite finding 8) | The overworld is drawn in Tiled by a person: external tilesets (`.tsx`), more than one tileset, object layers for NPCs, doors, chests and spawns with custom properties |
-| Deeper UI | Context not built (needs a tree three levels deep); children on list items flat only (`RGE1209`); `<Text>` does not wrap | A dialogue box with wrapped, revealed text; an inventory grid of slots that may be empty; a settings screen of nested panels, sliders and a key-capture row |
+| Deeper UI | Context not built (needs a tree three levels deep); children on list items flat only (`TSE1209`); `<Text>` does not wrap | A dialogue box with wrapped, revealed text; an inventory grid of slots that may be empty; a settings screen of nested panels, sliders and a key-capture row |
 | Entities that think | `moveActorX`/`moveActorY` against tiles; colliders report overlaps but stop nothing; no pathfinding | Enemies that wander, notice the player and path to them around walls; NPCs and pushable blocks that the character cannot walk through |
 | Settings and rebinding | `createControls` binds names to keys at build time; one volume per sound or music | Rebinding a control by pressing a key, music and effects volume, full screen; all kept across runs |
 | Usable outside this repo | Every game is a workspace in `packages/*` | The game is made from a template, installs the engine as packed packages, and is built and played with one command line |
@@ -100,7 +100,7 @@ then that step re-baselines them in a commit of its own and says why. `npm run b
 
 ```mermaid
 flowchart LR
-  M0["M0 Engine as packages<br/>rge CLI, template,<br/>games/bramble outside check"] --> M1["M1 Greybox<br/>rules + headless tests"]
+  M0["M0 Engine as packages<br/>tse CLI, template,<br/>games/bramble outside check"] --> M1["M1 Greybox<br/>rules + headless tests"]
   M1 --> M2["M2 Large world<br/>chunked tilemap, camera follow"]
   M1 --> M3["M3 Saving and settings<br/>ABI v7 storage"]
   M1 --> M4["M4 Text and inventory UI"]
@@ -117,13 +117,13 @@ first, because it is the biggest gap and changes the draw path that M6 builds on
 
 **Two things found while planning, which set this milestone's shape:**
 
-- Every `@rge/*` package's `exports` point at `.ts` source (`"./src/index.ts"`). That works in the workspace because the files
+- Every `@tsengine/*` package's `exports` point at `.ts` source (`"./src/index.ts"`). That works in the workspace because the files
   are not under `node_modules`. **Node refuses to strip types from files under `node_modules`**
   (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so an installed package has to ship JavaScript and `.d.ts` files.
 - `findNativeLibrary` (`packages/player-node/src/ffi.ts`) looks only in `native/build*` beside the repository root, and
-  `tools/package.ts` builds librge with CMake and the Rust host with cargo from the repository. An outside game has neither.
+  `tools/package.ts` builds libtse with CMake and the Rust host with cargo from the repository. An outside game has neither.
 
-**0.1 Packs that build.** *(Done 2026-11-11.)* `npm run pack` (`tools/pack.ts`) writes `dist/packs/rge-<name>-<version>.tgz` for `runtime`, `compiler`,
+**0.1 Packs that build.** *(Done 2026-11-11.)* `npm run pack` (`tools/pack.ts`) writes `dist/packs/tsengine-<name>-<version>.tgz` for `runtime`, `compiler`,
 `player`, `player-node`, `native` and `cli`.
 
 - For each package it makes a staging copy: JavaScript from esbuild (one file per source file, ESM, no bundling, so the
@@ -132,69 +132,69 @@ first, because it is the biggest gap and changes the draw path that M6 builds on
 - The workspace keeps exporting source, so nothing changes for Kite, Hearth or the tests.
 - `.ts` imports in the source (`./foo.ts`) are rewritten to `.js` by esbuild (`rewriteRelativeImportExtensions`, or a small
   plugin if needed).
-- `@rge/compiler`'s `cli.ts` is shipped as `cli.js` with a `bin`. `dev.ts` finds the compiler through
-  `import.meta.resolve("@rge/compiler")` plus `cli.ts`, which becomes "the package's `bin`".
+- `@tsengine/compiler`'s `cli.ts` is shipped as `cli.js` with a `bin`. `dev.ts` finds the compiler through
+  `import.meta.resolve("@tsengine/compiler")` plus `cli.ts`, which becomes "the package's `bin`".
 - **Test:** `packages/cli/test/packs.test.ts` packs into a temporary folder, installs the tarballs into an empty project, and
-  imports each entry point (`@rge/runtime/jsx`, `@rge/player`, `@rge/player-node`, `@rge/compiler`) under plain Node.
+  imports each entry point (`@tsengine/runtime/jsx`, `@tsengine/player`, `@tsengine/player-node`, `@tsengine/compiler`) under plain Node.
 
-**0.2 `@rge/native`: librge and the host, prebuilt.** *(Done 2026-11-11: `packages/native`; `node tools/pack.ts --build` builds both flavors, desktop only if it can.)* A package with no code of its own beyond one `paths.js`:
-`lib/linux-x64/{desktop,headless}/librge.so` and `bin/linux-x64/{desktop,headless}/rge-host`, built by `npm run pack` from
+**0.2 `@tsengine/native`: libtse and the host, prebuilt.** *(Done 2026-11-11: `packages/native`; `node tools/pack.ts --build` builds both flavors, desktop only if it can.)* A package with no code of its own beyond one `paths.js`:
+`lib/linux-x64/{desktop,headless}/libtse.so` and `bin/linux-x64/{desktop,headless}/tse-host`, built by `npm run pack` from
 the CMake and cargo builds it already knows how to make. Only `linux-x64`: other platforms stay in "Not now".
 
-- `findNativeLibrary` looks in this order: `RGE_NATIVE_LIB`, then `@rge/native` (through `import.meta.resolve`), then the
+- `findNativeLibrary` looks in this order: `TSE_NATIVE_LIB`, then `@tsengine/native` (through `import.meta.resolve`), then the
   repository's build folders. The repository order is unchanged, so `npm test` behaves as before.
-- The same applies to `rge-host` (`RGE_HOST_BIN`, then `@rge/native`, then `host/target/release`).
+- The same applies to `tse-host` (`TSE_HOST_BIN`, then `@tsengine/native`, then `host/target/release`).
 - The ABI check at load already says clearly when the library and the player disagree.
 
-**0.3 `@rge/cli`: one command line.** *(Done 2026-11-11: `packages/cli`; `tools/check-game.ts`, `package.ts` and `screenshot.ts` are gone, `tools/bundle.ts` is a shim over the CLI, and a packaged game now lands in the game's own `dist/<name>/`.)* A new package with bin `rge` that takes over `tools/check-game.ts`, `tools/package.ts`,
+**0.3 `@tsengine/cli`: one command line.** *(Done 2026-11-11: `packages/cli`; `tools/check-game.ts`, `package.ts` and `screenshot.ts` are gone, `tools/bundle.ts` is a shim over the CLI, and a packaged game now lands in the game's own `dist/<name>/`.)* A new package with bin `tse` that takes over `tools/check-game.ts`, `tools/package.ts`,
 `tools/bundle.ts`, `tools/screenshot.ts` and `packages/player-node/src/play.ts`. It runs in a game's folder, or the folder
-given as the first argument (`rge check packages/kite`).
+given as the first argument (`tse check packages/kite`).
 
-- **A game's settings** live in its `package.json`'s `"rge"` field: `name`, `entry` (default `main.ts`), `src` (`src`),
+- **A game's settings** live in its `package.json`'s `"tse"` field: `name`, `entry` (default `main.ts`), `src` (`src`),
   `generated` (`generated`), `scenes` and `assets` (used when the folders exist, as `check-game.ts` does now), and
   `checkAssets` (already used by the demo).
 - **Commands:**
 
   | Command | Does | From |
   | --- | --- | --- |
-  | `rge build` | Compile `src` to `generated` (with scenes and assets) | `rge-compile` |
-  | `rge dev [--no-watch]` | Compile, open the window, hot reload | `play.ts`, `dev.ts` |
-  | `rge check` | Compile, type-check the game's `tsconfig.json`, `node --test test/`, parity under Node twice and under `rge-host` | `check-game.ts` |
-  | `rge package [--engine node\|quickjs] [--headless]` | The folder build, with librge and `rge-host` from `@rge/native` | `package.ts`, `bundle.ts` |
-  | `rge screenshot <script> [--frames …]` | PNGs and a contact sheet of a scripted run | `screenshot.ts` |
-  | `rge create <folder>` | A new game from the template (0.4) | new |
+  | `tse build` | Compile `src` to `generated` (with scenes and assets) | `tse-compile` |
+  | `tse dev [--no-watch]` | Compile, open the window, hot reload | `play.ts`, `dev.ts` |
+  | `tse check` | Compile, type-check the game's `tsconfig.json`, `node --test test/`, parity under Node twice and under `tse-host` | `check-game.ts` |
+  | `tse package [--engine node\|quickjs] [--headless]` | The folder build, with libtse and `tse-host` from `@tsengine/native` | `package.ts`, `bundle.ts` |
+  | `tse screenshot <script> [--frames …]` | PNGs and a contact sheet of a scripted run | `screenshot.ts` |
+  | `tse create <folder>` | A new game from the template (0.4) | new |
 
 - `tsc`, `esbuild` and `postject` are the CLI's own dependencies, resolved from its own folder, not the repository's
   `node_modules/.bin`. The repository-wide `tsc -p tsconfig.json` that `check-game.ts` runs stays in the root's `check:*`
   scripts.
-- **The root scripts become thin:** `"check:kite": "rge check packages/kite"`, `"play:kite": "rge dev packages/kite"`,
-  `"package:kite": "rge package packages/kite"`. Kite and Hearth are the command line's first users, and their checks must
+- **The root scripts become thin:** `"check:kite": "tse check packages/kite"`, `"play:kite": "tse dev packages/kite"`,
+  `"package:kite": "tse package packages/kite"`. Kite and Hearth are the command line's first users, and their checks must
   print the same results as before.
 - **Tests:** each command against a small fixture game in a temporary folder; `npm run check:kite` and `check:hearth` pass
   through it.
 
-**0.4 The template and `rge create`.** *(Done 2026-11-11.)* `packages/cli/template/`:
+**0.4 The template and `tse create`.** *(Done 2026-11-11.)* `packages/cli/template/`:
 
-- `package.json` (with `"rge"` and the `@rge/*` dependencies), `tsconfig.json`, `main.ts`, `game.ts` (bindings and screen),
+- `package.json` (with `"tse"` and the `@tsengine/*` dependencies), `tsconfig.json`, `main.ts`, `game.ts` (bindings and screen),
   `src/Main.tsx` (a `<Game>`, a `<Screen>`, a `<Router>` with one route), `src/GameState.ts`, `src/rules/move.ts` with one
   test, `assets/` with one image, `parity.ts` and `.gitignore` (`generated/`, `node_modules/`, `dist/`).
-- `rge create <folder> [--name] [--packs <dir>]` copies it and fills in the name. `--packs` writes `file:` dependencies on
+- `tse create <folder> [--name] [--packs <dir>]` copies it and fills in the name. `--packs` writes `file:` dependencies on
   the tarballs, which is how everything is tested before anything is published.
-- **Test:** create, install and `rge check` in a temporary folder pass; the template's own test passes.
+- **Test:** create, install and `tse check` in a temporary folder pass; the template's own test passes.
 
 **0.5 `games/bramble`, checked from outside.** *(Done 2026-11-11: `npm run check:outside` passes locally; the CI job `outside` is new and has not run yet.)*
 
-- `games/bramble` is made with `rge create`. It is **not** one of the workspaces (`packages/*`), and the root's `generate`,
+- `games/bramble` is made with `tse create`. It is **not** one of the workspaces (`packages/*`), and the root's `generate`,
   `test` and `typecheck` do not include it. Its `node_modules` is ignored by git.
 - `npm run bramble:install` repacks the engine and reinstalls the tarballs into `games/bramble`. This is the in-repo loop when
   the engine changes. It is slower than a workspace on purpose: it is the loop an outside author has.
 - `npm run check:outside` (`tools/check-outside.ts`) packs the engine, copies `games/bramble` to a temporary folder outside the
-  repository, points its dependencies at the tarballs, runs `npm install`, `rge check`, and `rge package --headless`, then runs
+  repository, points its dependencies at the tarballs, runs `npm install`, `tse check`, and `tse package --headless`, then runs
   the packaged build for 120 frames.
-- A CI job, `outside`, runs it after the `native` job (it needs librge and `rge-host` built to pack `@rge/native`). A
+- A CI job, `outside`, runs it after the `native` job (it needs libtse and `tse-host` built to pack `@tsengine/native`). A
   relative import into `packages/`, an export that is missing from a package, or a file left out of a pack fails there.
 
-**Done when:** Kite and Hearth check through `rge`; `rge create` gives a game that passes `rge check` from a temporary folder;
+**Done when:** Kite and Hearth check through `tse`; `tse create` gives a game that passes `tse check` from a temporary folder;
 `check:outside` passes locally and in CI on the empty Bramble.
 
 ### M1. Bramble's greybox (game; \~1 week)
@@ -225,7 +225,7 @@ under "Findings while writing", as Kite and Hearth did. The engine is fixed only
 - **Tests:** the rules, plus one replay: the title, walking to an NPC, talking, and going through a door.
 - A person plays it here if one is available.
 
-**Done when:** the greybox can be walked, talked to and played through its doors; `rge check` passes from outside; the
+**Done when:** the greybox can be walked, talked to and played through its doors; `tse check` passes from outside; the
 findings are written down.
 
 ### M2. The large world (engine; \~1 week)
@@ -277,23 +277,23 @@ recorded.
 
 *(Built 2026-11-11: 3.1 to 3.4 as written, with `createSettings` also applying `fullscreen` through a `StorageSink`; the one deviation is that `pick` takes no argument, because the runtime does not know the game's store. Bramble has Continue, a save at each shrine, and a settings screen with rebinding. Not done: a person has not tried a save across a real quit under both hosts; the Node and Rust hosts are tested against the real library separately.)*
 
-**3.1 Storage in librge.** New in `native/include/rge.h`:
+**3.1 Storage in libtse.** New in `native/include/tse.h`:
 
 ```c
 /* Saved data: small named entries in the platform's user data folder, each written whole and atomically. Needs no window. */
-int32_t rge_storage_open(const char *game_id);  /* 0 ok; makes the folder if missing. Before any other storage call. */
-int32_t rge_storage_read(const char *name, uint8_t *out, int32_t capacity); /* bytes the entry holds, -1 if there is none; copies only when it fits */
-int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length); /* 0 ok */
-int32_t rge_storage_remove(const char *name);   /* 0 ok, also when it did not exist */
+int32_t tse_storage_open(const char *game_id);  /* 0 ok; makes the folder if missing. Before any other storage call. */
+int32_t tse_storage_read(const char *name, uint8_t *out, int32_t capacity); /* bytes the entry holds, -1 if there is none; copies only when it fits */
+int32_t tse_storage_write(const char *name, const uint8_t *data, int32_t length); /* 0 ok */
+int32_t tse_storage_remove(const char *name);   /* 0 ok, also when it did not exist */
 ```
 
-- **The folder:** `$RGE_DATA_DIR` if set (tests and CI), else `$XDG_DATA_HOME/<game_id>`, else
+- **The folder:** `$TSE_DATA_DIR` if set (tests and CI), else `$XDG_DATA_HOME/<game_id>`, else
   `~/.local/share/<game_id>`. The macOS and Windows folders are written but unverified, like `host/build.rs`'s link lists.
 - **Names:** `[A-Za-z0-9_-]{1,64}`, stored as `<name>.dat`. Anything else is refused, so a name can never become a path.
 - **Writing:** to `<name>.tmp`, flushed and `fsync`ed, then `rename`d over the old file. A crash leaves the old save or
   the new one, never half of one.
-- **Reading:** the two-call pattern `rge_read_pixels` already uses (ask for the size, then copy).
-- **Tests:** a C test in `native/test` for write, read, overwrite, remove, a missing entry, a bad name, and `RGE_DATA_DIR`.
+- **Reading:** the two-call pattern `tse_read_pixels` already uses (ask for the size, then copy).
+- **Tests:** a C test in `native/test` for write, read, overwrite, remove, a missing entry, a bad name, and `TSE_DATA_DIR`.
 
 **Both hosts:**
 
@@ -331,7 +331,7 @@ settings.get(); settings.set({ music: 0.4 });
 - **Applying settings:** they are read before the first frame. Full screen goes through `setFullscreen`; volumes and
   bindings are applied at once.
 - **Tests:** runtime tests on the memory store (round trip, migrate, corrupt, too new); a player test through
-  `RecordingBackend`; a Node host test against the real library with a temporary `RGE_DATA_DIR`; a parity line under the
+  `RecordingBackend`; a Node host test against the real library with a temporary `TSE_DATA_DIR`; a parity line under the
   Rust host that writes and reads an entry.
 
 **3.3 Rebinding.**
@@ -364,7 +364,7 @@ settings.get(); settings.set({ music: 0.4 });
   - It breaks at spaces, and inside a word only when the word alone is too wide.
   - `\n` always breaks.
   - Words are measured with the measure cache it already has (`measureText`, or the bitmap font's cell widths).
-- **Drawing:** each line is its own TEXT record (or its own run of sprite regions for a bitmap font), so `rge.h` does not
+- **Drawing:** each line is its own TEXT record (or its own run of sprite regions for a bitmap font), so `tse.h` does not
   change.
 - **Layout:** `<Flex>` measures the wrapped size (the widest line by the line count). `align` applies per line.
 - **Caching:** line breaks are cached by text, size, font and `maxWidth`.
@@ -377,7 +377,7 @@ nor rewraps as the text appears. The game's rules count `n`; the engine has no t
 **4.3 Tier 3, as hit.** Each is built only when Bramble hits it, one commit each, with compiler tests and a DESIGN.md
 section; otherwise recorded as not needed:
 
-- **The inventory grid:** slots that may be empty, `{item && <Icon/>}` inside a list item's children. Today that is `RGE1209`.
+- **The inventory grid:** slots that may be empty, `{item && <Icon/>}` inside a list item's children. Today that is `TSE1209`.
 - **Context:** if the settings screen passes the same props three levels down.
 
 **4.4 A slider.** A component in the game first (a focusable `<Flex>` whose left and right keys call an action). It becomes
@@ -390,7 +390,7 @@ and mouse.
 
 *(Built 2026-11-12: `findPath` / `lineOfSight` with tests and a bench scene; Bramble's beetle and wisp, combat and invulnerability, with 10 tests including a wisp that follows a path round a wall. The `blocked` function stayed in the game: it was not written twice.)*
 
-**5.1 `findPath` and `lineOfSight`** in `packages/runtime/src/path.ts`, exported from `@rge/runtime`:
+**5.1 `findPath` and `lineOfSight`** in `packages/runtime/src/path.ts`, exported from `@tsengine/runtime`:
 
 ```ts
 findPath(grid: TileGrid, from: Cell, to: Cell, options?: { diagonal?: boolean; maxNodes?: number; blocked?: (x: number, y: number) => boolean }): Cell[] | null
@@ -410,7 +410,7 @@ lineOfSight(grid: TileGrid, from: Point, to: Point): boolean
   (not every step), and gives up 4 s after losing sight.
 - **Combat:** the swing knocks an enemy back; contact damages the character, who then gets a moment of invulnerability.
 - **Actors block each other:** the `blocked` function passed to `moveActorX`/`moveActorY` checks tiles, then other actors'
-  boxes. It moves into `@rge/runtime` only if it turns out to be the same code twice.
+  boxes. It moves into `@tsengine/runtime` only if it turns out to be the same code twice.
 
 **Done when:** both enemies work on the overworld, a replay shows a wisp chasing around a wall, and the bench is in budget.
 
@@ -468,10 +468,10 @@ updated.
 
 ### M8. The guide, the reference and the license (\~4 days)
 
-*(Done 2026-11-12 except the license: `docs/start.html` was written by running every step in a folder outside the repository (`rge create`, install, a second screen, a sound, a test, `rge check`, `rge package --headless`), and is linked from the overview; tests fail when a built-in element or an authoring hook is missing from the docs. **The license is not chosen**: it is the owner's decision (open decision 4 with the package names). A pass for secrets and large files found none (the largest tracked files are the games' 0.6 to 0.7 MB themes). The guide has not yet been followed by someone who did not write it.)*
+*(Done 2026-11-12 except the license: `docs/start.html` was written by running every step in a folder outside the repository (`tse create`, install, a second screen, a sound, a test, `tse check`, `tse package --headless`), and is linked from the overview; tests fail when a built-in element or an authoring hook is missing from the docs. **The license is not chosen**: it is the owner's decision (open decision 4 with the package names). A pass for secrets and large files found none (the largest tracked files are the games' 0.6 to 0.7 MB themes). The guide has not yet been followed by someone who did not write it.)*
 
 - **A getting-started page** (`docs/start.html`, linked first from `docs/index.html`), written by doing it: an empty folder,
-  `rge create`, a moving square, a sprite, a sound, a second screen, a test, `rge check`, `rge package`. Then it is followed
+  `tse create`, a moving square, a sprite, a sound, a second screen, a test, `tse check`, `tse package`. Then it is followed
   again from scratch by someone (or an agent) who did not write it.
 - **A reference entry for every built-in and hook,** each with an example. A test lists the runtime manifest's built-ins and
   hooks and fails when `docs/reference.html` lacks one, so it cannot fall behind.
@@ -491,7 +491,7 @@ updated.
 
 ## Done when
 
-- [ ] `rge create`, `rge dev`, `rge check`, `rge build` and `rge package` work for a game in a folder outside this repository,
+- [ ] `tse create`, `tse dev`, `tse check`, `tse build` and `tse package` work for a game in a folder outside this repository,
       installed from packed packages, and Kite and Hearth use the same command line
 - [ ] Bramble is playable from the title to the end by keyboard or gamepad, under Node and as a packaged build, with music and
       sound; a scripted replay plays it through, and another saves, quits, continues and finishes
@@ -510,11 +510,11 @@ updated.
 
 ## Open decisions
 
-1. ~~**Where storage lives.**~~ Decided 2026-11-11: **one implementation, in librge**, shared by both hosts, until a web build is
+1. ~~**Where storage lives.**~~ Decided 2026-11-11: **one implementation, in libtse**, shared by both hosts, until a web build is
    decided on. The player's `Storage` interface is where a second one (`localStorage`) would go then.
 2. ~~**Whether the game is in this repository.**~~ Decided 2026-11-11: **yes**, in `games/bramble` outside the workspaces, checked
    from a copy in a temporary folder.
 3. **Combat at all.** Proposed: the one swing and two enemies above, because enemies are what tests pathfinding and actors
    blocking each other. Dropping it keeps the game smaller and leaves `findPath` unasked for.
-4. **Package names and a scope** for the packed packages (`@rge/…` today). Only matters once anything is published; decide with
+4. **Package names and a scope** for the packed packages (`@tsengine/…` today). Only matters once anything is published; decide with
    the license.

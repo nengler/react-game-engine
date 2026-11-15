@@ -1,4 +1,4 @@
-import { Entity, Shape, Text } from "@rge/runtime/jsx";
+import { Entity, Shape, Text } from "@tsengine/runtime/jsx";
 
 import { useGame } from "./GameState.ts";
 import { slotsOf } from "./rules/run.ts";

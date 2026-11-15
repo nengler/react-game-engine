@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Entity, Flex, Shape, Sprite, Text, type FlexProps, type GameObject } from "@rge/runtime";
+import { Entity, Flex, Shape, Sprite, Text, type FlexProps, type GameObject } from "@tsengine/runtime";
 
 import { Layouter, type MeasuredSize } from "../src/layout.ts";
 

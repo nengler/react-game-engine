@@ -4,7 +4,7 @@
  * The launcher (`play.ts`) drives the frame loop itself, between turns of Node's event loop, so it can watch files while the
  * game runs. When a file under the game's `src/` (or `scenes/`) changes it:
  *
- * 1. compiles the game again (`rge-compile src generated`, with `--scenes` and `--assets` as the check command uses them), in
+ * 1. compiles the game again (`tse-compile src generated`, with `--scenes` and `--assets` as the check command uses them), in
  *    a child process, while the game keeps running; a compile error is shown in the window;
  * 2. imports the entry file again. A module hook gives every file inside the game's folder (not its `node_modules`) a new
  *    version in its URL, so the whole game, its rules and its game state are evaluated afresh, and the engine's packages are
@@ -24,8 +24,8 @@ import { registerHooks } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { createPlayer, HOST_BACKEND_KEY, HOST_RUN_KEY, Rewind, type Backend, type Player, type PlayerConfig } from "@rge/player";
-import { GameStore } from "@rge/runtime";
+import { createPlayer, HOST_BACKEND_KEY, HOST_RUN_KEY, Rewind, type Backend, type Player, type PlayerConfig } from "@tsengine/player";
+import { GameStore } from "@tsengine/runtime";
 
 import { startInspector, type Inspector } from "./inspector.ts";
 
@@ -33,11 +33,11 @@ export interface DevOptions {
   /** The game's entry file, which calls `run(hostBackend(), config)`. */
   readonly entry: string;
   /**
-   * Make the config another way than by importing `entry` (`rge preview` builds a story): called on start and after each
+   * Make the config another way than by importing `entry` (`tse preview` builds a story): called on start and after each
    * compile, with the game's files given a new version, as an import of the entry would be.
    */
   readonly load?: () => Promise<PlayerConfig>;
-  /** Called once the game runs, with a way to load the game again without compiling (`rge preview` switching stories). */
+  /** Called once the game runs, with a way to load the game again without compiling (`tse preview` switching stories). */
   readonly onReady?: (handle: { readonly reload: () => void }) => void;
   /** The folders whose changes reload the game, in the game's folder. Default `src` and `scenes`. */
   readonly watch?: readonly string[];
@@ -60,7 +60,7 @@ export interface DevOptions {
 
 const NOTE = "Save a file to reload. Close the window to quit.";
 
-/** The `rge` field of a game's package.json: where its folders are, and whether a missing asset is an error. */
+/** The `tse` field of a game's package.json: where its folders are, and whether a missing asset is an error. */
 export interface GameSettings {
   readonly name?: string;
   readonly entry?: string;
@@ -73,7 +73,7 @@ export interface GameSettings {
 
 export function readGameSettings(gameDir: string): GameSettings {
   try {
-    return (JSON.parse(readFileSync(join(gameDir, "package.json"), "utf8")) as { rge?: GameSettings }).rge ?? {};
+    return (JSON.parse(readFileSync(join(gameDir, "package.json"), "utf8")) as { tse?: GameSettings }).tse ?? {};
   } catch {
     return {}; // No package.json: the defaults.
   }
@@ -81,12 +81,12 @@ export function readGameSettings(gameDir: string): GameSettings {
 
 /** The compiler's command-line script: `cli.ts` in the workspace, `cli.js` in an installed pack. */
 export function compilerCli(): string {
-  const dir = dirname(fileURLToPath(import.meta.resolve("@rge/compiler")));
+  const dir = dirname(fileURLToPath(import.meta.resolve("@tsengine/compiler")));
   return [join(dir, "cli.ts"), join(dir, "cli.js")].find((path) => existsSync(path)) ?? join(dir, "cli.js");
 }
 
 /**
- * The command line that compiles the game in `gameDir`, as `rge check` does. It writes a source map beside each generated file, so
+ * The command line that compiles the game in `gameDir`, as `tse check` does. It writes a source map beside each generated file, so
  * a Node run with `--enable-source-maps` names the component's own line in an error (`src/Play.tsx:20:3`), not the generated one.
  */
 export function compileArgs(gameDir: string): string[] {

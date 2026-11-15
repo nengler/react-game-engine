@@ -127,12 +127,12 @@ main.start h1{font-family:var(--font-head)} .topbar{padding:10px 16px;border-bot
 <div class="topbar"><a href="index.html">Overview</a><a href="start.html">Getting started</a><a href="recipes.html"><strong>Recipes</strong></a><a href="language.html">Language</a><a href="systems.html">Systems</a><a href="effects.html">Effects and input</a><a href="reference.html">Reference</a></div>
 <main class="start">
 <h1>Recipes</h1>
-<p>Short components for things most games need, each complete and ready to copy into <code>src/</code>. Every one is compiled and type-checked by the engine's tests, so they work with the engine as it is. For a whole starting point, <code>rge create my-game --template menu</code> (a title, settings and a pause menu) or <code>--template platformer</code> (running and jumping on solid blocks).</p>
+<p>Short components for things most games need, each complete and ready to copy into <code>src/</code>. Every one is compiled and type-checked by the engine's tests, so they work with the engine as it is. For a whole starting point, <code>tse create my-game --template menu</code> (a title, settings and a pause menu) or <code>--template platformer</code> (running and jumping on solid blocks).</p>
 <ul><li><a href="#menu">A menu</a></li><li><a href="#settings">A settings screen</a></li><li><a href="#health-bar">A health bar</a></li><li><a href="#spawning">Things that come and go</a></li><li><a href="#card">A panel that takes children</a></li><li><a href="#pickups">Picking things up</a></li><li><a href="#cooldown">A cooldown and a flash</a></li></ul>
 
 <h2 id="menu">A menu</h2>
 <p>A title or pause menu: buttons the arrow keys (or the d-pad) move between, Enter (or A) presses, and Escape closes. <code>&lt;Menu&gt;</code> keeps the focus among its own items and goes round at the ends; <code>autoFocus</code> says where it starts.</p>
-<pre class="code" data-lang="tsx" data-recipe="Menu.tsx"><code>import { Button, Menu, Text } from &quot;@rge/runtime/jsx&quot;;
+<pre class="code" data-lang="tsx" data-recipe="Menu.tsx"><code>import { Button, Menu, Text } from &quot;@tsengine/runtime/jsx&quot;;
 
 interface PauseMenuProps {
   onResume: () =&gt; void;
@@ -155,7 +155,7 @@ export function PauseMenu({ onResume, onQuit }: PauseMenuProps) {
 
 <h2 id="settings">A settings screen</h2>
 <p>Rows that change a value in place: <code>onAdjust</code> hears left and right while a row has the focus, and the focus stays. A <code>&lt;Slider&gt;</code> and a <code>&lt;Toggle&gt;</code> do the same with the mouse.</p>
-<pre class="code" data-lang="tsx" data-recipe="Options.tsx"><code>import { Button, Flex, Menu, Slider, Text, Toggle, useMutable } from &quot;@rge/runtime/jsx&quot;;
+<pre class="code" data-lang="tsx" data-recipe="Options.tsx"><code>import { Button, Flex, Menu, Slider, Text, Toggle, useMutable } from &quot;@tsengine/runtime/jsx&quot;;
 
 export function Options({ onClose }: { onClose: () =&gt; void }) {
   const s = useMutable({ volume: 8, shake: true });
@@ -182,7 +182,7 @@ export function Options({ onClose }: { onClose: () =&gt; void }) {
 
 <h2 id="health-bar">A health bar</h2>
 <p>A bar is a box inside a box: the inner one's width follows the value. It renders again only when <code>hp</code> or <code>max</code> change.</p>
-<pre class="code" data-lang="tsx" data-recipe="HealthBar.tsx"><code>import { Flex } from &quot;@rge/runtime/jsx&quot;;
+<pre class="code" data-lang="tsx" data-recipe="HealthBar.tsx"><code>import { Flex } from &quot;@tsengine/runtime/jsx&quot;;
 
 interface HealthBarProps {
   hp: number;
@@ -202,7 +202,7 @@ export function HealthBar({ hp, max, width = 40 }: HealthBarProps) {
 
 <h2 id="spawning">Things that come and go</h2>
 <p>A list in state, one component per item, each with a <code>key</code>. A new item mounts its component; an item that leaves the list unmounts it. The item says it is done through a callback, as a React child tells its parent.</p>
-<pre class="code" data-lang="tsx" data-recipe="Spawner.tsx"><code>import { Entity, Shape, useMutable, useUpdate } from &quot;@rge/runtime/jsx&quot;;
+<pre class="code" data-lang="tsx" data-recipe="Spawner.tsx"><code>import { Entity, Shape, useMutable, useUpdate } from &quot;@tsengine/runtime/jsx&quot;;
 
 interface Spark {
   id: number;
@@ -240,7 +240,7 @@ export function Spawner() {
 
 <h2 id="card">A panel that takes children</h2>
 <p>A reusable panel with a title and a footer of its own, and whatever the parent passes in between: single elements, conditions and a list, each kept in its place.</p>
-<pre class="code" data-lang="tsx" data-recipe="Card.tsx"><code>import { type Child, Flex, Text } from &quot;@rge/runtime/jsx&quot;;
+<pre class="code" data-lang="tsx" data-recipe="Card.tsx"><code>import { type Child, Flex, Text } from &quot;@tsengine/runtime/jsx&quot;;
 
 interface CardProps {
   title: string;
@@ -277,7 +277,7 @@ export function Bag({ items }: { items: readonly Item[] }) {
 
 <h2 id="pickups">Picking things up</h2>
 <p>Colliders report when they start touching; the handler reads the other collider's <code>tag</code> (and <code>owner</code>, and <code>data</code>). There is no physics: what touching does is up to the handler.</p>
-<pre class="code" data-lang="tsx" data-recipe="Pickup.tsx"><code>import { Collider, Entity, Shape, useMutable } from &quot;@rge/runtime/jsx&quot;;
+<pre class="code" data-lang="tsx" data-recipe="Pickup.tsx"><code>import { Collider, Entity, Shape, useMutable } from &quot;@tsengine/runtime/jsx&quot;;
 
 export function Coin({ x, y, onTaken }: { x: number; y: number; onTaken: () =&gt; void }) {
   return (
@@ -302,7 +302,7 @@ export function Field() {
 
 <h2 id="cooldown">A cooldown and a flash</h2>
 <p>Time is counted in the update, in seconds of game time: it follows the fixed step, replays the same, and stops while the game is paused. <code>after</code> and <code>every</code> do the same for a one-off delay.</p>
-<pre class="code" data-lang="tsx" data-recipe="Turret.tsx"><code>import { after, Shape, useInput, useMutable, useUpdate } from &quot;@rge/runtime/jsx&quot;;
+<pre class="code" data-lang="tsx" data-recipe="Turret.tsx"><code>import { after, Shape, useInput, useMutable, useUpdate } from &quot;@tsengine/runtime/jsx&quot;;
 
 export function Turret() {
   const s = useMutable({ cooldown: 0, flash: false, shots: 0 });

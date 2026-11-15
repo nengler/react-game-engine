@@ -10,7 +10,7 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseInputScript } from "@rge/player";
+import { parseInputScript } from "@tsengine/player";
 
 import { NO_CONTROLS, type Controls } from "../src/rules/body.ts";
 import { TRANSITION_TIME } from "../src/rules/constants.ts";

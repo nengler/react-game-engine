@@ -1,4 +1,4 @@
-import { registerTilemaps } from "@rge/runtime";
+import { registerTilemaps } from "@tsengine/runtime";
 
 import { tilemaps } from "../generated/tilemaps.ts";
 

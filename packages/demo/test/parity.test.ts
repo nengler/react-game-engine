@@ -9,15 +9,15 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const parity = resolve(repo, "packages/demo/parity.ts");
 
-/** The Rust host, when it has been built: `RGE_HOST_BIN` names it. CI sets RGE_REQUIRE_HOST=1 so a missing one fails. */
-const hostBin = process.env["RGE_HOST_BIN"];
-const requireHost = process.env["RGE_REQUIRE_HOST"] === "1";
+/** The Rust host, when it has been built: `TSE_HOST_BIN` names it. CI sets TSE_REQUIRE_HOST=1 so a missing one fails. */
+const hostBin = process.env["TSE_HOST_BIN"];
+const requireHost = process.env["TSE_REQUIRE_HOST"] === "1";
 const skipHost =
   hostBin !== undefined && existsSync(hostBin)
     ? false
     : requireHost
       ? false
-      : "the Rust host is not built (npm run host:build:headless, then RGE_HOST_BIN=host/target/release/rge-host)";
+      : "the Rust host is not built (npm run host:build:headless, then TSE_HOST_BIN=host/target/release/tse-host)";
 
 function bundle(entry: string, out: string): void {
   execFileSync(process.execPath, [resolve(repo, "tools/bundle.ts"), entry, out], { cwd: repo, stdio: "pipe" });
@@ -48,19 +48,19 @@ describe("parity: the demo under Node", () => {
 
 describe("bundling for the host", () => {
   it("bundles the demo into one module with nothing from Node or a native package", () => {
-    const dir = mkdtempSync(join(tmpdir(), "rge-bundle-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-bundle-"));
     try {
       bundle("packages/demo/main.ts", join(dir, "game.js"));
       const text = readFileSync(join(dir, "game.js"), "utf8");
       assert.doesNotMatch(text, /node:|koffi/, "no Node or koffi import");
-      assert.match(text, /__rgeBackend/, "it asks the host for the backend");
+      assert.match(text, /__tseBackend/, "it asks the host for the backend");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
   it("refuses a bundle that imports from Node", () => {
-    const dir = mkdtempSync(join(tmpdir(), "rge-bundle-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-bundle-"));
     try {
       assert.throws(() => bundle("packages/player-node/src/play.ts", join(dir, "play.js")), /Command failed/);
     } finally {
@@ -71,7 +71,7 @@ describe("bundling for the host", () => {
 
 describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }, () => {
   it("produces byte-identical output to Node over 60 scripted frames", () => {
-    const dir = mkdtempSync(join(tmpdir(), "rge-parity-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-parity-"));
     try {
       bundle("packages/demo/parity.ts", join(dir, "parity.js"));
       const underHost = execFileSync(hostBin as string, [join(dir, "parity.js")], {
@@ -86,13 +86,13 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
   });
 
   it("keeps saved data: write, overwrite, read back (UTF-8), remove, and refuse names that could be paths (ABI v7)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "rge-storage-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-storage-"));
     try {
       bundle("packages/demo/test/storage-script.ts", join(dir, "storage.js"));
       const out = execFileSync(hostBin as string, [join(dir, "storage.js")], {
         cwd: repo,
         encoding: "utf8",
-        env: { ...process.env, RGE_DATA_DIR: join(dir, "data") },
+        env: { ...process.env, TSE_DATA_DIR: join(dir, "data") },
       });
       assert.deepEqual(JSON.parse(out), [true, null, true, '{"version":1,"data":"héllo ✓"}', true, "two", false, null, null, false]);
       assert.equal(existsSync(join(dir, "data", "save.dat")), false, "the entry was removed from the folder");
@@ -102,7 +102,7 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
   });
 
   it("exits with status 1 and prints the stack when the game throws", () => {
-    const dir = mkdtempSync(join(tmpdir(), "rge-crash-"));
+    const dir = mkdtempSync(join(tmpdir(), "tse-crash-"));
     try {
       writeCrash(dir);
       assert.throws(
@@ -116,7 +116,7 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
 
   it("exits with status 2 and a usage line for a missing game file", () => {
     assert.throws(
-      () => execFileSync(hostBin as string, [join(tmpdir(), "rge-no-such-game.js")], { cwd: repo, stdio: "pipe" }),
+      () => execFileSync(hostBin as string, [join(tmpdir(), "tse-no-such-game.js")], { cwd: repo, stdio: "pipe" }),
       (error: { status?: number; stderr?: Buffer }) => error.status === 2 && /Cannot read/.test(String(error.stderr))
     );
   });

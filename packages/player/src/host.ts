@@ -1,7 +1,7 @@
 import type { Backend } from "./backend.ts";
 
 /** The global a host sets before it runs the game, so one entry file runs under every host. */
-export const HOST_BACKEND_KEY = "__rgeBackend";
+export const HOST_BACKEND_KEY = "__tseBackend";
 
 /**
  * The backend the host installed on `globalThis`: the Node launcher sets it from koffi, the Rust host
@@ -22,4 +22,4 @@ export function hostBackend(): Backend {
  * instead of stepping until the window closes. The Node launcher does this to hot reload, so a newer build of the entry file
  * hands it a newer config.
  */
-export const HOST_RUN_KEY = "__rgeRun";
+export const HOST_RUN_KEY = "__tseRun";

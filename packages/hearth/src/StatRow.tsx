@@ -1,4 +1,4 @@
-import { Flex, type TextChild } from "@rge/runtime/jsx";
+import { Flex, type TextChild } from "@tsengine/runtime/jsx";
 
 import { Icon } from "./Icon.tsx";
 import { Label } from "./Label.tsx";

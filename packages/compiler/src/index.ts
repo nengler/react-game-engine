@@ -1,4 +1,4 @@
-import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
+import { runtimeManifest, type RuntimeManifest } from "@tsengine/runtime";
 
 import { analyzeSourceFile, type SourceAnalysis } from "./analyzer/analyzer.ts";
 import { checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
@@ -16,7 +16,7 @@ import { buildModuleIR } from "./transform/transform.ts";
 import { typeCheckFiles, typeCheckSources, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export * from "./ir/types.ts";
-export type { RuntimeManifest } from "@rge/runtime";
+export type { RuntimeManifest } from "@tsengine/runtime";
 export * from "./diagnostics/diagnostics.ts";
 export {
   analyzeSourceFile,
@@ -85,9 +85,9 @@ export {
 } from "./typecheck/typecheck.ts";
 
 export interface CompilerConfig {
-  /** Module specifier generated code imports runtime classes from. Default: `@rge/runtime`. */
+  /** Module specifier generated code imports runtime classes from. Default: `@tsengine/runtime`. */
   readonly runtimeModule?: string;
-  /** What the runtime provides (intrinsics, host class, reserved names, handle types, functions). Default: `@rge/runtime`'s manifest. */
+  /** What the runtime provides (intrinsics, host class, reserved names, handle types, functions). Default: `@tsengine/runtime`'s manifest. */
   readonly manifest?: RuntimeManifest;
   /** Working directory for the TypeScript process. */
   readonly cwd?: string;
@@ -131,7 +131,7 @@ export class Compiler {
 
   constructor(config: CompilerConfig = {}) {
     this.#parser = new TsxParser({ cwd: config.cwd ?? process.cwd() });
-    this.#runtimeModule = config.runtimeModule ?? "@rge/runtime";
+    this.#runtimeModule = config.runtimeModule ?? "@tsengine/runtime";
     this.#manifest = config.manifest ?? runtimeManifest;
     this.#gameState = config.gameState;
     this.#sourceFromOutput = config.sourceFromOutput ?? "..";

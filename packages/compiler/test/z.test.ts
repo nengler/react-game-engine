@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { FrameBuilder } from "@rge/player";
-import { Entity, Shape, World } from "@rge/runtime";
+import { FrameBuilder } from "@tsengine/player";
+import { Entity, Shape, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, load } from "./helpers.ts";
@@ -118,7 +118,7 @@ describe("z: diagnostics", () => {
       getCompiler().typeCheckSources([
         {
           fileName: `${process.cwd()}/.test-output/Z${Math.random()}.tsx`,
-          text: `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C" transform={{ z: ${z} }} />; }`,
+          text: `import { Entity } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C" transform={{ z: ${z} }} />; }`,
         },
       ]);
     assert.deepEqual(check("3"), []);
