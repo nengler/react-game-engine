@@ -106,6 +106,11 @@ export function pendingRef(s: StateIR): string {
   return `this.${pending(s)}`;
 }
 
+/** The private field holding a `useMutable`'s object, which a handler hands over when it passes it whole (`takeHit(s)`): `#sObject`. */
+export function mutableObject(view: string): string {
+  return `#${view}Object`;
+}
+
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 export function propertyKey(name: string): string {

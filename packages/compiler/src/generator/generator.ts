@@ -1,7 +1,7 @@
 import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type StateIR, type TypeIR, walkExpr, walkFunction } from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
 import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
-import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access } from "./helpers.ts";
+import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access, mutableObject } from "./helpers.ts";
 import { ElementEmitter } from "./elements.ts";
 import { RenderGuard } from "./expressions.ts";
 
@@ -358,11 +358,20 @@ class ComponentGenerator extends ElementEmitter {
         mutables.set(s.mutable.view, [...(mutables.get(s.mutable.view) ?? []), s]);
       }
       for (const [view, fields] of mutables) {
-        const type = `{ ${fields.map((f) => `${f.mutable!.field}: ${typeText(f.type)}`).join("; ")} }`;
+        const type = `{ ${fields.map((f) => `${propertyKey(f.mutable!.field)}: ${typeText(f.type)}`).join("; ")} }`;
         const cache = `#${view}View`;
-        const members = fields.map((f) => `get ${f.mutable!.field}() { return self.${f.name}; }, set ${f.mutable!.field}(value: ${typeText(f.type)}) { self.${this.setter(f.id)}(value); }`);
+        const members = fields.map((f) => `get ${propertyKey(f.mutable!.field)}() { return self.${f.name}; }, set ${propertyKey(f.mutable!.field)}(value: ${typeText(f.type)}) { self.${this.setter(f.id)}(value); }`);
         w.line(`${cache}: ${type} | undefined;`);
         w.line(`get ${view}(): ${type} { const self = this; return (this.${cache} ??= { ${members.join(", ")} }); }`);
+        // The object a handler hands over when it passes the `useMutable` whole (`takeHit(s)`): one per component, made with it. Its
+        // fields are the component's as a handler sees them: a read is the value as it is now, a write goes through the field's
+        // setter (so it renders, as `s.hp -= 1` would). Once the component has been unmounted a write does nothing (`$mayWrite`).
+        const live = fields.map((f) => {
+          const key = propertyKey(f.mutable!.field);
+          const path = `${f.mutable!.name}.${f.mutable!.field}`;
+          return `get ${key}() { return self.${pending(f)}; }, set ${key}(value: ${typeText(f.type)}) { if (self.$mayWrite(${JSON.stringify(path)})) self.${this.setter(f.id)}(value); }`;
+        });
+        w.line(`readonly ${mutableObject(view)}: ${type} = ((self) => ({ ${live.join(", ")} }))(this);`);
       }
       // Its value props as a handler reads them (`this.$live.hp`): what its parent has now (see `GameObject.liveProp`). A property, not a
       // call, so TypeScript narrows it (`tower !== null && …`) as it does `this.props.tower`.

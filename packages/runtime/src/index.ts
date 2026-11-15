@@ -1,4 +1,5 @@
 export { GameObject } from "./GameObject.ts";
+export { developmentWarning, setDevelopmentWarnings } from "./develop.ts";
 export { Transform, composeTransforms, offsetTransform, IDENTITY_TRANSFORM, type WorldTransform } from "./Transform.ts";
 export { freeze, World } from "./World.ts";
 export { objectAt, pathIn, captureHotState, restoreHotState, type HotState } from "./hot.ts";
