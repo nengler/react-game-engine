@@ -117,7 +117,7 @@ export class Slider<P extends object = {}> extends Flex<P> {
   }
 
   /** Left and right move the thumb one step (a twentieth of the range with no step), and are used up even at an end; up and down are not, and move the focus. */
-  onNavigate(dx: number, _dy: number): boolean {
+  override onNavigate(dx: number, _dy: number): boolean {
     if (dx === 0) return false;
     const delta = this.step > 0 && Number.isFinite(this.step) ? this.step : (this.max - this.min) * KEY_SHARE;
     this.#set(this.#snap((Number.isFinite(this.value) ? this.value : this.min) + dx * delta));

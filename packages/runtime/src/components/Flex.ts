@@ -172,6 +172,11 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   disabledBorderColor?: string;
   /** Called when a press lands on the laid-out box (see `World.reportPress`), or as `PressableProps` says. The box is the size it was laid out at, last frame. */
   onPress?: () => void;
+  /**
+   * Called with -1 or 1 when left or right is pressed while the box has the focus (`focusable`): a settings row that changes its
+   * value, as a slider does. The direction is used up, so the focus stays on the box; up and down still move it.
+   */
+  onAdjust?: (direction: number) => void;
 }
 
 /**
@@ -326,6 +331,7 @@ export class Flex<P extends object = {}> extends GameObject<P> {
   autoFocus: boolean;
   onFocus: (() => void) | undefined;
   onBlur: (() => void) | undefined;
+  onAdjust: ((direction: number) => void) | undefined;
   /** Layout's working numbers (see `FlexBox`); `box.size` is the size the box was laid out at, last frame. */
   readonly box = new FlexBox();
 
@@ -395,6 +401,14 @@ export class Flex<P extends object = {}> extends GameObject<P> {
     this.autoFocus = hostProps.autoFocus ?? false;
     this.onFocus = hostProps.onFocus;
     this.onBlur = hostProps.onBlur;
+    this.onAdjust = hostProps.onAdjust;
+  }
+
+  /** A direction was pressed while it has the focus: left and right go to `onAdjust` when it has one (and are used up); otherwise the focus moves. */
+  onNavigate(dx: number, _dy: number): boolean {
+    if (dx === 0 || this.onAdjust === undefined) return false;
+    this.onAdjust(dx);
+    return true;
   }
 
   /**

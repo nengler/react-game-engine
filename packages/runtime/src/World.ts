@@ -1,6 +1,7 @@
 import { GameObject } from "./GameObject.ts";
 import { Collider, type Contact } from "./components/Collider.ts";
 import { Tilemap } from "./components/Tilemap.ts";
+import { Menu } from "./components/Menu.ts";
 import { boxesOverlap, type BodySpace, type Box } from "./body.ts";
 import { findTilemap } from "./tilemap.ts";
 import { takeTreeRestore } from "./gameTree.ts";
@@ -59,6 +60,8 @@ export class World implements BodySpace {
   /** Every `<Pointer>` and `<Flex>` in this world: what a `pressKey`, the focus and the confirm key look through. */
   readonly #pressables = new Set<GameObject & Pressable>();
   #focused: (GameObject & Pressable) | null = null;
+  /** What had the focus when a modal made it inert, to give it back when it can take it again (as a browser does when a dialog closes). */
+  #focusBeforeInert: (GameObject & Pressable) | null = null;
   readonly #live: (GameObject & Pressable)[] = [];
   readonly #focusables: (GameObject & Pressable)[] = [];
   #frozen = 0;
@@ -289,7 +292,16 @@ export class World implements BodySpace {
       if (p.focusable === true) focusables.push(p);
     }
     const ask = (action: string, keys: readonly string[]): boolean => (input.isAction?.(action) ? input.pressed(action) : keys.some((k) => input.pressed(k)));
-    if (this.#focused !== null && !focusables.includes(this.#focused)) this.focus(null);
+    if (this.#focused !== null && !focusables.includes(this.#focused)) {
+      const lost = this.#focused;
+      if (anyInert && lost.world === this && lost.focusable === true && lost.disabled !== true && this.isInert(lost)) this.#focusBeforeInert = lost;
+      this.focus(null);
+    }
+    const before = this.#focusBeforeInert;
+    if (before !== null && (before.world !== this || focusables.includes(before))) {
+      this.#focusBeforeInert = null;
+      if (before.world === this && (this.#focused === null || this.#focused.world !== this)) this.focus(before);
+    }
     if (this.#focused === null) {
       const auto = focusables.find((p) => p.autoFocus === true);
       if (auto) this.focus(auto);
@@ -302,12 +314,24 @@ export class World implements BodySpace {
         else if (this.#focused.onNavigate?.(dx, dy) === true) {
           // It used the direction itself (a slider moving its thumb), so the focus stays.
         } else {
-          const next = nearestInDirection(this.#focused, focusables, dx, dy);
+          const next = this.#nextFocus(this.#focused, focusables, dx, dy);
           if (next !== null) this.focus(next);
         }
       } else if (this.#focused !== null && ask("confirm", ["Enter", "PadA"])) this.#focused.onPress?.();
+      else if (this.#focused !== null && ask("back", ["Escape", "PadB"])) menuOf(this.#focused)?.onBack?.();
     }
     for (const p of live) if (p.pressKey !== undefined && p.world === this && input.pressed(p.pressKey)) p.onPress?.();
+  }
+
+  /**
+   * Where the focus goes from `from` in a direction: inside a `<Menu>`, the nearest of the menu's own items that way, or round to the
+   * far end when there is none and the menu loops (it never leaves the menu); elsewhere, the nearest focusable that way.
+   */
+  #nextFocus(from: GameObject & Pressable, focusables: readonly (GameObject & Pressable)[], dx: number, dy: number): (GameObject & Pressable) | null {
+    const menu = menuOf(from);
+    if (menu === null) return nearestInDirection(from, focusables, dx, dy);
+    const items = focusables.filter((p) => menuOf(p) === menu);
+    return nearestInDirection(from, items, dx, dy) ?? (menu.loop ? farthestInDirection(from, items, -dx, -dy) : null);
   }
 
   /** Called by GameObject when it joins this world: remember which per-tick hooks it overrides. */
@@ -458,6 +482,32 @@ function nearestInDirection(from: Pressable, candidates: readonly (GameObject & 
     }
   }
   return best;
+}
+
+/** The farthest of `candidates` from `from` in a direction (the other end of a menu, to go round to), or null when none is that way. */
+function farthestInDirection(from: Pressable, candidates: readonly (GameObject & Pressable)[], dx: number, dy: number): (GameObject & Pressable) | null {
+  const here = from.focusPoint?.() ?? { x: 0, y: 0 };
+  let best: (GameObject & Pressable) | null = null;
+  let bestScore = -Infinity;
+  for (const c of candidates) {
+    if (c === from) continue;
+    const at = c.focusPoint?.() ?? { x: 0, y: 0 };
+    const along = (at.x - here.x) * dx + (at.y - here.y) * dy;
+    if (along <= 0) continue;
+    const across = Math.abs((at.x - here.x) * dy) + Math.abs((at.y - here.y) * dx);
+    const score = along - across * 2;
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
+}
+
+/** The nearest `<Menu>` that holds `object` (not counting itself), or null. */
+function menuOf(object: Pressable): Menu | null {
+  for (let at = (object as unknown as GameObject).parent; at !== null; at = at.parent) if (at instanceof Menu) return at;
+  return null;
 }
 
 /** Is `object` `root` or inside it? */
