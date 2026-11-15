@@ -17,16 +17,37 @@
  *   --out <dir>             where to write (default ./shots); frames are step-<n>.png
  *   --sheet <name>          also write a contact sheet <name>.png of the captured frames
  *   --columns N --scale N   the sheet's frames per row and enlargement; --scale also enlarges the single frames
+ *   --gpu                   draw with the desktop build on the GPU (OpenGL), as a player's window does, not the software renderer:
+ *                           what a shader or a driver does shows. Needs `npm run native:build` and a display; without one (CI, a
+ *                           cloud machine) it runs itself again under `xvfb-run`, which Mesa's software OpenGL backs
+ *   --compare <dir>         compare each frame with <dir>/step-<n>.png and exit 1 if one differs (new frames are written to --out)
+ *   --tolerance N           how far a channel (0 to 255) may differ before a pixel counts as different (default 0)
+ *   --update                with --compare: write the frames into <dir> as the new references instead of comparing
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parseInputScript, type InputBindings, type PlayerConfig, type ScriptOptions } from "@rge/player";
-import { contactSheet, encodePng, renderRun, type Pixels } from "@rge/player-node";
+import { contactSheet, decodePng, encodePng, findNativeLibraryOf, pixelDifference, renderRun, type Pixels } from "@rge/player-node";
 
 const usage =
-  'usage: rge screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N]';
+  'usage: rge screenshot <gameFolder> [--script "<script>" | --script-file <file>] [--at 0,10 | --every N] [--out dir] [--sheet name] [--columns N] [--scale N] [--gpu] [--compare dir [--tolerance N] [--update]]';
+
+/** Options that take no value. */
+const SWITCHES = new Set(["gpu", "update"]);
+
+/** The virtual display `--gpu` runs under when there is none: large enough for a game's hidden window at its default scale. */
+const XVFB_SCREEN = "-screen 0 1920x1080x24";
+
+function hasDisplay(env: NodeJS.ProcessEnv): boolean {
+  return process.platform !== "linux" || Boolean(env["DISPLAY"]) || Boolean(env["WAYLAND_DISPLAY"]);
+}
+
+function onPath(command: string): boolean {
+  return spawnSync("sh", ["-c", `command -v ${command}`], { encoding: "utf8" }).status === 0;
+}
 
 function enlarge(pixels: Pixels, scale: number): Pixels {
   if (scale <= 1) return pixels;
@@ -46,7 +67,8 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
   const flags = new Map<string, string>();
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] as string;
-    if (arg.startsWith("--")) {
+    if (arg.startsWith("--") && SWITCHES.has(arg.slice(2))) flags.set(arg.slice(2), "true");
+    else if (arg.startsWith("--")) {
       const value = argv[i + 1];
       if (value === undefined) {
         console.error(`${arg} needs a value.\n${usage}`);
@@ -62,6 +84,37 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     return 2;
   }
   const gameDir = resolve(folder);
+  const gpu = flags.has("gpu");
+  let library: string | undefined;
+  if (gpu) {
+    const found = findNativeLibraryOf("desktop");
+    if (found === null) {
+      console.error(
+        "--gpu needs the desktop build of librge: run `npm run native:build` (it needs the window libraries; see Getting started)."
+      );
+      return 2;
+    }
+    library = found;
+    if (!hasDisplay(process.env)) {
+      // No display (CI, a cloud machine): run again under a virtual one, which Mesa's software OpenGL draws for.
+      if (process.env["RGE_UNDER_XVFB"] === "1" || !onPath("xvfb-run")) {
+        console.error("--gpu needs a display, and there is none: install Xvfb (`sudo apt install xvfb`) or run it in a desktop session.");
+        return 2;
+      }
+      const self = fileURLToPath(new URL("../cli.ts", import.meta.url));
+      const again = spawnSync("xvfb-run", ["-a", "-s", XVFB_SCREEN, process.execPath, self, "screenshot", ...argv], {
+        stdio: "inherit",
+        env: { ...process.env, RGE_UNDER_XVFB: "1" },
+      });
+      return again.status ?? 1;
+    }
+  }
+  const compareDir = flags.has("compare") ? resolve(flags.get("compare") as string) : null;
+  const tolerance = Number(flags.get("tolerance") ?? 0);
+  if (!Number.isInteger(tolerance) || tolerance < 0 || tolerance > 255) {
+    console.error(`--tolerance takes a whole number from 0 to 255.\n${usage}`);
+    return 2;
+  }
   const mod = (await import(pathToFileURL(join(gameDir, "game.ts")).href)) as {
     gameConfig: PlayerConfig;
     bindings?: InputBindings;
@@ -82,7 +135,7 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     return 2;
   }
   const warnings: string[] = [];
-  const shots = renderRun(mod.gameConfig, frames, { at, warnings });
+  const shots = renderRun(mod.gameConfig, frames, { at, warnings, ...(library !== undefined ? { library } : {}) });
   const scale = Math.max(1, Number(flags.get("scale") ?? 1));
   const out = resolve(flags.get("out") ?? "shots");
   mkdirSync(out, { recursive: true });
@@ -99,6 +152,30 @@ export async function screenshotCommand(argv: readonly string[]): Promise<number
     written.push(`${sheetName}.png`);
   }
   for (const warning of warnings) console.warn(`warning: ${warning}`);
-  console.log(`${frames.length} frames run; wrote ${written.join(", ")} to ${out}`);
-  return 0;
+  console.log(`${frames.length} frames run${gpu ? " on the GPU" : ""}; wrote ${written.join(", ")} to ${out}`);
+  if (compareDir === null) return 0;
+  if (flags.has("update")) {
+    mkdirSync(compareDir, { recursive: true });
+    for (const shot of shots) writeFileSync(join(compareDir, `step-${shot.step}.png`), encodePng(shot.pixels));
+    console.log(`updated ${shots.length} reference${shots.length === 1 ? "" : "s"} in ${compareDir}`);
+    return 0;
+  }
+  let failed = 0;
+  for (const shot of shots) {
+    const reference = join(compareDir, `step-${shot.step}.png`);
+    if (!existsSync(reference)) {
+      console.log(`new   step-${shot.step}: no reference (--update writes it)`);
+      failed++;
+      continue;
+    }
+    const diff = pixelDifference(shot.pixels, decodePng(readFileSync(reference)), tolerance);
+    if (diff === 0) console.log(`same  step-${shot.step}`);
+    else {
+      failed++;
+      console.log(
+        `DIFF  step-${shot.step}: ${typeof diff === "number" ? `${diff} pixels differ by more than ${tolerance}` : diff} (the new frame is in ${out})`
+      );
+    }
+  }
+  return failed === 0 ? 0 : 1;
 }

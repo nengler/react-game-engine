@@ -21,6 +21,7 @@
     "native:build:headless": "cmake -S native -B native/build-headless -DRGE_PLATFORM=Memory && cmake --build native/build-headless -j",
     "native:test": "cmake --build native/build-headless -j && ctest --test-dir native/build-headless --output-on-failure",
     "screenshot": "rge screenshot",
+    "check:gpu": "node packages/cli/src/cli.ts screenshot packages/demo --gpu --script \"right*20, _*10\" --at 9,29 --out /tmp/rge-gpu-demo --compare packages/demo/test/gpu --tolerance 64 && node packages/cli/src/cli.ts screenshot packages/kite --gpu --script \"_*5, Enter, _*40, right*20\" --at 3,65 --out /tmp/rge-gpu-kite --compare packages/kite/test/gpu --tolerance 64",
     "check:demo": "rge check packages/demo && tsc -p tsconfig.json",
     "bundle": "node tools/bundle.ts",
     "bench:check": "node tools/bench-check.ts",
