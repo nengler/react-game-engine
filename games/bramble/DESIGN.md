@@ -66,6 +66,15 @@ lantern's light flicker a little (`params[0]`, 0.12 *(guess)*) and darkens the s
 renderer's, without it. The story `Play/Cave` keeps its
 picture. Not decided yet: how dark it should be when played, and how bright the glows are (the bell and the key glow and the wisp carries a light, all guesses).
 
+## The cave's first visit is a cutscene (2026-11-15)
+
+The first time the character steps into the cave, `Play` holds the world for 3.4 s (`CAVE_INTRO_SECONDS`) while a sequence
+(`cutscenes.ts`, the engine's `sequence`) grows the lantern's light out of the dark and shows a line. It is kept in a `useMutable`
+field (`intro`, started from `noCutscene()`), so it is not saved: a run loaded from a save plays it again on the next visit, which is
+fine for now. The whole-game replay (`test/fullrun.ts`) waits it out after the cave's door. The stories `Play/Cave` (after it) and
+`Play/CaveIntro` (during it) keep its pictures. Found while writing it: a field started at `null` could not have its methods called,
+and `import type` from `@rge/runtime` is refused in a component (DESIGN.md, "Sequences, for cutscenes").
+
 ## Findings while writing
 
 Written down as they were hit, as Kite and Hearth did; the engine is changed only when one is worth it.

@@ -878,7 +878,7 @@ reload keeps a timer only if the callback still exists at the same place in the 
 - [x] `after`, `every` and `cancelTimers` compile, are cancelled on unmount, follow the fixed step and `freeze`, and replay
 - [x] Hot reload drops timers, with a note and a test (keeping them by call site is not possible: see above)
 - [x] The guide says which delays are timers and which are state that is saved
-- [x] Sequences: built when a game with a cutscene asks (recorded in NEXT_PRIORITIES.md's "Not now")
+- [x] Sequences: built 2026-11-15 for Bramble's cave (`runtime/src/sequence.ts`; DESIGN.md, "Sequences, for cutscenes")
 
 ### C3. Context
 

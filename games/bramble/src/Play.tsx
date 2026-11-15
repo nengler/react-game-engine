@@ -1,5 +1,6 @@
-import { Camera, Entity, Hud, Light, Lighting, ParticleLayer, Sprite, Text, useInput, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Hud, Light, Lighting, ParticleLayer, Sprite, Text, useInput, useMutable, useUpdate } from "@rge/runtime/jsx";
 
+import { caveIntro, noCutscene } from "./cutscenes.ts";
 import { Dialogue } from "./Dialogue.tsx";
 import { fx } from "./effects.ts";
 import { useGame } from "./GameState.ts";
@@ -18,6 +19,8 @@ export function Play() {
   const { advance, togglePause } = useGame.actions();
   const { x, y, frame } = heroOf(run);
   const { width, height } = mapPixels(run.map);
+  // The cave's first visit plays a short cutscene (cutscenes.ts): the world waits while it runs.
+  const s = useMutable({ intro: noCutscene(), sawCave: false, reach: 1, line: "" });
 
   // While the pause screen is shown it is modal: this hears no keys, and the pause screen closes itself.
   useInput((input) => {
@@ -25,6 +28,18 @@ export function Play() {
   });
   // The step reads the keys itself: useUpdate gets the same input as useInput, so nothing is carried between them.
   useUpdate((dt, input) => {
+    if (run.map === "cave" && !s.sawCave) {
+      s.sawCave = true;
+      s.intro = caveIntro(
+        (reach) => {
+          s.reach = reach;
+        },
+        (line) => {
+          s.line = line;
+        }
+      );
+    }
+    if (s.intro.step(dt)) return; // the world waits while a cutscene plays
     if (paused) return; // not stepped while paused
     advance(readInput(input), dt);
   });
@@ -48,7 +63,7 @@ export function Play() {
           light flicker and the edges darker (the software renderer, in tests, draws it without). */}
       {run.map === "cave" && (
         <Lighting ambient="#16162c" shader="cave.glsl" params={[0.12]}>
-          <Light radius={56} color="#ffe2b0" x={x + 8} y={y + 8} />
+          <Light radius={56 * s.reach} color="#ffe2b0" x={x + 8} y={y + 8} />
           {glowsOf(run).map((g) => (
             <Light key={g.id} radius={g.radius} color={g.color} intensity={g.intensity} x={g.x} y={g.y} />
           ))}
@@ -57,6 +72,7 @@ export function Play() {
       <Hud>
         <Text x={4} y={3} color="#ff6b6b">{`Hearts ${run.hearts}/${MAX_HEARTS}   Bells ${run.items.bell ?? 0}/${BELLS_NEEDED}`}</Text>
         {run.notice !== null && <Notice text={run.notice} />}
+        {s.line !== "" && <Notice text={s.line} />}
         {run.talk !== null && !paused && <Dialogue />}
         {paused && <Pause />}
       </Hud>

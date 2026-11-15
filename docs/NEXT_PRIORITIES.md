@@ -38,7 +38,7 @@ performance are set aside for now; the author has played Bramble in a window, an
 | 6 | Shaders (**done**, ABI v11: `<Layer shader params>`, a GLSL `effect` function per file; the software renderer warns that it runs none; Bramble's cave flickers and darkens at the edges) | Tested in Bramble's cave or night area |
 | 7 | Lighting (**done**, ABI v12: `<Lighting ambient>` and `<Light radius color intensity>`; Bramble's lantern, the cave's items and the wisps are lights; no shadows) | A light map multiplied over the scene, finishing that area |
 | 8 | Better collision shapes (**done**: `shape="circle"` and convex `shape="polygon"` on `<Collider>`, tested exactly for contacts and body queries, rotated boxes exact against them; solid shapes and slopes not yet) | Circles and polygons; whether they also stop movement (slopes) is the author's call |
-| 9 | Cutscenes | Sequences (REACT_FEEL_PLAN.md C2); the way into Bramble's cave is the first |
+| 9 | Cutscenes (**done**: `sequence`, `wait`, `call`, `waitFor`, `tween`, `parallel` in `@rge/runtime`; Bramble's first visit to the cave is one) | Sequences (REACT_FEEL_PLAN.md C2); the way into Bramble's cave is the first |
 
 ## Phase 4: driven by a real game
 
@@ -512,7 +512,7 @@ The rest of the backlog (the player's and the compiler's) waits because nothing 
 | One-file executable, prebuilt librge, macOS signing, publishing packages to npm | Packaging as a folder works, and Phase 4 is local first | Handing a build to someone else, or open-sourcing after priority 8 |
 | SDL3 platform layer, native code generation | Large, and nothing measured asks for them | Consoles, or script time dominating after priority 4 |
 | ~~Context (`createContext` / `useContext`)~~ | Built 2026-11-13 ([REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md), C3) | — |
-| Sequences for cutscenes (`sequence([wait(0.5), call(…), parallel([…])])`, [REACT_FEEL_PLAN.md](REACT_FEEL_PLAN.md) C2) | Timers (`after`, `every`) cover the short delays the games have; no game has a cutscene yet | A game with a cutscene: the adventure (priority 8) is the likeliest |
+| ~~Sequences for cutscenes~~ | Built 2026-11-15 (DESIGN.md, "Sequences, for cutscenes"), with Bramble's cave as the first | — |
 | Children on list items that are conditional, lists, or nested | Built flat only (second-game finding 4): `RGE1209` for the rest | An author needing `{ok && <Icon/>}` inside a list item's children; the third game's inventory slots are expected to (priority 8) |
 | ~~Forwarding `{children}` beside other passed children~~, spread onto a built-in | Forwarding and lists beside other passed children built 2026-11-15 (DESIGN.md, "Forwarding"); spread onto components only | A game writing `<Shape {...p} />` |
 | Tiled importer gaps (whole-number `int` checks, template properties, zstd layers, infinite maps, collections of images) | `visible`, tile flip flags (priority 7), base64 layers, external `.tsj` and `.tsx` tilesets, several tilesets each drawn from its own sheet, map properties and objects as data (priority 8, M6.1 and M6.2) are done; the rest each say so when met | A map that uses them, or the first map saved by Tiled itself (finding 8): still none, so M6.3 (a person saving Bramble's overworld in Tiled) is the open step |
