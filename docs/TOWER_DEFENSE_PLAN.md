@@ -165,7 +165,7 @@ generated code, diagnostics for what is still not allowed), a runtime test, and 
 The order is the order the game is expected to hit them; build each when it is hit.
 
 1. **Spread props** (`<Enemy {...e} />`, and spread together with named props, later ones winning). Today: rejected
-   ("Only plain `name={value}` attributes are supported", `RGE1203`). On a **component** element this needs no key list:
+   ("Only plain `name={value}` attributes are supported", `TSE1203`). On a **component** element this needs no key list:
    the generated code can spread for real (`new Enemy({ ...e, speed: 2 })`, `updateProps({ ...e })`). TypeScript checks
    the object against the props type, the source type-check reports a missing prop at the author's line, and the
    runtime's `applyProps` already compares key by key, so a render only marks the child dirty when a value changed.
@@ -271,18 +271,18 @@ replaces turned into a test of the new behaviour plus a test of what is still re
 | File | Change |
 | --- | --- |
 | `compiler/src/ir/elements.ts` | `PropIR` gains `SpreadPropIR { kind: "SpreadProp"; value: ExprIR; dependencies: DependencyIR[] }`. Order among props is kept, so later props win as in React |
-| `compiler/src/transform/elements.ts` (`lowerProps`) | A `JsxSpreadAttribute` on a component element lowers its expression with `lowerNode` (so it may read state, props, the list item or a `useGame` selection). On a built-in: `RGE1203` "spread onto a built-in is not supported yet". `key` and `ref` checks are unchanged. A spread of a callback-only object is not special: functions in the object pass through as values |
+| `compiler/src/transform/elements.ts` (`lowerProps`) | A `JsxSpreadAttribute` on a component element lowers its expression with `lowerNode` (so it may read state, props, the list item or a `useGame` selection). On a built-in: `TSE1203` "spread onto a built-in is not supported yet". `key` and `ref` checks are unchanged. A spread of a callback-only object is not special: functions in the object pass through as values |
 | `compiler/src/transform/lowering.ts` (`asListItem`) | A spread that reads the item gets the `Item` dependency, like a dynamic prop |
 | `compiler/src/generator/elements.ts` (`propsObject`, `emitPropUpdates`) | Emit `...(<expr>)` in place. `updateProps` gets the spread together with the dynamic props whenever the spread's dependencies changed. A static spread (reads nothing that changes) goes in at construction only |
 | `compiler/src/ir/walk.ts` | Walk `SpreadProp` values (dependencies, `readsParam`, asset collection) |
 | `compiler/src/prefabs/prefabs.ts`, `compiler/src/assets/assets.ts` | Skip spread props when listing settable props and literal asset paths (they are not literal) |
-| Tests | Lowering and generated text, a spread in a keyed list re-rendering only the item whose object changed (runtime counts renders), named prop after a spread winning, source type-check catching a missing prop (`RGE9002`), spread onto `<Sprite>` rejected |
+| Tests | Lowering and generated text, a spread in a keyed list re-rendering only the item whose object changed (runtime counts renders), named prop after a spread winning, source type-check catching a missing prop (`TSE9002`), spread onto `<Sprite>` rejected |
 
 ### 2. Conditionals inside a list's `.map`
 
 | File | Change |
 | --- | --- |
-| `compiler/src/transform/elements.ts` (`lowerList`) | Accept a body that is `cond && <El key …/>`: rewrite the source to `source.filter((item) => cond)` (the source may already be filtered; `isListSource` allows it) and lower the element as today. Accept `cond ? <A key …/> : <B key …/>`: lower both branches, check that the two `key` expressions are the same IR (`sameExpr`, new in `ir/walk.ts`), otherwise `RGE1209` "both branches need the same key". A `null` branch is the `&&` form |
+| `compiler/src/transform/elements.ts` (`lowerList`) | Accept a body that is `cond && <El key …/>`: rewrite the source to `source.filter((item) => cond)` (the source may already be filtered; `isListSource` allows it) and lower the element as today. Accept `cond ? <A key …/> : <B key …/>`: lower both branches, check that the two `key` expressions are the same IR (`sameExpr`, new in `ir/walk.ts`), otherwise `TSE1209` "both branches need the same key". A `null` branch is the `&&` form |
 | `compiler/src/ir/elements.ts` | `KeyedListChildIR` gains `alternate: { condition: ExprIR; element: ElementIR } \| null`: `element` when `condition` is true, `alternate.element` otherwise. Each branch has its own `fieldName` |
 | `compiler/src/generator/elements.ts` (`emitList`, `subtreeResets`), `generator.ts` (field declarations) | Per key keep `{ branch: 0 \| 1, instance }`. On render: compute the branch; a new key constructs that branch; a key whose branch flipped queues removal of the old instance and adds the new one at the same `(slot, position)`; otherwise update props. One items map and one order array per list, typed as the union of both classes. The duplicate-key check is unchanged |
 | `compiler/src/generator/elements.ts` (`listItemType`) | Unchanged: the item type comes from the source |
@@ -296,7 +296,7 @@ item to live.
 
 | File | Change |
 | --- | --- |
-| `compiler/src/transform/elements.ts` (`lowerList`) | Allow children on the item element: static children, conditional children and a nested `{children}`-free subtree. They may read the item. A nested list inside a list item stays `RGE1209` in the first cut |
+| `compiler/src/transform/elements.ts` (`lowerList`) | Allow children on the item element: static children, conditional children and a nested `{children}`-free subtree. They may read the item. A nested list inside a list item stays `TSE1209` in the first cut |
 | `compiler/src/generator/elements.ts` | Teach the element emitters (`emitElementFields`, `emitStaticWiring`, `emitChildUpdates`, `emitMountStatics`, `subtreeResets`) to take an **owner** expression instead of assuming `this`: `this` for the component's own elements, `$rec` for a list item's, where `$rec` is the per-key record (the list already keeps `#<field>Records` for callbacks; it becomes the place the item's child instances live too). A component item mounts them with `attachPassedChild`; a built-in item with `addChild` |
 | `compiler/src/generator/generator.ts` | Emit a record type per list with children (`{ current: Item; icon: Icon; label: Label \| null; … }`) |
 | Tests | `TOWER_LIST.map((d) => <MenuButton key={d.kind}><Icon kind={d.kind}/><Label text={d.name}/></MenuButton>)`: built, updated when `d` changes, removed with its item. A conditional child in a list item. A list item that is a `<Flex>` with children |
@@ -305,11 +305,11 @@ item to live.
 
 | File | Change |
 | --- | --- |
-| `compiler/src/transform/lowering.ts` (`lowerChildrenSlot`) | When `context.passed` (the slot is among the children passed to another component) and the slot is the only child of that block, accept it and record the forwarding target (that component element). Beside other passed children (open decision 5, decided: option A) it is `RGE1202`: "`{children}` forwarded to <Panel> must be the only child passed to it: put the other children inside <Panel> itself, or pass them through `{children}` from the parent." Inside a condition or a list, keep today's diagnostic |
+| `compiler/src/transform/lowering.ts` (`lowerChildrenSlot`) | When `context.passed` (the slot is among the children passed to another component) and the slot is the only child of that block, accept it and record the forwarding target (that component element). Beside other passed children (open decision 5, decided: option A) it is `TSE1202`: "`{children}` forwarded to <Panel> must be the only child passed to it: put the other children inside <Panel> itself, or pass them through `{children}` from the parent." Inside a condition or a list, keep today's diagnostic |
 | `compiler/src/ir/elements.ts`, `ir/declarations.ts` | `ChildrenSlotChildIR` gains `forwardedTo: string \| null` (the inner element's field). `ComponentIR` records it for the generator |
 | `compiler/src/generator/generator.ts` (the constructor's slot wiring at `findChildrenSlot`) | For a forwarding component, emit `this.passedChildrenForward = this.<inner>;` instead of host and slot |
 | `runtime/src/GameObject.ts` | `passedChildrenForward: GameObject \| null`. `attachPassedChild`, `queueAttachPassedChild`, `queueDetachPassedChild` and `queueReorderPassedChildren` delegate to it when set, so two levels (Modal → Panel → Flex) resolve in a chain. `acceptsPassedChildren` is true when either is set |
-| Tests | Modal → Panel → Flex with static, conditional and list children; the runtime error for a component that does not render `{children}` still reads well through a forward; a forwarded `{children}` with a sibling in the same block rejected with `RGE1202` |
+| Tests | Modal → Panel → Flex with static, conditional and list children; the runtime error for a component that does not render `{children}` still reads well through a forward; a forwarded `{children}` with a sibling in the same block rejected with `TSE1202` |
 
 ### 5. Context
 

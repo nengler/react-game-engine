@@ -1,4 +1,4 @@
-import { Camera, Entity, Hud, Light, Lighting, ParticleLayer, Sprite, Text, useInput, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { Camera, Entity, Hud, Light, Lighting, ParticleLayer, Sprite, Text, useInput, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 import { caveIntro, noCutscene } from "./cutscenes.ts";
 import { Dialogue } from "./Dialogue.tsx";

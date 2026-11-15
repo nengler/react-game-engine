@@ -4,26 +4,26 @@
 #include "internal.h"
 #include "raylib.h"
 #include "rlgl.h"
-#include "rge.h"
+#include "tse.h"
 
-/* librge: opens a window and executes the draw records described in include/rge.h. It does no
+/* libtse: opens a window and executes the draw records described in include/tse.h. It does no
  * game logic and no maths beyond applying the transform each record carries. */
 
 #define RAD_TO_DEG (180.0f / 3.14159265358979323846f)
 
 static struct {
   bool open;
-  bool hidden;       /* opened with RGE_OPEN_HIDDEN: frames are captured for rge_read_pixels */
+  bool hidden;       /* opened with TSE_OPEN_HIDDEN: frames are captured for tse_read_pixels */
   uint8_t *pixels;   /* the last captured frame, RGBA8, top row first */
   int32_t pixels_size;
   int32_t pixels_width;
   int32_t pixels_height;
   bool bad_frame_reported;
-  RenderTexture2D canvas; /* the off-screen target of RGE_OP_CANVAS; id 0 when there is none */
-  RenderTexture2D upscaled; /* RGE_OPEN_SHARP: the canvas scaled up by a whole number, before the bilinear step down to the window */
-  RenderTexture2D layers[RGE_LAYER_MAX]; /* RGE_OP_LAYER_BEGIN's targets, one per depth, kept between frames and remade at a new size */
+  RenderTexture2D canvas; /* the off-screen target of TSE_OP_CANVAS; id 0 when there is none */
+  RenderTexture2D upscaled; /* TSE_OPEN_SHARP: the canvas scaled up by a whole number, before the bilinear step down to the window */
+  RenderTexture2D layers[TSE_LAYER_MAX]; /* TSE_OP_LAYER_BEGIN's targets, one per depth, kept between frames and remade at a new size */
   bool sharp;
-  uint32_t typed[RGE_TYPED_MAX]; /* what rge_frame collected for rge_typed */
+  uint32_t typed[TSE_TYPED_MAX]; /* what tse_frame collected for tse_typed */
   int32_t typed_count;
 } state;
 
@@ -32,7 +32,7 @@ static struct {
 /* A render target for 2D drawing: a colour texture and no depth. raylib 6.0's LoadRenderTexture fails on some drivers (Mesa 25.x's
  * llvmpipe and softpipe): its colour texture is uploaded with no pixels, which those drivers refuse (GL_INVALID_ENUM), and its depth
  * renderbuffer takes the unsized GL_DEPTH_COMPONENT format. The framebuffer is then incomplete and everything drawn through it is
- * black. Here the texture starts from zeroed pixels, and there is no depth: nothing librge draws tests it. */
+ * black. Here the texture starts from zeroed pixels, and there is no depth: nothing libtse draws tests it. */
 static RenderTexture2D load_target(int32_t width, int32_t height) {
 #if defined(GRAPHICS_API_OPENGL_SOFTWARE)
   return LoadRenderTexture(width, height);
@@ -64,22 +64,22 @@ static RenderTexture2D load_target(int32_t width, int32_t height) {
 #endif
 }
 
-int32_t rge_abi_version(void) {
-  return RGE_ABI_VERSION;
+int32_t tse_abi_version(void) {
+  return TSE_ABI_VERSION;
 }
 
-int32_t rge_key_count(void) {
+int32_t tse_key_count(void) {
   return keys_count();
 }
 
-int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t options) {
+int32_t tse_open(int32_t width, int32_t height, const char *title, uint32_t options) {
   if (state.open) return 2;
   if (width <= 0 || height <= 0) return 3;
 
   unsigned int flags = 0;
-  if (options & RGE_OPEN_RESIZABLE) flags |= FLAG_WINDOW_RESIZABLE;
-  if (options & RGE_OPEN_VSYNC) flags |= FLAG_VSYNC_HINT;
-  if (options & RGE_OPEN_HIDDEN) flags |= FLAG_WINDOW_HIDDEN;
+  if (options & TSE_OPEN_RESIZABLE) flags |= FLAG_WINDOW_RESIZABLE;
+  if (options & TSE_OPEN_VSYNC) flags |= FLAG_VSYNC_HINT;
+  if (options & TSE_OPEN_HIDDEN) flags |= FLAG_WINDOW_HIDDEN;
   SetConfigFlags(flags);
   SetTraceLogLevel(LOG_WARNING);
 
@@ -90,22 +90,22 @@ int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t opti
   rlDisableBackfaceCulling();
   SetExitKey(KEY_NULL); /* Escape belongs to the game, not to the window */
   /* Without vsync, cap at 60 fps; a hidden window (tests, CI) runs flat out. */
-  if (!(options & RGE_OPEN_VSYNC) && !(options & RGE_OPEN_HIDDEN)) SetTargetFPS(60);
+  if (!(options & TSE_OPEN_VSYNC) && !(options & TSE_OPEN_HIDDEN)) SetTargetFPS(60);
 
   /* A hidden window is for tests and CI: no audio device, so no noise from machines without a sound card. */
-  assets_init((options & RGE_OPEN_SMOOTH) != 0, (options & RGE_OPEN_HIDDEN) == 0);
+  assets_init((options & TSE_OPEN_SMOOTH) != 0, (options & TSE_OPEN_HIDDEN) == 0);
   state.open = true;
-  state.hidden = (options & RGE_OPEN_HIDDEN) != 0;
-  state.sharp = (options & RGE_OPEN_SHARP) != 0;
+  state.hidden = (options & TSE_OPEN_HIDDEN) != 0;
+  state.sharp = (options & TSE_OPEN_SHARP) != 0;
   state.bad_frame_reported = false;
   return 0;
 }
 
-void rge_close(void) {
+void tse_close(void) {
   if (!state.open) return;
   if (state.canvas.id != 0) UnloadRenderTexture(state.canvas);
   if (state.upscaled.id != 0) UnloadRenderTexture(state.upscaled);
-  for (int32_t i = 0; i < RGE_LAYER_MAX; i++) {
+  for (int32_t i = 0; i < TSE_LAYER_MAX; i++) {
     if (state.layers[i].id != 0) UnloadRenderTexture(state.layers[i]);
     state.layers[i] = (RenderTexture2D){ 0 };
   }
@@ -115,23 +115,23 @@ void rge_close(void) {
   memset(&state, 0, sizeof(state));
 }
 
-int32_t rge_set_fullscreen(int32_t on) {
+int32_t tse_set_fullscreen(int32_t on) {
   if (!state.open || state.hidden) return 1;
   bool wanted = on != 0;
   if (IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) != wanted) ToggleBorderlessWindowed();
   return 0;
 }
 
-int32_t rge_measure_text(const char *text, double size, double *out) {
+int32_t tse_measure_text(const char *text, double size, double *out) {
   if (!state.open || text == NULL || out == NULL || !(size >= 0.0 && size <= 100000.0)) return 1;
-  /* The font and spacing RGE_OP_TEXT draws with. */
+  /* The font and spacing TSE_OP_TEXT draws with. */
   Vector2 measured = MeasureTextEx(GetFontDefault(), text, (float)size, (float)size / 10.0f);
   out[0] = (double)measured.x;
   out[1] = (double)measured.y;
   return 0;
 }
 
-int32_t rge_texture_size(int32_t handle, double *out) {
+int32_t tse_texture_size(int32_t handle, double *out) {
   Texture2D texture;
   if (!state.open || out == NULL || !assets_texture(handle, &texture)) return 1;
   out[0] = (double)texture.width;
@@ -157,7 +157,7 @@ static Color unpack_color(uint32_t rgba) {
 static void report_bad_frame(const char *why, int32_t at) {
   if (state.bad_frame_reported) return;
   state.bad_frame_reported = true;
-  TraceLog(LOG_ERROR, "RGE: malformed draw records (%s at %d): the rest of the frame is not drawn", why, at);
+  TraceLog(LOG_ERROR, "TSE: malformed draw records (%s at %d): the rest of the frame is not drawn", why, at);
 }
 
 /* translate, rotate, scale: the record's world transform, applied to a drawable at the local origin. */
@@ -193,7 +193,7 @@ static int corner_segments(float radius) {
   return segments < 4 ? 4 : segments > 24 ? 24 : segments;
 }
 
-/* RGE_OP_BOX at the local origin: the fill over the whole box, then the border inside its edge (as CSS paints a background
+/* TSE_OP_BOX at the local origin: the fill over the whole box, then the border inside its edge (as CSS paints a background
  * under its border). The border is built from exact pieces, so no pixel is painted twice (a translucent border stays even):
  * four edge rectangles between the corners, and in each corner block (c x c, c the larger of the radius and the border
  * width) a quarter ring when the radius covers the border, else the quarter disc of the outer corner and the rest of the block. */
@@ -259,7 +259,7 @@ extern void swBlendFunc(int sfactor, int dfactor);
 #define SW_GL_ZERO 0
 #endif
 
-/* How a drawable meets what is under it: an RGE_BLEND_* as raylib's blend state. `translucent` says that what is drawn next has
+/* How a drawable meets what is under it: an TSE_BLEND_* as raylib's blend state. `translucent` says that what is drawn next has
  * alpha below 1 in its colour (a layer laid over at an opacity); only the software renderer needs to know. */
 static void set_blend(int32_t mode, bool translucent) {
 #if defined(GRAPHICS_API_OPENGL_SOFTWARE)
@@ -269,9 +269,9 @@ static void set_blend(int32_t mode, bool translucent) {
    * rlsw keeps blending. A sprite with alpha drawn in an add layer is then added at full strength here, as it is not on the GPU. */
   rlDrawRenderBatchActive();
   switch (mode) {
-    case RGE_BLEND_ADD: swBlendFunc(translucent ? SW_GL_SRC_ALPHA : SW_GL_ONE, SW_GL_ONE); break;
-    case RGE_BLEND_MULTIPLY: swBlendFunc(SW_GL_DST_COLOR, translucent ? SW_GL_ONE_MINUS_SRC_ALPHA : SW_GL_ZERO); break;
-    case RGE_BLEND_SCREEN: swBlendFunc(SW_GL_ONE, SW_GL_ONE_MINUS_SRC_COLOR); break;
+    case TSE_BLEND_ADD: swBlendFunc(translucent ? SW_GL_SRC_ALPHA : SW_GL_ONE, SW_GL_ONE); break;
+    case TSE_BLEND_MULTIPLY: swBlendFunc(SW_GL_DST_COLOR, translucent ? SW_GL_ONE_MINUS_SRC_ALPHA : SW_GL_ZERO); break;
+    case TSE_BLEND_SCREEN: swBlendFunc(SW_GL_ONE, SW_GL_ONE_MINUS_SRC_COLOR); break;
     default: swBlendFunc(SW_GL_SRC_ALPHA, SW_GL_ONE_MINUS_SRC_ALPHA); break;
   }
   return;
@@ -279,9 +279,9 @@ static void set_blend(int32_t mode, bool translucent) {
   (void)translucent;
 #endif
   switch (mode) {
-    case RGE_BLEND_ADD: BeginBlendMode(BLEND_ADDITIVE); break;
-    case RGE_BLEND_MULTIPLY: BeginBlendMode(BLEND_MULTIPLIED); break;
-    case RGE_BLEND_SCREEN:
+    case TSE_BLEND_ADD: BeginBlendMode(BLEND_ADDITIVE); break;
+    case TSE_BLEND_MULTIPLY: BeginBlendMode(BLEND_MULTIPLIED); break;
+    case TSE_BLEND_SCREEN:
       rlSetBlendFactors(RL_ONE, RL_ONE_MINUS_SRC_COLOR, RL_FUNC_ADD);
       BeginBlendMode(BLEND_CUSTOM);
       break;
@@ -291,17 +291,17 @@ static void set_blend(int32_t mode, bool translucent) {
 
 static int32_t blend_of(double value) {
   int32_t mode = to_index(value);
-  return mode >= RGE_BLEND_NORMAL && mode <= RGE_BLEND_SCREEN ? mode : RGE_BLEND_NORMAL;
+  return mode >= TSE_BLEND_NORMAL && mode <= TSE_BLEND_SCREEN ? mode : TSE_BLEND_NORMAL;
 }
 
-/* What a frame draws into: the canvas (when the frame starts with RGE_OP_CANVAS) or the window, and the layers opened on top of it.
+/* What a frame draws into: the canvas (when the frame starts with TSE_OP_CANVAS) or the window, and the layers opened on top of it.
  * The view and the scissor are kept here too, because changing the target (BeginTextureMode, EndTextureMode) resets raylib's
  * matrices and its scissor: they are put back after every change. */
 static struct {
   RenderTexture2D *base; /* the canvas, or NULL for the window */
   int32_t width, height; /* of the base: every layer is this size */
   int32_t depth;         /* layers open */
-  int32_t child_blend[RGE_LAYER_MAX + 1]; /* the blend of drawables at each depth; [0] is the base's, always normal */
+  int32_t child_blend[TSE_LAYER_MAX + 1]; /* the blend of drawables at each depth; [0] is the base's, always normal */
   bool view_pushed;
   float view[16];
   bool scissor_on;
@@ -335,7 +335,7 @@ static void restore_target_state(void) {
 }
 
 static bool begin_layer(uint32_t clear, int32_t child_blend) {
-  if (target.depth >= RGE_LAYER_MAX) return false;
+  if (target.depth >= TSE_LAYER_MAX) return false;
   /* Leave the current target first: making or unloading a texture binds the window's framebuffer, which would send what is still
    * batched for the current target to the window instead. */
   end_current_target();
@@ -371,7 +371,7 @@ static void end_layer(int32_t blend, uint32_t tint, int32_t shader_handle, float
    * source is flipped. The scissor still clips it. */
   if (target.scissor_on) begin_scissor(target.scissor[0], target.scissor[1], target.scissor[2], target.scissor[3]);
   set_blend(blend, (tint & 255u) < 255u);
-  RgeShader shader;
+  TseShader shader;
   bool shaded = assets_shader(shader_handle, &shader);
   if (shaded) {
     BeginShaderMode(shader.shader);
@@ -390,7 +390,7 @@ static void end_layer(int32_t blend, uint32_t tint, int32_t shader_handle, float
   restore_target_state();
 }
 
-/* A light at the local origin (RGE_OP_LIGHT): `color` premultiplied by its alpha at the middle, falling off as (1 - d)^2 to black at
+/* A light at the local origin (TSE_OP_LIGHT): `color` premultiplied by its alpha at the middle, falling off as (1 - d)^2 to black at
  * `radius`, drawn as rings of triangles with the colour at each ring's radius (smooth enough at the sizes games draw lights). */
 static void draw_light(float radius, uint32_t packed) {
   if (!(radius > 0.0f)) return;
@@ -423,7 +423,7 @@ static void draw_light(float radius, uint32_t packed) {
 
 static void execute_records(const double *records, int32_t length, const char *text, const int32_t *text_offsets, int32_t text_count) {
   target.depth = 0;
-  target.child_blend[0] = RGE_BLEND_NORMAL;
+  target.child_blend[0] = TSE_BLEND_NORMAL;
   target.view_pushed = false;
   target.scissor_on = false;
   int32_t at = 0;
@@ -432,19 +432,19 @@ static void execute_records(const double *records, int32_t length, const char *t
     int32_t op = to_index(r[0]);
     int32_t need = 0;
     switch (op) {
-      case RGE_OP_VIEW: need = RGE_OP_VIEW_LEN; break;
-      case RGE_OP_SPRITE: need = RGE_OP_SPRITE_LEN; break;
-      case RGE_OP_RECT: need = RGE_OP_RECT_LEN; break;
-      case RGE_OP_ELLIPSE: need = RGE_OP_ELLIPSE_LEN; break;
-      case RGE_OP_TEXT: need = RGE_OP_TEXT_LEN; break;
-      case RGE_OP_SPRITE_REGION: need = RGE_OP_SPRITE_REGION_LEN; break;
-      case RGE_OP_BOX: need = RGE_OP_BOX_LEN; break;
-      case RGE_OP_SCISSOR: need = RGE_OP_SCISSOR_LEN; break;
-      case RGE_OP_SCISSOR_END: need = RGE_OP_SCISSOR_END_LEN; break;
-      case RGE_OP_LAYER_BEGIN: need = RGE_OP_LAYER_BEGIN_LEN; break;
-      case RGE_OP_LAYER_END: need = RGE_OP_LAYER_END_LEN; break;
-      case RGE_OP_LIGHT: need = RGE_OP_LIGHT_LEN; break;
-      case RGE_OP_CANVAS: report_bad_frame("canvas record that is not first", at); goto done;
+      case TSE_OP_VIEW: need = TSE_OP_VIEW_LEN; break;
+      case TSE_OP_SPRITE: need = TSE_OP_SPRITE_LEN; break;
+      case TSE_OP_RECT: need = TSE_OP_RECT_LEN; break;
+      case TSE_OP_ELLIPSE: need = TSE_OP_ELLIPSE_LEN; break;
+      case TSE_OP_TEXT: need = TSE_OP_TEXT_LEN; break;
+      case TSE_OP_SPRITE_REGION: need = TSE_OP_SPRITE_REGION_LEN; break;
+      case TSE_OP_BOX: need = TSE_OP_BOX_LEN; break;
+      case TSE_OP_SCISSOR: need = TSE_OP_SCISSOR_LEN; break;
+      case TSE_OP_SCISSOR_END: need = TSE_OP_SCISSOR_END_LEN; break;
+      case TSE_OP_LAYER_BEGIN: need = TSE_OP_LAYER_BEGIN_LEN; break;
+      case TSE_OP_LAYER_END: need = TSE_OP_LAYER_END_LEN; break;
+      case TSE_OP_LIGHT: need = TSE_OP_LIGHT_LEN; break;
+      case TSE_OP_CANVAS: report_bad_frame("canvas record that is not first", at); goto done;
       default: report_bad_frame("unknown op", at); goto done;
     }
     if (at + need > length) {
@@ -453,7 +453,7 @@ static void execute_records(const double *records, int32_t length, const char *t
     }
 
     switch (op) {
-      case RGE_OP_VIEW: {
+      case TSE_OP_VIEW: {
         /* A later view replaces the earlier one. */
         if (target.view_pushed) rlPopMatrix();
         /* x' = a x + c y + e, y' = b x + d y + f, as a column-major 4x4. */
@@ -468,20 +468,20 @@ static void execute_records(const double *records, int32_t length, const char *t
         target.view_pushed = true;
         break;
       }
-      case RGE_OP_LAYER_BEGIN:
+      case TSE_OP_LAYER_BEGIN:
         if (!begin_layer(to_color(r[1]), blend_of(r[2]))) {
-          report_bad_frame(target.depth >= RGE_LAYER_MAX ? "layers nested too deep" : "could not make the layer texture", at);
+          report_bad_frame(target.depth >= TSE_LAYER_MAX ? "layers nested too deep" : "could not make the layer texture", at);
           goto done;
         }
         break;
-      case RGE_OP_LAYER_END:
+      case TSE_OP_LAYER_END:
         if (target.depth == 0) {
           report_bad_frame("layer end with no layer open", at);
           goto done;
         }
         end_layer(blend_of(r[1]), to_color(r[2]), to_index(r[3]), isfinite(r[4]) ? (float)r[4] : 0.0f, r + 5);
         break;
-      case RGE_OP_SCISSOR: {
+      case TSE_OP_SCISSOR: {
         /* NaN or negative sizes clip everything, which is what an empty rectangle means. */
         double w = r[3] > 0.0 && r[3] <= 1e9 ? r[3] : 0.0, h = r[4] > 0.0 && r[4] <= 1e9 ? r[4] : 0.0;
         double x = r[1] >= -1e9 && r[1] <= 1e9 ? r[1] : 0.0, y = r[2] >= -1e9 && r[2] <= 1e9 ? r[2] : 0.0;
@@ -494,11 +494,11 @@ static void execute_records(const double *records, int32_t length, const char *t
         target.scissor_on = true;
         break;
       }
-      case RGE_OP_SCISSOR_END:
+      case TSE_OP_SCISSOR_END:
         if (target.scissor_on) EndScissorMode();
         target.scissor_on = false;
         break;
-      case RGE_OP_SPRITE: {
+      case TSE_OP_SPRITE: {
         Texture2D texture;
         if (assets_texture(to_index(r[6]), &texture)) {
           push_transform(r);
@@ -507,17 +507,17 @@ static void execute_records(const double *records, int32_t length, const char *t
         }
         break;
       }
-      case RGE_OP_SPRITE_REGION: {
+      case TSE_OP_SPRITE_REGION: {
         Texture2D texture;
         if (assets_texture(to_index(r[6]), &texture)) {
           int32_t flags = to_index(r[13]);
           float w = (float)r[9], h = (float)r[10];
           if (!(w > 0.0f && h > 0.0f)) break;
           /* A negative source size mirrors the region; the destination always starts at minus the origin. */
-          Rectangle source = { (float)r[7], (float)r[8], (flags & RGE_SPRITE_FLIP_X) ? -w : w, (flags & RGE_SPRITE_FLIP_Y) ? -h : h };
+          Rectangle source = { (float)r[7], (float)r[8], (flags & TSE_SPRITE_FLIP_X) ? -w : w, (flags & TSE_SPRITE_FLIP_Y) ? -h : h };
           float ox = (float)r[11], oy = (float)r[12];
-          if (flags & RGE_SPRITE_FLIP_X) ox = w - ox;
-          if (flags & RGE_SPRITE_FLIP_Y) oy = h - oy;
+          if (flags & TSE_SPRITE_FLIP_X) ox = w - ox;
+          if (flags & TSE_SPRITE_FLIP_Y) oy = h - oy;
           Rectangle dest = { -ox, -oy, w, h };
           push_transform(r);
           DrawTexturePro(texture, source, dest, (Vector2){ 0.0f, 0.0f }, 0.0f, unpack_color(to_color(r[14])));
@@ -525,31 +525,31 @@ static void execute_records(const double *records, int32_t length, const char *t
         }
         break;
       }
-      case RGE_OP_RECT: {
+      case TSE_OP_RECT: {
         push_transform(r);
         DrawRectangleV((Vector2){ 0.0f, 0.0f }, (Vector2){ (float)r[6], (float)r[7] }, unpack_color(to_color(r[8])));
         rlPopMatrix();
         break;
       }
-      case RGE_OP_BOX: {
+      case TSE_OP_BOX: {
         push_transform(r);
         draw_box((float)r[6], (float)r[7], to_color(r[8]), to_color(r[9]), (float)r[10], (float)r[11]);
         rlPopMatrix();
         break;
       }
-      case RGE_OP_LIGHT:
+      case TSE_OP_LIGHT:
         push_transform(r);
         draw_light(finite_or_zero((float)r[6]), to_color(r[7]));
         rlPopMatrix();
         break;
-      case RGE_OP_ELLIPSE: {
+      case TSE_OP_ELLIPSE: {
         push_transform(r);
         float w = (float)r[6], h = (float)r[7];
         DrawEllipseV((Vector2){ w / 2.0f, h / 2.0f }, w / 2.0f, h / 2.0f, unpack_color(to_color(r[8])));
         rlPopMatrix();
         break;
       }
-      case RGE_OP_TEXT: {
+      case TSE_OP_TEXT: {
         int32_t index = to_index(r[6]);
         if (index >= 0 && index < text_count && text != NULL && text_offsets != NULL) {
           float size = (float)r[7];
@@ -565,15 +565,15 @@ static void execute_records(const double *records, int32_t length, const char *t
   }
 done:
   /* A layer still open is closed as if by an END: laid over its target, normal, white. */
-  while (target.depth > 0) end_layer(RGE_BLEND_NORMAL, 0xFFFFFFFFu, -1, 0.0f, NULL);
-  set_blend(RGE_BLEND_NORMAL, false);
+  while (target.depth > 0) end_layer(TSE_BLEND_NORMAL, 0xFFFFFFFFu, -1, 0.0f, NULL);
+  set_blend(TSE_BLEND_NORMAL, false);
   if (target.scissor_on) EndScissorMode();
   if (target.view_pushed) rlPopMatrix();
   target.scissor_on = false;
   target.view_pushed = false;
 }
 
-/* Keep the frame about to be presented, for rge_read_pixels: RGBA8, top row first. */
+/* Keep the frame about to be presented, for tse_read_pixels: RGBA8, top row first. */
 static void capture_frame(void) {
   rlDrawRenderBatchActive(); /* flush, so the framebuffer holds everything drawn so far */
   int32_t width = GetRenderWidth();
@@ -610,10 +610,10 @@ static void capture_frame(void) {
 #endif
 }
 
-/* A frame that starts with RGE_OP_CANVAS: draw the rest into the off-screen texture, then copy it into the window. */
+/* A frame that starts with TSE_OP_CANVAS: draw the rest into the off-screen texture, then copy it into the window. */
 static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t length, const char *text, const int32_t *text_offsets, int32_t text_count) {
   int32_t width = to_index(r[1]), height = to_index(r[2]);
-  if (length < RGE_OP_CANVAS_LEN || width <= 0 || height <= 0 || width > MAX_CANVAS || height > MAX_CANVAS) {
+  if (length < TSE_OP_CANVAS_LEN || width <= 0 || height <= 0 || width > MAX_CANVAS || height > MAX_CANVAS) {
     report_bad_frame("bad canvas record", 0);
     ClearBackground(unpack_color(clear_color));
     return;
@@ -636,7 +636,7 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
   target.base = &state.canvas;
   target.width = width;
   target.height = height;
-  execute_records(r + RGE_OP_CANVAS_LEN, length - RGE_OP_CANVAS_LEN, text, text_offsets, text_count);
+  execute_records(r + TSE_OP_CANVAS_LEN, length - TSE_OP_CANVAS_LEN, text, text_offsets, text_count);
   EndTextureMode();
 
   ClearBackground(unpack_color(to_color(r[7])));
@@ -671,7 +671,7 @@ static void draw_canvas_frame(uint32_t clear_color, const double *r, int32_t len
   DrawTexturePro(shown, source, dest, (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
 }
 
-void rge_frame(uint32_t clear_color, const double *records, int32_t records_length,
+void tse_frame(uint32_t clear_color, const double *records, int32_t records_length,
                const char *text, const int32_t *text_offsets, int32_t text_count,
                double *input, uint8_t *keys) {
   if (!state.open) return;
@@ -679,7 +679,7 @@ void rge_frame(uint32_t clear_color, const double *records, int32_t records_leng
   assets_update_music();
   BeginDrawing();
   bool has_records = records != NULL && records_length > 0;
-  if (has_records && to_index(records[0]) == RGE_OP_CANVAS) {
+  if (has_records && to_index(records[0]) == TSE_OP_CANVAS) {
     draw_canvas_frame(clear_color, records, records_length, text, text_offsets, text_count);
   } else {
     ClearBackground(unpack_color(clear_color));
@@ -693,13 +693,13 @@ void rge_frame(uint32_t clear_color, const double *records, int32_t records_leng
 
   if (input != NULL) {
     Vector2 mouse = GetMousePosition();
-    input[RGE_IN_DT] = (double)GetFrameTime();
-    input[RGE_IN_WIDTH] = (double)GetScreenWidth();
-    input[RGE_IN_HEIGHT] = (double)GetScreenHeight();
-    input[RGE_IN_MOUSE_X] = (double)mouse.x;
-    input[RGE_IN_MOUSE_Y] = (double)mouse.y;
-    input[RGE_IN_WHEEL] = (double)GetMouseWheelMove();
-    input[RGE_IN_QUIT] = WindowShouldClose() ? 1.0 : 0.0;
+    input[TSE_IN_DT] = (double)GetFrameTime();
+    input[TSE_IN_WIDTH] = (double)GetScreenWidth();
+    input[TSE_IN_HEIGHT] = (double)GetScreenHeight();
+    input[TSE_IN_MOUSE_X] = (double)mouse.x;
+    input[TSE_IN_MOUSE_Y] = (double)mouse.y;
+    input[TSE_IN_WHEEL] = (double)GetMouseWheelMove();
+    input[TSE_IN_QUIT] = WindowShouldClose() ? 1.0 : 0.0;
   }
   if (keys != NULL) {
     int32_t count = keys_count();
@@ -708,12 +708,12 @@ void rge_frame(uint32_t clear_color, const double *records, int32_t records_leng
   /* The characters typed this frame, Backspace among them where it fell (raylib queues characters, so a Backspace goes after them). */
   state.typed_count = 0;
   for (int c = GetCharPressed(); c != 0; c = GetCharPressed()) {
-    if (state.typed_count < RGE_TYPED_MAX) state.typed[state.typed_count++] = (uint32_t)c;
+    if (state.typed_count < TSE_TYPED_MAX) state.typed[state.typed_count++] = (uint32_t)c;
   }
-  if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && state.typed_count < RGE_TYPED_MAX) state.typed[state.typed_count++] = RGE_TYPED_BACKSPACE;
+  if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && state.typed_count < TSE_TYPED_MAX) state.typed[state.typed_count++] = TSE_TYPED_BACKSPACE;
 }
 
-int32_t rge_typed(uint32_t *out, int32_t capacity) {
+int32_t tse_typed(uint32_t *out, int32_t capacity) {
   if (out != NULL) {
     int32_t n = state.typed_count < capacity ? state.typed_count : capacity;
     for (int32_t i = 0; i < n; i++) out[i] = state.typed[i];
@@ -721,7 +721,7 @@ int32_t rge_typed(uint32_t *out, int32_t capacity) {
   return state.typed_count;
 }
 
-int32_t rge_read_pixels(uint8_t *rgba, int32_t capacity) {
+int32_t tse_read_pixels(uint8_t *rgba, int32_t capacity) {
   if (state.pixels == NULL) return 0;
   if (rgba != NULL && capacity >= state.pixels_size) memcpy(rgba, state.pixels, (size_t)state.pixels_size);
   return state.pixels_size;

@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { AnimatedSprite, Camera, Collider, Entity, Flex, Hud, Pointer, Shape, Sprite, Text, World, type GameObject } from "@rge/runtime";
+import {
+  AnimatedSprite,
+  Camera,
+  Collider,
+  Entity,
+  Flex,
+  Hud,
+  Pointer,
+  Shape,
+  Sprite,
+  Text,
+  World,
+  type GameObject,
+} from "@tsengine/runtime";
 
 import { CollisionTracker } from "../src/collide.ts";
 import { FrameBuilder } from "../src/draw.ts";

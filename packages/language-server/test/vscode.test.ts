@@ -5,14 +5,14 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 /**
  * The VS Code extension (`editors/vscode/extension.js`), driven by a stand-in for the `vscode` module: it finds the game's
- * `@rge/cli`, starts `rge lsp`, shows its diagnostics and turns its quick fixes into workspace edits. What VS Code itself does
+ * `@tsengine/cli`, starts `tse lsp`, shows its diagnostics and turns its quick fixes into workspace edits. What VS Code itself does
  * with those (drawing squiggles, the light bulb) is not tested here.
  */
 import { after, describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const game = mkdtempSync(join(tmpdir(), "rge-vscode-"));
+const game = mkdtempSync(join(tmpdir(), "tse-vscode-"));
 const disposables: { dispose(): void }[] = [];
 after(() => {
   for (const d of disposables) d.dispose();
@@ -118,14 +118,14 @@ const fake = {
   commands: { registerCommand: () => ({ dispose() {} }) },
 };
 
-const SOURCE = `import { Entity } from "@rge/runtime/jsx";\n\nexport function Lamp() {\n  const s = useMutable({ on: true });\n  return <Entity />;\n}\n`;
+const SOURCE = `import { Entity } from "@tsengine/runtime/jsx";\n\nexport function Lamp() {\n  const s = useMutable({ on: true });\n  return <Entity />;\n}\n`;
 
 describe("the VS Code extension", () => {
-  it("starts the game's rge lsp, shows its diagnostics, and offers its quick fixes as edits", async () => {
-    writeFileSync(join(game, "package.json"), JSON.stringify({ name: "g", dependencies: { "@rge/runtime": "0.0.0" } }));
+  it("starts the game's tse lsp, shows its diagnostics, and offers its quick fixes as edits", async () => {
+    writeFileSync(join(game, "package.json"), JSON.stringify({ name: "g", dependencies: { "@tsengine/runtime": "0.0.0" } }));
     mkdirSync(join(game, "src"));
-    mkdirSync(join(game, "node_modules/@rge"), { recursive: true });
-    symlinkSync(join(repo, "packages/cli"), join(game, "node_modules/@rge/cli"), "dir");
+    mkdirSync(join(game, "node_modules/@tsengine"), { recursive: true });
+    symlinkSync(join(repo, "packages/cli"), join(game, "node_modules/@tsengine/cli"), "dir");
     const file = join(game, "src/Lamp.tsx");
     writeFileSync(file, SOURCE);
 
@@ -138,7 +138,7 @@ describe("the VS Code extension", () => {
     } finally {
       (Module as unknown as { _load: unknown })._load = load;
     }
-    assert.equal(extension.cliOf(join(game, "src")), join(game, "node_modules/@rge/cli/src/cli.ts"));
+    assert.equal(extension.cliOf(join(game, "src")), join(game, "node_modules/@tsengine/cli/src/cli.ts"));
 
     const context = { subscriptions: disposables };
     extension.activate(context);
@@ -151,12 +151,12 @@ describe("the VS Code extension", () => {
     assert.equal(shown.uri, pathToFileURL(file).href);
     assert.deepEqual(
       shown.diagnostics.map((d) => [d.code, d.source, d.range.start.line, d.range.start.character]),
-      [["RGE1005", "rge", 3, 12]]
+      [["TSE1005", "tse", 3, 12]]
     );
 
     const actions = await provider!.provideCodeActions(document, shown.diagnostics[0]!.range, { diagnostics: shown.diagnostics });
     assert.equal(actions.length, 1);
-    assert.equal(actions[0].title, `Import 'useMutable' from "@rge/runtime/jsx"`);
+    assert.equal(actions[0].title, `Import 'useMutable' from "@tsengine/runtime/jsx"`);
     assert.equal(actions[0].isPreferred, true);
     assert.equal(actions[0].diagnostics.length, 1);
     assert.deepEqual(

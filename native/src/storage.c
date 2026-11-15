@@ -1,4 +1,4 @@
-/* Saved data: named entries in the user's data folder, written atomically. See rge.h. Needs no window. */
+/* Saved data: named entries in the user's data folder, written atomically. See tse.h. Needs no window. */
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +12,7 @@
 #else
 #include <unistd.h>
 #endif
-#include "rge.h"
+#include "tse.h"
 
 #define DIR_MAX 3072
 #define NAME_MAX_LEN 64
@@ -66,10 +66,10 @@ static int entry_path(char *out, size_t size, const char *name, const char *ext)
   return (n > 0 && (size_t)n < size) ? 0 : -1;
 }
 
-int32_t rge_storage_open(const char *game_id) {
+int32_t tse_storage_open(const char *game_id) {
   opened = 0;
   if (!valid_name(game_id)) return 1;
-  const char *override = getenv("RGE_DATA_DIR");
+  const char *override = getenv("TSE_DATA_DIR");
   int n;
   if (override != NULL && override[0] != 0) {
     n = snprintf(dir, sizeof(dir), "%s", override);
@@ -99,7 +99,7 @@ int32_t rge_storage_open(const char *game_id) {
   return 0;
 }
 
-int32_t rge_storage_read(const char *name, uint8_t *out, int32_t capacity) {
+int32_t tse_storage_read(const char *name, uint8_t *out, int32_t capacity) {
   char path[DIR_MAX + 128];
   if (entry_path(path, sizeof(path), name, "dat") != 0) return -1;
   FILE *f = fopen(path, "rb");
@@ -116,7 +116,7 @@ int32_t rge_storage_read(const char *name, uint8_t *out, int32_t capacity) {
   return (int32_t)size;
 }
 
-int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length) {
+int32_t tse_storage_write(const char *name, const uint8_t *data, int32_t length) {
   char path[DIR_MAX + 128];
   char tmp[DIR_MAX + 128];
   if (entry_path(path, sizeof(path), name, "dat") != 0 || entry_path(tmp, sizeof(tmp), name, "tmp") != 0) return 1;
@@ -140,7 +140,7 @@ int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length)
   return 0;
 }
 
-int32_t rge_storage_remove(const char *name) {
+int32_t tse_storage_remove(const char *name) {
   char path[DIR_MAX + 128];
   if (entry_path(path, sizeof(path), name, "dat") != 0) return 1;
   if (remove(path) != 0 && errno != ENOENT) return 2;

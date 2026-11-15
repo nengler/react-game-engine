@@ -1,4 +1,4 @@
-import { Entity, Hud, ParticleLayer, useInput, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Hud, ParticleLayer, useInput, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 import { hpOf, type Built, type Fired, type Foe, type InFlight } from "./battle.ts";
 import { fx, sfx } from "./effects.ts";

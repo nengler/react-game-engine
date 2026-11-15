@@ -81,7 +81,7 @@ export function createGameState<D extends object, A extends Record<string, GameA
 
 function wrap<S>(store: GameStore<S>): GameState<S> {
   const use = (): never => {
-    throw new Error("useGame(selector) is a compile-time declaration: components are compiled by @rge/compiler, not executed.");
+    throw new Error("useGame(selector) is a compile-time declaration: components are compiled by @tsengine/compiler, not executed.");
   };
   const actions = (): ActionsOf<S> => {
     const state = store.getState() as Record<string, unknown>;

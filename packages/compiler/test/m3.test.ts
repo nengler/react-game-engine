@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Entity, GameObject, Sprite, Transform, World } from "@rge/runtime";
-import { runtimeManifest } from "@rge/runtime";
+import { Entity, GameObject, Sprite, Transform, World } from "@tsengine/runtime";
+import { runtimeManifest } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode, type ComponentIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck, withAuthoringImports, elementOf } from "./helpers.ts";

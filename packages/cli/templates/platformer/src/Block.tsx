@@ -1,4 +1,4 @@
-import { Collider, Entity, Shape } from "@rge/runtime/jsx";
+import { Collider, Entity, Shape } from "@tsengine/runtime/jsx";
 
 interface BlockProps {
   x: number;

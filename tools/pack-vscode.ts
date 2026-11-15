@@ -1,4 +1,4 @@
-// npm run vscode:pack: write dist/rge-vscode-<version>.vsix, the VS Code extension in editors/vscode, to install with
+// npm run vscode:pack: write dist/tse-vscode-<version>.vsix, the VS Code extension in editors/vscode, to install with
 // `code --install-extension`. A .vsix is a zip with a manifest; this writes it directly (no vsce, no dependencies).
 //
 //   node tools/pack-vscode.ts [--out <dir>]
@@ -120,7 +120,7 @@ export function packVscode(outDir: string = join(ROOT, "dist")): string {
     ...FILES.map((file) => ({ name: `extension/${file}`, data: readFileSync(join(SOURCE, file)) })),
   ];
   mkdirSync(outDir, { recursive: true });
-  const path = join(outDir, `rge-vscode-${manifest.version}.vsix`);
+  const path = join(outDir, `tse-vscode-${manifest.version}.vsix`);
   writeFileSync(path, zip(entries));
   return path;
 }

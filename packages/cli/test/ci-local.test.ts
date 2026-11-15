@@ -32,8 +32,8 @@ describe("ci-local", () => {
     assert.ok(packaged?.run?.includes("\ncmp /tmp/parity-node.json /tmp/parity-packaged.json\n"), packaged?.run ?? "no packaging step");
     const desktop = workflow.jobs
       .find((job) => job.name === "native-desktop")!
-      .steps.find((step) => step.env["RGE_NATIVE_LIB"] !== undefined);
-    assert.equal(desktop?.env["RGE_NATIVE_LIB"], "${GITHUB_WORKSPACE}/native/build/librge.so");
+      .steps.find((step) => step.env["TSE_NATIVE_LIB"] !== undefined);
+    assert.equal(desktop?.env["TSE_NATIVE_LIB"], "${GITHUB_WORKSPACE}/native/build/libtse.so");
   });
 
   it("stops on what it does not understand, rather than run something other than CI", () => {

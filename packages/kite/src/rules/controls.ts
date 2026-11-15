@@ -1,4 +1,4 @@
-import { createControls, type InputState } from "@rge/runtime";
+import { createControls, type InputState } from "@tsengine/runtime";
 
 import type { Controls } from "./body.ts";
 

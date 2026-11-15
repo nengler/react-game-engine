@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-/** The development layout overlay (REACT_FEEL_PLAN.md C4): F1 under `rge dev` outlines boxes, colliders and pointers. */
+/** The development layout overlay (REACT_FEEL_PLAN.md C4): F1 under `tse dev` outlines boxes, colliders and pointers. */
 import { describe, it } from "node:test";
 
-import { Collider, Entity, Flex, Game, Pointer } from "@rge/runtime";
+import { Collider, Entity, Flex, Game, Pointer } from "@tsengine/runtime";
 
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
@@ -41,7 +41,7 @@ const outlines = (records: readonly DecodedRecord[]): string[] =>
   );
 
 describe("the layout overlay", () => {
-  it("outlines every box and its padding, every collider and every pointer, once F1 is pressed under rge dev", () => {
+  it("outlines every box and its padding, every collider and every pointer, once F1 is pressed under tse dev", () => {
     assert.deepEqual(outlines(run(true, [{}])), [], "off until pressed");
     const on = outlines(run(true, [{ pressed: ["F1"] }, {}]));
     assert.ok(on.includes("#4fc3f7ff 0,0 80x40"), on.join("\n"));

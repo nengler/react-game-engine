@@ -1,4 +1,4 @@
-import { Entity, useInput } from "@rge/runtime/jsx";
+import { Entity, useInput } from "@tsengine/runtime/jsx";
 
 interface KeyPromptProps {
   /** The key pressed (never Escape). */

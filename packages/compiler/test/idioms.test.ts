@@ -8,7 +8,7 @@ import { join, resolve } from "node:path";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, Text, World } from "@rge/runtime";
+import { Entity, Text, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -33,7 +33,7 @@ const sourceErrors = (text: string): string[] =>
     .map((d) => d.message);
 
 describe("an early return", () => {
-  const SOURCE = `import { Entity, Text } from "@rge/runtime/jsx";
+  const SOURCE = `import { Entity, Text } from "@tsengine/runtime/jsx";
 interface Hero { hp: number; name: string }
 interface StatusProps { hero: Hero | null; paused: boolean }
 export function Status({ hero, paused }: StatusProps) {
@@ -74,7 +74,7 @@ export function Status({ hero, paused }: StatusProps) {
 
 describe("a props type written in the parameter", () => {
   it("is the component's props type, named for it, and the props are checked against it", async () => {
-    const compiled = compile(`import { Text } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Text } from "@tsengine/runtime/jsx";
 export function Heart({ hp, max = 3 }: { hp: number; max?: number }) {
   return <Text>{hp}/{max}</Text>;
 }`);
@@ -87,7 +87,7 @@ export function Heart({ hp, max = 3 }: { hp: number; max?: number }) {
     world.mount(heart);
     world.flush();
     assert.equal(heart.text, "2/3");
-    const wrong = compileErrors(`import { Text } from "@rge/runtime/jsx";
+    const wrong = compileErrors(`import { Text } from "@tsengine/runtime/jsx";
 export function Heart({ hp, colour }: { hp: number }) {
   return <Text>{hp}</Text>;
 }`);
@@ -100,7 +100,7 @@ export function Heart({ hp, colour }: { hp: number }) {
 
 describe("an object state without its type written", () => {
   it("takes its literal's type, as TypeScript would", async () => {
-    const compiled = compile(`import { Entity, Text, useInput, useMutable } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Entity, Text, useInput, useMutable } from "@tsengine/runtime/jsx";
 export function Walker() {
   const s = useMutable({ at: { x: 0, y: 0, tags: ["a"], last: { hit: false } } });
   useInput((input) => {
@@ -122,7 +122,7 @@ export function Walker() {
   });
 
   it("still asks for the type of an empty array, which TypeScript would call never[]", () => {
-    const errors = compileErrors(`import { Entity, useMutable } from "@rge/runtime/jsx";
+    const errors = compileErrors(`import { Entity, useMutable } from "@tsengine/runtime/jsx";
 export function A() {
   const s = useMutable({ items: [] });
   return <Entity x={s.items.length} />;
@@ -144,7 +144,7 @@ describe("a module imported whole", () => {
     );
     writeFileSync(
       join(dir, "src/Mover.tsx"),
-      `import { Entity, useMutable, useUpdate } from "@rge/runtime/jsx";
+      `import { Entity, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 import * as K from "./constants.ts";
 export function Mover() {
   const s = useMutable({ x: 0 });
@@ -177,7 +177,7 @@ describe("a useMutable field set from an imported constant or function", () => {
     );
     writeFileSync(
       join(dir, "src/Shop.tsx"),
-      `import { Text, useInput, useMutable } from "@rge/runtime/jsx";
+      `import { Text, useInput, useMutable } from "@tsengine/runtime/jsx";
 import { START_GOLD, makeHero } from "./constants.ts";
 export function Shop() {
   const s = useMutable({ gold: START_GOLD, hero: makeHero(), bought: 0 });
@@ -206,7 +206,7 @@ export function Shop() {
 
 describe("a derived value that may be null, tested before it is used", () => {
   it("narrows as TypeScript does in the source: one value, not a copy at each use", async () => {
-    const SOURCE = `import { Text, useInput, useMutable } from "@rge/runtime/jsx";
+    const SOURCE = `import { Text, useInput, useMutable } from "@tsengine/runtime/jsx";
 const PRICES = { bow: 5, axe: 9 };
 type Kind = keyof typeof PRICES;
 export function Shop() {
@@ -240,7 +240,7 @@ export function Shop() {
 });
 
 describe("a list worked out in the body: reduce, a sorted copy, and an item found and shown", () => {
-  const SOURCE = `import { Flex, Text, useInput, useMutable } from "@rge/runtime/jsx";
+  const SOURCE = `import { Flex, Text, useInput, useMutable } from "@tsengine/runtime/jsx";
 interface Foe { id: number; hp: number; x: number; boss: boolean }
 export function Wave() {
   const s = useMutable({ foes: [{ id: 1, hp: 2, x: 30, boss: false }, { id: 2, hp: 0, x: 10, boss: false }, { id: 3, hp: 5, x: 20, boss: true }] as Foe[] });
@@ -277,7 +277,7 @@ export function Wave() {
   });
 
   it("still refuses sorting state's own list in place", () => {
-    const errors = compileErrors(`import { Text, useMutable } from "@rge/runtime/jsx";
+    const errors = compileErrors(`import { Text, useMutable } from "@tsengine/runtime/jsx";
 export function A() {
   const s = useMutable({ xs: [3, 1] });
   const sorted = s.xs.sort();
@@ -288,7 +288,7 @@ export function A() {
 });
 
 describe("a loop over a useMutable list that writes through its item", () => {
-  const SOURCE = `import { Text, useInput, useMutable } from "@rge/runtime/jsx";
+  const SOURCE = `import { Text, useInput, useMutable } from "@tsengine/runtime/jsx";
 interface Foe { id: number; hp: number; x: number; tags: string[] }
 export function Field() {
   const s = useMutable({
@@ -324,7 +324,7 @@ export function Field() {
   });
 
   it("refuses a loop that also changes the list itself, and says what to write", () => {
-    const errors = compileErrors(`import { Text, useUpdate, useMutable } from "@rge/runtime/jsx";
+    const errors = compileErrors(`import { Text, useUpdate, useMutable } from "@tsengine/runtime/jsx";
 interface Foe { hp: number }
 export function A() {
   const s = useMutable({ foes: [] as Foe[] });
@@ -343,7 +343,7 @@ export function A() {
 
 describe("a `let` declared with its type and no value", () => {
   it("is assigned by a switch after it, as in TypeScript", async () => {
-    const SOURCE = `import { Text, useInput, useMutable } from "@rge/runtime/jsx";
+    const SOURCE = `import { Text, useInput, useMutable } from "@tsengine/runtime/jsx";
 type Screen = "title" | "play" | "over";
 export function Banner() {
   const s = useMutable({ screen: "title" as Screen });
@@ -379,7 +379,7 @@ export function Banner() {
   });
 
   it("asks for the type when it has none", () => {
-    const errors = compileErrors(`import { Text } from "@rge/runtime/jsx";
+    const errors = compileErrors(`import { Text } from "@tsengine/runtime/jsx";
 export function A() {
   let msg;
   msg = "x";
@@ -389,7 +389,7 @@ export function A() {
   });
 
   it("is reported by the type-check when a path reads it unassigned", () => {
-    const compiled = compile(`import { Text, useMutable } from "@rge/runtime/jsx";
+    const compiled = compile(`import { Text, useMutable } from "@tsengine/runtime/jsx";
 export function A() {
   const s = useMutable({ n: 0 });
   let msg: string;

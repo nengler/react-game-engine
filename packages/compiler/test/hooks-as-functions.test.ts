@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, GameObject, Pointer, Text, World } from "@rge/runtime";
+import { Entity, GameObject, Pointer, Text, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";

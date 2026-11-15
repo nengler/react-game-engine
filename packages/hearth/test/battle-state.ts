@@ -1,4 +1,4 @@
-import { findComponent } from "@rge/testing";
+import { findComponent } from "@tsengine/testing";
 
 import { Play } from "../generated/Play.ts";
 

@@ -1,4 +1,4 @@
-import { createGameState } from "@rge/runtime";
+import { createGameState } from "@tsengine/runtime";
 
 /**
  * The game's state, in one place: the data, and the actions that change it. A component reads one value with

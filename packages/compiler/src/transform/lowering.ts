@@ -1,4 +1,4 @@
-import { type RuntimeManifest } from "@rge/runtime";
+import { type RuntimeManifest } from "@tsengine/runtime";
 // The base of the component lowering: fields, names, diagnostics and type helpers. Layer 0 of ComponentLowering (see transform.ts).
 import { SyntaxKind, type Expression, type PropertyAccessExpression, type Node, type SourceFile } from "typescript/ast";
 import {

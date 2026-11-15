@@ -1,4 +1,4 @@
-import { Entity, Sprite, useBody, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Sprite, useBody, useUpdate } from "@tsengine/runtime/jsx";
 
 interface HeroProps {
   /** Pixels a second. */

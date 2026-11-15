@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 /** `<Tooltip>` (shown while its box has the mouse or the focus), scroll bars on a scroll box, and a scroll box keeping the focus in view. */
 import { describe, it } from "node:test";
 
-import { Entity, Flex, Hud, Shape, Text, Tooltip, World, type FlexProps, type GameObject } from "@rge/runtime";
+import { Entity, Flex, Hud, Shape, Text, Tooltip, World, type FlexProps, type GameObject } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 function flex(props: FlexProps, ...children: GameObject[]): Flex {
@@ -25,7 +25,7 @@ function frames(root: GameObject) {
   const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path) });
   const draw = (): DecodedRecord[] => {
     const built = builder.build(root, 200, 100);
-    backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+    backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
     return [...backend.lastFrame.records];
   };
   return { world, draw, builder };

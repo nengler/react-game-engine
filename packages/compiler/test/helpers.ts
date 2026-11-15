@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
+import { runtimeManifest, type RuntimeManifest } from "@tsengine/runtime";
 
 import { LIBRARY_HOOKS } from "../src/hooks/library.ts";
 import {
@@ -17,7 +17,7 @@ import {
 } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-/** Inside the repo so generated code resolves `@rge/runtime` through the workspace. */
+/** Inside the repo so generated code resolves `@tsengine/runtime` through the workspace. */
 export const OUTPUT_ROOT = resolve(here, "../../../.test-output");
 /** Test files run in parallel processes; each only touches its own directory. */
 const PROCESS_DIR = join(OUTPUT_ROOT, String(process.pid));
@@ -44,7 +44,7 @@ export interface CompiledModule {
 
 /**
  * Component source must import the hooks, built-in elements and functions it
- * uses from the authoring module (`RGE1005` otherwise). Most test sources are
+ * uses from the authoring module (`TSE1005` otherwise). Most test sources are
  * short snippets about something else, so the helpers below add the import
  * line for the names a source uses. It goes on the source's first line, so
  * line numbers are unchanged, and a source that already imports from the

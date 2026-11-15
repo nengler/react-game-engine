@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 /** Context (REACT_FEEL_PLAN.md, C3): `createContext`, `<X.Provider value>` and `useContext`, compiled. */
 import { after, describe, it } from "node:test";
 
-import { Entity, Text, World } from "@rge/runtime";
+import { Entity, Text, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load } from "./helpers.ts";
 
@@ -13,11 +13,11 @@ after(() => {
   cleanOutput();
 });
 
-const THEME = `import { createContext } from "@rge/runtime";
+const THEME = `import { createContext } from "@tsengine/runtime";
 export const Theme = createContext({ accent: "gold", size: 10 });
 `;
 
-const SOURCE = `import { Entity, Text, useContext, useMutable, useUpdate } from "@rge/runtime/jsx";
+const SOURCE = `import { Entity, Text, useContext, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 import { Theme } from "./theme.ts";
 
 function Label() {

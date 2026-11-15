@@ -17,7 +17,7 @@ import {
   createGameState,
   getSoundSink,
   type InputState,
-} from "@rge/runtime";
+} from "@tsengine/runtime";
 
 import { Hero } from "../../example/generated/Hero.ts";
 import { createPlayer, DEFAULT_WINDOW, MAX_DT, run, type PlayerConfig } from "../src/loop.ts";

@@ -17,7 +17,7 @@ const FORBIDDEN = /(?:from\s+|import\s*\(\s*|require\s*\(\s*|import\s+)["'](?:no
 
 describe("portability", () => {
   for (const name of ["player", "runtime"]) {
-    it(`@rge/${name} imports nothing from Node or a native package`, () => {
+    it(`@tsengine/${name} imports nothing from Node or a native package`, () => {
       const files = sources(join(packages, name, "src"));
       assert.ok(files.length > 0);
       for (const file of files) {

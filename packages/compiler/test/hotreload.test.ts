@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, World, captureHotState, restoreHotState, type GameObject } from "@rge/runtime";
+import { Entity, World, captureHotState, restoreHotState, type GameObject } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 

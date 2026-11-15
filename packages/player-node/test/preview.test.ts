@@ -3,15 +3,15 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 /**
- * `rge preview`: the window (a copy of the demo with a stories file, against a recording backend, so it needs no native library),
- * and the screenshots compared with the stored ones (which need the headless librge, and are skipped without it).
+ * `tse preview`: the window (a copy of the demo with a stories file, against a recording backend, so it needs no native library),
+ * and the screenshots compared with the stored ones (which need the headless libtse, and are skipped without it).
  */
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { libraryFileName, nativeLibrary } from "@rge/native";
-import { RecordingBackend, type Player } from "@rge/player";
-import { Text, type GameObject } from "@rge/runtime";
+import { libraryFileName, nativeLibrary } from "@tsengine/native";
+import { RecordingBackend, type Player } from "@tsengine/player";
+import { Text, type GameObject } from "@tsengine/runtime";
 
 import { compareScreenshots, loadPreviews, pixelDifference, previewWithReload } from "../src/preview.ts";
 
@@ -47,7 +47,7 @@ function texts(root: GameObject): string[] {
   return out;
 }
 
-const STORIES = `import { stories, story } from "@rge/player";
+const STORIES = `import { stories, story } from "@tsengine/player";
 import { CoinCounter } from "../generated/CoinCounter.ts";
 import { useGame } from "../src/GameState.ts";
 
@@ -56,7 +56,7 @@ export const Some = story({}, { setup: () => useGame.setState({ stats: { coins: 
 export const Many = story({}, { setup: () => useGame.setState({ stats: { coins: 70, hits: 0 } }) });
 `;
 
-describe("rge preview", () => {
+describe("tse preview", () => {
   it("shows one story at a time, switches with F6 and F5, and hot reloads the shown story", async () => {
     mkdirSync(gameDir, { recursive: true });
     for (const name of ["src", "assets", "main.ts", "game.ts", "package.json", "tsconfig.json"])
@@ -124,19 +124,19 @@ describe("rge preview", () => {
   });
 
   // The stored pictures are the software renderer's: the OpenGL build blends translucent colours a little differently, so only
-  // the headless build is compared (as `rge check` does).
+  // the headless build is compared (as `tse check` does).
   const headless =
     nativeLibrary("headless") ?? [join(repo, "native/build-headless", libraryFileName())].find((path) => existsSync(path)) ?? null;
   it(
     "renders Hearth's stories as their stored screenshots",
-    { skip: headless === null ? "the headless librge is not built" : false },
+    { skip: headless === null ? "the headless libtse is not built" : false },
     async () => {
       const hearth = join(repo, "packages/hearth");
       const cwd = process.cwd();
-      const before = process.env["RGE_NATIVE_LIB"];
-      process.env["RGE_NATIVE_LIB"] = headless!;
+      const before = process.env["TSE_NATIVE_LIB"];
+      process.env["TSE_NATIVE_LIB"] = headless!;
       process.chdir(hearth);
-      const out = mkdtempSync(join(tmpdir(), "rge-previews-"));
+      const out = mkdtempSync(join(tmpdir(), "tse-previews-"));
       try {
         const previews = await loadPreviews(hearth);
         assert.ok(previews.stories.length >= 10, `${previews.stories.length} stories`);
@@ -144,8 +144,8 @@ describe("rge preview", () => {
         rmSync(out, { recursive: true, force: true });
       } finally {
         process.chdir(cwd);
-        if (before === undefined) delete process.env["RGE_NATIVE_LIB"];
-        else process.env["RGE_NATIVE_LIB"] = before;
+        if (before === undefined) delete process.env["TSE_NATIVE_LIB"];
+        else process.env["TSE_NATIVE_LIB"] = before;
       }
     }
   );

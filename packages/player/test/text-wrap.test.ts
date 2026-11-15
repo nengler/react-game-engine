@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Flex, GameObject, Shape, Text } from "@rge/runtime";
+import { Flex, GameObject, Shape, Text } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 /** A backend that measures the built-in font as 6 pixels a character and a line as `size` tall (so tests can count). */
@@ -21,7 +21,7 @@ function build(
     font: options.font,
   });
   const built = builder.build(root, 320, 180);
-  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
   return { records: [...backend.lastFrame.records], builder, measured };
 }
 

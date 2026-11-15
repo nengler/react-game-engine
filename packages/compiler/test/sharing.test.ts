@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, World } from "@rge/runtime";
+import { Entity, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, load } from "./helpers.ts";
 
@@ -17,13 +17,13 @@ after(() => {
   cleanOutput();
 });
 
-const LEVEL = `import { createContext } from "@rge/runtime";
+const LEVEL = `import { createContext } from "@tsengine/runtime";
 export const PlayerAt = createContext(0);
 `;
 
 // The player moves one pixel a step and reports where it is; the chaser (by props) and the watcher (through context) record what
 // they saw in each of their updates.
-const SOURCE = `import { Entity, useContext, useMutable, useUpdate } from "@rge/runtime/jsx";
+const SOURCE = `import { Entity, useContext, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 import { PlayerAt } from "./level.ts";
 
 interface PlayerProps { onMove: (x: number) => void }

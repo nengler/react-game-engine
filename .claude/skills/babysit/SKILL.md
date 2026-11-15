@@ -3,7 +3,7 @@ name: babysit
 description: How to watch a pull request in this repository until it is mergeable - CI failures, review comments, merge conflicts, and which checks to run before pushing. Use when a PR is opened in a session, or when a PR event (CI result, review, comment) arrives.
 ---
 
-# Watching a pull request in react-game-engine
+# Watching a pull request in tse
 
 A PR you opened, or were asked to get mergeable, is yours until CI is green on its current head, it has no merge
 conflict, and no review is waiting on a change. Subscribe with `subscribe_pr_activity` when it is opened; CI results
@@ -33,16 +33,16 @@ Run what the change touches, and for a CI fix show the failing check passing loc
 | A game (`packages/kite`, `packages/hearth`, `packages/demo`) or the engine it uses | `npm run check:<game>` |
 | `games/bramble`, packaging, `packages/cli`, or a package's exports | `npm run native:build:headless`, then `npm run check:outside` |
 | The player, runtime, compiler output, or anything on the frame path | `npm run bench:check` |
-| The Rust host or the parity between hosts | `npm run host:build:headless`, then `RGE_HOST_BIN=host/target/release/rge-host RGE_REQUIRE_HOST=1 node --test packages/demo/test/parity.test.ts` |
+| The Rust host or the parity between hosts | `npm run host:build:headless`, then `TSE_HOST_BIN=host/target/release/tse-host TSE_REQUIRE_HOST=1 node --test packages/demo/test/parity.test.ts` |
 
-`check:<game>` compares against the Rust host only when `host/target/release/rge-host` exists; say so when it was not
+`check:<game>` compares against the Rust host only when `host/target/release/tse-host` exists; say so when it was not
 built. Bramble is not a workspace: after an engine change, `npm run bramble:install` repacks the engine into it.
 
 ## What the CI jobs run
 
 `.github/workflows/ci.yml`: **check** (`npm test`, typecheck, lint and format check, the bench under Node against budgets), **host** (the Rust host built headless, parity with
 Node, packaging the demo), **native** and **native-desktop**
-(`librge`, the C smoke test, the Node host against the real library, packaged builds under a virtual display), and
+(`libtse`, the C smoke test, the Node host against the real library, packaged builds under a virtual display), and
 **outside** (`check:outside`: Bramble packed, installed and checked from a temporary folder).
 
 ## When Actions cannot run CI

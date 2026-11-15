@@ -4,11 +4,11 @@ import {
   FrameBuilder,
   HOST_BACKEND_KEY,
   PlayerInput,
-  RGE_IN_DT,
-  RGE_IN_QUIT,
+  TSE_IN_DT,
+  TSE_IN_QUIT,
   Warner,
   type Backend,
-} from "@rge/player";
+} from "@tsengine/player";
 /**
  * How long a frame of script takes: `createPlayer(...).step()` with `n` moving entities, each drawn as a
  * rectangle, against a backend that draws nothing, so only the engine (hooks, renders, the tree walk, the
@@ -19,11 +19,11 @@ import {
  * redraws every frame; one that moves by state (`StateMover`) is a compiled component, which it reuses around while it stands still:
  *
  *   node packages/player/bench/frame.ts
- *   npm run bundle -- packages/player/bench/frame.ts host/dist/bench.js && host/target/release/rge-host host/dist/bench.js
+ *   npm run bundle -- packages/player/bench/frame.ts host/dist/bench.js && host/target/release/tse-host host/dist/bench.js
  *
  * `npm run bench:check` runs it under Node and fails when a scene is over its budget in `budget.json` (CI does).
  */
-import { findPath, AnimatedSprite, Camera, Collider, Entity, Shape, Sprite, Tilemap, World, registerTilemaps } from "@rge/runtime";
+import { findPath, AnimatedSprite, Camera, Collider, Entity, Shape, Sprite, Tilemap, World, registerTilemaps } from "@tsengine/runtime";
 
 /**
  * The host's broad phase for collisions, when the bench runs under a host that has one (the Rust host): a player there asks
@@ -43,8 +43,8 @@ const nothing: Backend = {
   loadSound: () => 0,
   playSound() {},
   frame(_clear, _records, _length, _texts, input) {
-    input[RGE_IN_DT] = 1 / 60;
-    input[RGE_IN_QUIT] = 0;
+    input[TSE_IN_DT] = 1 / 60;
+    input[TSE_IN_QUIT] = 0;
   },
 };
 

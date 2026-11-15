@@ -1,5 +1,5 @@
 {
-  "name": "@rge/player",
+  "name": "@tsengine/player",
   "version": "0.0.0",
   "license": "MIT",
   "private": true,
@@ -8,6 +8,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@rge/runtime": "0.0.0"
+    "@tsengine/runtime": "0.0.0"
   }
 }

@@ -2,7 +2,7 @@
  * Stories: one component on its own, with given props, as Storybook shows a React component. A game keeps them in `stories/`, one
  * file per component, beside `test/`, and imports the generated class as a test does:
  *
- *     import { stories, story } from "@rge/player";
+ *     import { stories, story } from "@tsengine/player";
  *     import { HealthBar } from "../generated/HealthBar.ts";
  *
  *     export default stories(HealthBar, { size: [16, 6], origin: [8, 12] });
@@ -11,10 +11,10 @@
  *     export const Spent = story({ hp: 0, maxHp: 10 }, { setup: () => useGame.setState({ gold: 0 }) });
  *
  * Every other export is a story: its props, or `story(props, options)` for one that sets game state first or plays an input script
- * before it is looked at. `rge preview` shows them in a window with hot reload; `rge preview --screenshot` writes one PNG per story,
- * and `rge check` compares those with the stored ones.
+ * before it is looked at. `tse preview` shows them in a window with hot reload; `tse preview --screenshot` writes one PNG per story,
+ * and `tse check` compares those with the stored ones.
  */
-import { Entity, Game, GameObject, resetGameState, Screen, type GameProps } from "@rge/runtime";
+import { Entity, Game, GameObject, resetGameState, Screen, type GameProps } from "@tsengine/runtime";
 
 /** What a stories file's default export says about all its stories. */
 export interface StoriesOptions {
@@ -44,8 +44,8 @@ export interface StoryOptions {
   readonly input?: string;
 }
 
-const STORIES = Symbol.for("rge.stories");
-const STORY = Symbol.for("rge.story");
+const STORIES = Symbol.for("tse.stories");
+const STORY = Symbol.for("tse.story");
 
 type ComponentClass<P> = new (props: P) => GameObject;
 
@@ -76,7 +76,7 @@ export interface LoadedStory {
   readonly component: string;
   /** The export's name (`Hurt`). */
   readonly name: string;
-  /** `HealthBar/Hurt`: what `rge preview --story` takes and what its screenshot is called. */
+  /** `HealthBar/Hurt`: what `tse preview --story` takes and what its screenshot is called. */
   readonly id: string;
   readonly of: StoriesOf<unknown>;
   readonly props: unknown;

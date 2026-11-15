@@ -1,4 +1,4 @@
-import type { InputBindings, PlayerConfig } from "@rge/player";
+import type { InputBindings, PlayerConfig } from "@tsengine/player";
 
 import { Main } from "./generated/Main.ts";
 

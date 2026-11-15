@@ -17,16 +17,16 @@ What a ref gave that a field does not is "never renders". That is already free: 
 field (`$in` guards, REACT_FEEL_PLAN.md D5), so a field nothing in render reads costs one comparison, not a redraw. Kite's `Runner`
 holds eight fields none of which render, and that is the shape to teach.
 
-**Done 2026-11-14.** `useRef` is `RGE1102`, whose message writes out the conversion in the author's names; `tools/codemod-mutable.ts`, the
+**Done 2026-11-14.** `useRef` is `TSE1102`, whose message writes out the conversion in the author's names; `tools/codemod-mutable.ts`, the
 `Compiler.convertToMutable` and the editor's quick fix move a file's refs (`const timer = useRef(0)` becomes a field of the function's
 own `useMutable`, or of a new one, and `timer.current` becomes `s.timer`; a ref used as a value, such as returned from a hook, is left
 for a person). Kite's `DashTrail`, the example's `Enemy`, Hearth's `Play` and the compiler's tests moved. The compiler lost `RefIR`,
-`RefRead`, the `RefCurrent` assignment target, `lowerUseRef`, `RGE1304` (retired) and the runtime's `useRef`; `RGE1106` is now only
+`RefRead`, the `RefCurrent` assignment target, `lowerUseRef`, `TSE1304` (retired) and the runtime's `useRef`; `TSE1106` is now only
 `ref={…}` on an element.
 
 What settling it showed:
 
-- **A field written in `useUnmount` is still refused** (`RGE1402`), which a ref could do. The message no longer says "or write a ref".
+- **A field written in `useUnmount` is still refused** (`TSE1402`), which a ref could do. The message no longer says "or write a ref".
   `m9`'s badge counted mounts and unmounts in a ref; it now counts mounts only and tells its parent with `onGone`. Allowing a field
   write there (it would render nowhere, harmlessly) is open, if a component needs to leave a note on its way out.
 - **A ref used to cost nothing when written; a field marks the component**, which re-runs `render()` (`world.tick` returns 1 where it
@@ -71,7 +71,7 @@ closed, and the decision here is to keep the copy model and not add versions. Wh
 ## Done: the game state is migrated
 
 **Done 2026-11-15.** `createGameState(data, actions)` is the only form: Kite, Hearth, Bramble, the demo and the templates use it, and
-the `(set) => ({ … })` form is removed from the runtime and the compiler (`RGE1109` says what to write instead). A write to a selected
+the `(set) => ({ … })` form is removed from the runtime and the compiler (`TSE1109` says what to write instead). A write to a selected
 value in a component is an error that spells the action to add, and what a selector returns is typed `ReadonlyDeep<T>`, so a helper
 that changes it in place does not type-check. `setState` stays for tests, stories and tools, and throws while an action runs; inside an
 action, `getState()` reads its draft, which Bramble's save needed (its `pick` runs from the `advance` action). See DESIGN.md, "Global
@@ -93,7 +93,7 @@ changed through `set` and a handler reads the old value after an action. Items t
 - Selected values become read-only (`Readonly<…>` types and an error on a write), as props are.
 - Boilerplate: a one-line action per `cursor` or `open`. Hearth and Kite have 8 to 11 actions each. If it hurts, try an opt-in
   `free: [...]` list of fields components may write, not a setter per field.
-- `GameState.ts` must still return an object literal (`RGE1109`): decide whether the new shape keeps that.
+- `GameState.ts` must still return an object literal (`TSE1109`): decide whether the new shape keeps that.
 
 ## Done: props read live in the three places #124 left
 

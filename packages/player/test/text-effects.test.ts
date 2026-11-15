@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Entity, Flex, Text, type GameObject, type TextProps } from "@rge/runtime";
+import { Entity, Flex, Text, type GameObject, type TextProps } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
-import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 type TextRecord = Extract<DecodedRecord, { op: "text" }>;
@@ -20,7 +20,7 @@ function draw(root: GameObject, warnings: string[] = [], retain = false): Decode
     ...(retain ? { retain: "check" as const } : {}),
   });
   const built = builder.build(root, 400, 300);
-  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
   return [...backend.lastFrame.records];
 }
 
@@ -172,7 +172,7 @@ describe("<Text> effects are drawn with the text", () => {
 describe("<Game textSize textColor>", () => {
   it("are the size and colour of every <Text> that sets none, set by the player from the root", async () => {
     const { createPlayer } = await import("../src/loop.ts");
-    const { Game } = await import("@rge/runtime");
+    const { Game } = await import("@tsengine/runtime");
     const backend = new RecordingBackend();
     const game = new Game({ textSize: 10, textColor: "#ff0000" });
     game.addChild(new Text({ text: "plain" }));

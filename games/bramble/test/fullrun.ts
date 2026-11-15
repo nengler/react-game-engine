@@ -4,7 +4,7 @@
  * way the character's own movement treats them), then walked by `route`, which simulates it with the rules and writes down what was
  * held. The route is made with no enemies (the replay of the whole game is about the world; enemies have their own tests).
  */
-import { findPath } from "@rge/runtime";
+import { findPath } from "@tsengine/runtime";
 
 import { CAVE_INTRO_SECONDS } from "../src/cutscenes.ts";
 import { cellAt, findDoor, MAPS, type MapId } from "../src/rules/maps.ts";

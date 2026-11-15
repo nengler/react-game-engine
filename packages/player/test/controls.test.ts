@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** Named input actions: createControls, <Game controls>, and input.pressed("jump") meaning any of the action's keys. */
 import { describe, it } from "node:test";
 
-import { Entity, Game, createControls, createInputState, type InputState } from "@rge/runtime";
+import { Entity, Game, createControls, createInputState, type InputState } from "@tsengine/runtime";
 
 import { createPlayer, parseInputScript, RecordingBackend } from "../src/index.ts";
 

@@ -1,4 +1,4 @@
-import { Game, Screen } from "@rge/runtime/jsx";
+import { Game, Screen } from "@tsengine/runtime/jsx";
 
 import { useGame } from "./GameState.ts";
 import { Play } from "./Play.tsx";

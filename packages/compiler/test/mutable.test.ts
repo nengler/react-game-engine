@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { after, describe, it } from "node:test";
 
-import { Entity, setDevelopmentWarnings, Text, World } from "@rge/runtime";
+import { Entity, setDevelopmentWarnings, Text, World } from "@tsengine/runtime";
 
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 

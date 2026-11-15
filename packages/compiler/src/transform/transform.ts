@@ -1,4 +1,4 @@
-import { type RuntimeManifest } from "@rge/runtime";
+import { type RuntimeManifest } from "@tsengine/runtime";
 import { type Node } from "typescript/ast";
 
 import { AUTHORING_HOOKS, AUTHORING_TYPES, type SourceAnalysis } from "../analyzer/analyzer.ts";

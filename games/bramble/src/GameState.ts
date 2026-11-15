@@ -1,4 +1,4 @@
-import { createGameState, createSave } from "@rge/runtime";
+import { createGameState, createSave } from "@tsengine/runtime";
 
 import "./tilemaps.ts";
 import { answer } from "./effects.ts";

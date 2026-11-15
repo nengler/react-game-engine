@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>]
+ * Usage: tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>]
  * Type-checks every .tsx file in srcDir (imports from the authoring module,
  * prop types, hook arguments), compiles each to a .ts file in outDir, writes
  * the IR next to it as .ir.json, then type-checks the output. `--no-check`
@@ -55,7 +55,7 @@ function main(argv: readonly string[]): number {
   let sourceMaps = false;
   let scenesDir: string | undefined;
   let assetsDir: string | undefined;
-  const usage = "usage: rge-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>]";
+  const usage = "usage: tse-compile <srcDir> <outDir> [--runtime <module>] [--no-check] [--source-maps] [--scenes <dir>] [--assets <dir>]";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === "--runtime" || arg === "--scenes" || arg === "--assets") {

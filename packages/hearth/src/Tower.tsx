@@ -1,4 +1,4 @@
-import { Entity, Sprite, useBody, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { Entity, Sprite, useBody, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 import { Barrel } from "./Barrel.tsx";
 import type { Fired } from "./battle.ts";

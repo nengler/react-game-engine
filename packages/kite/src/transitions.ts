@@ -1,4 +1,4 @@
-import type { TransitionFrame } from "@rge/runtime";
+import type { TransitionFrame } from "@tsengine/runtime";
 
 /**
  * How the game changes screen: a plain function of progress, which the `<Router>` calls every step while a transition runs.

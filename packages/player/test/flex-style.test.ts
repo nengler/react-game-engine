@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { Entity, Flex, Hud, Shape, getSoundSink, type FlexProps, type GameObject } from "@rge/runtime";
+import { Entity, Flex, Hud, Shape, getSoundSink, type FlexProps, type GameObject } from "@tsengine/runtime";
 
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
-import { KEYS, RGE_IN_LEN, RGE_OP_BOX_LEN } from "../src/protocol.ts";
+import { KEYS, TSE_IN_LEN, TSE_OP_BOX_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 type Box = Extract<DecodedRecord, { op: "box" }>;
@@ -17,7 +17,7 @@ function draw(root: GameObject): DecodedRecord[] {
   const backend = new RecordingBackend();
   const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path) });
   const built = builder.build(root, WINDOW.width, WINDOW.height);
-  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  backend.frame(0, built.list.records, built.list.length, built.list.texts, new Float64Array(TSE_IN_LEN), new Uint8Array(KEYS.length));
   return [...backend.lastFrame.records];
 }
 
@@ -282,7 +282,7 @@ describe("<Flex> hover and focus props, in the loop", () => {
   });
 
   it("writes the box record at its length", () => {
-    assert.equal(RGE_OP_BOX_LEN, 12);
+    assert.equal(TSE_OP_BOX_LEN, 12);
   });
 });
 

@@ -1,4 +1,4 @@
-import { Game, Screen, Text } from "@rge/runtime/jsx";
+import { Game, Screen, Text } from "@tsengine/runtime/jsx";
 
 import { Block } from "./Block.tsx";
 import { useGame } from "./GameState.ts";

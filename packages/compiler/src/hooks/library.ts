@@ -1,12 +1,12 @@
 /**
  * Hooks the engine ships, written as ordinary custom hooks (the inliner's input), so they are what an author could have written
  * from `useMutable` and `useUpdate`, and every rule of a component body applies to them. A component imports one from the
- * authoring module (`import { useSquash } from "@rge/runtime/jsx"`), where it is declared for TypeScript; the inliner takes its
+ * authoring module (`import { useSquash } from "@tsengine/runtime/jsx"`), where it is declared for TypeScript; the inliner takes its
  * body from here. A hook that hands back state returns its `useMutable` (`return s`), and the caller reads and writes its fields.
  */
-export const LIBRARY_FILE = "rge:hooks.tsx";
+export const LIBRARY_FILE = "tse:hooks.tsx";
 
-export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate } from "@rge/runtime/jsx";
+export const LIBRARY_SOURCE = `import { createBody, keepIfEqual, shakeOn, springBack, startSpring, startTween, stepSpring, stepTween, useMount, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 /**
  * Squash and stretch: a scale that is set at a moment and springs back to 1 at \`recover\` a second.

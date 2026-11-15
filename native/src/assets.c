@@ -3,7 +3,7 @@
 #include <string.h>
 #include "internal.h"
 #include "rlgl.h"
-#include "rge.h"
+#include "tse.h"
 
 /* Textures and sounds are kept in growable tables; a handle is an index and is never reused. The
  * TypeScript side loads each path once, so this side does not look paths up. */
@@ -32,7 +32,7 @@ typedef struct {
 } MusicTable;
 
 typedef struct {
-  RgeShader *items;
+  TseShader *items;
   int32_t count;
   int32_t capacity;
 } ShaderTable;
@@ -50,7 +50,7 @@ void assets_init(bool smooth, bool audio) {
   if (!audio) return;
   InitAudioDevice();
   audio_ready = IsAudioDeviceReady();
-  if (!audio_ready) TraceLog(LOG_WARNING, "RGE: no audio device: sounds will be silent");
+  if (!audio_ready) TraceLog(LOG_WARNING, "TSE: no audio device: sounds will be silent");
 }
 
 bool assets_audio_ready(void) {
@@ -90,7 +90,7 @@ bool assets_texture(int32_t handle, Texture2D *out) {
   return true;
 }
 
-bool assets_shader(int32_t handle, RgeShader *out) {
+bool assets_shader(int32_t handle, TseShader *out) {
   if (handle < 0 || handle >= shaders.count) return false;
   *out = shaders.items[handle];
   return true;
@@ -119,10 +119,10 @@ static const char *SHADER_TAIL =
   "}\n";
 #endif
 
-int32_t rge_load_shader(const char *path) {
+int32_t tse_load_shader(const char *path) {
   if (path == NULL || !FileExists(path)) return -1;
 #if defined(GRAPHICS_API_OPENGL_SOFTWARE)
-  return RGE_SHADER_UNSUPPORTED;
+  return TSE_SHADER_UNSUPPORTED;
 #else
   char *body = LoadFileText(path);
   if (body == NULL) return -1;
@@ -138,12 +138,12 @@ int32_t rge_load_shader(const char *path) {
   free(source);
   /* raylib falls back to its default shader when compiling fails: that is a failure here. */
   if (shader.id == 0 || shader.id == rlGetShaderIdDefault()) {
-    TraceLog(LOG_WARNING, "RGE: the shader %s did not compile (the message above says why): its layers are drawn without it", path);
+    TraceLog(LOG_WARNING, "TSE: the shader %s did not compile (the message above says why): its layers are drawn without it", path);
     return -1;
   }
   if (shaders.count == shaders.capacity) {
     int32_t capacity = shaders.capacity ? shaders.capacity * 2 : 8;
-    RgeShader *grown = realloc(shaders.items, (size_t)capacity * sizeof(RgeShader));
+    TseShader *grown = realloc(shaders.items, (size_t)capacity * sizeof(TseShader));
     if (grown == NULL) {
       UnloadShader(shader);
       return -1;
@@ -151,7 +151,7 @@ int32_t rge_load_shader(const char *path) {
     shaders.items = grown;
     shaders.capacity = capacity;
   }
-  shaders.items[shaders.count] = (RgeShader){
+  shaders.items[shaders.count] = (TseShader){
     .shader = shader,
     .resolution = GetShaderLocation(shader, "resolution"),
     .time = GetShaderLocation(shader, "time"),
@@ -165,7 +165,7 @@ static double clamp_volume(double volume) {
   return volume >= 0.0 && volume <= 1.0 ? volume : (volume > 1.0 ? 1.0 : 0.0); /* NaN reads as 0 */
 }
 
-/* Play a sound on a voice that is free: the sound itself, then aliases of it made as needed, up to RGE_SOUND_VOICES; with
+/* Play a sound on a voice that is free: the sound itself, then aliases of it made as needed, up to TSE_SOUND_VOICES; with
  * all of them busy the oldest is cut off and used again. */
 void assets_play(int32_t handle, double volume) {
   if (handle < 0 || handle >= sounds.count || !sounds.loaded[handle]) return;
@@ -178,7 +178,7 @@ void assets_play(int32_t handle, double volume) {
         break;
       }
     }
-    if (voice == NULL && sounds.voice_count[handle] < RGE_SOUND_VOICES - 1) {
+    if (voice == NULL && sounds.voice_count[handle] < TSE_SOUND_VOICES - 1) {
       Sound *grown = realloc(sounds.voices[handle], (size_t)(sounds.voice_count[handle] + 1) * sizeof(Sound));
       if (grown != NULL) {
         sounds.voices[handle] = grown;
@@ -203,7 +203,7 @@ void assets_update_music(void) {
   for (int32_t i = 0; i < musics.count; i++) if (musics.loaded[i] && IsMusicStreamPlaying(musics.items[i])) UpdateMusicStream(musics.items[i]);
 }
 
-int32_t rge_load_music(const char *path) {
+int32_t tse_load_music(const char *path) {
   if (path == NULL || !FileExists(path)) return -1;
   Music music = {0};
   bool loaded = false;
@@ -233,7 +233,7 @@ int32_t rge_load_music(const char *path) {
   return musics.count++;
 }
 
-void rge_music_play(int32_t handle, double volume, int32_t loop) {
+void tse_music_play(int32_t handle, double volume, int32_t loop) {
   if (handle < 0 || handle >= musics.count || !musics.loaded[handle]) return;
   Music *music = &musics.items[handle];
   music->looping = loop != 0;
@@ -242,17 +242,17 @@ void rge_music_play(int32_t handle, double volume, int32_t loop) {
   PlayMusicStream(*music);
 }
 
-void rge_music_set_volume(int32_t handle, double volume) {
+void tse_music_set_volume(int32_t handle, double volume) {
   if (handle < 0 || handle >= musics.count || !musics.loaded[handle]) return;
   SetMusicVolume(musics.items[handle], (float)clamp_volume(volume));
 }
 
-void rge_music_stop(int32_t handle) {
+void tse_music_stop(int32_t handle) {
   if (handle < 0 || handle >= musics.count || !musics.loaded[handle]) return;
   StopMusicStream(musics.items[handle]);
 }
 
-int32_t rge_load_texture(const char *path) {
+int32_t tse_load_texture(const char *path) {
   if (path == NULL || !FileExists(path)) return -1;
   Texture2D texture = LoadTexture(path);
   if (texture.id == 0) return -1;
@@ -271,7 +271,7 @@ int32_t rge_load_texture(const char *path) {
   return textures.count++;
 }
 
-int32_t rge_load_sound(const char *path) {
+int32_t tse_load_sound(const char *path) {
   if (path == NULL || !FileExists(path)) return -1;
   Sound sound = {0};
   bool loaded = false;
@@ -315,10 +315,10 @@ int32_t rge_load_sound(const char *path) {
   return sounds.count++;
 }
 
-void rge_play_sound(int32_t handle) {
+void tse_play_sound(int32_t handle) {
   assets_play(handle, 1.0);
 }
 
-void rge_play_sound_ex(int32_t handle, double volume) {
+void tse_play_sound_ex(int32_t handle, double volume) {
   assets_play(handle, volume);
 }

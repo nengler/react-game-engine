@@ -1,19 +1,19 @@
-//! The `Backend` object the game's `hostBackend()` finds on `globalThis.__rgeBackend`: the same eight
-//! methods the Node host implements, over the same `librge` calls. One `frame` call per frame carries the
+//! The `Backend` object the game's `hostBackend()` finds on `globalThis.__tseBackend`: the same eight
+//! methods the Node host implements, over the same `libtse` calls. One `frame` call per frame carries the
 //! draw records; the input comes back by writing into the two typed arrays the player passes.
 use crate::ffi;
 use rquickjs::{Ctx, Exception, Function, Object, Result as JsResult, TypedArray};
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-/// The global a host sets before it runs the game (`HOST_BACKEND_KEY` in `@rge/player`).
-const HOST_BACKEND_KEY: &str = "__rgeBackend";
+/// The global a host sets before it runs the game (`HOST_BACKEND_KEY` in `@tsengine/player`).
+const HOST_BACKEND_KEY: &str = "__tseBackend";
 
-/// Check that the library this binary was linked against is the one `rge.h` this file was written for.
+/// Check that the library this binary was linked against is the one `tse.h` this file was written for.
 pub fn check_abi() -> Result<(), String> {
-    let version = unsafe { ffi::rge_abi_version() };
-    if version != ffi::RGE_ABI_VERSION {
-        return Err(format!("librge speaks ABI version {version}, but this host expects {}", ffi::RGE_ABI_VERSION));
+    let version = unsafe { ffi::tse_abi_version() };
+    if version != ffi::TSE_ABI_VERSION {
+        return Err(format!("libtse speaks ABI version {version}, but this host expects {}", ffi::TSE_ABI_VERSION));
     }
     Ok(())
 }
@@ -58,85 +58,85 @@ fn open<'js>(ctx: Ctx<'js>, config: Object<'js>) -> JsResult<()> {
     let title: String = config.get("title")?;
     let flag = |name: &str, default: bool| -> JsResult<bool> { Ok(config.get::<_, Option<bool>>(name)?.unwrap_or(default)) };
     let mut options = 0;
-    if flag("resizable", true)? { options |= ffi::RGE_OPEN_RESIZABLE; }
-    if flag("vsync", true)? { options |= ffi::RGE_OPEN_VSYNC; }
-    if flag("hidden", false)? { options |= ffi::RGE_OPEN_HIDDEN; }
-    if flag("smooth", false)? { options |= ffi::RGE_OPEN_SMOOTH; }
-    if flag("sharp", false)? { options |= ffi::RGE_OPEN_SHARP; }
+    if flag("resizable", true)? { options |= ffi::TSE_OPEN_RESIZABLE; }
+    if flag("vsync", true)? { options |= ffi::TSE_OPEN_VSYNC; }
+    if flag("hidden", false)? { options |= ffi::TSE_OPEN_HIDDEN; }
+    if flag("smooth", false)? { options |= ffi::TSE_OPEN_SMOOTH; }
+    if flag("sharp", false)? { options |= ffi::TSE_OPEN_SHARP; }
     let title = c_string(&title);
-    let code = unsafe { ffi::rge_open(width, height, title.as_ptr(), options) };
+    let code = unsafe { ffi::tse_open(width, height, title.as_ptr(), options) };
     if code != 0 {
-        return Err(Exception::throw_message(&ctx, &format!("Could not open the window (librge error {code}).")));
+        return Err(Exception::throw_message(&ctx, &format!("Could not open the window (libtse error {code}).")));
     }
     Ok(())
 }
 
 fn close() {
-    unsafe { ffi::rge_close() }
+    unsafe { ffi::tse_close() }
 }
 
-/// Full screen on or off; false when librge cannot (no window, or a hidden one).
+/// Full screen on or off; false when libtse cannot (no window, or a hidden one).
 fn set_fullscreen(on: bool) -> bool {
-    unsafe { ffi::rge_set_fullscreen(on as i32) == 0 }
+    unsafe { ffi::tse_set_fullscreen(on as i32) == 0 }
 }
 
 fn load_texture(path: String) -> i32 {
     let path = c_string(&path);
-    unsafe { ffi::rge_load_texture(path.as_ptr()) }
+    unsafe { ffi::tse_load_texture(path.as_ptr()) }
 }
 
 /// A layer's shader (ABI v11): a handle, -1 when it could not be loaded, -2 where this build runs none.
 fn load_shader(path: String) -> i32 {
     let path = c_string(&path);
-    unsafe { ffi::rge_load_shader(path.as_ptr()) }
+    unsafe { ffi::tse_load_shader(path.as_ptr()) }
 }
 
 fn load_sound(path: String) -> i32 {
     let path = c_string(&path);
-    unsafe { ffi::rge_load_sound(path.as_ptr()) }
+    unsafe { ffi::tse_load_sound(path.as_ptr()) }
 }
 
 /// Play a sound at `volume` (0 to 1) over any plays of it still going.
 fn play_sound(handle: i32, volume: Option<f64>) {
-    unsafe { ffi::rge_play_sound_ex(handle, volume.unwrap_or(1.0)) }
+    unsafe { ffi::tse_play_sound_ex(handle, volume.unwrap_or(1.0)) }
 }
 
 fn load_music(path: String) -> i32 {
     let path = c_string(&path);
-    unsafe { ffi::rge_load_music(path.as_ptr()) }
+    unsafe { ffi::tse_load_music(path.as_ptr()) }
 }
 
 fn play_music(handle: i32, volume: f64, looping: bool) {
-    unsafe { ffi::rge_music_play(handle, volume, looping as i32) }
+    unsafe { ffi::tse_music_play(handle, volume, looping as i32) }
 }
 
 fn set_music_volume(handle: i32, volume: f64) {
-    unsafe { ffi::rge_music_set_volume(handle, volume) }
+    unsafe { ffi::tse_music_set_volume(handle, volume) }
 }
 
 fn stop_music(handle: i32) {
-    unsafe { ffi::rge_music_stop(handle) }
+    unsafe { ffi::tse_music_stop(handle) }
 }
 
 fn set_gamepad_deadzone(deadzone: f64) {
-    unsafe { ffi::rge_set_gamepad_deadzone(deadzone) }
+    unsafe { ffi::tse_set_gamepad_deadzone(deadzone) }
 }
 
-/// Open the game's saved-data folder (`rge_storage_open`): true when it is there to use.
+/// Open the game's saved-data folder (`tse_storage_open`): true when it is there to use.
 fn storage_open(game_id: String) -> bool {
     let id = c_string(&game_id);
-    unsafe { ffi::rge_storage_open(id.as_ptr()) == 0 }
+    unsafe { ffi::tse_storage_open(id.as_ptr()) == 0 }
 }
 
 /// An entry's text, or null (`None`) when there is none or it is not UTF-8.
 fn storage_read(name: String) -> Option<String> {
     let name = c_string(&name);
-    let size = unsafe { ffi::rge_storage_read(name.as_ptr(), std::ptr::null_mut(), 0) };
+    let size = unsafe { ffi::tse_storage_read(name.as_ptr(), std::ptr::null_mut(), 0) };
     if size < 0 {
         return None;
     }
     let mut bytes = vec![0u8; size as usize];
-    let got = unsafe { ffi::rge_storage_read(name.as_ptr(), bytes.as_mut_ptr(), size) };
+    let got = unsafe { ffi::tse_storage_read(name.as_ptr(), bytes.as_mut_ptr(), size) };
     if got != size {
         return None; // it changed between the two calls
     }
@@ -146,19 +146,19 @@ fn storage_read(name: String) -> Option<String> {
 fn storage_write(name: String, text: String) -> bool {
     let name = c_string(&name);
     let bytes = text.as_bytes();
-    unsafe { ffi::rge_storage_write(name.as_ptr(), bytes.as_ptr(), bytes.len() as i32) == 0 }
+    unsafe { ffi::tse_storage_write(name.as_ptr(), bytes.as_ptr(), bytes.len() as i32) == 0 }
 }
 
 fn storage_remove(name: String) {
     let name = c_string(&name);
-    unsafe { ffi::rge_storage_remove(name.as_ptr()) };
+    unsafe { ffi::tse_storage_remove(name.as_ptr()) };
 }
 
 /// What was typed in the last frame (ABI v9): its characters, with U+0008 for each Backspace.
 fn typed() -> String {
-    let mut out = [0u32; ffi::RGE_TYPED_MAX];
-    let count = unsafe { ffi::rge_typed(out.as_mut_ptr(), ffi::RGE_TYPED_MAX as i32) };
-    let count = (count.max(0) as usize).min(ffi::RGE_TYPED_MAX);
+    let mut out = [0u32; ffi::TSE_TYPED_MAX];
+    let count = unsafe { ffi::tse_typed(out.as_mut_ptr(), ffi::TSE_TYPED_MAX as i32) };
+    let count = (count.max(0) as usize).min(ffi::TSE_TYPED_MAX);
     out[..count].iter().filter_map(|&c| char::from_u32(c)).collect()
 }
 
@@ -166,9 +166,9 @@ fn typed() -> String {
 fn measure_text<'js>(ctx: Ctx<'js>, text: String, size: f64) -> JsResult<Object<'js>> {
     let text = c_string(&text);
     let mut out = [0.0f64; 2];
-    let code = unsafe { ffi::rge_measure_text(text.as_ptr(), size, out.as_mut_ptr()) };
+    let code = unsafe { ffi::tse_measure_text(text.as_ptr(), size, out.as_mut_ptr()) };
     if code != 0 {
-        return Err(Exception::throw_message(&ctx, &format!("librge could not measure text at size {size}.")));
+        return Err(Exception::throw_message(&ctx, &format!("libtse could not measure text at size {size}.")));
     }
     size_object(&ctx, out)
 }
@@ -176,9 +176,9 @@ fn measure_text<'js>(ctx: Ctx<'js>, text: String, size: f64) -> JsResult<Object<
 /// The width and height of a loaded texture, as an object.
 fn texture_size<'js>(ctx: Ctx<'js>, handle: i32) -> JsResult<Object<'js>> {
     let mut out = [0.0f64; 2];
-    let code = unsafe { ffi::rge_texture_size(handle, out.as_mut_ptr()) };
+    let code = unsafe { ffi::tse_texture_size(handle, out.as_mut_ptr()) };
     if code != 0 {
-        return Err(Exception::throw_message(&ctx, &format!("librge has no texture with handle {handle}.")));
+        return Err(Exception::throw_message(&ctx, &format!("libtse has no texture with handle {handle}.")));
     }
     size_object(&ctx, out)
 }
@@ -190,14 +190,14 @@ fn size_object<'js>(ctx: &Ctx<'js>, size: [f64; 2]) -> JsResult<Object<'js>> {
     Ok(object)
 }
 
-/// The pairs of boxes that overlap (`rge_overlaps`): never more boxes than `boxes` and `order` hold, whatever `count` claims.
+/// The pairs of boxes that overlap (`tse_overlaps`): never more boxes than `boxes` and `order` hold, whatever `count` claims.
 fn overlaps<'js>(ctx: Ctx<'js>, boxes: TypedArray<'js, f64>, count: i32, order: TypedArray<'js, i32>, pairs: TypedArray<'js, i32>) -> JsResult<i32> {
     let (boxes_ptr, boxes_len) = raw_f64(&ctx, &boxes, "boxes")?;
     let (order_ptr, order_len) = raw_i32(&ctx, &order, "order")?;
     let (pairs_ptr, pairs_len) = raw_i32(&ctx, &pairs, "pairs")?;
     let count = (count.max(0) as usize).min(boxes_len / 4).min(order_len).min(i32::MAX as usize);
     let capacity = (pairs_len / 2).min(i32::MAX as usize);
-    Ok(unsafe { ffi::rge_overlaps(boxes_ptr as *const f64, count as i32, order_ptr, pairs_ptr, capacity as i32) })
+    Ok(unsafe { ffi::tse_overlaps(boxes_ptr as *const f64, count as i32, order_ptr, pairs_ptr, capacity as i32) })
 }
 
 /// Draw and present one frame, then write the next frame's input into `input` and `keys`.
@@ -213,16 +213,16 @@ fn frame<'js>(
     let (records_ptr, records_len) = raw_f64(&ctx, &records, "records")?;
     let (input_ptr, input_len) = raw_f64(&ctx, &input, "input")?;
     let (keys_ptr, keys_len) = raw_u8(&ctx, &keys, "keys")?;
-    let key_count = unsafe { ffi::rge_key_count() } as usize;
-    if input_len < ffi::RGE_IN_LEN {
-        return Err(Exception::throw_type(&ctx, &format!("The input buffer needs {} entries, not {input_len}.", ffi::RGE_IN_LEN)));
+    let key_count = unsafe { ffi::tse_key_count() } as usize;
+    if input_len < ffi::TSE_IN_LEN {
+        return Err(Exception::throw_type(&ctx, &format!("The input buffer needs {} entries, not {input_len}.", ffi::TSE_IN_LEN)));
     }
-    // Exactly: a longer buffer means the game was built with more keys than this librge knows, so names past the
-    // end of librge's table would silently never be pressed (the Node host checks the same thing at load).
+    // Exactly: a longer buffer means the game was built with more keys than this libtse knows, so names past the
+    // end of libtse's table would silently never be pressed (the Node host checks the same thing at load).
     if keys_len != key_count {
         return Err(Exception::throw_type(
             &ctx,
-            &format!("The keys buffer has {keys_len} entries, but librge has {key_count} keys: rge.h and protocol.ts have drifted apart."),
+            &format!("The keys buffer has {keys_len} entries, but libtse has {key_count} keys: tse.h and protocol.ts have drifted apart."),
         ));
     }
     // Never read past what the array holds, whatever length the caller claims.
@@ -241,7 +241,7 @@ fn frame<'js>(
     }
 
     unsafe {
-        ffi::rge_frame(
+        ffi::tse_frame(
             clear_color as u32,
             records_ptr as *const f64,
             length as i32,

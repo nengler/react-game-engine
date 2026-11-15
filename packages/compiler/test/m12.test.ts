@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
  */
 import { after, before, describe, it } from "node:test";
 
-import { Camera, Entity, Sprite, World } from "@rge/runtime";
+import { Camera, Entity, Sprite, World } from "@tsengine/runtime";
 
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
@@ -177,7 +177,7 @@ describe("M12: authored source type-checks", () => {
     getCompiler().typeCheckSources([
       {
         fileName: `${process.cwd()}/.test-output/M12${Math.random()}.tsx`,
-        text: `import { Entity, Camera } from "@rge/runtime/jsx";\nfunction C({ n }: { n: number }) { return <Entity name="C">${body}</Entity>; }`,
+        text: `import { Entity, Camera } from "@tsengine/runtime/jsx";\nfunction C({ n }: { n: number }) { return <Entity name="C">${body}</Entity>; }`,
       },
     ]);
 
@@ -299,7 +299,7 @@ describe("M12: runtime behaviour", () => {
 
 describe("M12: a camera rig passes what it follows through {children}", () => {
   const RIG = `
-import { type Child, Camera, Entity, Sprite, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { type Child, Camera, Entity, Sprite, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 interface RigProps {
   children: Child;

@@ -1,5 +1,5 @@
 /**
- * The JSX types for authoring components (`jsxImportSource: "@rge/runtime"`).
+ * The JSX types for authoring components (`jsxImportSource: "@tsengine/runtime"`).
  * Source TSX is never executed: the compiler turns it into classes. These
  * declarations exist so an editor and `tsc` can type-check the TSX itself.
  */
@@ -52,7 +52,7 @@ export namespace JSX {
 }
 
 function compileTimeOnly(name: string): never {
-  throw new Error(`${name} is a compile-time declaration: components are compiled by @rge/compiler, not executed.`);
+  throw new Error(`${name} is a compile-time declaration: components are compiled by @tsengine/compiler, not executed.`);
 }
 
 export function jsx(_type: unknown, _props: unknown, _key?: unknown): JSX.Element {

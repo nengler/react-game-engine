@@ -1,4 +1,4 @@
-// Moving a diagnostic found in generated code (a type error, RGE9001) back to the component source it was written for.
+// Moving a diagnostic found in generated code (a type error, TSE9001) back to the component source it was written for.
 import { relative, resolve } from "node:path";
 
 import type { LineOrigin } from "../generator/writer.ts";

@@ -1,5 +1,5 @@
 {
-  "name": "@rge/player-node",
+  "name": "@tsengine/player-node",
   "version": "0.0.0",
   "license": "MIT",
   "private": true,
@@ -8,10 +8,10 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@rge/compiler": "0.0.0",
-    "@rge/native": "0.0.0",
-    "@rge/player": "0.0.0",
-    "@rge/runtime": "0.0.0",
+    "@tsengine/compiler": "0.0.0",
+    "@tsengine/native": "0.0.0",
+    "@tsengine/player": "0.0.0",
+    "@tsengine/runtime": "0.0.0",
     "koffi": "^3.3.7"
   }
 }

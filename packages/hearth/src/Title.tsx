@@ -1,4 +1,4 @@
-import { Flex, Hud, Text, useTime } from "@rge/runtime/jsx";
+import { Flex, Hud, Text, useTime } from "@tsengine/runtime/jsx";
 
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";

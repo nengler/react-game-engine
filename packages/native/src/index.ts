@@ -1,6 +1,6 @@
 /**
  * Where the prebuilt native parts are. In a pack made by `npm run pack` this package holds
- * `lib/<platform>-<arch>/{desktop,headless}/librge.*` and `bin/<platform>-<arch>/{desktop,headless}/rge-host*`; in the
+ * `lib/<platform>-<arch>/{desktop,headless}/libtse.*` and `bin/<platform>-<arch>/{desktop,headless}/tse-host*`; in the
  * repository's workspace it holds nothing, and every lookup answers null (the callers then look in the CMake and cargo
  * build folders, as they always did).
  */
@@ -19,14 +19,14 @@ export function platformFolder(platform: string = process.platform, arch: string
 }
 
 export function libraryFileName(platform: string = process.platform): string {
-  return platform === "win32" ? "rge.dll" : platform === "darwin" ? "librge.dylib" : "librge.so";
+  return platform === "win32" ? "tse.dll" : platform === "darwin" ? "libtse.dylib" : "libtse.so";
 }
 
 export function hostFileName(platform: string = process.platform): string {
-  return platform === "win32" ? "rge-host.exe" : "rge-host";
+  return platform === "win32" ? "tse-host.exe" : "tse-host";
 }
 
-/** Where a pack puts librge for a flavor on this platform (whether or not it is there). */
+/** Where a pack puts libtse for a flavor on this platform (whether or not it is there). */
 export function libraryPathIn(
   root: string,
   flavor: NativeFlavor,
@@ -40,13 +40,13 @@ export function hostPathIn(root: string, flavor: NativeFlavor, platform: string 
   return join(root, "bin", platformFolder(platform, arch), flavor, hostFileName(platform));
 }
 
-/** librge shipped in this package, or null. */
+/** libtse shipped in this package, or null. */
 export function nativeLibrary(flavor: NativeFlavor): string | null {
   const path = libraryPathIn(NATIVE_ROOT, flavor);
   return existsSync(path) ? path : null;
 }
 
-/** `rge-host` shipped in this package, or null. */
+/** `tse-host` shipped in this package, or null. */
 export function nativeHost(flavor: NativeFlavor): string | null {
   const path = hostPathIn(NATIVE_ROOT, flavor);
   return existsSync(path) ? path : null;

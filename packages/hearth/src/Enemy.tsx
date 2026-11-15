@@ -1,4 +1,4 @@
-import { AnimatedSprite, Collider, Entity, after, cancelTimers, useMutable, useUpdate } from "@rge/runtime/jsx";
+import { AnimatedSprite, Collider, Entity, after, cancelTimers, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
 import { HealthBar } from "./HealthBar.tsx";
 import { FLASH } from "./rules/constants.ts";

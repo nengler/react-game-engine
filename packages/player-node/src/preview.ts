@@ -1,9 +1,9 @@
 /**
- * `rge preview`: a game's stories (see `stories` in @rge/player), in a window with hot reload, or as PNGs to compare with the
+ * `tse preview`: a game's stories (see `stories` in @tsengine/player), in a window with hot reload, or as PNGs to compare with the
  * stored ones.
  *
  * Stories live in the game's `stories/` folder, one `<Component>.stories.ts` per component. The stored screenshots are
- * `stories/screenshots/<Component>/<Story>.png`; `rge preview --screenshot` writes them and `rge check` compares them.
+ * `stories/screenshots/<Component>/<Story>.png`; `tse preview --screenshot` writes them and `tse check` compares them.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -15,9 +15,9 @@ import {
   gameLook,
   KEY_INDEX,
   parseInputScript,
-  RGE_IN_HEIGHT,
-  RGE_IN_WIDTH,
-  RGE_KEY_PRESSED,
+  TSE_IN_HEIGHT,
+  TSE_IN_WIDTH,
+  TSE_KEY_PRESSED,
   storiesIn,
   storyRoot,
   type Backend,
@@ -25,8 +25,8 @@ import {
   type InputFrame,
   type LoadedStory,
   type PlayerConfig,
-} from "@rge/player";
-import type { GameProps } from "@rge/runtime";
+} from "@tsengine/player";
+import type { GameProps } from "@tsengine/runtime";
 
 import type { Pixels } from "./backend.ts";
 import { playWithReload, type DevOptions } from "./dev.ts";
@@ -254,11 +254,11 @@ export async function previewWithReload(backend: Backend, options: PreviewOption
             label.text({ ...W, x: 7, y: 5 }, text, 10, 0xffffffff);
           }
           target.frame(clear, label.records, label.length, label.texts, values, keys);
-          const pressed = (key: number): boolean => ((keys[key] as number) & RGE_KEY_PRESSED) !== 0;
+          const pressed = (key: number): boolean => ((keys[key] as number) & TSE_KEY_PRESSED) !== 0;
           if (pressed(PREVIOUS)) step(-1);
           else if (pressed(NEXT)) step(1);
           const next = feed.shift();
-          if (next !== undefined) applyInputFrame(next, values, keys, values[RGE_IN_WIDTH] as number, values[RGE_IN_HEIGHT] as number);
+          if (next !== undefined) applyInputFrame(next, values, keys, values[TSE_IN_WIDTH] as number, values[TSE_IN_HEIGHT] as number);
         };
         return frame;
       }

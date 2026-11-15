@@ -1,18 +1,18 @@
-import type { Controls, InputState, Point, ViewTransform } from "@rge/runtime";
+import type { Controls, InputState, Point, ViewTransform } from "@tsengine/runtime";
 
 import {
   KEYS,
   KEY_INDEX,
-  RGE_IN_HEIGHT,
-  RGE_IN_LEN,
-  RGE_IN_MOUSE_X,
-  RGE_IN_MOUSE_Y,
-  RGE_IN_QUIT,
-  RGE_IN_WIDTH,
-  RGE_IN_DT,
-  RGE_KEY_DOWN,
-  RGE_KEY_PRESSED,
-  RGE_KEY_RELEASED,
+  TSE_IN_HEIGHT,
+  TSE_IN_LEN,
+  TSE_IN_MOUSE_X,
+  TSE_IN_MOUSE_Y,
+  TSE_IN_QUIT,
+  TSE_IN_WIDTH,
+  TSE_IN_DT,
+  TSE_KEY_DOWN,
+  TSE_KEY_PRESSED,
+  TSE_KEY_RELEASED,
 } from "./protocol.ts";
 import { Warner } from "./warn.ts";
 
@@ -24,7 +24,7 @@ const IDENTITY_VIEW: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
  * frame that was last drawn, which is how the mouse is turned into a world position.
  */
 export class PlayerInput implements InputState {
-  readonly values = new Float64Array(RGE_IN_LEN);
+  readonly values = new Float64Array(TSE_IN_LEN);
   readonly keys = new Uint8Array(KEYS.length);
   /**
    * The key flags handlers read (`pressed`, `down`, `released`). The raw `keys` unless a fixed timestep is on, when the player
@@ -46,11 +46,11 @@ export class PlayerInput implements InputState {
   }
 
   pressed(key: string): boolean {
-    return this.#flags(key, RGE_KEY_PRESSED);
+    return this.#flags(key, TSE_KEY_PRESSED);
   }
 
   lastPressed(): (typeof KEYS)[number] | undefined {
-    for (let i = 0; i < KEYS.length; i++) if (((this.handlerKeys[i] as number) & RGE_KEY_PRESSED) !== 0) return KEYS[i];
+    for (let i = 0; i < KEYS.length; i++) if (((this.handlerKeys[i] as number) & TSE_KEY_PRESSED) !== 0) return KEYS[i];
     return undefined;
   }
 
@@ -59,47 +59,47 @@ export class PlayerInput implements InputState {
   }
 
   down(key: string): boolean {
-    return this.#flags(key, RGE_KEY_DOWN);
+    return this.#flags(key, TSE_KEY_DOWN);
   }
 
   released(key: string): boolean {
-    return this.#flags(key, RGE_KEY_RELEASED);
+    return this.#flags(key, TSE_KEY_RELEASED);
   }
 
   /** The mouse in world space: where it is on the screen, taken back through the camera. */
   get pointerX(): number {
-    return this.worldPoint(this.values[RGE_IN_MOUSE_X] as number, this.values[RGE_IN_MOUSE_Y] as number).x;
+    return this.worldPoint(this.values[TSE_IN_MOUSE_X] as number, this.values[TSE_IN_MOUSE_Y] as number).x;
   }
 
   get pointerY(): number {
-    return this.worldPoint(this.values[RGE_IN_MOUSE_X] as number, this.values[RGE_IN_MOUSE_Y] as number).y;
+    return this.worldPoint(this.values[TSE_IN_MOUSE_X] as number, this.values[TSE_IN_MOUSE_Y] as number).y;
   }
 
   /** Seconds since the previous frame, as the backend measured it. */
   get dt(): number {
-    return this.values[RGE_IN_DT] as number;
+    return this.values[TSE_IN_DT] as number;
   }
 
   get width(): number {
-    return this.values[RGE_IN_WIDTH] as number;
+    return this.values[TSE_IN_WIDTH] as number;
   }
 
   get height(): number {
-    return this.values[RGE_IN_HEIGHT] as number;
+    return this.values[TSE_IN_HEIGHT] as number;
   }
 
   /** The mouse in window coordinates (origin top-left). */
   get screenX(): number {
-    return this.values[RGE_IN_MOUSE_X] as number;
+    return this.values[TSE_IN_MOUSE_X] as number;
   }
 
   get screenY(): number {
-    return this.values[RGE_IN_MOUSE_Y] as number;
+    return this.values[TSE_IN_MOUSE_Y] as number;
   }
 
   /** The window was asked to close. */
   get quit(): boolean {
-    return this.values[RGE_IN_QUIT] !== 0;
+    return this.values[TSE_IN_QUIT] !== 0;
   }
 
   /** The world-space point under a window-space point: the inverse of the view last drawn. */
@@ -115,8 +115,8 @@ export class PlayerInput implements InputState {
   #flags(name: string, flag: number): boolean {
     const keys = this.controls?.keysOf(name);
     if (keys === undefined) return this.#keyFlags(name, flag);
-    if (flag === RGE_KEY_RELEASED)
-      return keys.some((k) => this.#keyFlags(k, RGE_KEY_RELEASED)) && !keys.some((k) => this.#keyFlags(k, RGE_KEY_DOWN));
+    if (flag === TSE_KEY_RELEASED)
+      return keys.some((k) => this.#keyFlags(k, TSE_KEY_RELEASED)) && !keys.some((k) => this.#keyFlags(k, TSE_KEY_DOWN));
     return keys.some((k) => this.#keyFlags(k, flag));
   }
 

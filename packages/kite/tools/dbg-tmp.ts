@@ -1,5 +1,5 @@
-import { createPlayer, parseInputScript, RecordingBackend, Rewind } from "@rge/player";
-import { captureHotState } from "@rge/runtime";
+import { createPlayer, parseInputScript, RecordingBackend, Rewind } from "@tsengine/player";
+import { captureHotState } from "@tsengine/runtime";
 
 import { bindings, gameConfig } from "../game.ts";
 import { useGame } from "../src/GameState.ts";

@@ -1,5 +1,5 @@
 /**
- * The tree the game runs: its world and root, which the player sets when it mounts the root (and `@rge/testing` when it renders a
+ * The tree the game runs: its world and root, which the player sets when it mounts the root (and `@tsengine/testing` when it renders a
  * component). A save with `tree: true` reads every component's own state from it, and puts state back into it after a load.
  */
 import type { GameObject } from "./GameObject.ts";

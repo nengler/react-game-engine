@@ -1,4 +1,4 @@
-import type { TileGrid } from "@rge/runtime";
+import type { TileGrid } from "@tsengine/runtime";
 
 import { TILE } from "./constants.ts";
 

@@ -1,4 +1,4 @@
-// npm run pack: write dist/packs/rge-<name>-<version>.tgz for each engine package a game outside this repository installs.
+// npm run pack: write dist/packs/tsengine-<name>-<version>.tgz for each engine package a game outside this repository installs.
 //
 // The workspace exports TypeScript source ("./src/index.ts"). That works in the repository because the files are not under
 // node_modules, and Node refuses to strip types from files that are (ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING). So a pack
@@ -7,10 +7,10 @@
 // keeps exporting source; nothing here changes how Kite, Hearth or the tests run.
 //
 //   node tools/pack.ts [--out <dir>] [--build [--strict]] [--version <x.y.z>] [package ...]     (default: dist/packs, every package below)
-//   --build builds librge and rge-host first (headless always, desktop if it can); without it, @rge/native ships what is built.
-//     It builds what this machine can: without cmake there is no librge, without cargo no rge-host, and a build that fails is a
+//   --build builds libtse and tse-host first (headless always, desktop if it can); without it, @tsengine/native ships what is built.
+//     It builds what this machine can: without cmake there is no libtse, without cargo no tse-host, and a build that fails is a
 //     warning. It ends by saying what the packs let you do and what to install for the rest. --strict makes any failure an error.
-//   --version stamps the packs with a release's version: each package's own, and its dependencies on the other @rge packages,
+//   --version stamps the packs with a release's version: each package's own, and its dependencies on the other @tsengine packages,
 //     so a game that installs one release's tarballs gets that release throughout (.github/workflows/release.yml uses it).
 //   npm run dist is `--build`: from a fresh checkout, `npm install && npm run dist` is all a game outside the repository needs.
 import { execFileSync } from "node:child_process";
@@ -25,16 +25,16 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * The packages a game installs. `native` and `cli` join them in M0.2 and M0.3; `testing` (a game's tests) with A8; `language-server`
- * (`rge lsp`, which the command line depends on) with D2.
+ * (`tse lsp`, which the command line depends on) with D2.
  */
 export const PACKABLE = ["runtime", "compiler", "player", "native", "player-node", "testing", "language-server", "cli"] as const;
 
 type Flavor = "desktop" | "headless";
 const platform = `${process.platform}-${process.arch}`;
-const libName = process.platform === "win32" ? "rge.dll" : process.platform === "darwin" ? "librge.dylib" : "librge.so";
-const hostName = process.platform === "win32" ? "rge-host.exe" : "rge-host";
+const libName = process.platform === "win32" ? "tse.dll" : process.platform === "darwin" ? "libtse.dylib" : "libtse.so";
+const hostName = process.platform === "win32" ? "tse-host.exe" : "tse-host";
 
-/** Where the CMake and cargo builds put librge and rge-host for a flavor. */
+/** Where the CMake and cargo builds put libtse and tse-host for a flavor. */
 const BUILDS: Record<Flavor, { lib: string[]; host: string }> = {
   desktop: { lib: ["native/build"], host: "host/target/release" },
   headless: { lib: ["native/build-headless"], host: "host/target-headless/release" },
@@ -50,7 +50,7 @@ function find(candidates: string[], file: string): string | null {
   return null;
 }
 
-/** The tools a build needs that a machine may lack: cmake (and a C compiler) for librge, cargo for rge-host. */
+/** The tools a build needs that a machine may lack: cmake (and a C compiler) for libtse, cargo for tse-host. */
 export interface BuildTools {
   readonly cmake: boolean;
   readonly cargo: boolean;
@@ -70,8 +70,8 @@ export function probeTools(): BuildTools {
 }
 
 /**
- * Build librge and rge-host for a flavor from the repository's CMake and cargo setups, whichever of the two `tools` has. The
- * headless flavor (raylib's software renderer: no window, no GPU, no system libraries) is what CI and `rge package --headless`
+ * Build libtse and tse-host for a flavor from the repository's CMake and cargo setups, whichever of the two `tools` has. The
+ * headless flavor (raylib's software renderer: no window, no GPU, no system libraries) is what CI and `tse package --headless`
  * need; the desktop one needs the platform's windowing libraries, so a failure there is a warning, not an error.
  */
 export function buildNative(flavor: Flavor, tools: BuildTools = { cmake: true, cargo: true }): void {
@@ -80,8 +80,8 @@ export function buildNative(flavor: Flavor, tools: BuildTools = { cmake: true, c
   };
   if (tools.cmake) {
     const folder = flavor === "headless" ? "native/build-headless" : "native/build";
-    run("cmake", ["-S", "native", "-B", folder, ...(flavor === "headless" ? ["-DRGE_PLATFORM=Memory"] : [])]);
-    run("cmake", ["--build", folder, "-j", "--target", "rge"]);
+    run("cmake", ["-S", "native", "-B", folder, ...(flavor === "headless" ? ["-DTSE_PLATFORM=Memory"] : [])]);
+    run("cmake", ["--build", folder, "-j", "--target", "tse"]);
   }
   if (tools.cargo) {
     const cargo = [
@@ -95,54 +95,54 @@ export function buildNative(flavor: Flavor, tools: BuildTools = { cmake: true, c
   }
 }
 
-/** The windowing libraries the desktop librge is built against, for the hint about a missing window. */
+/** The windowing libraries the desktop libtse is built against, for the hint about a missing window. */
 const WINDOW_LIBRARIES = "libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev";
 
 /**
  * What the packs let an author do, and what to install for the rest, as lines for the end of `--build`. `shipped` is what
- * `@rge/native` holds (`lib/<platform>/<flavor>/…`, `bin/…`); `tools` is what the machine has.
+ * `@tsengine/native` holds (`lib/<platform>/<flavor>/…`, `bin/…`); `tools` is what the machine has.
  */
 export function setupNotes(shipped: readonly string[], tools: BuildTools): string[] {
   const has = (kind: string, flavor: string): boolean =>
     shipped.some((file) => file.startsWith(`${kind}/`) && file.includes(`/${flavor}/`));
-  const lines = ["Write, test and check games: ready. `rge create` and `rge check` need only Node."];
-  if (has("lib", "desktop")) lines.push("A window (`rge dev`): ready.");
+  const lines = ["Write, test and check games: ready. `tse create` and `tse check` need only Node."];
+  if (has("lib", "desktop")) lines.push("A window (`tse dev`): ready.");
   else
     lines.push(
-      "A window (`rge dev`): not built. It needs the platform's windowing libraries (Debian or Ubuntu: sudo apt install " +
+      "A window (`tse dev`): not built. It needs the platform's windowing libraries (Debian or Ubuntu: sudo apt install " +
         WINDOW_LIBRARIES +
         "), then `npm run dist` again."
     );
-  if (has("lib", "headless")) lines.push("Screenshots and `rge package --headless`: ready.");
+  if (has("lib", "headless")) lines.push("Screenshots and `tse package --headless`: ready.");
   else {
     const why = tools.cmake ? "the build failed (see above; it needs a C compiler)" : "cmake was not found";
     lines.push(
-      "Screenshots and `rge package`: no librge, because " +
+      "Screenshots and `tse package`: no libtse, because " +
         why +
         ". Install cmake and a C compiler (Debian or Ubuntu: sudo apt install build-essential cmake; macOS: xcode-select --install and brew install cmake), then `npm run dist` again."
     );
   }
   if (shipped.some((file) => file.startsWith("bin/")))
-    lines.push("`rge package --engine quickjs`, and `rge check` against the Rust host: ready.");
+    lines.push("`tse package --engine quickjs`, and `tse check` against the Rust host: ready.");
   else {
     const why = tools.cargo ? "the build failed (see above)" : "cargo was not found";
     lines.push(
-      "`rge package --engine quickjs`, and `rge check` against the Rust host: no rge-host, because " +
+      "`tse package --engine quickjs`, and `tse check` against the Rust host: no tse-host, because " +
         why +
-        ". Install Rust (https://rustup.rs), then `npm run dist` again. Until then `rge check` compares against Node only."
+        ". Install Rust (https://rustup.rs), then `npm run dist` again. Until then `tse check` compares against Node only."
     );
   }
   return lines;
 }
 
-/** What is built and would ship in `@rge/native`: `lib/<platform>/<flavor>/<name>` and `bin/…`, with where each is built. */
+/** What is built and would ship in `@tsengine/native`: `lib/<platform>/<flavor>/<name>` and `bin/…`, with where each is built. */
 function builtBinaries(): { readonly path: string; readonly from: string }[] {
   const found: { path: string; from: string }[] = [];
   for (const flavor of ["desktop", "headless"] as const) {
     const lib = find(BUILDS[flavor].lib, libName);
     // host/target/release is whatever `cargo build` last built there (a headless build, if `host:build:headless` ran last), so
-    // it only counts as the desktop host when a desktop librge exists too.
-    // Conversely a headless host may be there (`host:build:headless`) with no desktop librge, so it is shipped as the headless one.
+    // it only counts as the desktop host when a desktop libtse exists too.
+    // Conversely a headless host may be there (`host:build:headless`) with no desktop libtse, so it is shipped as the headless one.
     const desktopLib = find(BUILDS.desktop.lib, libName);
     const candidates =
       flavor === "headless" ? [BUILDS.headless.host, ...(desktopLib === null ? [BUILDS.desktop.host] : [])] : [BUILDS.desktop.host];
@@ -157,7 +157,7 @@ function builtBinaries(): { readonly path: string; readonly from: string }[] {
   return found;
 }
 
-/** Copy the built librge and rge-host for each flavor that exists into the staged `@rge/native`. Returns what it shipped. */
+/** Copy the built libtse and tse-host for each flavor that exists into the staged `@tsengine/native`. Returns what it shipped. */
 function addBinaries(stage: string): string[] {
   const shipped: string[] = [];
   for (const { path, from } of builtBinaries()) {
@@ -205,7 +205,7 @@ function mapExports(exports: unknown): unknown {
 }
 
 /**
- * A package.json with `version` set, and its dependencies on other `@rge/*` packages pinned to the same version. Without a
+ * A package.json with `version` set, and its dependencies on other `@tsengine/*` packages pinned to the same version. Without a
  * version it is returned as it is (every workspace package is 0.0.0).
  */
 export function stampVersion(pkg: Json, version: string | undefined): Json {
@@ -215,7 +215,7 @@ export function stampVersion(pkg: Json, version: string | undefined): Json {
     ...pkg,
     version,
     ...(deps && {
-      dependencies: Object.fromEntries(Object.entries(deps).map(([dep, range]) => [dep, dep.startsWith("@rge/") ? version : range])),
+      dependencies: Object.fromEntries(Object.entries(deps).map(([dep, range]) => [dep, dep.startsWith("@tsengine/") ? version : range])),
     }),
   };
 }
@@ -256,6 +256,10 @@ export function stagePackage(name: string, staging: string, version?: string): s
     name: pkg.name,
     version: pkg.version,
     license: pkg.license,
+    // Where it is built from: npm's provenance check compares this with the repository the release workflow ran in.
+    repository: { type: "git", url: "git+https://github.com/nengler/tse.git", directory: `packages/${name}` },
+    // A scoped package is private on npm unless it says otherwise.
+    publishConfig: { access: "public" },
     type: "module",
     exports: mapExports(pkg.exports),
     dependencies: pkg.dependencies,
@@ -311,7 +315,7 @@ function emitDeclarations(name: string, stage: string): void {
 }
 
 export function packAll(outDir: string, names: readonly string[] = PACKABLE, version?: string): string[] {
-  const staging = mkdtempSync(join(tmpdir(), "rge-pack-"));
+  const staging = mkdtempSync(join(tmpdir(), "tse-pack-"));
   mkdirSync(outDir, { recursive: true });
   const tarballs: string[] = [];
   try {
@@ -320,7 +324,7 @@ export function packAll(outDir: string, names: readonly string[] = PACKABLE, ver
       if (name === "native") {
         const shipped = addBinaries(stage);
         if (!shipped.some((file) => file.startsWith("lib/") && file.includes("/headless/"))) {
-          console.warn("pack: no headless librge found; run with --build (or npm run native:build:headless) first");
+          console.warn("pack: no headless libtse found; run with --build (or npm run native:build:headless) first");
         }
       }
       const printed = execFileSync("npm", ["pack", "--json", "--pack-destination", outDir, "--silent"], {
@@ -365,7 +369,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   }
   const tools = build ? probeTools() : { cmake: true, cargo: true };
   if (build) {
-    // Build what this machine can, and keep going when a piece fails: the packs without a librge still write and check games.
+    // Build what this machine can, and keep going when a piece fails: the packs without a libtse still write and check games.
     // --strict is for CI, where a missing piece is an error.
     const attempt = (what: string, run: () => void): void => {
       try {

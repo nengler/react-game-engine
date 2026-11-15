@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 /** M0 hardening: nested conditional commit, runtime manifest as config, components across files. */
 import { after, describe, it } from "node:test";
 
-import { Entity, Sprite, World, runtimeManifest } from "@rge/runtime";
+import { Entity, Sprite, World, runtimeManifest } from "@tsengine/runtime";
 
 import { Compiler, DiagnosticCode } from "../src/index.ts";
 import {
@@ -99,7 +99,7 @@ function Lamp() {
     try {
       const result = compiler.compile("Lamp.tsx", withAuthoringImports(TORCH, manifest));
       assert.ok(result.ok);
-      assert.match(result.code, /import \{ Entity, Torch \} from "@rge\/runtime";/);
+      assert.match(result.code, /import \{ Entity, Torch \} from "@tsengine\/runtime";/);
       assert.match(result.code, /new Torch\(\{ radius: 4 \}\)/);
     } finally {
       compiler.close();
@@ -158,7 +158,7 @@ function W() {
         )
       );
       assert.ok(calls.ok);
-      assert.match(calls.code, /import \{ Entity, wrap \} from "@rge\/runtime";/);
+      assert.match(calls.code, /import \{ Entity, wrap \} from "@tsengine\/runtime";/);
     } finally {
       compiler.close();
     }
@@ -248,7 +248,7 @@ function Player() {
 
   it("rejects an import that collides with an intrinsic or a local component", () => {
     const local = compileProjectErrors({
-      "P.tsx": `import { Entity, Sprite as _S } from "@rge/runtime/jsx";\nimport { Entity } from "./Entity.tsx";\nfunction P() { return <Entity name="P" />; }`,
+      "P.tsx": `import { Entity, Sprite as _S } from "@tsengine/runtime/jsx";\nimport { Entity } from "./Entity.tsx";\nfunction P() { return <Entity name="P" />; }`,
     });
     assert.ok(local.some((d) => d.code === DiagnosticCode.DuplicateComponent));
     const dup = compileProjectErrors({
@@ -269,13 +269,13 @@ function Player() {
     for (const source of [
       `import { useState } from "react";`,
       `import "./style.css";`,
-      `import * as jsx from "@rge/runtime/jsx";`,
-      `import jsx from "@rge/runtime/jsx";`,
-      `import { useState as state } from "@rge/runtime/jsx";`,
-      `import type { useState } from "@rge/runtime/jsx";`,
+      `import * as jsx from "@tsengine/runtime/jsx";`,
+      `import jsx from "@tsengine/runtime/jsx";`,
+      `import { useState as state } from "@tsengine/runtime/jsx";`,
+      `import type { useState } from "@tsengine/runtime/jsx";`,
     ]) {
       const codes = compileErrors(
-        `import { Entity } from "@rge/runtime/jsx";\n${source}\nfunction S() { return <Entity name="S" />; }`
+        `import { Entity } from "@tsengine/runtime/jsx";\n${source}\nfunction S() { return <Entity name="S" />; }`
       ).map((d) => d.code);
       assert.deepEqual(codes, [DiagnosticCode.UnsupportedSyntax], source);
     }
@@ -283,21 +283,21 @@ function Player() {
 
   it("treats a relative .ts import named like a hook as the game state, so it says what to import instead; any other name is a plain function", () => {
     const [d] = compileErrors(
-      `import { Entity } from "@rge/runtime/jsx";\nimport { useHelper } from "./helper.ts";\nfunction S() { return <Entity name="S" />; }`
+      `import { Entity } from "@tsengine/runtime/jsx";\nimport { useHelper } from "./helper.ts";\nfunction S() { return <Entity name="S" />; }`
     );
     assert.equal(d!.code, DiagnosticCode.InvalidGameState);
     assert.match(d!.message, /no game state to import `useHelper` from/);
     assert.ok(
       getCompiler().compile(
         "S.tsx",
-        `import { Entity } from "@rge/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" transform={{ x: helper(1) }} />; }`
+        `import { Entity } from "@tsengine/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" transform={{ x: helper(1) }} />; }`
       ).ok
     );
   });
 
   it("accepts `type` only on the authoring module's types, and requires it there", () => {
     const wrap = (specifier: string) =>
-      `import { Entity, ${specifier} } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`;
+      `import { Entity, ${specifier} } from "@tsengine/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`;
     assert.ok(getCompiler().compile("S.tsx", wrap("type Child")).ok);
     assert.deepEqual(
       getCompiler()
@@ -316,7 +316,7 @@ function Player() {
 
   it("accepts the authoring module's hooks, built-ins and functions, and leaves no trace of the import in the output", () => {
     const { code } = compile(
-      `import { useMutable, useUpdate, clamp, Entity, Sprite } from "@rge/runtime/jsx";
+      `import { useMutable, useUpdate, clamp, Entity, Sprite } from "@tsengine/runtime/jsx";
 function S() {
   const s = useMutable({ n: 0 });
   useUpdate((dt) => { s.n = clamp(s.n + dt, 0, 10); });
@@ -324,13 +324,13 @@ function S() {
 }`,
       "S.tsx"
     );
-    assert.doesNotMatch(code, /rge\/runtime\/jsx/);
-    assert.match(code, /import \{ Entity, Sprite, clamp \} from "@rge\/runtime";/);
+    assert.doesNotMatch(code, /tse\/runtime\/jsx/);
+    assert.match(code, /import \{ Entity, Sprite, clamp \} from "@tsengine\/runtime";/);
   });
 
   it("rejects names the authoring module does not export", () => {
     const result = compileErrors(
-      `import { useState, useTransform, Nope, Entity } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`
+      `import { useState, useTransform, Nope, Entity } from "@tsengine/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`
     );
     assert.deepEqual(
       result.map((d) => d.code),

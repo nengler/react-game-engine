@@ -74,7 +74,7 @@ import { applyEdits, EditMap, type Edit } from "./edits.ts";
 import { LIBRARY_FILE, LIBRARY_HOOKS, LIBRARY_SOURCE } from "./library.ts";
 
 /** The module the library's own source imports from; rewritten to the project's authoring module when they differ. */
-const LIBRARY_AUTHORING_MODULE = "@rge/runtime/jsx";
+const LIBRARY_AUTHORING_MODULE = "@tsengine/runtime/jsx";
 
 export interface HookSource {
   readonly fileName: string;

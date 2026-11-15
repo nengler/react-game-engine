@@ -1,8 +1,8 @@
 /**
  * Script time of one frame of the level (Node, V8), over a scripted run of the whole game on a recording backend: the mean, the
- * 99th percentile and the slowest step. Drawing in librge is not in it. `node packages/kite/tools/frame-time.ts`.
+ * 99th percentile and the slowest step. Drawing in libtse is not in it. `node packages/kite/tools/frame-time.ts`.
  */
-import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+import { createPlayer, parseInputScript, RecordingBackend } from "@tsengine/player";
 
 import { bindings, gameConfig } from "../game.ts";
 import { REPLAYS } from "../test/replays.ts";

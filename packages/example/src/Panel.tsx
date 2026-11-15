@@ -1,4 +1,4 @@
-import { type Child, Entity, Sprite } from "@rge/runtime/jsx";
+import { type Child, Entity, Sprite } from "@tsengine/runtime/jsx";
 
 interface PanelProps {
   title: string;

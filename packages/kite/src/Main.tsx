@@ -1,4 +1,18 @@
-import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Particles, Route, Router, Screen, useShake } from "@rge/runtime/jsx";
+import {
+  Camera,
+  Entity,
+  Fade,
+  Flex,
+  Game,
+  Hud,
+  Music,
+  ParticleLayer,
+  Particles,
+  Route,
+  Router,
+  Screen,
+  useShake,
+} from "@tsengine/runtime/jsx";
 
 import { fx } from "./effects.ts";
 import { End } from "./End.tsx";

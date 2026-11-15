@@ -11,9 +11,9 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 | Milestone | Status | Branch / PR | Notes |
 | --- | --- | --- | --- |
 | N0 Design and protocol | Done | #25 | This document |
-| N1 Draw list (`@rge/player`, pure TS) | Done | #26 | `FrameBuilder` + `walkTree` in `draw.ts`; `native/include/rge.h` is committed here (complete, including the full key table); goldens are JSON files in `test/golden/` (`UPDATE_GOLDEN=1` rewrites them, numbers rounded to 1e-9) rather than `node:test` snapshots, which are still experimental |
+| N1 Draw list (`@tsengine/player`, pure TS) | Done | #26 | `FrameBuilder` + `walkTree` in `draw.ts`; `native/include/tse.h` is committed here (complete, including the full key table); goldens are JSON files in `test/golden/` (`UPDATE_GOLDEN=1` rewrites them, numbers rounded to 1e-9) rather than `node:test` snapshots, which are still experimental |
 | N2 Input, sound and the frame loop (pure TS) | Done | #27 | Also added: `PlayerConfig.warn` (where warnings go; tests use it), `getSoundSink()` (so a closing player removes only its own sink), `PlayerInput` (the `InputState` with `worldPoint`, `screenX/Y`, `dt`, `quit`), `RecordingBackend`'s `missingSounds`. The press is dispatched only for a *new* left press and only to pointers drawn in the previous frame |
-| N3 `librge` (C + raylib) and the Node dev host | Done | #28 | First pixels. Built and tested in the cloud container on both raylib platforms: `Memory` (software renderer, no system libraries; the CI `native` job) and `Desktop` (GLFW + Mesa under Xvfb; the `native-desktop` job). Still needs a person at a real display: how the window feels, real keyboard and mouse input, and audio (a hidden window has no audio device, so sounds are loaded but silent) |
+| N3 `libtse` (C + raylib) and the Node dev host | Done | #28 | First pixels. Built and tested in the cloud container on both raylib platforms: `Memory` (software renderer, no system libraries; the CI `native` job) and `Desktop` (GLFW + Mesa under Xvfb; the `native-desktop` job). Still needs a person at a real display: how the window feels, real keyboard and mouse input, and audio (a hidden window has no audio device, so sounds are loaded but silent) |
 | N4 Demo game and headless CI | Done | #29 | The headless C smoke test and the Node-host tests already ran in CI from N3; N4 adds the demo and runs it in those jobs: scripted-input tests through `RecordingBackend` (movement, camera, clicks, sound, the missing frame) and a 60-frame pixel check through the real library. Replaces N3's hello stand-in. Not yet seen by a person in a real window |
 | N5 Collisions (pure TS) | Done | #30 | `CollisionTracker` in `collide.ts`, called by the player once per frame (since 2026-11-12: after every step, see DESIGN.md, "Why collisions are per step"). Added a rule the plan did not have: colliders with the same parent never collide with each other (a hitbox and a shield must not hit each other, and handler code cannot read `other` to filter it out). Measured cost is in the doc comment |
 | N6 Rust host with QuickJS-ng | Done | #31 | The shipping executable. Built and tested in the cloud container: the demo runs under QuickJS-ng with output byte-identical to Node over 60 scripted frames; the packaged folder runs from another directory. Differences from the plan: `--root <dir>` instead of `--assets <dir>` (the game's relative paths resolve against it); with no arguments the host runs `game.js` next to the executable. Measuring found that all-pairs collisions were ~45x slower under QuickJS (465 ms a frame for 2,000 colliders), so N5's tracker now sweeps over x (38 ms). Not yet seen by a person in a real window |
@@ -24,7 +24,7 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 2. **It ships without Node.** A small Rust executable embeds a JavaScript engine (QuickJS-ng) and runs the same generated code: a folder with `game.exe`, `game.js` and `assets/`.
 3. **One body of game code, three places it runs.** The generated TypeScript runs unchanged in the Node tests (mock), the Node dev player and the shipped executable. Nothing in the compiler changes for this phase.
 4. **Testable without a GPU.** Almost all player logic is pure TypeScript and is tested against a recording backend. Native drawing gets a headless smoke test in CI.
-5. **Pieces that can be swapped.** Drawing code lives in exactly one place (`librge`, in C). The boundary between JavaScript and native is a handful of functions, so a host (Node, Rust, or later a browser) is a thin adapter.
+5. **Pieces that can be swapped.** Drawing code lives in exactly one place (`libtse`, in C). The boundary between JavaScript and native is a handful of functions, so a host (Node, Rust, or later a browser) is a thin adapter.
 
 ### Non-goals for this phase
 
@@ -35,12 +35,12 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 ## Architecture
 
 ```
-            game source (.tsx)  ──rge-compile──▶  generated .ts  (unchanged from Phase 2)
+            game source (.tsx)  ──tse-compile──▶  generated .ts  (unchanged from Phase 2)
                                                       │ imports
                                                       ▼
-  @rge/runtime   GameObject, World, built-ins (mock; no drawing). New in N2: a sound sink hook.
+  @tsengine/runtime   GameObject, World, built-ins (mock; no drawing). New in N2: a sound sink hook.
                                                       ▲ reads the tree
-  @rge/player    pure TypeScript, no Node APIs, no native deps
+  @tsengine/player    pure TypeScript, no Node APIs, no native deps
                  • draw.ts     walk the tree → one Float64Array of draw commands
                  • input.ts    native input buffers → InputState; pointer presses → World.reportPress
                  • collide.ts  collider overlaps → World.reportCollision (N5)
@@ -50,12 +50,12 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
                                                       │ Backend interface
                     ┌─────────────────────────────────┼──────────────────────────────┐
                     ▼                                 ▼                              ▼
-  @rge/player-node (dev)               host/ (Rust, ships)                  (later) a canvas
-  koffi → librge.so/.dylib/.dll        rquickjs + librge linked statically   backend for the web
+  @tsengine/player-node (dev)               host/ (Rust, ships)                  (later) a canvas
+  koffi → libtse.so/.dylib/.dll        rquickjs + libtse linked statically   backend for the web
                     └─────────────────────────────────┬──────────────────────────────┘
                                                       ▼
-  native/librge  C, the only drawing code. Wraps raylib 6.0: window, textures, text, sounds, input.
-                 ABI: native/include/rge.h (about ten functions)
+  native/libtse  C, the only drawing code. Wraps raylib 6.0: window, textures, text, sounds, input.
+                 ABI: native/include/tse.h (about ten functions)
 ```
 
 **Why this split.** The tree walk, colour parsing, camera maths, pointer hit testing and collision detection are where the bugs will be, so they live in TypeScript, where the existing test setup runs them without a window. The native side is deliberately boring: it executes a list of draw records and reports input. Because the boundary is one call per frame with plain arrays, it costs the same in every host, and each host's adapter is about 100 lines.
@@ -78,9 +78,9 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 | --- | --- | --- |
 | Graphics library | **raylib 6.0** (released 2026-04-23), pinned to the `6.0` tag | Each built-in maps to one or two raylib calls. It is one C library with no extra libraries for images, fonts or audio. 6.0 adds a CPU-only software renderer, which makes headless CI possible. raylib can itself run on SDL as its platform layer, so moving to SDL later does not change our code |
 | Not SDL3 (3.4) | Rejected for now | Better platform reach (consoles, gamepads, the GPU API), but we would add SDL_image, SDL_ttf and SDL_mixer and write our own batching for the same feature set. Revisit if consoles or custom shaders become goals |
-| Where drawing code lives | **C, in `native/librge`**, once | raylib's documentation and examples are in C. Both hosts link the same library: Node loads it as a shared library, the Rust host links it statically |
+| Where drawing code lives | **C, in `native/libtse`**, once | raylib's documentation and examples are in C. Both hosts link the same library: Node loads it as a shared library, the Rust host links it statically |
 | Native boundary | **One call per frame**: a `Float64Array` of fixed-size records, plus strings | Per-call FFI cost does not grow with the number of sprites, and a new host is a small adapter. `Float64Array`, not `Float32Array`: a packed `0xRRGGBBAA` colour and every handle fit exactly, and JavaScript numbers go in unchanged |
-| Dev host | **Node + koffi** (`@rge/player-node`) | The repo targets Node ≥ 22.18, and koffi works there with prebuilt binaries. `node:ffi` is still experimental (added in 26.1 behind a flag, and its signature syntax changed between minor versions). The koffi calls stay in one file, so moving to `node:ffi` later is a small change |
+| Dev host | **Node + koffi** (`@tsengine/player-node`) | The repo targets Node ≥ 22.18, and koffi works there with prebuilt binaries. `node:ffi` is still experimental (added in 26.1 behind a flag, and its signature syntax changed between minor versions). The koffi calls stay in one file, so moving to `node:ffi` later is a small change |
 | Shipping host | **Rust + rquickjs (QuickJS-ng)** in `host/` | A small binary with Cargo's cross-platform build. QuickJS-ng is an interpreter: no JIT, so it can go where JIT is banned (iOS, consoles), and it supports the ES2022 features the generated code uses (classes, `#private` fields, `??`, `?.`). Rust only hosts the engine; it does not draw |
 | Bundling for the Rust host | **esbuild** to one ESM file (`--bundle --format=esm --platform=neutral --target=es2022`) | It resolves workspace packages and `.ts` imports. The Rust host loads one file, so it needs no module resolver |
 | Draw order | **Tree order, depth first**: parent before children, children in `children` order (source order, by `(slot, order)`). Later draws are on top | It matches how JSX reads, and keyed lists already keep their order. `transform.z` now overrides it (see DESIGN.md, "What is drawn") |
@@ -88,8 +88,8 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 | Active camera | **The first `Camera` in draw order.** More than one: warn once, use the first. None: identity view, world origin at the window's **top-left** | With a camera, the followed point is centred, as `Camera` documents. Without one, top-left is what people expect from a 2D API |
 | `input.pointerX/Y` | **World space**, through the active camera | Components only know world space and cannot reach a camera to convert. A screen-space reading can come later as `input.screenX/Y` |
 | Coordinates | Logical pixels. raylib's high-DPI flag is off in v1 | Simplest. High DPI is "Later" |
-| Key names | Keep the current style: `"A"`–`"Z"`, `"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`, `"Alt"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"F1"`–`"F12"`, and mouse buttons as keys: `"MouseLeft"`, `"MouseRight"`, `"MouseMiddle"` | The examples already use `"Space"` and `"A"`. Mouse buttons as keys mean `input.pressed("MouseLeft")` works with no new API. The table is in `rge.h` (see [The ABI](#the-abi-nativeincludergeh)) |
-| Asset paths | Relative to the player's `assets` option (default `"assets"`), joined with `/` in TypeScript (no `node:path`) | `@rge/player` must also run in QuickJS |
+| Key names | Keep the current style: `"A"`–`"Z"`, `"0"`–`"9"`, `"Space"`, `"Enter"`, `"Escape"`, `"Tab"`, `"Backspace"`, `"Shift"`, `"Control"`, `"Alt"`, `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"`, `"F1"`–`"F12"`, and mouse buttons as keys: `"MouseLeft"`, `"MouseRight"`, `"MouseMiddle"` | The examples already use `"Space"` and `"A"`. Mouse buttons as keys mean `input.pressed("MouseLeft")` works with no new API. The table is in `tse.h` (see [The ABI](#the-abi-nativeincludetseh)) |
+| Asset paths | Relative to the player's `assets` option (default `"assets"`), joined with `/` in TypeScript (no `node:path`) | `@tsengine/player` must also run in QuickJS |
 | Missing asset or bad colour | Never throw. Warn once per value, draw a 16×16 magenta rect for a missing texture, use magenta for an unparsable colour | A typo should not stop a game during development, and magenta is easy to spot |
 | Sound playback | The runtime gets a sound sink (N2). `Sound` calls `sink.load(path)` when constructed (so sounds preload as components mount) and `sink.play(path)` from `play()`, after counting the play | `Sound` instances are fields on components and not reachable from the tree, so the player cannot find them. One module-level hook is the smallest change |
 
@@ -97,22 +97,22 @@ Last updated 2026-11-09. **Update this table and the milestone's checklist in th
 
 The compiler's rules ([DESIGN.md](DESIGN.md#ground-rules-and-settled-decisions)) still apply. Two change, and three are added:
 
-- **Changed: "Runtime stays a mock" → "Runtime stays backend-free."** `@rge/runtime` never draws, plays or polls anything. It gains only hooks a backend plugs into (the sound sink). Drawing, input and audio live in `@rge/player` and the hosts. The mock tests keep passing unchanged.
-- **Changed: TypeScript-only.** `native/` (C) and `host/` (Rust) are new languages in the repo. Keep them small; logic goes in TypeScript unless it needs the GPU, the OS or audio. *(One exception since ABI v4: `rge_overlaps`, the search for the boxes that overlap. It needs none of those; it is there because the interpreter spent more of a busy frame on it than on anything else. See "Performance pass three, the broad phase in librge".)*
-- **New: `@rge/player` and `@rge/runtime` import no `node:` modules and no native packages.** They run in QuickJS. A test enforces this (N1).
-- **New: `rge.h` is the single source of truth for the protocol.** `packages/player/src/protocol.ts` mirrors it, and a test parses `rge.h` and fails if any constant or key name differs (N1). Change the header first.
-- **New: the C side does no maths beyond applying the transform it is given and drawing the shape a record describes.** Anything else a record needs (a world position, a view, a colour) is computed in TypeScript. *(`rge_overlaps`, ABI v4, is the exception: it compares boxes the script worked out, and decides nothing about the game. Which pairs collide, by parent and layer, and what starts and ends, stays in script.)*
+- **Changed: "Runtime stays a mock" → "Runtime stays backend-free."** `@tsengine/runtime` never draws, plays or polls anything. It gains only hooks a backend plugs into (the sound sink). Drawing, input and audio live in `@tsengine/player` and the hosts. The mock tests keep passing unchanged.
+- **Changed: TypeScript-only.** `native/` (C) and `host/` (Rust) are new languages in the repo. Keep them small; logic goes in TypeScript unless it needs the GPU, the OS or audio. *(One exception since ABI v4: `tse_overlaps`, the search for the boxes that overlap. It needs none of those; it is there because the interpreter spent more of a busy frame on it than on anything else. See "Performance pass three, the broad phase in libtse".)*
+- **New: `@tsengine/player` and `@tsengine/runtime` import no `node:` modules and no native packages.** They run in QuickJS. A test enforces this (N1).
+- **New: `tse.h` is the single source of truth for the protocol.** `packages/player/src/protocol.ts` mirrors it, and a test parses `tse.h` and fails if any constant or key name differs (N1). Change the header first.
+- **New: the C side does no maths beyond applying the transform it is given and drawing the shape a record describes.** Anything else a record needs (a world position, a view, a colour) is computed in TypeScript. *(`tse_overlaps`, ABI v4, is the exception: it compares boxes the script worked out, and decides nothing about the game. Which pairs collide, by parent and layer, and what starts and ends, stays in script.)*
 
-## The ABI: `native/include/rge.h`
+## The ABI: `native/include/tse.h`
 
-This is the contract every milestone builds on. It is written out here in full so N1 (TypeScript) and N3 (C) can be built in parallel against it. Changing it is fine, but change it here and in the header together, and bump `RGE_ABI_VERSION`.
+This is the contract every milestone builds on. It is written out here in full so N1 (TypeScript) and N3 (C) can be built in parallel against it. Changing it is fine, but change it here and in the header together, and bump `TSE_ABI_VERSION`.
 
 ```c
-#ifndef RGE_H
-#define RGE_H
+#ifndef TSE_H
+#define TSE_H
 #include <stdint.h>
 
-#define RGE_ABI_VERSION 1
+#define TSE_ABI_VERSION 1
 
 /* ---------- Draw records ----------
  * A frame is a flat array of doubles: records back to back, each starting with its op.
@@ -121,37 +121,37 @@ This is the contract every milestone builds on. It is written out here in full s
  * The C side draws each drawable at the local origin under translate(x, y), rotate, scale(sx, sy).
  * Colours are packed 0xRRGGBBAA stored in a double (exact).
  */
-#define RGE_OP_VIEW     1  /* op, a, b, c, d, e, f: world → screen affine, already including
+#define TSE_OP_VIEW     1  /* op, a, b, c, d, e, f: world → screen affine, already including
                               the viewport-centre offset. A later VIEW replaces it (ABI v2).    len 7 */
-#define RGE_OP_SPRITE   2  /* op, x, y, rot, sx, sy, texture                                    len 7 */
-#define RGE_OP_RECT     3  /* op, x, y, rot, sx, sy, width, height, color                       len 9 */
-#define RGE_OP_ELLIPSE  4  /* op, x, y, rot, sx, sy, width, height, color (fills the w×h box)   len 9 */
-#define RGE_OP_TEXT     5  /* op, x, y, rot, sx, sy, textIndex, size, color                     len 9 */
+#define TSE_OP_SPRITE   2  /* op, x, y, rot, sx, sy, texture                                    len 7 */
+#define TSE_OP_RECT     3  /* op, x, y, rot, sx, sy, width, height, color                       len 9 */
+#define TSE_OP_ELLIPSE  4  /* op, x, y, rot, sx, sy, width, height, color (fills the w×h box)   len 9 */
+#define TSE_OP_TEXT     5  /* op, x, y, rot, sx, sy, textIndex, size, color                     len 9 */
 
-#define RGE_OP_VIEW_LEN    7
-#define RGE_OP_SPRITE_LEN  7
-#define RGE_OP_RECT_LEN    9
-#define RGE_OP_ELLIPSE_LEN 9
-#define RGE_OP_TEXT_LEN    9
+#define TSE_OP_VIEW_LEN    7
+#define TSE_OP_SPRITE_LEN  7
+#define TSE_OP_RECT_LEN    9
+#define TSE_OP_ELLIPSE_LEN 9
+#define TSE_OP_TEXT_LEN    9
 
-/* ---------- Input, written by rge_frame ---------- */
-#define RGE_IN_DT       0  /* seconds since the previous frame */
-#define RGE_IN_WIDTH    1  /* window size in logical pixels */
-#define RGE_IN_HEIGHT   2
-#define RGE_IN_MOUSE_X  3  /* window coordinates, origin top-left */
-#define RGE_IN_MOUSE_Y  4
-#define RGE_IN_WHEEL    5
-#define RGE_IN_QUIT     6  /* 1 when the window was asked to close */
-#define RGE_IN_LEN      7
+/* ---------- Input, written by tse_frame ---------- */
+#define TSE_IN_DT       0  /* seconds since the previous frame */
+#define TSE_IN_WIDTH    1  /* window size in logical pixels */
+#define TSE_IN_HEIGHT   2
+#define TSE_IN_MOUSE_X  3  /* window coordinates, origin top-left */
+#define TSE_IN_MOUSE_Y  4
+#define TSE_IN_WHEEL    5
+#define TSE_IN_QUIT     6  /* 1 when the window was asked to close */
+#define TSE_IN_LEN      7
 
-/* Per-key flags in the keys buffer (one byte per entry of RGE_KEYS, in order). */
-#define RGE_KEY_DOWN     1
-#define RGE_KEY_PRESSED  2
-#define RGE_KEY_RELEASED 4
+/* Per-key flags in the keys buffer (one byte per entry of TSE_KEYS, in order). */
+#define TSE_KEY_DOWN     1
+#define TSE_KEY_PRESSED  2
+#define TSE_KEY_RELEASED 4
 
 /* The key table: X(kind, raylib code, name). kind K = keyboard, M = mouse button.
  * The order here is the order of the keys buffer. Append only. */
-#define RGE_KEYS(X) \
+#define TSE_KEYS(X) \
   X(K, KEY_SPACE, "Space") X(K, KEY_ENTER, "Enter") X(K, KEY_ESCAPE, "Escape") \
   X(K, KEY_TAB, "Tab") X(K, KEY_BACKSPACE, "Backspace") \
   X(K, KEY_LEFT_SHIFT, "Shift") X(K, KEY_LEFT_CONTROL, "Control") X(K, KEY_LEFT_ALT, "Alt") \
@@ -162,33 +162,33 @@ This is the contract every milestone builds on. It is written out here in full s
   X(M, MOUSE_BUTTON_LEFT, "MouseLeft") X(M, MOUSE_BUTTON_RIGHT, "MouseRight") X(M, MOUSE_BUTTON_MIDDLE, "MouseMiddle")
 /* N3 writes the table out in full; no "…" in the real header. Shift/Control/Alt read left OR right. */
 
-/* ---------- Window options for rge_open ---------- */
-#define RGE_OPEN_RESIZABLE 1
-#define RGE_OPEN_VSYNC     2
-#define RGE_OPEN_HIDDEN    4  /* no visible window: tests and CI */
-#define RGE_OPEN_SMOOTH    8  /* bilinear texture filtering; default is nearest (pixel art) */
+/* ---------- Window options for tse_open ---------- */
+#define TSE_OPEN_RESIZABLE 1
+#define TSE_OPEN_VSYNC     2
+#define TSE_OPEN_HIDDEN    4  /* no visible window: tests and CI */
+#define TSE_OPEN_SMOOTH    8  /* bilinear texture filtering; default is nearest (pixel art) */
 
 /* ---------- Functions ---------- */
-int32_t rge_abi_version(void);
-int32_t rge_key_count(void);
-int32_t rge_open(int32_t width, int32_t height, const char *title, uint32_t options); /* 0 ok, nonzero error */
-void    rge_close(void);
+int32_t tse_abi_version(void);
+int32_t tse_key_count(void);
+int32_t tse_open(int32_t width, int32_t height, const char *title, uint32_t options); /* 0 ok, nonzero error */
+void    tse_close(void);
 
-int32_t rge_load_texture(const char *path); /* handle >= 0, or -1 if it could not be loaded */
-int32_t rge_load_sound(const char *path);   /* handle >= 0, or -1 */
-void    rge_play_sound(int32_t handle);     /* ignores -1 */
+int32_t tse_load_texture(const char *path); /* handle >= 0, or -1 if it could not be loaded */
+int32_t tse_load_sound(const char *path);   /* handle >= 0, or -1 */
+void    tse_play_sound(int32_t handle);     /* ignores -1 */
 
-/* Draw one frame and present it, then poll devices and fill `input` (RGE_IN_LEN doubles) and
- * `keys` (rge_key_count() bytes). `text` holds `textCount` NUL-terminated UTF-8 strings back to back;
- * `textOffsets[i]` is the byte offset of string i, which RGE_OP_TEXT's textIndex refers to. */
-void rge_frame(uint32_t clearColor,
+/* Draw one frame and present it, then poll devices and fill `input` (TSE_IN_LEN doubles) and
+ * `keys` (tse_key_count() bytes). `text` holds `textCount` NUL-terminated UTF-8 strings back to back;
+ * `textOffsets[i]` is the byte offset of string i, which TSE_OP_TEXT's textIndex refers to. */
+void tse_frame(uint32_t clearColor,
                const double *records, int32_t recordsLength,
                const char *text, const int32_t *textOffsets, int32_t textCount,
                double *input, uint8_t *keys);
 
 /* Tests only: copy the last presented frame as RGBA8, top row first. Returns the bytes needed;
  * copies only when capacity is enough. */
-int32_t rge_read_pixels(uint8_t *rgba, int32_t capacity);
+int32_t tse_read_pixels(uint8_t *rgba, int32_t capacity);
 
 #endif
 ```
@@ -198,28 +198,28 @@ int32_t rge_read_pixels(uint8_t *rgba, int32_t capacity);
 ```c
 /* The pairs of the `count` boxes (minX, minY, maxX, maxY each) that overlap, two box indices a pair, up to `capacity`
  * of them; returns how many there are. `order` is the caller's to keep: it comes back as the boxes by minX. */
-int32_t rge_overlaps(const double *boxes, int32_t count, int32_t *order, int32_t *pairs, int32_t capacity);
+int32_t tse_overlaps(const double *boxes, int32_t count, int32_t *order, int32_t *pairs, int32_t capacity);
 ```
 
 Notes for the C implementer (N3):
 
-- **Transforms.** For each drawable: `rlPushMatrix(); rlTranslatef(x, y, 0); rlRotatef(rot * RAD2DEG, 0, 0, 1); rlScalef(sx, sy, 1);`, draw at the origin, then `rlPopMatrix()`. rlgl applies the matrix to vertices on the CPU while batching, so this does not break batching. For `RGE_OP_VIEW`, push once and multiply by the affine as a column-major 4×4: `{ a, b, 0, 0,  c, d, 0, 0,  0, 0, 1, 0,  e, f, 0, 1 }`. Pop it at the end of the frame. Check the layout with a test: a view with `e = 10` must move a rect 10 pixels right.
+- **Transforms.** For each drawable: `rlPushMatrix(); rlTranslatef(x, y, 0); rlRotatef(rot * RAD2DEG, 0, 0, 1); rlScalef(sx, sy, 1);`, draw at the origin, then `rlPopMatrix()`. rlgl applies the matrix to vertices on the CPU while batching, so this does not break batching. For `TSE_OP_VIEW`, push once and multiply by the affine as a column-major 4×4: `{ a, b, 0, 0,  c, d, 0, 0,  0, 0, 1, 0,  e, f, 0, 1 }`. Pop it at the end of the frame. Check the layout with a test: a view with `e = 10` must move a rect 10 pixels right.
 - **Disable backface culling** (`rlDisableBackfaceCulling()`) after opening. A negative scale (a flipped sprite) reverses the triangles' winding, and raylib culls back faces by default, so flipped sprites would vanish. N3 has a test for a flipped sprite.
 - **Per op:** `SPRITE` → `DrawTexture(tex, 0, 0, WHITE)`. `RECT` → `DrawRectangle(0, 0, w, h, c)` (use the float variant). `ELLIPSE` → `DrawEllipse(w/2, h/2, w/2, h/2, c)` (the record describes the box; filling it is the C side's job). `TEXT` → `DrawTextEx(GetFontDefault(), str, (Vector2){0, 0}, size, size / 10.0f, c)`, the spacing `DrawText` uses.
-- **Opening:** `SetConfigFlags` from the options, `InitWindow`, `InitAudioDevice`, `SetExitKey(KEY_NULL)` (Escape must reach the game, not close the window), `SetTraceLogLevel(LOG_WARNING)`. When `RGE_OPEN_VSYNC` is off, `SetTargetFPS(60)`.
-- **In `rge_frame`:** `BeginDrawing`, `ClearBackground`, the records, `EndDrawing` (raylib swaps and polls input here), then fill `input` from `GetFrameTime`, `GetScreenWidth/Height`, `GetMousePosition`, `GetMouseWheelMove` and `WindowShouldClose`, and fill `keys` from `IsKeyDown/Pressed/Released` and `IsMouseButtonDown/Pressed/Released`. `"Shift"` is down when either shift is (the same for Control and Alt).
-- **Handles** index into growable arrays of `Texture2D` and `Sound`. Unload everything in `rge_close`. TypeScript caches by path, so C never sees a path twice.
+- **Opening:** `SetConfigFlags` from the options, `InitWindow`, `InitAudioDevice`, `SetExitKey(KEY_NULL)` (Escape must reach the game, not close the window), `SetTraceLogLevel(LOG_WARNING)`. When `TSE_OPEN_VSYNC` is off, `SetTargetFPS(60)`.
+- **In `tse_frame`:** `BeginDrawing`, `ClearBackground`, the records, `EndDrawing` (raylib swaps and polls input here), then fill `input` from `GetFrameTime`, `GetScreenWidth/Height`, `GetMousePosition`, `GetMouseWheelMove` and `WindowShouldClose`, and fill `keys` from `IsKeyDown/Pressed/Released` and `IsMouseButtonDown/Pressed/Released`. `"Shift"` is down when either shift is (the same for Control and Alt).
+- **Handles** index into growable arrays of `Texture2D` and `Sound`. Unload everything in `tse_close`. TypeScript caches by path, so C never sees a path twice.
 - **An unknown op or a short buffer**: log once at `LOG_ERROR` and stop drawing that frame. Never read past `recordsLength`.
-- **Hidden windows** (`RGE_OPEN_HIDDEN`) have no audio device (so no ALSA noise on machines without a sound card; sounds still load and are silent) and keep each frame for `rge_read_pixels`.
+- **Hidden windows** (`TSE_OPEN_HIDDEN`) have no audio device (so no ALSA noise on machines without a sound card; sounds still load and are silent) and keep each frame for `tse_read_pixels`.
 - **raylib 6.0's software renderer reads the framebuffer back top row first and as BGRA**, whatever format is requested, and `LoadImageFromScreen` flips it again. `capture_frame` reads it raw and swaps red and blue under `GRAPHICS_API_OPENGL_SOFTWARE`, and uses `LoadImageFromScreen` on OpenGL. The smoke test checks both orientations and channels.
 
 ## Pieces and interfaces
 
-### `packages/player` (`@rge/player`, TypeScript)
+### `packages/player` (`@tsengine/player`, TypeScript)
 
 ```
 packages/player/
-  src/protocol.ts    constants mirroring rge.h: ops, record lengths, input indices, key flags, KEYS (names, in order)
+  src/protocol.ts    constants mirroring tse.h: ops, record lengths, input indices, key flags, KEYS (names, in order)
   src/backend.ts     Backend interface, WindowConfig
   src/color.ts       CSS colour string → packed 0xRRGGBBAA (cached)
   src/draw.ts        DrawList (a growable Float64Array plus a text array) and the tree walk
@@ -297,7 +297,7 @@ visit(world.root, IDENTITY_TRANSFORM, walk);
 
 - Use the runtime's exported `composeTransforms`; never re-derive the maths. It already handles `global`.
 - **Parity test (required):** for every object in the example `Level` tree after a few ticks, the walk's transform equals `object.worldTransform()` to within 1e-9. If a built-in ever overrides `childSpace()` again, this test is what catches the walk drifting from it.
-- Emit `RGE_OP_VIEW` first with placeholder numbers and fill it in after the walk, once the active camera is known: `camera.viewTransform()` plus `e += width / 2`, `f += height / 2`. No camera: identity. `viewTransform()` throws a `RangeError` on a zero zoom or scale; catch it, warn once, use identity.
+- Emit `TSE_OP_VIEW` first with placeholder numbers and fill it in after the walk, once the active camera is known: `camera.viewTransform()` plus `e += width / 2`, `f += height / 2`. No camera: identity. `viewTransform()` throws a `RangeError` on a zero zoom or scale; catch it, warn once, use identity.
 - `Sprite` and `AnimatedSprite` both draw `image` (the current frame). An empty `image` draws nothing. A texture is loaded through the backend the first time its path is seen (`assets + "/" + image`), with the handle cached in a `Map`. A handle of -1 emits a magenta 16×16 `RECT` instead, with one warning per path.
 - `Shape`: `kind === "rect"` → `RECT`, `"circle"` → `ELLIPSE`, each with `width`, `height` and the parsed colour.
 - `Text`: push `text` onto the frame's text array and emit its index, `size` and colour.
@@ -308,7 +308,7 @@ visit(world.root, IDENTITY_TRANSFORM, walk);
 
 **Input (`input.ts`).**
 
-- `KEYS` (from `protocol.ts`) maps each name to its index in the keys buffer. `InputState.pressed(name)` reads `keys[index] & RGE_KEY_PRESSED`, and likewise for `down` and `released`. An unknown name returns false and warns once, listing the valid names.
+- `KEYS` (from `protocol.ts`) maps each name to its index in the keys buffer. `InputState.pressed(name)` reads `keys[index] & TSE_KEY_PRESSED`, and likewise for `down` and `released`. An unknown name returns false and warns once, listing the valid names.
 - `pointerX/Y`: the mouse position taken back through the inverse of the view drawn last frame (the same maths as `Camera.viewToWorld`, applied to the full view including the centre offset).
 - Presses as described in [The frame](#the-frame): topmost pointer first, one hit per press.
 
@@ -316,51 +316,51 @@ visit(world.root, IDENTITY_TRANSFORM, walk);
 
 ```ts
 export interface SoundSink { load(path: string): void; play(path: string): void }
-export function setSoundSink(sink: SoundSink | null): void; // exported from @rge/runtime
+export function setSoundSink(sink: SoundSink | null): void; // exported from @tsengine/runtime
 // constructor: this.path = path; sink?.load(path)
 // play():      this.plays++;     sink?.play(path)
 ```
 
 The player installs a sink that loads through the backend (cached by path) and plays the handle. Runtime tests reset the sink to `null`. With no sink installed, behaviour is exactly as today.
 
-**Host-agnostic entry (`host.ts`).** A game's entry file is `run(hostBackend(), { … })`. `hostBackend()` returns `globalThis.__rgeBackend` and throws a clear error if no host installed one. The Node launcher installs it and then imports the entry; the Rust host installs it before evaluating the bundle. So one entry file runs under both hosts, and the bundle never contains koffi.
+**Host-agnostic entry (`host.ts`).** A game's entry file is `run(hostBackend(), { … })`. `hostBackend()` returns `globalThis.__tseBackend` and throws a clear error if no host installed one. The Node launcher installs it and then imports the entry; the Rust host installs it before evaluating the bundle. So one entry file runs under both hosts, and the bundle never contains koffi.
 
 **`RecordingBackend`.** It keeps every frame's records (copied), texts and clear colour, plus every texture and sound load and every play. Tests script input frame by frame (`backend.queueInput({ pressed: ["Space"], down: ["A"], released: ["MouseLeft"], mouse: { x, y }, dt })`; `pressed` also sets down). It decodes records into readable objects for assertions (`{ op: "rect", x, y, …, color: "#ff0000ff" }`).
 
-### `packages/player-node` (`@rge/player-node`, Node dev host)
+### `packages/player-node` (`@tsengine/player-node`, Node dev host)
 
-- `src/ffi.ts`: the only file that imports koffi. It loads the library from `RGE_NATIVE_LIB` or the default `native/build/` path, declares the functions from `rge.h`, and checks `rge_abi_version()` and `rge_key_count()` against `protocol.ts` at load time.
+- `src/ffi.ts`: the only file that imports koffi. It loads the library from `TSE_NATIVE_LIB` or the default `native/build/` path, declares the functions from `tse.h`, and checks `tse_abi_version()` and `tse_key_count()` against `protocol.ts` at load time.
 - `src/backend.ts`: `createNodeBackend(): Backend`. `frame` encodes `texts` into a reused `Uint8Array` plus an `Int32Array` of offsets and passes typed arrays straight through as pointers. Check the koffi version's documentation for typed-array arguments before relying on it.
-- `src/play.ts`: the CLI, `node packages/player-node/src/play.ts <entry.ts> [--no-watch]`. It installs `globalThis.__rgeBackend = createNodeBackend()`. When the game's folder has a `src/`, it plays the game with hot reload (`dev.ts`); with `--no-watch` it dynamically imports the entry, which runs as under the packaged build.
-- `src/dev.ts`: `playWithReload(backend, { entry })` (priority 5, 2026-11-11). It installs a function at `globalThis.__rgeRun` (`HOST_RUN_KEY`), so the entry's `run(hostBackend(), config)` hands over its config instead of looping, and drives the frame loop itself, one `player.step()` per turn of Node's event loop, so it can hear file events while the game runs. It compiles the game first (as `check:<game>` does: `rge-compile src generated`, with `--scenes` and `--assets` where the folders exist), then watches `src/` and `scenes/`. A save (debounced, 80 ms) compiles in a child process while the game keeps running; a compile error goes to the window (`player.showError`) with the note "Save a file to reload. Close the window to quit." A good build is imported again: a `module.registerHooks` resolve hook (in-thread, Node 22.15+) gives every file inside the game's folder, but not its `node_modules`, the load's version in its URL (`?v=3`), so the game's components, rules and game state are evaluated afresh while the engine's packages and the window stay as they are. The game states the new build exports are matched to the old ones by file and export name and `carryFrom` them, then `player.reload` swaps the root (see DESIGN.md, "Hot reload"). On the cloud VM compiling Kite with its type-check takes about 0.65 s, which is most of a reload. Images and sounds are loaded once per path, so a changed asset file still needs a restart, and each build stays in memory (ES modules cannot be unloaded). The Rust host does not reload: it runs a packaged game.
+- `src/play.ts`: the CLI, `node packages/player-node/src/play.ts <entry.ts> [--no-watch]`. It installs `globalThis.__tseBackend = createNodeBackend()`. When the game's folder has a `src/`, it plays the game with hot reload (`dev.ts`); with `--no-watch` it dynamically imports the entry, which runs as under the packaged build.
+- `src/dev.ts`: `playWithReload(backend, { entry })` (priority 5, 2026-11-11). It installs a function at `globalThis.__tseRun` (`HOST_RUN_KEY`), so the entry's `run(hostBackend(), config)` hands over its config instead of looping, and drives the frame loop itself, one `player.step()` per turn of Node's event loop, so it can hear file events while the game runs. It compiles the game first (as `check:<game>` does: `tse-compile src generated`, with `--scenes` and `--assets` where the folders exist), then watches `src/` and `scenes/`. A save (debounced, 80 ms) compiles in a child process while the game keeps running; a compile error goes to the window (`player.showError`) with the note "Save a file to reload. Close the window to quit." A good build is imported again: a `module.registerHooks` resolve hook (in-thread, Node 22.15+) gives every file inside the game's folder, but not its `node_modules`, the load's version in its URL (`?v=3`), so the game's components, rules and game state are evaluated afresh while the engine's packages and the window stay as they are. The game states the new build exports are matched to the old ones by file and export name and `carryFrom` them, then `player.reload` swaps the root (see DESIGN.md, "Hot reload"). On the cloud VM compiling Kite with its type-check takes about 0.65 s, which is most of a reload. Images and sounds are loaded once per path, so a changed asset file still needs a restart, and each build stays in memory (ES modules cannot be unloaded). The Rust host does not reload: it runs a packaged game.
 
 ### `native/` (C)
 
 ```
 native/
-  CMakeLists.txt   FetchContent raylib (GIT_TAG 6.0); builds librge as SHARED (Node) and STATIC (Rust)
-  include/rge.h
-  src/rge.c        open/close/frame/read_pixels and record execution
+  CMakeLists.txt   FetchContent raylib (GIT_TAG 6.0); builds libtse as SHARED (Node) and STATIC (Rust)
+  include/tse.h
+  src/tse.c        open/close/frame/read_pixels and record execution
   src/assets.c     texture and sound handle tables
-  src/keys.c       the RGE_KEYS table expanded into code and name arrays
+  src/keys.c       the TSE_KEYS table expanded into code and name arrays
   test/smoke.c     opens hidden, draws a red rect, checks the pixel; a flipped sprite; a translated view
 ```
 
-Build: `npm run native:build` (a real window; `native/build`) or `npm run native:build:headless` (raylib's software renderer, `-DRGE_PLATFORM=Memory`; `native/build-headless`: no window, no GPU, no system libraries, no keyboard or mouse, so it is what tests and CI use). `npm run native:test` builds and runs the C smoke test on the headless build. On Linux, raylib's desktop build needs the X11 and GL development packages (`libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev`). Confirm the list against raylib's Linux build instructions for 6.0.
+Build: `npm run native:build` (a real window; `native/build`) or `npm run native:build:headless` (raylib's software renderer, `-DTSE_PLATFORM=Memory`; `native/build-headless`: no window, no GPU, no system libraries, no keyboard or mouse, so it is what tests and CI use). `npm run native:test` builds and runs the C smoke test on the headless build. On Linux, raylib's desktop build needs the X11 and GL development packages (`libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev`). Confirm the list against raylib's Linux build instructions for 6.0.
 
 ### `host/` (Rust)
 
 ```
 host/
   Cargo.toml       rquickjs (with the ESM loader feature), cmake (build dependency)
-  build.rs         builds ../native with the cmake crate and links librge and raylib statically, plus system libs
-  src/main.rs      CLI: rge-host <game.js> [--assets <dir>]
+  build.rs         builds ../native with the cmake crate and links libtse and raylib statically, plus system libs
+  src/main.rs      CLI: tse-host <game.js> [--assets <dir>]
   src/backend.rs   a JS object implementing Backend (open, close, loadTexture, loadSound, playSound, frame)
   src/console.rs   console.log / warn / error → stderr (QuickJS provides no console)
 ```
 
-- `frame` reads the `Float64Array`, `Uint8Array` and string array through rquickjs's typed-array and array types, packs the strings, and calls `rge_frame` with pointers into the typed arrays' memory.
-- The bundle: `npm run bundle -- <entry.ts> host/dist/game.js` runs esbuild with the options in [Decisions](#decisions-settled). The host evaluates it as a module after setting `globalThis.__rgeBackend`.
+- `frame` reads the `Float64Array`, `Uint8Array` and string array through rquickjs's typed-array and array types, packs the strings, and calls `tse_frame` with pointers into the typed arrays' memory.
+- The bundle: `npm run bundle -- <entry.ts> host/dist/game.js` runs esbuild with the options in [Decisions](#decisions-settled). The host evaluates it as a module after setting `globalThis.__tseBackend`.
 - An uncaught exception prints the message and stack and exits with status 1, so a crash shows up in the terminal.
 - Packaging in v1 is a folder: the executable, `game.js` and `assets/`. Embedding both in the executable is "Later".
 
@@ -371,7 +371,7 @@ Sizes are rough estimates for one engineer.
 ```mermaid
 flowchart LR
   N0["N0 Design, ABI<br/>(this doc)"] --> N1["N1 Draw list<br/>~1 week"]
-  N0 --> N3["N3 librge + Node host<br/>~1 week"]
+  N0 --> N3["N3 libtse + Node host<br/>~1 week"]
   N1 --> N2["N2 Input, sound, loop<br/>~4 days"]
   N2 --> N4["N4 Demo + headless CI<br/>~4 days"]
   N3 --> N4
@@ -386,12 +386,12 @@ N1 and N3 can run in parallel because the ABI is fixed above. The cloud environm
 
 The ABI, the interfaces, the decisions, and the ground-rule change. Also points `PHASE2_PLAN.md` and the README here.
 
-### N1: draw list (`@rge/player`, pure TS, ~1 week)
+### N1: draw list (`@tsengine/player`, pure TS, ~1 week)
 
 | Work item | Where | Done when |
 | --- | --- | --- |
-| Package scaffold: `@rge/player` workspace package, added to the root `tsconfig.json` includes and `npm test` | `packages/player`, root config | `npm test` runs its tests; `npm run typecheck` covers it |
-| `protocol.ts` and the header-parity test (reads `native/include/rge.h` with a regex over `#define RGE_*` and the `RGE_KEYS` X-macro) | `src/protocol.ts`, `test/protocol.test.ts` | Changing a constant in either file alone fails the test |
+| Package scaffold: `@tsengine/player` workspace package, added to the root `tsconfig.json` includes and `npm test` | `packages/player`, root config | `npm test` runs its tests; `npm run typecheck` covers it |
+| `protocol.ts` and the header-parity test (reads `native/include/tse.h` with a regex over `#define TSE_*` and the `TSE_KEYS` X-macro) | `src/protocol.ts`, `test/protocol.test.ts` | Changing a constant in either file alone fails the test |
 | "No `node:` imports" test over `packages/player/src` and `packages/runtime/src` | `test/portability.test.ts` | Adding `import "node:fs"` to either package fails |
 | `color.ts` | `src/color.ts` | Every format above is tested, including every example colour and an invalid one (magenta, one warning) |
 | `Backend`, `RecordingBackend` with decoding | `src/backend.ts`, `src/recording.ts` | Tests can assert decoded records |
@@ -410,12 +410,12 @@ The ABI, the interfaces, the decisions, and the ground-rule change. Also points 
 | `hostBackend()` | `src/host.ts` | Throws a clear error with no host; returns the installed backend otherwise |
 | `DESIGN.md` gains a "Player" section | `docs/DESIGN.md` | Covers draw order, origin, camera, `pointerX/Y`, sounds |
 
-### N3: `librge` and the Node dev host (~1 week)
+### N3: `libtse` and the Node dev host (~1 week)
 
 | Work item | Where | Done when |
 | --- | --- | --- |
 | CMake build with pinned raylib 6.0 | `native/CMakeLists.txt` | `npm run native:build` produces the shared and static libraries on Linux and macOS (Windows best-effort) |
-| `rge.c`, `assets.c`, `keys.c` per the ABI | `native/src` | `smoke.c` passes: a red rect lands on the expected pixel, a flipped sprite is visible, a view with `e = 10` moves a rect 10 pixels right |
+| `tse.c`, `assets.c`, `keys.c` per the ABI | `native/src` | `smoke.c` passes: a red rect lands on the expected pixel, a flipped sprite is visible, a view with `e = 10` moves a rect 10 pixels right |
 | koffi binding and `createNodeBackend` | `packages/player-node` | ABI version and key count are checked at load; a mismatch throws, naming both versions |
 | `play.ts` CLI | `packages/player-node/src/play.ts` | `node packages/player-node/src/play.ts packages/demo/src/main.ts` opens a window (a stand-in demo until N4, which replaced it) |
 
@@ -424,7 +424,7 @@ The ABI, the interfaces, the decisions, and the ground-rule change. Also points 
 | Work item | Where | Done when |
 | --- | --- | --- |
 | `packages/demo`: a small game that needs no art. A square moved with the arrow keys inside a `<Camera>`, a `Shape` button with a `Pointer` that adds to a score, `<Text>` showing the score, an `AnimatedSprite` with one missing frame (shows magenta, on purpose), a sound on click | `packages/demo/src`, `assets/` with one short `.wav` | `npm run play:demo` plays it under Node. It has its own compile step like `example`, and CI checks its generated output too |
-| Headless smoke in CI: a separate `native` job that installs the X11/GL dev packages, builds `native/`, runs `smoke.c`, then runs the demo for 60 frames with `hidden: true` and compares a few pixels from `rge_read_pixels` with expected colours | `.github/workflows/ci.yml` | The job passes. Try raylib 6.0's software renderer first (check its exact CMake option in the 6.0 release notes); if it is not usable, run under `xvfb-run` with Mesa's llvmpipe |
+| Headless smoke in CI: a separate `native` job that installs the X11/GL dev packages, builds `native/`, runs `smoke.c`, then runs the demo for 60 frames with `hidden: true` and compares a few pixels from `tse_read_pixels` with expected colours | `.github/workflows/ci.yml` | The job passes. Try raylib 6.0's software renderer first (check its exact CMake option in the 6.0 release notes); if it is not usable, run under `xvfb-run` with Mesa's llvmpipe |
 
 ### N5: collisions (pure TS, ~3 days)
 
@@ -440,7 +440,7 @@ The ABI, the interfaces, the decisions, and the ground-rule change. Also points 
 | Work item | Where | Done when |
 | --- | --- | --- |
 | esbuild bundle script | root `package.json` (`npm run bundle`) | `host/dist/game.js` is one ESM file with no `node:` or koffi imports |
-| `host/` crate: build script, console, backend, CLI | `host/` | `rge-host game.js --root packages/demo` plays the demo identically to the Node host (`--root` is the folder the game's relative `assets/` is resolved against) |
+| `host/` crate: build script, console, backend, CLI | `host/` | `tse-host game.js --root packages/demo` plays the demo identically to the Node host (`--root` is the folder the game's relative `assets/` is resolved against) |
 | Parity check | `host/tests` or a script | The same 60 scripted frames under Node and under the Rust host produce identical decoded draw lists. Record them from each host with a debug flag that dumps records |
 | Performance baseline | `docs/NATIVE_PLAN.md` | Measure frame time for 500, 2,000 and 5,000 sprites under QuickJS and Node, and record the numbers here. A target to aim for, not a promise: 2,000 objects at 60 fps on a mid-range laptop under QuickJS. If it misses, the first fixes are caching world transforms for subtrees that did not change, and dependency-scoped `render()` (Phase 2 "Later"). **Recorded below, under "Performance baseline (N6)"** |
 | Release folder | `npm run package` | Produces `dist/<game>/` with the executable, `game.js` and `assets/` for the current platform |
@@ -556,7 +556,7 @@ Same VM and bench file, old and new code run alternately; the middle of three ru
 - **The contract.** An entry must not be changed after it is handed over; make a new one. The frame builder does. Tests that built a list once and edited its entries in place now make new entries.
 - **How it was checked.** A randomized test runs an incremental tracker beside a full-sweep one over the same lists (jumps, drifts, additions, removals, colliders losing and regaining their area, layer changes, two shared parents, a collider far wider than any before) and requires identical reports in identical order, and the same enters and exits as testing every pair by the rules. Another feeds both from the real frame builder over random changes. Seven deliberate bugs (no old contacts, no dedupe of two moved colliders on either side, layers not refreshed, order not re-sorted, a search window that never widens, a contact never forgotten) each fail them.
 
-The review also fixed: `console.log` in the Rust host panicking (and ending the game) when stdout is closed, as with `rge-host game.js | head`; the Rust host accepting a keys buffer longer than librge's table (rge.h and protocol.ts drifting apart, which the Node host already refused); librge casting draw-record doubles straight to integers (undefined behaviour in C for NaN or out-of-range values; a bad op now stops the frame, a bad index draws nothing, a bad colour is magenta); frame capture on the OpenGL path copying a screen image whose size need not match the buffer on a high-DPI display; and Shift, Control and Alt reporting a second press when the other side went down while one was held, and a release while still held.
+The review also fixed: `console.log` in the Rust host panicking (and ending the game) when stdout is closed, as with `tse-host game.js | head`; the Rust host accepting a keys buffer longer than libtse's table (tse.h and protocol.ts drifting apart, which the Node host already refused); libtse casting draw-record doubles straight to integers (undefined behaviour in C for NaN or out-of-range values; a bad op now stops the frame, a bad index draws nothing, a bad colour is magenta); frame capture on the OpenGL path copying a screen image whose size need not match the buffer on a high-DPI display; and Shift, Control and Alt reporting a second press when the other side went down while one was held, and a release while still held.
 
 ### Performance pass three: the frame where everything moves (2026-11-10)
 
@@ -590,7 +590,7 @@ Old and new code run alternately on one VM; the middle of three runs each.
 
 - **The 10 ms target is still not met on this VM**: 15 ms, from 23.5. What is left is close to what an interpreter charges for the statements each object needs, so the next savings come from doing less in script, not from doing it more cleverly:
   - **Updater arrows written out by the compiler**, about 0.9 ms (measured by editing the bench's stand-in by hand: tick 3.8 to 2.9 ms). `setX((x) => x + dt * 30)` makes a closure and two calls per setter per frame; `{ const x = this.#xNext; const next = x + dt * 30; if (next !== x) { this.#xNext = next; this.markDirty(); } }` is the same thing. Priority 4 already lists it.
-  - **The broad phase in `librge`**, about 2 ms of the 3.8 (the sort, the bands and the sweep; the box per collider stays in script). The player would hand the boxes over in a `Float64Array` and get back the pairs that overlap. An ABI change for both hosts, with the script sweep kept for a backend without it.
+  - **The broad phase in `libtse`**, about 2 ms of the 3.8 (the sort, the bands and the sweep; the box per collider stays in script). The player would hand the boxes over in a `Float64Array` and get back the pairs that overlap. An ABI change for both hosts, with the script sweep kept for a backend without it.
   - **A component that only moved**, perhaps 3 ms of the walk (an estimate; nothing was built). A render stamps the component, and the builder then makes every record under it again, though usually only the component's own transform changed. If the compiler stamped each owned element whose props a render really changed, the builder could copy a moved component's records with the offset added, and make only its collider entries again.
 - **The pile is untouched** (26 ms): its time is the `Set` of touching pairs, 44,850 of them added and looked up each frame, not the sweep.
 - **Found on the way**: `DrawList.sprite` read `records` before the call that could grow it, so a sprite whose record was the one that grew the buffer was drawn with texture 0 for that one frame. Fixed, with a test.
@@ -610,11 +610,11 @@ The bench's stand-in component moves the way the compiler now writes it. Before 
 - **What is left of the tick** is `markDirty`, the render list, `runRender`, `commitState` and `render`: five calls for an object that moved, about 1.4 µs.
 - **How it was checked.** A component with every case (two updaters chained, a parameter named like a state, like a local and like the hook's own parameter, an updater that changes nothing, one that makes a new array, one with statements, one in a callback) is compiled, type-checked and run; the example and demo are generated again, and their golden draw lists and the Node/QuickJS parity test are unchanged.
 
-### Performance pass three, the broad phase in librge (2026-11-10)
+### Performance pass three, the broad phase in libtse (2026-11-10)
 
 The second of the three things pass three left, and the first logic that is not drawing to move out of script. After the banded sweep, collisions for 2,000 moving colliders were 4.3 ms: 1.7 ms working out each collider's box, and 2.3 ms finding which boxes overlap (the sort by left edge, the bands and the sweep), which is a few thousand comparisons that compiled code does in microseconds.
 
-- **`rge_overlaps` (ABI v4)** takes the boxes in the `Float64Array` the tracker already fills and writes back the pairs that overlap, as box indices. It is the script's sweep in C: an insertion sort over the order the caller keeps from last frame, then horizontal bands, each swept on its own. It needs no window and keeps no state but its working memory.
+- **`tse_overlaps` (ABI v4)** takes the boxes in the `Float64Array` the tracker already fills and writes back the pairs that overlap, as box indices. It is the script's sweep in C: an insertion sort over the order the caller keeps from last frame, then horizontal bands, each swept on its own. It needs no window and keeps no state but its working memory.
 - **What stays in script** is everything about the game: the box of each collider, the rules for a pair (same parent, layers and `hits`), which contacts started and ended, and the reports. The tracker's frames that look only at what moved do not ask the host at all; they use the order the last full sweep left, which the host now writes.
 - **A backend without it** (the test recorder, any host that does not implement `Backend.overlaps`) gets the script's sweep, unchanged. Both find the same pairs, so reports are the same in the same order, and the Node/QuickJS parity test passes with the Node host on koffi and the Rust host linked statically.
 - **It trusts nothing.** The order may hold anything (it is checked to be a permutation, or started again), a count larger than the arrays is cut down by each host, and boxes that are not finite still return valid indices. Its tests run under the address and undefined-behaviour sanitizers.
@@ -628,7 +628,7 @@ The bench under the Rust host now uses the host's broad phase, as a player there
 
 - **What is left of collisions** when everything moves is the box and id of each collider (about 1 µs each), in script. Writing the boxes during the tree walk, which already has each collider's world transform in hand, would take most of that.
 - **The pile hardly changes**, as expected: its time is the `Set` of touching pairs, in script.
-- **How it was checked.** `smoke.c` compares `rge_overlaps` with testing every pair over seven layouts (mixed sizes with boxes that reach through every band, tiles on band edges, a world deeper than the most bands, a far-away box, a row, a pile, a column) and twelve frames each, with the order carried over, a shorter and a longer list, too little room, and rubbish for boxes and order. Seven deliberate bugs in the C each fail it. The Node host's tests do the same through koffi, and run a tracker on the host's broad phase beside one on the script's sweep over 120 frames of moves, adds and removals: the same reports in the same order. The player's tests do that again with a stand-in broad phase that returns its pairs in another order and too many for the first buffer.
+- **How it was checked.** `smoke.c` compares `tse_overlaps` with testing every pair over seven layouts (mixed sizes with boxes that reach through every band, tiles on band edges, a world deeper than the most bands, a far-away box, a row, a pile, a column) and twelve frames each, with the order carried over, a shorter and a longer list, too little room, and rubbish for boxes and order. Seven deliberate bugs in the C each fail it. The Node host's tests do the same through koffi, and run a tracker on the host's broad phase beside one on the script's sweep over 120 frames of moves, adds and removals: the same reports in the same order. The player's tests do that again with a stand-in broad phase that returns its pairs in another order and too many for the first buffer.
 
 ### Performance pass three, a component that only moved (2026-11-10)
 
@@ -667,7 +667,7 @@ Main against this, alternately, the middle of three (2,000 objects, QuickJS):
 
 ### Performance pass four, a pile that stays a pile (2026-11-10)
 
-The pile of 300 colliders, every pair touching, was the slowest scene left (about 26 ms under QuickJS, 5 ms under Node), and the broad phase in `librge` did not help it: its time was the `Set` of touching pairs. Each of the 44,850 pairs paid for a key, a `now.add` and a `touching.has` every frame; timed alone under QuickJS that is about 20 ms, and a plain loop over the same pairs about 4.
+The pile of 300 colliders, every pair touching, was the slowest scene left (about 26 ms under QuickJS, 5 ms under Node), and the broad phase in `libtse` did not help it: its time was the `Set` of touching pairs. Each of the 44,850 pairs paid for a key, a `now.add` and a `touching.has` every frame; timed alone under QuickJS that is about 20 ms, and a plain loop over the same pairs about 4.
 
 - **When the pairs are last sweep's, the `Set`s are left alone.** The full sweep (the host's broad phase or the script's) writes the pairs the rules accept into an `Int32Array`, as box indices in the order found, and compares them on the way with the last full sweep's. When the colliders are last frame's box for box (so a box index means the same collider) and the pairs are the same in the same order, the contacts are exactly what `#touching` holds: nothing started or ended, and no key is made. At the first difference it clears `now` and files the rest of the pairs as before, and files the ones before the difference after the loop, so a frame whose contacts change does the same work as before plus two stores a pair.
 - **When it is not used.** A frame that looked only at what moved and changed a contact, or a renumbering, leaves `#touching` different from what the last full sweep found, so the next sweep files every pair.
@@ -686,15 +686,15 @@ Old and new code alternately, the middle of three, Rust host:
 
 ### A guard in CI (2026-11-10)
 
-`npm run bench:check` runs the bench under Node, and with `--host <rge-host>` under the Rust host too, and fails when a scene is over its budget in `packages/player/bench/budget.json` or a scene with four times the objects takes more than about twice four times as long (`ratios`: a mount, collisions and the walk, which catch quadratic growth on any machine). The bench now also times mounting 5,000 and 20,000 objects, which is how the quadratic mount went unnoticed. Budgets are about 2.5 to 3 times this VM's numbers. The CI `host` job runs it in place of the step that only printed the numbers. Run against the code before pass four, it fails on the pile under Node (5.6 ms against 2.5).
+`npm run bench:check` runs the bench under Node, and with `--host <tse-host>` under the Rust host too, and fails when a scene is over its budget in `packages/player/bench/budget.json` or a scene with four times the objects takes more than about twice four times as long (`ratios`: a mount, collisions and the walk, which catch quadratic growth on any machine). The bench now also times mounting 5,000 and 20,000 objects, which is how the quadratic mount went unnoticed. Budgets are about 2.5 to 3 times this VM's numbers. The CI `host` job runs it in place of the step that only printed the numbers. Run against the code before pass four, it fails on the pile under Node (5.6 ms against 2.5).
 
 ### A V8 build for desktops (2026-11-10)
 
-After pass four, what is left in a busy frame is mostly the price QuickJS-ng charges for each statement: the same bench under Node is 10 to 30 times faster. QuickJS was the default when this was written, because it is small and goes where a JIT is not allowed (iOS, consoles). *Since 2026-11-10 (NEXT_PRIORITIES.md, "V8 is the main engine") V8 is the default and QuickJS the fallback: `rge package` builds on V8 unless given `--engine quickjs`.* For desktops there is now a second way to package a game, on V8:
+After pass four, what is left in a busy frame is mostly the price QuickJS-ng charges for each statement: the same bench under Node is 10 to 30 times faster. QuickJS was the default when this was written, because it is small and goes where a JIT is not allowed (iOS, consoles). *Since 2026-11-10 (NEXT_PRIORITIES.md, "V8 is the main engine") V8 is the default and QuickJS the fallback: `tse package` builds on V8 unless given `--engine quickjs`.* For desktops there is now a second way to package a game, on V8:
 
     npm run package -- --engine node [--headless]
 
-`dist/<name>/` then holds a Node single executable application (Node's own binary with the game bundled inside it), `lib/librge.so` (the shared library the Node dev host already uses), `node_modules/koffi` (with this platform's addon; koffi finds it by paths relative to its own files, so it cannot be bundled and is loaded from beside the executable) and `assets/`. Like the Rust host run with no arguments, it runs from its own folder. It is about 125 MB, nearly all of it Node, against a few MB for the Rust host. It is built from the Node that runs `npm run package`, with `postject` (a dev dependency) per the Node documentation; the macOS and Windows steps follow that documentation and are unverified, like the link lists in `host/build.rs`.
+`dist/<name>/` then holds a Node single executable application (Node's own binary with the game bundled inside it), `lib/libtse.so` (the shared library the Node dev host already uses), `node_modules/koffi` (with this platform's addon; koffi finds it by paths relative to its own files, so it cannot be bundled and is loaded from beside the executable) and `assets/`. Like the Rust host run with no arguments, it runs from its own folder. It is about 125 MB, nearly all of it Node, against a few MB for the Rust host. It is built from the Node that runs `npm run package`, with `postject` (a dev dependency) per the Node documentation; the macOS and Windows steps follow that documentation and are unverified, like the link lists in `host/build.rs`.
 
 The frame bench packaged this way, against the Rust host, same VM:
 
@@ -717,8 +717,8 @@ Engine features the first level of the platformer needed (see [NEXT_PRIORITIES.m
 Built first, because the level is written without a window. `npm run check:<game>` (`tools/check-game.ts`) compiles a game package, type-checks it, runs its tests and runs its parity script under Node (and under the Rust host when it is built), printing one line per step.
 
 - **`parseInputScript(script, { bindings, dt })`** turns `right*30, jump, right*20+dash` into input frames. Items run one after another, `+` joins terms that start together, `name*N` holds N frames, a bare name is a one-frame tap, `_` waits. Presses and releases are derived from what is held, so a key held across two items is one hold. The same format is the replay format of the level.
-- **`runScript(config, frames, observe)`** (`@rge/player`) builds a game on a `RecordingBackend`, does one warm-up step, then steps once per frame and returns what `observe` gives after each: the game state, not draw records. `ScriptedInputBackend` wraps any backend and takes input from a script, which is how a scripted run is drawn natively.
-- **GPU screenshots** (2026-11-15). `rge screenshot --gpu` runs `renderRun` against the desktop librge (`findNativeLibraryOf("desktop")`,
+- **`runScript(config, frames, observe)`** (`@tsengine/player`) builds a game on a `RecordingBackend`, does one warm-up step, then steps once per frame and returns what `observe` gives after each: the game state, not draw records. `ScriptedInputBackend` wraps any backend and takes input from a script, which is how a scripted run is drawn natively.
+- **GPU screenshots** (2026-11-15). `tse screenshot --gpu` runs `renderRun` against the desktop libtse (`findNativeLibraryOf("desktop")`,
   never falling back to the software build), in a hidden window captured with `LoadImageFromScreen`, and runs itself under
   `xvfb-run -a -s "-screen 0 1920x1080x24"` when there is no display. `--compare <dir>` checks each frame against a stored PNG with a
   per-channel `--tolerance`; `npm run check:gpu` checks two frames of the demo and two of Kite, and the `native-desktop` CI job runs it.
@@ -726,11 +726,11 @@ Built first, because the level is written without a window. `npm run check:<game
   518,400 (within 64 per channel). Building it found the next item.
 - **Render targets on Mesa 25.x** (fixed 2026-11-15). raylib 6.0's `LoadRenderTexture` uploads its colour texture with no pixels, which
   Mesa 25.2's llvmpipe and softpipe refuse (`GL_INVALID_ENUM` from `glTexImage2D`), and gives its depth renderbuffer the unsized
-  `GL_DEPTH_COMPONENT`. The framebuffer was incomplete, so the canvas (`RGE_OP_CANVAS`) and the sharp upscale were never drawn: 15 of
-  the C smoke test's 644 checks failed under Xvfb, and a player on such a driver would have seen the canvas missing. librge now makes its
-  own targets (`load_target` in `rge.c`): a colour texture uploaded from zeroed pixels and no depth, which nothing it draws tests. The
+  `GL_DEPTH_COMPONENT`. The framebuffer was incomplete, so the canvas (`TSE_OP_CANVAS`) and the sharp upscale were never drawn: 15 of
+  the C smoke test's 644 checks failed under Xvfb, and a player on such a driver would have seen the canvas missing. libtse now makes its
+  own targets (`load_target` in `tse.c`): a colour texture uploaded from zeroed pixels and no depth, which nothing it draws tests. The
   software build still uses `LoadRenderTexture`.
-- **`renderRun` and `npm run screenshot`** (`@rge/player-node`, `tools/screenshot.ts`) render chosen steps of a scripted run through the software-rendered hidden window to PNG, and a contact sheet of them with step numbers (`--sheet`). Needs `npm run native:build:headless`.
+- **`renderRun` and `npm run screenshot`** (`@tsengine/player-node`, `tools/screenshot.ts`) render chosen steps of a scripted run through the software-rendered hidden window to PNG, and a contact sheet of them with step numbers (`--sheet`). Needs `npm run native:build:headless`.
 
 ### Fixed timestep
 
@@ -743,12 +743,12 @@ Built first, because the level is written without a window. `npm run check:<game
 
 ### ABI v5: one batch (priority 7)
 
-`RGE_ABI_VERSION` moved from 4 to 5 once, for everything the platformer needed from librge:
+`TSE_ABI_VERSION` moved from 4 to 5 once, for everything the platformer needed from libtse:
 
-- **`RGE_OP_SPRITE_REGION`** (op 9, 15 doubles): a source rectangle of a texture, an origin, mirror flags and a packed tint (its alpha is opacity). `DrawTexturePro` under the record's transform; a mirror swings the picture about the origin, so a character flipped to face left stays on its feet. The old `RGE_OP_SPRITE` is unchanged, so a game that uses no sprite option writes the same bytes as before (the parity test stays byte-identical).
-- **`rge_play_sound_ex(handle, volume)`**: volume 0 to 1 (clamped, NaN is 0), and a sound that is still playing is played again on an alias (`LoadSoundAlias`), up to `RGE_SOUND_VOICES` (4) at once; with all busy the oldest is cut off.
-- **`rge_load_music` / `rge_music_play(handle, volume, loop)` / `rge_music_set_volume` / `rge_music_stop`**: streams (`LoadMusicStream`) that `rge_frame` feeds each frame. Fading is the player's job (`<Music>` moves the volume each step), which keeps librge free of time.
-- **Gamepad keys**: `PadA PadB PadX PadY PadLB PadRB PadBack PadStart` and `PadLeft PadRight PadUp PadDown` are appended to `RGE_KEYS` (kinds `G` and `S`), read from the first gamepad; a direction is down for the d-pad or the left stick beyond the dead zone, which `rge_set_gamepad_deadzone` sets (default 0.35). Edges are worked out in librge from last frame's state. No pad connected reads as nothing held, so the hidden-window smoke test checks that every key is idle.
+- **`TSE_OP_SPRITE_REGION`** (op 9, 15 doubles): a source rectangle of a texture, an origin, mirror flags and a packed tint (its alpha is opacity). `DrawTexturePro` under the record's transform; a mirror swings the picture about the origin, so a character flipped to face left stays on its feet. The old `TSE_OP_SPRITE` is unchanged, so a game that uses no sprite option writes the same bytes as before (the parity test stays byte-identical).
+- **`tse_play_sound_ex(handle, volume)`**: volume 0 to 1 (clamped, NaN is 0), and a sound that is still playing is played again on an alias (`LoadSoundAlias`), up to `TSE_SOUND_VOICES` (4) at once; with all busy the oldest is cut off.
+- **`tse_load_music` / `tse_music_play(handle, volume, loop)` / `tse_music_set_volume` / `tse_music_stop`**: streams (`LoadMusicStream`) that `tse_frame` feeds each frame. Fading is the player's job (`<Music>` moves the volume each step), which keeps libtse free of time.
+- **Gamepad keys**: `PadA PadB PadX PadY PadLB PadRB PadBack PadStart` and `PadLeft PadRight PadUp PadDown` are appended to `TSE_KEYS` (kinds `G` and `S`), read from the first gamepad; a direction is down for the d-pad or the left stick beyond the dead zone, which `tse_set_gamepad_deadzone` sets (default 0.35). Edges are worked out in libtse from last frame's state. No pad connected reads as nothing held, so the hidden-window smoke test checks that every key is idle.
 
 Both hosts, the recording backend (`playVolumes`, `musicEvents`, `spriteRegion` records) and `smoke.c` follow.
 
@@ -786,43 +786,43 @@ Limits, each said by the importer: one tileset (the first is used; a second is a
 
 ### ABI v6: sharp scaling
 
-`RGE_OPEN_SHARP` (open option 16; `<Game upscale="sharp">`). A pixel-perfect `<Screen>` shown at a scale that is not a whole number (`fit="contain"`, or any window size) used to be copied to the window with nearest filtering, so at 2.3x some game pixels were two window pixels wide and some three, which shimmers as things move slowly. With the option, a canvas shown between two whole scales is first copied into a second render texture at the next whole number above (3x for 2.3x) with nearest filtering, and that is taken down to the exact size with bilinear filtering: edges stay crisp and every game pixel looks the same size. Whole-number scales and scales below 1 are untouched, and the default stays nearest, so no parity output changes. The second texture is made when needed and resized with the window. **Fixed 2026-11-11:** the copy into the second texture did not flip the canvas, so at a fractional scale (full screen, say) the picture was upside down; every draw of a render texture flips it, so both draws do. The first check only ran at whole scales, which skip this path; `player-node/test/screenshot.test.ts` now renders a 320 × 180 game at 3.125 times through librge and checks the top left is the top left.
+`TSE_OPEN_SHARP` (open option 16; `<Game upscale="sharp">`). A pixel-perfect `<Screen>` shown at a scale that is not a whole number (`fit="contain"`, or any window size) used to be copied to the window with nearest filtering, so at 2.3x some game pixels were two window pixels wide and some three, which shimmers as things move slowly. With the option, a canvas shown between two whole scales is first copied into a second render texture at the next whole number above (3x for 2.3x) with nearest filtering, and that is taken down to the exact size with bilinear filtering: edges stay crisp and every game pixel looks the same size. Whole-number scales and scales below 1 are untouched, and the default stays nearest, so no parity output changes. The second texture is made when needed and resized with the window. **Fixed 2026-11-11:** the copy into the second texture did not flip the canvas, so at a fractional scale (full screen, say) the picture was upside down; every draw of a render texture flips it, so both draws do. The first check only ran at whole scales, which skip this path; `player-node/test/screenshot.test.ts` now renders a 320 × 180 game at 3.125 times through libtse and checks the top left is the top left.
 
 ### ABI v7: saved data
 
-Four calls in `rge.h`, no window needed: `rge_storage_open(game_id)`, `rge_storage_read(name, out, capacity)` (the two-call size-then-copy pattern of `rge_read_pixels`; -1 when there is no entry), `rge_storage_write(name, data, length)` and `rge_storage_remove(name)`. Entries are small named files in one folder per game: `$RGE_DATA_DIR` when set (tests and CI), else `$XDG_DATA_HOME/<game_id>`, else `~/.local/share/<game_id>`, `~/Library/Application Support/<game_id>` on macOS and `%APPDATA%\<game_id>` on Windows (the last two are written but unverified, like `host/build.rs`'s link lists). The game id and every name are 1 to 64 of `A-Z a-z 0-9 _ -`, so neither can become a path, and an entry is `<name>.dat`. A write goes to `<name>.tmp`, is flushed and `fsync`ed, then `rename`d over the old file: a crash leaves the old entry or the new one. One implementation, in librge, serves both hosts (decided 2026-11-11); `Backend.storage` (UTF-8 text: `open`, `read`, `write`, `remove`) is where a web build's `localStorage` would go.
+Four calls in `tse.h`, no window needed: `tse_storage_open(game_id)`, `tse_storage_read(name, out, capacity)` (the two-call size-then-copy pattern of `tse_read_pixels`; -1 when there is no entry), `tse_storage_write(name, data, length)` and `tse_storage_remove(name)`. Entries are small named files in one folder per game: `$TSE_DATA_DIR` when set (tests and CI), else `$XDG_DATA_HOME/<game_id>`, else `~/.local/share/<game_id>`, `~/Library/Application Support/<game_id>` on macOS and `%APPDATA%\<game_id>` on Windows (the last two are written but unverified, like `host/build.rs`'s link lists). The game id and every name are 1 to 64 of `A-Z a-z 0-9 _ -`, so neither can become a path, and an entry is `<name>.dat`. A write goes to `<name>.tmp`, is flushed and `fsync`ed, then `rename`d over the old file: a crash leaves the old entry or the new one. One implementation, in libtse, serves both hosts (decided 2026-11-11); `Backend.storage` (UTF-8 text: `open`, `read`, `write`, `remove`) is where a web build's `localStorage` would go.
 
-Above it, `@rge/runtime` has `createSave` (`write`, `exists`, `load`, `remove`; a `{ version, data }` JSON entry; `migrate` steps from older versions; a file that does not parse, or one from a newer version of the game, is said once and read as no save) and `createSettings` (`get`, `set`, `reset`; `music` and `effects` set the volume groups, `fullscreen` goes through the window, `bindings` through `Controls.load`; applied when the player installs its `StorageSink`, which is before the tree is mounted, and on each `set`). The `<Game id="…">` prop (a literal) names the folder; without it nothing is kept. `Controls` can be rebound (`bind`, `reset`, `toJSON`, `load`), `InputState.lastPressed()` names the first key pressed this step, and `setVolume("music" | "effects", v)` multiplies every `<Music>` and every sound. `RecordingBackend` keeps entries in memory (`options.storage` to start from a save, `stored` to read what was written). Tests: the C smoke test (write, read, overwrite, remove, missing, bad names, both folder variables), `player-node`'s `native.test.ts` against the real library, `demo/test/parity.test.ts` under the Rust host, the runtime's `storage.test.ts` and `rebinding.test.ts`, and the player's `storage.test.ts`.
+Above it, `@tsengine/runtime` has `createSave` (`write`, `exists`, `load`, `remove`; a `{ version, data }` JSON entry; `migrate` steps from older versions; a file that does not parse, or one from a newer version of the game, is said once and read as no save) and `createSettings` (`get`, `set`, `reset`; `music` and `effects` set the volume groups, `fullscreen` goes through the window, `bindings` through `Controls.load`; applied when the player installs its `StorageSink`, which is before the tree is mounted, and on each `set`). The `<Game id="…">` prop (a literal) names the folder; without it nothing is kept. `Controls` can be rebound (`bind`, `reset`, `toJSON`, `load`), `InputState.lastPressed()` names the first key pressed this step, and `setVolume("music" | "effects", v)` multiplies every `<Music>` and every sound. `RecordingBackend` keeps entries in memory (`options.storage` to start from a save, `stored` to read what was written). Tests: the C smoke test (write, read, overwrite, remove, missing, bad names, both folder variables), `player-node`'s `native.test.ts` against the real library, `demo/test/parity.test.ts` under the Rust host, the runtime's `storage.test.ts` and `rebinding.test.ts`, and the player's `storage.test.ts`.
 
 ### ABI v8: boxes with borders and rounded corners
 
-`RGE_OP_BOX` (op 10, 12 doubles): `op, x, y, rot, sx, sy, width, height, fill, borderColor, borderWidth, radius`. The fill covers the whole box, then the border is drawn inside its edge, as CSS paints a background under its border. A fill or border colour with alpha 0, or a width of 0 or less, draws nothing for that part; a radius of 0 or less is square, and a radius or width over half the shorter side is clamped to it. `<Flex>` writes it only when it has a border or a radius (`borderWidth`, `borderColor`, `borderRadius`); a box with just a `background` is still a `RECT`, so a game that uses neither writes the same bytes as before.
+`TSE_OP_BOX` (op 10, 12 doubles): `op, x, y, rot, sx, sy, width, height, fill, borderColor, borderWidth, radius`. The fill covers the whole box, then the border is drawn inside its edge, as CSS paints a background under its border. A fill or border colour with alpha 0, or a width of 0 or less, draws nothing for that part; a radius of 0 or less is square, and a radius or width over half the shorter side is clamped to it. `<Flex>` writes it only when it has a border or a radius (`borderWidth`, `borderColor`, `borderRadius`); a box with just a `background` is still a `RECT`, so a game that uses neither writes the same bytes as before.
 
 The border is built from exact pieces rather than raylib's rounded outline (in raylib 6.0 `DrawRectangleRoundedLinesEx` draws outside the rectangle): four edge rectangles between the corners, and in each corner block (c × c, where c is the larger of the radius and the border width) a `DrawRing` quarter when the radius covers the border, else a quarter disc of the outer corner and the rest of the block. No pixel is painted twice, so a translucent border is one even colour. **Corner segments.** A rounded corner is drawn with an explicit segment count, about one per pixel of radius from 4 to 24 (`corner_segments`), because raylib's own count for a radius of a few pixels is one segment, which draws a 10 pixel circle as a diamond (a slider's thumb or a toggle's knob). The smoke test checks the top row and left column of a 12 × 12 circle, which the diamond leaves clear. No ABI change: only how the same records look. The pixel tests in `native/test/smoke.c` cover square and rounded boxes, a radius smaller than the border, a translucent border, and the clamps.
 
 ### ABI v9: typed text
 
-`int32_t rge_typed(uint32_t *out, int32_t capacity)` gives the characters typed during the last `rge_frame`: raylib's `GetCharPressed` queue (Unicode code points, as the keyboard layout and the system's key repeat make them), and `RGE_TYPED_BACKSPACE` (8) for each press or repeat of Backspace (`IsKeyPressedRepeat`), after them. At most `RGE_TYPED_MAX` (64) a frame. It is a function of its own, not part of `rge_frame`'s input buffer, so that buffer keeps its fixed size. Both hosts expose it as `Backend.typed()`, a string with `"\b"` for Backspace; the player hands a frame's typing to the next frame's first step as `InputState.typed`, and a focused `<TextInput>` takes it.
+`int32_t tse_typed(uint32_t *out, int32_t capacity)` gives the characters typed during the last `tse_frame`: raylib's `GetCharPressed` queue (Unicode code points, as the keyboard layout and the system's key repeat make them), and `TSE_TYPED_BACKSPACE` (8) for each press or repeat of Backspace (`IsKeyPressedRepeat`), after them. At most `TSE_TYPED_MAX` (64) a frame. It is a function of its own, not part of `tse_frame`'s input buffer, so that buffer keeps its fixed size. Both hosts expose it as `Backend.typed()`, a string with `"\b"` for Backspace; the player hands a frame's typing to the next frame's first step as `InputState.typed`, and a focused `<TextInput>` takes it.
 
 ### ABI v10: layers and blend modes
 
 Two records, built for lighting and for the shaders that come next (NEXT_PRIORITIES.md, "Now", steps 5 to 7):
 
-- `RGE_OP_LAYER_BEGIN` (op 11, 3 doubles): `op, clearColor, childBlend`. What follows is drawn into an off-screen target the size of
+- `TSE_OP_LAYER_BEGIN` (op 11, 3 doubles): `op, clearColor, childBlend`. What follows is drawn into an off-screen target the size of
   the current one (the canvas, the window, or the layer it is in), cleared to `clearColor`, each drawable blended with `childBlend`.
-- `RGE_OP_LAYER_END` (op 12, 3 doubles): `op, blend, tint`. The innermost layer is laid over the target it is in, covering it
+- `TSE_OP_LAYER_END` (op 12, 3 doubles): `op, blend, tint`. The innermost layer is laid over the target it is in, covering it
   exactly, blended with `blend`, its colours multiplied by `tint` (whose alpha is the layer's opacity).
 
-Blend modes `RGE_BLEND_NORMAL` (0), `ADD` (1), `MULTIPLY` (2) and `SCREEN` (3) are raylib's alpha, additive and multiplied modes and a
-custom `(ONE, ONE_MINUS_SRC_COLOR)` for screen. Layers nest `RGE_LAYER_MAX` (4) deep; one more, or an end with none open, stops the frame
+Blend modes `TSE_BLEND_NORMAL` (0), `ADD` (1), `MULTIPLY` (2) and `SCREEN` (3) are raylib's alpha, additive and multiplied modes and a
+custom `(ONE, ONE_MINUS_SRC_COLOR)` for screen. Layers nest `TSE_LAYER_MAX` (4) deep; one more, or an end with none open, stops the frame
 as a malformed record does, and a layer left open is closed at the end of the frame. Each depth keeps one target between frames
-(`state.layers`), remade when the size changes. **librge keeps the view and the scissor itself** (`target` in `rge.c`), because raylib's
+(`state.layers`), remade when the size changes. **libtse keeps the view and the scissor itself** (`target` in `tse.c`), because raylib's
 `BeginTextureMode` and `EndTextureMode` reset its matrices and its scissor: they are put back after every change of target, and a layer is
 composited in target pixels with no view. **Making or unloading a texture binds the window's framebuffer**, which once sent what was
 still batched for a canvas to the window: a layer's target is made only after the current target is left.
 
-**The software renderer** (`RGE_PLATFORM=Memory`, rlsw) needed two things raylib does not do there. `rlSetBlendMode` does nothing on
-it, so librge sets rlsw's `swBlendFunc` itself. And rlsw switches blending off for a primitive whose colour is opaque and whose texture
+**The software renderer** (`TSE_PLATFORM=Memory`, rlsw) needed two things raylib does not do there. `rlSetBlendMode` does nothing on
+it, so libtse sets rlsw's `swBlendFunc` itself. And rlsw switches blending off for a primitive whose colour is opaque and whose texture
 has no alpha when the blend function reads alpha, which is right only for normal blending: an opaque light added with
 `(SRC_ALPHA, ONE)` replaced what was under it. With nothing translucent drawn, add and multiply use `(ONE, ONE)` and
 `(DST_COLOR, ZERO)` there, which give the same result without reading alpha; a layer laid over at an opacity below 1 keeps the
@@ -838,8 +838,8 @@ renderers.
 
 ### ABI v11: shaders
 
-`int32_t rge_load_shader(const char *path)` loads a file holding one GLSL function, `vec4 effect(vec2 uv)`, and `RGE_OP_LAYER_END` grows to 13
-doubles: `op, blend, tint, shader, time, p0..p7`. librge wraps the function (`SHADER_HEAD` and `SHADER_TAIL` in `assets.c`) in GLSL 3.30
+`int32_t tse_load_shader(const char *path)` loads a file holding one GLSL function, `vec4 effect(vec2 uv)`, and `TSE_OP_LAYER_END` grows to 13
+doubles: `op, blend, tint, shader, time, p0..p7`. libtse wraps the function (`SHADER_HEAD` and `SHADER_TAIL` in `assets.c`) in GLSL 3.30
 with the inputs it is given: `image` (the layer's texture), `pixel` (from the top left of the target, worked out from `gl_FragCoord`, whose
 origin is the bottom left), `resolution`, `time` and `params[8]`, and a `main` that multiplies its result by raylib's tint and vertex
 colour. `#line 1` before the author's text makes the compiler's messages count lines in their file. Only the function is the author's,
@@ -847,16 +847,16 @@ so a WebGL build can wrap the same file in GLSL ES 3.00 (a different version lin
 layer is laid over its target (`end_layer`), with its uniforms set each time; the locations are looked up once, at load.
 
 It returns -1 for a missing file or GLSL that does not compile (raylib then falls back to its default shader, which counts as a
-failure; its compiler message is in the log), and `RGE_SHADER_UNSUPPORTED` (-2) in the software build, which has no shaders: a layer
+failure; its compiler message is in the log), and `TSE_SHADER_UNSUPPORTED` (-2) in the software build, which has no shaders: a layer
 with that handle is laid over without one. The player asks once per name and warns once for -1 and once for -2 (the warning step 4
 deferred). The `time` is the player's animation clock, so a replay draws the same frames, and the records stay byte-identical between
-Node and the Rust host. `<Layer shader params>` is checked against the assets folder by `rge build` like an image. The smoke test runs a
+Node and the Rust host. `<Layer shader params>` is checked against the assets folder by `tse build` like an image. The smoke test runs a
 shader on the GPU (a pixel-position split, `params` and `time`, in the window and in a canvas, a bad handle, a shader that does not
 compile) and checks the software build's -2 and fallback.
 
 ### ABI v12: lights
 
-`RGE_OP_LIGHT` (op 13, 8 doubles): `op, x, y, rot, sx, sy, radius, color`. A disc at the local origin, `color` at the middle falling off as
+`TSE_OP_LIGHT` (op 13, 8 doubles): `op, x, y, rot, sx, sy, radius, color`. A disc at the local origin, `color` at the middle falling off as
 (1 − d)² to black at `radius`, drawn with rlgl's immediate mode as six rings of 48 segments with the colour at each ring, so it needs no
 texture and draws the same on the GPU and in the software renderer. The colour is premultiplied by its alpha (the light's strength) and
 the vertices are opaque: in an add layer black adds nothing, and the rlsw shortcut of ABI v10 does not apply. The smoke test checks the
@@ -902,16 +902,16 @@ drawing the health bars from one component.
 | Idea | Notes |
 | --- | --- |
 | Hot reload | The IR's stable element ids and the scene ids were designed for it. Swap classes in the Node host, keep state by id |
-| Screen-space layer (HUD) | A `<Screen>` built-in or `global`-like flag whose subtree is drawn after a second `RGE_OP_VIEW` with an identity view |
-| Fonts | `<Text font="…">`, an `RGE_OP_TEXT` payload field with a font handle, and `rge_load_font` |
+| Screen-space layer (HUD) | A `<Screen>` built-in or `global`-like flag whose subtree is drawn after a second `TSE_OP_VIEW` with an identity view |
+| Fonts | `<Text font="…">`, an `TSE_OP_TEXT` payload field with a font handle, and `tse_load_font` |
 | Overlapping plays of one sound | raylib's `LoadSoundAlias` pool in `assets.c`. Today a second `play()` restarts the sound |
-| Gamepads | More pseudo-keys in `RGE_KEYS`, plus axes in `RGE_IN_*` |
-| Compile-time key checks | The manifest lists `KEYS`; the compiler reports an unknown literal in `input.pressed("Spcae")` with a did-you-mean, as `RGE1210` does for shape kinds |
+| Gamepads | More pseudo-keys in `TSE_KEYS`, plus axes in `TSE_IN_*` |
+| Compile-time key checks | The manifest lists `KEYS`; the compiler reports an unknown literal in `input.pressed("Spcae")` with a did-you-mean, as `TSE1210` does for shape kinds |
 | Fixed timestep | `useFixedUpdate`, if physics needs it |
 | High DPI | `FLAG_WINDOW_HIGHDPI`, scaling the view by the DPI factor |
 | Web | A canvas backend implementing `Backend` (records map directly to `setTransform` and `fillRect`/`drawImage`/`fillText`). No raylib needed in the browser |
 | Embedded assets | Pack `game.js` and `assets/` into the executable (`include_bytes!` or an appended archive) |
-| Prebuilt `librge` | Publish binaries per platform so `@rge/player-node` users skip CMake |
+| Prebuilt `libtse` | Publish binaries per platform so `@tsengine/player-node` users skip CMake |
 | SDL3 platform layer | raylib's SDL backend, if consoles or better gamepad support become goals. Our code does not change |
 | Native code generation | Go first if ever, since its garbage collector fits the object graph. Needs resolved types from the TypeScript checker first |
 | A smaller V8 build | `--engine node` ships all of Node (about 125 MB). Embedding V8 alone in the Rust host (the `v8` crate) would be smaller, without the rest of Node, and keep one host, at the cost of a binding of its own; worth it if download size starts to matter |
@@ -920,7 +920,7 @@ drawing the health bars from one component.
 
 | Risk | Affects | Mitigation |
 | --- | --- | --- |
-| `rge.h` and `protocol.ts` drift | N1–N6 | The header-parity test (N1), plus the ABI version and key-count checks at load (N3) |
+| `tse.h` and `protocol.ts` drift | N1–N6 | The header-parity test (N1), plus the ABI version and key-count checks at load (N3) |
 | The tree walk drifts from `worldTransform()` / `childSpace()` | N1 | The parity test over the example tree |
 | The column-major matrix layout or backface culling is wrong, so things are invisible or mirrored | N3 | `smoke.c` covers a translated view and a flipped sprite |
 | QuickJS is too slow for larger scenes | N6 | Measure in N6; see the fixes listed there. Node stays available as a host |
@@ -944,9 +944,9 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 
 ### N1 Draw list
 
-- [x] `@rge/player` package scaffolded and covered by `npm test` and `npm run typecheck`
-- [x] `protocol.ts` with the header-parity test (and `native/include/rge.h` committed as above, if N3 has not landed yet)
-- [x] Portability test: no `node:` imports in `@rge/player` or `@rge/runtime`
+- [x] `@tsengine/player` package scaffolded and covered by `npm test` and `npm run typecheck`
+- [x] `protocol.ts` with the header-parity test (and `native/include/tse.h` committed as above, if N3 has not landed yet)
+- [x] Portability test: no `node:` imports in `@tsengine/player` or `@tsengine/runtime`
 - [x] `color.ts` with tests
 - [x] `Backend` and `RecordingBackend`
 - [x] Tree walk with the parity test, camera view, missing-texture fallback, and golden draw lists for `Level` and `Hero`
@@ -963,10 +963,10 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 - [x] `docs/DESIGN.md` "Player" section
 - [x] `npm test` and `npm run typecheck` pass
 
-### N3 `librge` and the Node dev host
+### N3 `libtse` and the Node dev host
 
 - [x] CMake build with raylib pinned to 6.0; `npm run native:build` (built and tested on Linux only: macOS and Windows are unverified)
-- [x] `rge.c`, `assets.c`, `keys.c` implementing every function in `rge.h`
+- [x] `tse.c`, `assets.c`, `keys.c` implementing every function in `tse.h`
 - [x] `smoke.c`: pixel check, flipped sprite, translated view
 - [x] koffi binding with ABI version and key-count checks
 - [x] `play.ts` opens a window (run under Xvfb; a person should check it on a real display)
@@ -988,7 +988,7 @@ Orientation for the implementer: read this document, then `DESIGN.md`'s "Transfo
 ### N6 Rust host
 
 - [x] `npm run bundle` produces one ESM file with no `node:` or koffi imports
-- [x] `host/` builds and links `librge` statically on Linux (macOS and Windows link lists are written from raylib's own and unverified)
+- [x] `host/` builds and links `libtse` statically on Linux (macOS and Windows link lists are written from raylib's own and unverified)
 - [x] The demo plays identically under the Rust host (decoded draw-list parity over 60 scripted frames)
 - [x] Performance baseline recorded in this document
 - [x] `npm run package` produces a runnable folder

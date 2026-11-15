@@ -11,7 +11,7 @@ export interface WindowConfig {
   readonly hidden?: boolean;
   /** Bilinear texture filtering. Default false, which keeps pixel art sharp. */
   readonly smooth?: boolean;
-  /** Sharp scaling of a pixel-perfect screen shown at a scale that is not a whole number (see `RGE_OPEN_SHARP`). Default false. */
+  /** Sharp scaling of a pixel-perfect screen shown at a scale that is not a whole number (see `TSE_OPEN_SHARP`). Default false. */
   readonly sharp?: boolean;
 }
 
@@ -31,7 +31,7 @@ export interface StorageBackend {
 
 /**
  * What a host (Node with koffi, the Rust + QuickJS executable, a test recorder) provides.
- * The player produces the draw records and the host executes them; see `native/include/rge.h`
+ * The player produces the draw records and the host executes them; see `native/include/tse.h`
  * for the record layout and the input and keys buffers.
  */
 export interface Backend {
@@ -47,7 +47,7 @@ export interface Backend {
   /** A sound handle, or -1 if the file could not be loaded. */
   loadSound(path: string): number;
   /**
-   * A shader for a `<Layer>` (ABI v11): its handle; -1 if the file is missing or does not compile; -2 (`RGE_SHADER_UNSUPPORTED`)
+   * A shader for a `<Layer>` (ABI v11): its handle; -1 if the file is missing or does not compile; -2 (`TSE_SHADER_UNSUPPORTED`)
    * where shaders cannot run (the software renderer), whose layers are drawn without them. Optional: without it, no layer is shaded.
    */
   loadShader?(path: string): number;
