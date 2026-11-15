@@ -117,11 +117,15 @@ function analyzeProps(
   }
   const bindings: PropBindingAnalysis[] = [];
   for (const element of param.name.elements) {
-    if (element.dotDotDotToken || element.propertyName || !element.name || !isIdentifier(element.name)) {
-      invalid("props are destructured by plain name: no rest (`...rest`), renaming (`a: b`) or nesting.", element);
+    // `{ seed: firstSeed }` reads the prop `seed` as `firstSeed`, so a prop and the state it seeds can share a name.
+    const renamed = element.propertyName !== undefined && isIdentifier(element.propertyName);
+    if (element.dotDotDotToken || (element.propertyName !== undefined && !renamed) || !element.name || !isIdentifier(element.name)) {
+      invalid("props are destructured by name, or renamed (`{ seed: firstSeed }`): no rest (`...rest`), computed names or nesting.", element);
       continue;
     }
-    bindings.push({ name: element.name.text, defaultValue: element.initializer ?? null, node: element });
+    const local = element.name.text;
+    const prop = renamed ? (element.propertyName as unknown as { text: string }).text : local;
+    bindings.push({ name: prop, local, defaultValue: element.initializer ?? null, node: element });
   }
   return { typeName, typeNode: type, bindings, objectName: null, ...inlined };
 }

@@ -97,6 +97,11 @@ export interface ExpandedSource {
   readonly map: EditMap;
   /** `text`, already parsed, when the inliner's last parse was of exactly this text (the caller owns it and disposes it). */
   readonly parsed: ParsedSource | null;
+  /**
+   * Where each inlined hook call was, in the original text. A diagnostic found inside an expansion maps to exactly its call's
+   * range, so the compiler can tell what came from a hook's body (see `Compiler.compile`, one mistake, one error).
+   */
+  readonly calls: readonly { readonly start: number; readonly end: number }[];
 }
 
 /**
@@ -112,6 +117,7 @@ export function inlineCustomHooks(parser: TsxParser, fileName: string, text: str
 /** `inlineCustomHooks`, keeping the edit map and the last parse for the compiler, which goes on to analyze the result. */
 export function expandCustomHooks(parser: TsxParser, fileName: string, text: string, resolve: HookResolver | null, diagnostics: CompilerDiagnostic[], authoringModule: string): ExpandedSource {
   const map = new EditMap();
+  const calls: { start: number; end: number }[] = [];
   const files = new HookFiles(parser);
   const library = authoringModule === LIBRARY_AUTHORING_MODULE ? LIBRARY_SOURCE : LIBRARY_SOURCE.replace(JSON.stringify(LIBRARY_AUTHORING_MODULE), JSON.stringify(authoringModule));
   let current = text;
@@ -169,7 +175,12 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
               if (!expandedHere.includes(call.name)) expandedHere.push(call.name);
               const expanded = expandCall(files, stmt, call, hook, sf, fileName, `_${call.name}${++counter}_`, (name) => !fileNames.has(name) && !bodyNames.has(name), bodyNames, diagnostics);
               if (hook.fileName !== fileName) collectImports(files, hook, needed);
-              if (expanded !== null) edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: expanded });
+              if (expanded !== null) {
+                edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: expanded });
+                const start = map.toOriginal(stmt.getStart(sf), map.passes, "start");
+                const end = map.toOriginal(stmt.getEnd(), map.passes, "end");
+                if (!calls.some((c) => c.start === start && c.end === end)) calls.push({ start, end });
+              }
             }
           }
         }
@@ -178,11 +189,11 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
           const removed = map.apply(current, removeHookDeclarations(sf, stores, authoringModule));
           const result = map.apply(removed, importEdits(sf, needed));
           keep = result === current;
-          return { text: result, map, parsed: keep ? parsed : null };
+          return { text: result, map, parsed: keep ? parsed : null, calls };
         }
         if (edits.length === 0) {
           keep = true; // every call failed; the diagnostics say why
-          return { text: current, map, parsed };
+          return { text: current, map, parsed, calls };
         }
         chain.push(expandedHere);
         current = map.apply(current, edits);
@@ -200,7 +211,7 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
   const shown = firstRepeat >= 0 ? steps.slice(0, firstRepeat + 1) : steps;
   const how = firstRepeat >= 0 ? `'${steps[firstRepeat]}' calls itself through ${shown.join(" → ")}` : `they call each other more than ${MAX_DEPTH} levels deep: ${shown.join(" → ")} → …`;
   diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `Custom hooks are inlined, so they cannot recurse: ${how}.`, null));
-  return { text, map: new EditMap(), parsed: null };
+  return { text, map: new EditMap(), parsed: null, calls: [] };
 }
 
 /** The hook sources parsed for one file's inlining, each once (a hook called three times was parsed three times). */

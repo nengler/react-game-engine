@@ -299,8 +299,8 @@ state (screen, cursor, speed, pause, how the battle ended).
 4. **What still did not read like React** (open):
    - `useState(START_GOLD)` and `useState(-Math.PI / 2)` cannot infer their type (`RGE1104`): an imported constant or an
      expression needs `useState<number>(…)`.
-   - Renaming in prop destructuring (`{ seed: firstSeed }`) is refused (`RGE1208`), so a prop and the state it seeds need
-     different names.
+   - ~~Renaming in prop destructuring (`{ seed: firstSeed }`) is refused (`RGE1208`), so a prop and the state it seeds need
+     different names.~~ *Allowed since 2026-11-15.*
    - `nextId.current++` is refused (a postfix increment); `+= 1` works.
    - A derived value is read again where it is used, so `cost !== null && gold >= cost` does not narrow `cost` in the second
      half; Hearth writes `?? -1`.

@@ -6,7 +6,7 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Entity, World, captureHotState, registerTilemaps, restoreHotState, type TilemapData } from "@rge/runtime";
 import { dirname, join } from "node:path";
-import { cleanOutput, closeCompiler, compile, getCompiler, load, typeCheck } from "./helpers.ts";
+import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -183,5 +183,26 @@ describe("useBody across a hot reload", () => {
     }
     assert.equal(hero.transform.y, 20, "and still lands on the floor: its body is attached to it, not to the component that left");
     assert.equal(hero.transform.x, 12, "and still stops at the crate");
+  });
+});
+
+describe("one mistake, one error, through an inlined hook", () => {
+  it("reports a bad argument to useBody once, not again as the hook's own methods failing", () => {
+    const errors = compileErrors(`function Hero() {
+  const { x, y, move, blocked } = useBody({ x: nowhere, y: 0, width: 4, height: 4 });
+  useUpdate(() => { if (blocked(0, 1)) move(1, 0); });
+  return <Entity x={x} y={y} />;
+}`);
+    assert.equal(errors.length, 1, errors.map((d) => d.message).join("\n"));
+    assert.match(errors[0]!.message, /'nowhere'/);
+  });
+
+  it("still reports a second mistake that is not in the hook call", () => {
+    const errors = compileErrors(`function Hero() {
+  const { x, y } = useBody({ x: nowhere, y: 0, width: 4, height: 4 });
+  useUpdate(() => { missing(); });
+  return <Entity x={x} y={y} />;
+}`);
+    assert.equal(errors.length, 2, errors.map((d) => d.message).join("\n"));
   });
 });

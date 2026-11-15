@@ -131,7 +131,7 @@ export class Compiler {
       const analysis = analyzeSourceFile(parsed.sourceFile, fileName, this.#manifest.authoringModule);
       const transformed = buildModuleIR(analysis, { manifest: this.#manifest, ...(this.#gameState ? { gameState: this.#gameState } : {}) });
       // The inliner's own diagnostics are already in the original text.
-      const diagnostics = [...hookDiagnostics, ...expanded.map.spans([...analysis.diagnostics, ...transformed.diagnostics], fileName, original)];
+      const diagnostics = oneErrorPerHookCall([...hookDiagnostics, ...expanded.map.spans([...analysis.diagnostics, ...transformed.diagnostics], fileName, original)], expanded.calls);
       const ir = expanded.map.spans(transformed.module, fileName, original);
       if (hasErrors(diagnostics)) return { ok: false, fileName, ir, diagnostics };
       const options: GeneratorOptions = {
@@ -215,4 +215,22 @@ export class Compiler {
 /** `Player.tsx` → `Player.ts` */
 export function generatedFileName(sourceFileName: string): string {
   return sourceFileName.replace(/\.tsx$/, ".ts");
+}
+
+/**
+ * One mistake, one error, through an inlined hook: an error found inside a hook's expansion maps to exactly the call's range, and
+ * the first is the author's (a bad argument, `useBody({ x: nowhere })`); what follows is the hook's own body failing for it
+ * (`'move' is not a method`, about names the author never wrote). Only the first error on each call is kept; warnings are kept.
+ */
+export function oneErrorPerHookCall(diagnostics: readonly CompilerDiagnostic[], calls: readonly { readonly start: number; readonly end: number }[]): CompilerDiagnostic[] {
+  if (calls.length === 0) return [...diagnostics];
+  const seen = new Set<number>();
+  return diagnostics.filter((d) => {
+    if (d.severity !== "error" || d.span === null || d.span === undefined) return true;
+    const call = calls.findIndex((c) => c.start === d.span!.start && c.end === d.span!.end);
+    if (call < 0) return true;
+    if (seen.has(call)) return false;
+    seen.add(call);
+    return true;
+  });
 }
