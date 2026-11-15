@@ -811,7 +811,11 @@ function memoized(key: string, value: ExprIR): ExprIR {
     e.kind !== "Memo" &&
     ((e.kind === "Call" && (e.callee.kind === "Plain" || e.callee.kind === "ArrayMethod" || e.callee.kind === "ValueMethod")) ||
       childExpressions(e).some(calls));
-  return calls(value) ? { kind: "Memo", key, value } : value;
+  // `const cost = kind === null ? null : price(kind)`, `const name = hero?.name ?? ""`: a value that may be null is tested before it
+  // is used (`cost !== null && gold >= cost`). Written out at each use, TypeScript could not narrow one copy by testing another;
+  // as a memo it is one `const`, which narrows as the source does.
+  const mayBeNull = value.kind === "Conditional" || (value.kind === "Binary" && value.operator === "??");
+  return calls(value) || mayBeNull ? { kind: "Memo", key, value } : value;
 }
 
 /** `TextChild | readonly TextChild[]` (either order, either alone, `string` too): a props type's text children. */

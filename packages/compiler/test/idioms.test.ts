@@ -203,3 +203,38 @@ export function Shop() {
     assert.match(out, /\$s_hero: ReturnType<typeof makeHero>/);
   });
 });
+
+describe("a derived value that may be null, tested before it is used", () => {
+  it("narrows as TypeScript does in the source: one value, not a copy at each use", async () => {
+    const SOURCE = `import { Text, useInput, useMutable } from "@rge/runtime/jsx";
+const PRICES = { bow: 5, axe: 9 };
+type Kind = keyof typeof PRICES;
+export function Shop() {
+  const s = useMutable({ gold: 7, kind: null as Kind | null });
+  const cost = s.kind === null ? null : PRICES[s.kind];
+  const label = s.kind ?? "nothing";
+  useInput((input) => {
+    if (input.pressed("Left")) s.kind = "bow";
+    if (input.pressed("Right")) s.kind = "axe";
+  });
+  return <Text>{cost !== null && s.gold >= cost ? \`\${label} for \${cost}\` : label}</Text>;
+}`;
+    assert.deepEqual(sourceErrors(SOURCE), [], "the source as written");
+    const compiled = compile(SOURCE);
+    assert.deepEqual(typeCheck(compiled), [], "the generated code tests and uses one `cost`");
+    const { Shop } = await load<{ Shop: new () => Entity }>(compiled);
+    const world = new World();
+    const shop = new Shop();
+    world.mount(shop);
+    world.flush();
+    assert.deepEqual(texts(shop), ["nothing"]);
+    const press = (key: string) => {
+      world.tick(1 / 60, { pressed: (k: string) => k === key, down: () => false, released: () => false } as never);
+      world.flush();
+    };
+    press("Left");
+    assert.deepEqual(texts(shop), ["bow for 5"]);
+    press("Right");
+    assert.deepEqual(texts(shop), ["axe"]);
+  });
+});
