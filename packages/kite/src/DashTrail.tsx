@@ -54,7 +54,8 @@ export function DashTrail({ dashing, x, y, height, flipX }: DashTrailProps) {
           originY={12}
           tint="#ff9a7a"
           opacity={0.6 * (1 - g.age / 0.3)}
-          x={g.x - x} y={g.y - y}
+          x={g.x - x}
+          y={g.y - y}
         />
       ))}
     </Entity>

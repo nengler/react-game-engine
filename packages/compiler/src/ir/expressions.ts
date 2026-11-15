@@ -2,8 +2,6 @@
 import { type StateId, type LocalId } from "./ids.ts";
 import { type FunctionIR, type ParamIR } from "./values.ts";
 
-
-
 // ---------------------------------------------------------------------------
 // Expressions
 // ---------------------------------------------------------------------------
@@ -276,9 +274,27 @@ export type ArrayMethodName = keyof typeof ARRAY_METHODS;
  * checks the receiver has them. (`slice`, `includes`, `indexOf`, `concat`, `at` are shared with arrays, in `ARRAY_METHODS`.)
  */
 export const VALUE_METHODS: ReadonlySet<string> = new Set([
-  "padStart", "padEnd", "startsWith", "endsWith", "toUpperCase", "toLowerCase", "trim", "trimStart", "trimEnd", "split", "replace",
-  "replaceAll", "repeat", "charAt", "charCodeAt", "substring", "localeCompare", "normalize",
-  "toFixed", "toPrecision", "toString",
+  "padStart",
+  "padEnd",
+  "startsWith",
+  "endsWith",
+  "toUpperCase",
+  "toLowerCase",
+  "trim",
+  "trimStart",
+  "trimEnd",
+  "split",
+  "replace",
+  "replaceAll",
+  "repeat",
+  "charAt",
+  "charCodeAt",
+  "substring",
+  "localeCompare",
+  "normalize",
+  "toFixed",
+  "toPrecision",
+  "toString",
 ]);
 
 /** Global conversions, called as functions: `String(n)`, `Number(text)`, `Boolean(x)`. Argument count. */
@@ -343,11 +359,25 @@ export interface UnaryExprIR {
 }
 
 export type BinaryOperator =
-  | "+" | "-" | "*" | "/" | "%" | "**"
-  | "<" | "<=" | ">" | ">="
-  | "===" | "!==" | "==" | "!="
-  | "&&" | "||" | "??"
-  | "instanceof" | "in";
+  | "+"
+  | "-"
+  | "*"
+  | "/"
+  | "%"
+  | "**"
+  | "<"
+  | "<="
+  | ">"
+  | ">="
+  | "==="
+  | "!=="
+  | "=="
+  | "!="
+  | "&&"
+  | "||"
+  | "??"
+  | "instanceof"
+  | "in";
 
 export interface BinaryExprIR {
   readonly kind: "Binary";

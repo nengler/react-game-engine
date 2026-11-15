@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+import { buildCommand } from "./commands/build.ts";
+import { checkCommand } from "./commands/check.ts";
+import { createCommand } from "./commands/create.ts";
+import { devCommand } from "./commands/dev.ts";
+import { packageCommand } from "./commands/package.ts";
+import { previewCommand } from "./commands/preview.ts";
+import { screenshotCommand } from "./commands/screenshot.ts";
 /**
  * rge: one command line for a game made with the engine. Run it in the game's folder, or give the folder as the first argument.
  *
@@ -14,13 +21,6 @@
  * A game's settings live in the "rge" field of its package.json: name, entry, src, generated, scenes, assets, checkAssets.
  */
 import { UsageError } from "./config.ts";
-import { buildCommand } from "./commands/build.ts";
-import { checkCommand } from "./commands/check.ts";
-import { createCommand } from "./commands/create.ts";
-import { devCommand } from "./commands/dev.ts";
-import { packageCommand } from "./commands/package.ts";
-import { previewCommand } from "./commands/preview.ts";
-import { screenshotCommand } from "./commands/screenshot.ts";
 
 const USAGE = `usage: rge <command> [folder] [options]
 

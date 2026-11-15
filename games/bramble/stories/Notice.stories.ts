@@ -1,4 +1,5 @@
 import { stories, story } from "@rge/player";
+
 import { Notice } from "../generated/Notice.ts";
 
 /** The card that says what just happened. It drops in: `input` waits for it to land. */

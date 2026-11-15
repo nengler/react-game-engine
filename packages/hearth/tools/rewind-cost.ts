@@ -7,6 +7,7 @@
  *   node packages/hearth/tools/rewind-cost.ts
  */
 import { createPlayer, parseInputScript, RecordingBackend, Rewind, type Backend, type Player } from "@rge/player";
+
 import { bindings, gameConfig, screen } from "../game.ts";
 import { useGame } from "../src/GameState.ts";
 import { battleOf, findPlay } from "../test/battle-state.ts";
@@ -36,7 +37,13 @@ function measure(withRewind: boolean): { mean: number; p99: number; rewind: Rewi
     }
   }
   times.sort((a, b) => a - b);
-  return { mean: times.reduce((a, b) => a + b, 0) / Math.max(1, times.length), p99: times[Math.floor(times.length * 0.99)] ?? 0, rewind, player, wave10 };
+  return {
+    mean: times.reduce((a, b) => a + b, 0) / Math.max(1, times.length),
+    p99: times[Math.floor(times.length * 0.99)] ?? 0,
+    rewind,
+    player,
+    wave10,
+  };
 }
 
 const plain = measure(false);
@@ -56,11 +63,13 @@ for (const at of [middle - (middle % 60) + 59, middle - (middle % 60) + 119]) {
   worst = Math.max(worst, now() - t0);
 }
 recorded.player.close();
-console.log(JSON.stringify({
-  plain: { meanMs: +plain.mean.toFixed(3), p99Ms: +plain.p99.toFixed(3) },
-  recording: { meanMs: +recorded.mean.toFixed(3), p99Ms: +recorded.p99.toFixed(3) },
-  seekHalfSecondMs: +back.toFixed(1),
-  seekFullSecondMs: +worst.toFixed(1),
-  divergence: rewind.divergence,
-  framesKept: rewind.range.to - rewind.range.from,
-}));
+console.log(
+  JSON.stringify({
+    plain: { meanMs: +plain.mean.toFixed(3), p99Ms: +plain.p99.toFixed(3) },
+    recording: { meanMs: +recorded.mean.toFixed(3), p99Ms: +recorded.p99.toFixed(3) },
+    seekHalfSecondMs: +back.toFixed(1),
+    seekFullSecondMs: +worst.toFixed(1),
+    divergence: rewind.divergence,
+    framesKept: rewind.range.to - rewind.range.from,
+  })
+);

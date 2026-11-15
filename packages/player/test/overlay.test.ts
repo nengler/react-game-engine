@@ -1,7 +1,9 @@
+import assert from "node:assert/strict";
 /** The development layout overlay (REACT_FEEL_PLAN.md C4): F1 under `rge dev` outlines boxes, colliders and pointers. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Collider, Entity, Flex, Game, Pointer } from "@rge/runtime";
+
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
@@ -32,7 +34,11 @@ function run(devtools: boolean, frames: { pressed?: string[]; mouse?: { x: numbe
 }
 
 const outlines = (records: readonly DecodedRecord[]): string[] =>
-  records.flatMap((r) => (r.op === "box" && r.fill === "#00000000" ? [`${r.borderColor} ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`] : []));
+  records.flatMap((r) =>
+    r.op === "box" && r.fill === "#00000000"
+      ? [`${r.borderColor} ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`]
+      : []
+  );
 
 describe("the layout overlay", () => {
   it("outlines every box and its padding, every collider and every pointer, once F1 is pressed under rge dev", () => {
@@ -40,7 +46,10 @@ describe("the layout overlay", () => {
     const on = outlines(run(true, [{ pressed: ["F1"] }, {}]));
     assert.ok(on.includes("#4fc3f7ff 0,0 80x40"), on.join("\n"));
     assert.ok(on.includes("#4fc3f766 5,5 70x30"), "the padding inside it");
-    assert.ok(on.some((o) => o.endsWith(" 120,0 10x10")), "the collider");
+    assert.ok(
+      on.some((o) => o.endsWith(" 120,0 10x10")),
+      "the collider"
+    );
     assert.ok(on.includes("#ffd54fff 150,50 20x20"), "the pointer");
   });
 

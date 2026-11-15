@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Collider, Entity, Shape, Sprite, Text, World, type GameObject } from "@rge/runtime";
+
 import { CollisionTracker } from "../src/collide.ts";
 import { FrameBuilder, type ColliderEntry } from "../src/draw.ts";
 import { RGE_OP_RECT, RGE_OP_RECT_LEN, RGE_OP_SPRITE, RGE_OP_SPRITE_LEN, RGE_OP_VIEW_LEN } from "../src/protocol.ts";
@@ -92,11 +94,17 @@ const ACTOR_DOUBLES = RGE_OP_RECT_LEN + RGE_OP_SPRITE_LEN;
 
 function random(seed: number): () => number {
   let state = seed * 7919;
-  return () => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+  return () => (state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff;
 }
 
 /** `count` actors under one root, each with a collider, mounted and built twice so that every actor's records are written down. */
-function stage(count: number): { world: World; root: Entity; actors: Actor[]; builder: FrameBuilder; frame: () => ReturnType<FrameBuilder["build"]> } {
+function stage(count: number): {
+  world: World;
+  root: Entity;
+  actors: Actor[];
+  builder: FrameBuilder;
+  frame: () => ReturnType<FrameBuilder["build"]>;
+} {
   const world = new World();
   const root = new Entity();
   const actors = Array.from({ length: count }, (_, i) => {
@@ -159,14 +167,30 @@ describe("a component that only moved", () => {
     const { actors, builder, frame } = stage(10);
     const all = (): void => actors.forEach((actor) => actor.set({ x: actor.transform.x + 1 }));
     const one = actors[4]!;
-    for (const change of [{ color: "blue" }, { width: 12 }, { image: "b.png" }, { image: "" }, { image: "missing.png" }, { image: "a.png" }] as Partial<ActorState>[]) {
+    for (const change of [
+      { color: "blue" },
+      { width: 12 },
+      { image: "b.png" },
+      { image: "" },
+      { image: "missing.png" },
+      { image: "a.png" },
+    ] as Partial<ActorState>[]) {
       all();
       one.set(change);
       frame();
-      assert.equal(builder.movedRecords, 9 * ACTOR_DOUBLES, `${JSON.stringify(change)}: the one that changed is drawn again, the others are moved`);
+      assert.equal(
+        builder.movedRecords,
+        9 * ACTOR_DOUBLES,
+        `${JSON.stringify(change)}: the one that changed is drawn again, the others are moved`
+      );
       all();
       const built = frame();
-      const expected = change.image === "" ? 9 * ACTOR_DOUBLES + RGE_OP_RECT_LEN : change.image === "missing.png" ? 9 * ACTOR_DOUBLES + 2 * RGE_OP_RECT_LEN : 10 * ACTOR_DOUBLES;
+      const expected =
+        change.image === ""
+          ? 9 * ACTOR_DOUBLES + RGE_OP_RECT_LEN
+          : change.image === "missing.png"
+            ? 9 * ACTOR_DOUBLES + 2 * RGE_OP_RECT_LEN
+            : 10 * ACTOR_DOUBLES;
       assert.equal(builder.movedRecords, expected, `${JSON.stringify(change)}: and the frame after, it only moved`);
       assert.equal(built.colliders.length, 10);
     }
@@ -204,7 +228,11 @@ describe("a component that only moved", () => {
     frame();
     all();
     const withLabel = frame();
-    assert.equal(builder.movedRecords, 4 * ACTOR_DOUBLES, "a text may be shifted inside its width, so an actor with one is not moved as a block");
+    assert.equal(
+      builder.movedRecords,
+      4 * ACTOR_DOUBLES,
+      "a text may be shifted inside its width, so an actor with one is not moved as a block"
+    );
     assert.deepEqual(withLabel.list.texts, ["boss"]);
     actors[2]!.queueRemoveChild(label);
     all();
@@ -351,7 +379,7 @@ describe("a component that only moved", () => {
           ({
             reportCollision: (a: GameObject, b: GameObject) => void log.push(`in ${names.get(a)} ${names.get(b)}`),
             reportCollisionExit: (a: GameObject, b: GameObject) => void log.push(`out ${names.get(a)} ${names.get(b)}`),
-          }) as unknown as World,
+          }) as unknown as World
       );
       const trackers = [new CollisionTracker(), new CollisionTracker(undefined, false, false)];
       let moved = 0;
@@ -365,13 +393,27 @@ describe("a component that only moved", () => {
         for (let c = Math.floor(next() * 4); c > 0; c--) {
           const actor = pick(actors);
           switch (Math.floor(next() * 11)) {
-            case 0: actor.set({ color: pick(["red", "green", "blue"]) }); break;
-            case 1: actor.set({ width: 5 + Math.floor(next() * 10) }); break;
-            case 2: actor.set({ image: pick(["a.png", "b.png", "", "missing.png"]) }); break;
-            case 3: actor.set({ offset: pick([0, 0, 3]) }); break;
-            case 4: actor.set({ z: pick([0, 0, 0, 1, -1]) }); break;
-            case 5: actor.set({ rotation: next() * 6, scale: pick([1, 1, 2, -1]) }); break;
-            case 6: addActor(pick(groups), true); break;
+            case 0:
+              actor.set({ color: pick(["red", "green", "blue"]) });
+              break;
+            case 1:
+              actor.set({ width: 5 + Math.floor(next() * 10) });
+              break;
+            case 2:
+              actor.set({ image: pick(["a.png", "b.png", "", "missing.png"]) });
+              break;
+            case 3:
+              actor.set({ offset: pick([0, 0, 3]) });
+              break;
+            case 4:
+              actor.set({ z: pick([0, 0, 0, 1, -1]) });
+              break;
+            case 5:
+              actor.set({ rotation: next() * 6, scale: pick([1, 1, 2, -1]) });
+              break;
+            case 6:
+              addActor(pick(groups), true);
+              break;
             case 7: {
               if (actor.parent !== null && actor.parent.children.length > 3 && groups.includes(actor.parent as Entity)) {
                 actor.parent.queueRemoveChild(actor);
@@ -392,7 +434,9 @@ describe("a component that only moved", () => {
               else actor.queueAddChild(new Text({ text: "!" }));
               break;
             }
-            default: actor.set({ x: next() * 300, y: next() * 300 }); break;
+            default:
+              actor.set({ x: next() * 300, y: next() * 300 });
+              break;
           }
         }
         world.tick(1 / 60);
@@ -400,7 +444,11 @@ describe("a component that only moved", () => {
         moved += builder.movedRecords;
         logs.forEach((log) => (log.length = 0));
         trackers.forEach((tracker, k) => tracker.update(worlds[k] as World, built.colliders));
-        assert.deepEqual(logs[0], logs[1], `seed ${seed} frame ${frame}: the tracker that looks only at new entries reports what a full sweep reports`);
+        assert.deepEqual(
+          logs[0],
+          logs[1],
+          `seed ${seed} frame ${frame}: the tracker that looks only at new entries reports what a full sweep reports`
+        );
         reports += (logs[1] as string[]).length;
       }
       assert.ok(moved > 160 * 20 * ACTOR_DOUBLES, `seed ${seed}: most moving actors were moved, not drawn again (${moved} doubles)`);

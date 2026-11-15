@@ -1,7 +1,7 @@
 import type { Backend } from "./backend.ts";
 import { createPlayer, type Player, type PlayerConfig } from "./loop.ts";
-import { applyInputFrame, RecordingBackend, type InputFrame, type RecordingOptions } from "./recording.ts";
 import { RGE_IN_HEIGHT, RGE_IN_WIDTH } from "./protocol.ts";
+import { applyInputFrame, RecordingBackend, type InputFrame, type RecordingOptions } from "./recording.ts";
 
 /**
  * A backend that draws with another one and takes its input from a script instead of devices. Each frame is drawn by
@@ -72,7 +72,12 @@ export type RunOptions = RecordingOptions;
  * them. The harness steps exactly one `player.step()` per frame, and that is one fixed step when the game turns the
  * fixed timestep on and its frames report `dt` of 1/60 (what `parseInputScript` gives), so a run is repeatable.
  */
-export function runScript<T>(config: PlayerConfig, frames: readonly InputFrame[], observe: (player: Player) => T, options: RunOptions = {}): RunResult<T> {
+export function runScript<T>(
+  config: PlayerConfig,
+  frames: readonly InputFrame[],
+  observe: (player: Player) => T,
+  options: RunOptions = {}
+): RunResult<T> {
   const backend = new RecordingBackend(options);
   const warnings: string[] = [];
   for (const frame of frames) backend.queueInput(frame);

@@ -1,6 +1,7 @@
 import { useMutable, useUpdate, AnimatedSprite, Camera, Entity, Sprite, Collider, Pointer, Shape, Text } from "@rge/runtime/jsx";
-import Coin, { Trail } from "./Coin.tsx";
+
 import { Banner } from "./Banner.tsx";
+import Coin, { Trail } from "./Coin.tsx";
 import { Panel } from "./Panel.tsx";
 
 interface EnemyProps {
@@ -49,9 +50,9 @@ function Level() {
     score: 0,
     // Array state is updated immutably: a setter only renders when it gets a new array.
     spawns: [
-    { id: "red-1", tint: "red", x: 40 },
-    { id: "blue-1", tint: "blue", x: 80 },
-  ] as Spawn[],
+      { id: "red-1", tint: "red", x: 40 },
+      { id: "blue-1", tint: "blue", x: 80 },
+    ] as Spawn[],
     defeats: [] as Defeat[],
   });
   const bossVisible = st.defeats.some((d) => d.tint === "blue") && st.defeats.length >= 2;
@@ -65,7 +66,7 @@ function Level() {
           transform={{ x: s.x }}
           onDefeated={() => {
             // `s` is the spawn's current value, looked up by its key.
-            st.score += (s.tint === "blue" ? 5 : 1);
+            st.score += s.tint === "blue" ? 5 : 1;
             st.defeats = [...st.defeats, { tint: s.tint, wave: st.wave }];
             st.spawns = st.spawns.filter((other) => other.id !== s.id);
           }}
@@ -75,7 +76,15 @@ function Level() {
       <Camera zoom={st.wave > 5 ? 2 : 1}>{st.wave >= 3 && <Enemy speed={st.wave} transform={{ x: 120 }} />}</Camera>
       {/* A hit area: a press inside it calls the handler. Pair it with a Shape to draw the button. */}
       <Shape kind="rect" width={48} height={16} color="gray" x={160} y={80} />
-      <Pointer width={48} height={16} x={160} y={80} onPress={() => { st.wave += 1; }} />
+      <Pointer
+        width={48}
+        height={16}
+        x={160}
+        y={80}
+        onPress={() => {
+          st.wave += 1;
+        }}
+      />
       <Panel title="hud" transform={{ x: 160 }}>
         <Coin value={st.score} />
         <Trail value={st.wave} transform={{ x: 40, y: 20 }} />
@@ -89,8 +98,16 @@ function Level() {
           <Sprite image={st.wave > 5 ? "boss-enraged.png" : "boss.png"} />
           <Collider width={64} height={64} />
           {/* Cycles its frames; a different list (from wave 9) restarts it, an equal one does not. */}
-          <AnimatedSprite frames={st.wave > 8 ? ["boss-rage-1.png", "boss-rage-2.png"] : ["boss-1.png", "boss-2.png", "boss-3.png"]} fps={6} />
-          <Banner text="boss" onDone={() => { st.wave += 1; }} />
+          <AnimatedSprite
+            frames={st.wave > 8 ? ["boss-rage-1.png", "boss-rage-2.png"] : ["boss-1.png", "boss-2.png", "boss-3.png"]}
+            fps={6}
+          />
+          <Banner
+            text="boss"
+            onDone={() => {
+              st.wave += 1;
+            }}
+          />
         </Entity>
       )}
     </Entity>

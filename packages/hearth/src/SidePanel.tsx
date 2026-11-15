@@ -1,16 +1,17 @@
 import { Flex } from "@rge/runtime/jsx";
+
 import type { Built } from "./battle.ts";
 import { BuildMenu } from "./BuildMenu.tsx";
 import { useGame } from "./GameState.ts";
 import { Label } from "./Label.tsx";
 import { MenuButton } from "./MenuButton.tsx";
-import { SlideIn } from "./SlideIn.tsx";
-import { StatRow } from "./StatRow.tsx";
-import { UpgradePanel } from "./UpgradePanel.tsx";
 import { keyLabel } from "./rules/controls.ts";
 import type { TowerKind } from "./rules/towers.ts";
 import { WAVE_COUNT } from "./rules/waves.ts";
+import { SlideIn } from "./SlideIn.tsx";
+import { StatRow } from "./StatRow.tsx";
 import { COLOR, ICON } from "./theme.ts";
+import { UpgradePanel } from "./UpgradePanel.tsx";
 
 interface SidePanelProps {
   gold: number;
@@ -33,11 +34,28 @@ export function SidePanel({ gold, lives, wave, active, tower, onStartWave, onBui
   const { toggleSpeed, togglePause } = useGame.actions();
 
   return (
-    <Flex float anchor="top-right" to="top-right" direction="column" justifyContent="space-between" width={80} height={180} padding={4} gap={4} background={COLOR.background}>
+    <Flex
+      float
+      anchor="top-right"
+      to="top-right"
+      direction="column"
+      justifyContent="space-between"
+      width={80}
+      height={180}
+      padding={4}
+      gap={4}
+      background={COLOR.background}
+    >
       <Flex direction="column" gap={4} width="grow">
-        <StatRow icon={ICON.gold} color={COLOR.gold}>{gold}</StatRow>
-        <StatRow icon={ICON.lives} color={COLOR.lives}>{lives}</StatRow>
-        <StatRow icon={ICON.wave} color={COLOR.wave}>{wave}/{WAVE_COUNT}</StatRow>
+        <StatRow icon={ICON.gold} color={COLOR.gold}>
+          {gold}
+        </StatRow>
+        <StatRow icon={ICON.lives} color={COLOR.lives}>
+          {lives}
+        </StatRow>
+        <StatRow icon={ICON.wave} color={COLOR.wave}>
+          {wave}/{WAVE_COUNT}
+        </StatRow>
         {open && tower === null && (
           <SlideIn>
             <BuildMenu gold={gold} onBuild={onBuild} />
@@ -55,7 +73,9 @@ export function SidePanel({ gold, lives, wave, active, tower, onStartWave, onBui
           <Label>{active ? "WAVE ON" : `${keyLabel("wave")} WAVE`}</Label>
         </MenuButton>
         <MenuButton pressKey="fast" onPress={toggleSpeed}>
-          <Label>{keyLabel("fast")} SPEED X{speed}</Label>
+          <Label>
+            {keyLabel("fast")} SPEED X{speed}
+          </Label>
         </MenuButton>
         <MenuButton pressKey="pause" onPress={togglePause}>
           <Label>{keyLabel("pause")} PAUSE</Label>

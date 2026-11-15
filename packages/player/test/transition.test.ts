@@ -1,6 +1,8 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { Entity, Flex, Shape, getSoundSink, type FlexProps, type FlexTransition } from "@rge/runtime";
+
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 import { ease, mixThrough, stepTransition, type ShownColors } from "../src/transition.ts";
@@ -153,7 +155,11 @@ describe("<Flex transition> in the loop", () => {
     const between = fills.slice(start, end);
     assert.ok(between.length >= 2 && between.every((f) => f !== "#000000ff" && f !== "#ffffffff"), "in between colours");
     const greys = between.map((f) => parseInt(f.slice(1, 3), 16));
-    assert.deepEqual([...greys].sort((a, b) => a - b), greys, "getting lighter, never backwards");
+    assert.deepEqual(
+      [...greys].sort((a, b) => a - b),
+      greys,
+      "getting lighter, never backwards"
+    );
     assert.equal(fills.at(-1), "#ffffffff");
   });
 
@@ -182,7 +188,9 @@ describe("<Flex transition> in the loop", () => {
   it("fades a background in from nothing, and the border's colour with it", () => {
     const backend = new RecordingBackend();
     const root = new Entity();
-    root.addChild(new Flex({ width: 40, height: 20, borderWidth: 2, borderColor: "#00000000", hoverBorderColor: "#ff0000", transition: 0.4 }));
+    root.addChild(
+      new Flex({ width: 40, height: 20, borderWidth: 2, borderColor: "#00000000", hoverBorderColor: "#ff0000", transition: 0.4 })
+    );
     const p = createPlayer(backend, { ...WINDOW, root: () => root, warn: () => {} });
     const edges: string[] = [];
     for (const mouse of [OUT, OUT, IN, IN, IN, IN, IN, IN, IN]) {
@@ -192,7 +200,10 @@ describe("<Flex transition> in the loop", () => {
       edges.push(b?.op === "box" ? b.borderColor : "none");
     }
     p.close();
-    assert.ok(edges.some((e) => /^#ff0000[0-9a-f]{2}$/.test(e) && e !== "#ff0000ff" && e !== "#ff000000"), `an in-between alpha of red: ${edges.join(" ")}`);
+    assert.ok(
+      edges.some((e) => /^#ff0000[0-9a-f]{2}$/.test(e) && e !== "#ff0000ff" && e !== "#ff000000"),
+      `an in-between alpha of red: ${edges.join(" ")}`
+    );
     assert.equal(edges.at(-1), "#ff0000ff");
   });
 
@@ -209,4 +220,3 @@ describe("<Flex transition> in the loop", () => {
     p.close();
   });
 });
-

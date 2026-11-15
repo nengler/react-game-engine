@@ -1,4 +1,5 @@
 import type { InputBindings, PlayerConfig } from "@rge/player";
+
 import { Main } from "./generated/Main.ts";
 
 /**

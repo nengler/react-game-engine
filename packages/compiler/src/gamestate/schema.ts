@@ -1,4 +1,5 @@
 import { SyntaxKind } from "typescript/ast";
+import type { CallExpression, Expression, ObjectLiteralExpression, SourceFile } from "typescript/ast";
 import {
   isArrowFunction,
   isAsExpression,
@@ -18,7 +19,7 @@ import {
   isStringLiteral,
   isVariableStatement,
 } from "typescript/ast/is";
-import type { CallExpression, Expression, ObjectLiteralExpression, SourceFile } from "typescript/ast";
+
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import type { ValueType } from "../ir/types.ts";
 import { spanOf, type TsxParser } from "../parser/parser.ts";
@@ -67,7 +68,8 @@ export interface GameStateSchemaResult {
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
-const SHAPE = "GameState.ts must contain `export const useGame = createGameState({ coins: 0, player: { hp: 10 } }, { collect(s) { s.coins += 1; } });`";
+const SHAPE =
+  "GameState.ts must contain `export const useGame = createGameState({ coins: 0, player: { hp: 10 } }, { collect(s) { s.coins += 1; } });`";
 
 /**
  * Reads `GameState.ts`: `createGameState(creator)` or `createGameState<State>()(creator)`, exported under a name
@@ -106,11 +108,17 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
         if (split) {
           const before = diagnostics.length;
           if (!isObjectLiteralExpression(split.data)) {
-            fail(`The game state's data is an object literal: \`createGameState({ coins: 0, player: { hp: 10 } }, { … })\`. ${SHAPE}`, split.data);
+            fail(
+              `The game state's data is an object literal: \`createGameState({ coins: 0, player: { hp: 10 } }, { … })\`. ${SHAPE}`,
+              split.data
+            );
             continue;
           }
           if (!isObjectLiteralExpression(split.actions)) {
-            fail(`The game state's actions are an object literal of functions: \`{ collect(s) { s.coins += 1; } }\`. ${SHAPE}`, split.actions);
+            fail(
+              `The game state's actions are an object literal of functions: \`{ collect(s) { s.coins += 1; } }\`. ${SHAPE}`,
+              split.actions
+            );
             continue;
           }
           const tree = readNode(split.data, fail, null, "data");
@@ -120,7 +128,10 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
         }
         const object = stateObject(creatorCall);
         if (!object) {
-          fail(`The creator must be an arrow function (or function) that returns the state as an object literal: \`(set) => ({ coins: 0, … })\`. ${SHAPE}`, creatorCall);
+          fail(
+            `The creator must be an arrow function (or function) that returns the state as an object literal: \`(set) => ({ coins: 0, … })\`. ${SHAPE}`,
+            creatorCall
+          );
           continue;
         }
         const before = diagnostics.length;
@@ -129,7 +140,8 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
         if (diagnostics.length === before) result = { name: declaration.name.text, tree, actions };
       }
     }
-    if (found === 0) diagnostics.push(error(DiagnosticCode.InvalidGameStateSchema, `${SHAPE}.`, { fileName, start: 0, end: 0, line: 1, column: 1 }));
+    if (found === 0)
+      diagnostics.push(error(DiagnosticCode.InvalidGameStateSchema, `${SHAPE}.`, { fileName, start: 0, end: 0, line: 1, column: 1 }));
     return { schema: diagnostics.length === 0 ? result : null, diagnostics };
   } finally {
     parsed.dispose();
@@ -142,7 +154,12 @@ type Fail = (message: string, node: { getStart(sf: SourceFile): number; getEnd()
 function creatorOf(call: CallExpression): Expression | undefined {
   const callee = unwrap(call.expression);
   if (isIdentifier(callee) && callee.text === "createGameState") return call.arguments[0] ? unwrap(call.arguments[0]) : undefined;
-  if (isCallExpression(callee) && isIdentifier(callee.expression) && callee.expression.text === "createGameState" && callee.arguments.length === 0) {
+  if (
+    isCallExpression(callee) &&
+    isIdentifier(callee.expression) &&
+    callee.expression.text === "createGameState" &&
+    callee.arguments.length === 0
+  ) {
     return call.arguments[0] ? unwrap(call.arguments[0]) : undefined;
   }
   return undefined;
@@ -159,7 +176,8 @@ function dataAndActions(call: CallExpression): { data: Expression; actions: Expr
 function readActions(object: ObjectLiteralExpression, fail: Fail, tree: GameStateNode): string[] {
   const names: string[] = [];
   for (const p of object.properties) {
-    const name = (isPropertyAssignment(p) || isMethodDeclaration(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
+    const name =
+      (isPropertyAssignment(p) || isMethodDeclaration(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
     const value = isPropertyAssignment(p) ? unwrap(p.initializer) : null;
     if (name === null || (!isMethodDeclaration(p) && !(value !== null && (isArrowFunction(value) || isFunctionExpression(value))))) {
       fail("Each action is `name(s, …) { … }` or `name: (s, …) => …`: no spreads, computed keys or values.", p);
@@ -189,10 +207,19 @@ function stateObject(creator: Expression): ObjectLiteralExpression | null {
   return expression && isObjectLiteralExpression(expression) ? expression : null;
 }
 
-function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[] | null, form: "creator" | "data" = "creator"): GameStateNode {
+function readNode(
+  object: ObjectLiteralExpression,
+  fail: Fail,
+  actions: string[] | null,
+  form: "creator" | "data" = "creator"
+): GameStateNode {
   const children: Record<string, GameStateEntry> = {};
   for (const p of object.properties) {
-    const named = (isPropertyAssignment(p) || isMethodDeclaration(p) || isShorthandPropertyAssignment(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
+    const named =
+      (isPropertyAssignment(p) || isMethodDeclaration(p) || isShorthandPropertyAssignment(p)) &&
+      (isIdentifier(p.name) || isStringLiteral(p.name))
+        ? p.name.text
+        : null;
     if (named === null) {
       fail("Each state entry is `key: value` or an action `name() {}`: no spreads or computed keys.", p);
       continue;
@@ -212,8 +239,13 @@ function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[]
     }
     const value = isPropertyAssignment(p) ? unwrap(p.initializer) : null;
     if (value === null || isArrowFunction(value) || isFunctionExpression(value)) {
-      if (form === "data") fail(`'${key}' is a function in the game state's data: actions go in the second argument, \`createGameState(data, { ${key}(s) { … } })\`.`, p);
-      else if (actions === null) fail(`'${key}' is a function inside a nested object: actions live at the top level of the state, next to the objects.`, p);
+      if (form === "data")
+        fail(
+          `'${key}' is a function in the game state's data: actions go in the second argument, \`createGameState(data, { ${key}(s) { … } })\`.`,
+          p
+        );
+      else if (actions === null)
+        fail(`'${key}' is a function inside a nested object: actions live at the top level of the state, next to the objects.`, p);
       else actions.push(key);
       continue;
     }
@@ -237,7 +269,8 @@ function unwrap(expression: Expression): Expression {
 
 function literalLeaf(node: Expression): GameStateLeaf | null {
   if (isNumericLiteral(node)) return { kind: "leaf", type: "number", initial: Number(node.text) };
-  if (isPrefixUnaryExpression(node) && node.operator === SyntaxKind.MinusToken && isNumericLiteral(node.operand)) return { kind: "leaf", type: "number", initial: -Number(node.operand.text) };
+  if (isPrefixUnaryExpression(node) && node.operator === SyntaxKind.MinusToken && isNumericLiteral(node.operand))
+    return { kind: "leaf", type: "number", initial: -Number(node.operand.text) };
   if (isStringLiteral(node)) return { kind: "leaf", type: "string", initial: node.text };
   if (node.kind === SyntaxKind.TrueKeyword) return { kind: "leaf", type: "boolean", initial: true };
   if (node.kind === SyntaxKind.FalseKeyword) return { kind: "leaf", type: "boolean", initial: false };

@@ -46,6 +46,8 @@ jobs:
       - run: npm run generate
       - run: npm test --ignore-scripts
       - run: npm run typecheck --ignore-scripts
+      - run: npm run lint
+      - run: npm run format:check
       # Fails when a scene is over its budget in packages/player/bench/budget.json, or grows faster than its size.
       - name: Script frame time under Node, against budgets
         run: npm run bench:check

@@ -1,4 +1,5 @@
 import { createSettings } from "@rge/runtime";
+
 import { controls } from "./rules/controls.ts";
 import type { SettingsView } from "./rules/menu.ts";
 

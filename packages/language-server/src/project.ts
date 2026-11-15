@@ -5,6 +5,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+
 import { Compiler, type CompilerDiagnostic } from "@rge/compiler";
 
 /** Reads a file as the editor has it (an open, unsaved document) or else from disk; null when there is none. */
@@ -47,7 +48,10 @@ export function findGame(file: string): GameFolder | null {
   let dir = dirname(resolve(file));
   for (;;) {
     const pkg = readPackage(dir);
-    if (pkg !== null && (pkg.rge !== undefined || pkg.dependencies?.["@rge/runtime"] !== undefined || pkg.devDependencies?.["@rge/runtime"] !== undefined)) {
+    if (
+      pkg !== null &&
+      (pkg.rge !== undefined || pkg.dependencies?.["@rge/runtime"] !== undefined || pkg.devDependencies?.["@rge/runtime"] !== undefined)
+    ) {
       return { dir, src: resolve(dir, pkg.rge?.src ?? "src"), generated: resolve(dir, pkg.rge?.generated ?? "generated") };
     }
     const up = dirname(dir);
@@ -100,7 +104,9 @@ export class GameProject {
     const { schema, diagnostics } = this.#compiler.parseGameState(toPosix(relative(this.game.dir, path)), text);
     this.#gameStateDiagnostics = diagnostics.filter((d) => d.severity === "error");
     const fromOutput = toPosix(relative(this.game.generated, path));
-    this.#compiler.setGameState(schema === null ? undefined : { ...schema, importFrom: fromOutput.startsWith(".") ? fromOutput : `./${fromOutput}` });
+    this.#compiler.setGameState(
+      schema === null ? undefined : { ...schema, importFrom: fromOutput.startsWith(".") ? fromOutput : `./${fromOutput}` }
+    );
   }
 
   /**

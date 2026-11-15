@@ -1,3 +1,27 @@
+import type { AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
+import type { ButtonProps } from "./components/Button.ts";
+import type { CameraProps } from "./components/Camera.ts";
+import type { ColliderProps, ContactOf } from "./components/Collider.ts";
+import type { EntityProps } from "./components/Entity.ts";
+import type { FadeProps } from "./components/Fade.ts";
+import type { FlexProps } from "./components/Flex.ts";
+import type { GameProps } from "./components/Game.ts";
+import type { HudProps } from "./components/Hud.ts";
+import type { MenuProps } from "./components/Menu.ts";
+import type { MusicProps } from "./components/Music.ts";
+import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
+import type { ParticlesProps } from "./components/Particles.ts";
+import type { PointerProps } from "./components/Pointer.ts";
+import type { RouteProps, RouterProps } from "./components/Router.ts";
+import type { ScreenProps } from "./components/Screen.ts";
+import type { ShapeProps } from "./components/Shape.ts";
+import type { SliderProps } from "./components/Slider.ts";
+import type { SpriteProps } from "./components/Sprite.ts";
+import type { TextProps } from "./components/Text.ts";
+import type { TextInputProps } from "./components/TextInput.ts";
+import type { TilemapProps } from "./components/Tilemap.ts";
+import type { ToggleProps } from "./components/Toggle.ts";
+import type { TooltipProps } from "./components/Tooltip.ts";
 /**
  * The authoring entry point: what component source imports.
  *
@@ -9,32 +33,8 @@
  * test checks that this module exports exactly what the compiler accepts.
  */
 import type { InputState } from "./input.ts";
-import type { SpringOptions, TweenOptions } from "./math.ts";
-import type { EntityProps } from "./components/Entity.ts";
-import type { HudProps } from "./components/Hud.ts";
-import type { GameProps } from "./components/Game.ts";
-import type { SpriteProps } from "./components/Sprite.ts";
-import type { ColliderProps, ContactOf } from "./components/Collider.ts";
-import type { PointerProps } from "./components/Pointer.ts";
-import type { SliderProps } from "./components/Slider.ts";
-import type { ButtonProps } from "./components/Button.ts";
-import type { MenuProps } from "./components/Menu.ts";
-import type { TooltipProps } from "./components/Tooltip.ts";
-import type { TextInputProps } from "./components/TextInput.ts";
-import type { ToggleProps } from "./components/Toggle.ts";
-import type { TextProps } from "./components/Text.ts";
-import type { ShapeProps } from "./components/Shape.ts";
-import type { CameraProps } from "./components/Camera.ts";
-import type { AnimatedSpriteProps } from "./components/AnimatedSprite.ts";
-import type { FlexProps } from "./components/Flex.ts";
-import type { ScreenProps } from "./components/Screen.ts";
-import type { TilemapProps } from "./components/Tilemap.ts";
-import type { ParticlesProps } from "./components/Particles.ts";
-import type { ParticleLayerProps } from "./components/ParticleLayer.ts";
-import type { FadeProps } from "./components/Fade.ts";
-import type { MusicProps } from "./components/Music.ts";
-import type { RouteProps, RouterProps } from "./components/Router.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
+import type { SpringOptions, TweenOptions } from "./math.ts";
 
 export type { TransformProps, TransformShorthand, Child } from "./jsx-runtime.ts";
 import type { TransformShorthand } from "./jsx-runtime.ts";
@@ -43,8 +43,8 @@ export { clamp, shakeOn, springBack, startSpring, startTween, stepSpring, stepTw
 export { keepIfEqual } from "./equal.ts";
 export { createBody, type BodyHit, type BodyOptions } from "./body.ts";
 export { readContext, type Context } from "./context.ts";
-import type { Context } from "./context.ts";
 import type { BodyHit, BodyOptions } from "./body.ts";
+import type { Context } from "./context.ts";
 
 // -- state -----------------------------------------------------------
 

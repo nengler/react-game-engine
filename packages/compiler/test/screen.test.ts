@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * `<Screen>`: the game's fixed resolution, as the root of the game (C1 in docs/UI_PLAN.md), and the layout offset
  * every object carries (U1). The compiler learns both from the runtime manifest; these tests check it does.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Hud, Screen, Shape, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -59,7 +61,7 @@ describe("Screen: a component rooted at one", () => {
     const world = new World();
     const game = new Arena();
     world.mount(game);
-    game.s.wide = (true);
+    game.s.wide = true;
     world.flush();
     assert.equal(game.width, 640);
   });
@@ -73,21 +75,38 @@ describe("Screen: a component rooted at one", () => {
 describe("Screen: diagnostics", () => {
   it("checks fit against its choices, with a suggestion", () => {
     const errors = compileErrors(`function C() { return <Screen width={320} height={180} fit="integr" />; }`);
-    assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.InvalidPropValue]);
-    assert.match(errors[0]!.message, /<Screen fit> must be one of "integer", "contain", "stretch", "expand", not 'integr' \(did you mean "integer"\?\)/);
+    assert.deepEqual(
+      errors.map((d) => d.code),
+      [DiagnosticCode.InvalidPropValue]
+    );
+    assert.match(
+      errors[0]!.message,
+      /<Screen fit> must be one of "integer", "contain", "stretch", "expand", not 'integr' \(did you mean "integer"\?\)/
+    );
   });
 
   it("cannot be placed with transform", () => {
     const errors = compileErrors(`function C() { return <Screen width={320} height={180} transform={{ x: 4 }} />; }`);
-    assert.ok(errors.some((d) => /<Screen> cannot be placed with `transform`/.test(d.message)), errors.map((d) => d.message).join("\n"));
+    assert.ok(
+      errors.some((d) => /<Screen> cannot be placed with `transform`/.test(d.message)),
+      errors.map((d) => d.message).join("\n")
+    );
   });
 
   it("type-checks in authored source: a width and a height are required, fit is one of its choices", () => {
     const check = (element: string) =>
       getCompiler().typeCheckSources([
-        { fileName: `${process.cwd()}/.test-output/Screen${Math.random()}.tsx`, text: `import { Screen, Shape } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }` },
+        {
+          fileName: `${process.cwd()}/.test-output/Screen${Math.random()}.tsx`,
+          text: `import { Screen, Shape } from "@rge/runtime/jsx";\nfunction C({ big }: { big: boolean }) { return ${element}; }`,
+        },
       ]);
-    assert.deepEqual(check(`<Screen width={320} height={180} fit={big ? "stretch" : "contain"} pixelPerfect={false}><Shape kind="rect" width={1} height={1} /></Screen>`), []);
+    assert.deepEqual(
+      check(
+        `<Screen width={320} height={180} fit={big ? "stretch" : "contain"} pixelPerfect={false}><Shape kind="rect" width={1} height={1} /></Screen>`
+      ),
+      []
+    );
     assert.ok(check(`<Screen width={320} />`).length > 0, "no height");
     assert.ok(check(`<Screen width={320} height={180} fit={big ? "cover" : "contain"} />`).length > 0, "a bad fit inside an expression");
   });
@@ -98,7 +117,12 @@ describe("Screen: diagnostics", () => {
 
   it("lets state take its own names, kept in `$name` fields", () => {
     for (const name of ["fit", "pixelPerfect", "border"]) {
-      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Screen width={1} height={1} />; }`).code.includes(`get $${name}()`), name);
+      assert.ok(
+        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Screen width={1} height={1} />; }`).code.includes(
+          `get $${name}()`
+        ),
+        name
+      );
     }
   });
 });
@@ -136,7 +160,10 @@ function Level() {
   it("type-checks in authored source and in the generated module", () => {
     assert.deepEqual(typeCheck(compile(HUD_GAME, "HudGame.tsx")), []);
     const check = getCompiler().typeCheckSources([
-      { fileName: `${process.cwd()}/.test-output/Hud${Math.random()}.tsx`, text: `import { Hud, Text } from "@rge/runtime/jsx";\nfunction C() { return <Hud transform={{ x: 1 }}><Text size={8}>x</Text></Hud>; }` },
+      {
+        fileName: `${process.cwd()}/.test-output/Hud${Math.random()}.tsx`,
+        text: `import { Hud, Text } from "@rge/runtime/jsx";\nfunction C() { return <Hud transform={{ x: 1 }}><Text size={8}>x</Text></Hud>; }`,
+      },
     ]);
     assert.deepEqual(check, []);
   });
@@ -144,14 +171,20 @@ function Level() {
   it("lets a component called Hud shadow the built-in, but not in a file that imports <Hud>", () => {
     assert.match(compile(`function Hud() { return <Entity name="Hud" />; }`).code, /class Hud extends Entity/);
     const clash = compileErrors(`import { Entity, Hud } from "@rge/runtime/jsx"; function Hud() { return <Entity name="Hud" />; }`);
-    assert.ok(clash.some((d) => /conflicts with the built-in <Hud> this file imports/.test(d.message)), clash.map((d) => d.message).join("\n"));
+    assert.ok(
+      clash.some((d) => /conflicts with the built-in <Hud> this file imports/.test(d.message)),
+      clash.map((d) => d.message).join("\n")
+    );
   });
 });
 
 describe("the layout offset", () => {
   it("can be a state name, kept apart from the field layout writes into every object", () => {
     for (const name of ["layoutX", "layoutY"]) {
-      assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Entity name="C" />; }`).code.includes(`get $${name}()`), name);
+      assert.ok(
+        compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Entity name="C" />; }`).code.includes(`get $${name}()`),
+        name
+      );
     }
   });
 });

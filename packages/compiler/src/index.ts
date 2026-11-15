@@ -1,41 +1,88 @@
 import { runtimeManifest, type RuntimeManifest } from "@rge/runtime";
+
 import { analyzeSourceFile, type SourceAnalysis } from "./analyzer/analyzer.ts";
 import { checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
+import { convertToMutable, type Converted } from "./codemod/mutable.ts";
 import { hasErrors, type CompilerDiagnostic } from "./diagnostics/diagnostics.ts";
+import { parseGameState, type GameStateDefinition, type GameStateSchemaResult } from "./gamestate/schema.ts";
 import { generateModuleWithMap, generateModuleWithOrigins, type GeneratorOptions } from "./generator/generator.ts";
 import { type LineOrigin } from "./generator/writer.ts";
+import { expandCustomHooks, type HookResolver } from "./hooks/inline.ts";
 import type { IRModule } from "./ir/types.ts";
 import { TsxParser } from "./parser/parser.ts";
-import { convertToMutable, type Converted } from "./codemod/mutable.ts";
 import type { PrefabSchema } from "./prefabs/prefabs.ts";
 import { validateScene } from "./scenes/validate.ts";
 import { buildModuleIR } from "./transform/transform.ts";
-import { parseGameState, type GameStateDefinition, type GameStateSchemaResult } from "./gamestate/schema.ts";
-import { expandCustomHooks, type HookResolver } from "./hooks/inline.ts";
 import { typeCheckFiles, typeCheckSources, type VirtualFile } from "./typecheck/typecheck.ts";
 
 export * from "./ir/types.ts";
 export type { RuntimeManifest } from "@rge/runtime";
 export * from "./diagnostics/diagnostics.ts";
-export { analyzeSourceFile, AUTHORING_HOOKS, AUTHORING_TYPES, type PropsAnalysis, type TypeDeclarationAnalysis, type SourceAnalysis, type ComponentAnalysis, type ImportAnalysis, type HookCallAnalysis } from "./analyzer/analyzer.ts";
+export {
+  analyzeSourceFile,
+  AUTHORING_HOOKS,
+  AUTHORING_TYPES,
+  type PropsAnalysis,
+  type TypeDeclarationAnalysis,
+  type SourceAnalysis,
+  type ComponentAnalysis,
+  type ImportAnalysis,
+  type HookCallAnalysis,
+} from "./analyzer/analyzer.ts";
 export { buildModuleIR, type TransformOptions, type TransformResult } from "./transform/transform.ts";
 export { TIMER_FUNCTIONS } from "./transform/helpers.ts";
-export { generateModule, generateModuleWithMap, generateModuleWithOrigins, type GeneratorOptions, type SourceMapOptions } from "./generator/generator.ts";
+export {
+  generateModule,
+  generateModuleWithMap,
+  generateModuleWithOrigins,
+  type GeneratorOptions,
+  type SourceMapOptions,
+} from "./generator/generator.ts";
 export { type LineOrigin } from "./generator/writer.ts";
 export { mapToSource, type GeneratedFile } from "./diagnostics/source.ts";
-export { parseGameState, type GameStateDefinition, type GameStateEntry, type GameStateLeaf, type GameStateNode, type GameStateValue, type GameStateSchemaResult } from "./gamestate/schema.ts";
+export {
+  parseGameState,
+  type GameStateDefinition,
+  type GameStateEntry,
+  type GameStateLeaf,
+  type GameStateNode,
+  type GameStateValue,
+  type GameStateSchemaResult,
+} from "./gamestate/schema.ts";
 export { TsxParser, spanOf, type ParsedSource } from "./parser/parser.ts";
-export { constantValue, exportedComponents, moduleSchemas, prefabSchema, type JsonValue, type PrefabPropSchema, type PrefabSchema } from "./prefabs/prefabs.ts";
+export {
+  constantValue,
+  exportedComponents,
+  moduleSchemas,
+  prefabSchema,
+  type JsonValue,
+  type PrefabPropSchema,
+  type PrefabSchema,
+} from "./prefabs/prefabs.ts";
 export { validateScene, SCENE_VERSION } from "./scenes/validate.ts";
 export { ASSET_PROPS, checkAssets, checkSoundStores, type AssetCheckOptions, type SourceText } from "./assets/assets.ts";
 export { importTiled, type TiledImport } from "./scenes/tiled.ts";
-export { importTilemap, tilemapsSource, type TilemapImport, type TilemapImportOptions, type TilemapObjectOut, type TilemapOut, type TilesetOut } from "./scenes/tilemap.ts";
+export {
+  importTilemap,
+  tilemapsSource,
+  type TilemapImport,
+  type TilemapImportOptions,
+  type TilemapObjectOut,
+  type TilemapOut,
+  type TilesetOut,
+} from "./scenes/tilemap.ts";
 export { readTsx, type TilesetJson } from "./scenes/tsx.ts";
 export { inlineCustomHooks, expandCustomHooks, type ExpandedSource, type HookResolver, type HookSource } from "./hooks/inline.ts";
 export { EditMap } from "./hooks/edits.ts";
 export { convertToMutable, type Converted } from "./codemod/mutable.ts";
 export { checkProject, prefabsIndexSource, prefabsJson, projectSchemas, type ProjectModule } from "./project.ts";
-export { typeCheckFiles, typeCheckSources, generatedCodeCompilerOptions, sourceCompilerOptions, type VirtualFile } from "./typecheck/typecheck.ts";
+export {
+  typeCheckFiles,
+  typeCheckSources,
+  generatedCodeCompilerOptions,
+  sourceCompilerOptions,
+  type VirtualFile,
+} from "./typecheck/typecheck.ts";
 
 export interface CompilerConfig {
   /** Module specifier generated code imports runtime classes from. Default: `@rge/runtime`. */
@@ -121,7 +168,14 @@ export class Compiler {
     // Custom hooks are inlined first: from here on the file is a component with everything written out. Spans found in the
     // expanded text are moved back to the text as written (`map`), so diagnostics and the IR point at the author's code.
     const hookDiagnostics: CompilerDiagnostic[] = [];
-    const expanded = expandCustomHooks(this.#parser, fileName, original, this.#hookResolver, hookDiagnostics, this.#manifest.authoringModule);
+    const expanded = expandCustomHooks(
+      this.#parser,
+      fileName,
+      original,
+      this.#hookResolver,
+      hookDiagnostics,
+      this.#manifest.authoringModule
+    );
     if (hasErrors(hookDiagnostics)) {
       expanded.parsed?.dispose();
       return { ok: false, fileName, ir: null, diagnostics: hookDiagnostics };
@@ -131,7 +185,10 @@ export class Compiler {
       const analysis = analyzeSourceFile(parsed.sourceFile, fileName, this.#manifest.authoringModule);
       const transformed = buildModuleIR(analysis, { manifest: this.#manifest, ...(this.#gameState ? { gameState: this.#gameState } : {}) });
       // The inliner's own diagnostics are already in the original text.
-      const diagnostics = oneErrorPerHookCall([...hookDiagnostics, ...expanded.map.spans([...analysis.diagnostics, ...transformed.diagnostics], fileName, original)], expanded.calls);
+      const diagnostics = oneErrorPerHookCall(
+        [...hookDiagnostics, ...expanded.map.spans([...analysis.diagnostics, ...transformed.diagnostics], fileName, original)],
+        expanded.calls
+      );
       const ir = expanded.map.spans(transformed.module, fileName, original);
       if (hasErrors(diagnostics)) return { ok: false, fileName, ir, diagnostics };
       const options: GeneratorOptions = {
@@ -222,7 +279,10 @@ export function generatedFileName(sourceFileName: string): string {
  * the first is the author's (a bad argument, `useBody({ x: nowhere })`); what follows is the hook's own body failing for it
  * (`'move' is not a method`, about names the author never wrote). Only the first error on each call is kept; warnings are kept.
  */
-export function oneErrorPerHookCall(diagnostics: readonly CompilerDiagnostic[], calls: readonly { readonly start: number; readonly end: number }[]): CompilerDiagnostic[] {
+export function oneErrorPerHookCall(
+  diagnostics: readonly CompilerDiagnostic[],
+  calls: readonly { readonly start: number; readonly end: number }[]
+): CompilerDiagnostic[] {
   if (calls.length === 0) return [...diagnostics];
   const seen = new Set<number>();
   return diagnostics.filter((d) => {

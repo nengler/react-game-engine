@@ -1,7 +1,9 @@
+import assert from "node:assert/strict";
 /** Timers (REACT_FEEL_PLAN.md, C2): `after`, `every` and `cancelTimers` in handlers, the component's own. */
 import { after as afterAll, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Text, World, freeze, type InputState } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -27,7 +29,8 @@ export function Flash() {
   return <Text>{s.flash ? "on" : "off"} {s.ticks}</Text>;
 }`;
 
-const key = (name: string): InputState => ({ pressed: (k: string) => k === name, down: () => false, released: () => false }) as unknown as InputState;
+const key = (name: string): InputState =>
+  ({ pressed: (k: string) => k === name, down: () => false, released: () => false }) as unknown as InputState;
 
 async function mount() {
   const compiled = compile(FLASH);
@@ -97,13 +100,19 @@ export function A() {
   const x = after(1, () => { s.n = 1; });
   return <Text>{s.n}</Text>;
 }`);
-    assert.ok(rendering.some((d) => d.code === DiagnosticCode.UnsupportedExpression && /only valid as a statement in a handler/.test(d.message)), JSON.stringify(rendering));
+    assert.ok(
+      rendering.some((d) => d.code === DiagnosticCode.UnsupportedExpression && /only valid as a statement in a handler/.test(d.message)),
+      JSON.stringify(rendering)
+    );
     const missing = compileErrors(`import { Text, useMount, useMutable } from "@rge/runtime/jsx";
 export function A() {
   const s = useMutable({ n: 0 });
   useMount(() => { after(1, () => { s.n = 1; }); });
   return <Text>{s.n}</Text>;
 }`);
-    assert.ok(missing.some((d) => /'after' is not imported/.test(d.message)), JSON.stringify(missing));
+    assert.ok(
+      missing.some((d) => /'after' is not imported/.test(d.message)),
+      JSON.stringify(missing)
+    );
   });
 });

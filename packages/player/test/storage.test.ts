@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { createControls, createSave, createSettings, Entity, getVolume, setVolume, type Controls } from "@rge/runtime";
+
 import { createPlayer, parseInputScript, RecordingBackend } from "../src/index.ts";
 
 const controls: Controls = createControls({ jump: ["Z"] });
@@ -8,8 +10,14 @@ const controls: Controls = createControls({ jump: ["Z"] });
 describe("saved data in the player", () => {
   it("opens the game's folder with its id and applies the stored settings before the first frame", () => {
     setVolume("music", 1);
-    const backend = new RecordingBackend({ storage: { settings: JSON.stringify({ version: 1, data: { music: 0.25, bindings: { jump: ["Space"] } } }) } });
-    const settings = createSettings({ name: "settings", defaults: { music: 0.6 as number, bindings: null as Record<string, string[]> | null }, controls });
+    const backend = new RecordingBackend({
+      storage: { settings: JSON.stringify({ version: 1, data: { music: 0.25, bindings: { jump: ["Space"] } } }) },
+    });
+    const settings = createSettings({
+      name: "settings",
+      defaults: { music: 0.6 as number, bindings: null as Record<string, string[]> | null },
+      controls,
+    });
     const seen: number[] = [];
     const player = createPlayer(backend, {
       id: "mygame",
@@ -34,7 +42,12 @@ describe("saved data in the player", () => {
 
   it("writes a save through the backend, and a second run starts from it", () => {
     const state = { score: 0 };
-    const save = createSave({ name: "save", version: 1, pick: () => ({ score: state.score }), apply: (d: { score: number }) => void (state.score = d.score) });
+    const save = createSave({
+      name: "save",
+      version: 1,
+      pick: () => ({ score: state.score }),
+      apply: (d: { score: number }) => void (state.score = d.score),
+    });
     const first = new RecordingBackend();
     const run = createPlayer(first, { id: "mygame", root: () => new Entity() });
     state.score = 42;
@@ -57,7 +70,14 @@ describe("saved data in the player", () => {
     assert.equal(backend.storageOpenedFor, null);
     const warnings: string[] = [];
     const bare = new RecordingBackend();
-    const without = { open: bare.open.bind(bare), close: bare.close.bind(bare), loadTexture: bare.loadTexture.bind(bare), loadSound: bare.loadSound.bind(bare), playSound: bare.playSound.bind(bare), frame: bare.frame.bind(bare) };
+    const without = {
+      open: bare.open.bind(bare),
+      close: bare.close.bind(bare),
+      loadTexture: bare.loadTexture.bind(bare),
+      loadSound: bare.loadSound.bind(bare),
+      playSound: bare.playSound.bind(bare),
+      frame: bare.frame.bind(bare),
+    };
     createPlayer(without, { id: "mygame", warn: (m) => warnings.push(m), root: () => new Entity() }).close();
     assert.equal(warnings.filter((w) => /no saved data/.test(w)).length, 1);
   });

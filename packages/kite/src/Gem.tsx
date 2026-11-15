@@ -1,4 +1,5 @@
 import { Collider, Entity, Shape } from "@rge/runtime/jsx";
+
 import { useGame } from "./GameState.ts";
 
 /** The optional pickup, off the main path of room 7: it takes itself when the character touches it, and is gone after. */

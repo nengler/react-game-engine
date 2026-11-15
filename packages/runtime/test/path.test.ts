@@ -1,10 +1,17 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { findPath, lineOfSight, TileGrid } from "../src/index.ts";
 
 /** A grid from rows of text: `#` is solid. */
 function grid(rows: string[]) {
-  return { width: rows[0]!.length, height: rows.length, tileWidth: 10, tileHeight: 10, solidAt: (c: number, r: number) => rows[r]?.[c] === "#" };
+  return {
+    width: rows[0]!.length,
+    height: rows.length,
+    tileWidth: 10,
+    tileHeight: 10,
+    solidAt: (c: number, r: number) => rows[r]?.[c] === "#",
+  };
 }
 const cells = (path: { x: number; y: number }[] | null) => path?.map((c) => `${c.x},${c.y}`);
 
@@ -39,7 +46,11 @@ describe("findPath", () => {
     const open = grid(["...", "...", "..."]);
     assert.equal(findPath(open, { x: 0, y: 0 }, { x: 2, y: 2 }, { diagonal: true })!.length, 2);
     const corner = grid([".#", "#."]);
-    assert.equal(findPath(corner, { x: 0, y: 0 }, { x: 1, y: 1 }, { diagonal: true }), null, "both neighbours are solid: no squeezing between");
+    assert.equal(
+      findPath(corner, { x: 0, y: 0 }, { x: 1, y: 1 }, { diagonal: true }),
+      null,
+      "both neighbours are solid: no squeezing between"
+    );
     const one = grid([".#.", "...", "..."]);
     const path = findPath(one, { x: 0, y: 0 }, { x: 2, y: 0 }, { diagonal: true })!;
     for (let i = 0; i < path.length; i++) {
@@ -59,7 +70,10 @@ describe("findPath", () => {
     const g = grid(Array.from({ length: 12 }, () => ".".repeat(12)));
     const first = JSON.stringify(findPath(g, { x: 0, y: 0 }, { x: 11, y: 11 }));
     for (let i = 0; i < 5; i++) assert.equal(JSON.stringify(findPath(g, { x: 0, y: 0 }, { x: 11, y: 11 })), first);
-    assert.equal(JSON.stringify(findPath(g, { x: 0, y: 0 }, { x: 11, y: 11 }, { diagonal: true })), JSON.stringify(findPath(g, { x: 0, y: 0 }, { x: 11, y: 11 }, { diagonal: true })));
+    assert.equal(
+      JSON.stringify(findPath(g, { x: 0, y: 0 }, { x: 11, y: 11 }, { diagonal: true })),
+      JSON.stringify(findPath(g, { x: 0, y: 0 }, { x: 11, y: 11 }, { diagonal: true }))
+    );
   });
 
   it("gives up after maxNodes", () => {
@@ -69,7 +83,15 @@ describe("findPath", () => {
   });
 
   it("works on a TileGrid", () => {
-    const tiles = new TileGrid({ width: 3, height: 1, tileWidth: 8, tileHeight: 8, firstGid: 1, solid: [2], layers: [{ name: "a", visible: true, data: [1, 2, 1] }] });
+    const tiles = new TileGrid({
+      width: 3,
+      height: 1,
+      tileWidth: 8,
+      tileHeight: 8,
+      firstGid: 1,
+      solid: [2],
+      layers: [{ name: "a", visible: true, data: [1, 2, 1] }],
+    });
     assert.equal(findPath(tiles, { x: 0, y: 0 }, { x: 2, y: 0 }), null);
   });
 });
@@ -84,7 +106,20 @@ describe("lineOfSight", () => {
   });
 
   it("is symmetric and false from or to a solid cell", () => {
-    for (const [a, b] of [[{ x: 5, y: 5 }, { x: 55, y: 25 }], [{ x: 5, y: 5 }, { x: 25, y: 25 }], [{ x: 3, y: 27 }, { x: 57, y: 3 }]] as const) {
+    for (const [a, b] of [
+      [
+        { x: 5, y: 5 },
+        { x: 55, y: 25 },
+      ],
+      [
+        { x: 5, y: 5 },
+        { x: 25, y: 25 },
+      ],
+      [
+        { x: 3, y: 27 },
+        { x: 57, y: 3 },
+      ],
+    ] as const) {
       assert.equal(lineOfSight(g, a, b), lineOfSight(g, b, a));
     }
     assert.equal(lineOfSight(g, { x: 25, y: 15 }, { x: 5, y: 5 }), false);

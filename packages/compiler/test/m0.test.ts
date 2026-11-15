@@ -1,10 +1,25 @@
+import assert from "node:assert/strict";
 /** M0 hardening: nested conditional commit, runtime manifest as config, components across files. */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Sprite, World, runtimeManifest } from "@rge/runtime";
+
 import { Compiler, DiagnosticCode } from "../src/index.ts";
 import {
-  cleanOutput, closeCompiler, compile, compileErrors, compileProject, compileProjectErrors, load, loadProject, typeCheck, typeCheckProject, withAuthoringImports, elementOf, getCompiler } from "./helpers.ts";
+  cleanOutput,
+  closeCompiler,
+  compile,
+  compileErrors,
+  compileProject,
+  compileProjectErrors,
+  load,
+  loadProject,
+  typeCheck,
+  typeCheckProject,
+  withAuthoringImports,
+  elementOf,
+  getCompiler,
+} from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -38,20 +53,18 @@ function Nested() {
   });
 
   it("still settles correctly inside a World when state flips later", async () => {
-    const mod = await load<{ Nested: new () => Entity & { s: { [field: string]: unknown } } }>(
-      compile(NESTED, "Nested.tsx"),
-    );
+    const mod = await load<{ Nested: new () => Entity & { s: { [field: string]: unknown } } }>(compile(NESTED, "Nested.tsx"));
     const world = new World();
     const nested = new mod.Nested();
     world.mount(nested);
-    nested.s.inner = (false);
+    nested.s.inner = false;
     world.flush();
     assert.equal(nested.children[0]!.children.length, 0);
-    nested.s.outer = (false);
+    nested.s.outer = false;
     world.flush();
     assert.equal(nested.children.length, 0);
-    nested.s.outer = (true);
-    nested.s.inner = (true);
+    nested.s.outer = true;
+    nested.s.inner = true;
     world.flush();
     assert.equal(nested.children[0]!.children.length, 1);
   });
@@ -71,7 +84,10 @@ function Lamp() {
     const compiler = new Compiler();
     try {
       const result = compiler.compile("Lamp.tsx", withAuthoringImports(LIGHT));
-      assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.UnknownComponent]);
+      assert.deepEqual(
+        result.diagnostics.map((d) => d.code),
+        [DiagnosticCode.UnknownComponent]
+      );
     } finally {
       compiler.close();
     }
@@ -94,11 +110,14 @@ function Lamp() {
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
     const compiler = new Compiler();
     try {
-      const result = compiler.compile("Bad.tsx", withAuthoringImports(`
+      const result = compiler.compile(
+        "Bad.tsx",
+        withAuthoringImports(`
 function Bad() {
   const render = useMutable({ n: 0 });
   return <Entity name="Bad" />;
-}`));
+}`)
+      );
       assert.ok(result.ok);
       assert.match(result.code, /get \$render\(\)/);
     } finally {
@@ -107,21 +126,37 @@ function Bad() {
   });
 
   it("takes the reserved names, host intrinsic and functions from the manifest it is given", () => {
-    const manifest = { ...runtimeManifest, reservedMembers: [...runtimeManifest.reservedMembers, "score"], functions: { clamp: 3, wrap: 2 } };
+    const manifest = {
+      ...runtimeManifest,
+      reservedMembers: [...runtimeManifest.reservedMembers, "score"],
+      functions: { clamp: 3, wrap: 2 },
+    };
     const compiler = new Compiler({ manifest });
     try {
-      const reserved = compiler.compile("R.tsx", withAuthoringImports(`
+      const reserved = compiler.compile(
+        "R.tsx",
+        withAuthoringImports(
+          `
 function R() {
   const score = useMutable({ n: 0 });
   return <Entity name="R" />;
-}`, manifest));
+}`,
+          manifest
+        )
+      );
       assert.ok(reserved.ok && reserved.code.includes("get $score()"), "a reserved name from the manifest is kept apart, as `$score`");
-      const calls = compiler.compile("W.tsx", withAuthoringImports(`
+      const calls = compiler.compile(
+        "W.tsx",
+        withAuthoringImports(
+          `
 function W() {
   const s = useMutable({ n: 0 });
   useUpdate(() => { s.n = wrap(s.n, 10); });
   return <Entity name="W" />;
-}`, manifest));
+}`,
+          manifest
+        )
+      );
       assert.ok(calls.ok);
       assert.match(calls.code, /import \{ Entity, wrap \} from "@rge\/runtime";/);
     } finally {
@@ -188,7 +223,7 @@ function Player() {
     world.mount(player);
     assert.equal(player.children.length, 1);
     assert.equal(player.children[0]!.constructor.name, "WarningIcon");
-    player.s.health = (10);
+    player.s.health = 10;
     world.flush();
     assert.equal(player.children.length, 2);
   });
@@ -224,7 +259,10 @@ function Player() {
 
   it("still reports an unimported component as unknown", () => {
     const unknown = compileProjectErrors({ "P.tsx": `function P() { return <Entity name="P"><WarningIcon /></Entity>; }` });
-    assert.deepEqual(unknown.map((d) => d.code), [DiagnosticCode.UnknownComponent]);
+    assert.deepEqual(
+      unknown.map((d) => d.code),
+      [DiagnosticCode.UnknownComponent]
+    );
   });
 
   it("rejects imports it would otherwise drop silently", () => {
@@ -236,41 +274,68 @@ function Player() {
       `import { useState as state } from "@rge/runtime/jsx";`,
       `import type { useState } from "@rge/runtime/jsx";`,
     ]) {
-      const codes = compileErrors(`import { Entity } from "@rge/runtime/jsx";\n${source}\nfunction S() { return <Entity name="S" />; }`).map((d) => d.code);
+      const codes = compileErrors(
+        `import { Entity } from "@rge/runtime/jsx";\n${source}\nfunction S() { return <Entity name="S" />; }`
+      ).map((d) => d.code);
       assert.deepEqual(codes, [DiagnosticCode.UnsupportedSyntax], source);
     }
   });
 
   it("treats a relative .ts import named like a hook as the game state, so it says what to import instead; any other name is a plain function", () => {
-    const [d] = compileErrors(`import { Entity } from "@rge/runtime/jsx";\nimport { useHelper } from "./helper.ts";\nfunction S() { return <Entity name="S" />; }`);
+    const [d] = compileErrors(
+      `import { Entity } from "@rge/runtime/jsx";\nimport { useHelper } from "./helper.ts";\nfunction S() { return <Entity name="S" />; }`
+    );
     assert.equal(d!.code, DiagnosticCode.InvalidGameState);
     assert.match(d!.message, /no game state to import `useHelper` from/);
-    assert.ok(getCompiler().compile("S.tsx", `import { Entity } from "@rge/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" transform={{ x: helper(1) }} />; }`).ok);
+    assert.ok(
+      getCompiler().compile(
+        "S.tsx",
+        `import { Entity } from "@rge/runtime/jsx";\nimport { helper } from "./helper.ts";\nfunction S() { return <Entity name="S" transform={{ x: helper(1) }} />; }`
+      ).ok
+    );
   });
 
   it("accepts `type` only on the authoring module's types, and requires it there", () => {
-    const wrap = (specifier: string) => `import { Entity, ${specifier} } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`;
+    const wrap = (specifier: string) =>
+      `import { Entity, ${specifier} } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`;
     assert.ok(getCompiler().compile("S.tsx", wrap("type Child")).ok);
-    assert.deepEqual(getCompiler().compile("S.tsx", wrap("type useState")).diagnostics.map((d) => d.code), [DiagnosticCode.UnknownImport], "a value cannot be imported as a type");
+    assert.deepEqual(
+      getCompiler()
+        .compile("S.tsx", wrap("type useState"))
+        .diagnostics.map((d) => d.code),
+      [DiagnosticCode.UnknownImport],
+      "a value cannot be imported as a type"
+    );
     const value = getCompiler().compile("S.tsx", wrap("Child"));
-    assert.deepEqual(value.diagnostics.map((d) => d.code), [DiagnosticCode.UnknownImport]);
+    assert.deepEqual(
+      value.diagnostics.map((d) => d.code),
+      [DiagnosticCode.UnknownImport]
+    );
     assert.match(value.diagnostics[0]!.message, /import \{ type Child \}/);
   });
 
   it("accepts the authoring module's hooks, built-ins and functions, and leaves no trace of the import in the output", () => {
-    const { code } = compile(`import { useMutable, useUpdate, clamp, Entity, Sprite } from "@rge/runtime/jsx";
+    const { code } = compile(
+      `import { useMutable, useUpdate, clamp, Entity, Sprite } from "@rge/runtime/jsx";
 function S() {
   const s = useMutable({ n: 0 });
   useUpdate((dt) => { s.n = clamp(s.n + dt, 0, 10); });
   return <Entity name="S"><Sprite image="a.png" /></Entity>;
-}`, "S.tsx");
+}`,
+      "S.tsx"
+    );
     assert.doesNotMatch(code, /rge\/runtime\/jsx/);
     assert.match(code, /import \{ Entity, Sprite, clamp \} from "@rge\/runtime";/);
   });
 
   it("rejects names the authoring module does not export", () => {
-    const result = compileErrors(`import { useState, useTransform, Nope, Entity } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`);
-    assert.deepEqual(result.map((d) => d.code), [DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport]);
+    const result = compileErrors(
+      `import { useState, useTransform, Nope, Entity } from "@rge/runtime/jsx";\nfunction S() { return <Entity name="S" />; }`
+    );
+    assert.deepEqual(
+      result.map((d) => d.code),
+      [DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport, DiagnosticCode.UnknownImport]
+    );
     assert.match(result[0]!.message, /^`useState` is replaced by `useMutable`/, "a hook that was replaced says what replaced it");
     assert.match(result[1]!.message, /'useTransform' is not exported/);
   });

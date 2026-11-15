@@ -1,7 +1,8 @@
-// The reference cannot fall behind the compiler: every authoring hook has an entry in the docs.
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+// The reference cannot fall behind the compiler: every authoring hook has an entry in the docs.
+import { describe, it } from "node:test";
+
 import { AUTHORING_HOOKS } from "../src/index.ts";
 
 const read = (name: string): string => readFileSync(new URL(`../../../docs/${name}`, import.meta.url), "utf8");

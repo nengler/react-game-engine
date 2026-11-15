@@ -1,5 +1,6 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { HOST_BACKEND_KEY, hostBackend } from "../src/host.ts";
 import { RecordingBackend } from "../src/recording.ts";
 

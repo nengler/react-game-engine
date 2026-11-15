@@ -1,8 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { BODY, MAX_HEARTS, TILE } from "../src/rules/constants.ts";
 import { MAPS, MAP_IDS, cellAt, findDoor, mapSize, type MapId } from "../src/rules/maps.ts";
-import { NO_INPUT, bellsFound, bodyAt, carries, facingNpc, hurt, loadRun, newRun, npcState, pagesOf, saveOf, slotsOf, step, type GameEvent, type Input, type Run } from "../src/rules/run.ts";
+import {
+  NO_INPUT,
+  bellsFound,
+  bodyAt,
+  carries,
+  facingNpc,
+  hurt,
+  loadRun,
+  newRun,
+  npcState,
+  pagesOf,
+  saveOf,
+  slotsOf,
+  step,
+  type GameEvent,
+  type Input,
+  type Run,
+} from "../src/rules/run.ts";
 
 const DT = 1 / 60;
 
@@ -28,7 +46,10 @@ test("every map is a rectangle, walled round, with its objects on open ground", 
   for (const id of MAP_IDS) {
     const def = MAPS[id];
     const { cols, rows } = mapSize(id);
-    assert.ok(def.rows.every((r) => r.length === cols), `${id}: rows are ${cols} wide`);
+    assert.ok(
+      def.rows.every((r) => r.length === cols),
+      `${id}: rows are ${cols} wide`
+    );
     for (const d of def.doors) assert.ok(cellAt(id, d.col, d.row) === "#" || cellAt(id, d.col, d.row) === ".", `${id}: door ${d.id}`);
     for (const p of def.pickups) assert.equal(cellAt(id, p.col, p.row), ".", `${id}: pickup ${p.id} is on open ground`);
     for (const n of def.npcs) assert.equal(cellAt(id, n.col, n.row), ".", `${id}: ${n.id} is on open ground`);
@@ -175,7 +196,15 @@ test("the gate: closed with fewer than three bells, ends the game with three", (
 });
 
 test("a save holds a plain object with a version, and loads back to the shrine", () => {
-  const run: Run = { ...newRun(), items: { lantern: 1, key: 1 }, taken: ["lantern", "key"], cut: ["maze:14,3"], time: 321, hearts: 1, shrine: { map: "overworld", col: 21, row: 11 } };
+  const run: Run = {
+    ...newRun(),
+    items: { lantern: 1, key: 1 },
+    taken: ["lantern", "key"],
+    cut: ["maze:14,3"],
+    time: 321,
+    hearts: 1,
+    shrine: { map: "overworld", col: 21, row: 11 },
+  };
   const save = saveOf(run);
   assert.deepEqual(JSON.parse(JSON.stringify(save)), save, "plain data");
   const back = loadRun(JSON.parse(JSON.stringify(save)))!;
@@ -220,8 +249,19 @@ test("the game can be finished: a search through the world, with locks and bushe
         seen.add("gate");
         continue;
       }
-      for (const p of def.pickups) if (p.col === col && p.row === row && !inv.has(p.id)) (inv.add(p.id), (changed = true), inv.add(p.item));
-      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) queue.push([map, col + dc, row + dr]);
+      for (const p of def.pickups)
+        if (p.col === col && p.row === row && !inv.has(p.id)) {
+          inv.add(p.id);
+          changed = true;
+          inv.add(p.item);
+        }
+      for (const [dc, dr] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const)
+        queue.push([map, col + dc, row + dr]);
     }
   }
   for (const id of ["lantern", "key", "shears", "bell-cave", "bell-house", "bell-maze"]) assert.ok(inv.has(id), `${id} can be reached`);
@@ -237,9 +277,17 @@ test("a shrine saves when stepped onto, not every step the character stands on i
   const shrine = MAPS.overworld.shrines[0]!;
   const below = at("overworld", shrine.col, shrine.row + 1, [0, -1]);
   const onto = walk(below, 0, -1, 0.3);
-  assert.equal(onto.events.filter((e) => e.type === "shrine").length, 1, "stepping onto the first shrine saves, even though it is already the last one touched");
+  assert.equal(
+    onto.events.filter((e) => e.type === "shrine").length,
+    1,
+    "stepping onto the first shrine saves, even though it is already the last one touched"
+  );
   const shuffle = walk(onto.run, 0, -1, 0.2);
-  assert.deepEqual(shuffle.events.filter((e) => e.type === "shrine"), [], "moving about on it does not save again");
+  assert.deepEqual(
+    shuffle.events.filter((e) => e.type === "shrine"),
+    [],
+    "moving about on it does not save again"
+  );
   const away = walk(shuffle.run, 0, 1, 0.6);
   const back = walk(away.run, 0, -1, 0.6);
   assert.equal(back.events.filter((e) => e.type === "shrine").length, 1, "stepping off and on does");
@@ -259,9 +307,16 @@ test("a page types itself out at a steady rate while the world waits, and a pres
 });
 
 test("the inventory is eight slots, in a fixed order, with the empty ones last", () => {
-  assert.deepEqual(slotsOf(newRun()).map((s) => s.item), ["", "", "", "", "", "", "", ""]);
+  assert.deepEqual(
+    slotsOf(newRun()).map((s) => s.item),
+    ["", "", "", "", "", "", "", ""]
+  );
   const run = { ...newRun(), items: { key: 1, bell: 2 } };
   const slots = slotsOf(run);
   assert.equal(slots.length, 8);
-  assert.deepEqual(slots.map((s) => [s.item, s.count]).slice(0, 3), [["key", 1], ["bell", 2], ["", 0]]);
+  assert.deepEqual(slots.map((s) => [s.item, s.count]).slice(0, 3), [
+    ["key", 1],
+    ["bell", 2],
+    ["", 0],
+  ]);
 });

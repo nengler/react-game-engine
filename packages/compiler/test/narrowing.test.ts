@@ -1,14 +1,16 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 /**
  * What the source narrows, the generated code narrows too (Bramble finding 17, Hearth's `p.tower && …`): a callback made under a
  * condition reads state through `this`, a memo through a call, and a list's `&&` is a filter, none of which TypeScript narrows on
  * its own. The generated code says `$assume(condition)`, which narrows and checks nothing.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+
 import { World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, load } from "./helpers.ts";
 
 after(() => {
@@ -24,7 +26,10 @@ function compileProject(files: Record<string, string>): { status: number | null;
   const dir = mkdtempSync(join(repo, ".test-output", "narrow-"));
   mkdirSync(join(dir, "src"));
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, "src", name), text);
-  const r = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], { cwd: repo, encoding: "utf8" });
+  const r = spawnSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out")], {
+    cwd: repo,
+    encoding: "utf8",
+  });
   const outputs = new Map<string, string>();
   for (const name of ["Settings.ts", "Pads.ts"]) {
     try {
@@ -83,7 +88,10 @@ export function Settings() {
 `,
     });
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.out("Settings.ts"), /const \$m0 = this\.\$memo\("waiting@live", .*\);\n\s+\$assume\(\(?\$m0 !== null\)?\);\n\s+bind\(\$m0, key\);/);
+    assert.match(
+      r.out("Settings.ts"),
+      /const \$m0 = this\.\$memo\("waiting@live", .*\);\n\s+\$assume\(\(?\$m0 !== null\)?\);\n\s+bind\(\$m0, key\);/
+    );
   });
 
   it("a list item under `&&` is narrowed by its condition, as the filter guarantees", () => {
@@ -105,7 +113,9 @@ export function Pads({ pads }: PadsProps) {
   });
 
   it("checks nothing: a callback still runs when its condition no longer holds (a useUnmount telling the parent)", async () => {
-    const { Host } = await load<{ Host: new (props: object) => any }>(compile(`
+    const { Host } = await load<{ Host: new (props: object) => any }>(
+      compile(
+        `
 interface BadgeProps { onGone: () => void }
 function Badge({ onGone }: BadgeProps) {
   useUnmount(() => onGone());
@@ -115,13 +125,16 @@ interface HostProps { onLog: (line: string) => void }
 function Host({ onLog }: HostProps) {
   const s = useMutable({ label: "a" as string | null });
   return <Entity name="Host">{s.label !== null && <Badge onGone={() => onLog(\`gone \${s.label}\`)} />}</Entity>;
-}`, "Host.tsx"));
+}`,
+        "Host.tsx"
+      )
+    );
     const log: string[] = [];
     const host = new Host({ onLog: (line: string) => log.push(line) });
     const world = new World();
     world.mount(host);
     world.flush();
-    host.s.label = (null);
+    host.s.label = null;
     world.flush();
     assert.deepEqual(log, ["gone null"], "the callback ran, reading the state as it is now");
   });

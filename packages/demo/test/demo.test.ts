@@ -1,12 +1,14 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { dirname, resolve } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+
 import { createPlayer, parseInputScript, RecordingBackend, runScript, type DecodedRecord, type InputFrame, type Player } from "@rge/player";
 import { createNodeBackend, findNativeLibrary, type Pixels } from "@rge/player-node";
+
 import { bindings, gameConfig } from "../game.ts";
-import { useGame } from "../src/GameState.ts";
 import { Main } from "../generated/Main.ts";
+import { useGame } from "../src/GameState.ts";
 
 const ASSETS = resolve(dirname(fileURLToPath(import.meta.url)), "../assets");
 /** The window the root asks for with `<Game width height>`. */
@@ -35,12 +37,18 @@ function play(inputs: readonly InputFrame[], steps: number, retain: boolean | "c
 function summary(records: readonly DecodedRecord[]): unknown[] {
   return records.map((r) => {
     switch (r.op) {
-      case "canvas": return ["canvas", r.width, r.height];
-      case "view": return ["view", r.e, r.f];
-      case "sprite": return ["sprite", r.texture, r.x, r.y];
-      case "rect": return ["rect", r.x, r.y, r.width, r.height, r.color];
-      case "ellipse": return ["ellipse", r.x, r.y, r.width, r.height, r.color];
-      case "text": return ["text", r.text, r.x, r.y, r.size, r.color];
+      case "canvas":
+        return ["canvas", r.width, r.height];
+      case "view":
+        return ["view", r.e, r.f];
+      case "sprite":
+        return ["sprite", r.texture, r.x, r.y];
+      case "rect":
+        return ["rect", r.x, r.y, r.width, r.height, r.color];
+      case "ellipse":
+        return ["ellipse", r.x, r.y, r.width, r.height, r.color];
+      case "text":
+        return ["text", r.text, r.x, r.y, r.size, r.color];
     }
   });
 }
@@ -49,10 +57,15 @@ function close(actual: number, expected: number, what: string): void {
   assert.ok(Math.abs(actual - expected) < 1e-6, `${what}: ${actual} ≈ ${expected}`);
 }
 
-const player = (run: Run): Rect => run.backend.lastFrame.records.filter((r): r is Rect => r.op === "rect" && (r.color === "#ffd700ff" || r.color === "#ff6347ff")).at(-1) as Rect;
+const player = (run: Run): Rect =>
+  run.backend.lastFrame.records
+    .filter((r): r is Rect => r.op === "rect" && (r.color === "#ffd700ff" || r.color === "#ff6347ff"))
+    .at(-1) as Rect;
 const button = (run: Run): Rect => run.backend.lastFrame.records.find((r): r is Rect => r.op === "rect" && r.width === 96) as Rect;
-const texts = (run: Run): string[] => run.backend.lastFrame.records.flatMap((r) => (r.op === "text" && r.text.startsWith("Clicks") ? [r.text] : []));
-const coinsText = (run: Run): string[] => run.backend.lastFrame.records.flatMap((r) => (r.op === "text" && r.text.startsWith("Coins") ? [r.text] : []));
+const texts = (run: Run): string[] =>
+  run.backend.lastFrame.records.flatMap((r) => (r.op === "text" && r.text.startsWith("Clicks") ? [r.text] : []));
+const coinsText = (run: Run): string[] =>
+  run.backend.lastFrame.records.flatMap((r) => (r.op === "text" && r.text.startsWith("Coins") ? [r.text] : []));
 const coin = (run: Run): DecodedRecord | undefined => run.backend.lastFrame.records.find((r) => r.op === "ellipse" && r.width === 16);
 
 /** Where a world point is on the screen in the last frame. */
@@ -95,7 +108,10 @@ describe("demo: the first frame", () => {
 
 describe("demo: moving", () => {
   it("moves the square with the arrow keys and keeps the camera on it", () => {
-    const run = play(Array.from({ length: 5 }, () => MOVE_RIGHT), 6);
+    const run = play(
+      Array.from({ length: 5 }, () => MOVE_RIGHT),
+      6
+    );
     close(player(run).x, 70, "player x (5 frames of 0.1s at 140 px/s)");
     assert.equal(player(run).y, 0);
     const at = onScreen(run, player(run).x, player(run).y);
@@ -140,7 +156,14 @@ describe("demo: the button", () => {
   });
 
   it("ignores a click beside the button, a held button, and the right button", () => {
-    const run = play([press(100, 100), { dt: 0.1, mouse: { x: 30, y: 50 }, down: ["MouseLeft"] }, { dt: 0.1, mouse: { x: 30, y: 50 }, pressed: ["MouseRight"] }], 4);
+    const run = play(
+      [
+        press(100, 100),
+        { dt: 0.1, mouse: { x: 30, y: 50 }, down: ["MouseLeft"] },
+        { dt: 0.1, mouse: { x: 30, y: 50 }, pressed: ["MouseRight"] },
+      ],
+      4
+    );
     assert.deepEqual(texts(run), ["Clicks: 0"]);
     assert.deepEqual(run.backend.plays, []);
   });
@@ -191,9 +214,16 @@ describe("demo: what is kept from the frame before", () => {
   const CLICK: InputFrame = { dt: 0.1, mouse: { x: 60, y: 60 }, pressed: ["MouseLeft"] };
   const script: InputFrame[] = [
     ...Array.from({ length: 6 }, () => MOVE_RIGHT), // over the coin and onto the spikes
-    IDLE, IDLE, CLICK, IDLE, CLICK, CLICK, IDLE,
+    IDLE,
+    IDLE,
+    CLICK,
+    IDLE,
+    CLICK,
+    CLICK,
+    IDLE,
     ...Array.from({ length: 8 }, () => LEFT), // back off the spikes, and past the start
-    { dt: 0.1, down: ["ArrowDown", "D"] }, { dt: 0.1, down: ["W"] },
+    { dt: 0.1, down: ["ArrowDown", "D"] },
+    { dt: 0.1, down: ["W"] },
     ...Array.from({ length: 12 }, () => IDLE), // the beacon keeps cycling while nothing else moves
   ];
 
@@ -224,7 +254,17 @@ describe("demo: the beacon", () => {
     }
     p.close();
     const gone = "#ff00ffff 16x16 at -120,-60";
-    assert.deepEqual(shown, ["assets/beacon-1.png", "assets/beacon-1.png", "assets/beacon-1.png", "assets/beacon-2.png", "assets/beacon-2.png", gone, gone, gone, "assets/beacon-1.png"]);
+    assert.deepEqual(shown, [
+      "assets/beacon-1.png",
+      "assets/beacon-1.png",
+      "assets/beacon-1.png",
+      "assets/beacon-2.png",
+      "assets/beacon-2.png",
+      gone,
+      gone,
+      gone,
+      "assets/beacon-1.png",
+    ]);
     assert.equal(warnings.length, 1);
     assert.match(warnings[0] as string, /beacon-gone\.png/);
   });
@@ -286,7 +326,10 @@ describe("demo: pixels from the real library", { skip }, () => {
     let white = 0;
     for (let y = 44; y < 68; y++) for (let x = 18; x < 112; x++) if (pixel(frame, x, y) === "ffffffff") white++;
     assert.ok(white > 10, `the label drew ${white} white pixels`);
-    assert.ok(warnings.every((w) => /beacon-gone/.test(w)), `unexpected warnings: ${warnings.join("; ")}`);
+    assert.ok(
+      warnings.every((w) => /beacon-gone/.test(w)),
+      `unexpected warnings: ${warnings.join("; ")}`
+    );
   });
 });
 
@@ -296,7 +339,10 @@ describe("demo: a fixed resolution that expands", () => {
   it("is drawn at 640 × 360 and shown 1:1 in the window it opens at", () => {
     const run = play([], 1);
     assert.equal(run.backend.config?.width, 640);
-    assert.deepEqual([canvas(run).op, canvas(run).width, canvas(run).height, canvas(run).destW, canvas(run).destH], ["canvas", 640, 360, 640, 360]);
+    assert.deepEqual(
+      [canvas(run).op, canvas(run).width, canvas(run).height, canvas(run).destW, canvas(run).destH],
+      ["canvas", 640, 360, 640, 360]
+    );
   });
 
   it("widens the canvas, not the scale, in a wider window, and the camera stays on the player in its middle", () => {
@@ -305,7 +351,10 @@ describe("demo: a fixed resolution that expands", () => {
     const v = run.backend.lastFrame.records[1];
     assert.ok(v?.op === "view");
     assert.deepEqual([v.e, v.f], [480, 180], "the camera is on the middle of the wider game");
-    assert.deepEqual(run.warnings.filter((w) => !/beacon-gone/.test(w)), []);
+    assert.deepEqual(
+      run.warnings.filter((w) => !/beacon-gone/.test(w)),
+      []
+    );
   });
 
   it("toggles full screen on F11", () => {
@@ -322,7 +371,9 @@ describe("demo: a fixed resolution that expands", () => {
 describe("demo: the headless harness", () => {
   it("runs an input script and reports the game's state after each step, so a test can assert on what happened", () => {
     // The coin is 60 pixels right of the start: 20 frames at 140 px/s is 46 pixels, 40 is well past it.
-    const result = runScript(gameConfig, parseInputScript("right*40, down*10", { bindings, dt: 0.05 }), () => ({ ...useGame.getState().stats }));
+    const result = runScript(gameConfig, parseInputScript("right*40, down*10", { bindings, dt: 0.05 }), () => ({
+      ...useGame.getState().stats,
+    }));
     assert.equal(result.states.length, 50);
     assert.equal(result.states[3]?.coins, 0, "not yet at the coin");
     assert.equal(result.states.at(-1)?.coins, 1, "picked it up on the way");
@@ -332,7 +383,10 @@ describe("demo: the headless harness", () => {
 
 describe("demo: scripted clicks", () => {
   it("clicks the HUD button from an input script (click@x,y)", () => {
-    const frames = parseInputScript("_, click@30,50, _, click@60,60, _", { bindings, screen: { ...WINDOW, windowWidth: WINDOW.width, windowHeight: WINDOW.height, fit: "expand" } });
+    const frames = parseInputScript("_, click@30,50, _, click@60,60, _", {
+      bindings,
+      screen: { ...WINDOW, windowWidth: WINDOW.width, windowHeight: WINDOW.height, fit: "expand" },
+    });
     const run = runScript(gameConfig, frames, () => 0);
     const last = run.backend.lastFrame.records.flatMap((r) => (r.op === "text" && r.text.startsWith("Clicks") ? [r.text] : []));
     assert.deepEqual(last, ["Clicks: 2"]);

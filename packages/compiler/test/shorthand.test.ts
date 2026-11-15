@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * `x`, `y`, `z`, `rotation`, `scaleX` and `scaleY` as props of their own on a built-in that takes `transform` (REACT_FEEL_PLAN.md,
  * B2): `<Sprite x={spot.x} y={spot.y} />` is `transform={{ x: spot.x, y: spot.y }}`, lowered to the same writes.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Shape, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -46,7 +48,17 @@ export function Row() {
     world.flush();
     const [first, second] = row.children as Shape[];
     assert.deepEqual([row.transform.x, row.transform.y], [1, 2], "on the component's root");
-    assert.deepEqual([first!.transform.x, first!.transform.y, first!.transform.rotation, first!.transform.scaleX, first!.transform.scaleY, first!.transform.z], [4, 8, 0.5, 2, 3, 7]);
+    assert.deepEqual(
+      [
+        first!.transform.x,
+        first!.transform.y,
+        first!.transform.rotation,
+        first!.transform.scaleX,
+        first!.transform.scaleY,
+        first!.transform.z,
+      ],
+      [4, 8, 0.5, 2, 3, 7]
+    );
     assert.deepEqual([second!.transform.x, second!.transform.y], [9, 5], "with transform for the other fields");
     world.tick(1 / 60, { pressed: (key: string) => key === "Space", down: () => false, released: () => false } as never);
     world.flush();
@@ -60,7 +72,7 @@ export function A() {
 }`);
     assert.deepEqual(
       twice.map((d) => [d.code, d.message]),
-      [[DiagnosticCode.InvalidTransformAttribute, "'x' is written twice: as a prop (`x={…}`) and in `transform`. Keep one."]],
+      [[DiagnosticCode.InvalidTransformAttribute, "'x' is written twice: as a prop (`x={…}`) and in `transform`. Keep one."]]
     );
     const music = compileErrors(`import { Entity, Music } from "@rge/runtime/jsx";
 export function A() {

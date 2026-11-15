@@ -1,14 +1,24 @@
-import { assertNever, type ChildIR, type ExprIR, type IRModule, type PropIR, type FunctionIR, isHandlerHook, type StateIR, type TypeIR, walkExpr, walkFunction } from "../ir/types.ts";
+import {
+  assertNever,
+  type ChildIR,
+  type ExprIR,
+  type IRModule,
+  type PropIR,
+  type FunctionIR,
+  isHandlerHook,
+  type StateIR,
+  type TypeIR,
+  walkExpr,
+  walkFunction,
+} from "../ir/types.ts";
 import { exportedComponents, moduleSchemas } from "../prefabs/prefabs.ts";
-import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
-import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access, mutableObject } from "./helpers.ts";
 import { ElementEmitter } from "./elements.ts";
 import { RenderGuard } from "./expressions.ts";
+import { ROOT, findChildrenSlot, typeText, pending, pendingRef, propertyKey, access, mutableObject } from "./helpers.ts";
+import { CodeWriter, sourceMap, type LineOrigin } from "./writer.ts";
 
 /** Built-ins whose `name` a component root takes from the component when it does not write one (`Game` extends `Entity`). */
 const NAMED_ROOTS: ReadonlySet<string> = new Set(["Entity", "Game"]);
-
-
 
 export interface GeneratorOptions {
   /** Module specifier the generated code imports runtime classes from. */
@@ -57,13 +67,24 @@ export function generateModule(module: IRModule, options: GeneratorOptions): str
  * `generateModule`, with a source map (version 3) from each generated line to the component, hook or element it was written
  * for. The code ends with a `//# sourceMappingURL=` comment naming `<file>.map`, where the caller writes `map`.
  */
-export function generateModuleWithMap(module: IRModule, options: GeneratorOptions, map: SourceMapOptions): { readonly code: string; readonly map: string; readonly origins: readonly LineOrigin[] } {
+export function generateModuleWithMap(
+  module: IRModule,
+  options: GeneratorOptions,
+  map: SourceMapOptions
+): { readonly code: string; readonly map: string; readonly origins: readonly LineOrigin[] } {
   const w = writeModule(module, options);
-  return { code: `${w.toString()}//# sourceMappingURL=${map.file}.map\n`, map: sourceMap(w.origins, map.file, map.source, map.sourceContent), origins: w.origins };
+  return {
+    code: `${w.toString()}//# sourceMappingURL=${map.file}.map\n`,
+    map: sourceMap(w.origins, map.file, map.source, map.sourceContent),
+    origins: w.origins,
+  };
 }
 
 /** The generated code, and for each generated line written for a construct of the source, where that construct is. */
-export function generateModuleWithOrigins(module: IRModule, options: GeneratorOptions): { readonly code: string; readonly origins: readonly LineOrigin[] } {
+export function generateModuleWithOrigins(
+  module: IRModule,
+  options: GeneratorOptions
+): { readonly code: string; readonly origins: readonly LineOrigin[] } {
   const w = writeModule(module, options);
   return { code: w.toString(), origins: w.origins };
 }
@@ -115,7 +136,13 @@ function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
   for (const component of module.components) {
     w.blank();
     w.at(component.span, () => {
-      const generator = new ComponentGenerator(component, w, options.requiredHostProps, options.intrinsicHooks, options.gameState?.name ?? "");
+      const generator = new ComponentGenerator(
+        component,
+        w,
+        options.requiredHostProps,
+        options.intrinsicHooks,
+        options.gameState?.name ?? ""
+      );
       generator.emit();
       usesAssume ||= generator.usesAssume;
     });
@@ -126,7 +153,9 @@ function writeModule(module: IRModule, options: GeneratorOptions): CodeWriter {
   }
   if (usesAssume) {
     w.blank();
-    w.line("/** Narrows for TypeScript what a callback made under a condition reads (the condition held when it was made). It checks nothing. */");
+    w.line(
+      "/** Narrows for TypeScript what a callback made under a condition reads (the condition held when it was made). It checks nothing. */"
+    );
     w.line("function $assume(_condition: unknown): asserts _condition {}");
   }
   emitPrefabs(module, w);
@@ -142,9 +171,13 @@ function typeImportLines(module: IRModule, from: string): string[] {
   const typesByModule = new Map<string, string[]>();
   for (const i of module.typeImports) {
     if (!used.has(i.name)) continue;
-    (typesByModule.get(i.module) ?? typesByModule.set(i.module, []).get(i.module)!).push(i.importedName !== undefined ? `${i.importedName} as ${i.name}` : i.name);
+    (typesByModule.get(i.module) ?? typesByModule.set(i.module, []).get(i.module)!).push(
+      i.importedName !== undefined ? `${i.importedName} as ${i.name}` : i.name
+    );
   }
-  return [...typesByModule].map(([specifier, names]) => `import type { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};`);
+  return [...typesByModule].map(
+    ([specifier, names]) => `import type { ${names.join(", ")} } from ${JSON.stringify(`${from}/${specifier.replace(/^\.\//, "")}`)};`
+  );
 }
 
 /** Every piece of type text the generated module can contain: copied declarations, and the source types in the IR. */
@@ -156,12 +189,16 @@ function typeTexts(module: IRModule): string[] {
   };
   const fn = (f: FunctionIR): void => {
     f.params.forEach((p) => type(p.type));
-    walkFunction(f, (e) => {
-      if (e.kind === "Arrow") e.params.forEach((p) => type(p.type));
-      if (e.kind === "Callback") fn(e.fn); // its own `let` types
-    }, (stmt) => {
-      if (stmt.kind === "LocalConst" && stmt.type) type(stmt.type);
-    });
+    walkFunction(
+      f,
+      (e) => {
+        if (e.kind === "Arrow") e.params.forEach((p) => type(p.type));
+        if (e.kind === "Callback") fn(e.fn); // its own `let` types
+      },
+      (stmt) => {
+        if (stmt.kind === "LocalConst" && stmt.type) type(stmt.type);
+      }
+    );
   };
   const children = (list: readonly ChildIR[]): void => {
     for (const child of list) {
@@ -209,7 +246,7 @@ function emitPrefabs(module: IRModule, w: CodeWriter): void {
     w.line(
       component.propsType
         ? `create: (props: ConstructorParameters<typeof ${component.name}>[0]) => new ${component.name}(props),`
-        : `create: () => new ${component.name}(),`,
+        : `create: () => new ${component.name}(),`
     );
     const props = schemas.get(component.name)!.props;
     if (props.length === 0) w.line("props: [],");
@@ -224,7 +261,12 @@ function emitPrefabs(module: IRModule, w: CodeWriter): void {
 }
 
 /** Runtime values (intrinsic classes, helper functions) and types the module's output refers to. */
-function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>, usage: { store: boolean; plain: Set<string> }, intrinsicHooks: Readonly<Record<string, readonly string[]>> | undefined): string[] {
+function collectImports(
+  module: IRModule,
+  runtimeFunctions: ReadonlySet<string>,
+  usage: { store: boolean; plain: Set<string> },
+  intrinsicHooks: Readonly<Record<string, readonly string[]>> | undefined
+): string[] {
   const values = new Set<string>();
   const types = new Set<string>();
   const visitType = (type: TypeIR): void => {
@@ -272,7 +314,8 @@ function collectImports(module: IRModule, runtimeFunctions: ReadonlySet<string>,
   for (const c of module.components) {
     if (c.acceptsChildren) types.add("Child");
     // A text wrapper's props (`children: TextChild | readonly TextChild[]`) name the type in the copied props interface.
-    if (c.props.some((p) => p.name === "children" && p.type.kind === "SourceText" && /\bTextChild\b/.test(p.type.text))) types.add("TextChild");
+    if (c.props.some((p) => p.name === "children" && p.type.kind === "SourceText" && /\bTextChild\b/.test(p.type.text)))
+      types.add("TextChild");
     values.add(c.root.component.name);
     visitProps(c.root.props);
     visitProps(c.root.transform);
@@ -299,7 +342,10 @@ function collectComponentImports(module: IRModule): Map<string, { defaultName: s
   const visit = (children: readonly ChildIR[]): void => {
     for (const child of children) {
       if (child.kind === "ChildrenSlot") continue;
-      for (const ref of [child.element.component, ...(child.kind === "KeyedListChild" && child.alternate ? [child.alternate.component] : [])]) {
+      for (const ref of [
+        child.element.component,
+        ...(child.kind === "KeyedListChild" && child.alternate ? [child.alternate.component] : []),
+      ]) {
         if (ref.kind === "Imported") {
           const specifier = ref.module.replace(/\.tsx$/, ".ts");
           if (!named.has(specifier)) named.set(specifier, new Set());
@@ -314,7 +360,7 @@ function collectComponentImports(module: IRModule): Map<string, { defaultName: s
   return new Map(
     [...named]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([specifier, names]) => [specifier, { defaultName: defaults.get(specifier) ?? null, names: [...names].sort() }]),
+      .map(([specifier, names]) => [specifier, { defaultName: defaults.get(specifier) ?? null, names: [...names].sort() }])
   );
 }
 
@@ -361,7 +407,10 @@ class ComponentGenerator extends ElementEmitter {
       for (const [view, fields] of mutables) {
         const type = `{ ${fields.map((f) => `${propertyKey(f.mutable!.field)}: ${typeText(f.type)}`).join("; ")} }`;
         const cache = `#${view}View`;
-        const members = fields.map((f) => `get ${propertyKey(f.mutable!.field)}() { return self.${f.name}; }, set ${propertyKey(f.mutable!.field)}(value: ${typeText(f.type)}) { self.${this.setter(f.id)}(value); }`);
+        const members = fields.map(
+          (f) =>
+            `get ${propertyKey(f.mutable!.field)}() { return self.${f.name}; }, set ${propertyKey(f.mutable!.field)}(value: ${typeText(f.type)}) { self.${this.setter(f.id)}(value); }`
+        );
         w.line(`${cache}: ${type} | undefined;`);
         w.line(`get ${view}(): ${type} { const self = this; return (this.${cache} ??= { ${members.join(", ")} }); }`);
         // The object a handler hands over when it passes the `useMutable` whole (`takeHit(s)`), written once the class body is (only a
@@ -386,17 +435,22 @@ class ComponentGenerator extends ElementEmitter {
       if (valueProps.length > 0 && runtimeProps) {
         const type = `Pick<${runtimeProps}, ${valueProps.map((p) => JSON.stringify(p.name)).join(" | ")}>`;
         w.line(`#liveView: ${type} | undefined;`);
-        w.line(`get $live(): ${type} { const self = this; return (this.#liveView ??= { ${valueProps.map((p) => `get ${propertyKey(p.name)}() { return self.liveProp(${JSON.stringify(p.name)}); }`).join(", ")} }); }`);
+        w.line(
+          `get $live(): ${type} { const self = this; return (this.#liveView ??= { ${valueProps.map((p) => `get ${propertyKey(p.name)}() { return self.liveProp(${JSON.stringify(p.name)}); }`).join(", ")} }); }`
+        );
       }
       // The paths it reads: the runtime tells it when one changes (see `GameObject.gameStateKeys`).
       const globals = c.state.filter((s) => s.globalKey !== undefined);
       if (globals.length > 0) {
         w.line(`override readonly gameStateStore = ${this.storeName}.store;`);
-        w.line(`override readonly gameStateKeys: readonly string[] = [${[...new Set(globals.map((s) => JSON.stringify(s.globalKey)))].join(", ")}];`);
+        w.line(
+          `override readonly gameStateKeys: readonly string[] = [${[...new Set(globals.map((s) => JSON.stringify(s.globalKey)))].join(", ")}];`
+        );
       }
       // Per-instance objects a factory made: told when the component joins and leaves a world (a body learns its world so).
       const handles = c.state.filter((s) => s.handle);
-      if (handles.length > 0) w.line(`protected override ownedHandles(): readonly unknown[] { return [${handles.map((s) => `this.${s.name}`).join(", ")}]; }`);
+      if (handles.length > 0)
+        w.line(`protected override ownedHandles(): readonly unknown[] { return [${handles.map((s) => `this.${s.name}`).join(", ")}]; }`);
       // Sounds: one per useSound. Playing is an effect, so nothing is marked dirty.
       for (const s of c.sounds) {
         w.line(`readonly ${s.name}: Sound = new Sound(${JSON.stringify(s.path)});`);
@@ -408,7 +462,8 @@ class ComponentGenerator extends ElementEmitter {
 
       w.blank();
       const defaults = c.props.filter((p) => p.defaultValue !== null);
-      const defaultsObject = defaults.length > 0 ? `{ ${defaults.map((p) => `${propertyKey(p.name)}: ${this.expr(p.defaultValue!, true)}`).join(", ")} }` : null;
+      const defaultsObject =
+        defaults.length > 0 ? `{ ${defaults.map((p) => `${propertyKey(p.name)}: ${this.expr(p.defaultValue!, true)}`).join(", ")} }` : null;
       // Every prop optional: the parent may omit the object entirely.
       const constructorParams = runtimeProps ? `props: ${runtimeProps}${c.props.every((p) => p.optional) ? " = {}" : ""}` : "";
       w.block(`constructor(${constructorParams})`, () => {
@@ -416,14 +471,22 @@ class ComponentGenerator extends ElementEmitter {
         // A built-in's constructor may require a prop (a Sprite's `image`) that is dynamic here. `super()` runs before
         // state exists, so it gets a placeholder and its real value in the first `render()`, which the constructor runs.
         const required = this.requiredHostProps[c.root.component.name] ?? [];
-        const placeholders = c.root.props.flatMap((p) => (p.kind === "DynamicProp" && required.includes(p.name) ? [`${propertyKey(p.name)}: undefined as never`] : []));
+        const placeholders = c.root.props.flatMap((p) =>
+          p.kind === "DynamicProp" && required.includes(p.name) ? [`${propertyKey(p.name)}: undefined as never`] : []
+        );
         // A root `<Entity>` (or `<Game>`, a fragment, or the container a component or condition root is held in) with no
         // `name` of its own is named after the component, as `<Entity name="Player">` would: what `other.owner` reads.
         const defaultName =
-          c.root.component.kind === "Intrinsic" && NAMED_ROOTS.has(c.root.component.name) && !c.root.props.some((p) => "name" in p && p.name === "name")
+          c.root.component.kind === "Intrinsic" &&
+          NAMED_ROOTS.has(c.root.component.name) &&
+          !c.root.props.some((p) => "name" in p && p.name === "name")
             ? [`name: ${JSON.stringify(c.name)}`]
             : [];
-        const hostEntries = this.within({ inlineMemos: true }, () => [...defaultName, ...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`), ...placeholders]);
+        const hostEntries = this.within({ inlineMemos: true }, () => [
+          ...defaultName,
+          ...staticHostProps.map((p) => `${propertyKey(p.name)}: ${this.expr(p.value, true)}`),
+          ...placeholders,
+        ]);
         const host = hostEntries.length > 0 ? `{ ${hostEntries.join(", ")} }` : "{}";
         if (c.propsType) w.line(`super(${host}, props${defaultsObject ? `, ${defaultsObject}` : ""});`);
         else w.line(hostEntries.length > 0 ? `super(${host});` : "super();");
@@ -468,11 +531,13 @@ class ComponentGenerator extends ElementEmitter {
             w.blank();
             // A write: the next value, which a handler reads back at once and render sees once committed. Only a different value
             // (`===`) renders.
-            w.at(hook.span, () => w.block(`${hook.setterName}(value: ${type}): void`, () => {
-              w.line(`if (value === ${pendingRef(s)}) return;`);
-              w.line(`${pendingRef(s)} = value;`);
-              w.line("this.markDirty();");
-            }));
+            w.at(hook.span, () =>
+              w.block(`${hook.setterName}(value: ${type}): void`, () => {
+                w.line(`if (value === ${pendingRef(s)}) return;`);
+                w.line(`${pendingRef(s)} = value;`);
+                w.line("this.markDirty();");
+              })
+            );
             break;
           }
           case "OnUpdate":
@@ -493,7 +558,8 @@ class ComponentGenerator extends ElementEmitter {
         w.block("override commitState(): void", () => {
           for (const s of settable) w.line(`this.${s.name} = ${pendingRef(s)};`);
           // Every component that reads a leaf refreshes its snapshot when the game changes it, whoever acted.
-          for (const s of shared) w.line(`this.${s.name} = ${this.storeName}.store.get<${typeText(s.type)}>(${JSON.stringify(s.globalKey)});`);
+          for (const s of shared)
+            w.line(`this.${s.name} = ${this.storeName}.store.get<${typeText(s.type)}>(${JSON.stringify(s.globalKey)});`);
           // A context's value, read again from its reader (the provider marked this component dirty when it changed).
           for (const s of refreshed) w.line(`this.${s.name} = ${this.expr(s.refresh!, true)};`);
         });
@@ -505,9 +571,7 @@ class ComponentGenerator extends ElementEmitter {
       if (local.length > 0) {
         w.blank();
         w.block("override saveHotState(): Record<string, unknown>", () => {
-          const entries = [
-            ...local.map((s) => `${JSON.stringify(s.id)}: ${this.hasSetter(s.id) ? pendingRef(s) : `this.${s.name}`}`),
-          ];
+          const entries = [...local.map((s) => `${JSON.stringify(s.id)}: ${this.hasSetter(s.id) ? pendingRef(s) : `this.${s.name}`}`)];
           w.line(`return { ${entries.join(", ")} };`);
         });
         w.blank();
@@ -529,47 +593,59 @@ class ComponentGenerator extends ElementEmitter {
         w.blank();
         const fields = w.mark();
         let inputs: readonly string[] = [];
-        w.block("override render(): void", () => w.at(c.root.span, () => {
-          this.renderTemps = 0;
-          const prologue = w.mark();
-          // A memo read where the render always writes is worked out once, at the top, rather than at each place it is read.
-          const renderMemos = new Map<string, string>();
-          const memoLines: string[] = [];
-          for (const memo of this.alwaysReadMemos()) {
-            const local = `$r${renderMemos.size}`;
-            memoLines.push(`const ${local} = ${this.within({ renderMemos }, () => this.expr(memo, true))};`);
-            renderMemos.set(memo.key, local);
-          }
-          const body = (guard: RenderGuard | null): void => {
+        w.block("override render(): void", () =>
+          w.at(c.root.span, () => {
             this.renderTemps = 0;
-            this.within({ renderMemos, guard }, () => {
-              const dynamic = c.root.props.filter((p) => p.kind === "DynamicProp");
-              this.emitReportedWrites(dynamic.map((prop) => ({ target: access("this", prop.name), value: prop.value })), "this.markChanged()");
-              this.emitDynamicTransform(c.root.transform, "this", "transform");
-              this.emitChildUpdates(c.root.children, ROOT, "persistent");
-            });
-          };
-          const guard = new RenderGuard();
-          body(guard);
-          if (guard.useful) inputs = guard.inputs;
-          else {
-            // Nothing would be skipped: write the render again without guards.
-            w.truncate(prologue);
-            body(null);
-          }
-          // The dirty mask: a bit for each input a guarded part reads that is not what it was at the last render (all of them the first time).
-          const maskLines =
-            inputs.length === 0
-              ? []
-              : ["const $i = this.$in;", "let $d = 0;", ...inputs.map((input, bit) => `if ($i[${bit}] !== ${input}) { $i[${bit}] = ${input}; $d |= ${1 << bit}; }`)];
-          w.insert(prologue, [...memoLines, ...maskLines]);
-        }));
+            const prologue = w.mark();
+            // A memo read where the render always writes is worked out once, at the top, rather than at each place it is read.
+            const renderMemos = new Map<string, string>();
+            const memoLines: string[] = [];
+            for (const memo of this.alwaysReadMemos()) {
+              const local = `$r${renderMemos.size}`;
+              memoLines.push(`const ${local} = ${this.within({ renderMemos }, () => this.expr(memo, true))};`);
+              renderMemos.set(memo.key, local);
+            }
+            const body = (guard: RenderGuard | null): void => {
+              this.renderTemps = 0;
+              this.within({ renderMemos, guard }, () => {
+                const dynamic = c.root.props.filter((p) => p.kind === "DynamicProp");
+                this.emitReportedWrites(
+                  dynamic.map((prop) => ({ target: access("this", prop.name), value: prop.value })),
+                  "this.markChanged()"
+                );
+                this.emitDynamicTransform(c.root.transform, "this", "transform");
+                this.emitChildUpdates(c.root.children, ROOT, "persistent");
+              });
+            };
+            const guard = new RenderGuard();
+            body(guard);
+            if (guard.useful) inputs = guard.inputs;
+            else {
+              // Nothing would be skipped: write the render again without guards.
+              w.truncate(prologue);
+              body(null);
+            }
+            // The dirty mask: a bit for each input a guarded part reads that is not what it was at the last render (all of them the first time).
+            const maskLines =
+              inputs.length === 0
+                ? []
+                : [
+                    "const $i = this.$in;",
+                    "let $d = 0;",
+                    ...inputs.map((input, bit) => `if ($i[${bit}] !== ${input}) { $i[${bit}] = ${input}; $d |= ${1 << bit}; }`),
+                  ];
+            w.insert(prologue, [...memoLines, ...maskLines]);
+          })
+        );
         // What each input was at the last render; a fresh object at first, which no input can be.
         if (inputs.length > 0) w.insert(fields, [`readonly $in: unknown[] = new Array(${inputs.length}).fill({});`, ""]);
       }
       // Last, once every handler has been written: an object only for a `useMutable` one of them passes whole. Inserted above
       // everything after `mutableObjectsAt`, so the marks written later were already used.
-      w.insert(mutableObjectsAt, [...mutableObjectLines].filter(([view]) => this.mutableObjects.has(view)).flatMap(([, lines]) => lines));
+      w.insert(
+        mutableObjectsAt,
+        [...mutableObjectLines].filter(([view]) => this.mutableObjects.has(view)).flatMap(([, lines]) => lines)
+      );
     });
   }
 }

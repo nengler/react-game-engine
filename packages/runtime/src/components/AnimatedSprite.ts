@@ -58,7 +58,8 @@ export function parseAnimations(text: string | AnimationTable): SheetAnimation[]
     const item = entry.trim();
     if (item === "") continue;
     const match = /^([A-Za-z_][\w-]*)\s*:\s*([\d+\-\s]+?)\s*(?:@\s*(\d+(?:\.\d+)?))?\s*(~?)$/.exec(item);
-    if (match === null) throw new Error(`Cannot read the animation '${item}': expected name:frames@fps, as in "run:2-7@12" (a trailing ~ plays it once).`);
+    if (match === null)
+      throw new Error(`Cannot read the animation '${item}': expected name:frames@fps, as in "run:2-7@12" (a trailing ~ plays it once).`);
     const frames = framesOf(match[2] as string, match[1] as string);
     if (out.some((a) => a.name === match[1])) throw new Error(`The animation '${match[1] as string}' is listed twice.`);
     out.push({ name: match[1] as string, frames, fps: match[3] === undefined ? 10 : Number(match[3]), once: match[4] === "~" });
@@ -83,8 +84,14 @@ function framesOf(text: string, name: string): number[] {
 /** An animation table as animations, checked as the text form is. */
 function animationsOf(table: AnimationTable): SheetAnimation[] {
   return Object.entries(table).map(([name, entry]) => {
-    const frames = typeof entry.frames === "number" ? [entry.frames] : typeof entry.frames === "string" ? framesOf(entry.frames, name) : [...entry.frames];
-    if (frames.length === 0 || frames.some((f) => !Number.isInteger(f) || f < 0)) throw new Error(`The animation '${name}' needs frames: whole numbers from 0.`);
+    const frames =
+      typeof entry.frames === "number"
+        ? [entry.frames]
+        : typeof entry.frames === "string"
+          ? framesOf(entry.frames, name)
+          : [...entry.frames];
+    if (frames.length === 0 || frames.some((f) => !Number.isInteger(f) || f < 0))
+      throw new Error(`The animation '${name}' needs frames: whole numbers from 0.`);
     const fps = entry.fps ?? DEFAULT_FPS;
     if (!(fps > 0)) throw new Error(`The animation '${name}' needs a positive fps, not ${fps}.`);
     return { name, frames, fps, once: entry.once ?? false };

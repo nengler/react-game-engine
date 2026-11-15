@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * M10: `<Text>`. A leaf built-in for HUDs and labels. Its content is its JSX
  * text (`<Text>Score: {score}</Text>`) or its `text` prop, which are the same
  * thing: one string prop, updated in place when the state it reads changes.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Text, World, runtimeManifest } from "@rge/runtime";
+
 import { DiagnosticCode, type ExprIR, type PropIR } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -76,7 +78,11 @@ describe("M10: IR", () => {
   it("makes text between the tags a template over the state it reads, as a dynamic prop", () => {
     const text = prop(texts[0]!.props, "text");
     assert.equal(text.kind, "DynamicProp");
-    assert.deepEqual(valueOf(text), { kind: "TemplateLiteral", quasis: ["Score: ", ""], expressions: [{ kind: "StateRead", state: "Scoreboard.s.score" }] });
+    assert.deepEqual(valueOf(text), {
+      kind: "TemplateLiteral",
+      quasis: ["Score: ", ""],
+      expressions: [{ kind: "StateRead", state: "Scoreboard.s.score" }],
+    });
     assert.deepEqual(text.kind === "DynamicProp" && text.dependencies, [{ kind: "State", state: "Scoreboard.s.score" }]);
     assert.equal(prop(texts[0]!.props, "size").kind, "StaticProp");
   });
@@ -102,7 +108,11 @@ describe("M10: IR", () => {
   it("works at the root of a component", () => {
     const badge = ir.components.find((c) => c.name === "Badge")!;
     assert.equal(badge.root.component.name, "Text");
-    assert.deepEqual(valueOf(prop(badge.root.props, "text")), { kind: "TemplateLiteral", quasis: ["+", ""], expressions: [{ kind: "PropRead", name: "points" }] });
+    assert.deepEqual(valueOf(prop(badge.root.props, "text")), {
+      kind: "TemplateLiteral",
+      quasis: ["+", ""],
+      expressions: [{ kind: "PropRead", name: "points" }],
+    });
   });
 });
 
@@ -127,8 +137,8 @@ describe("M10: whitespace and literals follow JSX", () => {
 
   it("drops whitespace that contains a line break, so no space appears across lines (as in React)", () => {
     assert.equal(content("\n  Score: {n}\n"), "Score: ${n}");
-    assert.equal(content("\n  {n}\n  points\n"), "${n}points", "write {n}{\" \"}points, or keep them on one line, for a space");
-    assert.equal(content("\n  {n}{\" \"}\n  points\n"), "${n} points");
+    assert.equal(content("\n  {n}\n  points\n"), "${n}points", 'write {n}{" "}points, or keep them on one line, for a space');
+    assert.equal(content('\n  {n}{" "}\n  points\n'), "${n} points");
   });
 
   it("folds string and number literals into the text, and ignores comments", () => {
@@ -142,7 +152,11 @@ describe("M10: generated code", () => {
   it("builds the element with its text and updates the field in place", () => {
     assert.match(code, /readonly text: Text = new Text\(\{ size: 12, text: `Score: \$\{this\.\$s_score\}` \}\);/);
     assert.match(code, /const (\$\d+) = `Score: \$\{this\.\$s_score\}`;[^]*?this\.text\.text = \1;/);
-    assert.match(code, /const (\$\d+) = `\$\{this\.props\.label \+ ":"\}`;[^]*?this\.text2\.text = \1;/, "an expression child is a dynamic text, as a template literal (always a string)");
+    assert.match(
+      code,
+      /const (\$\d+) = `\$\{this\.props\.label \+ ":"\}`;[^]*?this\.text2\.text = \1;/,
+      "an expression child is a dynamic text, as a template literal (always a string)"
+    );
     assert.match(code, /const (\$\d+) = \(this\.\$s_score > 5\) \? "gold" : "white";[^]*?this\.text2\.color = \1;/);
     assert.match(code, /readonly text4: Text = new Text\(\{ text: "Fixed" \}\);/);
   });
@@ -190,7 +204,7 @@ describe("M10: runtime behaviour", () => {
     world.mount(hud);
     assert.deepEqual([hud.text.text, hud.text2.text, hud.text3.text, hud.text4.text], ["Score: 0", "HP:", "Total 0", "Fixed"]);
     const [first, second] = [hud.text, hud.text2];
-    hud.s.score = (7);
+    hud.s.score = 7;
     assert.equal(world.flush(), 1, "one render for the component, none for the texts");
     assert.deepEqual([hud.text.text, hud.text2.color, hud.text3.text], ["Score: 7", "gold", "Total 14"]);
     assert.equal(hud.text, first);
@@ -234,13 +248,22 @@ describe("M10: diagnostics", () => {
 
   it("rejects HTML entities, which JSX would decode", () => {
     const errors = compileErrors(`function C() { return <Text>Tom &amp; Jerry</Text>; }`);
-    assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedJsxChild]);
+    assert.deepEqual(
+      errors.map((d) => d.code),
+      [DiagnosticCode.UnsupportedJsxChild]
+    );
     assert.match(errors[0]!.message, /HTML entities/);
   });
 
   it("must be imported like any built-in", () => {
-    const result = getCompiler().compile("C.tsx", `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Text>x</Text></Entity>; }`);
-    assert.deepEqual(result.diagnostics.map((d) => d.code), [DiagnosticCode.MissingImport]);
+    const result = getCompiler().compile(
+      "C.tsx",
+      `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C"><Text>x</Text></Entity>; }`
+    );
+    assert.deepEqual(
+      result.diagnostics.map((d) => d.code),
+      [DiagnosticCode.MissingImport]
+    );
   });
 
   it("is placed with transform, and cannot have elements added to it from a parent's children", () => {

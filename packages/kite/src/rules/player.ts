@@ -42,14 +42,21 @@ export function stepPlayer(p: PlayerState, room: number, c: Controls, dt: number
   if (p.entering > 0) return { next: { ...p, entering: Math.max(0, p.entering - dt) }, outcome: "none", events, played: false };
   if (p.deadFor > 0) {
     const deadFor = p.deadFor - dt;
-    return deadFor > 0 ? { next: { ...p, deadFor }, outcome: "none", events, played: true } : { next: spawnIn(room), outcome: "respawned", events, played: true };
+    return deadFor > 0
+      ? { next: { ...p, deadFor }, outcome: "none", events, played: true }
+      : { next: spawnIn(room), outcome: "respawned", events, played: true };
   }
 
   const here = ROOM_LIST[room] as Room;
   const body = stepBody(p.body, c, here.solidAt, dt, events);
   if (onSpikes(here, body) || outOfBounds(body)) {
     events.push({ type: "death", x: body.x + BODY_W / 2, y: body.y + BODY_H / 2 });
-    return { next: { body: { ...body, vx: 0, vy: 0, state: "normal", dashTime: 0 }, deadFor: RESPAWN_DELAY, entering: 0 }, outcome: "died", events, played: true };
+    return {
+      next: { body: { ...body, vx: 0, vy: 0, state: "normal", dashTime: 0 }, deadFor: RESPAWN_DELAY, entering: 0 },
+      outcome: "died",
+      events,
+      played: true,
+    };
   }
   if (!inExit(here, body)) return { next: { ...p, body }, outcome: "none", events, played: true };
   if (here.exit === "end" || room + 1 >= ROOM_LIST.length) return { next: { ...p, body }, outcome: "finished", events, played: true };

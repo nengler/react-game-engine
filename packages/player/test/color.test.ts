@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { colorToHex, NAMED_COLOR_COUNT, parseColor } from "../src/color.ts";
 
 function hex(css: string): string | null {
@@ -45,7 +46,18 @@ describe("parseColor", () => {
   });
 
   it("returns null for anything else", () => {
-    for (const css of ["", "#12", "#12345", "#ggg", "rgb(1, 2)", "rgb(1, 2, 3, 4, 5)", "rgb(a, b, c)", "hsl(0, 100%, 50%)", "notacolor", "red green"]) {
+    for (const css of [
+      "",
+      "#12",
+      "#12345",
+      "#ggg",
+      "rgb(1, 2)",
+      "rgb(1, 2, 3, 4, 5)",
+      "rgb(a, b, c)",
+      "hsl(0, 100%, 50%)",
+      "notacolor",
+      "red green",
+    ]) {
       assert.equal(parseColor(css), null, css);
     }
   });

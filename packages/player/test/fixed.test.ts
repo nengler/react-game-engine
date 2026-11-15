@@ -1,7 +1,19 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Entity, freeze, Game, type InputState } from "@rge/runtime";
-import { createPlayer, FixedDriver, MAX_STEPS_PER_FRAME, RecordingBackend, RGE_KEY_DOWN, RGE_KEY_PRESSED, RGE_KEY_RELEASED, type InputFrame, type PlayerConfig } from "../src/index.ts";
+
+import {
+  createPlayer,
+  FixedDriver,
+  MAX_STEPS_PER_FRAME,
+  RecordingBackend,
+  RGE_KEY_DOWN,
+  RGE_KEY_PRESSED,
+  RGE_KEY_RELEASED,
+  type InputFrame,
+  type PlayerConfig,
+} from "../src/index.ts";
 
 /** Records what each tick of it saw. */
 class Probe extends Entity {
@@ -59,17 +71,33 @@ describe("fixed timestep", () => {
 
   it("shows a press to exactly one step, even when the frame has two or none", () => {
     // Frame with two steps (dt 1/30): the press is in the first only.
-    const two = run([{ dt: 1 / 30, pressed: ["Space"] }, { dt: 1 / 30, down: ["Space"] }, { dt: 1 / 30, released: ["Space"] }]);
+    const two = run([
+      { dt: 1 / 30, pressed: ["Space"] },
+      { dt: 1 / 30, down: ["Space"] },
+      { dt: 1 / 30, released: ["Space"] },
+    ]);
     assert.deepEqual(two.saw, ["dp-", "d--", "d--", "d--", "--r", "---"]);
     // A press on a frame that runs no step (a 120 Hz frame) is seen by the next step.
-    const none = run([{ dt: 1 / 120, pressed: ["Space"] }, { dt: 1 / 120, down: ["Space"] }, { dt: 1 / 120, down: ["Space"] }]);
+    const none = run([
+      { dt: 1 / 120, pressed: ["Space"] },
+      { dt: 1 / 120, down: ["Space"] },
+      { dt: 1 / 120, down: ["Space"] },
+    ]);
     assert.equal(none.saw.filter((s) => s[1] === "p").length, 1, "seen once");
-    assert.equal(none.saw.findIndex((s) => s[1] === "p"), none.saw.findIndex((s) => s[0] === "d"), "and the key is down for that step");
+    assert.equal(
+      none.saw.findIndex((s) => s[1] === "p"),
+      none.saw.findIndex((s) => s[0] === "d"),
+      "and the key is down for that step"
+    );
   });
 
   it("does not lose a tap that was released before the step ran", () => {
     const tap = run([{ dt: 1 / 120, pressed: ["Space"] }, { dt: 1 / 120, released: ["Space"] }, { dt: 1 / 120 }]);
-    assert.deepEqual(tap.saw.filter((s) => s !== "---"), ["dpr"], "down, pressed and released in the one step");
+    assert.deepEqual(
+      tap.saw.filter((s) => s !== "---"),
+      ["dpr"],
+      "down, pressed and released in the one step"
+    );
   });
 
   it("rejects a rate that is not positive", () => {
@@ -106,7 +134,10 @@ describe("<Game timeScale paused>", () => {
   });
 
   it("paused stops every update, while input still reaches the game (a pause menu can unpause it)", () => {
-    const probe = runGame([...idle(3, 1 / 60), { dt: 1 / 60, pressed: ["Space"] }, ...idle(3, 1 / 60)], (i, game) => (game.paused = i >= 2 && i < 6));
+    const probe = runGame(
+      [...idle(3, 1 / 60), { dt: 1 / 60, pressed: ["Space"] }, ...idle(3, 1 / 60)],
+      (i, game) => (game.paused = i >= 2 && i < 6)
+    );
     assert.equal(probe.dts.length, 3, "two steps before the pause, one after");
     assert.ok(probe.saw.includes("dp-"), "the press during the pause was seen by onInput");
   });
@@ -141,14 +172,40 @@ describe("FixedDriver, without a player", () => {
 
   it("keeps the edges of frozen steps for the first step after, and shows them to input only once", () => {
     // Steps 0 and 1 are frozen; the press is made in step 1.
-    const log = drive([{ dt: 1 / 60, keys: 0 }, { dt: 1 / 60, keys: PRESSED }, { dt: 1 / 60, keys: RGE_KEY_DOWN }, { dt: 1 / 60, keys: 0 }], (n) => n < 2);
-    assert.deepEqual(log.map((l) => (l.input & RGE_KEY_PRESSED) !== 0), [false, true, false, false], "input sees it in the step it was made");
-    assert.deepEqual(log.map((l) => (l.update & RGE_KEY_PRESSED) !== 0), [false, true, true, false], "update sees it in the first step after the freeze, and not again");
+    const log = drive(
+      [
+        { dt: 1 / 60, keys: 0 },
+        { dt: 1 / 60, keys: PRESSED },
+        { dt: 1 / 60, keys: RGE_KEY_DOWN },
+        { dt: 1 / 60, keys: 0 },
+      ],
+      (n) => n < 2
+    );
+    assert.deepEqual(
+      log.map((l) => (l.input & RGE_KEY_PRESSED) !== 0),
+      [false, true, false, false],
+      "input sees it in the step it was made"
+    );
+    assert.deepEqual(
+      log.map((l) => (l.update & RGE_KEY_PRESSED) !== 0),
+      [false, true, true, false],
+      "update sees it in the first step after the freeze, and not again"
+    );
   });
 
   it("keeps a release made in a freeze too, and drops what is kept once a step has run", () => {
-    const log = drive([{ dt: 1 / 60, keys: RGE_KEY_RELEASED }, { dt: 1 / 60, keys: 0 }, { dt: 1 / 60, keys: 0 }], (n) => n === 0);
-    assert.deepEqual(log.map((l) => (l.update & RGE_KEY_RELEASED) !== 0), [true, true, false]);
+    const log = drive(
+      [
+        { dt: 1 / 60, keys: RGE_KEY_RELEASED },
+        { dt: 1 / 60, keys: 0 },
+        { dt: 1 / 60, keys: 0 },
+      ],
+      (n) => n === 0
+    );
+    assert.deepEqual(
+      log.map((l) => (l.update & RGE_KEY_RELEASED) !== 0),
+      [true, true, false]
+    );
   });
 
   it("clones its state, so a replay can branch", () => {

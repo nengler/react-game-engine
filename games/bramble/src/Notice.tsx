@@ -19,7 +19,9 @@ export function Notice({ text }: NoticeProps) {
   return (
     <Entity transform={{ y, opacity }}>
       <Shape kind="rect" width={320} height={14} color="#10131ccc" />
-      <Text x={0} y={2} width={320} align="center" color="#fff1d6">{text}</Text>
+      <Text x={0} y={2} width={320} align="center" color="#fff1d6">
+        {text}
+      </Text>
     </Entity>
   );
 }

@@ -1,8 +1,8 @@
+import { developmentWarning } from "./develop.ts";
 import type { GameStore } from "./GameState.ts";
 import type { InputState } from "./input.ts";
 import { IDENTITY_TRANSFORM, Transform, composeTransforms, offsetTransform, type WorldTransform } from "./Transform.ts";
 import type { World } from "./World.ts";
-import { developmentWarning } from "./develop.ts";
 
 type StructureOp =
   | { readonly kind: "add"; readonly child: GameObject; readonly slot: number; readonly order: ChildOrder }
@@ -220,13 +220,15 @@ export class GameObject<P extends object = {}> {
    * its children puts its own position of `{children}` in front, so they sort between the children it passes itself.
    */
   attachPassedChild(child: GameObject, order: ChildOrder): void {
-    if (this.passedChildrenForward !== null) return this.passedChildrenForward.attachPassedChild(child, prependOrder(this.passedChildrenForwardAt, order));
+    if (this.passedChildrenForward !== null)
+      return this.passedChildrenForward.attachPassedChild(child, prependOrder(this.passedChildrenForwardAt, order));
     this.#passedHost().addChild(child, this.passedChildrenSlot, order);
   }
 
   /** Queue a passed child to be attached when structure is next committed. */
   queueAttachPassedChild(child: GameObject, order: ChildOrder): void {
-    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueAttachPassedChild(child, prependOrder(this.passedChildrenForwardAt, order));
+    if (this.passedChildrenForward !== null)
+      return this.passedChildrenForward.queueAttachPassedChild(child, prependOrder(this.passedChildrenForwardAt, order));
     this.#passedHost().queueAddChild(child, this.passedChildrenSlot, order);
   }
 
@@ -238,13 +240,16 @@ export class GameObject<P extends object = {}> {
 
   /** Queue a new order for the items of a keyed list among the passed children, see `queueReorder`; `prefix` is the list's own position. */
   queueReorderPassedChildren(children: readonly GameObject[], prefix: readonly number[] = []): void {
-    if (this.passedChildrenForward !== null) return this.passedChildrenForward.queueReorderPassedChildren(children, [this.passedChildrenForwardAt, ...prefix]);
+    if (this.passedChildrenForward !== null)
+      return this.passedChildrenForward.queueReorderPassedChildren(children, [this.passedChildrenForwardAt, ...prefix]);
     this.#passedHost().queueReorder(this.passedChildrenSlot, children, prefix);
   }
 
   #passedHost(): GameObject {
     if (this.passedChildrenHost === null) {
-      throw new Error(`${this.constructor.name} was given children but does not render {children}: declare \`children: Child\` in its props and write {children} where they belong.`);
+      throw new Error(
+        `${this.constructor.name} was given children but does not render {children}: declare \`children: Child\` in its props and write {children} where they belong.`
+      );
     }
     return this.passedChildrenHost;
   }
@@ -280,7 +285,9 @@ export class GameObject<P extends object = {}> {
     if (last === undefined || last.#slot < slot || (last.#slot === slot && compareOrder(last.#order, order) <= 0)) {
       this.children.push(child);
     } else {
-      const index = this.children.findIndex((sibling) => sibling.#slot > slot || (sibling.#slot === slot && compareOrder(sibling.#order, order) > 0));
+      const index = this.children.findIndex(
+        (sibling) => sibling.#slot > slot || (sibling.#slot === slot && compareOrder(sibling.#order, order) > 0)
+      );
       this.children.splice(index, 0, child);
     }
     this.markChanged();
@@ -444,7 +451,7 @@ export class GameObject<P extends object = {}> {
     const name = this.constructor.name;
     developmentWarning(
       `unmounted-write:${name}:${field}`,
-      `A write to ${name}'s '${field}' after it was unmounted was ignored: something kept its useMutable object (passed whole, as \`takeHit(s)\`) and wrote to it later. Write only while the component is mounted, or keep the value somewhere that outlives it (the game state).`,
+      `A write to ${name}'s '${field}' after it was unmounted was ignored: something kept its useMutable object (passed whole, as \`takeHit(s)\`) and wrote to it later. Write only while the component is mounted, or keep the value somewhere that outlives it (the game state).`
     );
     return false;
   }
@@ -549,7 +556,14 @@ export class GameObject<P extends object = {}> {
     // A state that holds an instance of a class (a `useBody` body) is kept, never replaced: the saved one's fields (from the
     // component this one replaces, or a plain copy of them in a rewind snapshot) are put into the instance this object already has,
     // which keeps its own links (its owner, its world). The saved instance belonged to a component that has left, and is detached.
-    if (typeof value === "object" && value !== null && typeof current === "object" && current !== null && Object.getPrototypeOf(current) !== Object.prototype && !Array.isArray(current)) {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      typeof current === "object" &&
+      current !== null &&
+      Object.getPrototypeOf(current) !== Object.prototype &&
+      !Array.isArray(current)
+    ) {
       const proto = Object.getPrototypeOf(value);
       if (value !== current && (proto === Object.getPrototypeOf(current) || proto === Object.prototype)) Object.assign(current, value);
       return false;

@@ -1,12 +1,18 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { Camera, Collider, Entity, Flex, GameObject, Hud, Pointer, Screen, Shape, Text, getSoundSink } from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
-function draw(root: GameObject, width = 640, height = 360): { records: DecodedRecord[]; warnings: string[]; built: ReturnType<FrameBuilder["build"]> } {
+function draw(
+  root: GameObject,
+  width = 640,
+  height = 360
+): { records: DecodedRecord[]; warnings: string[]; built: ReturnType<FrameBuilder["build"]> } {
   const backend = new RecordingBackend();
   const warnings: string[] = [];
   const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), warn: (m) => warnings.push(m) });
@@ -63,7 +69,11 @@ describe("<Hud>: what is drawn", () => {
     root.addChild(hud(high, box(2)));
     root.addChild(hud(box(3)));
     const { records } = draw(root);
-    assert.deepEqual(ops(records), ["view", "view", "rect@2", "rect@1", "rect@3"], "a high z inside the first layer does not lift it over the second");
+    assert.deepEqual(
+      ops(records),
+      ["view", "view", "rect@2", "rect@1", "rect@3"],
+      "a high z inside the first layer does not lift it over the second"
+    );
   });
 
   it("does not let the HUD's z reach into the world's order, or the world's into the HUD's", () => {
@@ -203,7 +213,8 @@ describe("<Hud>: pointers", () => {
 });
 
 describe("<Flex> in the frame", () => {
-  const rects = (records: readonly DecodedRecord[]) => records.flatMap((r) => (r.op === "rect" ? [[r.x, r.y, r.width, r.height, r.color] as const] : []));
+  const rects = (records: readonly DecodedRecord[]) =>
+    records.flatMap((r) => (r.op === "rect" ? [[r.x, r.y, r.width, r.height, r.color] as const] : []));
 
   it("draws its background first, behind its children, the size of the box, at the box's place", () => {
     const row = new Flex({ background: "red", padding: 2, gap: 4 });
@@ -261,7 +272,14 @@ describe("<Flex> in the frame", () => {
     const outer = new Flex({ width: 100, background: "red" });
     outer.addChild(inner);
     const { records } = draw(outer);
-    assert.deepEqual(rects(records).map((r) => r.slice(0, 4)), [[0, 0, 100, 5], [0, 0, 100, 5], [0, 0, 10, 5]]);
+    assert.deepEqual(
+      rects(records).map((r) => r.slice(0, 4)),
+      [
+        [0, 0, 100, 5],
+        [0, 0, 100, 5],
+        [0, 0, 10, 5],
+      ]
+    );
   });
 });
 
@@ -281,22 +299,53 @@ describe("<Text align>", () => {
   };
 
   it("sits at the start of its box by default, centred or at the end when asked, on whole pixels", () => {
-    assert.deepEqual(textRecords(label({ width: 80 })).map((t) => [t.x, t.y]), [[100, 7]]);
-    assert.deepEqual(textRecords(label({ width: 80, align: "left" })).map((t) => t.x), [100]);
-    assert.deepEqual(textRecords(label({ width: 80, align: "center" })).map((t) => t.x), [100 + 25]);
-    assert.deepEqual(textRecords(label({ width: 80, align: "right" })).map((t) => t.x), [100 + 50]);
-    assert.deepEqual(textRecords(label({ width: 31, align: "center" })).map((t) => t.x), [101], "(31 - 30) / 2 = 0.5 -> 1");
+    assert.deepEqual(
+      textRecords(label({ width: 80 })).map((t) => [t.x, t.y]),
+      [[100, 7]]
+    );
+    assert.deepEqual(
+      textRecords(label({ width: 80, align: "left" })).map((t) => t.x),
+      [100]
+    );
+    assert.deepEqual(
+      textRecords(label({ width: 80, align: "center" })).map((t) => t.x),
+      [100 + 25]
+    );
+    assert.deepEqual(
+      textRecords(label({ width: 80, align: "right" })).map((t) => t.x),
+      [100 + 50]
+    );
+    assert.deepEqual(
+      textRecords(label({ width: 31, align: "center" })).map((t) => t.x),
+      [101],
+      "(31 - 30) / 2 = 0.5 -> 1"
+    );
   });
 
   it("does nothing without a width, since the box is then the text itself", () => {
-    assert.deepEqual(textRecords(label({ align: "center" })).map((t) => t.x), [100]);
-    assert.deepEqual(textRecords(label({ align: "right" })).map((t) => t.x), [100]);
+    assert.deepEqual(
+      textRecords(label({ align: "center" })).map((t) => t.x),
+      [100]
+    );
+    assert.deepEqual(
+      textRecords(label({ align: "right" })).map((t) => t.x),
+      [100]
+    );
   });
 
   it("overflows a box that is too small, from the start for left and by the excess for the others", () => {
-    assert.deepEqual(textRecords(label({ width: 10, align: "left" })).map((t) => t.x), [100]);
-    assert.deepEqual(textRecords(label({ width: 10, align: "center" })).map((t) => t.x), [90]);
-    assert.deepEqual(textRecords(label({ width: 10, align: "right" })).map((t) => t.x), [80]);
+    assert.deepEqual(
+      textRecords(label({ width: 10, align: "left" })).map((t) => t.x),
+      [100]
+    );
+    assert.deepEqual(
+      textRecords(label({ width: 10, align: "center" })).map((t) => t.x),
+      [90]
+    );
+    assert.deepEqual(
+      textRecords(label({ width: 10, align: "right" })).map((t) => t.x),
+      [80]
+    );
   });
 
   it("shifts along the text's own axis when it is turned or scaled", () => {
@@ -316,7 +365,11 @@ describe("<Text align>", () => {
     column.addChild(b);
     const { records } = draw(column);
     const texts = records.flatMap((r) => (r.op === "text" ? [r] : []));
-    assert.deepEqual(texts.map((t) => t.x + (t.text.length * 6)), [60, 60], "both end at the right edge of the 60 box");
+    assert.deepEqual(
+      texts.map((t) => t.x + t.text.length * 6),
+      [60, 60],
+      "both end at the right edge of the 60 box"
+    );
     assert.equal(column.box.size[0], 60);
   });
 });
@@ -418,7 +471,14 @@ describe("<Flex float> in the frame", () => {
   it("presses a floating box before the box it covers, and not a floating box's neighbours through it", () => {
     const presses: string[] = [];
     const button = new Flex({ width: 40, height: 20, onPress: () => presses.push("button") });
-    const badge = new Flex({ float: true, anchor: "top-right", to: "top-right", width: 16, height: 16, onPress: () => presses.push("badge") });
+    const badge = new Flex({
+      float: true,
+      anchor: "top-right",
+      to: "top-right",
+      width: 16,
+      height: 16,
+      onPress: () => presses.push("badge"),
+    });
     badge.transform.z = 1;
     button.addChild(badge);
     const backend = new RecordingBackend();
@@ -436,7 +496,16 @@ describe("<Flex float> in the frame", () => {
   });
 
   it("is anchored to the screen's corners when it is the HUD's root, wherever the window is", () => {
-    const corner = new Flex({ float: true, anchor: "bottom-right", to: "bottom-right", offsetX: -8, offsetY: -8, width: 20, height: 10, background: "blue" });
+    const corner = new Flex({
+      float: true,
+      anchor: "bottom-right",
+      to: "bottom-right",
+      offsetX: -8,
+      offsetY: -8,
+      width: 20,
+      height: 10,
+      background: "blue",
+    });
     const screen = new Screen({ width: 320, height: 180 });
     screen.addChild(hud(corner));
     const { records } = draw(screen, 1280, 720);

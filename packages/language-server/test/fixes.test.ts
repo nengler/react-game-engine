@@ -1,6 +1,8 @@
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { after, describe, it } from "node:test";
+
 import { Compiler, type CompilerDiagnostic } from "@rge/compiler";
+
 import { applyEdits, callArguments, fixesFor } from "../src/fixes.ts";
 
 const compiler = new Compiler();
@@ -11,7 +13,12 @@ const diagnose = (source: string): CompilerDiagnostic[] => [...compiler.compile(
 /** Apply the preferred fix (or the only one) for the first diagnostic with `code`, and return the new text. */
 function fix(source: string, code: string): string {
   const diagnostic = diagnose(source).find((d) => d.code === code);
-  assert.ok(diagnostic, `no ${code} in:\n${source}\n${diagnose(source).map((d) => `${d.code} ${d.message}`).join("\n")}`);
+  assert.ok(
+    diagnostic,
+    `no ${code} in:\n${source}\n${diagnose(source)
+      .map((d) => `${d.code} ${d.message}`)
+      .join("\n")}`
+  );
   const fixes = fixesFor(source, diagnostic, compiler);
   const chosen = fixes.find((f) => f.preferred) ?? fixes[0];
   assert.ok(chosen, `no fix for ${code}: ${diagnostic.message}`);
@@ -22,22 +29,34 @@ const codes = (source: string): string[] => diagnose(source).map((d) => d.code);
 
 describe("quick fixes", () => {
   it("imports a hook or built-in that is used but not imported, keeping the list sorted", () => {
-    const fixed = fix(`import { Entity, useInput } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 0 });\n  return <Entity />;\n}\n`, "RGE1005");
+    const fixed = fix(
+      `import { Entity, useInput } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 0 });\n  return <Entity />;\n}\n`,
+      "RGE1005"
+    );
     assert.match(fixed, /^import \{ Entity, useInput, useMutable \} from "@rge\/runtime\/jsx";/);
     assert.deepEqual(codes(fixed), []);
   });
 
   it("imports from the authoring module instead of react, into the import that is there", () => {
-    const fixed = fix(`import { useMutable } from "react";\nimport { Entity } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 0 });\n  return <Entity />;\n}\n`, "RGE1001");
+    const fixed = fix(
+      `import { useMutable } from "react";\nimport { Entity } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 0 });\n  return <Entity />;\n}\n`,
+      "RGE1001"
+    );
     assert.equal(fixed.split("\n")[0], `import { Entity, useMutable } from "@rge/runtime/jsx";`);
     assert.deepEqual(codes(fixed), []);
   });
 
   it("moves a text attribute into the children of <Text>", () => {
-    const literal = fix(`import { Text } from "@rge/runtime/jsx";\nexport function A() {\n  return <Text text="hi" size={8} />;\n}\n`, "RGE1203");
+    const literal = fix(
+      `import { Text } from "@rge/runtime/jsx";\nexport function A() {\n  return <Text text="hi" size={8} />;\n}\n`,
+      "RGE1203"
+    );
     assert.match(literal, /<Text size=\{8\}>hi<\/Text>/);
     assert.deepEqual(codes(literal), []);
-    const expression = fix(`import { Text } from "@rge/runtime/jsx";\nexport function A({ n }: AProps) {\n  return <Text size={8} text={\`n \${n}\`} />;\n}\ninterface AProps { n: number }\n`, "RGE1203");
+    const expression = fix(
+      `import { Text } from "@rge/runtime/jsx";\nexport function A({ n }: AProps) {\n  return <Text size={8} text={\`n \${n}\`} />;\n}\ninterface AProps { n: number }\n`,
+      "RGE1203"
+    );
     assert.match(expression, /<Text size=\{8\}>\{`n \$\{n\}`\}<\/Text>/);
     assert.deepEqual(codes(expression), []);
   });
@@ -57,29 +76,46 @@ describe("quick fixes", () => {
   });
 
   it("turns useMemo into the value and useCallback into the function", () => {
-    const memo = fix(`import { Entity, useMemo, useMutable } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const twice = useMemo(() => (s.x * 2), [s.x]);\n  return <Entity transform={{ x: twice }} />;\n}\n`, "RGE1102");
+    const memo = fix(
+      `import { Entity, useMemo, useMutable } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const twice = useMemo(() => (s.x * 2), [s.x]);\n  return <Entity transform={{ x: twice }} />;\n}\n`,
+      "RGE1102"
+    );
     assert.match(memo, /const twice = s\.x \* 2;/);
     assert.match(memo, /import \{ Entity, useMutable \}/);
     assert.deepEqual(codes(memo), []);
-    const callback = fix(`import { Entity, useCallback, useMutable } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const more = useCallback(() => { s.x += 1; }, [s.x]);\n  return <Entity onPress={more} />;\n}\n`, "RGE1102");
+    const callback = fix(
+      `import { Entity, useCallback, useMutable } from "@rge/runtime/jsx";\nexport function A() {\n  const s = useMutable({ x: 2 });\n  const more = useCallback(() => { s.x += 1; }, [s.x]);\n  return <Entity onPress={more} />;\n}\n`,
+      "RGE1102"
+    );
     assert.match(callback, /const more = \(\) => \{ s\.x \+= 1; \};/);
   });
 
   it("takes actions with useGame.actions() instead of from the whole state", () => {
     const source = `const { begin } = useGame((s) => s);`;
-    const fixes = fixesFor(source, { code: "RGE1108", severity: "warning", message: "Take actions with `const { begin } = useGame.actions()` rather than from the whole state", span: { fileName: "src/A.tsx", start: 0, end: source.length, line: 1, column: 1 } });
+    const fixes = fixesFor(source, {
+      code: "RGE1108",
+      severity: "warning",
+      message: "Take actions with `const { begin } = useGame.actions()` rather than from the whole state",
+      span: { fileName: "src/A.tsx", start: 0, end: source.length, line: 1, column: 1 },
+    });
     assert.equal(applyEdits(source, fixes[0]!.edits), "const { begin } = useGame.actions();");
   });
 
   it("removes a name the authoring module does not export, and the import with it when it was the last", () => {
-    const fixed = fix(`import { Entity } from "@rge/runtime/jsx";\nimport { useLayoutEffect } from "@rge/runtime/jsx";\nexport function A() {\n  return <Entity />;\n}\n`, "RGE1004");
+    const fixed = fix(
+      `import { Entity } from "@rge/runtime/jsx";\nimport { useLayoutEffect } from "@rge/runtime/jsx";\nexport function A() {\n  return <Entity />;\n}\n`,
+      "RGE1004"
+    );
     assert.ok(!fixed.includes("useLayoutEffect"), fixed);
   });
 
   it("finds a call's arguments past strings, templates, comments and nested brackets", () => {
     const source = `f(a(")", 1), "x,y", \`t\${1}\` /* ), */, [1, 2])`;
     const found = callArguments(source, 1)!;
-    assert.deepEqual(found.args.map((a) => source.slice(a.start, a.end)), [`a(")", 1)`, `"x,y"`, "`t${1}` /* ), */", "[1, 2]"]);
+    assert.deepEqual(
+      found.args.map((a) => source.slice(a.start, a.end)),
+      [`a(")", 1)`, `"x,y"`, "`t${1}` /* ), */", "[1, 2]"]
+    );
     assert.equal(found.close, source.length - 1);
   });
 
@@ -104,7 +140,9 @@ export function Lamp() {
     for (let round = 0; round < 10; round++) {
       const found = diagnose(source).filter((d) => d.severity === "error");
       if (found.length === 0) break;
-      const fixable = found.map((d) => ({ d, fix: fixesFor(source, d, compiler).find((f) => f.preferred) ?? fixesFor(source, d, compiler)[0] })).find((x) => x.fix !== undefined);
+      const fixable = found
+        .map((d) => ({ d, fix: fixesFor(source, d, compiler).find((f) => f.preferred) ?? fixesFor(source, d, compiler)[0] }))
+        .find((x) => x.fix !== undefined);
       assert.ok(fixable, `no fix left for:\n${found.map((d) => `${d.code} ${d.message}`).join("\n")}\n${source}`);
       applied.push(fixable.fix!.title);
       source = applyEdits(source, fixable.fix!.edits);

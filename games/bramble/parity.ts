@@ -4,6 +4,7 @@
  * two outputs to be identical, and two runs under Node to be identical too.
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+
 import { bindings, gameConfig } from "./game.ts";
 import { useGame } from "./src/GameState.ts";
 import { route, TO_THE_CAVE } from "./test/replays.ts";

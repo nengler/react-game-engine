@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Entity, GameObject } from "@rge/runtime";
+
 import { parseInputScript, runScript, ScriptedInputBackend, RecordingBackend, type PlayerConfig } from "../src/index.ts";
 
 /** A hand-written object that counts the frames in which it saw a key down and a key pressed: the observable of this test. */
@@ -18,7 +20,11 @@ describe("runScript", () => {
     let counter: Counter | null = null;
     const config: PlayerConfig = { root: () => (counter = new Counter()) };
     const frames = parseInputScript("_*2, Space*3, _*2");
-    const result = runScript(config, frames, () => `${(counter as unknown as Counter).downFrames}/${(counter as unknown as Counter).pressedFrames}`);
+    const result = runScript(
+      config,
+      frames,
+      () => `${(counter as unknown as Counter).downFrames}/${(counter as unknown as Counter).pressedFrames}`
+    );
     assert.deepEqual(result.states, ["0/0", "0/0", "1/1", "2/1", "3/1", "3/1", "3/1"]);
     assert.equal(result.backend.frames.length, frames.length + 1, "the warm-up step plus one per frame");
     assert.deepEqual(result.warnings, []);

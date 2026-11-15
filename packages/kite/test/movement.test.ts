@@ -1,11 +1,13 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { newBody, NO_CONTROLS, stepBody, type Body, type Controls, type SolidAt } from "../src/rules/body.ts";
-import type { GameEvent } from "../src/rules/events.ts";
+import { describe, it } from "node:test";
+
 import { createInputState } from "@rge/runtime";
-import { controls, readControls } from "../src/rules/controls.ts";
+
+import { newBody, NO_CONTROLS, stepBody, type Body, type Controls, type SolidAt } from "../src/rules/body.ts";
 import * as K from "../src/rules/constants.ts";
 import { BODY_H, COYOTE, DASH_SPEED, JUMP_BUFFER, TILE } from "../src/rules/constants.ts";
+import { controls, readControls } from "../src/rules/controls.ts";
+import type { GameEvent } from "../src/rules/events.ts";
 
 const DT = 1 / 60;
 const FLOOR = 100;
@@ -16,7 +18,12 @@ const STAND_Y = FLOOR - BODY_H;
 type Played = Body[] & { events: GameEvent[][] };
 
 /** Step a body through `frames` frames of a controls function. */
-function play(controls: (frame: number, body: Body) => Partial<Controls>, frames: number, start: Partial<Body> = {}, solid: SolidAt = flat): Played {
+function play(
+  controls: (frame: number, body: Body) => Partial<Controls>,
+  frames: number,
+  start: Partial<Body> = {},
+  solid: SolidAt = flat
+): Played {
   let body: Body = { ...newBody(100, STAND_Y), ...start };
   const out = Object.assign([] as Body[], { events: [] as GameEvent[][] });
   for (let i = 0; i < frames; i++) {
@@ -29,7 +36,11 @@ function play(controls: (frame: number, body: Body) => Partial<Controls>, frames
 }
 
 /** How many `type` events happened up to and including frame `last`. */
-const happened = (played: Played, type: GameEvent["type"], last = Infinity): number => played.events.slice(0, last + 1).flat().filter((e) => e.type === type).length;
+const happened = (played: Played, type: GameEvent["type"], last = Infinity): number =>
+  played.events
+    .slice(0, last + 1)
+    .flat()
+    .filter((e) => e.type === type).length;
 
 const rise = (bodies: Body[]): number => STAND_Y - Math.min(...bodies.map((b) => b.y));
 const landing = (bodies: Body[], after: number): number => bodies.findIndex((b, i) => i > after && b.onGround);
@@ -50,7 +61,10 @@ describe("running", () => {
   it("is stopped by a wall, and ends the step outside it however fast it was going", () => {
     const wall: SolidAt = (x, y) => y >= FLOOR || x >= 150;
     const bodies = play((i) => ({ right: true, dashPressed: i === 3 }), 60, {}, wall);
-    assert.ok(bodies.every((b) => b.x + 8 <= 150), "never inside the wall");
+    assert.ok(
+      bodies.every((b) => b.x + 8 <= 150),
+      "never inside the wall"
+    );
     assert.equal(bodies.at(-1)?.x, 142);
   });
 });
@@ -136,24 +150,43 @@ describe("the dash", () => {
     const right = play((i) => ({ right: i === 1, dashPressed: i === 1 }), 30);
     assert.ok((right.at(-1)?.x ?? 0) - 100 >= 42, "reaches about five tiles");
     const dist = (c: Partial<Controls>): number => {
-      const bodies = play((i) => (i === 1 ? { ...c, dashPressed: true } : {}), 10, { y: 20 }, () => false);
+      const bodies = play(
+        (i) => (i === 1 ? { ...c, dashPressed: true } : {}),
+        10,
+        { y: 20 },
+        () => false
+      );
       const last = bodies.at(-1) as Body;
       return Math.hypot(last.x - 100, last.y - 20);
     };
     const straight = dist({ right: true });
     const diagonal = dist({ right: true, up: true });
     assert.ok(Math.abs(straight - diagonal) < 4, `straight ${straight}, diagonal ${diagonal}`);
-    assert.ok(Math.abs(dist({ left: true }) - straight) < 2 && Math.abs(dist({ up: true }) - straight) < 2 && Math.abs(dist({ down: true, left: true }) - straight) < 4);
-    assert.equal(play((i) => (i === 1 ? { dashPressed: true } : {}), 3, { facing: -1 })[2]?.vx, -DASH_SPEED, "with nothing held it goes the way the character faces");
+    assert.ok(
+      Math.abs(dist({ left: true }) - straight) < 2 &&
+        Math.abs(dist({ up: true }) - straight) < 2 &&
+        Math.abs(dist({ down: true, left: true }) - straight) < 4
+    );
+    assert.equal(
+      play((i) => (i === 1 ? { dashPressed: true } : {}), 3, { facing: -1 })[2]?.vx,
+      -DASH_SPEED,
+      "with nothing held it goes the way the character faces"
+    );
   });
 
   it("is used up in the air and comes back on the ground", () => {
-    const bodies = play((i) => ({ jumpPressed: i === 1, jumpHeld: i >= 1 && i < 30, right: true, dashPressed: i === 10 || i === 30 || i === 60 }), 140);
+    const bodies = play(
+      (i) => ({ jumpPressed: i === 1, jumpHeld: i >= 1 && i < 30, right: true, dashPressed: i === 10 || i === 30 || i === 60 }),
+      140
+    );
     assert.equal(bodies[9]?.dashes, 1);
     assert.equal(bodies[10]?.dashes, 0);
     assert.equal(happened(bodies, "dash", 10), 1);
     assert.equal(happened(bodies, "dash", 31), 1, "a second press in the air does nothing");
-    assert.ok(bodies.slice(-20).every((b) => b.onGround && b.dashes === 1), "refilled on landing, and the third press never started before that");
+    assert.ok(
+      bodies.slice(-20).every((b) => b.onGround && b.dashes === 1),
+      "refilled on landing, and the third press never started before that"
+    );
   });
 
   it("with a jump first, reaches what neither can alone: a ledge over six tiles up, and a gap of eight", () => {
@@ -162,11 +195,19 @@ describe("the dash", () => {
     assert.ok(rise(up) >= 65, `a jump then a dash up rises ${rise(up)}`);
     const across = play((i) => ({ right: true, jumpPressed: i === 1, jumpHeld: i >= 1 && i < 14, dashPressed: i === 14 }), 120);
     const down = landing(across, 3);
-    assert.ok((across[down]?.x ?? 0) - 100 >= 8 * TILE - 6 + 8, `a jump then a dash covers ${(across[down]?.x ?? 0) - 100}, 8px more than the gap needs`);
+    assert.ok(
+      (across[down]?.x ?? 0) - 100 >= 8 * TILE - 6 + 8,
+      `a jump then a dash covers ${(across[down]?.x ?? 0) - 100}, 8px more than the gap needs`
+    );
   });
 
   it("cannot start again for a moment after it starts", () => {
-    const bodies = play((i) => ({ right: true, dashPressed: i === 1 || i === 8 }), 30, { y: 20 }, () => false);
+    const bodies = play(
+      (i) => ({ right: true, dashPressed: i === 1 || i === 8 }),
+      30,
+      { y: 20 },
+      () => false
+    );
     assert.equal(happened(bodies, "dash"), 1);
   });
 });
@@ -177,11 +218,21 @@ describe("walls", () => {
   const atWall = { x: WALL_X - 8, y: 20 };
 
   it("slides slowly at first while held toward it, faster the longer it lasts, and falls freely otherwise", () => {
-    const sliding = play(() => ({ right: true }), 70, { ...atWall, vy: 100 }, (x) => x >= WALL_X);
+    const sliding = play(
+      () => ({ right: true }),
+      70,
+      { ...atWall, vy: 100 },
+      (x) => x >= WALL_X
+    );
     assert.ok(sliding[10]!.sliding);
     assert.ok(sliding[8]!.vy <= 40, `slow at the start: ${sliding[8]!.vy}`);
     assert.ok(sliding[69]!.vy > sliding[12]!.vy + 20, `faster after a second: ${sliding[69]!.vy}`);
-    const falling = play(() => ({}), 40, { ...atWall, vy: 100 }, (x) => x >= WALL_X);
+    const falling = play(
+      () => ({}),
+      40,
+      { ...atWall, vy: 100 },
+      (x) => x >= WALL_X
+    );
     assert.equal(falling.at(-1)?.vy, K.MAX_FALL);
   });
 
@@ -201,7 +252,12 @@ describe("walls", () => {
   });
 
   it("bounces high off a wall when jumping during a dash straight up beside it (a wall bounce)", () => {
-    const bodies = play((i) => ({ up: i >= 1, dashPressed: i === 1, jumpPressed: i === 5, jumpHeld: i >= 5 }), 8, { ...atWall, x: WALL_X - 8 - 1, y: 60 }, wall);
+    const bodies = play(
+      (i) => ({ up: i >= 1, dashPressed: i === 1, jumpPressed: i === 5, jumpHeld: i >= 5 }),
+      8,
+      { ...atWall, x: WALL_X - 8 - 1, y: 60 },
+      wall
+    );
     const bounce = bodies.findIndex((_, i) => bodies.events[i]!.some((e) => e.type === "wallJump"));
     assert.ok(bounce > 0);
     assert.equal(bodies[bounce]?.vx, -K.SUPER_WALL_JUMP_H);
@@ -215,7 +271,12 @@ describe("climbing", () => {
   const beside = { x: WALL_X - 8, y: 40, facing: 1 };
 
   it("holds onto a wall with grab, climbs at the climb speed, and runs out of stamina in about two and a half seconds", () => {
-    const bodies = play(() => ({ grab: true, up: true }), 200, { ...beside, y: 60 }, (x) => x >= WALL_X);
+    const bodies = play(
+      () => ({ grab: true, up: true }),
+      200,
+      { ...beside, y: 60 },
+      (x) => x >= WALL_X
+    );
     assert.ok(bodies[2]!.state === "climb");
     assert.ok(Math.abs((bodies[30]?.vy ?? 0) + K.CLIMB_UP_SPEED) < 1, `climbs up at ${bodies[30]?.vy}`);
     const letGo = bodies.findIndex((b) => b.state !== "climb");
@@ -236,7 +297,10 @@ describe("climbing", () => {
     const top = 50;
     const ledge: SolidAt = (x, y) => y >= FLOOR || (x >= WALL_X && y >= top);
     const bodies = play((i) => ({ grab: true, up: true, right: i > 30 }), 90, { ...beside, y: top + 10 }, ledge);
-    assert.ok(bodies.some((b) => b.onGround && b.x >= WALL_X && b.y + BODY_H === top), "standing on the top");
+    assert.ok(
+      bodies.some((b) => b.onGround && b.x >= WALL_X && b.y + BODY_H === top),
+      "standing on the top"
+    );
   });
 
   it("jumps up the wall from a hold, spending stamina; pushing away straight after makes it a wall jump", () => {
@@ -257,7 +321,10 @@ describe("Celeste's tech", () => {
   });
 
   it("hypers: a jump while sliding from a dash down at an angle on the ground is longer and flatter", () => {
-    const bodies = play((i) => ({ right: i >= 1, down: i >= 1 && i < 4, dashPressed: i === 1, jumpPressed: i === 4, jumpHeld: i >= 4 && i < 6 }), 6);
+    const bodies = play(
+      (i) => ({ right: i >= 1, down: i >= 1 && i < 4, dashPressed: i === 1, jumpPressed: i === 4, jumpHeld: i >= 4 && i < 6 }),
+      6
+    );
     assert.ok(bodies[2]!.ducking, "the dash became a slide");
     assert.equal(bodies[4]?.vx, K.SUPER_JUMP_H * K.DUCK_SUPER_JUMP_X_MULT);
     assert.equal(bodies[4]?.vy, -K.JUMP_SPEED * K.DUCK_SUPER_JUMP_Y_MULT);
@@ -266,26 +333,45 @@ describe("Celeste's tech", () => {
 
   it("wavedashes: a dash down at an angle from just above the ground lands as a slide, and a jump from it is a hyper", () => {
     let jumped = -1;
-    const bodies = play((i, b) => {
-      if (jumped < 0 && b.onGround && b.state === "dash" && i > 3) jumped = i;
-      return { right: true, down: i < 8, dashPressed: i === 2, jumpPressed: i === jumped, jumpHeld: i === jumped };
-    }, 30, { y: STAND_Y - 6, vy: 0 });
+    const bodies = play(
+      (i, b) => {
+        if (jumped < 0 && b.onGround && b.state === "dash" && i > 3) jumped = i;
+        return { right: true, down: i < 8, dashPressed: i === 2, jumpPressed: i === jumped, jumpHeld: i === jumped };
+      },
+      30,
+      { y: STAND_Y - 6, vy: 0 }
+    );
     const hyper = bodies.findIndex((b) => b.vx > K.SUPER_JUMP_H);
     assert.ok(hyper > 0, "a jump out of the landing went faster than a super jump");
   });
 
   it("keeps a downward dash's speed when it ends, and floats after any dash as if jump were held", () => {
-    const down = play((i) => ({ down: true, dashPressed: i === 1 }), 14, { y: 0 }, () => false);
+    const down = play(
+      (i) => ({ down: true, dashPressed: i === 1 }),
+      14,
+      { y: 0 },
+      () => false
+    );
     const over = down.findIndex((b, i) => i > 2 && b.state !== "dash");
     assert.equal(down[over]?.vy, K.DASH_SPEED, "a dash down is not slowed when it ends");
-    const up = play((i) => ({ up: true, dashPressed: i === 1 }), 14, { y: 50 }, () => false);
+    const up = play(
+      (i) => ({ up: true, dashPressed: i === 1 }),
+      14,
+      { y: 50 },
+      () => false
+    );
     const ended = up.findIndex((b, i) => i > 2 && b.state !== "dash");
     assert.ok(up[ended]!.autoJump);
     assert.equal(up[ended]?.vy, -K.END_DASH_SPEED * K.END_DASH_UP_MULT);
   });
 
   it("raises the fall cap gradually while holding down", () => {
-    const bodies = play(() => ({ down: true }), 60, { y: 0, vy: K.MAX_FALL }, () => false);
+    const bodies = play(
+      () => ({ down: true }),
+      60,
+      { y: 0, vy: K.MAX_FALL },
+      () => false
+    );
     assert.ok(bodies[5]!.vy < K.FAST_MAX_FALL && bodies[5]!.vy > K.MAX_FALL);
     assert.equal(bodies[59]?.vy, K.FAST_MAX_FALL);
   });

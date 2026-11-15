@@ -22,7 +22,17 @@ export const FLEX_OVERFLOW = ["visible", "hidden", "scroll"] as const;
 export type FlexOverflow = (typeof FLEX_OVERFLOW)[number];
 
 /** The nine points of a box that a floating `<Flex>` is attached by (`anchor`) and to (`to`). */
-export const FLEX_ANCHORS = ["top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center", "bottom-right"] as const;
+export const FLEX_ANCHORS = [
+  "top-left",
+  "top-center",
+  "top-right",
+  "center-left",
+  "center",
+  "center-right",
+  "bottom-left",
+  "bottom-center",
+  "bottom-right",
+] as const;
 export type FlexAnchor = (typeof FLEX_ANCHORS)[number];
 
 /**
@@ -261,7 +271,12 @@ export class FlexBox {
  * inside it, and a widget's parts sit inside it.
  */
 export function flexBorderRoom(f: Flex): number {
-  const coloured = f.borderColor !== undefined || f.hoverBorderColor !== undefined || f.focusBorderColor !== undefined || f.pressedBorderColor !== undefined || f.disabledBorderColor !== undefined;
+  const coloured =
+    f.borderColor !== undefined ||
+    f.hoverBorderColor !== undefined ||
+    f.focusBorderColor !== undefined ||
+    f.pressedBorderColor !== undefined ||
+    f.disabledBorderColor !== undefined;
   return f.borderWidth > 0 && Number.isFinite(f.borderWidth) && coloured ? f.borderWidth : 0;
 }
 

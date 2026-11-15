@@ -1,10 +1,8 @@
+import { type HostElementIR, type PropDeclIR } from "./elements.ts";
+import { type ExprIR } from "./expressions.ts";
 // The IR of a module and its declarations: components, hooks, state, refs and sounds.
 import { type StateId, type SoundId, type SourceSpan } from "./ids.ts";
 import { type TypeIR, type FunctionIR } from "./values.ts";
-import { type HostElementIR, type PropDeclIR } from "./elements.ts";
-import { type ExprIR } from "./expressions.ts";
-
-
 
 // ---------------------------------------------------------------------------
 // Module / component

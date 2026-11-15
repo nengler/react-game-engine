@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * `z`: draw order, written in `transform` beside `x` and `y` (priority 3 in docs/NEXT_PRIORITIES.md). The compiler
  * treats it like any transform field; what it means is the player's draw pass, tested in packages/player.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { Entity, Shape, World } from "@rge/runtime";
+
 import { FrameBuilder } from "@rge/player";
+import { Entity, Shape, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, load } from "./helpers.ts";
 
@@ -56,10 +58,20 @@ describe("z in transform", () => {
   it("is an ordinary transform field: static ones are set once, ones that read state or props in render", () => {
     const compiled = compile(SOURCE, "Cards.tsx");
     const card = compiled.ir.components.find((c) => c.name === "Card")!;
-    assert.deepEqual(card.root.transform.map((p) => [p.name, p.kind]), [["z", "DynamicProp"]], "from a prop");
+    assert.deepEqual(
+      card.root.transform.map((p) => [p.name, p.kind]),
+      [["z", "DynamicProp"]],
+      "from a prop"
+    );
     const [fixed, moving] = card.root.children.map((c) => elementOf(c));
-    assert.deepEqual(fixed!.transform.map((p) => [p.name, p.kind]), [["z", "StaticProp"]]);
-    assert.deepEqual(moving!.transform.map((p) => [p.name, p.kind]), [["z", "DynamicProp"]]);
+    assert.deepEqual(
+      fixed!.transform.map((p) => [p.name, p.kind]),
+      [["z", "StaticProp"]]
+    );
+    assert.deepEqual(
+      moving!.transform.map((p) => [p.name, p.kind]),
+      [["z", "DynamicProp"]]
+    );
     assert.match(compiled.code, /this\.shape\.transform\.z = 2;/);
     assert.match(compiled.code, /const (\$\d+) = this\.\$s_front \? 5 : \(-5\);[^]*?this\.shape2\.transform\.z = \1;/);
   });
@@ -103,7 +115,12 @@ describe("z: diagnostics", () => {
   it("type-checks z as a number in authored source", async () => {
     const { getCompiler } = await import("./helpers.ts");
     const check = (z: string) =>
-      getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/Z${Math.random()}.tsx`, text: `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C" transform={{ z: ${z} }} />; }` }]);
+      getCompiler().typeCheckSources([
+        {
+          fileName: `${process.cwd()}/.test-output/Z${Math.random()}.tsx`,
+          text: `import { Entity } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C" transform={{ z: ${z} }} />; }`,
+        },
+      ]);
     assert.deepEqual(check("3"), []);
     assert.ok(check(`"front"`).length > 0);
   });

@@ -1,10 +1,8 @@
+import { type TransformField } from "./declarations.ts";
+import { type ExprIR } from "./expressions.ts";
 // The IR of the element tree: component references, elements, children, props and their dependencies.
 import { type StateId, type ElementId, type SourceSpan } from "./ids.ts";
-import { type TransformField } from "./declarations.ts";
 import { type ParamIR, type FunctionIR, type PropTypeIR } from "./values.ts";
-import { type ExprIR } from "./expressions.ts";
-
-
 
 // ---------------------------------------------------------------------------
 // Elements

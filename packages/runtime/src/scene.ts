@@ -72,7 +72,10 @@ export function loadScene(world: World, scene: Scene, prefabs: PrefabRegistry): 
   const byId = new Map<string, GameObject>();
   const build = (entity: SceneEntity): GameObject => {
     const prefab = Object.hasOwn(prefabs, entity.prefab) ? prefabs[entity.prefab] : undefined;
-    if (!prefab) throw new Error(`Scene entity '${entity.id}': unknown prefab '${entity.prefab}' (known: ${Object.keys(prefabs).join(", ") || "none"}).`);
+    if (!prefab)
+      throw new Error(
+        `Scene entity '${entity.id}': unknown prefab '${entity.prefab}' (known: ${Object.keys(prefabs).join(", ") || "none"}).`
+      );
     if (byId.has(entity.id)) throw new Error(`Scene entity '${entity.id}': duplicate id.`);
     const object = prefab.create(entity.props ? { ...entity.props } : undefined);
     byId.set(entity.id, object);

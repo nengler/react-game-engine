@@ -11,7 +11,10 @@ const [rge, game] = process.argv.slice(2).map((arg) => resolve(arg)) as [string,
 const component = readdirSync(join(game, "src")).find((name) => name.endsWith(".tsx") && name !== "Main.tsx") ?? "Main.tsx";
 const path = join(game, "src", component);
 // A statement at the top of the component's body: after the line that declares it.
-const text = readFileSync(path, "utf8").replace(/(export (?:default )?function \w+\([^)]*\)[^{]*\{\n)/, "$1  const smoke = useMutable({ n: 0 });\n");
+const text = readFileSync(path, "utf8").replace(
+  /(export (?:default )?function \w+\([^)]*\)[^{]*\{\n)/,
+  "$1  const smoke = useMutable({ n: 0 });\n"
+);
 const uri = pathToFileURL(path).href;
 
 const child = spawn(rge, ["lsp"], { cwd: game, stdio: ["pipe", "pipe", "inherit"] });
@@ -32,7 +35,11 @@ child.stdout.on("data", (chunk: Buffer) => {
     if (end === -1) return;
     const length = Number(/Content-Length: (\d+)/.exec(buffer.subarray(0, end).toString())?.[1]);
     if (buffer.length < end + 4 + length) return;
-    const message = JSON.parse(buffer.subarray(end + 4, end + 4 + length).toString("utf8")) as { id?: number; method?: string; params?: { uri: string; diagnostics: { code: string }[] } };
+    const message = JSON.parse(buffer.subarray(end + 4, end + 4 + length).toString("utf8")) as {
+      id?: number;
+      method?: string;
+      params?: { uri: string; diagnostics: { code: string }[] };
+    };
     buffer = buffer.subarray(end + 4 + length);
     if (message.method === "textDocument/publishDiagnostics" && message.params?.uri === uri) {
       const codes = message.params.diagnostics.map((d) => d.code);

@@ -1,14 +1,30 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { AnimatedSprite, Camera, Collider, Entity, GameObject, Pointer, Screen, Shape, Sprite, Text, Tilemap, World, registerTilemaps } from "@rge/runtime";
+
+import {
+  AnimatedSprite,
+  Camera,
+  Collider,
+  Entity,
+  GameObject,
+  Pointer,
+  Screen,
+  Shape,
+  Sprite,
+  Text,
+  Tilemap,
+  World,
+  registerTilemaps,
+} from "@rge/runtime";
+
 import { Hero } from "../../example/generated/Hero.ts";
 import { Level } from "../../example/generated/Level.ts";
 import { estimateTextWidth, FrameBuilder, walkTree } from "../src/draw.ts";
-import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 import { RGE_IN_LEN, KEYS } from "../src/protocol.ts";
+import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -20,12 +36,29 @@ interface Drawn {
 }
 
 /** Build one frame for `root` and decode it through the recording backend, as a player would. */
-function draw(root: GameObject, options: { width?: number; height?: number; missing?: string[]; builder?: FrameBuilder; backend?: RecordingBackend; warnings?: string[] } = {}): Drawn {
+function draw(
+  root: GameObject,
+  options: {
+    width?: number;
+    height?: number;
+    missing?: string[];
+    builder?: FrameBuilder;
+    backend?: RecordingBackend;
+    warnings?: string[];
+  } = {}
+): Drawn {
   const backend = options.backend ?? new RecordingBackend({ missingTextures: options.missing });
   const warnings = options.warnings ?? [];
   const builder = options.builder ?? new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), warn: (m) => warnings.push(m) });
   const built = builder.build(root, options.width ?? 800, options.height ?? 600);
-  backend.frame(0x000000ff, built.list.records, built.list.length, built.list.texts, new Float64Array(RGE_IN_LEN), new Uint8Array(KEYS.length));
+  backend.frame(
+    0x000000ff,
+    built.list.records,
+    built.list.length,
+    built.list.texts,
+    new Float64Array(RGE_IN_LEN),
+    new Uint8Array(KEYS.length)
+  );
   return { records: [...backend.lastFrame.records], warnings, built, backend };
 }
 
@@ -43,7 +76,11 @@ function golden(name: string, actual: unknown): void {
     return;
   }
   assert.ok(existsSync(file), `test/golden/${name}.json is missing (UPDATE_GOLDEN=1 to create it)`);
-  assert.deepEqual(JSON.parse(text), JSON.parse(readFileSync(file, "utf8")), `${name} differs from test/golden/${name}.json (UPDATE_GOLDEN=1 to accept)`);
+  assert.deepEqual(
+    JSON.parse(text),
+    JSON.parse(readFileSync(file, "utf8")),
+    `${name} differs from test/golden/${name}.json (UPDATE_GOLDEN=1 to accept)`
+  );
 }
 
 function mounted(object: GameObject): World {
@@ -62,7 +99,8 @@ describe("walkTree", () => {
     let cameras = 0;
     walkTree(world.root, (object, transform) => {
       const expected = object.worldTransform();
-      for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const) close(transform[field], expected[field], `${object.constructor.name}.${field}`);
+      for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const)
+        close(transform[field], expected[field], `${object.constructor.name}.${field}`);
       count++;
       if (object instanceof Camera) cameras++;
     });
@@ -89,7 +127,8 @@ describe("walkTree", () => {
     inner.addChild(pinned);
     walkTree(outer, (object, transform) => {
       const expected = object.worldTransform();
-      for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const) close(transform[field], expected[field], `${object.constructor.name}.${field}`);
+      for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const)
+        close(transform[field], expected[field], `${object.constructor.name}.${field}`);
     });
   });
 
@@ -116,7 +155,8 @@ describe("walkTree", () => {
     let count = 0;
     walkTree(outer, (object, transform) => {
       const expected = object.worldTransform();
-      for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const) close(transform[field], expected[field], `${object.constructor.name}.${field}`);
+      for (const field of ["x", "y", "rotation", "scaleX", "scaleY"] as const)
+        close(transform[field], expected[field], `${object.constructor.name}.${field}`);
       count++;
     });
     assert.equal(count, 5);
@@ -166,7 +206,10 @@ describe("FrameBuilder: what each element draws", () => {
 
   it("draws nothing for a sprite with no image", () => {
     const { records } = draw(new AnimatedSprite({ frames: [] }));
-    assert.deepEqual(records.map((r) => r.op), ["view"]);
+    assert.deepEqual(
+      records.map((r) => r.op),
+      ["view"]
+    );
   });
 
   it("draws a rect and a circle with their size and colour", () => {
@@ -174,10 +217,13 @@ describe("FrameBuilder: what each element draws", () => {
     root.addChild(new Shape({ kind: "rect", width: 20, height: 10, color: "red" }));
     root.addChild(new Shape({ kind: "circle", width: 8, height: 6 }));
     const { records } = draw(root);
-    assert.deepEqual(records.slice(1).map((r) => (r.op === "rect" || r.op === "ellipse" ? [r.op, r.width, r.height, r.color] : r.op)), [
-      ["rect", 20, 10, "#ff0000ff"],
-      ["ellipse", 8, 6, "#ffffffff"],
-    ]);
+    assert.deepEqual(
+      records.slice(1).map((r) => (r.op === "rect" || r.op === "ellipse" ? [r.op, r.width, r.height, r.color] : r.op)),
+      [
+        ["rect", 20, 10, "#ff0000ff"],
+        ["ellipse", 8, 6, "#ffffffff"],
+      ]
+    );
   });
 
   it("draws text with its size and colour, and skips empty text", () => {
@@ -186,10 +232,13 @@ describe("FrameBuilder: what each element draws", () => {
     root.addChild(new Text({ text: "" }));
     root.addChild(new Text({ text: "second" }));
     const { records, built } = draw(root);
-    assert.deepEqual(records.slice(1).map((r) => (r.op === "text" ? [r.text, r.size, r.color] : r.op)), [
-      ["Score: 3", 12, "#ffd700ff"],
-      ["second", 16, "#ffffffff"],
-    ]);
+    assert.deepEqual(
+      records.slice(1).map((r) => (r.op === "text" ? [r.text, r.size, r.color] : r.op)),
+      [
+        ["Score: 3", 12, "#ffd700ff"],
+        ["second", 16, "#ffffffff"],
+      ]
+    );
     assert.deepEqual(built.list.texts, ["Score: 3", "second"]);
   });
 
@@ -201,7 +250,10 @@ describe("FrameBuilder: what each element draws", () => {
     root.addChild(pointer);
     root.addChild(collider);
     const { records, built } = draw(root);
-    assert.deepEqual(records.map((r) => r.op), ["view"]);
+    assert.deepEqual(
+      records.map((r) => r.op),
+      ["view"]
+    );
     assert.deepEqual(built.pointers, [pointer]);
     assert.equal(built.colliders.length, 1);
     assert.equal(built.colliders[0]?.collider, collider);
@@ -216,7 +268,10 @@ describe("FrameBuilder: what each element draws", () => {
     root.addChild(first);
     root.addChild(new Shape({ kind: "rect", width: 3, height: 3, color: "#030303" }));
     const { records } = draw(root);
-    assert.deepEqual(records.slice(1).map((r) => (r.op === "rect" ? r.width : -1)), [1, 2, 3]);
+    assert.deepEqual(
+      records.slice(1).map((r) => (r.op === "rect" ? r.width : -1)),
+      [1, 2, 3]
+    );
   });
 
   it("applies a parent's transform to its children", () => {
@@ -254,7 +309,17 @@ describe("FrameBuilder: textures", () => {
     const builder = new FrameBuilder({ loadTexture: (p) => backend.loadTexture(p), warn: (m) => warnings.push(m) });
     const first = draw(root, { builder, backend, warnings });
     draw(root, { builder, backend, warnings });
-    assert.deepEqual(first.records[1], { op: "rect", x: 4, y: 0, rotation: 0, scaleX: 1, scaleY: 1, width: 16, height: 16, color: "#ff00ffff" });
+    assert.deepEqual(first.records[1], {
+      op: "rect",
+      x: 4,
+      y: 0,
+      rotation: 0,
+      scaleX: 1,
+      scaleY: 1,
+      width: 16,
+      height: 16,
+      color: "#ff00ffff",
+    });
     assert.equal(warnings.length, 1);
     assert.match(warnings[0] as string, /assets\/missing\.png/);
     assert.deepEqual(backend.textureLoads, ["assets/missing.png"], "a failed load is not retried every frame");
@@ -396,7 +461,10 @@ describe("FrameBuilder: buffers", () => {
     for (let i = 0; i < 10; i++) many.addChild(new Text({ text: `t${i}` }));
     draw(many, { builder, backend });
     const few = draw(new Entity(), { builder, backend });
-    assert.deepEqual(few.records.map((r) => r.op), ["view"]);
+    assert.deepEqual(
+      few.records.map((r) => r.op),
+      ["view"]
+    );
     assert.deepEqual(few.built.list.texts, []);
   });
 });
@@ -465,7 +533,9 @@ describe("FrameBuilder: measuring, for layout", () => {
   });
 
   it("measures an animated sprite by its first frame, so the size does not jitter", () => {
-    const backend = new RecordingBackend({ textureSizes: { "assets/a.png": { width: 8, height: 8 }, "assets/b.png": { width: 30, height: 30 } } });
+    const backend = new RecordingBackend({
+      textureSizes: { "assets/a.png": { width: 8, height: 8 }, "assets/b.png": { width: 30, height: 30 } },
+    });
     const sprite = new AnimatedSprite({ frames: ["a.png", "b.png"], fps: 10 });
     sprite.onUpdate(0.15);
     assert.equal(sprite.image, "b.png");
@@ -540,7 +610,10 @@ describe("FrameBuilder: draw order (z)", () => {
       expected.push({ id: i, z });
     }
     expected.sort((a, b) => a.z - b.z || a.id - b.id);
-    assert.deepEqual(order(draw(root).records), expected.map((e) => e.id));
+    assert.deepEqual(
+      order(draw(root).records),
+      expected.map((e) => e.id)
+    );
   });
 
   it("adds a child's z to its parent's, so a raised subtree stays together relative to the rest", () => {
@@ -607,10 +680,16 @@ describe("FrameBuilder: draw order (z)", () => {
     const { records } = draw(parentOf(text, sprite, box(7), circle, under));
     assert.deepEqual(
       records.slice(1).map((r) => r.op),
-      ["text", "rect", "ellipse", "sprite", "text"],
+      ["text", "rect", "ellipse", "sprite", "text"]
     );
     const texts = records.filter((r) => r.op === "text");
-    assert.deepEqual(texts.map((r) => (r.op === "text" ? [r.text, r.size, r.color] : null)), [["under", 9, "#0000ffff"], ["top", 12, "#ff0000ff"]]);
+    assert.deepEqual(
+      texts.map((r) => (r.op === "text" ? [r.text, r.size, r.color] : null)),
+      [
+        ["under", 9, "#0000ffff"],
+        ["top", 12, "#ff0000ff"],
+      ]
+    );
     const ellipse = records.find((r) => r.op === "ellipse");
     assert.ok(ellipse?.op === "ellipse" && ellipse.width === 5 && ellipse.height === 6 && ellipse.color === "#00ff00ff");
     assert.ok(records.some((r) => r.op === "sprite" && r.texture === "assets/a.png"));
@@ -643,7 +722,11 @@ describe("FrameBuilder: draw order (z)", () => {
     low.transform.z = 3;
     const high = new Pointer({ width: 2, height: 2 });
     const { built } = draw(parentOf(low, high, new Pointer({ width: 3, height: 3 })));
-    assert.deepEqual(built.pointers.map((p) => (p as Pointer).width), [2, 3, 1], "last is on top");
+    assert.deepEqual(
+      built.pointers.map((p) => (p as Pointer).width),
+      [2, 3, 1],
+      "last is on top"
+    );
   });
 
   it("does not reorder anything for a game that never sets z", () => {
@@ -658,7 +741,7 @@ describe("FrameBuilder: leaves drawn in place", () => {
   /** Parents of every kind of placement, each with leaves of every kind: plain ones, which the walk deals with in place, and ones it must take the long way. */
   function scene(seed: number): Entity {
     let state = seed * 7919;
-    const next = (): number => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+    const next = (): number => (state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff;
     const move = (object: GameObject, chance: number): void => {
       if (next() >= chance) return;
       object.transform.x = next() * 200 - 100;
@@ -676,15 +759,23 @@ describe("FrameBuilder: leaves drawn in place", () => {
       for (let k = 0; k < 6; k++) {
         const kind = Math.floor(next() * 9);
         const leaf: GameObject =
-          kind === 0 ? new Shape({ kind: "rect", width: 1 + next() * 20, height: 1 + next() * 20, color: next() < 0.5 ? "red" : "#0f08" })
-          : kind === 1 ? new Shape({ kind: "circle", width: 8, height: 6, color: "blue" })
-          : kind === 2 ? new Sprite({ image: next() < 0.5 ? "a.png" : "b.png" })
-          : kind === 3 ? new Sprite({ image: next() < 0.5 ? "" : "missing.png" })
-          : kind === 4 ? new AnimatedSprite({ frames: ["f0.png", "f1.png"] })
-          : kind === 5 ? new Collider({ width: 5, height: 7 })
-          : kind === 6 ? new Text({ text: next() < 0.3 ? "" : "hi" })
-          : kind === 7 ? new Pointer({ width: 4, height: 4 })
-          : new Entity();
+          kind === 0
+            ? new Shape({ kind: "rect", width: 1 + next() * 20, height: 1 + next() * 20, color: next() < 0.5 ? "red" : "#0f08" })
+            : kind === 1
+              ? new Shape({ kind: "circle", width: 8, height: 6, color: "blue" })
+              : kind === 2
+                ? new Sprite({ image: next() < 0.5 ? "a.png" : "b.png" })
+                : kind === 3
+                  ? new Sprite({ image: next() < 0.5 ? "" : "missing.png" })
+                  : kind === 4
+                    ? new AnimatedSprite({ frames: ["f0.png", "f1.png"] })
+                    : kind === 5
+                      ? new Collider({ width: 5, height: 7 })
+                      : kind === 6
+                        ? new Text({ text: next() < 0.3 ? "" : "hi" })
+                        : kind === 7
+                          ? new Pointer({ width: 4, height: 4 })
+                          : new Entity();
         move(leaf, 0.5);
         if (next() < 0.1) leaf.transform.global = true; // also one that is otherwise untouched: it is at the world's origin
         if (next() < 0.15) leaf.placement.y = next() * 30;
@@ -725,7 +816,11 @@ describe("FrameBuilder: leaves drawn in place", () => {
       assert.equal(inPlace.colliders.length, general.colliders.length);
       inPlace.colliders.forEach((entry, i) => {
         assert.equal(entry.collider, (general.colliders[i] as (typeof general.colliders)[number]).collider, `seed ${seed}: collider ${i}`);
-        assert.deepEqual(entry.world, (general.colliders[i] as (typeof general.colliders)[number]).world, `seed ${seed}: collider ${i} world`);
+        assert.deepEqual(
+          entry.world,
+          (general.colliders[i] as (typeof general.colliders)[number]).world,
+          `seed ${seed}: collider ${i} world`
+        );
       });
       assert.deepEqual(inPlace.pointers, general.pointers, `seed ${seed}: pointers`);
     }
@@ -752,7 +847,15 @@ describe("FrameBuilder: a large <Tilemap>", () => {
   // 200 × 200 cells of 16 pixels, every cell filled, and a tile sheet of four tiles.
   const SIZE = 200;
   registerTilemaps({
-    big: { width: SIZE, height: SIZE, tileWidth: 16, tileHeight: 16, firstGid: 1, solid: [], layers: [{ name: "Ground", visible: true, data: Array.from({ length: SIZE * SIZE }, (_, i) => 1 + (i % 4)) }] },
+    big: {
+      width: SIZE,
+      height: SIZE,
+      tileWidth: 16,
+      tileHeight: 16,
+      firstGid: 1,
+      solid: [],
+      layers: [{ name: "Ground", visible: true, data: Array.from({ length: SIZE * SIZE }, (_, i) => 1 + (i % 4)) }],
+    },
   });
   const sizes = { "assets/tiles.png": { width: 64, height: 16 } };
 
@@ -771,7 +874,12 @@ describe("FrameBuilder: a large <Tilemap>", () => {
     const backend = new RecordingBackend({ textureSizes: sizes });
     const warnings: string[] = [];
     // `retain: "check"` builds every frame again without reusing anything and throws if the two differ.
-    const builder = new FrameBuilder({ loadTexture: (path) => backend.loadTexture(path), textureSize: (h) => backend.textureSize(h), warn: (m) => warnings.push(m), retain: "check" });
+    const builder = new FrameBuilder({
+      loadTexture: (path) => backend.loadTexture(path),
+      textureSize: (h) => backend.textureSize(h),
+      warn: (m) => warnings.push(m),
+      retain: "check",
+    });
     const frame = (x: number, y: number): Drawn => {
       marker.transform.x = x;
       marker.transform.y = y;
@@ -782,7 +890,8 @@ describe("FrameBuilder: a large <Tilemap>", () => {
     return { frame, warnings, marker };
   }
 
-  const tilesOf = (records: DecodedRecord[]) => records.filter((r): r is Extract<DecodedRecord, { op: "spriteRegion" }> => r.op === "spriteRegion");
+  const tilesOf = (records: DecodedRecord[]) =>
+    records.filter((r): r is Extract<DecodedRecord, { op: "spriteRegion" }> => r.op === "spriteRegion");
 
   it("writes only the cells the view shows, and a rectangle's worth wherever the camera is", () => {
     const { frame, warnings } = scene();
@@ -822,7 +931,7 @@ describe("FrameBuilder: a large <Tilemap>", () => {
     const { frame } = scene();
     const first = tilesOf(frame(500, 300).records);
     const again = tilesOf(frame(500, 300).records);
-    assert.deepEqual(again, first, "the same records (retain: \"check\" also compares them with a full draw)");
+    assert.deepEqual(again, first, 'the same records (retain: "check" also compares them with a full draw)');
     const moved = tilesOf(frame(520, 300).records);
     assert.notDeepEqual(moved, first);
     assert.ok(Math.min(...moved.map((t) => t.x)) > Math.min(...first.map((t) => t.x)) - 1);

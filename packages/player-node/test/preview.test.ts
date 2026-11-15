@@ -1,16 +1,18 @@
+import assert from "node:assert/strict";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 /**
  * `rge preview`: the window (a copy of the demo with a stories file, against a recording backend, so it needs no native library),
  * and the screenshots compared with the stored ones (which need the headless librge, and are skipped without it).
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { libraryFileName, nativeLibrary } from "@rge/native";
 import { RecordingBackend, type Player } from "@rge/player";
 import { Text, type GameObject } from "@rge/runtime";
-import { libraryFileName, nativeLibrary } from "@rge/native";
+
 import { compareScreenshots, loadPreviews, pixelDifference, previewWithReload } from "../src/preview.ts";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -21,7 +23,14 @@ after(() => rmSync(gameDir, { recursive: true, force: true }));
 /** A recording backend that keeps only the last frame and takes a millisecond per frame, as a window with vsync takes longer. */
 class PacedBackend extends RecordingBackend {
   readonly #pause = new Int32Array(new SharedArrayBuffer(4));
-  override frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
+  override frame(
+    clearColor: number,
+    records: Float64Array,
+    length: number,
+    texts: readonly string[],
+    input: Float64Array,
+    keys: Uint8Array
+  ): void {
     super.frame(clearColor, records, length, texts, input, keys);
     if (this.frames.length > 1) this.frames.shift();
     Atomics.wait(this.#pause, 0, 0, 1);
@@ -50,7 +59,8 @@ export const Many = story({}, { setup: () => useGame.setState({ stats: { coins: 
 describe("rge preview", () => {
   it("shows one story at a time, switches with F6 and F5, and hot reloads the shown story", async () => {
     mkdirSync(gameDir, { recursive: true });
-    for (const name of ["src", "assets", "main.ts", "game.ts", "package.json", "tsconfig.json"]) cpSync(join(repo, "packages/demo", name), join(gameDir, name), { recursive: true });
+    for (const name of ["src", "assets", "main.ts", "game.ts", "package.json", "tsconfig.json"])
+      cpSync(join(repo, "packages/demo", name), join(gameDir, name), { recursive: true });
     mkdirSync(join(gameDir, "stories"));
     writeFileSync(join(gameDir, "stories/CoinCounter.stories.ts"), STORIES);
     const counterFile = join(gameDir, "src/CoinCounter.tsx");
@@ -115,23 +125,28 @@ describe("rge preview", () => {
 
   // The stored pictures are the software renderer's: the OpenGL build blends translucent colours a little differently, so only
   // the headless build is compared (as `rge check` does).
-  const headless = nativeLibrary("headless") ?? [join(repo, "native/build-headless", libraryFileName())].find((path) => existsSync(path)) ?? null;
-  it("renders Hearth's stories as their stored screenshots", { skip: headless === null ? "the headless librge is not built" : false }, async () => {
-    const hearth = join(repo, "packages/hearth");
-    const cwd = process.cwd();
-    const before = process.env["RGE_NATIVE_LIB"];
-    process.env["RGE_NATIVE_LIB"] = headless!;
-    process.chdir(hearth);
-    const out = mkdtempSync(join(tmpdir(), "rge-previews-"));
-    try {
-      const previews = await loadPreviews(hearth);
-      assert.ok(previews.stories.length >= 10, `${previews.stories.length} stories`);
-      assert.deepEqual(compareScreenshots(hearth, previews, out), [], `the pictures as they are now are in ${out}`);
-      rmSync(out, { recursive: true, force: true });
-    } finally {
-      process.chdir(cwd);
-      if (before === undefined) delete process.env["RGE_NATIVE_LIB"];
-      else process.env["RGE_NATIVE_LIB"] = before;
+  const headless =
+    nativeLibrary("headless") ?? [join(repo, "native/build-headless", libraryFileName())].find((path) => existsSync(path)) ?? null;
+  it(
+    "renders Hearth's stories as their stored screenshots",
+    { skip: headless === null ? "the headless librge is not built" : false },
+    async () => {
+      const hearth = join(repo, "packages/hearth");
+      const cwd = process.cwd();
+      const before = process.env["RGE_NATIVE_LIB"];
+      process.env["RGE_NATIVE_LIB"] = headless!;
+      process.chdir(hearth);
+      const out = mkdtempSync(join(tmpdir(), "rge-previews-"));
+      try {
+        const previews = await loadPreviews(hearth);
+        assert.ok(previews.stories.length >= 10, `${previews.stories.length} stories`);
+        assert.deepEqual(compareScreenshots(hearth, previews, out), [], `the pictures as they are now are in ${out}`);
+        rmSync(out, { recursive: true, force: true });
+      } finally {
+        process.chdir(cwd);
+        if (before === undefined) delete process.env["RGE_NATIVE_LIB"];
+        else process.env["RGE_NATIVE_LIB"] = before;
+      }
     }
-  });
+  );
 });

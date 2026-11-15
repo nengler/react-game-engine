@@ -1,11 +1,36 @@
 // Recognisers for the statements of a component body: state, render constants, stores, refs, sounds and handlers.
 import { NodeFlags, SyntaxKind, type CallExpression, type Expression, type Node, type Statement } from "typescript/ast";
-import { isAsExpression, isTypeReferenceNode, isArrayBindingPattern, isBindingElement, isObjectBindingPattern, isOmittedExpression, isArrowFunction, isBlock, isExpressionStatement, isCallExpression, isIdentifier, isObjectLiteralExpression, isPropertyAccessExpression, isPropertyAssignment, isTypeLiteralNode, isVariableStatement } from "typescript/ast/is";
+import {
+  isAsExpression,
+  isTypeReferenceNode,
+  isArrayBindingPattern,
+  isBindingElement,
+  isObjectBindingPattern,
+  isOmittedExpression,
+  isArrowFunction,
+  isBlock,
+  isExpressionStatement,
+  isCallExpression,
+  isIdentifier,
+  isObjectLiteralExpression,
+  isPropertyAccessExpression,
+  isPropertyAssignment,
+  isTypeLiteralNode,
+  isVariableStatement,
+} from "typescript/ast/is";
+
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
-import { type UseStoreCallAnalysis, type RenderConstAnalysis, type RenderConstPattern, type UseSoundCallAnalysis, type HandlerCallAnalysis, type HookCallAnalysis, HANDLER_HOOKS, REMOVED_HOOKS } from "./model.ts";
+import {
+  type UseStoreCallAnalysis,
+  type RenderConstAnalysis,
+  type RenderConstPattern,
+  type UseSoundCallAnalysis,
+  type HandlerCallAnalysis,
+  type HookCallAnalysis,
+  HANDLER_HOOKS,
+  REMOVED_HOOKS,
+} from "./model.ts";
 import { unwrapParens } from "./util.ts";
-
-
 
 /**
  * What a matcher makes of a component-body statement: the hooks it declares, or why it is malformed (reported at the
@@ -67,7 +92,8 @@ export function matchRenderConst(statement: Statement): RenderConstAnalysis | nu
   if ((list.flags & NodeFlags.Const) === 0 || list.declarations.length !== 1) return null;
   const declaration = list.declarations[0]!;
   if (!declaration.initializer) return null;
-  if (isIdentifier(declaration.name)) return { kind: "const", name: declaration.name.text, initializer: declaration.initializer, declaration, pattern: null };
+  if (isIdentifier(declaration.name))
+    return { kind: "const", name: declaration.name.text, initializer: declaration.initializer, declaration, pattern: null };
   const pattern = renderConstPattern(declaration.name);
   if (pattern === null) return null;
   const names = pattern.entries.flatMap((e) => (e === null ? [] : [e.name]));
@@ -80,7 +106,8 @@ function renderConstPattern(name: Node): RenderConstPattern | null {
     const entries: { name: string; key: string; node: Node }[] = [];
     for (const element of name.elements) {
       if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) return null;
-      const key = element.propertyName === undefined ? element.name.text : isIdentifier(element.propertyName) ? element.propertyName.text : null;
+      const key =
+        element.propertyName === undefined ? element.name.text : isIdentifier(element.propertyName) ? element.propertyName.text : null;
       if (key === null) return null;
       entries.push({ name: element.name.text, key, node: element });
     }
@@ -140,18 +167,39 @@ export function matchStoreStatement(statement: Statement, storeNames: ReadonlySe
   const example = `const hp = ${storeName}((s) => s.player.hp);`;
   if ((list.flags & NodeFlags.Const) === 0) return invalid(`${storeName}(…) must be bound with \`const\`: \`${example}\``);
   const selector = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
-  if (init.arguments.length !== 1 || !selector || !isArrowFunction(selector) || selector.parameters.length !== 1 || !isIdentifier(selector.parameters[0]!.name) || init.typeArguments?.length) {
+  if (
+    init.arguments.length !== 1 ||
+    !selector ||
+    !isArrowFunction(selector) ||
+    selector.parameters.length !== 1 ||
+    !isIdentifier(selector.parameters[0]!.name) ||
+    init.typeArguments?.length
+  ) {
     return invalid(`${storeName} takes one selector, an arrow with one parameter: \`${example}\``);
   }
-  if (isBlock(selector.body)) return invalid(`The selector must be an expression, not a block: \`(s) => s.player.hp\` or \`(s) => s.cursor === id\`.`);
+  if (isBlock(selector.body))
+    return invalid(`The selector must be an expression, not a block: \`(s) => s.player.hp\` or \`(s) => s.cursor === id\`.`);
   const parameter = (selector.parameters[0]!.name as { text: string }).text;
   const body = unwrapParens(selector.body);
   const read = (valueName: string, expression: Expression, at: Node): UseStoreCallAnalysis | string => {
     let path = plainPath(expression, parameter);
     // The store tells readers of an array about its items, not its `length`: `s.enemies.length` is worked out from `s.enemies`.
     if (path !== null && path.length > 1 && path[path.length - 1] === "length") path = null;
-    if (path !== null && path.length === 0) return `'${valueName}' selects the whole state: select a path (\`(${parameter}) => ${parameter}.player\`), destructure values from one, or take actions with \`const { collect } = ${storeName}.actions()\`.`;
-    return { kind: "useStore", storeName, valueName, path: path ?? [], body: path === null ? expression : null, parameter, selector: at, call: init, declaration, via, group };
+    if (path !== null && path.length === 0)
+      return `'${valueName}' selects the whole state: select a path (\`(${parameter}) => ${parameter}.player\`), destructure values from one, or take actions with \`const { collect } = ${storeName}.actions()\`.`;
+    return {
+      kind: "useStore",
+      storeName,
+      valueName,
+      path: path ?? [],
+      body: path === null ? expression : null,
+      parameter,
+      selector: at,
+      call: init,
+      declaration,
+      via,
+      group,
+    };
   };
 
   // Destructuring (`const { gold, lives } = useGame((s) => s.battle)`) was split into one selector per name before this (hooks/inline.ts).
@@ -169,20 +217,31 @@ export function matchMutableStatement(statement: Statement): StatementMatch | nu
   const init = declaration.initializer ? unwrapParens(declaration.initializer) : undefined;
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useMutable") return null;
   const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
-  if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name)) return invalid("useMutable must be bound with a plain `const` name: `const s = useMutable({ x: 0 })`.");
+  if ((list.flags & NodeFlags.Const) === 0 || !isIdentifier(declaration.name))
+    return invalid("useMutable must be bound with a plain `const` name: `const s = useMutable({ x: 0 })`.");
   const arg = init.arguments[0] ? unwrapParens(init.arguments[0]) : undefined;
-  if (init.arguments.length !== 1 || !arg || !isObjectLiteralExpression(arg)) return invalid("useMutable takes one object literal of initial values: `const s = useMutable({ x: 0, y: 0 })`.");
+  if (init.arguments.length !== 1 || !arg || !isObjectLiteralExpression(arg))
+    return invalid("useMutable takes one object literal of initial values: `const s = useMutable({ x: 0, y: 0 })`.");
   const typeArgument = init.typeArguments?.[0];
   const typed = typeArgument && isTypeLiteralNode(typeArgument) ? typeArgument : null;
   const fields: { name: string; initializer: Expression; typeNode: Node | null }[] = [];
   for (const property of arg.properties) {
-    if (!isPropertyAssignment(property) || !isIdentifier(property.name)) return invalid("useMutable's fields are written `name: value`, with plain names (no shorthand, spreads or computed keys).");
+    if (!isPropertyAssignment(property) || !isIdentifier(property.name))
+      return invalid("useMutable's fields are written `name: value`, with plain names (no shorthand, spreads or computed keys).");
     const key = property.name.text;
-    const member = typed?.members.map((m) => m as unknown as { kind: SyntaxKind; name?: Node; type?: Node }).find((m) => m.kind === SyntaxKind.PropertySignature && m.name !== undefined && isIdentifier(m.name) && m.name.text === key);
+    const member = typed?.members
+      .map((m) => m as unknown as { kind: SyntaxKind; name?: Node; type?: Node })
+      .find((m) => m.kind === SyntaxKind.PropertySignature && m.name !== undefined && isIdentifier(m.name) && m.name.text === key);
     // `enemies: [] as readonly Foe[]`: the field's type, where the value alone does not say it.
     const written = unwrapParens(property.initializer);
-    const asserted = isAsExpression(written) && !(isTypeReferenceNode(written.type) && isIdentifier(written.type.typeName) && written.type.typeName.text === "const");
-    fields.push({ name: key, initializer: asserted ? written.expression : property.initializer, typeNode: member?.type ?? (asserted ? written.type : null) });
+    const asserted =
+      isAsExpression(written) &&
+      !(isTypeReferenceNode(written.type) && isIdentifier(written.type.typeName) && written.type.typeName.text === "const");
+    fields.push({
+      name: key,
+      initializer: asserted ? written.expression : property.initializer,
+      typeNode: member?.type ?? (asserted ? written.type : null),
+    });
   }
   if (fields.length === 0) return invalid("useMutable needs at least one field.");
   return { kind: "ok", hooks: [{ kind: "useMutable", name: declaration.name.text, fields, call: init, declaration }] };
@@ -219,7 +278,8 @@ export function matchContextStatement(statement: Statement): StatementMatch | nu
   if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || init.expression.text !== "useContext") return null;
   const invalid = (message: string): StatementMatch => ({ kind: "invalid", code: DiagnosticCode.InvalidUseState, message, call: init });
   if ((list.flags & NodeFlags.Const) === 0) return invalid("useContext must be bound with `const`: `const theme = useContext(Theme)`.");
-  if (init.arguments.length !== 1) return invalid("useContext takes one context, made with `createContext` in a `.ts` file: `useContext(Theme)`.");
+  if (init.arguments.length !== 1)
+    return invalid("useContext takes one context, made with `createContext` in a `.ts` file: `useContext(Theme)`.");
   const context = init.arguments[0]!;
   if (isIdentifier(declaration.name)) {
     return { kind: "ok", hooks: [{ kind: "useContext", name: declaration.name.text, entries: null, context, call: init, declaration }] };
@@ -227,7 +287,14 @@ export function matchContextStatement(statement: Statement): StatementMatch | nu
   if (isObjectBindingPattern(declaration.name)) {
     const entries: { name: string; key: string }[] = [];
     for (const element of declaration.name.elements) {
-      const key = element.propertyName === undefined ? (element.name && isIdentifier(element.name) ? element.name.text : null) : isIdentifier(element.propertyName) ? element.propertyName.text : null;
+      const key =
+        element.propertyName === undefined
+          ? element.name && isIdentifier(element.name)
+            ? element.name.text
+            : null
+          : isIdentifier(element.propertyName)
+            ? element.propertyName.text
+            : null;
       if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name) || key === null) {
         return invalid("Each value picked from useContext is a plain name: `const { accent, text: ink } = useContext(Theme)`.");
       }
@@ -249,7 +316,12 @@ export function matchHandlerStatement(statement: Statement): StatementMatch | nu
   const name = call.expression.text as HandlerCallAnalysis["kind"];
   const handler = call.arguments.length === 1 ? unwrapParens(call.arguments[0]!) : undefined;
   if (!handler || !isArrowFunction(handler)) {
-    return { kind: "invalid", code: DiagnosticCode.InvalidHandler, message: `${name} takes exactly one arrow function: \`${name}(() => { ... })\`.`, call };
+    return {
+      kind: "invalid",
+      code: DiagnosticCode.InvalidHandler,
+      message: `${name} takes exactly one arrow function: \`${name}(() => { ... })\`.`,
+      call,
+    };
   }
   return { kind: "ok", hooks: [{ kind: name, handler, call, statement }] };
 }

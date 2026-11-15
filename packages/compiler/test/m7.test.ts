@@ -1,16 +1,18 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 /**
  * M7: authoring types. Component source imports hooks and built-in elements
  * from `@rge/runtime/jsx`; the TypeScript checker then type-checks the TSX
  * itself (wrong props, bad hook arguments, undefined names).
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import * as authoring from "@rge/runtime/jsx";
+
 import { Transform, runtimeManifest } from "@rge/runtime";
+import * as authoring from "@rge/runtime/jsx";
+
 import { LIBRARY_HOOKS } from "../src/hooks/library.ts";
 import { TIMER_FUNCTIONS, AUTHORING_HOOKS, DiagnosticCode, TRANSFORM_FIELDS } from "../src/index.ts";
 import { OUTPUT_ROOT, cleanOutput, closeCompiler, compile, getCompiler } from "./helpers.ts";
@@ -34,7 +36,13 @@ const IMPORTS = `import { useMutable, useUpdate, useInput, clamp, Entity, Sprite
 
 describe("M7: the authoring module", () => {
   it("exports exactly the hooks, built-in elements and functions the compiler accepts, and the engine's own custom hooks", () => {
-    const expected = [...runtimeManifest.intrinsics, ...AUTHORING_HOOKS, ...Object.keys(runtimeManifest.functions), ...LIBRARY_HOOKS, ...Object.keys(TIMER_FUNCTIONS)].sort();
+    const expected = [
+      ...runtimeManifest.intrinsics,
+      ...AUTHORING_HOOKS,
+      ...Object.keys(runtimeManifest.functions),
+      ...LIBRARY_HOOKS,
+      ...Object.keys(TIMER_FUNCTIONS),
+    ].sort();
     assert.deepEqual(Object.keys(authoring).sort(), expected);
   });
 
@@ -82,7 +90,8 @@ function Hero() {
   useUpdate(() => { ${body} });
   return <Entity name="H" />;
 }`;
-    const forms = "s.foes.push({ id: 1, hp: 2 }); s.foes.splice(0, 1); s.foes.sort((a, b) => a.hp - b.hp); s.foes[0]!.hp -= 1; s.hp[0]! -= 1; s.hp[1] = 5; s.n = count(s.foes) + s.foes.length; s.foes = s.foes.filter((f) => f.hp > 0);";
+    const forms =
+      "s.foes.push({ id: 1, hp: 2 }); s.foes.splice(0, 1); s.foes.sort((a, b) => a.hp - b.hp); s.foes[0]!.hp -= 1; s.hp[0]! -= 1; s.hp[1] = 5; s.n = count(s.foes) + s.foes.length; s.foes = s.foes.filter((f) => f.hp > 0);";
     assert.deepEqual(checkSource(component(forms)), [], "the forms the compiler turns into a copy");
     const helper = checkSource(component("hurt(s.foes);"));
     assert.equal(helper.length, 1);
@@ -99,17 +108,12 @@ function C() {
   st.s = "b";
   return <Entity name={st.s} transform={{ x: st.n }} />;
 }`),
-      [],
+      []
     );
   });
 
   it("reports a wrong prop type, a missing prop and an unknown prop", () => {
-    for (const jsx of [
-      `<Sprite image={5} />`,
-      `<Collider width={1} />`,
-      `<Entity nme="typo" />`,
-      `<Sprite image="a.png" frames={3} />`,
-    ]) {
+    for (const jsx of [`<Sprite image={5} />`, `<Collider width={1} />`, `<Entity nme="typo" />`, `<Sprite image="a.png" frames={3} />`]) {
       const errors = checkSource(`${IMPORTS}\nfunction C() { return <Entity>${jsx}</Entity>; }`);
       assert.ok(errors.length > 0 && errors.every((e) => e.code === DiagnosticCode.SourceTypeError), jsx);
     }
@@ -129,7 +133,10 @@ function Coin({ value }: CoinProps) { return <Entity name="coin" transform={{ y:
 function Level() { return <Entity name="level"><Coin value={1} transform={{ x: 10, global: true }} /></Entity>; }`;
     assert.deepEqual(checkSource(source), []);
     assert.ok(checkSource(source.replace("global: true", `global: "yes"`)).length > 0, "its values are still type-checked");
-    assert.ok(checkSource(source.replace("<Coin value={1}", "<Coin value={1} nope={2}")).length > 0, "other unknown props are still reported");
+    assert.ok(
+      checkSource(source.replace("<Coin value={1}", "<Coin value={1} nope={2}")).length > 0,
+      "other unknown props are still reported"
+    );
   });
 
   it("reports field and ref misuse", () => {
@@ -158,15 +165,21 @@ function C() {
       checkSource(`${IMPORTS}
 function Coin() { return <Entity name="coin"><Sprite image="coin.png" /></Entity>; }
 function Level() { return <Entity name="level"><Coin /><Coin /></Entity>; }`),
-      [],
+      []
     );
   });
 });
 
 describe("M7: imports are mandatory", () => {
   /** Calls the compiler directly, so the test helpers cannot add imports for us. */
-  const codes = (source: string) => getCompiler().compile("Raw.tsx", source).diagnostics.map((d) => d.code);
-  const messages = (source: string) => getCompiler().compile("Raw.tsx", source).diagnostics.map((d) => d.message);
+  const codes = (source: string) =>
+    getCompiler()
+      .compile("Raw.tsx", source)
+      .diagnostics.map((d) => d.code);
+  const messages = (source: string) =>
+    getCompiler()
+      .compile("Raw.tsx", source)
+      .diagnostics.map((d) => d.message);
 
   it("reports each hook, element and function used without an import, once per name", () => {
     const source = `function C() {
@@ -181,7 +194,7 @@ describe("M7: imports are mandatory", () => {
     // useUpdate is used twice, Sprite twice: still one report per name, in order of first use.
     assert.deepEqual(
       result.diagnostics.map((d) => /'(\w+)'/.exec(d.message)?.[1]),
-      ["useMutable", "useUpdate", "clamp", "Entity", "Sprite"],
+      ["useMutable", "useUpdate", "clamp", "Entity", "Sprite"]
     );
   });
 
@@ -215,7 +228,9 @@ function C() {
   });
 
   it("is a separate error from a name the entry point does not export", () => {
-    assert.deepEqual(codes(`import { Entity, Nope } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C" />; }`), [DiagnosticCode.UnknownImport]);
+    assert.deepEqual(codes(`import { Entity, Nope } from "@rge/runtime/jsx";\nfunction C() { return <Entity name="C" />; }`), [
+      DiagnosticCode.UnknownImport,
+    ]);
   });
 });
 

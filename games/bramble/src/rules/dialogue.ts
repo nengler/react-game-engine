@@ -15,7 +15,10 @@ export interface NpcLines {
 export const DIALOGUE: Readonly<Record<NpcId, NpcLines>> = {
   guide: {
     name: "Wren",
-    before: ["The valley went quiet when the bells stopped.", "There is a lantern in the grass behind me. The cave to the east is dark without it."],
+    before: [
+      "The valley went quiet when the bells stopped.",
+      "There is a lantern in the grass behind me. The cave to the east is dark without it.",
+    ],
     after: ["You found the cave's bell! I can hear it from here.", "A key was in there too, wasn't it? The old house will want it."],
   },
   gardener: {

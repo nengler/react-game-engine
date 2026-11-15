@@ -1,7 +1,7 @@
 import { GameObject } from "../GameObject.ts";
 import type { InputState } from "../input.ts";
-import { IDENTITY_TRANSFORM, type WorldTransform } from "../Transform.ts";
 import type { ShakeState } from "../math.ts";
+import { IDENTITY_TRANSFORM, type WorldTransform } from "../Transform.ts";
 
 export interface CameraProps {
   /** Magnification of the view: 2 draws everything twice as large. Must be positive. Default 1. */
@@ -170,7 +170,12 @@ export class Camera<P extends object = {}> extends GameObject<P> {
   #boundsChanged(): boolean {
     const area = this.bounds;
     const last = this.#lastBounds;
-    return area !== undefined && area.length === 4 && last !== undefined && (last[0] !== area[0] || last[1] !== area[1] || last[2] !== area[2] || last[3] !== area[3]);
+    return (
+      area !== undefined &&
+      area.length === 4 &&
+      last !== undefined &&
+      (last[0] !== area[0] || last[1] !== area[1] || last[2] !== area[2] || last[3] !== area[3])
+    );
   }
 
   /** Does the view hold back from the children's centre: is there a deadzone or smoothing to apply? */
@@ -248,7 +253,12 @@ export class Camera<P extends object = {}> extends GameObject<P> {
       x = bw <= halfW * 2 ? bx + bw / 2 : Math.min(Math.max(x, bx + halfW), bx + bw - halfW);
       y = bh <= halfH * 2 ? by + bh / 2 : Math.min(Math.max(y, by + halfH), by + bh - halfH);
       const last = this.#lastBounds;
-      if (last !== undefined && (last[0] !== bx || last[1] !== by || last[2] !== bw || last[3] !== bh) && this.slide > 0 && this.#lastCentre !== null) {
+      if (
+        last !== undefined &&
+        (last[0] !== bx || last[1] !== by || last[2] !== bw || last[3] !== bh) &&
+        this.slide > 0 &&
+        this.#lastCentre !== null
+      ) {
         // Start where the view was last shown (slide and all), and ease to where the new bounds put it.
         this.slideX = this.#lastCentre.x + this.slideX - x;
         this.slideY = this.#lastCentre.y + this.slideY - y;

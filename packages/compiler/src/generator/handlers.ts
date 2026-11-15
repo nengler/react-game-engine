@@ -1,18 +1,32 @@
-// Layer 1 of ComponentGenerator: the handler methods, state setters, and the statements and callbacks inside them.
-import { assertNever, type FunctionIR, type AssignStmtIR, type HandlerHookIR, type IfStmtIR, type LoopBindingIR, isHandlerHook, type StatementIR, type StateId, type ExprIR } from "../ir/types.ts";
 import { HANDLER_SIGNATURES } from "../ir/handlers.ts";
+// Layer 1 of ComponentGenerator: the handler methods, state setters, and the statements and callbacks inside them.
+import {
+  assertNever,
+  type FunctionIR,
+  type AssignStmtIR,
+  type HandlerHookIR,
+  type IfStmtIR,
+  type LoopBindingIR,
+  isHandlerHook,
+  type StatementIR,
+  type StateId,
+  type ExprIR,
+} from "../ir/types.ts";
 import { walkExpr } from "../ir/walk.ts";
-import { param, annotated, propertyKey } from "./helpers.ts";
 import { ExpressionEmitter } from "./expressions.ts";
+import { param, annotated, propertyKey } from "./helpers.ts";
 
 /** A `for…of` binding as written: `e`, `[i, e]`, `{ id, hp: health }`. */
 function loopBinding(binding: LoopBindingIR): string {
   switch (binding.kind) {
-    case "Name": return binding.name;
-    case "Array": return `[${binding.elements.map((e) => (e === null ? "" : loopBinding(e))).join(", ")}]`;
+    case "Name":
+      return binding.name;
+    case "Array":
+      return `[${binding.elements.map((e) => (e === null ? "" : loopBinding(e))).join(", ")}]`;
     case "Object":
       return `{ ${binding.entries.map((e) => (e.value.kind === "Name" && e.value.name === e.key ? e.key : `${propertyKey(e.key)}: ${loopBinding(e.value)}`)).join(", ")} }`;
-    default: return assertNever(binding, "loop binding");
+    default:
+      return assertNever(binding, "loop binding");
   }
 }
 
@@ -20,12 +34,21 @@ function loopBinding(binding: LoopBindingIR): string {
 function returnsValue(body: readonly StatementIR[]): boolean {
   return body.some((stmt) => {
     switch (stmt.kind) {
-      case "Return": return stmt.value !== null;
-      case "If": return returnsValue(stmt.then) || returnsValue(stmt.else);
-      case "ForOf": case "Block": case "While": case "For": return returnsValue(stmt.body);
-      case "Try": return returnsValue(stmt.block) || returnsValue(stmt.handler?.body ?? []) || returnsValue(stmt.finalizer ?? []);
-      case "Switch": return stmt.cases.some((c) => returnsValue(c.body));
-      default: return false;
+      case "Return":
+        return stmt.value !== null;
+      case "If":
+        return returnsValue(stmt.then) || returnsValue(stmt.else);
+      case "ForOf":
+      case "Block":
+      case "While":
+      case "For":
+        return returnsValue(stmt.body);
+      case "Try":
+        return returnsValue(stmt.block) || returnsValue(stmt.handler?.body ?? []) || returnsValue(stmt.finalizer ?? []);
+      case "Switch":
+        return stmt.cases.some((c) => returnsValue(c.body));
+      default:
+        return false;
     }
   });
 }
@@ -59,18 +82,26 @@ export class HandlerEmitter extends ExpressionEmitter {
       }
       // Every parameter the runtime passes when `super` is called with them; otherwise only as many as some handler declares (an unused one is a type error).
       const declared = callsSuper ? signature.params.length : Math.max(0, ...hooks.map((h) => h.handler.params.length));
-      const canonical = signature.params.slice(0, declared).map((p) => annotated(p.name, p.type)).join(", ");
+      const canonical = signature.params
+        .slice(0, declared)
+        .map((p) => annotated(p.name, p.type))
+        .join(", ");
       w.block(`override ${signature.method}(${canonical}): void`, () => {
         if (callsSuper) w.line(`super.${signature.method}(${signature.params.map((p) => p.name).join(", ")});`);
         hooks.forEach((hook, i) => {
-          const args = signature.params.slice(0, hook.handler.params.length).map((p) => p.name).join(", ");
+          const args = signature.params
+            .slice(0, hook.handler.params.length)
+            .map((p) => p.name)
+            .join(", ");
           w.line(cleanups[i] ? `this.keepCleanup(this.#${signature.method}${i}(${args}));` : `this.#${signature.method}${i}(${args});`);
         });
       });
       hooks.forEach((hook, i) => {
         w.blank();
         const returns = cleanups[i] ? "(() => void) | void" : "void";
-        w.at(hook.span, () => w.block(`#${signature.method}${i}(${this.params(hook.handler)}): ${returns}`, () => this.stmts(hook.handler.body)));
+        w.at(hook.span, () =>
+          w.block(`#${signature.method}${i}(${this.params(hook.handler)}): ${returns}`, () => this.stmts(hook.handler.body))
+        );
       });
     }
   }
@@ -118,7 +149,9 @@ export class HandlerEmitter extends ExpressionEmitter {
           w.line(`${this.assignText(stmt)};`);
           break;
         case "LocalConst":
-          w.line(`${stmt.mutable ? "let" : "const"} ${stmt.type ? annotated(stmt.name, stmt.type) : stmt.name} = ${this.expr(stmt.value, true)};`);
+          w.line(
+            `${stmt.mutable ? "let" : "const"} ${stmt.type ? annotated(stmt.name, stmt.type) : stmt.name} = ${this.expr(stmt.value, true)};`
+          );
           break;
         case "ForOf":
           w.block(`for (const ${loopBinding(stmt.binding)} of ${this.expr(stmt.iterable, true)})`, () => this.stmts(stmt.body));
@@ -131,7 +164,9 @@ export class HandlerEmitter extends ExpressionEmitter {
           } else w.block(`while (${this.expr(stmt.test, true)})`, () => this.stmts(stmt.body));
           break;
         case "For": {
-          const init = stmt.init.map((s) => (s.kind === "LocalConst" ? `${s.type ? annotated(s.name, s.type) : s.name} = ${this.expr(s.value, true)}` : this.assignText(s)));
+          const init = stmt.init.map((s) =>
+            s.kind === "LocalConst" ? `${s.type ? annotated(s.name, s.type) : s.name} = ${this.expr(s.value, true)}` : this.assignText(s)
+          );
           const declares = stmt.init.length > 0 && stmt.init[0]!.kind === "LocalConst";
           const head = `${declares ? "let " : ""}${init.join(", ")}; ${stmt.test ? this.expr(stmt.test, true) : ""}; ${stmt.update.map((u) => this.assignText(u)).join(", ")}`;
           w.block(`for (${head})`, () => this.stmts(stmt.body));
@@ -139,7 +174,8 @@ export class HandlerEmitter extends ExpressionEmitter {
         }
         case "Try":
           w.block("try", () => this.stmts(stmt.block));
-          if (stmt.handler) w.block(stmt.handler.binding ? `catch (${stmt.handler.binding.name})` : "catch", () => this.stmts(stmt.handler!.body));
+          if (stmt.handler)
+            w.block(stmt.handler.binding ? `catch (${stmt.handler.binding.name})` : "catch", () => this.stmts(stmt.handler!.body));
           if (stmt.finalizer) w.block("finally", () => this.stmts(stmt.finalizer!));
           break;
         case "Throw":
@@ -230,33 +266,39 @@ export class HandlerEmitter extends ExpressionEmitter {
    */
   protected override callback(fn: FunctionIR): string {
     const params = fn.params.map(param).join(", ");
-    return this.arrow(params, this.within({ inCallback: true }, () => this.capture(() => {
-      // A callback made under a condition reads state through `this`, which TypeScript does not narrow inside a function, as it
-      // narrows the `const` the source's arrow closed over. `$assume` narrows it again; it checks nothing at run time, so a callback
-      // still runs as written when the condition no longer holds (a `useUnmount` telling the parent it went).
-      // The callback is a handler: it reads `useMutable` fields, and what is worked out from them, as they are when it runs (a
-      // `live` read, a `@live` memo), so the condition is assumed in that form, the one its reads take.
-      const conditions = this.mode.conditions.map((c) => this.live(c));
-      if (conditions.length === 0) {
-        this.stmts(fn.body);
-        return;
-      }
-      // A memo the condition reads (`const waiting = pick(id)`) is a call, which TypeScript cannot narrow: read each once into a local,
-      // and read the local everywhere in the callback. Within one call it is the same value (state is a snapshot, props do not change).
-      const memoLocals = new Map(this.mode.memoLocals);
-      for (const condition of conditions) {
-        walkExpr(condition, (e) => {
-          if (e.kind !== "Memo" || memoLocals.has(e.key)) return;
-          const local = `$m${memoLocals.size}`;
-          this.w.line(`const ${local} = ${this.within({ memoLocals }, () => this.expr(e, true))};`);
-          memoLocals.set(e.key, local);
-        });
-      }
-      this.within({ memoLocals }, () => {
-        this.usesAssume = true;
-        this.w.line(`$assume(${conditions.map((c) => this.expr(c)).join(" && ")});`);
-        this.stmts(fn.body);
-      });
-    })), fn);
+    return this.arrow(
+      params,
+      this.within({ inCallback: true }, () =>
+        this.capture(() => {
+          // A callback made under a condition reads state through `this`, which TypeScript does not narrow inside a function, as it
+          // narrows the `const` the source's arrow closed over. `$assume` narrows it again; it checks nothing at run time, so a callback
+          // still runs as written when the condition no longer holds (a `useUnmount` telling the parent it went).
+          // The callback is a handler: it reads `useMutable` fields, and what is worked out from them, as they are when it runs (a
+          // `live` read, a `@live` memo), so the condition is assumed in that form, the one its reads take.
+          const conditions = this.mode.conditions.map((c) => this.live(c));
+          if (conditions.length === 0) {
+            this.stmts(fn.body);
+            return;
+          }
+          // A memo the condition reads (`const waiting = pick(id)`) is a call, which TypeScript cannot narrow: read each once into a local,
+          // and read the local everywhere in the callback. Within one call it is the same value (state is a snapshot, props do not change).
+          const memoLocals = new Map(this.mode.memoLocals);
+          for (const condition of conditions) {
+            walkExpr(condition, (e) => {
+              if (e.kind !== "Memo" || memoLocals.has(e.key)) return;
+              const local = `$m${memoLocals.size}`;
+              this.w.line(`const ${local} = ${this.within({ memoLocals }, () => this.expr(e, true))};`);
+              memoLocals.set(e.key, local);
+            });
+          }
+          this.within({ memoLocals }, () => {
+            this.usesAssume = true;
+            this.w.line(`$assume(${conditions.map((c) => this.expr(c)).join(" && ")});`);
+            this.stmts(fn.body);
+          });
+        })
+      ),
+      fn
+    );
   }
 }

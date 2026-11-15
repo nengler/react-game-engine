@@ -1,4 +1,14 @@
-import { NodeFlags, SyntaxKind, type ArrowFunction, type BinaryExpression, type CallExpression, type Expression, type Node, type PropertyAccessExpression, type Statement } from "typescript/ast";
+import {
+  NodeFlags,
+  SyntaxKind,
+  type ArrowFunction,
+  type BinaryExpression,
+  type CallExpression,
+  type Expression,
+  type Node,
+  type PropertyAccessExpression,
+  type Statement,
+} from "typescript/ast";
 import {
   isArrowFunction,
   isBinaryExpression,
@@ -33,6 +43,7 @@ import {
   isVariableStatement,
   isFunctionDeclaration,
 } from "typescript/ast/is";
+
 import { unwrapParens } from "../analyzer/analyzer.ts";
 import { DiagnosticCode } from "../diagnostics/diagnostics.ts";
 import {
@@ -108,12 +119,15 @@ interface FunctionOptions {
   readonly what: string;
 }
 
-
 export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: FunctionOptions): FunctionIR | null {
   return ctx.inScope((scope) => {
     const params: ParamIR[] = [];
     if (options.paramTypes !== "contextual" && options.paramTypes !== "declared" && fn.parameters.length > options.paramTypes.length) {
-      ctx.error(DiagnosticCode.InvalidHandler, `${options.what} takes at most ${options.paramTypes.length} parameter(s).`, fn.parameters[options.paramTypes.length]!);
+      ctx.error(
+        DiagnosticCode.InvalidHandler,
+        `${options.what} takes at most ${options.paramTypes.length} parameter(s).`,
+        fn.parameters[options.paramTypes.length]!
+      );
       return null;
     }
     for (const [index, param] of fn.parameters.entries()) {
@@ -125,9 +139,13 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
       if (!checkFreshName(ctx, name, param)) return null;
       const id = localId(ctx.componentName, name, ctx.nextSerial());
       const type: TypeIR =
-        options.paramTypes === "contextual" ? { kind: "Contextual" }
-        : options.paramTypes === "declared" ? (param.type ? ctx.typeFromNode(param.type) ?? { kind: "Contextual" } : { kind: "Contextual" })
-        : options.paramTypes[index]!;
+        options.paramTypes === "contextual"
+          ? { kind: "Contextual" }
+          : options.paramTypes === "declared"
+            ? param.type
+              ? (ctx.typeFromNode(param.type) ?? { kind: "Contextual" })
+              : { kind: "Contextual" }
+            : options.paramTypes[index]!;
       scope.declare(name, { kind: "param", id, name, type });
       params.push({ id, name, type });
     }
@@ -142,10 +160,15 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
     } else {
       const stmt = lowerExpressionStatement(ctx, fn.body, fn.body);
       // `useMount(() => settings.subscribe(…))`: what a call returns is the cleanup (kept only if it is a function, as in React).
-      body = stmt && [options.returns === "cleanup" && stmt.kind === "ExpressionStatement" ? { kind: "Return", value: stmt.expression } : stmt];
+      body = stmt && [
+        options.returns === "cleanup" && stmt.kind === "ExpressionStatement" ? { kind: "Return", value: stmt.expression } : stmt,
+      ];
     }
     // A function of the component's own keeps its type parameters: its parameter types may name them.
-    const typeParams = options.paramTypes === "declared" && fn.typeParameters !== undefined ? `<${fn.typeParameters.map((t) => t.getText()).join(", ")}>` : undefined;
+    const typeParams =
+      options.paramTypes === "declared" && fn.typeParameters !== undefined
+        ? `<${fn.typeParameters.map((t) => t.getText()).join(", ")}>`
+        : undefined;
     return body && { kind: "Function", params, body, ...(typeParams !== undefined ? { typeParams } : {}) };
   });
 }
@@ -155,23 +178,45 @@ export function lowerFunction(ctx: LoweringContext, fn: ArrowFunction, options: 
  * then a `return { a, b }` of the names declared at the top is added, so what reads them after the block reads them from it. A
  * `return` of the author's is refused: a component returns once, at its end.
  */
-export function lowerRenderBlock(ctx: LoweringContext, statements: readonly Statement[], names: readonly string[], at: Node): FunctionIR | null {
+export function lowerRenderBlock(
+  ctx: LoweringContext,
+  statements: readonly Statement[],
+  names: readonly string[],
+  at: Node
+): FunctionIR | null {
   return ctx.inScope(() => {
-    const body = lowerStatements(ctx, statements, { paramTypes: [], returns: "void", what: "The component body" }, { newScope: false, jumps: NO_JUMPS });
+    const body = lowerStatements(
+      ctx,
+      statements,
+      { paramTypes: [], returns: "void", what: "The component body" },
+      { newScope: false, jumps: NO_JUMPS }
+    );
     if (!body) return null;
     let returns = false;
-    walkStatements(body, () => {}, (s) => {
-      if (s.kind === "Return") returns = true;
-    });
+    walkStatements(
+      body,
+      () => {},
+      (s) => {
+        if (s.kind === "Return") returns = true;
+      }
+    );
     if (returns) {
-      ctx.error(DiagnosticCode.InvalidComponentBody, "A component returns once, at its end: compute a value here and test it in the `return` (`return open ? <Menu /> : null`).", at);
+      ctx.error(
+        DiagnosticCode.InvalidComponentBody,
+        "A component returns once, at its end: compute a value here and test it in the `return` (`return open ? <Menu /> : null`).",
+        at
+      );
       return null;
     }
     const properties: ObjectPropertyIR[] = [];
     for (const name of names) {
       const binding = ctx.scope.get(name);
       if (binding?.kind !== "local") {
-        ctx.error(DiagnosticCode.InvalidComponentBody, `'${name}' must be declared with \`const\` or \`let\` and one name, in statements of the component body.`, at);
+        ctx.error(
+          DiagnosticCode.InvalidComponentBody,
+          `'${name}' must be declared with \`const\` or \`let\` and one name, in statements of the component body.`,
+          at
+        );
         return null;
       }
       properties.push({ kind: "Property", name, value: { kind: "LocalRead", local: binding.id, name } });
@@ -194,7 +239,11 @@ export function lowerFunctionValue(ctx: LoweringContext, fn: ArrowFunction): Exp
  */
 export function lowerCallbackValue(ctx: LoweringContext, fn: ArrowFunction, what: string): ExprIR | null {
   if (!ctx.canPassCallback()) {
-    ctx.error(DiagnosticCode.UnsupportedExpression, `An arrow function can be handed to a function only in a handler (\`useMount(() => settings.subscribe(() => …))\`), not in ${what}.`, fn);
+    ctx.error(
+      DiagnosticCode.UnsupportedExpression,
+      `An arrow function can be handed to a function only in a handler (\`useMount(() => settings.subscribe(() => …))\`), not in ${what}.`,
+      fn
+    );
     return null;
   }
   const lowered = lowerFunction(ctx, fn, { paramTypes: "contextual", returns: "void", what: "A callback" });
@@ -217,7 +266,12 @@ interface BlockOptions {
   readonly jumps: Jumps;
 }
 
-function lowerStatements(ctx: LoweringContext, statements: readonly Statement[], options: FunctionOptions, block: BlockOptions): StatementIR[] | null {
+function lowerStatements(
+  ctx: LoweringContext,
+  statements: readonly Statement[],
+  options: FunctionOptions,
+  block: BlockOptions
+): StatementIR[] | null {
   const lower = (): StatementIR[] | null => {
     const out: StatementIR[] = [];
     let ok = true;
@@ -246,7 +300,10 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
 
   if (isWhileStatement(statement) || isDoStatement(statement)) {
     const test = ctx.lowerExpression(statement.expression);
-    const body = lowerStatements(ctx, isBlock(statement.statement) ? statement.statement.statements : [statement.statement], options, { newScope: true, jumps: LOOP_JUMPS });
+    const body = lowerStatements(ctx, isBlock(statement.statement) ? statement.statement.statements : [statement.statement], options, {
+      newScope: true,
+      jumps: LOOP_JUMPS,
+    });
     return test && body && { kind: "While", test, body, doWhile: isDoStatement(statement) };
   }
 
@@ -278,7 +335,9 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
       if (!caught) return null;
       handler = caught;
     }
-    const finalizer = statement.finallyBlock ? lowerStatements(ctx, statement.finallyBlock.statements, options, { newScope: true, jumps }) : null;
+    const finalizer = statement.finallyBlock
+      ? lowerStatements(ctx, statement.finallyBlock.statements, options, { newScope: true, jumps })
+      : null;
     if (statement.finallyBlock && !finalizer) return null;
     return { kind: "Try", block, handler, finalizer };
   }
@@ -299,11 +358,19 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const isBreak = isBreakStatement(statement);
     const word = isBreak ? "break" : "continue";
     if (statement.label) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, `Labelled \`${word}\` is not supported: it leaves the innermost ${isBreak ? "loop or `switch`" : "loop"}.`, statement);
+      ctx.error(
+        DiagnosticCode.UnsupportedStatement,
+        `Labelled \`${word}\` is not supported: it leaves the innermost ${isBreak ? "loop or `switch`" : "loop"}.`,
+        statement
+      );
       return null;
     }
     if (!(isBreak ? jumps.break : jumps.continue)) {
-      ctx.error(DiagnosticCode.UnsupportedStatement, `\`${word}\` is only valid inside a ${isBreak ? "loop or a `switch`" : "loop"} of the same function.`, statement);
+      ctx.error(
+        DiagnosticCode.UnsupportedStatement,
+        `\`${word}\` is only valid inside a ${isBreak ? "loop or a `switch`" : "loop"} of the same function.`,
+        statement
+      );
       return null;
     }
     return { kind: isBreak ? "Break" : "Continue" };
@@ -322,7 +389,7 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
         ctx.error(
           DiagnosticCode.InvalidComponentBody,
           "This `return` is not supported: an early return is `if (condition) return …;` (or `{ return …; }`) at the top level of the component body, with no `else`, as React components usually guard (`if (!hero) return null;`). Otherwise put the condition in what the last `return` returns: `return dead ? null : <Text>…</Text>;`, or `{!dead && <Text>…</Text>}` inside an element.",
-          statement,
+          statement
         );
         return null;
       }
@@ -347,7 +414,11 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     const isConst = (list.flags & NodeFlags.Const) !== 0;
     if ((!isConst && !mutable) || list.declarations.length !== 1 || !isIdentifier(decl.name) || !decl.initializer) {
       const where = ctx.inRenderBlock() ? "in statements of the component body" : "in handlers";
-      ctx.error(ctx.inRenderBlock() ? DiagnosticCode.InvalidComponentBody : DiagnosticCode.UnsupportedStatement, `Only \`const name = expression;\` and \`let name = expression;\` declarations (one name, with a value) are supported ${where}.`, statement);
+      ctx.error(
+        ctx.inRenderBlock() ? DiagnosticCode.InvalidComponentBody : DiagnosticCode.UnsupportedStatement,
+        `Only \`const name = expression;\` and \`let name = expression;\` declarations (one name, with a value) are supported ${where}.`,
+        statement
+      );
       return null;
     }
     // `const events = step(input, dt);`: a game-state action whose result the handler uses (only here, in a handler, where it
@@ -357,7 +428,11 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
     let value: ExprIR | null;
     if (action?.kind === "action" && isCallExpression(init)) {
       if (ctx.inRenderBlock()) {
-        ctx.error(DiagnosticCode.InvalidComponentBody, `An action cannot be called in the component body: it runs on every render. Call \`${action.name}()\` in a handler.`, init);
+        ctx.error(
+          DiagnosticCode.InvalidComponentBody,
+          `An action cannot be called in the component body: it runs on every render. Call \`${action.name}()\` in a handler.`,
+          init
+        );
         return null;
       }
       const args = ctx.lowerAll(init.arguments);
@@ -379,14 +454,14 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
       /^[A-Z]/.test(name)
         ? `Declare the component <${name}> at the top level of the file, not inside another component: each component is compiled on its own, and one declared inside would be made again on every render.`
         : `Write the function as \`const ${name} = (…) => { … };\`: a function declaration is not supported ${ctx.inRenderBlock() ? "in the component body" : "in a handler"}.`,
-      statement,
+      statement
     );
     return null;
   }
   ctx.error(
     DiagnosticCode.UnsupportedStatement,
     `Unsupported statement ${ctx.inRenderBlock() ? "in the component body" : "in a handler"} (${SyntaxKind[statement.kind]}). Supported: state setter calls, writes to \`useMutable\` fields and \`let\` locals, allowlisted calls, \`if\`/\`else\`, \`switch\`, loops (\`for…of\`, \`for\`, \`while\`, \`do…while\`, with \`break\` and \`continue\`), \`try\`/\`catch\`/\`finally\`, \`throw\`, \`const\`, \`let\` and \`return\`.`,
-    statement,
+    statement
   );
   return null;
 }
@@ -398,7 +473,8 @@ function lowerStatement(ctx: LoweringContext, statement: Statement, options: Fun
 function isEffect(ctx: LoweringContext, body: Node): boolean {
   const e = unwrapParens(body as Expression);
   if (isBinaryExpression(e) && ASSIGNMENT_TOKENS.has(e.operatorToken.kind)) return true;
-  if (isPrefixUnaryExpression(e) || isPostfixUnaryExpression(e)) return e.operator === SyntaxKind.PlusPlusToken || e.operator === SyntaxKind.MinusMinusToken;
+  if (isPrefixUnaryExpression(e) || isPostfixUnaryExpression(e))
+    return e.operator === SyntaxKind.PlusPlusToken || e.operator === SyntaxKind.MinusMinusToken;
   if (!isCallExpression(e) || !isIdentifier(e.expression)) return false;
   const kind = ctx.scope.get(e.expression.text)?.kind;
   return kind === "sound" || kind === "action" || kind === "function";
@@ -425,7 +501,11 @@ function commaParts(expression: Expression): Expression[] {
  * `for (let i = 0; i < n; i++) { … }`: the `let`s are the loop's own (declared in a scope around the test, the update and the
  * body); an initializer that is not a declaration, and the update, are assignments (`i++` is `i += 1`), as comma lists.
  */
-function lowerFor(ctx: LoweringContext, statement: Statement & { kind: SyntaxKind.ForStatement }, options: FunctionOptions): StatementIR | null {
+function lowerFor(
+  ctx: LoweringContext,
+  statement: Statement & { kind: SyntaxKind.ForStatement },
+  options: FunctionOptions
+): StatementIR | null {
   const loop = statement as unknown as { initializer?: Node; condition?: Expression; incrementor?: Expression; statement: Statement };
   const shape = "A `for` loop's head is `let` locals or assignments, a test, and assignments: `for (let i = 0; i < n; i++)`";
   const assignments = (expression: Expression): AssignStmtIR[] | null => {
@@ -471,7 +551,10 @@ function lowerFor(ctx: LoweringContext, statement: Statement & { kind: SyntaxKin
     if (loop.condition && !test) return null;
     const update = loop.incrementor ? assignments(loop.incrementor) : [];
     if (!update) return null;
-    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: LOOP_JUMPS });
+    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, {
+      newScope: true,
+      jumps: LOOP_JUMPS,
+    });
     return body && { kind: "For", init, test, update, body };
   });
 }
@@ -481,7 +564,11 @@ function lowerFor(ctx: LoweringContext, statement: Statement & { kind: SyntaxKin
  * lowered first (it cannot read the item), then the body in a scope where the item's names are `const`s, and `break` /
  * `continue` are allowed.
  */
-function lowerForOf(ctx: LoweringContext, statement: Statement & { kind: SyntaxKind.ForOfStatement }, options: FunctionOptions): StatementIR | null {
+function lowerForOf(
+  ctx: LoweringContext,
+  statement: Statement & { kind: SyntaxKind.ForOfStatement },
+  options: FunctionOptions
+): StatementIR | null {
   const loop = statement as unknown as { awaitModifier?: Node; initializer: Node; expression: Expression; statement: Statement };
   const shape = "A loop is written `for (const item of items) { … }` (or `const [i, item]`, `const { id, hp }`)";
   if (loop.awaitModifier) {
@@ -496,7 +583,11 @@ function lowerForOf(ctx: LoweringContext, statement: Statement & { kind: SyntaxK
   }
   const pattern = loopPattern(decl.name);
   if (pattern === null) {
-    ctx.error(DiagnosticCode.UnsupportedStatement, `${shape}: names and \`[…]\` / \`{…}\` patterns of them, no defaults or rests.`, decl.name);
+    ctx.error(
+      DiagnosticCode.UnsupportedStatement,
+      `${shape}: names and \`[…]\` / \`{…}\` patterns of them, no defaults or rests.`,
+      decl.name
+    );
     return null;
   }
   const iterable = ctx.lowerExpression(loop.expression);
@@ -533,7 +624,10 @@ function lowerForOf(ctx: LoweringContext, statement: Statement & { kind: SyntaxK
     };
     const binding = bind(pattern);
     if (!binding) return null;
-    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, { newScope: true, jumps: LOOP_JUMPS });
+    const body = lowerStatements(ctx, isBlock(loop.statement) ? loop.statement.statements : [loop.statement], options, {
+      newScope: true,
+      jumps: LOOP_JUMPS,
+    });
     return body && { kind: "ForOf", binding, iterable, body };
   });
 }
@@ -565,7 +659,14 @@ function loopPattern(name: Node): LoopPattern | null {
     const entries: { key: string; value: LoopPattern }[] = [];
     for (const element of name.elements) {
       if (element.dotDotDotToken || element.initializer || !element.name) return null;
-      const key = element.propertyName === undefined ? (isIdentifier(element.name) ? element.name.text : null) : isIdentifier(element.propertyName) ? element.propertyName.text : null;
+      const key =
+        element.propertyName === undefined
+          ? isIdentifier(element.name)
+            ? element.name.text
+            : null
+          : isIdentifier(element.propertyName)
+            ? element.propertyName.text
+            : null;
       const value = loopPattern(element.name);
       if (key === null || !value) return null;
       entries.push({ key, value });
@@ -579,7 +680,12 @@ function loopPattern(name: Node): LoopPattern | null {
  * `switch (x) { case a: …; break; default: … }`: written as it is, falling through as in JS. The cases share one scope (as in
  * JS); `break` leaves the switch, and `continue` still belongs to an enclosing loop.
  */
-function lowerSwitch(ctx: LoweringContext, statement: Statement & { kind: SyntaxKind.SwitchStatement }, options: FunctionOptions, jumps: Jumps): StatementIR | null {
+function lowerSwitch(
+  ctx: LoweringContext,
+  statement: Statement & { kind: SyntaxKind.SwitchStatement },
+  options: FunctionOptions,
+  jumps: Jumps
+): StatementIR | null {
   const node = statement as unknown as { expression: Expression; caseBlock: { clauses: readonly Node[] } };
   const discriminant = ctx.lowerExpression(node.expression);
   return ctx.inScope(() => {
@@ -598,17 +704,27 @@ function lowerSwitch(ctx: LoweringContext, statement: Statement & { kind: Syntax
 }
 
 const ASSIGN_OPERATORS: ReadonlyMap<SyntaxKind, AssignOperator> = new Map([
-  [SyntaxKind.EqualsToken, "="], [SyntaxKind.PlusEqualsToken, "+="], [SyntaxKind.MinusEqualsToken, "-="],
-  [SyntaxKind.AsteriskEqualsToken, "*="], [SyntaxKind.SlashEqualsToken, "/="], [SyntaxKind.PercentEqualsToken, "%="],
-  [SyntaxKind.AsteriskAsteriskEqualsToken, "**="], [SyntaxKind.BarBarEqualsToken, "||="],
-  [SyntaxKind.AmpersandAmpersandEqualsToken, "&&="], [SyntaxKind.QuestionQuestionEqualsToken, "??="],
+  [SyntaxKind.EqualsToken, "="],
+  [SyntaxKind.PlusEqualsToken, "+="],
+  [SyntaxKind.MinusEqualsToken, "-="],
+  [SyntaxKind.AsteriskEqualsToken, "*="],
+  [SyntaxKind.SlashEqualsToken, "/="],
+  [SyntaxKind.PercentEqualsToken, "%="],
+  [SyntaxKind.AsteriskAsteriskEqualsToken, "**="],
+  [SyntaxKind.BarBarEqualsToken, "||="],
+  [SyntaxKind.AmpersandAmpersandEqualsToken, "&&="],
+  [SyntaxKind.QuestionQuestionEqualsToken, "??="],
 ] as const);
 
 /** Every assignment-shaped operator, so unsupported ones (the bitwise and shift forms) get a precise diagnostic. */
 const ASSIGNMENT_TOKENS: ReadonlySet<SyntaxKind> = new Set([
   ...ASSIGN_OPERATORS.keys(),
-  SyntaxKind.AmpersandEqualsToken, SyntaxKind.BarEqualsToken, SyntaxKind.CaretEqualsToken, SyntaxKind.LessThanLessThanEqualsToken,
-  SyntaxKind.GreaterThanGreaterThanEqualsToken, SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+  SyntaxKind.AmpersandEqualsToken,
+  SyntaxKind.BarEqualsToken,
+  SyntaxKind.CaretEqualsToken,
+  SyntaxKind.LessThanLessThanEqualsToken,
+  SyntaxKind.GreaterThanGreaterThanEqualsToken,
+  SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
 ]);
 
 /** A step from a `useMutable` field into a value it holds: `.hp`, or `[i]`. `bang` is a `!` after it, kept so the generated code type-checks. */
@@ -631,7 +747,11 @@ function isPlainIndex(node: Expression): boolean {
   if (isPrefixUnaryExpression(e)) return e.operator === SyntaxKind.MinusToken && isPlainIndex(e.operand);
   if (isBinaryExpression(e)) {
     const k = e.operatorToken.kind;
-    return (k === SyntaxKind.PlusToken || k === SyntaxKind.MinusToken || k === SyntaxKind.AsteriskToken || k === SyntaxKind.PercentToken) && isPlainIndex(e.left) && isPlainIndex(e.right);
+    return (
+      (k === SyntaxKind.PlusToken || k === SyntaxKind.MinusToken || k === SyntaxKind.AsteriskToken || k === SyntaxKind.PercentToken) &&
+      isPlainIndex(e.left) &&
+      isPlainIndex(e.right)
+    );
   }
   return false;
 }
@@ -668,7 +788,7 @@ function mutablePath(ctx: LoweringContext, target: Expression): MutablePath | nu
         ctx.error(
           DiagnosticCode.UnsupportedStatement,
           "An index written through a field is read and written, so it must be a plain value (a name, a number, a property): compute it into a `const` first.",
-          node.argumentExpression,
+          node.argumentExpression
         );
         return null;
       }
@@ -694,7 +814,15 @@ function rebuildPath(ctx: LoweringContext, path: MutablePath, leaf: (current: Ex
     if (step.kind === "prop") {
       const member: ExprIR = { kind: "MemberRead", object: read, name: step.name, optional: false };
       const value = go(step.bang ? { kind: "NonNull", expression: member } : member, i + 1);
-      return value && { kind: "ObjectLiteral", properties: [{ kind: "Spread", value: read }, { kind: "Property", name: step.name, value }] };
+      return (
+        value && {
+          kind: "ObjectLiteral",
+          properties: [
+            { kind: "Spread", value: read },
+            { kind: "Property", name: step.name, value },
+          ],
+        }
+      );
     }
     const index = ctx.lowerExpression(step.index);
     if (!index) return null;
@@ -708,11 +836,19 @@ function rebuildPath(ctx: LoweringContext, path: MutablePath, leaf: (current: Ex
 /** True, after reporting, where a field cannot be written: the component body, and `useUnmount`. */
 function writeBlocked(ctx: LoweringContext, at: Node): boolean {
   if (ctx.inRenderBlock()) {
-    ctx.error(DiagnosticCode.InvalidComponentBody, "A `useMutable` field cannot be written in the component body: it runs on every render. Write it in a handler (`useUpdate`, `useMount`, a callback prop).", at);
+    ctx.error(
+      DiagnosticCode.InvalidComponentBody,
+      "A `useMutable` field cannot be written in the component body: it runs on every render. Write it in a handler (`useUpdate`, `useMount`, a callback prop).",
+      at
+    );
     return true;
   }
   if (!ctx.canSetState()) {
-    ctx.error(DiagnosticCode.UnsupportedStatement, "A `useMutable` field cannot be written in `useUnmount`: the component is going away, so the update could never render. Tell the parent with a callback prop (`onGone?.()`).", at);
+    ctx.error(
+      DiagnosticCode.UnsupportedStatement,
+      "A `useMutable` field cannot be written in `useUnmount`: the component is going away, so the update could never render. Tell the parent with a callback prop (`onGone?.()`).",
+      at
+    );
     return true;
   }
   return false;
@@ -723,7 +859,13 @@ function writeBlocked(ctx: LoweringContext, at: Node): boolean {
  * `s.pos.x = 3`): a write of that state. The handler reads it back at once (a `live` read), so `s.vx += 1; if (s.vx > 3) …` sees the
  * sum. Undefined if `target` is not on a `useMutable` field (the caller carries on).
  */
-function lowerMutableWrite(ctx: LoweringContext, target: Expression, operator: AssignOperator, rhs: Expression | null, at: Node): StatementIR | null | undefined {
+function lowerMutableWrite(
+  ctx: LoweringContext,
+  target: Expression,
+  operator: AssignOperator,
+  rhs: Expression | null,
+  at: Node
+): StatementIR | null | undefined {
   const path = mutablePath(ctx, target);
   if (path === undefined) return undefined;
   if (path === null) return null;
@@ -733,7 +875,7 @@ function lowerMutableWrite(ctx: LoweringContext, target: Expression, operator: A
   const value = rhs === null ? ({ kind: "NumberLiteral", value: 1 } as ExprIR) : ctx.lowerExpression(rhs);
   if (!value) return null;
   const next = rebuildPath(ctx, path, (current) =>
-    operator === "=" ? value : { kind: "Binary", operator: operator.slice(0, -1) as BinaryOperator, left: current, right: value },
+    operator === "=" ? value : { kind: "Binary", operator: operator.slice(0, -1) as BinaryOperator, left: current, right: value }
   );
   return next && { kind: "SetState", state: path.state, value: next };
 }
@@ -784,9 +926,20 @@ function lowerMutableMethod(ctx: LoweringContext, call: CallExpression): Stateme
         return added && { kind: "ArrayLiteral", elements: [...added, { spread: true, value: current }] };
       }
       case "pop":
-        return noArguments() ? { kind: "Call", callee: { kind: "ArrayMethod", receiver: current, name: "slice" }, args: [{ kind: "NumberLiteral", value: 0 }, { kind: "NumberLiteral", value: -1 }] } : null;
+        return noArguments()
+          ? {
+              kind: "Call",
+              callee: { kind: "ArrayMethod", receiver: current, name: "slice" },
+              args: [
+                { kind: "NumberLiteral", value: 0 },
+                { kind: "NumberLiteral", value: -1 },
+              ],
+            }
+          : null;
       case "shift":
-        return noArguments() ? { kind: "Call", callee: { kind: "ArrayMethod", receiver: current, name: "slice" }, args: [{ kind: "NumberLiteral", value: 1 }] } : null;
+        return noArguments()
+          ? { kind: "Call", callee: { kind: "ArrayMethod", receiver: current, name: "slice" }, args: [{ kind: "NumberLiteral", value: 1 }] }
+          : null;
       case "splice":
         return ctx.lowerArrayCall(current, "toSpliced", call.arguments, call);
       case "sort":
@@ -794,7 +947,11 @@ function lowerMutableMethod(ctx: LoweringContext, call: CallExpression): Stateme
       case "reverse":
         return noArguments() ? ctx.lowerArrayCall(current, "toReversed", [], call) : null;
       default:
-        ctx.error(DiagnosticCode.UnsupportedStatement, `\`${name}\` is not supported on a field's list: write \`${list} = ${list}.map(…)\` for the list you want.`, call);
+        ctx.error(
+          DiagnosticCode.UnsupportedStatement,
+          `\`${name}\` is not supported on a field's list: write \`${list} = ${list}.map(…)\` for the list you want.`,
+          call
+        );
         return null;
     }
   });
@@ -805,7 +962,11 @@ function lowerMutableMethod(ctx: LoweringContext, call: CallExpression): Stateme
 function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): StatementIR | null {
   const operator = ASSIGN_OPERATORS.get(expression.operatorToken.kind);
   if (!operator) {
-    ctx.error(DiagnosticCode.UnsupportedStatement, `Supported assignment operators: ${[...ASSIGN_OPERATORS.values()].join(", ")}.`, expression.operatorToken);
+    ctx.error(
+      DiagnosticCode.UnsupportedStatement,
+      `Supported assignment operators: ${[...ASSIGN_OPERATORS.values()].join(", ")}.`,
+      expression.operatorToken
+    );
     return null;
   }
   const mutable = lowerMutableWrite(ctx, expression.left, operator, expression.right, expression);
@@ -826,7 +987,8 @@ function lowerAssignment(ctx: LoweringContext, expression: BinaryExpression): St
  */
 function lowerIncrement(ctx: LoweringContext, expression: Expression): StatementIR | null | undefined {
   if (!isPrefixUnaryExpression(expression) && !isPostfixUnaryExpression(expression)) return undefined;
-  const operator = expression.operator === SyntaxKind.PlusPlusToken ? "+=" : expression.operator === SyntaxKind.MinusMinusToken ? "-=" : null;
+  const operator =
+    expression.operator === SyntaxKind.PlusPlusToken ? "+=" : expression.operator === SyntaxKind.MinusMinusToken ? "-=" : null;
   if (operator === null) return undefined;
   const operand = unwrapParens(expression.operand);
   const mutable = lowerMutableWrite(ctx, operand, operator, null, expression);
@@ -834,9 +996,14 @@ function lowerIncrement(ctx: LoweringContext, expression: Expression): Statement
   // Only a local or a member of a handler's own value (`best.hits++`); anything else (`count++` on state) is left to
   // the expression's own diagnostic.
   const object = isPropertyAccessExpression(operand) ? unwrapParens(operand.expression) : null;
-  const kind = isIdentifier(operand) ? ctx.scope.get(operand.text)?.kind : object && isIdentifier(object) ? ctx.scope.get(object.text)?.kind : undefined;
+  const kind = isIdentifier(operand)
+    ? ctx.scope.get(operand.text)?.kind
+    : object && isIdentifier(object)
+      ? ctx.scope.get(object.text)?.kind
+      : undefined;
   let root: Expression = operand;
-  while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root)) root = unwrapParens(root.expression);
+  while (isPropertyAccessExpression(root) || isElementAccessExpression(root) || isNonNullExpression(root))
+    root = unwrapParens(root.expression);
   const rootBinding = root !== operand && isIdentifier(root) ? ctx.scope.get(root.text) : undefined;
   const owned = rootBinding?.kind === "local" && rootBinding.owned === true;
   if (!owned && !(isIdentifier(operand) && kind === "local")) return undefined;
@@ -861,13 +1028,17 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
       ctx.error(
         DiagnosticCode.InvalidComponentBody,
         `${what} cannot be called in the component body: it runs on every render. Call \`${call.expression.text}()\` in a handler (\`useUpdate\`, \`useMount\`, a callback prop), or compute the value here and use it.`,
-        call,
+        call
       );
       return null;
     }
     if (callee?.kind === "sound") {
       if (call.arguments.length > 1) {
-        ctx.error(DiagnosticCode.UnsupportedStatement, `\`${callee.name}\` takes at most one argument, the volume from 0 to 1: the sound and its path are fixed where it is declared.`, call);
+        ctx.error(
+          DiagnosticCode.UnsupportedStatement,
+          `\`${callee.name}\` takes at most one argument, the volume from 0 to 1: the sound and its path are fixed where it is declared.`,
+          call
+        );
         return null;
       }
       const volume = call.arguments.length === 1 ? ctx.lowerExpression(call.arguments[0]!) : null;
@@ -883,7 +1054,11 @@ function lowerExpressionStatement(ctx: LoweringContext, expression: Expression, 
   const lowered = ctx.lowerExpression(call);
   if (!lowered) return null;
   if (lowered.kind !== "Call") {
-    ctx.error(DiagnosticCode.UnsupportedStatement, "Expression statements must be a state setter call, a write to a field or a `let` local, or an allowlisted call.", at);
+    ctx.error(
+      DiagnosticCode.UnsupportedStatement,
+      "Expression statements must be a state setter call, a write to a field or a `let` local, or an allowlisted call.",
+      at
+    );
     return null;
   }
   return { kind: "ExpressionStatement", expression: lowered };
@@ -912,4 +1087,3 @@ export function checkFreshName(ctx: LoweringContext, name: string, at: Node): bo
   }
   return true;
 }
-

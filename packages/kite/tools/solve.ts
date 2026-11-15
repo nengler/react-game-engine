@@ -9,11 +9,13 @@
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { parseInputScript } from "@rge/player";
+
 import { NO_CONTROLS, type Controls } from "../src/rules/body.ts";
+import { TRANSITION_TIME } from "../src/rules/constants.ts";
 import { newSim } from "../src/rules/level.ts";
 import { playFrame, startPlayback, type Playback } from "../src/rules/playback.ts";
-import { TRANSITION_TIME } from "../src/rules/constants.ts";
 import { overlapsRect, ROOM_LIST } from "../src/rules/rooms.ts";
 
 /** Rooms that teach running and jumping: found without the dash, so the replay shows the intended way. */
@@ -31,10 +33,11 @@ interface Burst {
 }
 
 const BURSTS: Burst[] = [];
-for (const h of [0, 1, -1] as const) for (const jump of [false, true]) {
-  BURSTS.push({ h, v: 0, jump, dash: false });
-  for (const v of [0, -1, 1] as const) BURSTS.push({ h, v, jump, dash: true });
-}
+for (const h of [0, 1, -1] as const)
+  for (const jump of [false, true]) {
+    BURSTS.push({ h, v: 0, jump, dash: false });
+    for (const v of [0, -1, 1] as const) BURSTS.push({ h, v, jump, dash: true });
+  }
 
 interface Node {
   readonly run: Playback;
@@ -59,7 +62,23 @@ function controlsFor(burst: Burst, frame: number, jumpWasHeld: boolean): Control
 
 function key(play: Playback): string {
   const b = play.player.body;
-  return [Math.round(b.x / 2), Math.round(b.y / 2), Math.round(b.vx / 30), Math.round(b.vy / 30), b.onGround ? 1 : 0, b.dashes, b.varJump > 0 ? 1 : 0, b.state, b.forceMoveTime > 0 ? 1 : 0, b.coyote > 0 ? 1 : 0, b.ducking ? 1 : 0, b.autoJump ? 1 : 0, Math.round(b.wallSlideTimer * 2), b.dashCooldown > 0 ? 1 : 0, play.frozen].join(",");
+  return [
+    Math.round(b.x / 2),
+    Math.round(b.y / 2),
+    Math.round(b.vx / 30),
+    Math.round(b.vy / 30),
+    b.onGround ? 1 : 0,
+    b.dashes,
+    b.varJump > 0 ? 1 : 0,
+    b.state,
+    b.forceMoveTime > 0 ? 1 : 0,
+    b.coyote > 0 ? 1 : 0,
+    b.ducking ? 1 : 0,
+    b.autoJump ? 1 : 0,
+    Math.round(b.wallSlideTimer * 2),
+    b.dashCooldown > 0 ? 1 : 0,
+    play.frozen,
+  ].join(",");
 }
 
 /** Distance to the nearest exit tile: how promising a state looks. */
@@ -117,7 +136,13 @@ class Heap<T> {
   }
 }
 
-export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit = 600_000, from: Playback | null = null, goal: { x: number; y: number; w: number; h: number } | null = null): { script: string; end: Playback } | null {
+export function solve(
+  roomIndex: number,
+  allow: Allowed = { dash: true },
+  limit = 600_000,
+  from: Playback | null = null,
+  goal: { x: number; y: number; w: number; h: number } | null = null
+): { script: string; end: Playback } | null {
   const allowed = allow.dash ? BURSTS : BURSTS.filter((b) => !b.dash);
   const room = ROOM_LIST[roomIndex]!;
   const targets: [number, number][] = [];
@@ -138,8 +163,12 @@ export function solve(roomIndex: number, allow: Allowed = { dash: true }, limit 
       let ok = true;
       for (let f = 0; f < BURST; f++) {
         run = playFrame(run, controlsFor(burst, f, node.held.jump), DT);
-        if (run.run.dead) { ok = false; break; }
-        if (goal !== null && overlapsRect(run.player.body.x, run.player.body.y, goal)) return finish({ run, held: { jump: burst.jump }, parent: node, burst, g: node.g + BURST }, start);
+        if (run.run.dead) {
+          ok = false;
+          break;
+        }
+        if (goal !== null && overlapsRect(run.player.body.x, run.player.body.y, goal))
+          return finish({ run, held: { jump: burst.jump }, parent: node, burst, g: node.g + BURST }, start);
         if (goal === null && (run.run.room !== roomIndex || run.run.finished)) break;
       }
       if (!ok) continue;
@@ -169,7 +198,16 @@ let previousDown: readonly string[] = [];
 function controlsOf(down: readonly string[]): Controls {
   const was = (k: string): boolean => previousDown.includes(k);
   const has = (k: string): boolean => down.includes(k);
-  const c: Controls = { left: has("ArrowLeft"), right: has("ArrowRight"), up: has("ArrowUp"), down: has("ArrowDown"), jumpHeld: has("Z"), jumpPressed: has("Z") && !was("Z"), dashPressed: has("X") && !was("X"), grab: has("C") };
+  const c: Controls = {
+    left: has("ArrowLeft"),
+    right: has("ArrowRight"),
+    up: has("ArrowUp"),
+    down: has("ArrowDown"),
+    jumpHeld: has("Z"),
+    jumpPressed: has("Z") && !was("Z"),
+    dashPressed: has("X") && !was("X"),
+    grab: has("C"),
+  };
   previousDown = down;
   return c;
 }
@@ -183,18 +221,34 @@ function script(node: Node): string {
   for (const burst of bursts) {
     for (let f = 0; f < BURST; f++) {
       const c = controlsFor(burst, f, jumpWasHeld);
-      const names = [c.left && "left", c.right && "right", c.up && "up", c.down && "down", c.jumpHeld && "jump", c.dashPressed && "dash"].filter(Boolean) as string[];
+      const names = [
+        c.left && "left",
+        c.right && "right",
+        c.up && "up",
+        c.down && "down",
+        c.jumpHeld && "jump",
+        c.dashPressed && "dash",
+      ].filter(Boolean) as string[];
       frames.push(names.join("+") || "_");
     }
     jumpWasHeld = burst.jump;
   }
   // Run-length encode identical frames: `right+jump` four times is `right*4+jump*4`.
   const items: string[] = [];
-  for (let i = 0; i < frames.length; ) {
+  for (let i = 0; i < frames.length;) {
     let j = i;
     while (j < frames.length && frames[j] === frames[i]) j++;
     const n = j - i;
-    items.push(frames[i] === "_" ? (n === 1 ? "_" : `_*${n}`) : (frames[i] as string).split("+").map((name) => (n === 1 ? name : `${name}*${n}`)).join("+"));
+    items.push(
+      frames[i] === "_"
+        ? n === 1
+          ? "_"
+          : `_*${n}`
+        : (frames[i] as string)
+            .split("+")
+            .map((name) => (n === 1 ? name : `${name}*${n}`))
+            .join("+")
+    );
     i = j;
   }
   return items.join(", ");
@@ -221,7 +275,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   if (write && process.exitCode !== 1) {
     const body = found.map((r, i) => `  // ${i + 1}. ${ROOM_LIST[i]!.name}\n  ${JSON.stringify(r)},`).join("\n");
-    writeFileSync(join(dirname(fileURLToPath(import.meta.url)), "../test/replays.ts"), `/**\n * One input script per room, played one after the other from the start of the game: each finishes its room from where the\n * one before left the character, and waits out the camera's slide. Found by \`tools/solve.ts\`, which writes this file;\n * \`test/rooms.test.ts\` plays them. Rooms 1 and 2 are found without the dash.\n */\nexport const REPLAYS: readonly string[] = [\n${body}\n];\n`);
+    writeFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../test/replays.ts"),
+      `/**\n * One input script per room, played one after the other from the start of the game: each finishes its room from where the\n * one before left the character, and waits out the camera's slide. Found by \`tools/solve.ts\`, which writes this file;\n * \`test/rooms.test.ts\` plays them. Rooms 1 and 2 are found without the dash.\n */\nexport const REPLAYS: readonly string[] = [\n${body}\n];\n`
+    );
     console.log("wrote test/replays.ts");
   }
 }

@@ -1,5 +1,6 @@
-import { API, type RetainedSourceFile } from "typescript/sync";
 import { ScriptKind, type Node, type SourceFile } from "typescript/ast";
+import { API, type RetainedSourceFile } from "typescript/sync";
+
 import type { SourceSpan } from "../ir/types.ts";
 
 /**

@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { GameObject, World } from "../src/index.ts";
 
 /**
@@ -42,7 +43,11 @@ describe("the order handlers run in", () => {
     world.mount(p);
     world.flush();
     assert.deepEqual(frame(world, log), ["P", "A", "A1", "B"]);
-    assert.deepEqual(log.filter((line) => line.startsWith("input ")), ["input P", "input A", "input A1", "input B"], "and so is onInput");
+    assert.deepEqual(
+      log.filter((line) => line.startsWith("input ")),
+      ["input P", "input A", "input A1", "input B"],
+      "and so is onInput"
+    );
   });
 
   it("puts a child added later where it is in the tree, not after everything that was mounted before it", () => {

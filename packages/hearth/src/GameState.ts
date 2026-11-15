@@ -1,4 +1,5 @@
 import { createGameState } from "@rge/runtime";
+
 import { sfx } from "./effects.ts";
 
 type Screen = "title" | "play" | "won" | "lost";

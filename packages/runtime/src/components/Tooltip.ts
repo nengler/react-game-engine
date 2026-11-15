@@ -41,7 +41,8 @@ export class Tooltip<P extends object = {}> extends Flex<P> {
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: TooltipProps = {}, props?: P, defaults?: Partial<P>) {
     const given: Partial<TooltipProps> = {};
-    for (const key of Object.keys(hostProps) as (keyof TooltipProps)[]) if (hostProps[key] !== undefined) (given as Record<string, unknown>)[key] = hostProps[key];
+    for (const key of Object.keys(hostProps) as (keyof TooltipProps)[])
+      if (hostProps[key] !== undefined) (given as Record<string, unknown>)[key] = hostProps[key];
     super({ ...TOOLTIP_DEFAULTS, ...given }, props, defaults);
     this.show = hostProps.show;
     this.transform.z = 100;

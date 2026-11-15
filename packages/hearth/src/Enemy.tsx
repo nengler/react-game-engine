@@ -1,4 +1,5 @@
 import { AnimatedSprite, Collider, Entity, after, cancelTimers, useMutable, useUpdate } from "@rge/runtime/jsx";
+
 import { HealthBar } from "./HealthBar.tsx";
 import { FLASH } from "./rules/constants.ts";
 import { ENEMIES } from "./rules/enemies.ts";
@@ -63,7 +64,8 @@ export function Enemy({ id, kind, lane, maxHp, onKilled, onLeaked }: EnemyProps)
       <Collider
         width={10}
         height={10}
-        x={-5} y={-5}
+        x={-5}
+        y={-5}
         tag="enemy"
         layer="enemy"
         hits={["blast"]}

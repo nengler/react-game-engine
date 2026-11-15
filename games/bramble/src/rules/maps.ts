@@ -17,6 +17,7 @@
  * before: `.` ground, `#` wall, `~` water, `b` a bush.
  */
 import type { TilemapData } from "@rge/runtime";
+
 import { tilemaps } from "../../generated/tilemaps.ts";
 import { TILE } from "./constants.ts";
 import { DIALOGUE, type NpcId } from "./dialogue.ts";
@@ -127,7 +128,14 @@ export function readMap(id: MapId, data: TilemapData): MapDef {
         const [toMap, toDoor] = text("to")!.split("/");
         const facing = FACING[text("out")!] ?? fail(`${what}: 'out' must be up, down, left or right.`);
         const needs = text("needs", true);
-        doors.push({ id: door, col, row, to: { map: oneOf(toMap, MAP_IDS, "to"), door: toDoor ?? fail(`${what}: 'to' is map/door.`) }, out: facing, ...(needs === undefined ? {} : { needs: oneOf(needs, ITEMS, "needs") }) });
+        doors.push({
+          id: door,
+          col,
+          row,
+          to: { map: oneOf(toMap, MAP_IDS, "to"), door: toDoor ?? fail(`${what}: 'to' is map/door.`) },
+          out: facing,
+          ...(needs === undefined ? {} : { needs: oneOf(needs, ITEMS, "needs") }),
+        });
         break;
       }
       case "item":
@@ -170,10 +178,18 @@ export function readMap(id: MapId, data: TilemapData): MapDef {
 /** Every map, read from `generated/tilemaps.ts`; a door that leads nowhere is an error here too. */
 function readWorld(maps: Readonly<Record<string, TilemapData>>): Record<MapId, MapDef> {
   const world = {} as Record<MapId, MapDef>;
-  for (const id of MAP_IDS) world[id] = readMap(id, maps[id] ?? (() => { throw new Error(`scenes/${id}.tmj is missing (or was not compiled).`); })());
+  for (const id of MAP_IDS)
+    world[id] = readMap(
+      id,
+      maps[id] ??
+        (() => {
+          throw new Error(`scenes/${id}.tmj is missing (or was not compiled).`);
+        })()
+    );
   for (const def of Object.values(world)) {
     for (const d of def.doors) {
-      if (!world[d.to.map].doors.some((there) => there.id === d.to.door)) throw new Error(`scenes/${def.id}.tmj: door '${d.id}' leads to '${d.to.map}/${d.to.door}', which is not a door.`);
+      if (!world[d.to.map].doors.some((there) => there.id === d.to.door))
+        throw new Error(`scenes/${def.id}.tmj: door '${d.id}' leads to '${d.to.map}/${d.to.door}', which is not a door.`);
     }
   }
   return world;

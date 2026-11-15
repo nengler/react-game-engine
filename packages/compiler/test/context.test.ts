@@ -1,9 +1,11 @@
-/** Context (REACT_FEEL_PLAN.md, C3): `createContext`, `<X.Provider value>` and `useContext`, compiled. */
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+/** Context (REACT_FEEL_PLAN.md, C3): `createContext`, `<X.Provider value>` and `useContext`, compiled. */
+import { after, describe, it } from "node:test";
+
 import { Entity, Text, World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load } from "./helpers.ts";
 
 after(() => {
@@ -49,7 +51,10 @@ describe("context", () => {
     const compiled = compile(SOURCE, "App.tsx");
     mkdirSync(dirname(compiled.fileName), { recursive: true });
     writeFileSync(join(dirname(compiled.fileName), "..", "theme.ts"), THEME);
-    const typeErrors = getCompiler().typeCheck([{ fileName: compiled.fileName, text: compiled.code }, { fileName: join(dirname(compiled.fileName), "..", "theme.ts"), text: THEME }]);
+    const typeErrors = getCompiler().typeCheck([
+      { fileName: compiled.fileName, text: compiled.code },
+      { fileName: join(dirname(compiled.fileName), "..", "theme.ts"), text: THEME },
+    ]);
     assert.deepEqual(typeErrors, []);
     const { App } = await load<{ App: new () => Entity }>(compiled);
     const world = new World();

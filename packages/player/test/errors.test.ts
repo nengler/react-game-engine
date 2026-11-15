@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Errors in the window and hot reload: a game that throws keeps its window open and shows the error there, and `reload`
  * swaps in a new build of the root with the old tree's state.
  */
 import { afterEach, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Text, getSoundSink, type GameObject } from "@rge/runtime";
+
 import { estimateTextWidth } from "../src/draw.ts";
 import { HOST_RUN_KEY } from "../src/host.ts";
 import { createPlayer, describeError, layoutError, run, type PlayerConfig } from "../src/loop.ts";
@@ -77,7 +79,10 @@ describe("errors in the window", () => {
     assert.equal(backend.frames.length, 4, "the window stayed open until it was closed");
     const shown = texts(backend.frames[0]);
     assert.ok(shown.includes("Error: game over"), shown.join("\n"));
-    assert.ok(shown.some((line) => line.includes("onUpdate")), "the stack is shown");
+    assert.ok(
+      shown.some((line) => line.includes("onUpdate")),
+      "the stack is shown"
+    );
     assert.ok(shown.includes("Close the window to quit."));
     assert.equal(backend.frames[0]?.clearColor, backend.frames[3]?.clearColor);
     assert.equal((crasher as Crasher | null)?.updates, 1, "the game is not stepped again after the error");
@@ -142,7 +147,10 @@ describe("reload", () => {
     old.after(1, () => fired++);
     old.every(0.5, () => fired++);
     assert.equal(player.reload({ root: () => new Holder(2) }), true);
-    assert.ok(warnings.some((m) => /dropped 2 pending timers/.test(m)), JSON.stringify(warnings));
+    assert.ok(
+      warnings.some((m) => /dropped 2 pending timers/.test(m)),
+      JSON.stringify(warnings)
+    );
     assert.equal(old.pendingTimers, 0);
     for (let i = 0; i < 3; i++) player.world.tick(1);
     assert.equal(fired, 0, "nothing calls back into the old tree");
@@ -181,7 +189,7 @@ describe("reload", () => {
           throw new Error("broken edit");
         },
       }),
-      false,
+      false
     );
     assert.ok(player.failure);
     player.step();

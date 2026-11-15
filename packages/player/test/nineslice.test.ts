@@ -1,6 +1,8 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { Entity, Flex, Shape, getSoundSink, type FlexProps, type GameObject } from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
@@ -113,7 +115,10 @@ describe("<Flex backgroundImage>", () => {
   it("draws a magenta box the size of the box for an image that is missing, and says so once", () => {
     const warnings: string[] = [];
     const records = draw(panel({ backgroundImage: "gone.png", slice: 8 }), warnings);
-    assert.deepEqual(records.slice(1).map((r) => (r.op === "rect" ? [r.width, r.height, r.color] : r.op)), [[100, 60, "#ff00ffff"]]);
+    assert.deepEqual(
+      records.slice(1).map((r) => (r.op === "rect" ? [r.width, r.height, r.color] : r.op)),
+      [[100, 60, "#ff00ffff"]]
+    );
     assert.equal(warnings.filter((m) => /gone\.png/.test(m)).length, 1);
   });
 
@@ -133,7 +138,11 @@ describe("<Flex backgroundImage>", () => {
     const root = new Entity();
     root.addChild(panel({ backgroundImage: "skin.png", slice: 8 }));
     const backend = new RecordingBackend({ textureSizes: SIZES });
-    const builder = new FrameBuilder({ loadTexture: (p) => backend.loadTexture(p), textureSize: (h) => backend.textureSize(h) ?? { width: 0, height: 0 }, retain: "check" });
+    const builder = new FrameBuilder({
+      loadTexture: (p) => backend.loadTexture(p),
+      textureSize: (h) => backend.textureSize(h) ?? { width: 0, height: 0 },
+      retain: "check",
+    });
     builder.build(root, 400, 300);
     builder.build(root, 400, 300);
   });
@@ -152,7 +161,10 @@ describe("<Flex> state images, in the loop", () => {
   const IN = { x: 10, y: 10 };
   const OUT = { x: 300, y: 200 };
 
-  function textures(props: FlexProps, inputs: readonly { mouse: { x: number; y: number }; pressed?: string[]; down?: string[] }[]): string[] {
+  function textures(
+    props: FlexProps,
+    inputs: readonly { mouse: { x: number; y: number }; pressed?: string[]; down?: string[] }[]
+  ): string[] {
     const backend = new RecordingBackend({ textureSizes: SIZES });
     const root = new Entity();
     root.addChild(panel({ slice: 8, onPress: () => {}, ...props }));
@@ -168,7 +180,13 @@ describe("<Flex> state images, in the loop", () => {
   }
 
   it("shows the hover image while the mouse is over the box, and the plain one again after", () => {
-    const seen = textures({ backgroundImage: "skin.png", hoverBackgroundImage: "hover.png" }, [{ mouse: OUT }, { mouse: IN }, { mouse: IN }, { mouse: OUT }, { mouse: OUT }]);
+    const seen = textures({ backgroundImage: "skin.png", hoverBackgroundImage: "hover.png" }, [
+      { mouse: OUT },
+      { mouse: IN },
+      { mouse: IN },
+      { mouse: OUT },
+      { mouse: OUT },
+    ]);
     assert.equal(seen[0], "assets/skin.png");
     assert.equal(seen[2], "assets/hover.png");
     assert.equal(seen[4], "assets/skin.png");
@@ -176,14 +194,29 @@ describe("<Flex> state images, in the loop", () => {
 
   it("takes the state's image over the plain one in the order of the colours: disabled over pressed over hover", () => {
     const props: FlexProps = { backgroundImage: "skin.png", hoverBackgroundImage: "hover.png", pressedBackgroundImage: "wide.png" };
-    const pressed = textures(props, [{ mouse: IN }, { mouse: IN }, { mouse: IN, pressed: ["MouseLeft"] }, { mouse: IN, down: ["MouseLeft"] }, { mouse: IN, down: ["MouseLeft"] }]);
+    const pressed = textures(props, [
+      { mouse: IN },
+      { mouse: IN },
+      { mouse: IN, pressed: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+    ]);
     assert.equal(pressed.at(-1), "assets/wide.png");
-    const off = textures({ ...props, disabled: true, disabledBackgroundImage: "off.png" }, [{ mouse: IN }, { mouse: IN }, { mouse: IN, pressed: ["MouseLeft"] }, { mouse: IN, down: ["MouseLeft"] }]);
+    const off = textures({ ...props, disabled: true, disabledBackgroundImage: "off.png" }, [
+      { mouse: IN },
+      { mouse: IN },
+      { mouse: IN, pressed: ["MouseLeft"] },
+      { mouse: IN, down: ["MouseLeft"] },
+    ]);
     assert.equal(off.at(-1), "assets/off.png", "disabled shows only its own image, whatever the mouse is doing");
   });
 
   it("keeps the plain image for a state that has none of its own", () => {
-    const seen = textures({ backgroundImage: "skin.png", pressedBackgroundImage: "hover.png" }, [{ mouse: OUT }, { mouse: IN }, { mouse: IN }]);
+    const seen = textures({ backgroundImage: "skin.png", pressedBackgroundImage: "hover.png" }, [
+      { mouse: OUT },
+      { mouse: IN },
+      { mouse: IN },
+    ]);
     assert.equal(seen.at(-1), "assets/skin.png");
   });
 });

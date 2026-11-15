@@ -5,6 +5,7 @@
  *   node tools/frame-time.ts
  */
 import { createPlayer, parseInputScript, RecordingBackend } from "@rge/player";
+
 import { bindings, gameConfig } from "../game.ts";
 import { useGame } from "../src/GameState.ts";
 import { route, TO_THE_CAVE } from "../test/replays.ts";
@@ -26,7 +27,20 @@ for (let i = 0; i < frames.length + 1; i++) {
   if (now !== map) doors.push({ step: i, ms: +ms.toFixed(2) });
   map = now;
 }
-const slowest = times.map((ms, step) => ({ step, ms: +ms.toFixed(1) })).sort((a, b) => b.ms - a.ms).slice(0, 5);
+const slowest = times
+  .map((ms, step) => ({ step, ms: +ms.toFixed(1) }))
+  .sort((a, b) => b.ms - a.ms)
+  .slice(0, 5);
 const sorted = [...times].sort((a, b) => a - b);
 const mean = times.reduce((a, b) => a + b, 0) / times.length;
-console.log(JSON.stringify({ steps: times.length, meanMs: +mean.toFixed(3), p99Ms: +sorted[Math.floor(sorted.length * 0.99)]!.toFixed(3), maxMs: +sorted.at(-1)!.toFixed(3), records: backend.lastFrame.records.length, slowest, doors }));
+console.log(
+  JSON.stringify({
+    steps: times.length,
+    meanMs: +mean.toFixed(3),
+    p99Ms: +sorted[Math.floor(sorted.length * 0.99)]!.toFixed(3),
+    maxMs: +sorted.at(-1)!.toFixed(3),
+    records: backend.lastFrame.records.length,
+    slowest,
+    doors,
+  })
+);

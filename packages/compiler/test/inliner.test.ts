@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * The custom-hook inliner as the rest of the compiler sees it: diagnostics and IR spans point at the source as written (not the
  * expanded text), each hook file is parsed once however often it is called, the parse of a file with no hooks is reused for
  * analysis, and the authoring module is the manifest's, not a fixed name.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { runtimeManifest } from "@rge/runtime";
+
 import { Compiler, DiagnosticCode, EditMap, TsxParser, expandCustomHooks, type CompilerDiagnostic } from "../src/index.ts";
 import { closeCompiler, getCompiler, withAuthoringImports } from "./helpers.ts";
 
@@ -93,14 +95,21 @@ describe("parsing", () => {
 function C() { const [a, setA] = useFlag(); const [b, setB] = useFlag(); const [c, setC] = useFlag(); return <Entity name="C" />; }`,
         () => ({ fileName: "hooks.tsx", text: hooks }),
         diagnostics,
-        runtimeManifest.authoringModule,
+        runtimeManifest.authoringModule
       );
       expanded.parsed?.dispose();
       assert.deepEqual(diagnostics, []);
       assert.equal(parser.counts.get("hooks.tsx"), 1);
       assert.equal(parser.counts.get("Main.tsx"), 2, "once with the calls, once expanded");
 
-      const plain = expandCustomHooks(parser, "Plain.tsx", `function C() { return <Entity name="C" />; }`, null, diagnostics, runtimeManifest.authoringModule);
+      const plain = expandCustomHooks(
+        parser,
+        "Plain.tsx",
+        `function C() { return <Entity name="C" />; }`,
+        null,
+        diagnostics,
+        runtimeManifest.authoringModule
+      );
       assert.ok(plain.parsed, "the parse is handed on for analysis");
       plain.parsed.dispose();
       assert.equal(parser.counts.get("Plain.tsx"), 1);
@@ -121,7 +130,7 @@ describe("authoring module", () => {
 function C() {
   const time = useTime();
   return <Entity name="C" transform={{ x: time }} />;
-}`,
+}`
       );
       assert.ok(result.ok, result.diagnostics.map((d) => d.message).join("\n"));
       // The hook's own state is named after it (`time`), numbered because the component already has a `time`.
@@ -142,7 +151,7 @@ const LABEL = "Wave";
 interface Props { tower: Tower }
 export function T({ tower }: Props) {
   return <Entity name={LABEL} />;
-}`),
+}`)
     );
     assert.ok(result.ok, result.diagnostics.map((d) => d.message).join("\n"));
     assert.match(result.code, /import type \{ Tower \} from "\.\.\/rules\.ts";/);

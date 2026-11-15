@@ -1,4 +1,5 @@
 import { moveActorX, moveActorY } from "@rge/runtime";
+
 import * as K from "../constants.ts";
 import { BODY_H, DUCK_H } from "../constants.ts";
 import { dashSlide } from "./dash.ts";

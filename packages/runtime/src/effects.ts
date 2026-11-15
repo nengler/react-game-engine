@@ -39,7 +39,8 @@ export class ParticleStore<Name extends string = string> {
 
   /** Make the burst `name` at (`x`, `y`). */
   burst(name: Name, x: number, y: number, options?: BurstOptions): void {
-    if (!Object.hasOwn(this.presets, name)) throw new Error(`There is no particle burst named '${name}' (there are: ${Object.keys(this.presets).join(", ")}).`);
+    if (!Object.hasOwn(this.presets, name))
+      throw new Error(`There is no particle burst named '${name}' (there are: ${Object.keys(this.presets).join(", ")}).`);
     this.bursts[name] = (this.bursts[name] ?? 0) + 1;
     this.#renderer?.emitBurst(name, x, y, options);
   }
@@ -55,7 +56,9 @@ export class ParticleStore<Name extends string = string> {
 }
 
 /** Make the game's particle bursts. Keep the result in a module (`export const fx = createParticles({ … })`). */
-export function createParticles<const Presets extends Record<string, ParticlePreset>>(presets: Presets): ParticleStore<keyof Presets & string> {
+export function createParticles<const Presets extends Record<string, ParticlePreset>>(
+  presets: Presets
+): ParticleStore<keyof Presets & string> {
   return new ParticleStore<keyof Presets & string>(presets);
 }
 
@@ -75,7 +78,13 @@ export class SoundStore<Name extends string = string> {
   constructor(entries: Readonly<Record<Name, SoundEntry>>) {
     for (const [name, entry] of Object.entries<SoundEntry>(entries)) {
       const src = typeof entry === "string" ? entry : entry.src;
-      this.#sounds[name] = { sound: null, src, volume: typeof entry === "string" ? 1 : (entry.volume ?? 1), once: typeof entry !== "string" && entry.once === true, last: -1 };
+      this.#sounds[name] = {
+        sound: null,
+        src,
+        volume: typeof entry === "string" ? 1 : (entry.volume ?? 1),
+        once: typeof entry !== "string" && entry.once === true,
+        last: -1,
+      };
       addSoundPreload(src);
     }
   }
@@ -103,4 +112,3 @@ export class SoundStore<Name extends string = string> {
 export function createSounds<const Entries extends Record<string, SoundEntry>>(entries: Entries): SoundStore<keyof Entries & string> {
   return new SoundStore<keyof Entries & string>(entries);
 }
-

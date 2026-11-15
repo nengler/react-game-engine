@@ -1,9 +1,17 @@
+import assert from "node:assert/strict";
 /** Keys that press things: `pressKey` (a button's own shortcut), the focus (`focusable`, `autoFocus`) and the arrow keys moving it. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { createControls, createInputState, Entity, Flex, Pointer, World, type InputSnapshot, type Pressable } from "../src/index.ts";
 
-const controls = createControls({ wave: ["Space"], left: ["ArrowLeft"], right: ["ArrowRight"], up: ["ArrowUp"], down: ["ArrowDown"], confirm: ["Z"] });
+const controls = createControls({
+  wave: ["Space"],
+  left: ["ArrowLeft"],
+  right: ["ArrowRight"],
+  up: ["ArrowUp"],
+  down: ["ArrowDown"],
+  confirm: ["Z"],
+});
 const press = (world: World, ...pressed: string[]): void => {
   const snapshot: InputSnapshot = { pressed };
   world.tick(1 / 60, createInputState(snapshot, controls));
@@ -45,7 +53,19 @@ describe("focus", () => {
     const world = new World();
     const root = new Entity();
     const make = (name: string, x: number, y: number, auto = false): Pointer =>
-      at(new Pointer({ width: 10, height: 10, focusable: true, autoFocus: auto, onPress: () => log.push(`press ${name}`), onFocus: () => log.push(`focus ${name}`), onBlur: () => log.push(`blur ${name}`) }), x, y);
+      at(
+        new Pointer({
+          width: 10,
+          height: 10,
+          focusable: true,
+          autoFocus: auto,
+          onPress: () => log.push(`press ${name}`),
+          onFocus: () => log.push(`focus ${name}`),
+          onBlur: () => log.push(`blur ${name}`),
+        }),
+        x,
+        y
+      );
     const a = make("a", 0, 0, true);
     const b = make("b", 40, 2);
     const c = make("c", 100, 0);
@@ -64,14 +84,33 @@ describe("focus", () => {
     press(world, "ArrowLeft");
     press(world, "ArrowLeft");
     press(world, "ArrowDown");
-    assert.deepEqual(log, ["focus a", "blur a", "focus b", "blur b", "focus c", "press c", "blur c", "focus b", "blur b", "focus a", "blur a", "focus d"]);
+    assert.deepEqual(log, [
+      "focus a",
+      "blur a",
+      "focus b",
+      "blur b",
+      "focus c",
+      "press c",
+      "blur c",
+      "focus b",
+      "blur b",
+      "focus a",
+      "blur a",
+      "focus d",
+    ]);
   });
 
   it("a click on a focusable focuses it before pressing it; a removed focused one lets the next autoFocus take it", () => {
     const log: string[] = [];
     const world = new World();
     const root = new Entity();
-    const one = new Pointer({ width: 10, height: 10, focusable: true, onFocus: () => log.push("focus one"), onPress: () => log.push("press one") });
+    const one = new Pointer({
+      width: 10,
+      height: 10,
+      focusable: true,
+      onFocus: () => log.push("focus one"),
+      onPress: () => log.push("press one"),
+    });
     const two = at(new Pointer({ width: 10, height: 10, focusable: true, autoFocus: true, onFocus: () => log.push("focus two") }), 50, 0);
     root.addChild(one);
     root.addChild(two);
@@ -108,7 +147,16 @@ describe("disabled", () => {
     const log: string[] = [];
     const world = new World();
     const root = new Entity();
-    const off = new Flex({ width: 10, height: 10, disabled: true, focusable: true, autoFocus: true, pressKey: "wave", onPress: () => log.push("off"), onFocus: () => log.push("focus off") });
+    const off = new Flex({
+      width: 10,
+      height: 10,
+      disabled: true,
+      focusable: true,
+      autoFocus: true,
+      pressKey: "wave",
+      onPress: () => log.push("off"),
+      onFocus: () => log.push("focus off"),
+    });
     root.addChild(off);
     world.mount(root);
     world.flush();
@@ -220,6 +268,9 @@ describe("Pointer origin", () => {
 describe("Controls.label", () => {
   it("names an action's first key for the screen", () => {
     const c = createControls({ wave: ["Space", "PadY"], pause: ["Escape"], left: ["ArrowLeft"], one: ["1"] });
-    assert.deepEqual([c.label("wave"), c.label("pause"), c.label("left"), c.label("one"), c.label("other")], ["Space", "Esc", "Left", "1", "other"]);
+    assert.deepEqual(
+      [c.label("wave"), c.label("pause"), c.label("left"), c.label("one"), c.label("other")],
+      ["Space", "Esc", "Left", "1", "other"]
+    );
   });
 });

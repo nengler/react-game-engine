@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * M12: `<Camera>`. The viewport: its own transform is the view, `zoom`
  * magnifies, and it follows its children: `<Camera><Player /></Camera>`.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Camera, Entity, Sprite, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
 
@@ -112,9 +114,13 @@ let Hero: new () => HeroInstance;
 let View: new (props: { zoom: number }) => ViewInstance;
 
 before(async () => {
-  ({ Level, Stage, Swarm, Hero, View } = await load<{ Level: typeof Level; Stage: typeof Stage; Swarm: typeof Swarm; Hero: typeof Hero; View: typeof View }>(
-    compile(SOURCE, "Cam.tsx"),
-  ));
+  ({ Level, Stage, Swarm, Hero, View } = await load<{
+    Level: typeof Level;
+    Stage: typeof Stage;
+    Swarm: typeof Swarm;
+    Hero: typeof Hero;
+    View: typeof View;
+  }>(compile(SOURCE, "Cam.tsx")));
 });
 
 describe("M12: IR and generated code", () => {
@@ -128,12 +134,21 @@ describe("M12: IR and generated code", () => {
     const zoom = camera.props.find((p) => p.name === "zoom")!;
     assert.equal(zoom.kind, "DynamicProp");
     assert.deepEqual(zoom.kind === "DynamicProp" && zoom.dependencies, [{ kind: "State", state: "Level.s.wave" }]);
-    assert.deepEqual(camera.transform.map((t) => [t.name, t.kind]), [["x", "StaticProp"], ["y", "StaticProp"]]);
+    assert.deepEqual(
+      camera.transform.map((t) => [t.name, t.kind]),
+      [
+        ["x", "StaticProp"],
+        ["y", "StaticProp"],
+      ]
+    );
   });
 
   it("holds the children a camera follows as its own children", () => {
     assert.deepEqual(wrapper.component, { kind: "Intrinsic", name: "Camera" });
-    assert.deepEqual(wrapper.children.map((c) => c.kind), ["StaticChild", "ConditionalChild"]);
+    assert.deepEqual(
+      wrapper.children.map((c) => c.kind),
+      ["StaticChild", "ConditionalChild"]
+    );
   });
 
   it("builds the camera and updates zoom in place", () => {
@@ -192,7 +207,7 @@ describe("M12: runtime behaviour", () => {
     world.mount(level);
     const camera = level.camera;
     assert.equal(camera.zoom, 1);
-    level.s.wave = (6);
+    level.s.wave = 6;
     assert.equal(world.flush(), 1);
     assert.equal(camera.zoom, 2);
     assert.equal(level.camera, camera);
@@ -225,13 +240,13 @@ describe("M12: runtime behaviour", () => {
     const game = new Stage();
     world.mount(game);
     world.tick(1); // the player is at 10
-    game.s.pet = (true);
+    game.s.pet = true;
     world.flush();
     assert.equal(game.camera.children.length, 2, "the pet is a child of the camera");
     assert.equal(game.sprite!.worldTransform().x, 100, "placed in the camera's parent's space");
     const view = game.camera.worldToView(55, 0); // (10 + 100) / 2
     assert.ok(Math.abs(view.x) < 1e-9 && Math.abs(view.y) < 1e-9, `${JSON.stringify(view)}`);
-    game.s.pet = (false);
+    game.s.pet = false;
     world.flush();
     assert.deepEqual(game.camera.worldToView(10, 0), { x: 0, y: 0 }, "back on the player");
   });
@@ -241,10 +256,16 @@ describe("M12: runtime behaviour", () => {
     const swarm = new Swarm();
     world.mount(swarm);
     assert.deepEqual(swarm.camera.worldToView(0, 0), { x: 0, y: 0 }, "no children: where it is");
-    swarm.s.units = ([{ id: "a", x: 0 }, { id: "b", x: 100 }]);
+    swarm.s.units = [
+      { id: "a", x: 0 },
+      { id: "b", x: 100 },
+    ];
     world.flush();
     assert.deepEqual(swarm.camera.worldToView(50, 0), { x: 0, y: 0 });
-    swarm.s.units = ([{ id: "b", x: 100 }, { id: "c", x: 300 }]);
+    swarm.s.units = [
+      { id: "b", x: 100 },
+      { id: "c", x: 300 },
+    ];
     world.flush();
     assert.deepEqual(swarm.camera.worldToView(200, 0), { x: 0, y: 0 });
   });
@@ -337,6 +358,10 @@ describe("M12: diagnostics", () => {
   });
 
   it("does not apply to a component that merely has a prop called follow", () => {
-    assert.doesNotThrow(() => compile(`interface P { follow: number }\nfunction Child({ follow }: P) { return <Entity name="c" />; }\nfunction C() { return <Entity name="C"><Child follow={1} /></Entity>; }`));
+    assert.doesNotThrow(() =>
+      compile(
+        `interface P { follow: number }\nfunction Child({ follow }: P) { return <Entity name="c" />; }\nfunction C() { return <Entity name="C"><Child follow={1} /></Entity>; }`
+      )
+    );
   });
 });

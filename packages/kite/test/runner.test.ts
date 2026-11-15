@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Kite's ground movement two ways (REACT_FEEL_PLAN.md, A2): the rules the game plays (`stepBody`, a plain function over the
  * room's `solidAt`) and the same rules written as a component with `useBody` (`src/Runner.tsx`), which asks the world instead.
@@ -5,10 +6,11 @@
  * printed, not asserted.
  */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { parseInputScript } from "@rge/player";
 import { createInputState, Shape } from "@rge/runtime";
 import { render } from "@rge/testing";
+
 import { Runner } from "../generated/Runner.ts";
 import { newBody, stepBody, type Body } from "../src/rules/body.ts";
 import { controls, readControls } from "../src/rules/controls.ts";
@@ -22,7 +24,12 @@ function byRules(room: number, script: string): { x: number; y: number }[] {
   const r = ROOM_LIST[room]!;
   let body: Body = newBody(r.spawnX, r.spawnY);
   return parseInputScript(script, { dt: DT, bindings }).map((frame) => {
-    body = stepBody(body, readControls(createInputState({ pressed: frame.pressed, down: frame.down, released: frame.released }, controls)), r.solidAt, DT);
+    body = stepBody(
+      body,
+      readControls(createInputState({ pressed: frame.pressed, down: frame.down, released: frame.released }, controls)),
+      r.solidAt,
+      DT
+    );
     return { x: body.x, y: body.y };
   });
 }
@@ -44,7 +51,8 @@ function byComponent(room: number, script: string): { x: number; y: number }[] {
 /** The first step where the two differ, or null. */
 function firstDifference(a: readonly { x: number; y: number }[], b: readonly { x: number; y: number }[]): string | null {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    if (a[i]?.x !== b[i]?.x || a[i]?.y !== b[i]?.y) return `step ${i}: the rules at ${JSON.stringify(a[i])}, the component at ${JSON.stringify(b[i])}`;
+    if (a[i]?.x !== b[i]?.x || a[i]?.y !== b[i]?.y)
+      return `step ${i}: the rules at ${JSON.stringify(a[i])}, the component at ${JSON.stringify(b[i])}`;
   }
   return null;
 }

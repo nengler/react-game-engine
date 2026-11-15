@@ -1,10 +1,11 @@
+import assert from "node:assert/strict";
 /**
  * What the compiler says when a component is written as for React (PAIN_POINTS.md, 2026-11-14): one mistake is one error, and the
  * error says what to write instead. The editor shows each as the author types (`rge lsp`), so a cascade of follow-on errors or a
  * message that misleads costs more than it did in a terminal.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { closeCompiler, getCompiler } from "./helpers.ts";
 
 after(() => closeCompiler());
@@ -31,17 +32,30 @@ describe("one mistake, one error", () => {
 
   it("does not report a state again when its value was refused", () => {
     // An empty array inside: its type cannot be worked out from the values.
-    assert.equal(only(`export function A() { const s = useMutable({ p: { x: 0, items: [] } }); return <Entity x={s.p.x} y={s.p.items.length} />; }`).code, "RGE1104");
+    assert.equal(
+      only(`export function A() { const s = useMutable({ p: { x: 0, items: [] } }); return <Entity x={s.p.x} y={s.p.items.length} />; }`)
+        .code,
+      "RGE1104"
+    );
   });
 
   it("does not report the props again when the props parameter was refused", () => {
     // Nested in the destructuring (\`hp: { health }\`): refused, and \`health\` is not reported again where it is read.
-    assert.equal(only(`interface P { hp: { health: number } }\nexport function A({ hp: { health } }: P) { return <Text>{health}</Text>; }`).code, "RGE1208");
+    assert.equal(
+      only(`interface P { hp: { health: number } }\nexport function A({ hp: { health } }: P) { return <Text>{health}</Text>; }`).code,
+      "RGE1208"
+    );
   });
 
   it("does not report a component or a function declared inside another as unknown where it is used", () => {
-    assert.match(only(`export function A() { function Inner() { return <Text>x</Text>; } return <Entity><Inner /></Entity>; }`).message, /^Declare the component <Inner> at the top level of the file/);
-    assert.match(only(`export function A() { function twice(n: number) { return n * 2; } return <Text>{twice(2)}</Text>; }`).message, /^Write the function as `const twice = \(…\) => \{ … \};`: a function declaration is not supported in the component body\./);
+    assert.match(
+      only(`export function A() { function Inner() { return <Text>x</Text>; } return <Entity><Inner /></Entity>; }`).message,
+      /^Declare the component <Inner> at the top level of the file/
+    );
+    assert.match(
+      only(`export function A() { function twice(n: number) { return n * 2; } return <Text>{twice(2)}</Text>; }`).message,
+      /^Write the function as `const twice = \(…\) => \{ … \};`: a function declaration is not supported in the component body\./
+    );
   });
 
   it("still reports a name declared nowhere, with no other error to blame", () => {
@@ -56,13 +70,18 @@ describe("what to write instead", () => {
       .compile("src/A.tsx", `import { Text, useState, useUpdate } from "@rge/runtime/jsx";\n${source}`)
       .diagnostics.filter((d) => d.severity === "error");
     assert.equal(found.length, 1, found.map((e) => `${e.code} ${e.message}`).join("\n"));
-    assert.match(found[0]!.message, /^`useState` is replaced by `useMutable`, state you write directly: `const s = useMutable\(\{ hp: 3 \}\)`, read as `s\.hp`, and `setHp\(v\)` becomes `s\.hp = v`\./);
+    assert.match(
+      found[0]!.message,
+      /^`useState` is replaced by `useMutable`, state you write directly: `const s = useMutable\(\{ hp: 3 \}\)`, read as `s\.hp`, and `setHp\(v\)` becomes `s\.hp = v`\./
+    );
     // Imported and never called: the import says it.
-    const imported = getCompiler().compile("src/B.tsx", `import { Entity, useState } from "@rge/runtime/jsx";\nexport function B() { return <Entity />; }`).diagnostics;
+    const imported = getCompiler().compile(
+      "src/B.tsx",
+      `import { Entity, useState } from "@rge/runtime/jsx";\nexport function B() { return <Entity />; }`
+    ).diagnostics;
     assert.equal(imported.length, 1);
     assert.match(imported[0]!.message, /^`useState` is replaced by `useMutable`/);
   });
-
 
   it("useRef: a useMutable field, in the author's own names, once", () => {
     const source = `export function A() { const timer = useRef(0); useUpdate((dt) => { timer.current += dt; }); return <Text>hi</Text>; }`;
@@ -71,35 +90,61 @@ describe("what to write instead", () => {
       .diagnostics.filter((d) => d.severity === "error");
     assert.equal(found.length, 1, found.map((e) => `${e.code} ${e.message}`).join("\n"));
     assert.equal(found[0]!.code, "RGE1102");
-    assert.match(found[0]!.message, /^`useRef` is replaced by `useMutable`.*`const s = useMutable\(\{ timer: 0 \}\)`, read and written as `s\.timer` where `timer\.current` was\./);
-    const imported = getCompiler().compile("src/B.tsx", `import { Entity, useRef } from "@rge/runtime/jsx";\nexport function B() { return <Entity />; }`).diagnostics;
+    assert.match(
+      found[0]!.message,
+      /^`useRef` is replaced by `useMutable`.*`const s = useMutable\(\{ timer: 0 \}\)`, read and written as `s\.timer` where `timer\.current` was\./
+    );
+    const imported = getCompiler().compile(
+      "src/B.tsx",
+      `import { Entity, useRef } from "@rge/runtime/jsx";\nexport function B() { return <Entity />; }`
+    ).diagnostics;
     assert.equal(imported.length, 1);
     assert.match(imported[0]!.message, /^`useRef` is replaced by `useMutable`/);
   });
 
   it("an early return in a form it does not take: the form it takes, and the condition in what is returned", () => {
-    const e = only(`interface P { hp: number }\nexport function A({ hp }: P) { if (hp <= 0) { return null; } else { } return <Text>{hp}</Text>; }`);
+    const e = only(
+      `interface P { hp: number }\nexport function A({ hp }: P) { if (hp <= 0) { return null; } else { } return <Text>{hp}</Text>; }`
+    );
     assert.equal(e.code, "RGE1002");
     assert.match(e.message, /`if \(condition\) return …;`/);
     assert.match(e.message, /`return dead \? null : <Text>…<\/Text>;`/);
   });
 
   it("forEach: a for…of loop, without saying it changes the array", () => {
-    const e = only(`interface P { xs: number[] }\nexport function A({ xs }: P) { let t = 0; xs.forEach((x) => { t += x; }); return <Text>{t}</Text>; }`);
+    const e = only(
+      `interface P { xs: number[] }\nexport function A({ xs }: P) { let t = 0; xs.forEach((x) => { t += x; }); return <Text>{t}</Text>; }`
+    );
     assert.match(e.message, /^`forEach` is not supported: write a `for \(const item of items\) \{ … \}` loop/);
     assert.doesNotMatch(e.message, /in place/);
   });
 
   it("setTimeout and setInterval: after and every", () => {
-    assert.match(only(`export function A() { const s = useMutable({ n: 0 }); useMount(() => { setTimeout(() => { s.n = 1; }, 100); }); return <Text>{s.n}</Text>; }`).message, /^There is no `setTimeout`: .*`after\(seconds, \(\) => …\)`/);
-    assert.match(only(`export function A() { const s = useMutable({ n: 0 }); useMount(() => { setInterval(() => { s.n += 1; }, 100); }); return <Text>{s.n}</Text>; }`).message, /^There is no `setInterval`: .*`every\(seconds, \(\) => …\)`/);
+    assert.match(
+      only(
+        `export function A() { const s = useMutable({ n: 0 }); useMount(() => { setTimeout(() => { s.n = 1; }, 100); }); return <Text>{s.n}</Text>; }`
+      ).message,
+      /^There is no `setTimeout`: .*`after\(seconds, \(\) => …\)`/
+    );
+    assert.match(
+      only(
+        `export function A() { const s = useMutable({ n: 0 }); useMount(() => { setInterval(() => { s.n += 1; }, 100); }); return <Text>{s.n}</Text>; }`
+      ).message,
+      /^There is no `setInterval`: .*`every\(seconds, \(\) => …\)`/
+    );
   });
 
   it("a misspelt function: the nearest one it knows", () => {
-    assert.match(only(`export function A() { const s = useMutable({ n: 0 }); return <Text>{clmap(s.n, 0, 1)}</Text>; }`).message, /^'clmap' is not a function the compiler knows \(did you mean 'clamp'\?\)\./);
+    assert.match(
+      only(`export function A() { const s = useMutable({ n: 0 }); return <Text>{clmap(s.n, 0, 1)}</Text>; }`).message,
+      /^'clmap' is not a function the compiler knows \(did you mean 'clamp'\?\)\./
+    );
   });
 
   it("await: the game's steps do not wait", () => {
-    assert.match(only(`export function A() { useMount(async () => { await Promise.resolve(); }); return <Entity />; }`).message, /^`await` is not supported: .*`after\(seconds, \(\) => …\)`/);
+    assert.match(
+      only(`export function A() { useMount(async () => { await Promise.resolve(); }); return <Entity />; }`).message,
+      /^`await` is not supported: .*`after\(seconds, \(\) => …\)`/
+    );
   });
 });

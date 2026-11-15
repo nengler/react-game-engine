@@ -39,5 +39,5 @@ export const useGame = createGameState(
     toggleMusic(s) {
       s.music = !s.music;
     },
-  },
+  }
 );

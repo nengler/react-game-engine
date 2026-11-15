@@ -50,7 +50,9 @@ export type ActionsOf<S> = { readonly [K in keyof S as S[K] extends (...args: ne
 export type GameAction<D> = (state: D, ...args: any[]) => unknown;
 
 /** The actions as components call them: the state argument is supplied (`select(3)`). */
-export type BoundActions<A> = { readonly [K in keyof A]: A[K] extends (state: never, ...args: infer P) => infer R ? (...args: P) => R : never };
+export type BoundActions<A> = {
+  readonly [K in keyof A]: A[K] extends (state: never, ...args: infer P) => infer R ? (...args: P) => R : never;
+};
 
 /**
  * Create the game's state.
@@ -61,12 +63,15 @@ export type BoundActions<A> = { readonly [K in keyof A]: A[K] extends (state: ne
  * - **`createGameState<State>()(creator)` and `createGameState(creator)`**, the Zustand form with `set` and `get`, kept while games
  *   move to the form above.
  */
-export function createGameState<D extends object, A extends Record<string, GameAction<D>>>(data: D, actions: A): GameState<D & BoundActions<A>>;
+export function createGameState<D extends object, A extends Record<string, GameAction<D>>>(
+  data: D,
+  actions: A
+): GameState<D & BoundActions<A>>;
 export function createGameState<S extends object>(): (creator: GameStateCreator<S>) => GameState<S>;
 export function createGameState<S extends object>(creator: GameStateCreator<S>): GameState<S>;
 export function createGameState<S extends object>(
   creator?: GameStateCreator<S> | object,
-  actions?: Record<string, GameAction<object>>,
+  actions?: Record<string, GameAction<object>>
 ): GameState<S> | ((creator: GameStateCreator<S>) => GameState<S>) {
   if (actions !== undefined) return wrap(GameStore.fromActions(creator as object, actions)) as unknown as GameState<S>;
   const make = (creator: GameStateCreator<S>): GameState<S> => wrap(new GameStore<S>(creator));
@@ -81,7 +86,12 @@ function wrap<S>(store: GameStore<S>): GameState<S> {
     const state = store.getState() as Record<string, unknown>;
     return Object.fromEntries(Object.entries(state).filter(([, value]) => typeof value === "function")) as ActionsOf<S>;
   };
-  return Object.assign(use, { store, actions, getState: () => store.getState(), setState: (partial: Partial<S> | ((state: S) => Partial<S>)) => store.setState(partial) }) as unknown as GameState<S>;
+  return Object.assign(use, {
+    store,
+    actions,
+    getState: () => store.getState(),
+    setState: (partial: Partial<S> | ((state: S) => Partial<S>)) => store.setState(partial),
+  }) as unknown as GameState<S>;
 }
 
 /**
@@ -103,13 +113,15 @@ export class GameStore<S = object> {
    */
   static fromActions<D extends object>(data: D, actions: Record<string, GameAction<D>>): GameStore<D> {
     for (const [key, value] of Object.entries(data)) {
-      if (typeof value === "function") throw new Error(`The game state's data holds a function at '${key}': actions go in the second argument of createGameState.`);
+      if (typeof value === "function")
+        throw new Error(`The game state's data holds a function at '${key}': actions go in the second argument of createGameState.`);
       if (key in actions) throw new Error(`'${key}' is both a value and an action of the game state.`);
     }
     let store: GameStore<D> | null = null;
     store = new GameStore<D>(() => {
       const bound: Record<string, unknown> = {};
-      for (const [name, action] of Object.entries(actions)) bound[name] = (...args: unknown[]) => store!.#act(action as GameAction<unknown>, args);
+      for (const [name, action] of Object.entries(actions))
+        bound[name] = (...args: unknown[]) => store!.#act(action as GameAction<unknown>, args);
       return { ...(cloneData(data) as object), ...bound } as D;
     });
     return store;
@@ -163,7 +175,10 @@ export class GameStore<S = object> {
    * The last changes, newest last, while `recording` is on (the development inspector turns it on): which action made each (or
    * `"setState"`), and each leaf it changed, before and after.
    */
-  readonly history: { readonly action: string; readonly changes: readonly { readonly path: string; readonly before: unknown; readonly after: unknown }[] }[] = [];
+  readonly history: {
+    readonly action: string;
+    readonly changes: readonly { readonly path: string; readonly before: unknown; readonly after: unknown }[];
+  }[] = [];
   /** Keep `history`. Off by default: a game pays nothing for it. */
   recording = false;
 
@@ -180,7 +195,10 @@ export class GameStore<S = object> {
     this.#state = { ...before, ...next };
     const changed = changedPaths(before as Tree, this.#state as Tree, "", []);
     if (this.recording && changed.length > 0) {
-      this.history.push({ action: this.#acting ?? "setState", changes: changed.map((path) => ({ path, before: leafAt(before, path), after: leafAt(this.#state, path) })) });
+      this.history.push({
+        action: this.#acting ?? "setState",
+        changes: changed.map((path) => ({ path, before: leafAt(before, path), after: leafAt(this.#state, path) })),
+      });
       if (this.history.length > 50) this.history.splice(0, this.history.length - 50);
     }
     this.#notify(changed);
@@ -253,7 +271,7 @@ export class GameStore<S = object> {
     if (changed.length === 0 || this.#subscribers.size === 0) return;
     const told = new Set<string>();
     for (const path of changed) {
-      for (let at = path; ; ) {
+      for (let at = path; ;) {
         if (told.has(at)) break;
         told.add(at);
         const subscribers = this.#subscribers.get(at);

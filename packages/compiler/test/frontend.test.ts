@@ -1,7 +1,9 @@
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { after, describe, it } from "node:test";
+
 import { SyntaxKind, type Node } from "typescript/ast";
 import { isFunctionDeclaration, isJsxElement, isReturnStatement } from "typescript/ast/is";
+
 import { analyzeSourceFile, DiagnosticCode, TsxParser, type IRModule } from "../src/index.ts";
 import { closeCompiler, compile, compileErrors, getCompiler, stripSpans, elementOf } from "./helpers.ts";
 
@@ -54,14 +56,20 @@ describe("analyzer", () => {
   it("identifies components, hooks and JSX", () => {
     getCompiler().analyze("Player.tsx", PLAYER, (analysis) => {
       assert.deepEqual(analysis.diagnostics, []);
-      assert.deepEqual(analysis.components.map((c) => c.name), ["Player", "WarningIcon"]);
+      assert.deepEqual(
+        analysis.components.map((c) => c.name),
+        ["Player", "WarningIcon"]
+      );
 
       const player = analysis.components[0]!;
       assert.equal(player.hooks.length, 1);
       const hook = player.hooks[0]!;
       assert.equal(hook.kind, "useMutable");
       assert.equal(hook.name, "s");
-      assert.deepEqual(hook.fields.map((f) => f.name), ["health"]);
+      assert.deepEqual(
+        hook.fields.map((f) => f.name),
+        ["health"]
+      );
       assert.equal(hook.fields[0]!.initializer.kind, SyntaxKind.NumericLiteral);
 
       assert.ok(isJsxElement(player.jsx));
@@ -122,7 +130,7 @@ describe("IR construction", () => {
           kind: "Component",
           name: "Player",
           hooks: [{ kind: "UseState", state: "Player.s.health", setterName: "$set_s_health" }],
-              sounds: [],
+          sounds: [],
           functions: [],
           props: [],
           propsType: null,
@@ -182,7 +190,7 @@ describe("IR construction", () => {
         {
           kind: "Component",
           name: "WarningIcon",
-              sounds: [],
+          sounds: [],
           functions: [],
           props: [],
           propsType: null,
@@ -218,7 +226,12 @@ describe("IR construction", () => {
     `);
     const p = ir.components[0]!;
     assert.deepEqual(stripSpans(p.root.props), [
-      { kind: "DynamicProp", name: "name", value: { kind: "StateRead", state: "P.s.label" }, dependencies: [{ kind: "State", state: "P.s.label" }] },
+      {
+        kind: "DynamicProp",
+        name: "name",
+        value: { kind: "StateRead", state: "P.s.label" },
+        dependencies: [{ kind: "State", state: "P.s.label" }],
+      },
     ]);
     const [sprite, collider] = p.root.children.map((c) => elementOf(c));
     assert.deepEqual(stripSpans(sprite!.props[0]), {
@@ -239,7 +252,7 @@ describe("IR construction", () => {
     });
     assert.deepEqual(
       collider!.props.map((prop) => prop.kind),
-      ["StaticProp", "StaticProp"],
+      ["StaticProp", "StaticProp"]
     );
   });
 
@@ -308,7 +321,11 @@ describe("diagnostics", () => {
       `function A() { return <Entity>{children}</Entity>; }`,
     ],
     ["static self-reference", DiagnosticCode.ComponentCycle, `function A() { return <Entity><A /></Entity>; }`],
-    ["non-literal state type", DiagnosticCode.UnsupportedStateType, `function A() { const s = useMutable({ a: null }); return <Entity />; }`],
+    [
+      "non-literal state type",
+      DiagnosticCode.UnsupportedStateType,
+      `function A() { const s = useMutable({ a: null }); return <Entity />; }`,
+    ],
     // A state named like a runtime member is fine since REACT_FEEL_PLAN.md B7 (root-name.test.ts); one declared twice is not.
     ["state declared twice", DiagnosticCode.InvalidUseState, `function A() { const s = useMutable({ a: 1, a: 2 }); return <Entity />; }`],
     ["non-component top level code", DiagnosticCode.UnsupportedSyntax, `let speed = 4; function A() { return <Entity />; }`],
@@ -318,7 +335,7 @@ describe("diagnostics", () => {
       const diagnostics = compileErrors(source);
       assert.ok(
         diagnostics.some((d) => d.code === code),
-        `expected ${code}, got ${JSON.stringify(diagnostics.map((d) => `${d.code} ${d.message}`))}`,
+        `expected ${code}, got ${JSON.stringify(diagnostics.map((d) => `${d.code} ${d.message}`))}`
       );
       for (const d of diagnostics) assert.ok(d.span, "diagnostics carry a source location");
     });

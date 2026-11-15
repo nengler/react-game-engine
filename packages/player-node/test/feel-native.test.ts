@@ -1,10 +1,12 @@
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Entity, Fade, Hud, Particles, Screen, Sprite, Text, Tilemap, registerTilemaps } from "@rge/runtime";
+import { after, describe, it } from "node:test";
+
 import { createPlayer, type PlayerConfig } from "@rge/player";
+import { Entity, Fade, Hud, Particles, Screen, Sprite, Text, Tilemap, registerTilemaps } from "@rge/runtime";
+
 import { createNodeBackend, encodePng, findNativeLibrary, type Pixels } from "../src/index.ts";
 
 /** What tiles, sprite sheets, particles, fades and bitmap fonts really look like, through the software renderer. */
@@ -43,7 +45,17 @@ const pixel = (frame: Pixels, x: number, y: number): string => {
 function render(root: PlayerConfig["root"], steps = 2): Pixels {
   const backend = createNodeBackend(library);
   const warnings: string[] = [];
-  const player = createPlayer(backend, { width: 64, height: 32, title: "t", hidden: true, vsync: false, assets: scratch, background: "#000000", root, warn: (m) => warnings.push(m) });
+  const player = createPlayer(backend, {
+    width: 64,
+    height: 32,
+    title: "t",
+    hidden: true,
+    vsync: false,
+    assets: scratch,
+    background: "#000000",
+    root,
+    warn: (m) => warnings.push(m),
+  });
   try {
     for (let i = 0; i < steps; i++) player.step();
     const frame = backend.readPixels();
@@ -59,7 +71,12 @@ describe("drawing the new built-ins in a hidden window", { skip }, () => {
   it("draws tiles from a sheet, mirrored and turned as Tiled says", () => {
     registerTilemaps({
       native: {
-        width: 4, height: 1, tileWidth: 10, tileHeight: 10, firstGid: 1, solid: [],
+        width: 4,
+        height: 1,
+        tileWidth: 10,
+        tileHeight: 10,
+        firstGid: 1,
+        solid: [],
         layers: [{ name: "T", visible: true, data: [1, 1, 1, 2], flips: [0, 1, 6, 0] }],
       },
     });

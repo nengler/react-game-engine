@@ -1,7 +1,8 @@
-// The reference cannot fall behind the runtime: every built-in and hook the manifest knows has an entry in docs/reference.html.
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+// The reference cannot fall behind the runtime: every built-in and hook the manifest knows has an entry in docs/reference.html.
+import { describe, it } from "node:test";
+
 import { runtimeManifest } from "../src/index.ts";
 
 const reference = readFileSync(new URL("../../../docs/reference.html", import.meta.url), "utf8");

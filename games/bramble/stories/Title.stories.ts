@@ -1,4 +1,5 @@
 import { stories } from "@rge/player";
+
 import { Title } from "../generated/Title.ts";
 
 /** The title screen and its menu. */

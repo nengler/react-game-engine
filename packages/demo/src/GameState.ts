@@ -22,5 +22,5 @@ export const useGame = createGameState(
     hit(s) {
       s.stats.hits += 1;
     },
-  },
+  }
 );

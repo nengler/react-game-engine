@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Statements in the component body (REACT_FEEL_PLAN.md, A1 step c): `let`, loops and a local list built up, as a React render
  * would, worked out again only when what they read changes.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Text, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -46,7 +48,13 @@ describe("statements in the component body", () => {
     type P = { items: { id: string; name: string; count: number }[] };
     const { Inventory } = await load<{ Inventory: new (p: P) => Entity & { updateProps(p: P): void } }>(compiled);
     const world = new World();
-    const inventory = new Inventory({ items: [{ id: "a", name: "Key", count: 1 }, { id: "b", name: "Leaf", count: 0 }, { id: "c", name: "Bell", count: 2 }] });
+    const inventory = new Inventory({
+      items: [
+        { id: "a", name: "Key", count: 1 },
+        { id: "b", name: "Leaf", count: 0 },
+        { id: "c", name: "Bell", count: 2 },
+      ],
+    });
     world.mount(inventory);
     world.flush();
     const texts = (): string[] => inventory.children.map((c) => (c as Text).text);

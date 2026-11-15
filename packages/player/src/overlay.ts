@@ -5,6 +5,7 @@
  * in a packaged build (the player is given `devtools` only by `rge dev`).
  */
 import { Flex, Pointer, isComponent, type Collider, type GameObject, type ViewTransform, type WorldTransform } from "@rge/runtime";
+
 import type { BuiltFrame, DrawList } from "./draw.ts";
 
 const IDENTITY: ViewTransform = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
@@ -54,12 +55,20 @@ export function componentPath(object: GameObject): string {
 
 /** What sized a box, as its props say: `width grow`, `height 40`, `width 50%`. */
 function sizing(flex: Flex): string {
-  const show = (axis: string, value: unknown): string | null => (value === undefined || value === "fit" ? null : `${axis} ${String(value)}`);
+  const show = (axis: string, value: unknown): string | null =>
+    value === undefined || value === "fit" ? null : `${axis} ${String(value)}`;
   return [show("width", flex.width), show("height", flex.height)].filter((part) => part !== null).join(", ") || "fit";
 }
 
 /** Draw the overlay for a built frame into its list, with the mouse at (`mouseX`, `mouseY`) in window pixels. */
-export function drawOverlay(list: DrawList, built: BuiltFrame, boxes: readonly { readonly flex: Flex; readonly world: WorldTransform; readonly hud: boolean }[], mouseX: number, mouseY: number, windowWidth: number): void {
+export function drawOverlay(
+  list: DrawList,
+  built: BuiltFrame,
+  boxes: readonly { readonly flex: Flex; readonly world: WorldTransform; readonly hud: boolean }[],
+  mouseX: number,
+  mouseY: number,
+  windowWidth: number
+): void {
   list.view(IDENTITY);
   let hovered: { readonly flex: Flex; readonly rect: Rect } | null = null;
   for (const { flex, world, hud } of boxes) {
@@ -73,11 +82,25 @@ export function drawOverlay(list: DrawList, built: BuiltFrame, boxes: readonly {
     const bottom = flex.paddingBottom ?? flex.paddingY ?? flex.padding ?? 0;
     const left = flex.paddingLeft ?? flex.paddingX ?? flex.padding ?? 0;
     if (top + right + bottom + left > 0) {
-      outline(list, toWindow({ ...world, x: world.x + left * world.scaleX, y: world.y + top * world.scaleY }, Math.max(0, width - left - right), Math.max(0, height - top - bottom), view), PADDING_COLOR);
+      outline(
+        list,
+        toWindow(
+          { ...world, x: world.x + left * world.scaleX, y: world.y + top * world.scaleY },
+          Math.max(0, width - left - right),
+          Math.max(0, height - top - bottom),
+          view
+        ),
+        PADDING_COLOR
+      );
     }
     if (mouseX >= rect.x && mouseX < rect.x + rect.width && mouseY >= rect.y && mouseY < rect.y + rect.height) hovered = { flex, rect };
   }
-  for (const { collider, world } of built.colliders) outline(list, toWindow(world, (collider as Collider).width, (collider as Collider).height, built.view), layerColor((collider as Collider).layer));
+  for (const { collider, world } of built.colliders)
+    outline(
+      list,
+      toWindow(world, (collider as Collider).width, (collider as Collider).height, built.view),
+      layerColor((collider as Collider).layer)
+    );
   built.pointers.forEach((pointer, i) => {
     if (!(pointer instanceof Pointer)) return;
     const at = pointer.worldTransform();

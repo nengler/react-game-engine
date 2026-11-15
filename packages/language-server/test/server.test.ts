@@ -1,14 +1,15 @@
-/**
- * The language server end to end: started as `rge lsp` would start it (its own process, stdin and stdout), given a game in a
- * temporary folder, and spoken to as an editor would.
- */
-import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+/**
+ * The language server end to end: started as `rge lsp` would start it (its own process, stdin and stdout), given a game in a
+ * temporary folder, and spoken to as an editor would.
+ */
+import { after, before, describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
 import { applyEdits } from "../src/fixes.ts";
 import { LineMap } from "../src/server.ts";
 
@@ -69,7 +70,10 @@ class Client {
   }
 
   diagnostics(uri: string, version?: number): Promise<Received> {
-    return this.next((m) => m.method === "textDocument/publishDiagnostics" && m.params.uri === uri && (version === undefined || m.params.version === version));
+    return this.next(
+      (m) =>
+        m.method === "textDocument/publishDiagnostics" && m.params.uri === uri && (version === undefined || m.params.version === version)
+    );
   }
 
   exited(): Promise<number | null> {
@@ -111,42 +115,80 @@ describe("the language server", () => {
     const init = await client.request("initialize", { processId: null, rootUri: pathToFileURL(game).href, capabilities: {} });
     assert.equal(init.result.capabilities.textDocumentSync.change, 1);
     client.send({ method: "initialized", params: {} });
-    client.send({ method: "textDocument/didOpen", params: { textDocument: { uri: uri("src/Coins.tsx"), languageId: "typescriptreact", version: 1, text: COMPONENT } } });
+    client.send({
+      method: "textDocument/didOpen",
+      params: { textDocument: { uri: uri("src/Coins.tsx"), languageId: "typescriptreact", version: 1, text: COMPONENT } },
+    });
     const published = await client.diagnostics(uri("src/Coins.tsx"), 1);
     const [missing] = published.params.diagnostics;
     assert.equal(published.params.diagnostics.length, 1, JSON.stringify(published.params.diagnostics));
     assert.equal(missing.code, "RGE1005");
     assert.equal(missing.source, "rge");
     assert.equal(missing.severity, 1);
-    assert.deepEqual(missing.range, { start: { line: 6, character: 13 }, end: { line: 6, character: 41 } }, "useMutable({ shown: false }), on the line it is on");
+    assert.deepEqual(
+      missing.range,
+      { start: { line: 6, character: 13 }, end: { line: 6, character: 41 } },
+      "useMutable({ shown: false }), on the line it is on"
+    );
 
-    const actions = await client.request("textDocument/codeAction", { textDocument: { uri: uri("src/Coins.tsx") }, range: missing.range, context: { diagnostics: [missing] } });
+    const actions = await client.request("textDocument/codeAction", {
+      textDocument: { uri: uri("src/Coins.tsx") },
+      range: missing.range,
+      context: { diagnostics: [missing] },
+    });
     assert.equal(actions.result.length, 1);
     const [action] = actions.result;
     assert.equal(action.title, `Import 'useMutable' from "@rge/runtime/jsx"`);
     assert.equal(action.isPreferred, true);
     const lines = new LineMap(COMPONENT);
-    const edits = action.edit.changes[uri("src/Coins.tsx")].map((e: { range: { start: never; end: never }; newText: string }) => ({ start: lines.offset(e.range.start), end: lines.offset(e.range.end), text: e.newText }));
+    const edits = action.edit.changes[uri("src/Coins.tsx")].map((e: { range: { start: never; end: never }; newText: string }) => ({
+      start: lines.offset(e.range.start),
+      end: lines.offset(e.range.end),
+      text: e.newText,
+    }));
     const fixed = applyEdits(COMPONENT, edits);
     assert.match(fixed, /^import \{ Entity, useMutable \} from "@rge\/runtime\/jsx";/);
 
-    client.send({ method: "textDocument/didChange", params: { textDocument: { uri: uri("src/Coins.tsx"), version: 2 }, contentChanges: [{ text: fixed }] } });
+    client.send({
+      method: "textDocument/didChange",
+      params: { textDocument: { uri: uri("src/Coins.tsx"), version: 2 }, contentChanges: [{ text: fixed }] },
+    });
     assert.deepEqual((await client.diagnostics(uri("src/Coins.tsx"), 2)).params.diagnostics, []);
   });
 
   it("analyses the open components again when GameState.ts changes in the editor", async () => {
     // The selector reads `coins`; take it out of the state, unsaved.
-    client.send({ method: "textDocument/didOpen", params: { textDocument: { uri: uri("src/GameState.ts"), languageId: "typescript", version: 1, text: STATE.replace("coins: number;", "gold: number;").replace("coins: 0", "gold: 0") } } });
+    client.send({
+      method: "textDocument/didOpen",
+      params: {
+        textDocument: {
+          uri: uri("src/GameState.ts"),
+          languageId: "typescript",
+          version: 1,
+          text: STATE.replace("coins: number;", "gold: number;").replace("coins: 0", "gold: 0"),
+        },
+      },
+    });
     const published = await client.diagnostics(uri("src/Coins.tsx"));
-    assert.ok(published.params.diagnostics.some((d: { code: string; message: string }) => d.code === "RGE1108" && /coins/.test(d.message)), JSON.stringify(published.params.diagnostics));
+    assert.ok(
+      published.params.diagnostics.some((d: { code: string; message: string }) => d.code === "RGE1108" && /coins/.test(d.message)),
+      JSON.stringify(published.params.diagnostics)
+    );
   });
 
   it("leaves a .tsx outside the game's source folder alone, clears a closed component, and exits after shutdown", async () => {
     writeFileSync(join(game, "Other.tsx"), "export const x = <div />;");
-    client.send({ method: "textDocument/didOpen", params: { textDocument: { uri: uri("Other.tsx"), languageId: "typescriptreact", version: 1, text: "export const x = <div />;" } } });
+    client.send({
+      method: "textDocument/didOpen",
+      params: { textDocument: { uri: uri("Other.tsx"), languageId: "typescriptreact", version: 1, text: "export const x = <div />;" } },
+    });
     client.send({ method: "textDocument/didClose", params: { textDocument: { uri: uri("src/Coins.tsx") } } });
     assert.deepEqual((await client.diagnostics(uri("src/Coins.tsx"))).params.diagnostics, []);
-    await assert.rejects(client.next((m) => m.method === "textDocument/publishDiagnostics" && m.params.uri === uri("Other.tsx"), 600), /no such message/, "nothing is published for it");
+    await assert.rejects(
+      client.next((m) => m.method === "textDocument/publishDiagnostics" && m.params.uri === uri("Other.tsx"), 600),
+      /no such message/,
+      "nothing is published for it"
+    );
     const exited = client.exited();
     assert.equal((await client.request("shutdown", {})).result, null);
     client.send({ method: "exit" });

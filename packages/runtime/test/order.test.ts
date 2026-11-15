@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { GameObject, World } from "../src/index.ts";
 
 /**
@@ -57,7 +58,14 @@ describe("keyed list order", () => {
 
   it("reorders one slot at commit, leaving the other slots alone", () => {
     const parent = new GameObject();
-    const [before, a, b, c, after, external] = [new GameObject(), new GameObject(), new GameObject(), new GameObject(), new GameObject(), new GameObject()];
+    const [before, a, b, c, after, external] = [
+      new GameObject(),
+      new GameObject(),
+      new GameObject(),
+      new GameObject(),
+      new GameObject(),
+      new GameObject(),
+    ];
     parent.addChild(before, 0);
     parent.addChild(a, 1, 0);
     parent.addChild(b, 1, 1);

@@ -28,7 +28,17 @@
  * It is text to text: the replaced file is what the rest of the compiler sees, so positions in later diagnostics are those of the
  * expanded source.
  */
-import { NodeFlags, SyntaxKind, type Block, type CallExpression, type Expression, type FunctionDeclaration, type Node, type SourceFile, type Statement } from "typescript/ast";
+import {
+  NodeFlags,
+  SyntaxKind,
+  type Block,
+  type CallExpression,
+  type Expression,
+  type FunctionDeclaration,
+  type Node,
+  type SourceFile,
+  type Statement,
+} from "typescript/ast";
 import {
   isArrayBindingPattern,
   isArrayLiteralExpression,
@@ -55,6 +65,7 @@ import {
   isIfStatement,
   isBlock,
 } from "typescript/ast/is";
+
 import { AUTHORING_HOOKS, HOOK_NAME } from "../analyzer/model.ts";
 import { relativeTsImportNames } from "../analyzer/util.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
@@ -108,18 +119,35 @@ export interface ExpandedSource {
  * Inline the custom hooks used in `text`. Returns the text unchanged when it uses none. Problems are pushed to `diagnostics`
  * (their spans already in the original text) and leave the text as it was, for the compiler to report on as it would.
  */
-export function inlineCustomHooks(parser: TsxParser, fileName: string, text: string, resolve: HookResolver | null, diagnostics: CompilerDiagnostic[], authoringModule = LIBRARY_AUTHORING_MODULE): string {
+export function inlineCustomHooks(
+  parser: TsxParser,
+  fileName: string,
+  text: string,
+  resolve: HookResolver | null,
+  diagnostics: CompilerDiagnostic[],
+  authoringModule = LIBRARY_AUTHORING_MODULE
+): string {
   const expanded = expandCustomHooks(parser, fileName, text, resolve, diagnostics, authoringModule);
   expanded.parsed?.dispose();
   return expanded.text;
 }
 
 /** `inlineCustomHooks`, keeping the edit map and the last parse for the compiler, which goes on to analyze the result. */
-export function expandCustomHooks(parser: TsxParser, fileName: string, text: string, resolve: HookResolver | null, diagnostics: CompilerDiagnostic[], authoringModule: string): ExpandedSource {
+export function expandCustomHooks(
+  parser: TsxParser,
+  fileName: string,
+  text: string,
+  resolve: HookResolver | null,
+  diagnostics: CompilerDiagnostic[],
+  authoringModule: string
+): ExpandedSource {
   const map = new EditMap();
   const calls: { start: number; end: number }[] = [];
   const files = new HookFiles(parser);
-  const library = authoringModule === LIBRARY_AUTHORING_MODULE ? LIBRARY_SOURCE : LIBRARY_SOURCE.replace(JSON.stringify(LIBRARY_AUTHORING_MODULE), JSON.stringify(authoringModule));
+  const library =
+    authoringModule === LIBRARY_AUTHORING_MODULE
+      ? LIBRARY_SOURCE
+      : LIBRARY_SOURCE.replace(JSON.stringify(LIBRARY_AUTHORING_MODULE), JSON.stringify(authoringModule));
   let current = text;
   let counter = 0;
   let split = false;
@@ -135,7 +163,7 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
   // The hooks expanded at each depth, for the message when the expansion does not end (`useA → useB → useA`).
   const chain: string[][] = [];
   try {
-    for (let depth = 0; depth <= MAX_DEPTH; ) {
+    for (let depth = 0; depth <= MAX_DEPTH;) {
       const parsed = parser.parse(fileName, current);
       const reported = diagnostics.length;
       const passes = map.passes;
@@ -146,7 +174,11 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
         // First, once: a destructured selection on the game state becomes one selector per name (it may hold no hook at all).
         if (!split) {
           split = true;
-          const edits = [...storeSelectionEdits(sf, fileName, current, stores, diagnostics), ...providerEdits(sf, current, authoringModule), ...earlyReturnEdits(sf)];
+          const edits = [
+            ...storeSelectionEdits(sf, fileName, current, stores, diagnostics),
+            ...providerEdits(sf, current, authoringModule),
+            ...earlyReturnEdits(sf),
+          ];
           if (edits.length > 0) {
             current = map.apply(current, edits);
             continue;
@@ -173,7 +205,18 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
               if (hook === undefined) continue;
               found = true;
               if (!expandedHere.includes(call.name)) expandedHere.push(call.name);
-              const expanded = expandCall(files, stmt, call, hook, sf, fileName, `_${call.name}${++counter}_`, (name) => !fileNames.has(name) && !bodyNames.has(name), bodyNames, diagnostics);
+              const expanded = expandCall(
+                files,
+                stmt,
+                call,
+                hook,
+                sf,
+                fileName,
+                `_${call.name}${++counter}_`,
+                (name) => !fileNames.has(name) && !bodyNames.has(name),
+                bodyNames,
+                diagnostics
+              );
               if (hook.fileName !== fileName) collectImports(files, hook, needed);
               if (expanded !== null) {
                 edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: expanded });
@@ -209,7 +252,10 @@ export function expandCustomHooks(parser: TsxParser, fileName: string, text: str
   const steps = chain.map((names) => names.join(" / "));
   const firstRepeat = steps.findIndex((step, i) => steps.indexOf(step) !== i);
   const shown = firstRepeat >= 0 ? steps.slice(0, firstRepeat + 1) : steps;
-  const how = firstRepeat >= 0 ? `'${steps[firstRepeat]}' calls itself through ${shown.join(" → ")}` : `they call each other more than ${MAX_DEPTH} levels deep: ${shown.join(" → ")} → …`;
+  const how =
+    firstRepeat >= 0
+      ? `'${steps[firstRepeat]}' calls itself through ${shown.join(" → ")}`
+      : `they call each other more than ${MAX_DEPTH} levels deep: ${shown.join(" → ")} → …`;
   diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `Custom hooks are inlined, so they cannot recurse: ${how}.`, null));
   return { text, map: new EditMap(), parsed: null, calls: [] };
 }
@@ -250,7 +296,13 @@ class HookFiles {
  *
  * `$actions` and `$wholeN` (names picked from `(s) => s`) are the compiler's own spellings, read by `matchStoreStatement`.
  */
-function storeSelectionEdits(sf: SourceFile, fileName: string, text: string, stores: ReadonlySet<string>, diagnostics: CompilerDiagnostic[]): Edit[] {
+function storeSelectionEdits(
+  sf: SourceFile,
+  fileName: string,
+  text: string,
+  stores: ReadonlySet<string>,
+  diagnostics: CompilerDiagnostic[]
+): Edit[] {
   const edits: Edit[] = [];
   const src = (n: Node): string => text.slice(n.getStart(sf), n.getEnd());
   for (const statement of sf.statements) {
@@ -287,7 +339,14 @@ function storeSelectionEdits(sf: SourceFile, fileName: string, text: string, sto
           edits.push({ start: stmt.getStart(sf), end: stmt.getEnd(), text: lines.join("\n  ") });
           continue;
         }
-        if (!init || !isCallExpression(init) || !isIdentifier(init.expression) || !stores.has(init.expression.text) || !HOOK.test(init.expression.text)) continue;
+        if (
+          !init ||
+          !isCallExpression(init) ||
+          !isIdentifier(init.expression) ||
+          !stores.has(init.expression.text) ||
+          !HOOK.test(init.expression.text)
+        )
+          continue;
         if (!isObjectBindingPattern(d.name) && !isArrayBindingPattern(d.name)) continue;
         const store = init.expression.text;
         const selector = init.arguments[0];
@@ -327,7 +386,8 @@ function storeSelectionEdits(sf: SourceFile, fileName: string, text: string, sto
             lines.push(`const ${element.name.text} = ${store}${whole ? `.$whole${edits.length}` : ""}((${p}) => ${path});`);
           }
         } else {
-          const items = body.kind === SyntaxKind.ArrayLiteralExpression ? (body as unknown as { elements: readonly Node[] }).elements : null;
+          const items =
+            body.kind === SyntaxKind.ArrayLiteralExpression ? (body as unknown as { elements: readonly Node[] }).elements : null;
           if (items === null) {
             fail(`\`const [a, b] = ${store}(…)\` needs a selector that returns an array of paths: \`(${p}) => [${p}.a, ${p}.b]\`.`);
             continue;
@@ -363,7 +423,9 @@ function providerEdits(sf: SourceFile, text: string, authoringModule: string): E
   };
   sf.forEachChild(visit);
   if (edits.length === 0) return edits;
-  const authoring = sf.statements.find((st) => isImportDeclaration(st) && isStringLiteral(st.moduleSpecifier) && st.moduleSpecifier.text === authoringModule);
+  const authoring = sf.statements.find(
+    (st) => isImportDeclaration(st) && isStringLiteral(st.moduleSpecifier) && st.moduleSpecifier.text === authoringModule
+  );
   const named = authoring !== undefined && isImportDeclaration(authoring) ? authoring.importClause?.namedBindings : undefined;
   if (named !== undefined && isNamedImports(named)) {
     if (!named.elements.some((e) => e.name.text === "Provider")) {
@@ -381,7 +443,8 @@ function providerEdits(sf: SourceFile, text: string, authoringModule: string): E
 /** Parentheses (and `as`) around an expression do not change it. */
 function unwrap(node: Node): Node {
   let at = node;
-  while (at.kind === SyntaxKind.ParenthesizedExpression || at.kind === SyntaxKind.AsExpression) at = (at as unknown as { expression: Node }).expression;
+  while (at.kind === SyntaxKind.ParenthesizedExpression || at.kind === SyntaxKind.AsExpression)
+    at = (at as unknown as { expression: Node }).expression;
   return at;
 }
 
@@ -430,7 +493,8 @@ function earlyReturnEdits(sf: SourceFile): Edit[] {
 function branch(value: Expression, sf: SourceFile): string {
   let node: Node = value;
   while (node.kind === SyntaxKind.ParenthesizedExpression) node = (node as unknown as { expression: Node }).expression;
-  const plain = isJsxElement(node) || isJsxSelfClosingElement(node) || node.kind === SyntaxKind.JsxFragment || node.kind === SyntaxKind.NullKeyword;
+  const plain =
+    isJsxElement(node) || isJsxSelfClosingElement(node) || node.kind === SyntaxKind.JsxFragment || node.kind === SyntaxKind.NullKeyword;
   return plain ? value.getText(sf) : `<>{${value.getText(sf)}}</>`;
 }
 
@@ -453,12 +517,20 @@ interface HookCall {
   readonly name: string;
   readonly call: CallExpression;
   /** How the result is bound: not at all, `const v = …`, `const { a, b } = …` or `const [a, b] = …`. */
-  readonly binding: { readonly kind: "none" } | { readonly kind: "name"; readonly name: string; readonly keyword: string } | { readonly kind: "object" | "array"; readonly node: Node; readonly keyword: string };
+  readonly binding:
+    | { readonly kind: "none" }
+    | { readonly kind: "name"; readonly name: string; readonly keyword: string }
+    | { readonly kind: "object" | "array"; readonly node: Node; readonly keyword: string };
 }
 
 /** A statement that is a call of a custom hook (alone, or as the initializer of one `const`), or null. */
 function hookCall(statement: Statement, stores: ReadonlySet<string>): HookCall | null {
-  if (isExpressionStatement(statement) && isCallExpression(statement.expression) && isIdentifier(statement.expression.expression) && isCustomName(statement.expression.expression.text, stores)) {
+  if (
+    isExpressionStatement(statement) &&
+    isCallExpression(statement.expression) &&
+    isIdentifier(statement.expression.expression) &&
+    isCustomName(statement.expression.expression.text, stores)
+  ) {
     return { name: statement.expression.expression.text, call: statement.expression, binding: { kind: "none" } };
   }
   if (isVariableStatement(statement) && statement.declarationList.declarations.length === 1) {
@@ -467,23 +539,42 @@ function hookCall(statement: Statement, stores: ReadonlySet<string>): HookCall |
     if (init && isCallExpression(init) && isIdentifier(init.expression) && isCustomName(init.expression.text, stores)) {
       const keyword = (statement.declarationList.flags & NodeFlags.Const) !== 0 ? "const" : "let";
       if (isIdentifier(d.name)) return { name: init.expression.text, call: init, binding: { kind: "name", name: d.name.text, keyword } };
-      if (isObjectBindingPattern(d.name)) return { name: init.expression.text, call: init, binding: { kind: "object", node: d.name, keyword } };
-      if (isArrayBindingPattern(d.name)) return { name: init.expression.text, call: init, binding: { kind: "array", node: d.name, keyword } };
+      if (isObjectBindingPattern(d.name))
+        return { name: init.expression.text, call: init, binding: { kind: "object", node: d.name, keyword } };
+      if (isArrayBindingPattern(d.name))
+        return { name: init.expression.text, call: init, binding: { kind: "array", node: d.name, keyword } };
     }
   }
   return null;
 }
 
 /** A custom hook called somewhere a hook cannot be (in a condition, a callback, an expression) is reported where it is. */
-function reportNested(statement: Statement, sf: SourceFile, fileName: string, stores: ReadonlySet<string>, diagnostics: CompilerDiagnostic[]): void {
+function reportNested(
+  statement: Statement,
+  sf: SourceFile,
+  fileName: string,
+  stores: ReadonlySet<string>,
+  diagnostics: CompilerDiagnostic[]
+): void {
   const stack: Node[] = [statement];
   while (stack.length > 0) {
     const node = stack.pop() as Node;
-    if (isCallExpression(node) && isIdentifier(node.expression) && isCustomName(node.expression.text, stores) && node !== (statement as unknown as { expression?: Node }).expression) {
+    if (
+      isCallExpression(node) &&
+      isIdentifier(node.expression) &&
+      isCustomName(node.expression.text, stores) &&
+      node !== (statement as unknown as { expression?: Node }).expression
+    ) {
       // A call that is the whole initializer of a `const` is a hook call; anything else is nested.
       const direct = isVariableStatement(statement) && statement.declarationList.declarations.some((d) => d.initializer === node);
       if (!direct) {
-        diagnostics.push(error(DiagnosticCode.HookNotAtTopLevel, `The custom hook '${node.expression.text}' must be a statement of the component body (\`${node.expression.text}(…);\` or \`const v = ${node.expression.text}(…);\`): hooks are inlined into the component, so they cannot be called in a condition, a callback or an expression.`, spanOf(node, sf, fileName)));
+        diagnostics.push(
+          error(
+            DiagnosticCode.HookNotAtTopLevel,
+            `The custom hook '${node.expression.text}' must be a statement of the component body (\`${node.expression.text}(…);\` or \`const v = ${node.expression.text}(…);\`): hooks are inlined into the component, so they cannot be called in a condition, a callback or an expression.`,
+            spanOf(node, sf, fileName)
+          )
+        );
       }
     }
     node.forEachChild((child) => {
@@ -494,18 +585,39 @@ function reportNested(statement: Statement, sf: SourceFile, fileName: string, st
 }
 
 /** The custom hooks visible in this file: declared here, or imported from a relative `.tsx` file (their source read through `resolve`). */
-function collectHooks(files: HookFiles, sf: SourceFile, fileName: string, text: string, resolve: HookResolver | null, stores: ReadonlySet<string>, authoringModule: string, library: string): Map<string, Hook> {
+function collectHooks(
+  files: HookFiles,
+  sf: SourceFile,
+  fileName: string,
+  text: string,
+  resolve: HookResolver | null,
+  stores: ReadonlySet<string>,
+  authoringModule: string,
+  library: string
+): Map<string, Hook> {
   const hooks = new Map<string, Hook>();
   for (const statement of sf.statements) {
-    if (isFunctionDeclaration(statement) && statement.name && isCustomName(statement.name.text, stores)) hooks.set(statement.name.text, { name: statement.name.text, fileName, text });
+    if (isFunctionDeclaration(statement) && statement.name && isCustomName(statement.name.text, stores))
+      hooks.set(statement.name.text, { name: statement.name.text, fileName, text });
     // The engine's own hooks, imported from the authoring module.
-    if (isImportDeclaration(statement) && isStringLiteral(statement.moduleSpecifier) && statement.moduleSpecifier.text === authoringModule) {
+    if (
+      isImportDeclaration(statement) &&
+      isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === authoringModule
+    ) {
       const bindings = statement.importClause?.namedBindings;
       if (bindings && isNamedImports(bindings)) {
-        for (const element of bindings.elements) if (LIBRARY_HOOKS.includes(element.name.text)) hooks.set(element.name.text, { name: element.name.text, fileName: LIBRARY_FILE, text: library });
+        for (const element of bindings.elements)
+          if (LIBRARY_HOOKS.includes(element.name.text))
+            hooks.set(element.name.text, { name: element.name.text, fileName: LIBRARY_FILE, text: library });
       }
     }
-    if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || !/^\.\.?\/.*\.tsx$/.test(statement.moduleSpecifier.text)) continue;
+    if (
+      !isImportDeclaration(statement) ||
+      !isStringLiteral(statement.moduleSpecifier) ||
+      !/^\.\.?\/.*\.tsx$/.test(statement.moduleSpecifier.text)
+    )
+      continue;
     const bindings = statement.importClause?.namedBindings;
     if (!bindings || !isNamedImports(bindings)) continue;
     const wanted = bindings.elements.map((e) => e.name.text).filter((n) => isCustomName(n, stores));
@@ -513,7 +625,8 @@ function collectHooks(files: HookFiles, sf: SourceFile, fileName: string, text: 
     const source = resolve(statement.moduleSpecifier.text, fileName);
     if (source === null) continue;
     for (const s of files.get(source.fileName, source.text).statements) {
-      if (isFunctionDeclaration(s) && s.name && wanted.includes(s.name.text)) hooks.set(s.name.text, { name: s.name.text, fileName: source.fileName, text: source.text });
+      if (isFunctionDeclaration(s) && s.name && wanted.includes(s.name.text))
+        hooks.set(s.name.text, { name: s.name.text, fileName: source.fileName, text: source.text });
     }
   }
   return hooks;
@@ -525,13 +638,18 @@ function removeHookDeclarations(sf: SourceFile, stores: ReadonlySet<string>, aut
   for (const statement of sf.statements) {
     if (isFunctionDeclaration(statement) && statement.name && isCustomName(statement.name.text, stores)) {
       edits.push({ start: statement.getFullStart(), end: statement.getEnd(), text: "" });
-    } else if (isImportDeclaration(statement) && isStringLiteral(statement.moduleSpecifier) && (/^\.\.?\/.*\.tsx$/.test(statement.moduleSpecifier.text) || statement.moduleSpecifier.text === authoringModule)) {
+    } else if (
+      isImportDeclaration(statement) &&
+      isStringLiteral(statement.moduleSpecifier) &&
+      (/^\.\.?\/.*\.tsx$/.test(statement.moduleSpecifier.text) || statement.moduleSpecifier.text === authoringModule)
+    ) {
       const library = statement.moduleSpecifier.text === authoringModule;
       const bindings = statement.importClause?.namedBindings;
       if (!bindings || !isNamedImports(bindings)) continue;
       const keep = bindings.elements.filter((e) => (library ? !LIBRARY_HOOKS.includes(e.name.text) : !isCustomName(e.name.text, stores)));
       if (keep.length === bindings.elements.length) continue;
-      if (keep.length === 0 && !statement.importClause?.name) edits.push({ start: statement.getFullStart(), end: statement.getEnd(), text: "" });
+      if (keep.length === 0 && !statement.importClause?.name)
+        edits.push({ start: statement.getFullStart(), end: statement.getEnd(), text: "" });
       // Each kept name as it was written: `type Child` stays a type import, `a as b` stays renamed.
       else edits.push({ start: bindings.getStart(sf), end: bindings.getEnd(), text: `{ ${keep.map((e) => e.getText(sf)).join(", ")} }` });
     }
@@ -541,13 +659,63 @@ function removeHookDeclarations(sf: SourceFile, stores: ReadonlySet<string>, aut
 
 /** Words a hook's name cannot be shortened to (`useDefault` is not `default`). */
 const RESERVED_NAMES: ReadonlySet<string> = new Set([
-  "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else", "enum", "export", "extends", "false", "finally",
-  "for", "function", "if", "import", "in", "instanceof", "new", "null", "return", "super", "switch", "this", "throw", "true", "try", "typeof", "var",
-  "void", "while", "with", "yield", "let", "static", "await", "async", "of",
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "let",
+  "static",
+  "await",
+  "async",
+  "of",
 ]);
 
 /** The text that replaces a hook call, or null (with a diagnostic) when it cannot be expanded. */
-function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook: Hook, callSf: SourceFile, callFile: string, prefix: string, isFree: (name: string) => boolean, claimed: Set<string>, diagnostics: CompilerDiagnostic[]): string | null {
+function expandCall(
+  files: HookFiles,
+  statement: Statement,
+  call: HookCall,
+  hook: Hook,
+  callSf: SourceFile,
+  callFile: string,
+  prefix: string,
+  isFree: (name: string) => boolean,
+  claimed: Set<string>,
+  diagnostics: CompilerDiagnostic[]
+): string | null {
   const at = spanOf(statement, callSf, callFile);
   const sf = files.get(hook.fileName, hook.text);
   const declaration = sf.statements.find((s): s is FunctionDeclaration => isFunctionDeclaration(s) && s.name?.text === hook.name);
@@ -566,15 +734,24 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
       continue;
     }
     const entries: { local: string; key: string }[] = [];
-    const ok = isObjectBindingPattern(p.name) && p.name.elements.every((element) => {
-      if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) return false;
-      const key = element.propertyName === undefined ? element.name.text : isIdentifier(element.propertyName) ? element.propertyName.text : null;
-      if (key === null) return false;
-      entries.push({ local: element.name.text, key });
-      return true;
-    });
+    const ok =
+      isObjectBindingPattern(p.name) &&
+      p.name.elements.every((element) => {
+        if (element.dotDotDotToken || element.initializer || !element.name || !isIdentifier(element.name)) return false;
+        const key =
+          element.propertyName === undefined ? element.name.text : isIdentifier(element.propertyName) ? element.propertyName.text : null;
+        if (key === null) return false;
+        entries.push({ local: element.name.text, key });
+        return true;
+      });
     if (!ok) {
-      diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}': a parameter is a plain name or \`{ a, b: c }\` of plain names (no defaults, rests or nesting).`, spanOf(p, sf, hook.fileName)));
+      diagnostics.push(
+        error(
+          DiagnosticCode.UnsupportedSyntax,
+          `The hook '${hook.name}': a parameter is a plain name or \`{ a, b: c }\` of plain names (no defaults, rests or nesting).`,
+          spanOf(p, sf, hook.fileName)
+        )
+      );
       return null;
     }
     for (const entry of entries) declared.add(entry.local);
@@ -587,7 +764,13 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
     const s = bodyStatements[i] as Statement;
     if (isReturnStatement(s)) {
       if (i !== bodyStatements.length - 1) {
-        diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}': a \`return\` must be the last statement of the hook.`, spanOf(s, sf, hook.fileName)));
+        diagnostics.push(
+          error(
+            DiagnosticCode.UnsupportedSyntax,
+            `The hook '${hook.name}': a \`return\` must be the last statement of the hook.`,
+            spanOf(s, sf, hook.fileName)
+          )
+        );
         return null;
       }
       returnStatement = s;
@@ -612,14 +795,25 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
             if (!isPropertyAssignment(property) || !isIdentifier(property.name)) continue;
             const entry = members.find((m) => m.key === (property.name as { text: string }).text);
             const value = property.initializer;
-            const inPlace = (isIdentifier(value) && imported.has(value.text) && !declared.has(value.text)) || isStringLiteral(value) || value.kind === SyntaxKind.NumericLiteral || value.kind === SyntaxKind.TrueKeyword || value.kind === SyntaxKind.FalseKeyword;
+            const inPlace =
+              (isIdentifier(value) && imported.has(value.text) && !declared.has(value.text)) ||
+              isStringLiteral(value) ||
+              value.kind === SyntaxKind.NumericLiteral ||
+              value.kind === SyntaxKind.TrueKeyword ||
+              value.kind === SyntaxKind.FalseKeyword;
             if (entry !== undefined && inPlace) literals.set(entry.local, callSf.text.slice(value.getStart(callSf), value.getEnd()));
           }
         }
         continue;
       }
       const importedName = isIdentifier(arg) && imported.has(arg.text) && !declared.has(arg.text);
-      if (importedName || isStringLiteral(arg) || arg.kind === SyntaxKind.NumericLiteral || arg.kind === SyntaxKind.TrueKeyword || arg.kind === SyntaxKind.FalseKeyword) {
+      if (
+        importedName ||
+        isStringLiteral(arg) ||
+        arg.kind === SyntaxKind.NumericLiteral ||
+        arg.kind === SyntaxKind.TrueKeyword ||
+        arg.kind === SyntaxKind.FalseKeyword
+      ) {
         literals.set((params[i]!.name as { text: string }).text, callSf.text.slice(arg.getStart(callSf), arg.getEnd()));
       }
     }
@@ -628,13 +822,27 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
   // return a setter, as in React, and its value is the caller's own state.
   const aliases = new Map<string, string>();
   const returned = returnStatement !== null && isReturnStatement(returnStatement) ? returnStatement.expression : undefined;
-  if (returned !== undefined && call.binding.kind === "name" && isIdentifier(returned) && declared.has(returned.text) && params.every((p) => !isIdentifier(p.name) || p.name.text !== returned.text) && ![...destructured.values()].some((entries) => entries.some((e) => e.local === returned.text))) {
+  if (
+    returned !== undefined &&
+    call.binding.kind === "name" &&
+    isIdentifier(returned) &&
+    declared.has(returned.text) &&
+    params.every((p) => !isIdentifier(p.name) || p.name.text !== returned.text) &&
+    ![...destructured.values()].some((entries) => entries.some((e) => e.local === returned.text))
+  ) {
     aliases.set(returned.text, call.binding.name);
   } else if (returned !== undefined && call.binding.kind === "array" && isArrayLiteralExpression(returned)) {
     const targets = (call.binding.node as unknown as { elements: readonly Node[] }).elements;
     returned.elements.forEach((value, i) => {
       const target = targets[i] as unknown as { name?: Node } | undefined;
-      if (target?.name !== undefined && isIdentifier(target.name) && isIdentifier(value) && declared.has(value.text) && !params.some((p) => isIdentifier(p.name) && p.name.text === value.text) && !aliases.has(value.text)) {
+      if (
+        target?.name !== undefined &&
+        isIdentifier(target.name) &&
+        isIdentifier(value) &&
+        declared.has(value.text) &&
+        !params.some((p) => isIdentifier(p.name) && p.name.text === value.text) &&
+        !aliases.has(value.text)
+      ) {
         aliases.set(value.text, target.name.text);
       }
     });
@@ -642,13 +850,26 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
     const wanted = new Map<string, string>();
     for (const element of (call.binding.node as unknown as { elements: readonly { name: Node; propertyName?: Node }[] }).elements) {
       if (!isIdentifier(element.name)) continue;
-      wanted.set(element.propertyName !== undefined ? (element.propertyName as unknown as { text: string }).text : element.name.text, element.name.text);
+      wanted.set(
+        element.propertyName !== undefined ? (element.propertyName as unknown as { text: string }).text : element.name.text,
+        element.name.text
+      );
     }
     for (const property of returned.properties) {
-      const key = isShorthandPropertyAssignment(property) || (isPropertyAssignment(property) && isIdentifier(property.name)) ? (property.name as unknown as { text: string }).text : null;
+      const key =
+        isShorthandPropertyAssignment(property) || (isPropertyAssignment(property) && isIdentifier(property.name))
+          ? (property.name as unknown as { text: string }).text
+          : null;
       const value = isShorthandPropertyAssignment(property) ? property.name : isPropertyAssignment(property) ? property.initializer : null;
       const target = key === null ? undefined : wanted.get(key);
-      if (target !== undefined && value !== null && isIdentifier(value) && declared.has(value.text) && !params.some((p) => isIdentifier(p.name) && p.name.text === value.text) && !aliases.has(value.text)) {
+      if (
+        target !== undefined &&
+        value !== null &&
+        isIdentifier(value) &&
+        declared.has(value.text) &&
+        !params.some((p) => isIdentifier(p.name) && p.name.text === value.text) &&
+        !aliases.has(value.text)
+      ) {
         aliases.set(value.text, target);
       }
     }
@@ -657,7 +878,16 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
   // with a number after it where the name is taken. One the hook returns is named by the call (above).
   const mutableNames = new Map<string, string>();
   {
-    const own = kept.flatMap((s) => (isVariableStatement(s) ? s.declarationList.declarations : [])).filter((d) => isIdentifier(d.name) && d.initializer !== undefined && isCallExpression(d.initializer) && isIdentifier(d.initializer.expression) && d.initializer.expression.text === "useMutable");
+    const own = kept
+      .flatMap((s) => (isVariableStatement(s) ? s.declarationList.declarations : []))
+      .filter(
+        (d) =>
+          isIdentifier(d.name) &&
+          d.initializer !== undefined &&
+          isCallExpression(d.initializer) &&
+          isIdentifier(d.initializer.expression) &&
+          d.initializer.expression.text === "useMutable"
+      );
     const stem = hook.name.slice(3, 4).toLowerCase() + hook.name.slice(4);
     if (own.length > 0 && stem !== "" && !RESERVED_NAMES.has(stem)) {
       for (const d of own) {
@@ -675,7 +905,13 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
 
   const args = call.call.arguments;
   if (args.length > params.length) {
-    diagnostics.push(error(DiagnosticCode.InvalidProps, `The hook '${hook.name}' takes ${params.length} argument${params.length === 1 ? "" : "s"}, but the call passes ${args.length}.`, at));
+    diagnostics.push(
+      error(
+        DiagnosticCode.InvalidProps,
+        `The hook '${hook.name}' takes ${params.length} argument${params.length === 1 ? "" : "s"}, but the call passes ${args.length}.`,
+        at
+      )
+    );
     return null;
   }
   const lines: string[] = [`// ${hook.name}, inlined`];
@@ -697,10 +933,18 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
         if (object !== null) value = `${object}.${member.key}`;
         else {
           const property = (arg as unknown as { properties: readonly Node[] }).properties.find(
-            (q) => (isPropertyAssignment(q) && isIdentifier(q.name) && q.name.text === member.key) || (isShorthandPropertyAssignment(q) && (q.name as unknown as { text: string }).text === member.key),
+            (q) =>
+              (isPropertyAssignment(q) && isIdentifier(q.name) && q.name.text === member.key) ||
+              (isShorthandPropertyAssignment(q) && (q.name as unknown as { text: string }).text === member.key)
           );
           if (property === undefined) {
-            diagnostics.push(error(DiagnosticCode.InvalidProps, `The hook '${hook.name}' reads '${member.key}', which the object passed to it does not have.`, at));
+            diagnostics.push(
+              error(
+                DiagnosticCode.InvalidProps,
+                `The hook '${hook.name}' reads '${member.key}', which the object passed to it does not have.`,
+                at
+              )
+            );
             return null;
           }
           const valueNode = isPropertyAssignment(property) ? property.initializer : (property as unknown as { name: Node }).name;
@@ -710,9 +954,16 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
       }
       continue;
     }
-    const valueText = arg !== undefined ? `(${callSf.text.slice(arg.getStart(callSf), arg.getEnd())})` : p.initializer ? renameIn(p.initializer, sf, hook.text, declared, rename) : null;
+    const valueText =
+      arg !== undefined
+        ? `(${callSf.text.slice(arg.getStart(callSf), arg.getEnd())})`
+        : p.initializer
+          ? renameIn(p.initializer, sf, hook.text, declared, rename)
+          : null;
     if (valueText === null) {
-      diagnostics.push(error(DiagnosticCode.InvalidProps, `The hook '${hook.name}' needs an argument for '${(p.name as { text: string }).text}'.`, at));
+      diagnostics.push(
+        error(DiagnosticCode.InvalidProps, `The hook '${hook.name}' needs an argument for '${(p.name as { text: string }).text}'.`, at)
+      );
       return null;
     }
     if (!literals.has((p.name as { text: string }).text)) lines.push(`const ${rename((p.name as { text: string }).text)} = ${valueText};`);
@@ -727,24 +978,43 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
     }
     const renamed = (n: Node): string => renameIn(n, sf, hook.text, declared, rename);
     if (call.binding.kind === "name") {
-      if (!(isIdentifier(expr) && aliases.get(expr.text) === call.binding.name)) lines.push(`${call.binding.keyword} ${call.binding.name} = ${renamed(expr)};`);
-    }
-    else if (call.binding.kind === "object") {
+      if (!(isIdentifier(expr) && aliases.get(expr.text) === call.binding.name))
+        lines.push(`${call.binding.keyword} ${call.binding.name} = ${renamed(expr)};`);
+    } else if (call.binding.kind === "object") {
       if (!isObjectLiteralExpression(expr)) {
-        diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}' must return an object literal (\`return { a, b };\`) to be used as \`const { a, b } = ${hook.name}()\`.`, at));
+        diagnostics.push(
+          error(
+            DiagnosticCode.UnsupportedSyntax,
+            `The hook '${hook.name}' must return an object literal (\`return { a, b };\`) to be used as \`const { a, b } = ${hook.name}()\`.`,
+            at
+          )
+        );
         return null;
       }
       const values = new Map<string, string>();
       for (const property of expr.properties) {
-        if (isShorthandPropertyAssignment(property)) values.set((property.name as unknown as { text: string }).text, renamed(property.name));
-        else if (isPropertyAssignment(property) && isIdentifier(property.name)) values.set(property.name.text, renamed(property.initializer));
+        if (isShorthandPropertyAssignment(property))
+          values.set((property.name as unknown as { text: string }).text, renamed(property.name));
+        else if (isPropertyAssignment(property) && isIdentifier(property.name))
+          values.set(property.name.text, renamed(property.initializer));
         else {
-          diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}': the returned object may only have \`name\` and \`name: value\` entries.`, spanOf(property, sf, hook.fileName)));
+          diagnostics.push(
+            error(
+              DiagnosticCode.UnsupportedSyntax,
+              `The hook '${hook.name}': the returned object may only have \`name\` and \`name: value\` entries.`,
+              spanOf(property, sf, hook.fileName)
+            )
+          );
           return null;
         }
       }
-      for (const element of (call.binding.node as unknown as { elements: readonly { name: Node; propertyName?: Node; initializer?: Node }[] }).elements) {
-        const key = element.propertyName !== undefined ? (element.propertyName as unknown as { text: string }).text : (element.name as unknown as { text: string }).text;
+      for (const element of (
+        call.binding.node as unknown as { elements: readonly { name: Node; propertyName?: Node; initializer?: Node }[] }
+      ).elements) {
+        const key =
+          element.propertyName !== undefined
+            ? (element.propertyName as unknown as { text: string }).text
+            : (element.name as unknown as { text: string }).text;
         const value = values.get(key);
         if (value === (element.name as unknown as { text: string }).text) continue; // the hook's own name, renamed to this one
         if (value === undefined) {
@@ -755,7 +1025,13 @@ function expandCall(files: HookFiles, statement: Statement, call: HookCall, hook
       }
     } else {
       if (!isArrayLiteralExpression(expr)) {
-        diagnostics.push(error(DiagnosticCode.UnsupportedSyntax, `The hook '${hook.name}' must return an array literal (\`return [a, b];\`) to be used as \`const [a, b] = ${hook.name}()\`.`, at));
+        diagnostics.push(
+          error(
+            DiagnosticCode.UnsupportedSyntax,
+            `The hook '${hook.name}' must return an array literal (\`return [a, b];\`) to be used as \`const [a, b] = ${hook.name}()\`.`,
+            at
+          )
+        );
         return null;
       }
       const elements = (call.binding.node as unknown as { elements: readonly Node[] }).elements;
@@ -785,7 +1061,8 @@ function renameIn(node: Node, sf: SourceFile, text: string, names: ReadonlySet<s
   const edits: Edit[] = [];
   const walk = (n: Node, parent: Node | null): void => {
     if (isIdentifier(n) && names.has(n.text) && !isNotAReference(n, parent)) {
-      if (parent !== null && isShorthandPropertyAssignment(parent)) edits.push({ start: n.getStart(sf) - base, end: n.getEnd() - base, text: `${n.text}: ${rename(n.text)}` });
+      if (parent !== null && isShorthandPropertyAssignment(parent))
+        edits.push({ start: n.getStart(sf) - base, end: n.getEnd() - base, text: `${n.text}: ${rename(n.text)}` });
       else edits.push({ start: n.getStart(sf) - base, end: n.getEnd() - base, text: rename(n.text) });
     }
     n.forEachChild((child) => {
@@ -810,7 +1087,8 @@ function isNotAReference(id: Node, parent: Node | null): boolean {
 /** The names a hook's file imports from non-relative modules, by module. */
 function collectImports(files: HookFiles, hook: Hook, into: Map<string, Set<string>>): void {
   for (const statement of files.get(hook.fileName, hook.text).statements) {
-    if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || /^\.\.?\//.test(statement.moduleSpecifier.text)) continue;
+    if (!isImportDeclaration(statement) || !isStringLiteral(statement.moduleSpecifier) || /^\.\.?\//.test(statement.moduleSpecifier.text))
+      continue;
     const bindings = statement.importClause?.namedBindings;
     if (!bindings || !isNamedImports(bindings)) continue;
     const set = into.get(statement.moduleSpecifier.text) ?? new Set<string>();

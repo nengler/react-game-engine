@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+
 import { findLibrary } from "../src/native.ts";
 
 const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../src/cli.ts");
@@ -42,14 +43,26 @@ test("create refuses a folder that is not empty, and a bad name", () => {
 test("create --packs writes file: dependencies on the tarballs", () => {
   const packs = join(root, "packs");
   execFileSync("mkdir", [packs]);
-  for (const name of ["runtime", "player", "native", "player-node", "compiler", "testing", "language-server", "cli"]) writeFileSync(join(packs, `rge-${name}-0.0.0.tgz`), "");
+  for (const name of ["runtime", "player", "native", "player-node", "compiler", "testing", "language-server", "cli"])
+    writeFileSync(join(packs, `rge-${name}-0.0.0.tgz`), "");
   const made = rge(["create", join(root, "packed"), "--packs", packs]);
   assert.equal(made.status, 0, made.stderr);
-  const pkg = JSON.parse(readFileSync(join(root, "packed/package.json"), "utf8")) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
+  const pkg = JSON.parse(readFileSync(join(root, "packed/package.json"), "utf8")) as {
+    dependencies: Record<string, string>;
+    devDependencies: Record<string, string>;
+  };
   assert.equal(pkg.dependencies["@rge/runtime"], `file:${join(packs, "rge-runtime-0.0.0.tgz")}`);
   assert.equal(pkg.devDependencies["@rge/cli"], `file:${join(packs, "rge-cli-0.0.0.tgz")}`);
-  assert.equal(pkg.devDependencies["@rge/testing"], `file:${join(packs, "rge-testing-0.0.0.tgz")}`, "the tests' library is for development");
-  assert.equal(pkg.devDependencies["@rge/language-server"], `file:${join(packs, "rge-language-server-0.0.0.tgz")}`, "the editor's server too");
+  assert.equal(
+    pkg.devDependencies["@rge/testing"],
+    `file:${join(packs, "rge-testing-0.0.0.tgz")}`,
+    "the tests' library is for development"
+  );
+  assert.equal(
+    pkg.devDependencies["@rge/language-server"],
+    `file:${join(packs, "rge-language-server-0.0.0.tgz")}`,
+    "the editor's server too"
+  );
 });
 
 for (const template of ["menu", "platformer"]) {
@@ -87,7 +100,10 @@ test("check passes on the template: compile, typecheck, tests, parity", { timeou
 });
 
 test("check fails, and says which step, when a test fails", { timeout: 120_000 }, () => {
-  writeFileSync(join(game, "test/broken.test.ts"), `import { test } from "node:test";\nimport assert from "node:assert/strict";\ntest("broken", () => assert.equal(1, 2));\n`);
+  writeFileSync(
+    join(game, "test/broken.test.ts"),
+    `import { test } from "node:test";\nimport assert from "node:assert/strict";\ntest("broken", () => assert.equal(1, 2));\n`
+  );
   const checked = rge(["check", game]);
   assert.equal(checked.status, 1);
   assert.match(checked.stdout, /FAIL tests/);
@@ -100,7 +116,7 @@ test("an error in a component names its own line in src/, not the generated file
   // Z calls a plain function that throws, from the useInput handler of the template's Main.
   const main = readFileSync(join(errors, "src/Main.tsx"), "utf8")
     .replace('if (input.pressed("Z")) step();', 'if (input.pressed("Z")) boom();')
-    .replace('import { useGame }', 'import { boom } from "./boom.ts";\nimport { useGame }');
+    .replace("import { useGame }", 'import { boom } from "./boom.ts";\nimport { useGame }');
   writeFileSync(join(errors, "src/Main.tsx"), main);
   writeFileSync(join(errors, "src/boom.ts"), 'export function boom(): void {\n  throw new Error("boom");\n}\n');
   const built = rge(["build", errors]);
@@ -116,7 +132,7 @@ for (const frame of frames) backend.queueInput(frame);
 const player = createPlayer(backend, { ...gameConfig, showErrors: true } as never);
 for (let i = 0; i < frames.length + 1; i++) player.step();
 console.log(String((player.failure?.error as Error | undefined)?.stack));
-`,
+`
   );
   // `rge dev` and `rge check` run Node with this flag; so does this.
   const ran = spawnSync(process.execPath, ["--enable-source-maps", "boom.ts"], { cwd: errors, encoding: "utf8" });
@@ -128,21 +144,25 @@ console.log(String((player.failure?.error as Error | undefined)?.stack));
   assert.doesNotMatch(ran.stdout, /generated\/Main\.ts:/, "no frame names the generated file");
 });
 
-test("a game packaged on V8 names the same src/ lines when it crashes", { timeout: 300_000, skip: findLibrary("headless") === null ? "librge is not built (npm run native:build:headless)" : false }, () => {
-  // The game the test above wrote, with its boom.ts entry: packaged, run from another folder, and its stack read.
-  const errors = join(root, "errors");
-  const packaged = rge(["package", "--entry", "boom.ts", "--name", "boom", "--engine", "node", "--headless"], errors);
-  assert.equal(packaged.status, 0, packaged.stdout + packaged.stderr);
-  const ran = spawnSync(join(errors, "dist/boom/boom"), [], { cwd: tmpdir(), encoding: "utf8" });
-  const frame = ran.stdout.split("\n").find((line) => line.includes("Main.onInput"));
-  assert.ok(frame, ran.stdout + ran.stderr);
-  const main = readFileSync(join(errors, "src/Main.tsx"), "utf8");
-  const line = main.split("\n").findIndex((l) => l.includes("useInput((input)")) + 1;
-  assert.match(frame!, new RegExp(`src/Main\\.tsx:${line}:\\d+\\)$`), frame);
-  assert.match(ran.stdout, /at boom \(.*src\/boom\.ts:2:\d+\)/);
-  assert.match(ran.stdout, /@rge\/runtime\/src\/World\.ts:\d+/, "the engine's frames by package");
-  assert.doesNotMatch(ran.stdout, /game\.cjs:/, "no frame names the bundle");
-});
+test(
+  "a game packaged on V8 names the same src/ lines when it crashes",
+  { timeout: 300_000, skip: findLibrary("headless") === null ? "librge is not built (npm run native:build:headless)" : false },
+  () => {
+    // The game the test above wrote, with its boom.ts entry: packaged, run from another folder, and its stack read.
+    const errors = join(root, "errors");
+    const packaged = rge(["package", "--entry", "boom.ts", "--name", "boom", "--engine", "node", "--headless"], errors);
+    assert.equal(packaged.status, 0, packaged.stdout + packaged.stderr);
+    const ran = spawnSync(join(errors, "dist/boom/boom"), [], { cwd: tmpdir(), encoding: "utf8" });
+    const frame = ran.stdout.split("\n").find((line) => line.includes("Main.onInput"));
+    assert.ok(frame, ran.stdout + ran.stderr);
+    const main = readFileSync(join(errors, "src/Main.tsx"), "utf8");
+    const line = main.split("\n").findIndex((l) => l.includes("useInput((input)")) + 1;
+    assert.match(frame!, new RegExp(`src/Main\\.tsx:${line}:\\d+\\)$`), frame);
+    assert.match(ran.stdout, /at boom \(.*src\/boom\.ts:2:\d+\)/);
+    assert.match(ran.stdout, /@rge\/runtime\/src\/World\.ts:\d+/, "the engine's frames by package");
+    assert.doesNotMatch(ran.stdout, /game\.cjs:/, "no frame names the bundle");
+  }
+);
 
 test("a folder that is not a game, and an unknown command, are usage errors", () => {
   assert.equal(rge(["check", root]).status, 2);

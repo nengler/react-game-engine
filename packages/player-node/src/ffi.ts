@@ -6,9 +6,10 @@
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import koffi from "koffi";
-import { KEYS, RGE_ABI_VERSION } from "@rge/player";
+
 import { nativeLibrary } from "@rge/native";
+import { KEYS, RGE_ABI_VERSION } from "@rge/player";
+import koffi from "koffi";
 
 /** `librge`, as plain functions. Pointer arguments are typed arrays; koffi copies them in (and, for the two output buffers, back out). */
 export interface Native {
@@ -30,7 +31,16 @@ export interface Native {
   measureText(text: string, size: number): { width: number; height: number } | null;
   /** Width and height of a loaded texture, or null for an invalid handle. */
   textureSize(handle: number): { width: number; height: number } | null;
-  frame(clearColor: number, records: Float64Array, recordsLength: number, text: Uint8Array, textOffsets: Int32Array, textCount: number, input: Float64Array, keys: Uint8Array): void;
+  frame(
+    clearColor: number,
+    records: Float64Array,
+    recordsLength: number,
+    text: Uint8Array,
+    textOffsets: Int32Array,
+    textCount: number,
+    input: Float64Array,
+    keys: Uint8Array
+  ): void;
   /** `rge_overlaps`: the pairs of the `count` boxes that overlap, into `pairs` (`capacity` pairs of room); `order` goes in and comes back sorted. Returns how many pairs there are. */
   overlaps(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array, capacity: number): number;
   /** `rge_typed`: the characters typed in the last frame into `out` (as many as fit); returns how many there were. */
@@ -81,7 +91,9 @@ export function findNativeLibrary(prefer: BuildFlavor = "desktop", env: NodeJS.P
 export function checkAbi(native: Pick<Native, "abiVersion" | "keyCount">): void {
   const version = native.abiVersion();
   if (version !== RGE_ABI_VERSION) {
-    throw new Error(`librge speaks ABI version ${version}, but @rge/player expects ${RGE_ABI_VERSION}: rebuild it with \`npm run native:build\`.`);
+    throw new Error(
+      `librge speaks ABI version ${version}, but @rge/player expects ${RGE_ABI_VERSION}: rebuild it with \`npm run native:build\`.`
+    );
   }
   const keys = native.keyCount();
   if (keys !== KEYS.length) {
@@ -108,7 +120,7 @@ export function loadNative(path: string): Native {
   const measureText = lib.func("int32_t rge_measure_text(const char *text, double size, _Out_ double *out)");
   const textureSize = lib.func("int32_t rge_texture_size(int32_t handle, _Out_ double *out)");
   const frame = lib.func(
-    "void rge_frame(uint32_t clearColor, const double *records, int32_t recordsLength, const uint8_t *text, const int32_t *textOffsets, int32_t textCount, _Out_ double *input, _Out_ uint8_t *keys)",
+    "void rge_frame(uint32_t clearColor, const double *records, int32_t recordsLength, const uint8_t *text, const int32_t *textOffsets, int32_t textCount, _Out_ double *input, _Out_ uint8_t *keys)"
   );
   const readPixels = lib.func("int32_t rge_read_pixels(_Out_ uint8_t *rgba, int32_t capacity)");
   const storageOpen = lib.func("int32_t rge_storage_open(const char *game_id)");
@@ -116,7 +128,9 @@ export function loadNative(path: string): Native {
   const storageWrite = lib.func("int32_t rge_storage_write(const char *name, const uint8_t *data, int32_t length)");
   const storageRemove = lib.func("int32_t rge_storage_remove(const char *name)");
   const typed = lib.func("int32_t rge_typed(_Out_ uint32_t *out, int32_t capacity)");
-  const overlaps = lib.func("int32_t rge_overlaps(const double *boxes, int32_t count, _Inout_ int32_t *order, _Out_ int32_t *pairs, int32_t capacity)");
+  const overlaps = lib.func(
+    "int32_t rge_overlaps(const double *boxes, int32_t count, _Inout_ int32_t *order, _Out_ int32_t *pairs, int32_t capacity)"
+  );
 
   const native: Native = {
     abiVersion: () => abiVersion() as number,

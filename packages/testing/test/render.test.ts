@@ -1,14 +1,16 @@
+import assert from "node:assert/strict";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 /**
  * `@rge/testing` (REACT_FEEL_PLAN.md, A4): a component's own logic tested as a component, the way a rule is tested as a function.
  * The components are compiled here, as `rge` would compile a game's.
  */
 import { after, before, describe, it, mock } from "node:test";
-import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
 import { Compiler, formatDiagnostic } from "@rge/compiler";
 import { createControls, Pointer, type GameObject, type TilemapData } from "@rge/runtime";
+
 import { render } from "../src/index.ts";
 
 const OUT = resolve(import.meta.dirname, "../../../.test-output", `testing-${process.pid}`);
@@ -100,7 +102,15 @@ export function Menu() {
   });
 
   it("registers tilemaps, so a body stops on the floor", async () => {
-    const FLOOR: TilemapData = { width: 4, height: 2, tileWidth: 8, tileHeight: 8, firstGid: 1, solid: [1], layers: [{ name: "T", visible: true, data: [0, 0, 0, 0, 1, 1, 1, 1] }] };
+    const FLOOR: TilemapData = {
+      width: 4,
+      height: 2,
+      tileWidth: 8,
+      tileHeight: 8,
+      firstGid: 1,
+      solid: [1],
+      layers: [{ name: "T", visible: true, data: [0, 0, 0, 0, 1, 1, 1, 1] }],
+    };
     const { Faller } = await build<{ Faller: new () => GameObject }>(`
 export function Faller() {
   const { x, y, move } = useBody({ x: 0, y: 0, width: 4, height: 4 });

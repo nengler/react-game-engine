@@ -54,7 +54,7 @@ export function buildIndex(): string {
       const id = section[1]!;
       const attribute = (name: string): string => decode(new RegExp(`${name}="([^"]*)"`).exec(section[2]!)?.[1] ?? id);
       return { id, page, text, title: attribute("data-title"), dataGroup: attribute("data-group") };
-    }),
+    })
   );
   // A new section joins the navigation group its `data-group` already maps to ("Start here" is shown as "Start").
   const groupOf = new Map<string, string>();
@@ -64,7 +64,13 @@ export function buildIndex(): string {
   }
   const entries: Entry[] = sections.map((s) => {
     const old = known.get(s.id);
-    return { id: s.id, title: old?.title ?? s.title, page: s.page, group: old?.group ?? groupOf.get(s.dataGroup) ?? s.dataGroup, text: sectionText(s.text, s.id) };
+    return {
+      id: s.id,
+      title: old?.title ?? s.title,
+      page: s.page,
+      group: old?.group ?? groupOf.get(s.dataGroup) ?? s.dataGroup,
+      text: sectionText(s.text, s.id),
+    };
   });
   // Non-ASCII characters are escaped, as the pages have always held them.
   return JSON.stringify(entries).replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);

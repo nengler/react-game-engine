@@ -1,11 +1,22 @@
+import type { Expression } from "typescript/ast";
 /**
  * Build-time check of asset paths: every image and sound a component names with a literal (`<Sprite image="a.png">`,
  * `useSound("jump.wav")`, `<AnimatedSprite frames sheet>`, `<Tilemap image>`, `<Flex backgroundImage>`, `<Text font>`) must be a file in the assets folder,
  * so a typo is a compile error with the nearest file name, not a magenta square or a silent sound at run time. Paths that are
  * computed (a prop passed in, a string built from state) cannot be checked, and are not.
  */
-import { isAsExpression, isCallExpression, isIdentifier, isNoSubstitutionTemplateLiteral, isObjectLiteralExpression, isParenthesizedExpression, isPropertyAssignment, isSatisfiesExpression, isStringLiteral } from "typescript/ast/is";
-import type { Expression } from "typescript/ast";
+import {
+  isAsExpression,
+  isCallExpression,
+  isIdentifier,
+  isNoSubstitutionTemplateLiteral,
+  isObjectLiteralExpression,
+  isParenthesizedExpression,
+  isPropertyAssignment,
+  isSatisfiesExpression,
+  isStringLiteral,
+} from "typescript/ast/is";
+
 import { visit } from "../analyzer/util.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import type { ChildIR, ElementIR, HostElementIR, IRModule, PropIR, SourceSpan } from "../ir/types.ts";
@@ -34,13 +45,22 @@ export interface AssetCheckOptions {
 }
 
 /** A reporter for a file name that is not in the assets folder: one message, with the nearest file name when there is one. */
-function missingAssetReporter(options: AssetCheckOptions, diagnostics: CompilerDiagnostic[]): (what: string, name: string, span: SourceSpan | null) => void {
+function missingAssetReporter(
+  options: AssetCheckOptions,
+  diagnostics: CompilerDiagnostic[]
+): (what: string, name: string, span: SourceSpan | null) => void {
   let files: readonly string[] | null = null;
   return (what, name, span) => {
     if (options.exists(name)) return;
     files ??= options.list();
     const near = nearest(name, files);
-    diagnostics.push(error(DiagnosticCode.MissingAsset, `The ${what} '${name}' is not in ${options.folder}/${near === null ? "" : ` (did you mean '${near}'?)`}.`, span));
+    diagnostics.push(
+      error(
+        DiagnosticCode.MissingAsset,
+        `The ${what} '${name}' is not in ${options.folder}/${near === null ? "" : ` (did you mean '${near}'?)`}.`,
+        span
+      )
+    );
   };
 }
 
@@ -69,7 +89,8 @@ export function checkSoundStores(parser: TsxParser, sources: readonly SourceText
         if (isStringLiteral(value) || isNoSubstitutionTemplateLiteral(value)) {
           if (value.text !== "") report("sound", value.text, spanOf(value, sourceFile, fileName));
         } else if (isObjectLiteralExpression(value)) {
-          for (const member of value.properties) if (isPropertyAssignment(member) && propertyName(member.name) === "src") check(member.initializer);
+          for (const member of value.properties)
+            if (isPropertyAssignment(member) && propertyName(member.name) === "src") check(member.initializer);
         }
       };
       visit(sourceFile, (node) => {
@@ -105,7 +126,8 @@ export function checkAssets(modules: readonly IRModule[], options: AssetCheckOpt
     for (const prop of list) {
       if ((prop.kind !== "StaticProp" && prop.kind !== "DynamicProp") || !names.includes(prop.name)) continue;
       walkExpr(prop.value, (e) => {
-        if (e.kind === "StringLiteral" && e.value !== "") report(tag === "Text" || tag === "Game" ? "font" : tag === "Music" ? "music file" : "image", e.value, span);
+        if (e.kind === "StringLiteral" && e.value !== "")
+          report(tag === "Text" || tag === "Game" ? "font" : tag === "Music" ? "music file" : "image", e.value, span);
       });
     }
   };

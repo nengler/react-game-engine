@@ -1,6 +1,7 @@
 import { Entity, Sprite, useBody, useMutable, useUpdate } from "@rge/runtime/jsx";
-import type { Fired } from "./battle.ts";
+
 import { Barrel } from "./Barrel.tsx";
+import type { Fired } from "./battle.ts";
 import { sfx } from "./effects.ts";
 import { LevelPips } from "./LevelPips.tsx";
 import { MuzzleFlash } from "./MuzzleFlash.tsx";
@@ -42,7 +43,12 @@ export function Tower({ seed, kind, level, x, y, ring, onFire }: TowerProps) {
   useUpdate((dt) => {
     if (s.flash > 0) s.flash = Math.max(0, s.flash - dt);
     s.cooldown = Math.max(0, s.cooldown - dt);
-    const target = pickTarget(x, y, stats.range, overlapping("enemy").map((enemy) => enemy.data));
+    const target = pickTarget(
+      x,
+      y,
+      stats.range,
+      overlapping("enemy").map((enemy) => enemy.data)
+    );
     if (target === null) return;
     s.angle = Math.atan2(target.y - y, target.x - x);
     if (s.cooldown > 0) return;
@@ -52,13 +58,35 @@ export function Tower({ seed, kind, level, x, y, ring, onFire }: TowerProps) {
     if (kind === "bolt") {
       onFire({ kind, x, y, tx: target.x, ty: target.y, flight: TRACER, target: target.id, damage: stats.damage, radius: 0, slow: 0 });
     } else if (kind === "frost") {
-      onFire({ kind, x, y, tx: x, ty: y, flight: TRACER, target: -1, damage: stats.damage, radius: stats.radius, slow: TOWERS.frost.slowFor });
+      onFire({
+        kind,
+        x,
+        y,
+        tx: x,
+        ty: y,
+        flight: TRACER,
+        target: -1,
+        damage: stats.damage,
+        radius: stats.radius,
+        slow: TOWERS.frost.slowFor,
+      });
     } else {
       // The shell lands where the target is now, a little off.
       const rx = rollSigned(s.scatter);
       const ry = rollSigned(rx.seed);
       s.scatter = ry.seed;
-      onFire({ kind, x, y, tx: target.x + rx.value * 3, ty: target.y + ry.value * 3, flight: TOWERS.mortar.flight, target: -1, damage: stats.damage, radius: stats.radius, slow: 0 });
+      onFire({
+        kind,
+        x,
+        y,
+        tx: target.x + rx.value * 3,
+        ty: target.y + ry.value * 3,
+        flight: TOWERS.mortar.flight,
+        target: -1,
+        damage: stats.damage,
+        radius: stats.radius,
+        slow: 0,
+      });
     }
   });
 

@@ -1,13 +1,35 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { Camera, Collider, Entity, Flex, Game, GameObject, Pointer, Screen, Shape, Sound, Text, World, createGameState, getSoundSink, type InputState } from "@rge/runtime";
+import { afterEach, describe, it } from "node:test";
+
+import {
+  Camera,
+  Collider,
+  Entity,
+  Flex,
+  Game,
+  GameObject,
+  Pointer,
+  Screen,
+  Shape,
+  Sound,
+  Text,
+  World,
+  createGameState,
+  getSoundSink,
+  type InputState,
+} from "@rge/runtime";
+
 import { Hero } from "../../example/generated/Hero.ts";
 import { createPlayer, DEFAULT_WINDOW, MAX_DT, run, type PlayerConfig } from "../src/loop.ts";
 import { RecordingBackend } from "../src/recording.ts";
 
 const WINDOW = { width: 800, height: 600, title: "test" };
 
-function player(root: () => GameObject, options: Partial<PlayerConfig> = {}, backend = new RecordingBackend()): { backend: RecordingBackend; warnings: string[]; player: ReturnType<typeof createPlayer> } {
+function player(
+  root: () => GameObject,
+  options: Partial<PlayerConfig> = {},
+  backend = new RecordingBackend()
+): { backend: RecordingBackend; warnings: string[]; player: ReturnType<typeof createPlayer> } {
   const warnings: string[] = [];
   return { backend, warnings, player: createPlayer(backend, { ...WINDOW, root, warn: (m) => warnings.push(m), ...options }) };
 }
@@ -44,7 +66,16 @@ describe("createPlayer", () => {
   it("opens the window with the config it was given, and nothing else", () => {
     const { backend, player: p } = player(() => new Entity(), { resizable: false, smooth: true, background: "navy", assets: "art" });
     p.close();
-    assert.deepEqual(backend.config, { width: 800, height: 600, title: "test", resizable: false, vsync: undefined, hidden: undefined, smooth: true, sharp: undefined });
+    assert.deepEqual(backend.config, {
+      width: 800,
+      height: 600,
+      title: "test",
+      resizable: false,
+      vsync: undefined,
+      hidden: undefined,
+      smooth: true,
+      sharp: undefined,
+    });
   });
 
   it("asks for sharp scaling when the <Game> or the config says upscale is sharp, and for nothing otherwise", () => {
@@ -97,10 +128,7 @@ describe("createPlayer", () => {
     p.step();
     p.step();
     p.close();
-    assert.deepEqual(log, [
-      "input pointer=0,0", "update 0", "present",
-      "press", "input pointer=10,10", "update 0.01", "present",
-    ]);
+    assert.deepEqual(log, ["input pointer=0,0", "update 0", "present", "press", "input pointer=10,10", "update 0.01", "present"]);
   });
 
   it("gives the first frame a dt of zero, then the backend's, clamped to [0, MAX_DT]", () => {
@@ -114,7 +142,10 @@ describe("createPlayer", () => {
     for (let i = 0; i < 5; i++) p.step();
     p.close();
     assert.equal(MAX_DT, 0.1);
-    assert.deepEqual(log.filter((l) => l.startsWith("update")), ["update 0", "update 0.016", `update ${MAX_DT}`, "update 0", "update 0"]);
+    assert.deepEqual(
+      log.filter((l) => l.startsWith("update")),
+      ["update 0", "update 0.016", `update ${MAX_DT}`, "update 0", "update 0"]
+    );
   });
 
   it("returns false from the frame in which the window asked to close, and still draws it", () => {
@@ -142,7 +173,16 @@ describe("createPlayer", () => {
 
   it("opens no window and unhooks sounds if building the root throws", () => {
     const backend = new RecordingBackend();
-    assert.throws(() => createPlayer(backend, { ...WINDOW, root: () => { throw new Error("boom"); } }), /boom/);
+    assert.throws(
+      () =>
+        createPlayer(backend, {
+          ...WINDOW,
+          root: () => {
+            throw new Error("boom");
+          },
+        }),
+      /boom/
+    );
     assert.equal(backend.opened, false, "the root is built before the window opens");
     assert.equal(getSoundSink(), null);
   });
@@ -170,22 +210,43 @@ describe("createPlayer", () => {
     };
 
     it("toggles on F11, and off on the next F11", () => {
-      assert.deepEqual(run(() => new Entity(), [{ pressed: ["F11"] }, {}, { pressed: ["F11"] }]), [true, false]);
+      assert.deepEqual(
+        run(() => new Entity(), [{ pressed: ["F11"] }, {}, { pressed: ["F11"] }]),
+        [true, false]
+      );
     });
 
     it("toggles on Alt + Enter, and not on Enter alone", () => {
-      assert.deepEqual(run(() => new Entity(), [{ pressed: ["Enter"] }, { down: ["Alt"], pressed: ["Enter"] }]), [true]);
+      assert.deepEqual(
+        run(() => new Entity(), [{ pressed: ["Enter"] }, { down: ["Alt"], pressed: ["Enter"] }]),
+        [true]
+      );
     });
 
     it("uses the <Game> key over the player's, and a false key turns the key off", () => {
-      assert.deepEqual(run(() => new Game({ fullscreenKey: "F" }), [{ pressed: ["F11"] }, { pressed: ["F"] }]), [true]);
-      assert.deepEqual(run(() => new Entity(), [{ pressed: ["F11"] }, { pressed: ["G"] }], { fullscreenKey: "G" }), [true]);
-      assert.deepEqual(run(() => new Game({ fullscreenKey: false }), [{ pressed: ["F11"] }]), []);
+      assert.deepEqual(
+        run(() => new Game({ fullscreenKey: "F" }), [{ pressed: ["F11"] }, { pressed: ["F"] }]),
+        [true]
+      );
+      assert.deepEqual(
+        run(() => new Entity(), [{ pressed: ["F11"] }, { pressed: ["G"] }], { fullscreenKey: "G" }),
+        [true]
+      );
+      assert.deepEqual(
+        run(() => new Game({ fullscreenKey: false }), [{ pressed: ["F11"] }]),
+        []
+      );
     });
 
     it("warns once about a key it does not know, and Alt + Enter still works", () => {
       const warnings: string[] = [];
-      assert.deepEqual(run(() => new Entity(), [{ pressed: ["F11"] }, { down: ["Alt"], pressed: ["Enter"] }], { fullscreenKey: "Nope", warn: (m) => warnings.push(m) }), [true]);
+      assert.deepEqual(
+        run(() => new Entity(), [{ pressed: ["F11"] }, { down: ["Alt"], pressed: ["Enter"] }], {
+          fullscreenKey: "Nope",
+          warn: (m) => warnings.push(m),
+        }),
+        [true]
+      );
       assert.equal(warnings.length, 1);
       assert.match(warnings[0] as string, /fullscreenKey 'Nope'/);
     });
@@ -206,12 +267,27 @@ describe("createPlayer", () => {
 
   describe("a <Game> root", () => {
     it("opens the window it asks for, over the player's config, over the defaults, each setting on its own", () => {
-      const game = player(() => new Game({ title: "from game", width: 200, smooth: true }), { width: 999, height: 111, title: "from config", resizable: false, vsync: false, smooth: false });
-      assert.deepEqual(game.backend.config, { width: 200, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true, sharp: undefined }, "width, title and smooth from <Game>; the rest from the player");
+      const game = player(() => new Game({ title: "from game", width: 200, smooth: true }), {
+        width: 999,
+        height: 111,
+        title: "from config",
+        resizable: false,
+        vsync: false,
+        smooth: false,
+      });
+      assert.deepEqual(
+        game.backend.config,
+        { width: 200, height: 111, title: "from game", resizable: false, vsync: false, hidden: undefined, smooth: true, sharp: undefined },
+        "width, title and smooth from <Game>; the rest from the player"
+      );
       game.player.close();
       const backend = new RecordingBackend();
       const plain = createPlayer(backend, { root: () => new Entity(), warn: () => {} });
-      assert.deepEqual([backend.config?.width, backend.config?.height, backend.config?.title], [DEFAULT_WINDOW.width, DEFAULT_WINDOW.height, DEFAULT_WINDOW.title], "no <Game> and no config: the defaults");
+      assert.deepEqual(
+        [backend.config?.width, backend.config?.height, backend.config?.title],
+        [DEFAULT_WINDOW.width, DEFAULT_WINDOW.height, DEFAULT_WINDOW.title],
+        "no <Game> and no config: the defaults"
+      );
       plain.close();
     });
 
@@ -251,7 +327,11 @@ describe("createPlayer", () => {
       const p = createPlayer(backend, { root: () => new Level() });
       p.step();
       assert.equal(backend.lastFrame.clearColor, "#ff0000ff");
-      assert.deepEqual(backend.soundLoads, ["art/beep.wav"], "a sound made while the root is built is preloaded once the window is open, from the game's folder");
+      assert.deepEqual(
+        backend.soundLoads,
+        ["art/beep.wav"],
+        "a sound made while the root is built is preloaded once the window is open, from the game's folder"
+      );
       p.close();
     });
 
@@ -276,11 +356,15 @@ describe("createPlayer", () => {
         order.push("open");
         open(config);
       };
-      const { player: p } = player(() => {
-        order.push("root");
-        void new Sound("a.wav");
-        return new Game({ title: "x" });
-      }, {}, backend);
+      const { player: p } = player(
+        () => {
+          order.push("root");
+          void new Sound("a.wav");
+          return new Game({ title: "x" });
+        },
+        {},
+        backend
+      );
       assert.deepEqual(order, ["root", "open"]);
       assert.deepEqual(backend.soundLoads, ["assets/a.wav"]);
       p.close();
@@ -329,7 +413,11 @@ describe("pointer presses", () => {
     return pointer;
   }
 
-  function click(root: () => GameObject, mouse: { x: number; y: number }, keys: { pressed?: string[]; down?: string[] } = { pressed: ["MouseLeft"] }): void {
+  function click(
+    root: () => GameObject,
+    mouse: { x: number; y: number },
+    keys: { pressed?: string[]; down?: string[] } = { pressed: ["MouseLeft"] }
+  ): void {
     const backend = new RecordingBackend();
     backend.queueInput({ mouse, ...keys });
     const { player: p } = player(root, {}, backend);
@@ -409,15 +497,22 @@ describe("pointer presses", () => {
     const log: string[] = [];
     const backend = new RecordingBackend();
     backend.queueInput({ mouse: { x: 400 + 2 * 30, y: 300 + 2 * 40 } });
-    const { player: p } = player(() => {
-      const entity = new Probe(log);
-      entity.addChild(new Camera({ zoom: 2 }));
-      return entity;
-    }, {}, backend);
+    const { player: p } = player(
+      () => {
+        const entity = new Probe(log);
+        entity.addChild(new Camera({ zoom: 2 }));
+        return entity;
+      },
+      {},
+      backend
+    );
     p.step();
     p.step();
     p.close();
-    assert.deepEqual(log.filter((l) => l.startsWith("input")), ["input pointer=0,0", "input pointer=30,40"]);
+    assert.deepEqual(
+      log.filter((l) => l.startsWith("input")),
+      ["input pointer=0,0", "input pointer=30,40"]
+    );
   });
 });
 
@@ -477,8 +572,19 @@ describe("pointer hover", () => {
     const log: string[] = [];
     const root = (): GameObject => {
       const scene = new Entity();
-      const low = new Pointer({ width: 50, height: 50, onPress: () => log.push("press low"), onPointerEnter: () => log.push("enter low"), onPointerLeave: () => log.push("leave low") });
-      const box = new Flex({ width: 20, height: 20, onPointerEnter: () => log.push("enter box"), onPointerLeave: () => log.push("leave box") });
+      const low = new Pointer({
+        width: 50,
+        height: 50,
+        onPress: () => log.push("press low"),
+        onPointerEnter: () => log.push("enter low"),
+        onPointerLeave: () => log.push("leave low"),
+      });
+      const box = new Flex({
+        width: 20,
+        height: 20,
+        onPointerEnter: () => log.push("enter box"),
+        onPointerLeave: () => log.push("leave box"),
+      });
       box.transform.x = 60;
       scene.addChild(low);
       scene.addChild(box);
@@ -498,7 +604,8 @@ describe("pointer hover", () => {
       { mouse: { x: 8, y: 8 }, pressed: ["MouseLeft"] },
       { mouse: { x: 8, y: 8 } }, // the press goes through the hover-only flex to the pointer
       { mouse: { x: 500, y: 500 } }, // over nothing
-    ]) backend.queueInput(input);
+    ])
+      backend.queueInput(input);
     const { player: p } = player(root, {}, backend);
     for (let i = 0; i < 8; i++) p.step();
     p.close();
@@ -515,11 +622,15 @@ describe("<Game font>", () => {
       return game;
     };
     const draw = (font: string | undefined) => {
-      const backend = new RecordingBackend({ textureSizes: { "assets/font.png": { width: 80, height: 48 }, "assets/other.png": { width: 160, height: 96 } } });
+      const backend = new RecordingBackend({
+        textureSizes: { "assets/font.png": { width: 80, height: 48 }, "assets/other.png": { width: 160, height: 96 } },
+      });
       const { player: p } = player(scene(font), {}, backend);
       p.step();
       p.close();
-      return backend.lastFrame.records.map((r) => (r.op === "spriteRegion" ? `sprite ${r.texture}` : r.op === "text" ? `text ${r.text}` : r.op)).filter((r) => r.startsWith("sprite") || r.startsWith("text"));
+      return backend.lastFrame.records
+        .map((r) => (r.op === "spriteRegion" ? `sprite ${r.texture}` : r.op === "text" ? `text ${r.text}` : r.op))
+        .filter((r) => r.startsWith("sprite") || r.startsWith("text"));
     };
     assert.deepEqual(draw("font.png"), ["sprite assets/font.png", "sprite assets/font.png", "sprite assets/other.png"]);
     assert.deepEqual(draw(undefined), ["text AB", "sprite assets/other.png"]);

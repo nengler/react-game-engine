@@ -4,6 +4,7 @@
  *   npm run play:demo
  */
 import { hostBackend, run } from "@rge/player";
+
 import { gameConfig } from "./game.ts";
 
 run(hostBackend(), gameConfig);

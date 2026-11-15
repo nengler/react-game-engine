@@ -54,7 +54,12 @@ export class FixedDriver {
     return { hz: 1 / this.dt, accumulator: this.#accumulator, edges: [...this.#edges], carried: [...this.#carried] };
   }
 
-  static fromJSON(state: { readonly hz: number; readonly accumulator: number; readonly edges: readonly number[]; readonly carried: readonly number[] }): FixedDriver {
+  static fromJSON(state: {
+    readonly hz: number;
+    readonly accumulator: number;
+    readonly edges: readonly number[];
+    readonly carried: readonly number[];
+  }): FixedDriver {
     const driver = new FixedDriver(state.hz, state.edges.length);
     driver.#accumulator = state.accumulator;
     driver.#edges.set(state.edges);

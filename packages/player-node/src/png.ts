@@ -1,10 +1,12 @@
 import { crc32, deflateSync, inflateSync } from "node:zlib";
+
 import type { Pixels } from "./backend.ts";
 
 /** Encode RGBA8 pixels (top row first) as a PNG. */
 export function encodePng(pixels: Pixels): Uint8Array {
   const { width, height, rgba } = pixels;
-  if (rgba.length !== width * height * 4) throw new Error(`encodePng: ${width} × ${height} needs ${width * height * 4} bytes, not ${rgba.length}.`);
+  if (rgba.length !== width * height * 4)
+    throw new Error(`encodePng: ${width} × ${height} needs ${width * height * 4} bytes, not ${rgba.length}.`);
   const chunk = (type: string, data: Uint8Array): Buffer => {
     const out = Buffer.alloc(12 + data.length);
     out.writeUInt32BE(data.length, 0);
@@ -24,7 +26,12 @@ export function encodePng(pixels: Pixels): Uint8Array {
     raw[at] = 0; // filter: none
     raw.set(rgba.subarray(y * width * 4, (y + 1) * width * 4), at + 1);
   }
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw)), chunk("IEND", new Uint8Array(0))]);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", new Uint8Array(0)),
+  ]);
 }
 
 /** Read back a PNG written by `encodePng` (8-bit RGBA, no interlacing): for tests of the screenshot tool. */
@@ -57,8 +64,16 @@ export function decodePng(bytes: Uint8Array): Pixels {
 
 // A 3 × 5 digit font for contact-sheet labels, one row per entry, bits from the left.
 const DIGITS: readonly (readonly number[])[] = [
-  [7, 5, 5, 5, 7], [2, 6, 2, 2, 7], [7, 1, 7, 4, 7], [7, 1, 7, 1, 7], [5, 5, 7, 1, 1],
-  [7, 4, 7, 1, 7], [7, 4, 7, 5, 7], [7, 1, 1, 1, 1], [7, 5, 7, 5, 7], [7, 5, 7, 1, 7],
+  [7, 5, 5, 5, 7],
+  [2, 6, 2, 2, 7],
+  [7, 1, 7, 4, 7],
+  [7, 1, 7, 1, 7],
+  [5, 5, 7, 1, 1],
+  [7, 4, 7, 1, 7],
+  [7, 4, 7, 5, 7],
+  [7, 1, 1, 1, 1],
+  [7, 5, 7, 5, 7],
+  [7, 5, 7, 1, 7],
 ];
 
 export interface SheetOptions {
@@ -114,16 +129,27 @@ export function contactSheet(frames: readonly Pixels[], options: SheetOptions = 
   return { width, height, rgba };
 }
 
-function drawNumber(text: string, x: number, y: number, size: number, put: (x: number, y: number, r: number, g: number, b: number) => void, width: number, height: number): void {
+function drawNumber(
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  put: (x: number, y: number, r: number, g: number, b: number) => void,
+  width: number,
+  height: number
+): void {
   // A dark box behind the digits so they read on any room.
   const boxW = text.length * 4 * size + size;
-  for (let dy = 0; dy < 6 * size; dy++) for (let dx = 0; dx < boxW; dx++) if (x + dx < width && y + dy < height) put(x + dx, y + dy, 0, 0, 0);
+  for (let dy = 0; dy < 6 * size; dy++)
+    for (let dx = 0; dx < boxW; dx++) if (x + dx < width && y + dy < height) put(x + dx, y + dy, 0, 0, 0);
   for (let i = 0; i < text.length; i++) {
     const glyph = DIGITS[Number(text[i])] as readonly number[];
     for (let row = 0; row < 5; row++) {
       for (let col = 0; col < 3; col++) {
         if (((glyph[row] as number) >> (2 - col)) & 1) {
-          for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) put(x + (i * 4 + col) * size + dx + size / 2 | 0, y + row * size + dy + size / 2 | 0, 255, 255, 80);
+          for (let dy = 0; dy < size; dy++)
+            for (let dx = 0; dx < size; dx++)
+              put((x + (i * 4 + col) * size + dx + size / 2) | 0, (y + row * size + dy + size / 2) | 0, 255, 255, 80);
         }
       }
     }

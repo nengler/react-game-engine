@@ -30,7 +30,8 @@ const ENTITIES: Readonly<Record<string, string>> = { amp: "&", lt: "<", gt: ">",
 
 function unescape(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, ref: string) => {
-    if (ref[0] === "#") return String.fromCodePoint(ref[1] === "x" || ref[1] === "X" ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10));
+    if (ref[0] === "#")
+      return String.fromCodePoint(ref[1] === "x" || ref[1] === "X" ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10));
     return ENTITIES[ref] ?? whole;
   });
 }
@@ -115,7 +116,14 @@ export function readTsx(xml: string): TilesetJson {
   } = {};
   const a = root.attrs;
   if (a["name"] !== undefined) out.name = a["name"];
-  for (const [key, field] of [["tilewidth", "tilewidth"], ["tileheight", "tileheight"], ["columns", "columns"], ["tilecount", "tilecount"], ["margin", "margin"], ["spacing", "spacing"]] as const) {
+  for (const [key, field] of [
+    ["tilewidth", "tilewidth"],
+    ["tileheight", "tileheight"],
+    ["columns", "columns"],
+    ["tilecount", "tilecount"],
+    ["margin", "margin"],
+    ["spacing", "spacing"],
+  ] as const) {
     const n = int(a[key]);
     if (n !== undefined) out[field] = n;
   }

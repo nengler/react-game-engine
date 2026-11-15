@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Camera, Entity } from "@rge/runtime";
+
 import { PlayerInput } from "../src/input.ts";
 import { KEYS, RGE_IN_HEIGHT, RGE_IN_WIDTH } from "../src/protocol.ts";
 import { RecordingBackend, type InputFrame } from "../src/recording.ts";
@@ -23,7 +25,11 @@ function inputAfter(frame: InputFrame, warnings: string[] = []): PlayerInput {
 describe("PlayerInput keys", () => {
   it("reports pressed, down and released from the keys buffer", () => {
     const input = inputAfter({ pressed: ["Space"], down: ["A"], released: ["B"] });
-    assert.deepEqual([input.pressed("Space"), input.down("Space"), input.released("Space")], [true, true, false], "a pressed key is also down");
+    assert.deepEqual(
+      [input.pressed("Space"), input.down("Space"), input.released("Space")],
+      [true, true, false],
+      "a pressed key is also down"
+    );
     assert.deepEqual([input.pressed("A"), input.down("A"), input.released("A")], [false, true, false], "held, not new");
     assert.deepEqual([input.pressed("B"), input.down("B"), input.released("B")], [false, false, true]);
     assert.equal(input.pressed("C"), false);
@@ -83,7 +89,12 @@ describe("PlayerInput window and mouse", () => {
     parent.addChild(camera);
     const v = camera.viewTransform();
     const view = { a: v.a, b: v.b, c: v.c, d: v.d, e: v.e + 400, f: v.f + 300 };
-    for (const [x, y] of [[0, 0], [100, 50], [-30, 220], [12.5, -7.25]] as const) {
+    for (const [x, y] of [
+      [0, 0],
+      [100, 50],
+      [-30, 220],
+      [12.5, -7.25],
+    ] as const) {
       const screen = camera.worldToView(x, y);
       const input = inputAfter({ mouse: { x: screen.x + 400, y: screen.y + 300 } });
       input.view = view;

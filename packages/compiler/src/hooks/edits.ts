@@ -77,7 +77,8 @@ export class EditMap {
       if (v === null || typeof v !== "object") return v;
       const out: Record<string, unknown> = {};
       for (const [key, inner] of Object.entries(v)) {
-        out[key] = key === "span" && inner !== null && typeof inner === "object" ? this.span(inner as SourceSpan, fileName, original) : walk(inner);
+        out[key] =
+          key === "span" && inner !== null && typeof inner === "object" ? this.span(inner as SourceSpan, fileName, original) : walk(inner);
       }
       return out;
     };

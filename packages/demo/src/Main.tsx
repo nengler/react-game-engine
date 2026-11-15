@@ -1,4 +1,5 @@
 import { useSound, useMutable, Camera, Flex, Game, Hud, Screen, Text } from "@rge/runtime/jsx";
+
 import { Beacon } from "./Beacon.tsx";
 import { Coin } from "./Coin.tsx";
 import { CoinCounter } from "./CoinCounter.tsx";

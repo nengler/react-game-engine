@@ -1,4 +1,5 @@
 import { createParticles, createSounds } from "@rge/runtime";
+
 import type { GameEvent } from "./rules/run.ts";
 
 /** One-off effects: where a thing happened, as small bursts. `Play.tsx` mounts what draws them (`<ParticleLayer particles={fx} />`). */
@@ -25,19 +26,47 @@ export const sfx = createSounds({
 export function answer(events: readonly GameEvent[], at: { readonly x: number; readonly y: number }): void {
   for (const e of events) {
     switch (e.type) {
-      case "pickup": sfx.play("pickup"); fx.burst("spark", at.x, at.y); break;
-      case "talk": sfx.play("talk"); break;
-      case "door": sfx.play("door"); break;
+      case "pickup":
+        sfx.play("pickup");
+        fx.burst("spark", at.x, at.y);
+        break;
+      case "talk":
+        sfx.play("talk");
+        break;
+      case "door":
+        sfx.play("door");
+        break;
       case "locked":
-      case "gate-locked": sfx.play("deny"); break;
-      case "cut": sfx.play("cut"); fx.burst("leaf", at.x, at.y); break;
-      case "swing": sfx.play("swing"); break;
-      case "enemy-hit": sfx.play("hit"); fx.burst("spark", at.x, at.y); break;
-      case "enemy-defeated": fx.burst("puff", at.x, at.y); break;
-      case "shrine": sfx.play("shrine"); fx.burst("spark", at.x, at.y); break;
-      case "hurt": case "died": sfx.play("hurt"); break;
-      case "win": sfx.play("win"); break;
-      default: break;
+      case "gate-locked":
+        sfx.play("deny");
+        break;
+      case "cut":
+        sfx.play("cut");
+        fx.burst("leaf", at.x, at.y);
+        break;
+      case "swing":
+        sfx.play("swing");
+        break;
+      case "enemy-hit":
+        sfx.play("hit");
+        fx.burst("spark", at.x, at.y);
+        break;
+      case "enemy-defeated":
+        fx.burst("puff", at.x, at.y);
+        break;
+      case "shrine":
+        sfx.play("shrine");
+        fx.burst("spark", at.x, at.y);
+        break;
+      case "hurt":
+      case "died":
+        sfx.play("hurt");
+        break;
+      case "win":
+        sfx.play("win");
+        break;
+      default:
+        break;
     }
   }
 }

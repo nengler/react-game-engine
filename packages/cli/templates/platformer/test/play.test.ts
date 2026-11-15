@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { parseInputScript, runScript, type Player } from "@rge/player";
 import { findComponent } from "@rge/testing";
+
 import { bindings, gameConfig } from "../game.ts";
 import { useGame } from "../src/GameState.ts";
 import { START } from "../src/level.ts";

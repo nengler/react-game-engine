@@ -6,7 +6,6 @@ export declare const elementIdBrand: unique symbol;
 
 export declare const localIdBrand: unique symbol;
 
-
 export declare const soundIdBrand: unique symbol;
 
 /** Identifies a persistent state slot within a component. */

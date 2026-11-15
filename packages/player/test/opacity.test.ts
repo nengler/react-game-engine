@@ -1,13 +1,17 @@
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+
 import { Entity, Flex, Hud, Shape, Sprite, Text, getSoundSink, type FlexProps, type GameObject } from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { createPlayer } from "../src/loop.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
 function draw(root: GameObject, retain = false): DecodedRecord[] {
-  const backend = new RecordingBackend({ textureSizes: { "assets/hero.png": { width: 20, height: 10 }, "assets/font.png": { width: 160, height: 96 } } });
+  const backend = new RecordingBackend({
+    textureSizes: { "assets/hero.png": { width: 20, height: 10 }, "assets/font.png": { width: 160, height: 96 } },
+  });
   const builder = new FrameBuilder({
     loadTexture: (path) => backend.loadTexture(path),
     textureSize: (handle) => backend.textureSize(handle) ?? { width: 0, height: 0 },
@@ -27,7 +31,15 @@ function flex(props: FlexProps, ...children: GameObject[]): Flex {
 }
 /** The colour of every record that has one, in draw order. */
 const colors = (records: readonly DecodedRecord[]): string[] =>
-  records.flatMap((r) => (r.op === "rect" || r.op === "ellipse" || r.op === "text" ? [r.color] : r.op === "box" ? [r.fill, r.borderColor] : r.op === "spriteRegion" ? [r.tint] : []));
+  records.flatMap((r) =>
+    r.op === "rect" || r.op === "ellipse" || r.op === "text"
+      ? [r.color]
+      : r.op === "box"
+        ? [r.fill, r.borderColor]
+        : r.op === "spriteRegion"
+          ? [r.tint]
+          : []
+  );
 
 describe("<Flex opacity>", () => {
   it("draws a box with no opacity, or an opacity of 1, exactly as it always did", () => {
@@ -53,7 +65,11 @@ describe("<Flex opacity>", () => {
   it("goes to a box inside it too, multiplying: 0.5 inside 0.5 is 0.25", () => {
     const inner = flex({ background: "red", opacity: 0.5, width: 20, height: 20 }, shape("white"));
     const outer = flex({ opacity: 0.5 }, inner, shape("blue"));
-    assert.deepEqual(colors(draw(outer)), ["#ff000040", "#ffffff40", "#0000ff80"], "the inner box and its child at 0.25, the shape after it at 0.5");
+    assert.deepEqual(
+      colors(draw(outer)),
+      ["#ff000040", "#ffffff40", "#0000ff80"],
+      "the inner box and its child at 0.25, the shape after it at 0.5"
+    );
   });
 
   it("is only for the box and what is in it: a sibling after it is as it was", () => {
@@ -86,7 +102,10 @@ describe("<Flex opacity>", () => {
     const records = draw(flex({ opacity: 0.5 }, plain));
     const region = records.find((r) => r.op === "spriteRegion");
     assert.ok(region?.op === "spriteRegion");
-    assert.deepEqual([region.texture, region.srcX, region.srcY, region.srcW, region.srcH, region.tint], ["assets/hero.png", 0, 0, 20, 10, "#ffffff80"]);
+    assert.deepEqual(
+      [region.texture, region.srcX, region.srcY, region.srcW, region.srcH, region.tint],
+      ["assets/hero.png", 0, 0, 20, 10, "#ffffff80"]
+    );
     assert.equal(records.filter((r) => r.op === "sprite").length, 0);
     const own = new Sprite({ image: "hero.png", opacity: 0.5 });
     const both = draw(flex({ opacity: 0.5 }, own)).find((r) => r.op === "spriteRegion");
@@ -107,11 +126,20 @@ describe("<Flex opacity>", () => {
     const root = new Entity();
     root.addChild(flex({ background: "red", opacity: 0 }, shape("white"), new Sprite({ image: "hero.png" })));
     root.addChild(shape("blue"));
-    assert.deepEqual(draw(root).map((r) => r.op), ["view", "rect"]);
+    assert.deepEqual(
+      draw(root).map((r) => r.op),
+      ["view", "rect"]
+    );
   });
 
   it("uses an opacity as 0 to 1: more is 1, less is 0, and something that is not a number is 1", () => {
-    for (const [opacity, expected] of [[2, "#ff0000ff"], [-1, undefined], [Number.NaN, "#ff0000ff"], [Number.POSITIVE_INFINITY, "#ff0000ff"], [Number.NEGATIVE_INFINITY, undefined]] as const) {
+    for (const [opacity, expected] of [
+      [2, "#ff0000ff"],
+      [-1, undefined],
+      [Number.NaN, "#ff0000ff"],
+      [Number.POSITIVE_INFINITY, "#ff0000ff"],
+      [Number.NEGATIVE_INFINITY, undefined],
+    ] as const) {
       assert.deepEqual(colors(draw(flex({ background: "red", opacity }))), expected === undefined ? [] : [expected], String(opacity));
     }
   });
@@ -169,8 +197,14 @@ describe("<Flex opacity> with a transition, in the loop", () => {
     const seen = run({}, [1, 1, 0, 0, 0, 0, 0, 0]);
     assert.equal(seen[0], 255);
     const falling = seen.slice(2).filter((a): a is number => a !== null);
-    assert.ok(falling.length >= 2 && falling.every((a, i) => i === 0 || a <= (falling[i - 1] as number)), `getting fainter: ${seen.join(" ")}`);
-    assert.ok(seen.some((a) => a !== null && a > 0 && a < 255), "some frame in between");
+    assert.ok(
+      falling.length >= 2 && falling.every((a, i) => i === 0 || a <= (falling[i - 1] as number)),
+      `getting fainter: ${seen.join(" ")}`
+    );
+    assert.ok(
+      seen.some((a) => a !== null && a > 0 && a < 255),
+      "some frame in between"
+    );
     assert.equal(seen.at(-1), null, "gone at the end, and nothing drawn for it");
   });
 

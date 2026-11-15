@@ -42,9 +42,23 @@ export function fitScreen(width: number, height: number, windowWidth: number, wi
   }
   if (fit === "integer" && contain >= 1) {
     const scale = Math.floor(contain);
-    return { width, height, scaleX: scale, scaleY: scale, left: Math.floor((windowWidth - width * scale) / 2), top: Math.floor((windowHeight - height * scale) / 2) };
+    return {
+      width,
+      height,
+      scaleX: scale,
+      scaleY: scale,
+      left: Math.floor((windowWidth - width * scale) / 2),
+      top: Math.floor((windowHeight - height * scale) / 2),
+    };
   }
-  return { width, height, scaleX: contain, scaleY: contain, left: (windowWidth - width * contain) / 2, top: (windowHeight - height * contain) / 2 };
+  return {
+    width,
+    height,
+    scaleX: contain,
+    scaleY: contain,
+    left: (windowWidth - width * contain) / 2,
+    top: (windowHeight - height * contain) / 2,
+  };
 }
 
 /** `view` (world → game pixels) followed by the screen's placement (game pixels → window pixels). */

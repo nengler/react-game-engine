@@ -1,11 +1,13 @@
-/** Custom hooks: functions named `use…` that are inlined into the component that calls them. */
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+/** Custom hooks: functions named `use…` that are inlined into the component that calls them. */
+import { after, describe, it } from "node:test";
+
 import { Entity, World, createInputState } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -76,7 +78,7 @@ describe("custom hooks", () => {
          usePing();
          return <Entity name="C" transform={{ x: one, y: two }} />;
        }`,
-      "Counters.tsx",
+      "Counters.tsx"
     );
     assert.deepEqual(typeCheck(compiled), []);
     const { Counters } = await load<{ Counters: new () => Entity }>(compiled);
@@ -120,7 +122,11 @@ function Two() {
     world.tick(0.1);
     assert.deepEqual([two.a.count, two.b.count], [2, 15]);
     assert.deepEqual([two.transform.x, two.transform.y], [2, 15]);
-    assert.equal(Object.entries(two.saveHotState() ?? {}).find(([key]) => key.endsWith(".on"))?.[1], true, "toggled by the hook's own function");
+    assert.equal(
+      Object.entries(two.saveHotState() ?? {}).find(([key]) => key.endsWith(".on"))?.[1],
+      true,
+      "toggled by the hook's own function"
+    );
   });
 
   it("write a literal argument into the hook, so a parameter can be a sound's path", () => {
@@ -131,7 +137,7 @@ function Two() {
          useUpdate(() => { if (count !== s.seen) { s.seen = count; play(volume); } });
        }
        function Hit() { const s = useMutable({ hits: 0 }); useBeep("hit.wav", 0.5, s.hits); return <Entity name="H" />; }`,
-      "Hit.tsx",
+      "Hit.tsx"
     );
     assert.deepEqual(typeCheck(compiled), []);
     assert.match(compiled.code, /new Sound\("hit\.wav"\)/);
@@ -142,7 +148,7 @@ function Two() {
     const compiled = compile(
       `function useThing() { const s = useMutable({ x: 1 }); useUpdate(() => { s.x += 1; }); return s.x; }
        function Both() { const s = useMutable({ x: 100 }); const y = useThing(); return <Entity name="B" transform={{ x: s.x, y }} />; }`,
-      "Both.tsx",
+      "Both.tsx"
     );
     assert.deepEqual(typeCheck(compiled), []);
     // The hook's mutable is named after the hook (`thing`), so its `x` never meets the component's `s.x`.
@@ -152,11 +158,17 @@ function Two() {
   });
 
   it("report a hook called where only a component statement may be, and a call that does not match the hook", () => {
-    const nested = compileErrors(`function useA() { const s = useMutable({ n: 0 }); return s.n; } function C() { const s = useMutable({ on: true }); const v = s.on ? useA() : 0; return <Entity name="C" transform={{ x: v }} />; }`);
+    const nested = compileErrors(
+      `function useA() { const s = useMutable({ n: 0 }); return s.n; } function C() { const s = useMutable({ on: true }); const v = s.on ? useA() : 0; return <Entity name="C" transform={{ x: v }} />; }`
+    );
     assert.match(nested[0]!.message, /must be a statement of the component body/);
-    const tooMany = compileErrors(`function useA(a: number) { const s = useMutable({ n: a }); return s.n; } function C() { const n = useA(1, 2); return <Entity name="C" transform={{ x: n }} />; }`);
+    const tooMany = compileErrors(
+      `function useA(a: number) { const s = useMutable({ n: a }); return s.n; } function C() { const n = useA(1, 2); return <Entity name="C" transform={{ x: n }} />; }`
+    );
     assert.match(tooMany[0]!.message, /takes 1 argument, but the call passes 2/);
-    const none = compileErrors(`function useA() { useUpdate(() => {}); } function C() { const n = useA(); return <Entity name="C" transform={{ x: n }} />; }`);
+    const none = compileErrors(
+      `function useA() { useUpdate(() => {}); } function C() { const n = useA(); return <Entity name="C" transform={{ x: n }} />; }`
+    );
     assert.match(none[0]!.message, /returns nothing, but its result is used/);
     const unknown = compileErrors(`function C() { useMissing(); return <Entity name="C" />; }`);
     assert.ok(unknown.length > 0, "left to the compiler's own report of a statement it does not understand");
@@ -167,7 +179,9 @@ function Two() {
   });
 
   it("keep the rules of a component: a hook that returns a list method's result is the same error it would be inline", () => {
-    const found = compileErrors(`function useBad() { const s = useMutable({ items: [] as number[] }); useUpdate(() => { const n = s.items.push(1); s.items = [n]; }); } function C() { useBad(); return <Entity name="C" />; }`);
+    const found = compileErrors(
+      `function useBad() { const s = useMutable({ items: [] as number[] }); useUpdate(() => { const n = s.items.push(1); s.items = [n]; }); } function C() { useBad(); return <Entity name="C" />; }`
+    );
     assert.ok(found.length > 0);
   });
 
@@ -175,10 +189,19 @@ function Two() {
     const dir = mkdtempSync(join(tmpdir(), "rge-hooks-"));
     try {
       mkdirSync(join(dir, "src"));
-      writeFileSync(join(dir, "src/hooks.tsx"), `import { useMutable, useUpdate } from "@rge/runtime/jsx";\nexport function useClock(rate: number) {\n  const s = useMutable({ t: 0 });\n  useUpdate((dt) => { s.t += dt * rate; });\n  return s.t;\n}\n`);
-      writeFileSync(join(dir, "src/Clock.tsx"), `import { Entity } from "@rge/runtime/jsx";\nimport { useClock } from "./hooks.tsx";\nexport function Clock() {\n  const t = useClock(2);\n  return <Entity name="Clock" transform={{ x: t }} />;\n}\n`);
+      writeFileSync(
+        join(dir, "src/hooks.tsx"),
+        `import { useMutable, useUpdate } from "@rge/runtime/jsx";\nexport function useClock(rate: number) {\n  const s = useMutable({ t: 0 });\n  useUpdate((dt) => { s.t += dt * rate; });\n  return s.t;\n}\n`
+      );
+      writeFileSync(
+        join(dir, "src/Clock.tsx"),
+        `import { Entity } from "@rge/runtime/jsx";\nimport { useClock } from "./hooks.tsx";\nexport function Clock() {\n  const t = useClock(2);\n  return <Entity name="Clock" transform={{ x: t }} />;\n}\n`
+      );
       const repo = resolve(import.meta.dirname, "../../..");
-      execFileSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out"), "--no-check"], { cwd: repo, stdio: "pipe" });
+      execFileSync(process.execPath, [resolve(repo, "packages/compiler/src/cli.ts"), join(dir, "src"), join(dir, "out"), "--no-check"], {
+        cwd: repo,
+        stdio: "pipe",
+      });
       const clock = readFileSync(join(dir, "out/Clock.ts"), "utf8");
       assert.match(clock, /\$clock_t: number = 0;/, "the hook's state is the component's own, named after the hook");
       assert.doesNotMatch(clock, /useClock\(/);
@@ -190,7 +213,10 @@ function Two() {
 
   it("still type-check as authored source: the author's editor sees an ordinary function", () => {
     const found = getCompiler().typeCheckSources([
-      { fileName: `${process.cwd()}/.test-output/H${Math.random()}.tsx`, text: `import { Entity, useMutable, useInput, useUpdate } from "@rge/runtime/jsx";\n${SOURCE}` },
+      {
+        fileName: `${process.cwd()}/.test-output/H${Math.random()}.tsx`,
+        text: `import { Entity, useMutable, useInput, useUpdate } from "@rge/runtime/jsx";\n${SOURCE}`,
+      },
     ]);
     assert.deepEqual(found, []);
   });
@@ -202,7 +228,7 @@ describe("custom hooks: the name of a hook's own state", () => {
       `function useThing() { const s = useMutable({ x: 1 }); useUpdate(() => { s.x += 1; }); return s.x; }
        function Twice() { const a = useThing(); const b = useThing(); return <Entity name="T" transform={{ x: a, y: b }} />; }
        function Taken() { const thing = useMutable({ n: 0 }); const a = useThing(); return <Entity name="K" transform={{ x: a + thing.n }} />; }`,
-      "Names.tsx",
+      "Names.tsx"
     );
     assert.deepEqual(typeCheck(compiled), []);
     assert.match(compiled.code, /\$thing_x: number = 1;/);
@@ -215,7 +241,7 @@ describe("custom hooks: the name of a hook's own state", () => {
       `function useCounter() { const s = useMutable({ n: 0 }); return s; }
        function useDefault() { const s = useMutable({ n: 0 }); useUpdate(() => { s.n += 1; }); return s.n; }
        function C() { const counter = useCounter(); const d = useDefault(); return <Entity name="C" transform={{ x: counter.n + d }} />; }`,
-      "Names2.tsx",
+      "Names2.tsx"
     );
     assert.deepEqual(typeCheck(compiled), []);
     assert.match(compiled.code, /\$counter_n: number = 0;/);

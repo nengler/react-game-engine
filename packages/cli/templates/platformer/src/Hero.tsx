@@ -1,4 +1,5 @@
 import { Entity, Sprite, useBody, useMutable, useUpdate } from "@rge/runtime/jsx";
+
 import { useGame } from "./GameState.ts";
 
 interface HeroProps {

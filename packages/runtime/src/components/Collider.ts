@@ -28,7 +28,9 @@ export interface BaseContact {
 }
 
 /** One contact per tag the game declared in `ColliderData`, so comparing `other.tag` narrows `other.data`. */
-type DeclaredContact = { [K in keyof ColliderData & string]: { readonly tag: K; readonly owner: string; readonly data: ColliderData[K] } }[keyof ColliderData & string];
+type DeclaredContact = {
+  [K in keyof ColliderData & string]: { readonly tag: K; readonly owner: string; readonly data: ColliderData[K] };
+}[keyof ColliderData & string];
 
 /**
  * What a collision callback can read about the collider it touched (the `other` of `onCollisionEnter(other)`): its `tag`, its
@@ -38,7 +40,9 @@ type DeclaredContact = { [K in keyof ColliderData & string]: { readonly tag: K; 
 export type Contact = [keyof ColliderData] extends [never] ? BaseContact : DeclaredContact;
 
 /** A contact with this tag: typed by `ColliderData` when the game declares it (`overlapping("enemy")`'s `data` is an enemy's), else any contact. */
-export type ContactOf<Tag extends string> = [Extract<Contact, { readonly tag: Tag }>] extends [never] ? Contact : Extract<Contact, { readonly tag: Tag }>;
+export type ContactOf<Tag extends string> = [Extract<Contact, { readonly tag: Tag }>] extends [never]
+  ? Contact
+  : Extract<Contact, { readonly tag: Tag }>;
 
 export interface ColliderProps {
   width: number;

@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { moveActorX, moveActorY, type PixelActor } from "../src/index.ts";
 
 const wallAt = (wx: number) => (x: number) => x + 8 > wx;
@@ -12,7 +13,10 @@ describe("moveActorX / moveActorY", () => {
     moveActorX(a, 0.4, wallAt(100));
     assert.equal(a.x, 1, "two fifths and two fifths make a pixel");
     const hits: number[] = [];
-    assert.equal(moveActorX(a, 500, wallAt(100), (d) => hits.push(d)), true);
+    assert.equal(
+      moveActorX(a, 500, wallAt(100), (d) => hits.push(d)),
+      true
+    );
     assert.deepEqual([a.x, a.rx, hits], [92, 0, [1]], "stopped touching the wall, remainder dropped, told the direction");
     assert.equal(moveActorX(a, -5, wallAt(100)), false);
     assert.equal(a.x, 87);

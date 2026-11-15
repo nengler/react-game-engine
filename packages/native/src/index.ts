@@ -27,7 +27,12 @@ export function hostFileName(platform: string = process.platform): string {
 }
 
 /** Where a pack puts librge for a flavor on this platform (whether or not it is there). */
-export function libraryPathIn(root: string, flavor: NativeFlavor, platform: string = process.platform, arch: string = process.arch): string {
+export function libraryPathIn(
+  root: string,
+  flavor: NativeFlavor,
+  platform: string = process.platform,
+  arch: string = process.arch
+): string {
   return join(root, "lib", platformFolder(platform, arch), flavor, libraryFileName(platform));
 }
 

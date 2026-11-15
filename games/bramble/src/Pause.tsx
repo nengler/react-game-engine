@@ -1,7 +1,8 @@
 import { Entity, Shape, Text, useInput } from "@rge/runtime/jsx";
+
+import { Choices } from "./Choices.tsx";
 import { useGame } from "./GameState.ts";
 import { Inventory } from "./Inventory.tsx";
-import { Choices } from "./Choices.tsx";
 import { pauseRows } from "./rules/menu.ts";
 
 /**
@@ -16,7 +17,9 @@ export function Pause() {
   return (
     <Entity modal>
       <Shape kind="rect" width={320} height={180} color="#10131cd9" />
-      <Text x={12} y={8}>PAUSED</Text>
+      <Text x={12} y={8}>
+        PAUSED
+      </Text>
       <Inventory />
       <Choices top={120} rows={pauseRows()} onChoose={choosePaused} />
     </Entity>

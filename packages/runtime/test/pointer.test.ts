@@ -1,5 +1,6 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Camera, Entity, Pointer, World } from "../src/index.ts";
 
 function mounted(options: { x?: number; y?: number; presses?: number[] } = {}) {
@@ -23,7 +24,13 @@ describe("Pointer", () => {
 
   it("does not call it for a press outside, and reports a miss", () => {
     const { world, pointer, presses } = mounted({ x: 100, y: 50 });
-    for (const [x, y] of [[99, 55], [121, 55], [110, 49], [110, 61], [0, 0]] as const) {
+    for (const [x, y] of [
+      [99, 55],
+      [121, 55],
+      [110, 49],
+      [110, 61],
+      [0, 0],
+    ] as const) {
       assert.equal(world.reportPress(pointer, x, y), false, `${x},${y}`);
     }
     assert.deepEqual(presses, []);
@@ -66,7 +73,12 @@ describe("Pointer", () => {
 
   it("is never hit when it has no size, so a button that collapses stops firing", () => {
     const { world, pointer } = mounted();
-    for (const [w, h] of [[0, 10], [20, 0], [-5, 10], [Number.NaN, 10]] as const) {
+    for (const [w, h] of [
+      [0, 10],
+      [20, 0],
+      [-5, 10],
+      [Number.NaN, 10],
+    ] as const) {
       pointer.width = w;
       pointer.height = h;
       assert.equal(world.reportPress(pointer, 0, 0), false, `${w}x${h}`);

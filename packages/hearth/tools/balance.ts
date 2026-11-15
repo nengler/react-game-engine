@@ -6,10 +6,12 @@
  *
  *   node packages/hearth/tools/balance.ts [--write]
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { render } from "@rge/testing";
+
 import { Play } from "../generated/Play.ts";
 import { useGame } from "../src/GameState.ts";
 import { controls } from "../src/rules/controls.ts";
@@ -116,7 +118,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const t = table();
   console.log("lives left after each wave (0: lost in that wave, -: not reached)");
   console.log(`${"order".padEnd(10)}${WAVES.map((_, i) => String(i + 1).padStart(4)).join("")}`);
-  for (const [name, row] of Object.entries(t)) console.log(`${name.padEnd(10)}${row.map((v) => (v === null ? "   -" : String(v).padStart(4))).join("")}`);
+  for (const [name, row] of Object.entries(t))
+    console.log(`${name.padEnd(10)}${row.map((v) => (v === null ? "   -" : String(v).padStart(4))).join("")}`);
   if (process.argv.includes("--write")) {
     writeFileSync(expectedPath, `${JSON.stringify(t, null, 2)}\n`);
     console.log(`wrote ${expectedPath}`);

@@ -1,4 +1,5 @@
 import { stories } from "@rge/player";
+
 import { HealthBar } from "../generated/HealthBar.ts";
 
 /** The bar over a hurt enemy, drawn around the enemy's middle (its origin). */

@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * Hot reload: a tree built from one build of a component takes the state of a tree built from an older one. Compiles two
  * versions of the same components, runs the first, and checks what the second keeps (`saveHotState`, `loadHotState` and the
  * runtime's `captureHotState` / `restoreHotState`).
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, World, captureHotState, restoreHotState, type GameObject } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -84,11 +86,11 @@ describe("hot reload", () => {
     const before = new World();
     const old = new v1.Panel();
     before.mount(old);
-    old.s.open = (true);
+    old.s.open = true;
     before.flush();
     const oldCounter = find<Counter>(old, "Counter");
     assert.ok(oldCounter);
-    oldCounter.s.count = (7);
+    oldCounter.s.count = 7;
     before.tick(1 / 60);
     before.tick(1 / 60);
     assert.equal(oldCounter.s.count, 7);

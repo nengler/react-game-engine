@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { Entity, Flex, Text, type GameObject, type TextProps } from "@rge/runtime";
+
 import { FrameBuilder } from "../src/draw.ts";
 import { KEYS, RGE_IN_LEN } from "../src/protocol.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
@@ -28,12 +30,21 @@ const at = (r: TextRecord): string => `${r.x},${r.y}`;
 
 describe("<Text shadow>", () => {
   it("draws nothing extra without one: the text is one record, as it always was", () => {
-    assert.deepEqual(texts(draw(text({}))).map((r) => [r.text, r.color]), [["Hi", "#ffffffff"]]);
+    assert.deepEqual(
+      texts(draw(text({}))).map((r) => [r.text, r.color]),
+      [["Hi", "#ffffffff"]]
+    );
   });
 
   it("draws the text under itself a pixel right and down in the shadow's colour, then the text", () => {
     const records = texts(draw(text({ shadow: "black" })));
-    assert.deepEqual(records.map((r) => [at(r), r.color]), [["1,1", "#000000ff"], ["0,0", "#ffffffff"]]);
+    assert.deepEqual(
+      records.map((r) => [at(r), r.color]),
+      [
+        ["1,1", "#000000ff"],
+        ["0,0", "#ffffffff"],
+      ]
+    );
   });
 
   it("falls where shadowX and shadowY say, and either can be 0 or negative", () => {
@@ -42,7 +53,10 @@ describe("<Text shadow>", () => {
   });
 
   it("is a shadow of no offset when the offset is not a number, rather than a text lost", () => {
-    assert.deepEqual(texts(draw(text({ shadow: "black", shadowX: Number.NaN, shadowY: Number.POSITIVE_INFINITY }))).map(at), ["0,0", "0,0"]);
+    assert.deepEqual(texts(draw(text({ shadow: "black", shadowX: Number.NaN, shadowY: Number.POSITIVE_INFINITY }))).map(at), [
+      "0,0",
+      "0,0",
+    ]);
   });
 
   it("is the text's own position and colour for the text itself, whatever the effects drew", () => {
@@ -50,7 +64,13 @@ describe("<Text shadow>", () => {
     t.transform.x = 30;
     t.transform.y = 7;
     const records = texts(draw(t));
-    assert.deepEqual(records.map((r) => [at(r), r.color]), [["31,8", "#000000ff"], ["30,7", "#ff0000ff"]]);
+    assert.deepEqual(
+      records.map((r) => [at(r), r.color]),
+      [
+        ["31,8", "#000000ff"],
+        ["30,7", "#ff0000ff"],
+      ]
+    );
   });
 });
 
@@ -73,7 +93,8 @@ describe("<Text outline>", () => {
   });
 
   it("draws no outline for a width under 1 or that is not a number, only the text", () => {
-    for (const outlineWidth of [0, -2, 0.4, Number.NaN]) assert.equal(texts(draw(text({ outline: "black", outlineWidth }))).length, 1, String(outlineWidth));
+    for (const outlineWidth of [0, -2, 0.4, Number.NaN])
+      assert.equal(texts(draw(text({ outline: "black", outlineWidth }))).length, 1, String(outlineWidth));
   });
 
   it("is a shadow of the outlined shape when there are both: the outline's every offset, moved by the shadow's, then the outline, then the text", () => {
@@ -101,18 +122,24 @@ describe("<Text> effects are drawn with the text", () => {
 
   it("repeat each line of wrapped text, all the effects first and then the lines themselves", () => {
     const records = texts(draw(text({ text: "aa bb", maxWidth: 20, shadow: "black" })));
-    assert.deepEqual(records.map((r) => [r.text, at(r), r.color]), [
-      ["aa", "1,1", "#000000ff"],
-      ["bb", "1,11", "#000000ff"],
-      ["aa", "0,0", "#ffffffff"],
-      ["bb", "0,10", "#ffffffff"],
-    ]);
+    assert.deepEqual(
+      records.map((r) => [r.text, at(r), r.color]),
+      [
+        ["aa", "1,1", "#000000ff"],
+        ["bb", "1,11", "#000000ff"],
+        ["aa", "0,0", "#ffffffff"],
+        ["bb", "0,10", "#ffffffff"],
+      ]
+    );
   });
 
   it("repeat the glyphs of a bitmap font, tinted, in the same order", () => {
     const regions = draw(text({ text: "AB", font: "font.png", shadow: "black" })).filter((r): r is Region => r.op === "spriteRegion");
     assert.equal(regions.length, 4);
-    assert.deepEqual(regions.map((r) => r.tint), ["#000000ff", "#000000ff", "#ffffffff", "#ffffffff"]);
+    assert.deepEqual(
+      regions.map((r) => r.tint),
+      ["#000000ff", "#000000ff", "#ffffffff", "#ffffffff"]
+    );
     assert.deepEqual([regions[0]!.x, regions[0]!.y, regions[2]!.x, regions[2]!.y], [1, 1, 0, 0]);
   });
 
@@ -154,7 +181,13 @@ describe("<Game textSize textColor>", () => {
     player.step();
     const drawn = texts(backend.lastFrame.records);
     player.close();
-    assert.deepEqual(drawn.map((r) => [r.text, r.size, r.color]), [["plain", 10, "#ff0000ff"], ["own", 20, "#00ff00ff"]]);
+    assert.deepEqual(
+      drawn.map((r) => [r.text, r.size, r.color]),
+      [
+        ["plain", 10, "#ff0000ff"],
+        ["own", 20, "#00ff00ff"],
+      ]
+    );
   });
 
   it("are not inherited: a player without them leaves the engine's (16, white)", async () => {
@@ -166,6 +199,9 @@ describe("<Game textSize textColor>", () => {
     player.step();
     const drawn = texts(backend.lastFrame.records);
     player.close();
-    assert.deepEqual(drawn.map((r) => [r.size, r.color]), [[16, "#ffffffff"]]);
+    assert.deepEqual(
+      drawn.map((r) => [r.size, r.color]),
+      [[16, "#ffffffff"]]
+    );
   });
 });

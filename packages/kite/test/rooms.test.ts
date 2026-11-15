@@ -1,7 +1,9 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { parseInputScript, runScript } from "@rge/player";
 import type { GameObject } from "@rge/runtime";
+
 import { bindings, gameConfig } from "../game.ts";
 import { fx, sfx } from "../src/effects.ts";
 import { useGame } from "../src/GameState.ts";
@@ -45,11 +47,17 @@ describe("rooms", () => {
       if (room.exit === "right") {
         assert.equal(next.ox, room.ox + 320);
         const rows = tilesOf(room, "E").map(([, r]) => r);
-        assert.ok(rows.every((r) => next.rows[r]![0] === "."), `room ${room.index + 1}'s exit rows are open on the left of room ${room.index + 2}`);
+        assert.ok(
+          rows.every((r) => next.rows[r]![0] === "."),
+          `room ${room.index + 1}'s exit rows are open on the left of room ${room.index + 2}`
+        );
       } else {
         assert.equal(next.oy, room.oy - 180);
         const cols = tilesOf(room, "E").map(([c]) => c);
-        assert.ok(cols.every((c) => next.rows[15]![c] !== "#"), `room ${room.index + 1}'s exit columns are open at the bottom of room ${room.index + 2}`);
+        assert.ok(
+          cols.every((c) => next.rows[15]![c] !== "#"),
+          `room ${room.index + 1}'s exit columns are open at the bottom of room ${room.index + 2}`
+        );
       }
     }
     assert.equal(ROOM_LIST.at(-1)?.exit, "end");
@@ -74,7 +82,20 @@ describe("replays", () => {
     REPLAYS.forEach((script, index) => {
       for (const frame of parseInputScript(script, { bindings })) {
         const has = (key: string): boolean => frame.down.includes(key);
-        play = playFrame(play, { ...NO_CONTROLS, left: has("ArrowLeft"), right: has("ArrowRight"), up: has("ArrowUp"), down: has("ArrowDown"), jumpHeld: has("Z"), jumpPressed: has("Z") && !previous.includes("Z"), dashPressed: has("X") && !previous.includes("X") }, 1 / 60);
+        play = playFrame(
+          play,
+          {
+            ...NO_CONTROLS,
+            left: has("ArrowLeft"),
+            right: has("ArrowRight"),
+            up: has("ArrowUp"),
+            down: has("ArrowDown"),
+            jumpHeld: has("Z"),
+            jumpPressed: has("Z") && !previous.includes("Z"),
+            dashPressed: has("X") && !previous.includes("X"),
+          },
+          1 / 60
+        );
         previous = frame.down;
       }
       assert.equal(play.run.deaths, 0, `room ${index + 1}: no deaths`);
@@ -97,7 +118,14 @@ describe("replays", () => {
   });
 
   it("answer what happens with the effect stores: sounds, dust and no death on a clean run", () => {
-    const before = { dust: fx.bursts["dust"] ?? 0, kick: fx.bursts["kick"] ?? 0, jump: sfx.plays("jump"), dash: sfx.plays("dash"), start: sfx.plays("start"), death: sfx.plays("death") };
+    const before = {
+      dust: fx.bursts["dust"] ?? 0,
+      kick: fx.bursts["kick"] ?? 0,
+      jump: sfx.plays("jump"),
+      dash: sfx.plays("dash"),
+      start: sfx.plays("start"),
+      death: sfx.plays("death"),
+    };
     runScript(gameConfig, parseInputScript(`Enter, _*3, ${REPLAYS.slice(0, 3).join(", ")}`, { bindings }), () => null);
     assert.equal(sfx.plays("start") - before.start, 1, "the title's button");
     assert.ok(sfx.plays("jump") > before.jump, "jumps are heard");
@@ -127,7 +155,10 @@ describe("replays", () => {
       }).states.at(-1);
     const at60 = parseInputScript(script, { bindings });
     // The same inputs drawn at 120 and at 30 frames a second: every frame twice with half the time, or two frames' keys in one frame.
-    const at120 = at60.flatMap((frame) => [{ ...frame, dt: 1 / 120 }, { ...frame, dt: 1 / 120 }]);
+    const at120 = at60.flatMap((frame) => [
+      { ...frame, dt: 1 / 120 },
+      { ...frame, dt: 1 / 120 },
+    ]);
     const reference = final(at60);
     assert.equal(typeof reference?.x, "number", "the character is in the world");
     assert.deepEqual(final(at120), reference);
@@ -135,7 +166,10 @@ describe("replays", () => {
 
   it("reach the optional gem in room 7 by a detour, through the game: its collider and the character's collider meet", () => {
     const script = `Enter, _*3, ${REPLAYS.slice(0, 6).join(", ")}, ${GEM_REPLAY}, _*4`;
-    const result = runScript(gameConfig, parseInputScript(script, { bindings }), () => ({ gems: useGame.getState().gems, room: useGame.getState().run.room }));
+    const result = runScript(gameConfig, parseInputScript(script, { bindings }), () => ({
+      gems: useGame.getState().gems,
+      room: useGame.getState().run.room,
+    }));
     assert.deepEqual(result.states.at(-1), { gems: 1, room: 6 });
     assert.equal(result.states.find((s) => s.room === 6 && s.gems === 0) !== undefined, true, "it was not already picked up on arrival");
   });
@@ -143,21 +177,56 @@ describe("replays", () => {
 
 describe("the dash moves have room to spare", () => {
   /** Walk right `walk` frames, jump (held) and dash `dash` frames later; did `done` hold at any frame? */
-  function attempt(room: number, walk: number, dash: number, direction: { up?: boolean; right?: boolean }, done: (p: ReturnType<typeof startPlayback>) => boolean): boolean {
+  function attempt(
+    room: number,
+    walk: number,
+    dash: number,
+    direction: { up?: boolean; right?: boolean },
+    done: (p: ReturnType<typeof startPlayback>) => boolean
+  ): boolean {
     let p = startPlayback(newSim(room));
     for (let f = 0; f < 220 && !p.run.dead; f++) {
       const j = f - walk;
-      p = playFrame(p, { ...NO_CONTROLS, right: f < walk + 25 || direction.right === true, jumpPressed: j === 0, jumpHeld: j >= 0 && j < 14, up: direction.up === true && j >= dash, dashPressed: j === dash }, 1 / 60);
+      p = playFrame(
+        p,
+        {
+          ...NO_CONTROLS,
+          right: f < walk + 25 || direction.right === true,
+          jumpPressed: j === 0,
+          jumpHeld: j >= 0 && j < 14,
+          up: direction.up === true && j >= dash,
+          dashPressed: j === dash,
+        },
+        1 / 60
+      );
       if (done(p)) return true;
     }
     return false;
   }
 
   /** From standing at (x, y) in room 4, with `hold` held, a jump (held) and a dash up `dash` frames later: did `done` hold? */
-  function climb(x: number, y: number, hold: "left" | "right" | null, dash: number, done: (p: ReturnType<typeof startPlayback>) => boolean): boolean {
+  function climb(
+    x: number,
+    y: number,
+    hold: "left" | "right" | null,
+    dash: number,
+    done: (p: ReturnType<typeof startPlayback>) => boolean
+  ): boolean {
     let p = startPlayback(simAt(3, { x, y, onGround: true }));
     for (let f = 0; f < 150 && !p.run.dead; f++) {
-      p = playFrame(p, { ...NO_CONTROLS, left: hold === "left", right: hold === "right", jumpPressed: f === 1, jumpHeld: f >= 1 && f < 15, up: f >= 1 + dash, dashPressed: f === 1 + dash }, 1 / 60);
+      p = playFrame(
+        p,
+        {
+          ...NO_CONTROLS,
+          left: hold === "left",
+          right: hold === "right",
+          jumpPressed: f === 1,
+          jumpHeld: f >= 1 && f < 15,
+          up: f >= 1 + dash,
+          dashPressed: f === 1 + dash,
+        },
+        1 / 60
+      );
       if (done(p)) return true;
     }
     return false;
@@ -171,7 +240,8 @@ describe("the dash moves have room to spare", () => {
   it("room 4, first ledge: from the floor, a dash up timed anywhere in more than a tenth of a second, from a spread of places to jump", () => {
     for (const walk of [70, 80, 90]) {
       let window = 0;
-      for (let dash = 0; dash <= 30; dash++) if (attempt(3, walk, dash, { up: true }, (p) => p.player.body.onGround && p.player.body.y < 105 && p.player.body.x > 185)) window++;
+      for (let dash = 0; dash <= 30; dash++)
+        if (attempt(3, walk, dash, { up: true }, (p) => p.player.body.onGround && p.player.body.y < 105 && p.player.body.x > 185)) window++;
       // With Celeste's dash (straight up cancels the run), jumping from the far left (70) leaves 7 frames; from 80 and 90, 16 and 17.
       assert.ok(window >= 7, `walking ${walk} frames: ${window} frames of dash timing work`);
     }
@@ -257,7 +327,8 @@ describe("the dash moves have room to spare", () => {
     let best = 0;
     for (let walk = 40; walk <= 70; walk += 2) {
       let window = 0;
-      for (let dash = 0; dash <= 40; dash++) if (attempt(2, walk, dash, { right: true }, (p) => p.run.room === 3 || p.player.body.x > 175)) window++;
+      for (let dash = 0; dash <= 40; dash++)
+        if (attempt(2, walk, dash, { right: true }, (p) => p.run.room === 3 || p.player.body.x > 175)) window++;
       best = Math.max(best, window);
     }
     assert.ok(best >= 6, `at best ${best} frames of dash timing work`);

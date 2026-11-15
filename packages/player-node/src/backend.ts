@@ -1,5 +1,15 @@
 import type { Backend, StorageBackend, WindowConfig } from "@rge/player";
-import { RGE_IN_HEIGHT, RGE_IN_WIDTH, RGE_TYPED_MAX, RGE_OPEN_HIDDEN, RGE_OPEN_RESIZABLE, RGE_OPEN_SHARP, RGE_OPEN_SMOOTH, RGE_OPEN_VSYNC } from "@rge/player";
+import {
+  RGE_IN_HEIGHT,
+  RGE_IN_WIDTH,
+  RGE_TYPED_MAX,
+  RGE_OPEN_HIDDEN,
+  RGE_OPEN_RESIZABLE,
+  RGE_OPEN_SHARP,
+  RGE_OPEN_SMOOTH,
+  RGE_OPEN_VSYNC,
+} from "@rge/player";
+
 import { findNativeLibrary, loadNative, type Native } from "./ffi.ts";
 
 export interface Pixels {
@@ -109,7 +119,13 @@ export class NodeBackend implements Backend {
   overlaps(boxes: Float64Array, count: number, order: Int32Array, pairs: Int32Array): number {
     // Only what holds the boxes is handed over (koffi copies each array in, and the two it writes back out), and never more boxes than there is room for.
     const boxCount = Math.max(0, Math.min(count, Math.floor(boxes.length / 4), order.length));
-    return this.#native.overlaps(boxes.subarray(0, boxCount * 4), boxCount, order.subarray(0, boxCount), pairs, Math.floor(pairs.length / 2));
+    return this.#native.overlaps(
+      boxes.subarray(0, boxCount * 4),
+      boxCount,
+      order.subarray(0, boxCount),
+      pairs,
+      Math.floor(pairs.length / 2)
+    );
   }
 
   frame(clearColor: number, records: Float64Array, length: number, texts: readonly string[], input: Float64Array, keys: Uint8Array): void {
@@ -157,7 +173,9 @@ export class NodeBackend implements Backend {
 /** Load `librge` (see `findNativeLibrary`) and wrap it. Throws a helpful error if it has not been built. */
 export function createNodeBackend(libraryPath: string | null = findNativeLibrary()): NodeBackend {
   if (libraryPath === null) {
-    throw new Error("librge is not built: run `npm run native:build` (needs cmake, a C compiler and the X11/GL development packages on Linux), or set RGE_NATIVE_LIB.");
+    throw new Error(
+      "librge is not built: run `npm run native:build` (needs cmake, a C compiler and the X11/GL development packages on Linux), or set RGE_NATIVE_LIB."
+    );
   }
   return new NodeBackend(loadNative(libraryPath));
 }

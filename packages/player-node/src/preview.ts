@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
 import {
   applyInputFrame,
   DrawList,
@@ -26,6 +27,7 @@ import {
   type PlayerConfig,
 } from "@rge/player";
 import type { GameProps } from "@rge/runtime";
+
 import type { Pixels } from "./backend.ts";
 import { playWithReload, type DevOptions } from "./dev.ts";
 import { decodePng, encodePng } from "./png.ts";
@@ -91,7 +93,10 @@ export function storyFrames(story: LoadedStory, bindings: InputBindings | undefi
 /** Render one story through the headless build: its size times its scale (4 by default). Run in the game's folder. */
 export function renderStory(previews: Previews, story: LoadedStory, warnings?: string[]): Pixels {
   const frames = storyFrames(story, previews.bindings);
-  const shots = renderRun({ root: () => storyRoot(story, previews.look) }, frames, { at: [frames.length - 1], ...(warnings ? { warnings } : {}) });
+  const shots = renderRun({ root: () => storyRoot(story, previews.look) }, frames, {
+    at: [frames.length - 1],
+    ...(warnings ? { warnings } : {}),
+  });
   const shot = shots[0];
   if (shot === undefined) throw new Error(`${story.id} drew nothing`);
   return shot.pixels;
@@ -211,9 +216,13 @@ export async function previewWithReload(backend: Backend, options: PreviewOption
 
   const load = async (): Promise<PlayerConfig> => {
     const previews = await loadPreviews(gameDir);
-    if (previews.stories.length === 0) throw new Error(`${gameDir} has no stories: add a stories/<Component>.stories.ts (see the guide's "Previews").`);
+    if (previews.stories.length === 0)
+      throw new Error(`${gameDir} has no stories: add a stories/<Component>.stories.ts (see the guide's "Previews").`);
     ids = previews.stories.map((story) => story.id);
-    const story = previews.stories.find((s) => s.id === wanted) ?? previews.stories.find((s) => s.component === wanted) ?? (previews.stories[0] as LoadedStory);
+    const story =
+      previews.stories.find((s) => s.id === wanted) ??
+      previews.stories.find((s) => s.component === wanted) ??
+      (previews.stories[0] as LoadedStory);
     if (story.id !== current?.id) {
       feed = storyFrames(story, previews.bindings).slice(0, -1);
       log(`preview: ${story.id}  (${ids.indexOf(story.id) + 1} of ${ids.length}; F5 F6 switch)`);

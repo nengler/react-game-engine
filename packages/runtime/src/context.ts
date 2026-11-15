@@ -14,8 +14,8 @@
  */
 import { Entity, type EntityProps } from "./components/Entity.ts";
 import type { GameObject } from "./GameObject.ts";
-import type { World } from "./World.ts";
 import type { Child, JSX } from "./jsx-runtime.ts";
+import type { World } from "./World.ts";
 
 /** What `createContext` returns: its default value, and (for the type-checker) the `Provider` element written `<Theme.Provider>`. */
 export interface Context<T> {

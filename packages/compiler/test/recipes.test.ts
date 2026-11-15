@@ -1,7 +1,8 @@
-/** docs/recipes.html cannot fall behind the engine: each recipe is a component file, compiled and type-checked as an author's would be. */
-import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+/** docs/recipes.html cannot fall behind the engine: each recipe is a component file, compiled and type-checked as an author's would be. */
+import { after, describe, it } from "node:test";
+
 import { cleanOutput, closeCompiler, compile, typeCheck } from "./helpers.ts";
 
 after(() => {

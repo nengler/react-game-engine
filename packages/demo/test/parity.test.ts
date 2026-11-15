@@ -1,9 +1,9 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -12,7 +12,12 @@ const parity = resolve(repo, "packages/demo/parity.ts");
 /** The Rust host, when it has been built: `RGE_HOST_BIN` names it. CI sets RGE_REQUIRE_HOST=1 so a missing one fails. */
 const hostBin = process.env["RGE_HOST_BIN"];
 const requireHost = process.env["RGE_REQUIRE_HOST"] === "1";
-const skipHost = hostBin !== undefined && existsSync(hostBin) ? false : requireHost ? false : "the Rust host is not built (npm run host:build:headless, then RGE_HOST_BIN=host/target/release/rge-host)";
+const skipHost =
+  hostBin !== undefined && existsSync(hostBin)
+    ? false
+    : requireHost
+      ? false
+      : "the Rust host is not built (npm run host:build:headless, then RGE_HOST_BIN=host/target/release/rge-host)";
 
 function bundle(entry: string, out: string): void {
   execFileSync(process.execPath, [resolve(repo, "tools/bundle.ts"), entry, out], { cwd: repo, stdio: "pipe" });
@@ -29,8 +34,14 @@ describe("parity: the demo under Node", () => {
     const run = JSON.parse(first) as { frames: { records: { op: string; text?: string }[] }[]; plays: string[]; warnings: string[] };
     assert.equal(run.frames.length, 60);
     assert.deepEqual(run.plays, ["assets/click.wav"], "the miss does not play, the hit does once");
-    assert.ok(run.frames.at(-1)?.records.some((r) => r.op === "text" && r.text === "Clicks: 1"), "the click on the button counted");
-    assert.ok(run.frames.at(-1)?.records.some((r) => r.op === "text" && r.text === "Coins: 1"), "the walk picked up the coin, so collisions ran in the parity run too");
+    assert.ok(
+      run.frames.at(-1)?.records.some((r) => r.op === "text" && r.text === "Clicks: 1"),
+      "the click on the button counted"
+    );
+    assert.ok(
+      run.frames.at(-1)?.records.some((r) => r.op === "text" && r.text === "Coins: 1"),
+      "the walk picked up the coin, so collisions ran in the parity run too"
+    );
     assert.equal(run.warnings.length, 1, "only the missing beacon frame warns");
   });
 });
@@ -63,7 +74,11 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
     const dir = mkdtempSync(join(tmpdir(), "rge-parity-"));
     try {
       bundle("packages/demo/parity.ts", join(dir, "parity.js"));
-      const underHost = execFileSync(hostBin as string, [join(dir, "parity.js")], { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      const underHost = execFileSync(hostBin as string, [join(dir, "parity.js")], {
+        cwd: repo,
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
       assert.equal(underHost, underNode());
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -74,7 +89,11 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
     const dir = mkdtempSync(join(tmpdir(), "rge-storage-"));
     try {
       bundle("packages/demo/test/storage-script.ts", join(dir, "storage.js"));
-      const out = execFileSync(hostBin as string, [join(dir, "storage.js")], { cwd: repo, encoding: "utf8", env: { ...process.env, RGE_DATA_DIR: join(dir, "data") } });
+      const out = execFileSync(hostBin as string, [join(dir, "storage.js")], {
+        cwd: repo,
+        encoding: "utf8",
+        env: { ...process.env, RGE_DATA_DIR: join(dir, "data") },
+      });
       assert.deepEqual(JSON.parse(out), [true, null, true, '{"version":1,"data":"héllo ✓"}', true, "two", false, null, null, false]);
       assert.equal(existsSync(join(dir, "data", "save.dat")), false, "the entry was removed from the folder");
     } finally {
@@ -88,7 +107,7 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
       writeCrash(dir);
       assert.throws(
         () => execFileSync(hostBin as string, [join(dir, "crash.js")], { cwd: repo, stdio: "pipe" }),
-        (error: { status?: number; stderr?: Buffer }) => error.status === 1 && /Error: boom/.test(String(error.stderr)),
+        (error: { status?: number; stderr?: Buffer }) => error.status === 1 && /Error: boom/.test(String(error.stderr))
       );
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -98,11 +117,14 @@ describe("parity: the demo under the Rust host (QuickJS-ng)", { skip: skipHost }
   it("exits with status 2 and a usage line for a missing game file", () => {
     assert.throws(
       () => execFileSync(hostBin as string, [join(tmpdir(), "rge-no-such-game.js")], { cwd: repo, stdio: "pipe" }),
-      (error: { status?: number; stderr?: Buffer }) => error.status === 2 && /Cannot read/.test(String(error.stderr)),
+      (error: { status?: number; stderr?: Buffer }) => error.status === 2 && /Cannot read/.test(String(error.stderr))
     );
   });
 });
 
 function writeCrash(dir: string): void {
-  execFileSync(process.execPath, ["-e", `require("node:fs").writeFileSync(${JSON.stringify(join(dir, "crash.js"))}, 'console.log("starting"); throw new Error("boom");')`]);
+  execFileSync(process.execPath, [
+    "-e",
+    `require("node:fs").writeFileSync(${JSON.stringify(join(dir, "crash.js"))}, 'console.log("starting"); throw new Error("boom");')`,
+  ]);
 }

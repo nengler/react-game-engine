@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { render } from "@rge/testing";
+
 import { Hero } from "../generated/Hero.ts";
 
 // One component, tested alone: mounted in a world with no window and nothing to stand on, stepped with an input script.

@@ -1,12 +1,30 @@
 // Shared declarations of the component lowering: constants, helper functions and types used by transform.ts and
 // the layers (lowering.ts, expressions.ts, hooks.ts, elements.ts).
 import { SyntaxKind, type JsxElement, type JsxSelfClosingElement, type JsxAttribute, type JsxAttributes, type Node } from "typescript/ast";
-import { isIdentifier, isJsxAttribute, isJsxElement, isNumericLiteral, isParenthesizedTypeNode, isLiteralTypeNode, isJsxFragment, isJsxSelfClosingElement, isStringLiteral } from "typescript/ast/is";
+import {
+  isIdentifier,
+  isJsxAttribute,
+  isJsxElement,
+  isNumericLiteral,
+  isParenthesizedTypeNode,
+  isLiteralTypeNode,
+  isJsxFragment,
+  isJsxSelfClosingElement,
+  isStringLiteral,
+} from "typescript/ast/is";
+
 import { type JsxRoot } from "../analyzer/analyzer.ts";
 import { DiagnosticCode, error, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-import { assertNever, cycleThrough, type TypeIR, type PropTypeIR, type BinaryOperator, type ChildIR, type ComponentIR, type UnaryOperator } from "../ir/types.ts";
-
-
+import {
+  assertNever,
+  cycleThrough,
+  type TypeIR,
+  type PropTypeIR,
+  type BinaryOperator,
+  type ChildIR,
+  type ComponentIR,
+  type UnaryOperator,
+} from "../ir/types.ts";
 
 /** The root element that carries the game's configuration (`<Game title width …>`); it is only ever a component's root. */
 export const GAME_TAG = "Game";
@@ -15,19 +33,31 @@ export const GAME_TAG = "Game";
 export const SOUND_CLASS = "Sound";
 
 export const BINARY_OPERATORS: ReadonlyMap<SyntaxKind, BinaryOperator> = new Map([
-  [SyntaxKind.PlusToken, "+"], [SyntaxKind.MinusToken, "-"], [SyntaxKind.AsteriskToken, "*"],
-  [SyntaxKind.SlashToken, "/"], [SyntaxKind.PercentToken, "%"], [SyntaxKind.AsteriskAsteriskToken, "**"],
-  [SyntaxKind.LessThanToken, "<"], [SyntaxKind.LessThanEqualsToken, "<="],
-  [SyntaxKind.GreaterThanToken, ">"], [SyntaxKind.GreaterThanEqualsToken, ">="],
-  [SyntaxKind.EqualsEqualsEqualsToken, "==="], [SyntaxKind.ExclamationEqualsEqualsToken, "!=="],
-  [SyntaxKind.EqualsEqualsToken, "=="], [SyntaxKind.ExclamationEqualsToken, "!="],
-  [SyntaxKind.AmpersandAmpersandToken, "&&"], [SyntaxKind.BarBarToken, "||"],
+  [SyntaxKind.PlusToken, "+"],
+  [SyntaxKind.MinusToken, "-"],
+  [SyntaxKind.AsteriskToken, "*"],
+  [SyntaxKind.SlashToken, "/"],
+  [SyntaxKind.PercentToken, "%"],
+  [SyntaxKind.AsteriskAsteriskToken, "**"],
+  [SyntaxKind.LessThanToken, "<"],
+  [SyntaxKind.LessThanEqualsToken, "<="],
+  [SyntaxKind.GreaterThanToken, ">"],
+  [SyntaxKind.GreaterThanEqualsToken, ">="],
+  [SyntaxKind.EqualsEqualsEqualsToken, "==="],
+  [SyntaxKind.ExclamationEqualsEqualsToken, "!=="],
+  [SyntaxKind.EqualsEqualsToken, "=="],
+  [SyntaxKind.ExclamationEqualsToken, "!="],
+  [SyntaxKind.AmpersandAmpersandToken, "&&"],
+  [SyntaxKind.BarBarToken, "||"],
   [SyntaxKind.QuestionQuestionToken, "??"],
-  [SyntaxKind.InstanceOfKeyword, "instanceof"], [SyntaxKind.InKeyword, "in"],
+  [SyntaxKind.InstanceOfKeyword, "instanceof"],
+  [SyntaxKind.InKeyword, "in"],
 ] as const);
 
 export const UNARY_OPERATORS: ReadonlyMap<SyntaxKind, UnaryOperator> = new Map([
-  [SyntaxKind.ExclamationToken, "!"], [SyntaxKind.MinusToken, "-"], [SyntaxKind.PlusToken, "+"],
+  [SyntaxKind.ExclamationToken, "!"],
+  [SyntaxKind.MinusToken, "-"],
+  [SyntaxKind.PlusToken, "+"],
 ] as const);
 
 export const HANDLER_KIND = {
@@ -133,15 +163,20 @@ export const TRANSFORM_SHORTHAND: ReadonlySet<string> = new Set(["x", "y", "z", 
 /** A declared prop's type as a state type (`useState(items)` takes the prop's type). */
 export function propTypeToType(type: PropTypeIR): TypeIR | null {
   switch (type.kind) {
-    case "Primitive": return { kind: "Primitive", name: type.name };
-    case "Literals": return { kind: "SourceType", text: type.values.map((v) => JSON.stringify(v)).join(" | ") };
+    case "Primitive":
+      return { kind: "Primitive", name: type.name };
+    case "Literals":
+      return { kind: "SourceType", text: type.values.map((v) => JSON.stringify(v)).join(" | ") };
     case "Array": {
       const element = propTypeToType(type.element);
       return element && { kind: "Array", element };
     }
-    case "Function": return null;
-    case "SourceText": return { kind: "SourceType", text: type.text };
-    default: return assertNever(type, "prop type");
+    case "Function":
+      return null;
+    case "SourceText":
+      return { kind: "SourceType", text: type.text };
+    default:
+      return assertNever(type, "prop type");
   }
 }
 
@@ -168,7 +203,8 @@ export function checkStaticCycles(components: readonly ComponentIR[], diagnostic
     edges.set(c.name, targets);
   }
   for (const c of components) {
-    if (cycleThrough(c.name, edges)) diagnostics.push(error(DiagnosticCode.ComponentCycle, `Component '${c.name}' statically contains itself.`, c.span));
+    if (cycleThrough(c.name, edges))
+      diagnostics.push(error(DiagnosticCode.ComponentCycle, `Component '${c.name}' statically contains itself.`, c.span));
   }
 }
 

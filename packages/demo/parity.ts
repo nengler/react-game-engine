@@ -7,6 +7,7 @@
  *   node packages/demo/parity.ts
  */
 import { createPlayer, RecordingBackend, type InputFrame } from "@rge/player";
+
 import { gameConfig } from "./game.ts";
 
 const dt = 1 / 60;
@@ -36,6 +37,6 @@ console.log(
       textureLoads: backend.textureLoads,
       warnings,
     },
-    round,
-  ),
+    round
+  )
 );

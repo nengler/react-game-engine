@@ -1,15 +1,15 @@
-import { GameObject } from "./GameObject.ts";
-import { Collider, type Contact } from "./components/Collider.ts";
-import { Tilemap } from "./components/Tilemap.ts";
-import { Menu } from "./components/Menu.ts";
 import { boxesOverlap, type BodySpace, type Box } from "./body.ts";
-import { findTilemap } from "./tilemap.ts";
+import { Collider, type Contact } from "./components/Collider.ts";
+import { Menu } from "./components/Menu.ts";
+import type { Pressable } from "./components/Pointer.ts";
+import { Tilemap } from "./components/Tilemap.ts";
+import { GameObject } from "./GameObject.ts";
 import { takeTreeRestore } from "./gameTree.ts";
 import { restoreHotState } from "./hot.ts";
-import type { Pressable } from "./components/Pointer.ts";
 import { NO_INPUT, type InputState } from "./input.ts";
-import { countStep } from "./Sound.ts";
 import { activeProfiler, PROFILE_INPUT, PROFILE_RENDER, PROFILE_UPDATE } from "./profile.ts";
+import { countStep } from "./Sound.ts";
+import { findTilemap } from "./tilemap.ts";
 
 /** Steps the world is asked to freeze for by `freeze`: taken up by the next tick that is not already frozen. */
 let freezeRequest = 0;
@@ -231,7 +231,8 @@ export class World implements BodySpace {
    * `pointerenter` / `pointerleave`. One in an inert subtree counts as none. Dispatch only: renders happen in the next `tick`.
    */
   reportHover(pointer: Pressable | null, silent = false): void {
-    if (pointer !== null && (pointer.world !== this || (this.#hasInert() && this.isInert(pointer as unknown as GameObject)))) pointer = null;
+    if (pointer !== null && (pointer.world !== this || (this.#hasInert() && this.isInert(pointer as unknown as GameObject))))
+      pointer = null;
     if (pointer === this.#hovered) return;
     const previous = this.#hovered;
     this.#hovered = pointer;
@@ -295,7 +296,10 @@ export class World implements BodySpace {
    * `onFocus`. A click on a focusable one focuses it, as in a browser; the arrow keys move it (`tick`).
    */
   focus(target: Pressable | null): void {
-    const next = target !== null && (target as GameObject & Pressable).world === this && target.focusable === true && target.disabled !== true ? (target as GameObject & Pressable) : null;
+    const next =
+      target !== null && (target as GameObject & Pressable).world === this && target.focusable === true && target.disabled !== true
+        ? (target as GameObject & Pressable)
+        : null;
     if (next === this.#focused) return;
     const previous = this.#focused;
     this.#focused = next;
@@ -322,11 +326,13 @@ export class World implements BodySpace {
     }
     // While a text field has the focus, what is typed goes into it, and the keys that move or press are only the plain ones (the arrows,
     // Enter, Escape and the gamepad's), never letters an action is bound to: typing "x" must not go back, nor a `pressKey` fire.
-    const ask = (action: string, keys: readonly string[]): boolean => (!typing() && input.isAction?.(action) ? input.pressed(action) : keys.some((k) => input.pressed(k)));
+    const ask = (action: string, keys: readonly string[]): boolean =>
+      !typing() && input.isAction?.(action) ? input.pressed(action) : keys.some((k) => input.pressed(k));
     const typing = (): boolean => this.#focused !== null && typeof (this.#focused as Partial<TextEntry>).takeText === "function";
     if (this.#focused !== null && !focusables.includes(this.#focused)) {
       const lost = this.#focused;
-      if (anyInert && lost.world === this && lost.focusable === true && lost.disabled !== true && this.isInert(lost)) this.#focusBeforeInert = lost;
+      if (anyInert && lost.world === this && lost.focusable === true && lost.disabled !== true && this.isInert(lost))
+        this.#focusBeforeInert = lost;
       this.focus(null);
     }
     const before = this.#focusBeforeInert;
@@ -353,8 +359,7 @@ export class World implements BodySpace {
       } else if (this.#focused !== null && ask("confirm", ["Enter", "PadA"])) {
         if (typing()) (this.#focused as unknown as TextEntry).submit();
         else this.#focused.onPress?.();
-      }
-      else if (this.#focused !== null && ask("back", ["Escape", "PadB"])) menuOf(this.#focused)?.onBack?.();
+      } else if (this.#focused !== null && ask("back", ["Escape", "PadB"])) menuOf(this.#focused)?.onBack?.();
     }
     if (typing()) return;
     for (const p of live) if (p.pressKey !== undefined && p.world === this && input.pressed(p.pressKey)) p.onPress?.();
@@ -364,7 +369,12 @@ export class World implements BodySpace {
    * Where the focus goes from `from` in a direction: inside a `<Menu>`, the nearest of the menu's own items that way, or round to the
    * far end when there is none and the menu loops (it never leaves the menu); elsewhere, the nearest focusable that way.
    */
-  #nextFocus(from: GameObject & Pressable, focusables: readonly (GameObject & Pressable)[], dx: number, dy: number): (GameObject & Pressable) | null {
+  #nextFocus(
+    from: GameObject & Pressable,
+    focusables: readonly (GameObject & Pressable)[],
+    dx: number,
+    dy: number
+  ): (GameObject & Pressable) | null {
     const menu = menuOf(from);
     if (menu === null) return nearestInDirection(from, focusables, dx, dy);
     const items = focusables.filter((p) => menuOf(p) === menu);
@@ -474,8 +484,7 @@ export class World implements BodySpace {
     if (object instanceof Collider) {
       this.#colliders.add(object);
       this.#indexes = null;
-    }
-    else if (object instanceof Tilemap) this.#tilemaps.add(object);
+    } else if (object instanceof Tilemap) this.#tilemaps.add(object);
     if ("pressKey" in object && "focusable" in object) this.#pressables.add(object as GameObject & Pressable);
     if (object.onInput !== GameObject.prototype.onInput) this.#onInput.add(object);
     if (object.onUpdate !== GameObject.prototype.onUpdate) this.#onUpdate.add(object);
@@ -487,8 +496,7 @@ export class World implements BodySpace {
     if (object instanceof Collider) {
       this.#colliders.delete(object);
       this.#indexes = null;
-    }
-    else if (object instanceof Tilemap) this.#tilemaps.delete(object);
+    } else if (object instanceof Tilemap) this.#tilemaps.delete(object);
     this.#pressables.delete(object as GameObject & Pressable);
     if (this.#focused === object) this.#focused = null;
     if (this.#pressed === (object as unknown as Pressable)) this.#pressed = null;
@@ -534,7 +542,12 @@ export class World implements BodySpace {
  * The focusable nearest to `from` in a direction: only those on that side of it count, and distance across the direction
  * counts double, so the focus goes along a row before it jumps to the next one. Null when there is none that way.
  */
-function nearestInDirection(from: Pressable, candidates: readonly (GameObject & Pressable)[], dx: number, dy: number): (GameObject & Pressable) | null {
+function nearestInDirection(
+  from: Pressable,
+  candidates: readonly (GameObject & Pressable)[],
+  dx: number,
+  dy: number
+): (GameObject & Pressable) | null {
   const here = from.focusPoint?.() ?? { x: 0, y: 0 };
   let best: (GameObject & Pressable) | null = null;
   let bestScore = Infinity;
@@ -554,7 +567,12 @@ function nearestInDirection(from: Pressable, candidates: readonly (GameObject & 
 }
 
 /** The farthest of `candidates` from `from` in a direction (the other end of a menu, to go round to), or null when none is that way. */
-function farthestInDirection(from: Pressable, candidates: readonly (GameObject & Pressable)[], dx: number, dy: number): (GameObject & Pressable) | null {
+function farthestInDirection(
+  from: Pressable,
+  candidates: readonly (GameObject & Pressable)[],
+  dx: number,
+  dy: number
+): (GameObject & Pressable) | null {
   const here = from.focusPoint?.() ?? { x: 0, y: 0 };
   let best: (GameObject & Pressable) | null = null;
   let bestScore = -Infinity;

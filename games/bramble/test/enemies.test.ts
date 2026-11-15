@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+
 import { BODY, INVULNERABLE, MAX_HEARTS, TILE } from "../src/rules/constants.ts";
 import { spawnEnemy, nextRandom, type Enemy } from "../src/rules/enemies.ts";
 import { cellAt, MAP_IDS, MAPS, type MapId } from "../src/rules/maps.ts";
@@ -23,7 +24,12 @@ function wait(run: Run, seconds: number): { run: Run; events: GameEvent[] } {
 }
 
 const inSolid = (e: Enemy): boolean => {
-  for (const [x, y] of [[e.x, e.y], [e.x + BODY - 1, e.y], [e.x, e.y + BODY - 1], [e.x + BODY - 1, e.y + BODY - 1]] as const) {
+  for (const [x, y] of [
+    [e.x, e.y],
+    [e.x + BODY - 1, e.y],
+    [e.x, e.y + BODY - 1],
+    [e.x + BODY - 1, e.y + BODY - 1],
+  ] as const) {
     const ch = cellAt(e.map, Math.floor(x / TILE), Math.floor(y / TILE));
     if (ch === "#" || ch === "~") return true;
   }
@@ -84,7 +90,10 @@ test("a wisp that sees the character follows a path round a wall, and gives up a
   run = first.run;
   const e = run.enemies[0]!;
   assert.ok(!inSolid(e));
-  assert.ok(Math.hypot(e.x - run.x, e.y - run.y) < d0 - 20, `it came round the wall: ${d0.toFixed(0)} px away at first, ${Math.hypot(e.x - run.x, e.y - run.y).toFixed(0)} now`);
+  assert.ok(
+    Math.hypot(e.x - run.x, e.y - run.y) < d0 - 20,
+    `it came round the wall: ${d0.toFixed(0)} px away at first, ${Math.hypot(e.x - run.x, e.y - run.y).toFixed(0)} now`
+  );
 });
 
 test("a wisp stops chasing four seconds after it last saw the character", () => {
@@ -139,7 +148,10 @@ test("the swing hits an enemy in front, knocks it back, and defeats it after its
   const killed = { ...newRun(), enemies: [], defeated: ["b1"] };
   const loaded = loadRun(JSON.parse(JSON.stringify(saveOf(killed))))!;
   assert.ok(!loaded.enemies.some((x) => x.id === "b1"), "it does not come back");
-  assert.ok(loaded.enemies.some((x) => x.id === "beetle-2"), "the others do");
+  assert.ok(
+    loaded.enemies.some((x) => x.id === "beetle-2"),
+    "the others do"
+  );
 });
 
 test("enemies keep their place when the character leaves the map", () => {
@@ -168,7 +180,13 @@ test("enemies do not walk through each other or through people", () => {
 
 test("losing the last heart to an enemy sends the character back to the shrine with full hearts, nothing else lost", () => {
   const beetle = { ...spawnEnemy("b", "beetle", "overworld", 40, 40), turn: 99, dx: 0, dy: 0 };
-  let run: Run = { ...arena("overworld", 40, 40, [beetle]), hearts: 1, items: { lantern: 1 }, taken: ["lantern"], shrine: { map: "overworld", col: 21, row: 29 } };
+  let run: Run = {
+    ...arena("overworld", 40, 40, [beetle]),
+    hearts: 1,
+    items: { lantern: 1 },
+    taken: ["lantern"],
+    shrine: { map: "overworld", col: 21, row: 29 },
+  };
   const r = step(run, NO_INPUT, DT);
   assert.ok(r.events.some((e) => e.type === "died"));
   run = r.run;

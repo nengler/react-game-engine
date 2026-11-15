@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
 /**
  * Props read live: a handler of a child reads a prop as its parent has it now, which includes what a handler that ran before it
  * wrote to the parent's state in this step, where `props` holds what the parent's last render copied (docs/MUTABLE_STATE.md,
  * "Shared lists: live everywhere"). Render reads what the frame committed, as before.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, World } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -27,7 +29,8 @@ async function run(source: string, steps = 1): Promise<{ root: Entity; find: (na
     world.flush();
   }
   const find = (name: string): Entity & { s: Record<string, unknown> } => {
-    const walk = (o: Entity): Entity | null => (o.constructor.name === name || o.name === name ? o : (o.children.map((c) => walk(c as Entity)).find((x) => x !== null) ?? null));
+    const walk = (o: Entity): Entity | null =>
+      o.constructor.name === name || o.name === name ? o : (o.children.map((c) => walk(c as Entity)).find((x) => x !== null) ?? null);
     return walk(root) as Entity & { s: Record<string, unknown> };
   };
   return { root, find };

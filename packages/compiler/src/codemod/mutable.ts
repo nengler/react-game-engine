@@ -40,8 +40,9 @@ import {
   isVariableDeclaration,
   isVariableStatement,
 } from "typescript/ast/is";
-import { type TsxParser } from "../parser/parser.ts";
+
 import { applyEdits, type Edit } from "../hooks/edits.ts";
+import { type TsxParser } from "../parser/parser.ts";
 
 export interface Converted {
   readonly text: string;
@@ -71,7 +72,8 @@ function children(node: Node): Node[] {
 /** The names a binding name declares (`x`, `{ a, b: c }`, `[d, ...e]`). */
 function boundNames(name: Node): string[] {
   if (isIdentifier(name)) return [name.text];
-  if (isObjectBindingPattern(name) || isArrayBindingPattern(name)) return children(name).flatMap((e) => (isBindingElement(e) && e.name !== undefined ? boundNames(e.name) : []));
+  if (isObjectBindingPattern(name) || isArrayBindingPattern(name))
+    return children(name).flatMap((e) => (isBindingElement(e) && e.name !== undefined ? boundNames(e.name) : []));
   return [];
 }
 
@@ -96,7 +98,11 @@ function declaredBy(node: Node): Set<string> {
 }
 
 /** `const [x, setX] = useState(init)` (or `useState<T>(init)`), as a component body's statement; null if it is not one. */
-function useStateOf(statement: Node, text: string, sf: SourceFile): { value: string; setter: string | null; init: Node | null; type: string | null; call: Node } | null {
+function useStateOf(
+  statement: Node,
+  text: string,
+  sf: SourceFile
+): { value: string; setter: string | null; init: Node | null; type: string | null; call: Node } | null {
   if (!isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) return null;
   if ((statement.declarationList.flags & NodeFlags.Const) === 0) return null;
   const d = statement.declarationList.declarations[0]!;
@@ -107,7 +113,13 @@ function useStateOf(statement: Node, text: string, sf: SourceFile): { value: str
   const names = elements.map((e) => (isBindingElement(e) && e.name !== undefined && isIdentifier(e.name) ? e.name.text : null));
   if (names[0] === null || names[0] === undefined) return null;
   const typeArgument = call.typeArguments?.[0];
-  return { value: names[0], setter: names[1] ?? null, init: call.arguments[0] ?? null, type: typeArgument ? text.slice(typeArgument.getStart(sf), typeArgument.getEnd()) : null, call };
+  return {
+    value: names[0],
+    setter: names[1] ?? null,
+    init: call.arguments[0] ?? null,
+    type: typeArgument ? text.slice(typeArgument.getStart(sf), typeArgument.getEnd()) : null,
+    call,
+  };
 }
 
 const MUTABLE_NAMES = ["s", "st", "state", "local", "mutable"];
@@ -169,7 +181,16 @@ function convertStates(parser: TsxParser, fileName: string, text: string, lineOf
         }
         let field = src(init);
         if (found.type !== null) {
-          const simple = isIdentifier(init) || init.kind === SyntaxKind.NullKeyword || init.kind === SyntaxKind.ArrayLiteralExpression || init.kind === SyntaxKind.ObjectLiteralExpression || init.kind === SyntaxKind.NumericLiteral || init.kind === SyntaxKind.StringLiteral || isCallExpression(init) || isPropertyAccessExpression(init) || isParenthesizedExpression(init);
+          const simple =
+            isIdentifier(init) ||
+            init.kind === SyntaxKind.NullKeyword ||
+            init.kind === SyntaxKind.ArrayLiteralExpression ||
+            init.kind === SyntaxKind.ObjectLiteralExpression ||
+            init.kind === SyntaxKind.NumericLiteral ||
+            init.kind === SyntaxKind.StringLiteral ||
+            isCallExpression(init) ||
+            isPropertyAccessExpression(init) ||
+            isParenthesizedExpression(init);
           field = `${simple ? field : `(${field})`} as ${found.type}`;
         }
         const leading = text.slice(statement.pos, statement.getStart(sf));
@@ -204,7 +225,7 @@ function convertStates(parser: TsxParser, fileName: string, text: string, lineOf
         const init = d.statement;
         let bad: string | null = null;
         const check = (n: Node): void => {
-          if (isIdentifier(n) && (later.has(n.text) && !values.has(n.text))) bad = n.text;
+          if (isIdentifier(n) && later.has(n.text) && !values.has(n.text)) bad = n.text;
           if (isIdentifier(n) && values.has(n.text) && n.text !== d.value) bad = n.text;
           for (const c of children(n)) check(c);
         };
@@ -252,7 +273,12 @@ function convertStates(parser: TsxParser, fileName: string, text: string, lineOf
           if ((values.has(name) || setters.has(name)) && !shadowed.has(name) && parent !== undefined) {
             const isMember = isPropertyAccessExpression(parent) && parent.name === node;
             const isKey = (isPropertyAssignment(parent) && parent.name === node) || (isJsxAttribute(parent) && parent.name === node);
-            const isDeclaration = (isVariableDeclaration(parent) || isBindingElement(parent) || isParameterDeclaration(parent) || isFunctionDeclaration(parent)) && (parent as unknown as { name: Node }).name === node;
+            const isDeclaration =
+              (isVariableDeclaration(parent) ||
+                isBindingElement(parent) ||
+                isParameterDeclaration(parent) ||
+                isFunctionDeclaration(parent)) &&
+              (parent as unknown as { name: Node }).name === node;
             if (!isMember && !isKey && !isDeclaration) {
               if (values.has(name)) {
                 const replacement = isShorthandPropertyAssignment(parent) ? `${name}: ${m}.${name}` : `${m}.${name}`;
@@ -268,7 +294,10 @@ function convertStates(parser: TsxParser, fileName: string, text: string, lineOf
                   const arg = callNode.arguments[0];
                   if (callNode.arguments.length !== 1 || arg === undefined) {
                     fail(callNode, `${name} is called with ${callNode.arguments.length} arguments`);
-                  } else if ((isArrowFunction(arg) || isFunctionExpression(arg)) && (arg.parameters.length !== 1 || isBlock(arg.body) || !isIdentifier(arg.parameters[0]!.name))) {
+                  } else if (
+                    (isArrowFunction(arg) || isFunctionExpression(arg)) &&
+                    (arg.parameters.length !== 1 || isBlock(arg.body) || !isIdentifier(arg.parameters[0]!.name))
+                  ) {
                     fail(callNode, `${name} takes an updater that is not \`(previous) => expression\`: write the assignment by hand`);
                   } else {
                     const updater = isArrowFunction(arg) || isFunctionExpression(arg) ? arg : null;
@@ -281,7 +310,12 @@ function convertStates(parser: TsxParser, fileName: string, text: string, lineOf
                           const p = parentOf(updater.body as Node, n);
                           const member = p !== null && isPropertyAccessExpression(p) && p.name === n;
                           const key = p !== null && isPropertyAssignment(p) && p.name === n;
-                          if (!member && !key) local.push({ start: n.getStart(sf), end: n.getEnd(), text: p !== null && isShorthandPropertyAssignment(p) ? `${param}: ${m}.${field}` : `${m}.${field}` });
+                          if (!member && !key)
+                            local.push({
+                              start: n.getStart(sf),
+                              end: n.getEnd(),
+                              text: p !== null && isShorthandPropertyAssignment(p) ? `${param}: ${m}.${field}` : `${m}.${field}`,
+                            });
                         }
                         for (const c of children(n)) sub(c, hidden);
                       };
@@ -294,14 +328,25 @@ function convertStates(parser: TsxParser, fileName: string, text: string, lineOf
                       at: callNode,
                       build: () => {
                         const inside = local.filter((e) => e.start >= valueNode.getStart(sf) && e.end <= valueNode.getEnd());
-                        const shifted = inside.map((e) => ({ start: e.start - valueNode.getStart(sf), end: e.end - valueNode.getStart(sf), text: e.text }));
+                        const shifted = inside.map((e) => ({
+                          start: e.start - valueNode.getStart(sf),
+                          end: e.end - valueNode.getStart(sf),
+                          text: e.text,
+                        }));
                         const value = applyEdits(src(valueNode), shifted);
                         // `s.x = s.x + d` reads better as `s.x += d` (only where the whole right side follows the operator).
                         const target = `${m}.${field}`;
                         const compound = /^(\+|-|\*|\/) (.+)$/s.exec(value.startsWith(`${target} `) ? value.slice(target.length + 1) : "");
                         const top = valueNode as unknown as { kind: SyntaxKind; operatorToken?: { kind: SyntaxKind }; left?: Node };
-                        const leftmost = top.kind === SyntaxKind.BinaryExpression && top.left !== undefined && isIdentifier(top.left) && [SyntaxKind.PlusToken, SyntaxKind.MinusToken, SyntaxKind.AsteriskToken, SyntaxKind.SlashToken].includes(top.operatorToken!.kind);
-                        const assignment = compound !== null && leftmost ? `${target} ${compound[1]}= ${compound[2]}` : `${target} = ${value}`;
+                        const leftmost =
+                          top.kind === SyntaxKind.BinaryExpression &&
+                          top.left !== undefined &&
+                          isIdentifier(top.left) &&
+                          [SyntaxKind.PlusToken, SyntaxKind.MinusToken, SyntaxKind.AsteriskToken, SyntaxKind.SlashToken].includes(
+                            top.operatorToken!.kind
+                          );
+                        const assignment =
+                          compound !== null && leftmost ? `${target} ${compound[1]}= ${compound[2]}` : `${target} = ${value}`;
                         return statementPosition ? assignment : arrowBody ? `{ ${assignment}; }` : `(${assignment})`;
                       },
                     });
@@ -351,7 +396,19 @@ function convertStates(parser: TsxParser, fileName: string, text: string, lineOf
       const multiline = decls.length > 3 || decls.some((d) => d.comment !== "") || decls.map((d) => d.field).join("").length > 70;
       const fields = decls.map((d) => `${d.value}: ${d.field}`);
       const declaration = multiline
-        ? `const ${m} = useMutable({\n${decls.map((d, i) => `${d.comment !== "" ? `${indent}  ${d.comment.split("\n").map((l) => l.trim()).join(`\n${indent}  `)}\n` : ""}${indent}  ${fields[i]},`).join("\n")}\n${indent}});`
+        ? `const ${m} = useMutable({\n${decls
+            .map(
+              (d, i) =>
+                `${
+                  d.comment !== ""
+                    ? `${indent}  ${d.comment
+                        .split("\n")
+                        .map((l) => l.trim())
+                        .join(`\n${indent}  `)}\n`
+                    : ""
+                }${indent}  ${fields[i]},`
+            )
+            .join("\n")}\n${indent}});`
         : `const ${m} = useMutable({ ${fields.join(", ")} });`;
       // From the first state's comment, which moves into the field list, to the end of its statement.
       const leading = text.slice(first.pos, first.getStart(sf));
@@ -367,7 +424,12 @@ function convertStates(parser: TsxParser, fileName: string, text: string, lineOf
     // The import: `useMutable` in place of `useState`, or beside it while a function the codemod stopped at still uses it.
     const allConverted = converted === functions.length;
     for (const statement of sf.statements) {
-      if (!isImportDeclaration(statement) || !statement.importClause?.namedBindings || !isNamedImports(statement.importClause.namedBindings)) continue;
+      if (
+        !isImportDeclaration(statement) ||
+        !statement.importClause?.namedBindings ||
+        !isNamedImports(statement.importClause.namedBindings)
+      )
+        continue;
       const specifiers = statement.importClause.namedBindings.elements;
       const state = specifiers.find((s) => isImportSpecifier(s) && s.name.text === "useState");
       if (state === undefined) continue;
@@ -395,9 +457,14 @@ function useRefOf(statement: Node, text: string, sf: SourceFile): { name: string
   if ((statement.declarationList.flags & NodeFlags.Const) === 0) return null;
   const d = statement.declarationList.declarations[0]!;
   const call = d.initializer;
-  if (!call || !isCallExpression(call) || !isIdentifier(call.expression) || call.expression.text !== "useRef" || !isIdentifier(d.name)) return null;
+  if (!call || !isCallExpression(call) || !isIdentifier(call.expression) || call.expression.text !== "useRef" || !isIdentifier(d.name))
+    return null;
   const typeArgument = call.typeArguments?.[0];
-  return { name: d.name.text, init: call.arguments[0] ?? null, type: typeArgument ? text.slice(typeArgument.getStart(sf), typeArgument.getEnd()) : null };
+  return {
+    name: d.name.text,
+    init: call.arguments[0] ?? null,
+    type: typeArgument ? text.slice(typeArgument.getStart(sf), typeArgument.getEnd()) : null,
+  };
 }
 
 /**
@@ -419,7 +486,12 @@ function convertRefs(parser: TsxParser, fileName: string, text: string, lineOffs
 
     const functions: Node[] = [];
     const findFunctions = (node: Node): void => {
-      if ((isFunctionDeclaration(node) || isArrowFunction(node) || isFunctionExpression(node)) && node.body && isBlock(node.body) && node.body.statements.some((s) => useRefOf(s, text, sf) !== null)) {
+      if (
+        (isFunctionDeclaration(node) || isArrowFunction(node) || isFunctionExpression(node)) &&
+        node.body &&
+        isBlock(node.body) &&
+        node.body.statements.some((s) => useRefOf(s, text, sf) !== null)
+      ) {
         functions.push(node);
         return;
       }
@@ -448,7 +520,16 @@ function convertRefs(parser: TsxParser, fileName: string, text: string, lineOffs
         let field = src(found.init);
         if (found.type !== null) {
           const init = found.init;
-          const simple = isIdentifier(init) || init.kind === SyntaxKind.NullKeyword || init.kind === SyntaxKind.ArrayLiteralExpression || init.kind === SyntaxKind.ObjectLiteralExpression || init.kind === SyntaxKind.NumericLiteral || init.kind === SyntaxKind.StringLiteral || isCallExpression(init) || isPropertyAccessExpression(init) || isParenthesizedExpression(init);
+          const simple =
+            isIdentifier(init) ||
+            init.kind === SyntaxKind.NullKeyword ||
+            init.kind === SyntaxKind.ArrayLiteralExpression ||
+            init.kind === SyntaxKind.ObjectLiteralExpression ||
+            init.kind === SyntaxKind.NumericLiteral ||
+            init.kind === SyntaxKind.StringLiteral ||
+            isCallExpression(init) ||
+            isPropertyAccessExpression(init) ||
+            isParenthesizedExpression(init);
           field = `${simple ? field : `(${field})`} as ${found.type}`;
         }
         const leading = text.slice(statement.pos, statement.getStart(sf));
@@ -462,7 +543,14 @@ function convertRefs(parser: TsxParser, fileName: string, text: string, lineOffs
         if (!isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) continue;
         const d = statement.declarationList.declarations[0]!;
         const call = d.initializer;
-        if (!call || !isCallExpression(call) || !isIdentifier(call.expression) || call.expression.text !== "useMutable" || !isIdentifier(d.name)) continue;
+        if (
+          !call ||
+          !isCallExpression(call) ||
+          !isIdentifier(call.expression) ||
+          call.expression.text !== "useMutable" ||
+          !isIdentifier(d.name)
+        )
+          continue;
         const arg = call.arguments[0];
         if (arg === undefined || arg.kind !== SyntaxKind.ObjectLiteralExpression) continue;
         existing = { name: d.name.text, literal: arg, properties: (arg as unknown as { properties: readonly Node[] }).properties };
@@ -480,7 +568,15 @@ function convertRefs(parser: TsxParser, fileName: string, text: string, lineOffs
         fail(fn, "no free name for the useMutable");
         continue;
       }
-      const taken = new Set(existing?.properties.map((p) => (isPropertyAssignment(p) && isIdentifier(p.name) ? p.name.text : isShorthandPropertyAssignment(p) ? (p.name as unknown as { text: string }).text : "")) ?? []);
+      const taken = new Set(
+        existing?.properties.map((p) =>
+          isPropertyAssignment(p) && isIdentifier(p.name)
+            ? p.name.text
+            : isShorthandPropertyAssignment(p)
+              ? (p.name as unknown as { text: string }).text
+              : ""
+        ) ?? []
+      );
       const clash = refs.find((r) => taken.has(r.name));
       if (clash !== undefined) {
         fail(clash.statement, `the useMutable already has a field '${clash.name}'`);
@@ -501,7 +597,12 @@ function convertRefs(parser: TsxParser, fileName: string, text: string, lineOffs
         if (isIdentifier(node) && names.has(node.text) && !shadowed.has(node.text) && parent !== null) {
           const isMember = isPropertyAccessExpression(parent) && parent.name === node;
           const isKey = (isPropertyAssignment(parent) && parent.name === node) || (isJsxAttribute(parent) && parent.name === node);
-          const isDeclaration = (isVariableDeclaration(parent) || isBindingElement(parent) || isParameterDeclaration(parent) || isFunctionDeclaration(parent)) && (parent as unknown as { name: Node }).name === node;
+          const isDeclaration =
+            (isVariableDeclaration(parent) ||
+              isBindingElement(parent) ||
+              isParameterDeclaration(parent) ||
+              isFunctionDeclaration(parent)) &&
+            (parent as unknown as { name: Node }).name === node;
           if (!isMember && !isKey && !isDeclaration) {
             if (isPropertyAccessExpression(parent) && parent.expression === node && parent.name.text === "current") {
               local.push({ start: parent.getStart(sf), end: parent.getEnd(), text: `${m}.${node.text}` });
@@ -525,7 +626,19 @@ function convertRefs(parser: TsxParser, fileName: string, text: string, lineOffs
         const multiline = refs.length > 3 || refs.some((r) => r.comment !== "") || refs.map((r) => r.field).join("").length > 70;
         const fields = refs.map((r) => `${r.name}: ${r.field}`);
         const declaration = multiline
-          ? `const ${m} = useMutable({\n${refs.map((r, i) => `${r.comment !== "" ? `${indent}  ${r.comment.split("\n").map((l) => l.trim()).join(`\n${indent}  `)}\n` : ""}${indent}  ${fields[i]},`).join("\n")}\n${indent}});`
+          ? `const ${m} = useMutable({\n${refs
+              .map(
+                (r, i) =>
+                  `${
+                    r.comment !== ""
+                      ? `${indent}  ${r.comment
+                          .split("\n")
+                          .map((l) => l.trim())
+                          .join(`\n${indent}  `)}\n`
+                      : ""
+                  }${indent}  ${fields[i]},`
+              )
+              .join("\n")}\n${indent}});`
           : `const ${m} = useMutable({ ${fields.join(", ")} });`;
         const leading = text.slice(first.pos, first.getStart(sf));
         const from = refs[0]!.comment !== "" ? first.pos + leading.search(/\S/) : first.getStart(sf);
@@ -558,7 +671,12 @@ function convertRefs(parser: TsxParser, fileName: string, text: string, lineOffs
     // The import: `useMutable` in place of `useRef`, or beside it while a function the codemod stopped at still uses it.
     const allConverted = converted === total;
     for (const statement of sf.statements) {
-      if (!isImportDeclaration(statement) || !statement.importClause?.namedBindings || !isNamedImports(statement.importClause.namedBindings)) continue;
+      if (
+        !isImportDeclaration(statement) ||
+        !statement.importClause?.namedBindings ||
+        !isNamedImports(statement.importClause.namedBindings)
+      )
+        continue;
       const specifiers = statement.importClause.namedBindings.elements;
       const ref = specifiers.find((s) => isImportSpecifier(s) && s.name.text === "useRef");
       if (ref === undefined) continue;

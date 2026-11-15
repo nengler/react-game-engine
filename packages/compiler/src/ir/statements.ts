@@ -1,9 +1,7 @@
+import { type ExprIR } from "./expressions.ts";
 // The IR of statements: assignments, state setters, sounds, control flow and actions.
 import { type StateId, type LocalId, type SoundId } from "./ids.ts";
 import { type TypeIR } from "./values.ts";
-import { type ExprIR } from "./expressions.ts";
-
-
 
 /**
  * Statements are only valid inside functions. State reads are live: after a
@@ -62,7 +60,10 @@ export interface ForStmtIR {
 export interface TryStmtIR {
   readonly kind: "Try";
   readonly block: readonly StatementIR[];
-  readonly handler: { readonly binding: { readonly local: LocalId; readonly name: string } | null; readonly body: readonly StatementIR[] } | null;
+  readonly handler: {
+    readonly binding: { readonly local: LocalId; readonly name: string } | null;
+    readonly body: readonly StatementIR[];
+  } | null;
   readonly finalizer: readonly StatementIR[] | null;
 }
 

@@ -9,7 +9,9 @@
  */
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
 import type { CompilerDiagnostic } from "@rge/compiler";
+
 import { fixesFor, type Edit } from "./fixes.ts";
 import { findGame, GameProject, isComponentFile, readFromDisk } from "./project.ts";
 
@@ -132,7 +134,14 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
       diagnostics = project.diagnose(path, document.text);
     } catch (error) {
       // The compiler should not throw on any input; if it does, say so where the author looks rather than going quiet.
-      diagnostics = [{ code: "RGE1001", severity: "error", message: `The compiler failed on this file: ${error instanceof Error ? error.message : String(error)}`, span: null }];
+      diagnostics = [
+        {
+          code: "RGE1001",
+          severity: "error",
+          message: `The compiler failed on this file: ${error instanceof Error ? error.message : String(error)}`,
+          span: null,
+        },
+      ];
     }
     published.set(uri, diagnostics);
     const lines = new LineMap(document.text);
@@ -142,15 +151,13 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
       params: {
         uri,
         version: document.version,
-        diagnostics: diagnostics.map(
-          (d): LspDiagnostic => ({
-            range: d.span === null ? { start: zero, end: zero } : { start: lines.position(d.span.start), end: lines.position(d.span.end) },
-            severity: d.severity === "error" ? 1 : 2,
-            code: d.code,
-            source: "rge",
-            message: d.message,
-          }),
-        ),
+        diagnostics: diagnostics.map((d): LspDiagnostic => ({
+          range: d.span === null ? { start: zero, end: zero } : { start: lines.position(d.span.start), end: lines.position(d.span.end) },
+          severity: d.severity === "error" ? 1 : 2,
+          code: d.code,
+          source: "rge",
+          message: d.message,
+        })),
       },
     });
   };
@@ -163,7 +170,7 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
       setTimeout(() => {
         timers.delete(uri);
         analyse(uri);
-      }, delay),
+      }, delay)
     );
   };
 
@@ -196,7 +203,10 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
     const actions: object[] = [];
     const path = pathOf(uri);
     const project = path === null ? null : projectFor(path);
-    const converter = project === null || path === null ? undefined : { convertToMutable: (_: string, text: string) => project.convertToMutable(path, text) };
+    const converter =
+      project === null || path === null
+        ? undefined
+        : { convertToMutable: (_: string, text: string) => project.convertToMutable(path, text) };
     for (const d of diagnostics) {
       if (d.span === null || d.span.end < from || d.span.start > to) continue;
       for (const fix of fixesFor(document.text, d, converter)) {
@@ -204,8 +214,23 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
           title: fix.title,
           kind: "quickfix",
           isPreferred: fix.preferred === true,
-          diagnostics: [{ range: { start: lines.position(d.span.start), end: lines.position(d.span.end) }, severity: d.severity === "error" ? 1 : 2, code: d.code, source: "rge", message: d.message }],
-          edit: { changes: { [uri]: fix.edits.map((edit: Edit) => ({ range: { start: lines.position(edit.start), end: lines.position(edit.end) }, newText: edit.text })) } },
+          diagnostics: [
+            {
+              range: { start: lines.position(d.span.start), end: lines.position(d.span.end) },
+              severity: d.severity === "error" ? 1 : 2,
+              code: d.code,
+              source: "rge",
+              message: d.message,
+            },
+          ],
+          edit: {
+            changes: {
+              [uri]: fix.edits.map((edit: Edit) => ({
+                range: { start: lines.position(edit.start), end: lines.position(edit.end) },
+                newText: edit.text,
+              })),
+            },
+          },
         });
       }
     }
@@ -219,7 +244,10 @@ export function startServer(input: NodeJS.ReadableStream, output: NodeJS.Writabl
     switch (method) {
       case "initialize":
         reply({
-          capabilities: { textDocumentSync: { openClose: true, change: 1, save: { includeText: false } }, codeActionProvider: { codeActionKinds: ["quickfix"] } },
+          capabilities: {
+            textDocumentSync: { openClose: true, change: 1, save: { includeText: false } },
+            codeActionProvider: { codeActionKinds: ["quickfix"] },
+          },
           serverInfo: { name: "rge-language-server", version: "0.0.0" },
         });
         return;

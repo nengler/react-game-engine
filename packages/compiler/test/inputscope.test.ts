@@ -1,7 +1,9 @@
+import assert from "node:assert/strict";
 /** `inert` and `modal` written in components: a menu made inert from a prop, and a modal overlay that takes the keys while shown. */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { World, createInputState } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -52,14 +54,14 @@ describe("inert and modal in components", () => {
       return log.splice(0);
     };
     assert.deepEqual(press(), ["world", "menu"]);
-    root.s.disabled = (true);
+    root.s.disabled = true;
     world.flush();
     assert.deepEqual(press(), ["world"]);
-    root.s.disabled = (false);
-    root.s.paused = (true);
+    root.s.disabled = false;
+    root.s.paused = true;
     world.flush();
     assert.deepEqual(press(), ["pause"]);
-    root.s.paused = (false);
+    root.s.paused = false;
     world.flush();
     assert.deepEqual(press(), ["world", "menu"]);
   });

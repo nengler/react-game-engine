@@ -1,8 +1,9 @@
 import { Camera, Entity, Fade, Flex, Game, Hud, Music, ParticleLayer, Particles, Route, Router, Screen, useShake } from "@rge/runtime/jsx";
+
 import { fx } from "./effects.ts";
 import { End } from "./End.tsx";
-import { Gem } from "./Gem.tsx";
 import { useGame } from "./GameState.ts";
+import { Gem } from "./Gem.tsx";
 import { Label } from "./Label.tsx";
 import { Level } from "./Level.tsx";
 import { Player } from "./Player.tsx";
@@ -36,17 +37,20 @@ function Play() {
         prewarm
         space="world"
         max={64}
-        x={originX} y={originY}
+        x={originX}
+        y={originY}
       />
       <Level />
       <Gem transform={{ x: GEM_AT.x, y: GEM_AT.y }} />
       {/* The camera follows the character and never leaves the room; a new room slides in. A death shakes it. */}
       <Camera bounds={[originX, originY, 320, 180]} slide={0.4} shake={shake}>
-        <Player onDie={() => {
-          shake.strength = 3;
-          shake.duration = 0.25;
-          shake.elapsed = 0;
-        }} />
+        <Player
+          onDie={() => {
+            shake.strength = 3;
+            shake.duration = 0.25;
+            shake.elapsed = 0;
+          }}
+        />
       </Camera>
       {/* Where dust and sparks are drawn, in the world, over the character: effects.ts makes them. */}
       <ParticleLayer particles={fx} />

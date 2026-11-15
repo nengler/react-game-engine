@@ -29,7 +29,11 @@ export class CodeWriter {
 
   line(text: string): void {
     if (text !== "" && this.#origin !== null) {
-      this.#origins.push({ line: this.#lines.length, column: this.#indent * 2, source: { line: this.#origin.line, column: this.#origin.column } });
+      this.#origins.push({
+        line: this.#lines.length,
+        column: this.#indent * 2,
+        source: { line: this.#origin.line, column: this.#origin.column },
+      });
     }
     this.#lines.push(text === "" ? "" : "  ".repeat(this.#indent) + text);
   }
@@ -86,7 +90,9 @@ export class CodeWriter {
       this.#origins[i] = { ...o, line: o.line + texts.length };
     }
     if (mark.origin !== null) {
-      const added = texts.flatMap((t, i) => (t === "" ? [] : [{ line: mark.at + i, column: mark.indent * 2, source: { line: mark.origin!.line, column: mark.origin!.column } }]));
+      const added = texts.flatMap((t, i) =>
+        t === "" ? [] : [{ line: mark.at + i, column: mark.indent * 2, source: { line: mark.origin!.line, column: mark.origin!.column } }]
+      );
       this.#origins.splice(first, 0, ...added);
     }
   }
@@ -120,7 +126,14 @@ export function sourceMap(origins: readonly LineOrigin[], file: string, source: 
     previousLine = sourceLine;
     previousColumn = sourceColumn;
   }
-  return JSON.stringify({ version: 3, file, sources: [source], ...(sourceContent !== null ? { sourcesContent: [sourceContent] } : {}), names: [], mappings: lines.join(";") });
+  return JSON.stringify({
+    version: 3,
+    file,
+    sources: [source],
+    ...(sourceContent !== null ? { sourcesContent: [sourceContent] } : {}),
+    names: [],
+    mappings: lines.join(";"),
+  });
 }
 
 const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

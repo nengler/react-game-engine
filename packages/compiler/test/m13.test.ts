@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * M13: `<AnimatedSprite>`. Cycles through `frames` at `fps`; `playing={false}`
  * freezes it; different `frames` restart it. Advancing is not state, so it
@@ -5,8 +6,9 @@
  * must still animate, so the generated override calls `super` first.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { AnimatedSprite, Entity, World, runtimeManifest } from "@rge/runtime";
+
 import { cleanOutput, closeCompiler, compile, elementOf, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -78,7 +80,9 @@ let Twice: new () => TwiceInstance;
 let Loop: new (props: { frames: string[] }) => LoopInstance;
 
 before(async () => {
-  ({ Walker, Flame, Twice, Loop } = await load<{ Walker: typeof Walker; Flame: typeof Flame; Twice: typeof Twice; Loop: typeof Loop }>(compile(SOURCE, "Anim.tsx")));
+  ({ Walker, Flame, Twice, Loop } = await load<{ Walker: typeof Walker; Flame: typeof Flame; Twice: typeof Twice; Loop: typeof Loop }>(
+    compile(SOURCE, "Anim.tsx")
+  ));
 });
 
 describe("M13: IR and generated code", () => {
@@ -96,24 +100,38 @@ describe("M13: IR and generated code", () => {
   });
 
   it("builds the sprite with its frames, and re-assigns only what varies", () => {
-    assert.match(compiled.code, /readonly animatedSprite: AnimatedSprite = new AnimatedSprite\(\{ frames: this\.\$s_running \? \["run1\.png", "run2\.png", "run3\.png"\] : \["idle1\.png", "idle2\.png"\], fps: 8, playing: this\.\$s_running \}\);/);
-    assert.match(compiled.code, /readonly animatedSprite2: AnimatedSprite = new AnimatedSprite\(\{ frames: \["blink1\.png", "blink2\.png"\] \}\);/);
+    assert.match(
+      compiled.code,
+      /readonly animatedSprite: AnimatedSprite = new AnimatedSprite\(\{ frames: this\.\$s_running \? \["run1\.png", "run2\.png", "run3\.png"\] : \["idle1\.png", "idle2\.png"\], fps: 8, playing: this\.\$s_running \}\);/
+    );
+    assert.match(
+      compiled.code,
+      /readonly animatedSprite2: AnimatedSprite = new AnimatedSprite\(\{ frames: \["blink1\.png", "blink2\.png"\] \}\);/
+    );
     assert.match(compiled.code, /const (\$\d+) = this\.\$s_running \? \[[^]*?this\.animatedSprite\.frames = \1;/);
     assert.match(compiled.code, /const (\$\d+) = this\.\$s_running;[^]*?this\.animatedSprite\.playing = \1;/);
     assert.doesNotMatch(compiled.code, /this\.animatedSprite2\./, "a fixed sprite is never touched by render");
   });
 
   it("calls super first in a hook override on a component rooted at one that implements the hook", () => {
-    assert.match(compiled.code, /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(\);\n\s+\}/);
+    assert.match(
+      compiled.code,
+      /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(\);\n\s+\}/
+    );
     assert.match(compiled.code, /#onUpdate0\(\): void \{\n\s+this\.\$set_s_ticks\(this\.#\$s_ticksNext \+ 1\);/);
   });
 
   it("calls super once, then each handler in order, when there are several", () => {
-    assert.match(compiled.code, /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);\n\s+this\.#onUpdate1\(\);\n\s+\}/);
+    assert.match(
+      compiled.code,
+      /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);\n\s+this\.#onUpdate1\(\);\n\s+\}/
+    );
   });
 
   it("does not add super to a component whose root does not implement the hook", () => {
-    const plain = compile(`function C() { const s = useMutable({ r: 0 }); useUpdate(() => { s.r += 1; }); return <Shape kind="rect" width={1} height={1} />; }`);
+    const plain = compile(
+      `function C() { const s = useMutable({ r: 0 }); useUpdate(() => { s.r += 1; }); return <Shape kind="rect" width={1} height={1} />; }`
+    );
     assert.doesNotMatch(plain.code, /super\.onUpdate/);
     assert.match(plain.code, /override onUpdate\(\): void \{/);
     const mount = compile(`function C() { const s = useMutable({ r: 0 }); useMount(() => { s.r += 1; }); return <Camera />; }`);
@@ -141,7 +159,11 @@ describe("M13: authored source type-checks", () => {
   });
 
   it("rejects frames that are a string, or not images, and a wrong fps or playing", () => {
-    assert.deepEqual(check(`<AnimatedSprite />`), [], "frames is optional since a sprite can play a sheet instead; with neither it draws nothing");
+    assert.deepEqual(
+      check(`<AnimatedSprite />`),
+      [],
+      "frames is optional since a sprite can play a sheet instead; with neither it draws nothing"
+    );
     assert.ok(check(`<AnimatedSprite frames="a.png" />`).length > 0);
     assert.ok(check(`<AnimatedSprite frames={[1, 2]} />`).length > 0);
     assert.ok(check(`<AnimatedSprite frames={["a.png"]} fps="fast" />`).length > 0);
@@ -170,12 +192,12 @@ describe("M13: runtime behaviour", () => {
     const sprite = walker.animatedSprite;
     world.tick(0.125);
     assert.equal(sprite.image, "run2.png");
-    walker.s.running = (false);
+    walker.s.running = false;
     world.flush();
     assert.deepEqual([sprite.playing, sprite.image, sprite.frame], [false, "idle1.png", 0], "different frames restart at the first");
     world.tick(1);
     assert.equal(sprite.frame, 0, "frozen");
-    walker.s.running = (true);
+    walker.s.running = true;
     world.flush();
     assert.deepEqual([sprite.playing, sprite.image], [true, "run1.png"], "restarted again");
     world.tick(0.125);
@@ -190,7 +212,7 @@ describe("M13: runtime behaviour", () => {
     world.tick(0.125);
     world.tick(0.0625);
     assert.deepEqual([sprite.frame, sprite.elapsed], [1, 0.0625]);
-    walker.s.n = (1); // the component renders and assigns a fresh, equal array
+    walker.s.n = 1; // the component renders and assigns a fresh, equal array
     assert.equal(world.flush(), 1);
     assert.deepEqual([sprite.frame, sprite.elapsed], [1, 0.0625], "the animation carried on");
   });
@@ -202,7 +224,7 @@ describe("M13: runtime behaviour", () => {
     const blink = walker.animatedSprite2;
     world.tick(0.1);
     assert.equal(blink.image, "blink2.png");
-    walker.s.running = (false);
+    walker.s.running = false;
     world.flush();
     assert.equal(blink.image, "blink2.png", "its frames never changed, so it did not restart");
   });
@@ -275,7 +297,10 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
     const withSuper = (manifest: typeof runtimeManifest) => {
       const compiler = new (getCompiler().constructor as new (config: object) => ReturnType<typeof getCompiler>)({ manifest });
       try {
-        const result = compiler.compile("C.tsx", `import { Shape, useUpdate, useMutable } from "@rge/runtime/jsx";\nfunction C() { const s = useMutable({ r: 0 }); useUpdate((dt) => { s.r += dt; }); return <Shape kind="rect" width={1} height={1} />; }`);
+        const result = compiler.compile(
+          "C.tsx",
+          `import { Shape, useUpdate, useMutable } from "@rge/runtime/jsx";\nfunction C() { const s = useMutable({ r: 0 }); useUpdate((dt) => { s.r += dt; }); return <Shape kind="rect" width={1} height={1} />; }`
+        );
         assert.ok(result.ok, JSON.stringify(result.diagnostics));
         return result.code;
       } finally {
@@ -283,13 +308,19 @@ describe("M13: the manifest says which hooks a built-in implements", () => {
       }
     };
     assert.doesNotMatch(withSuper(runtimeManifest), /super\.onUpdate/);
-    assert.match(withSuper({ ...runtimeManifest, intrinsicHooks: { Shape: ["onUpdate"] } }), /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/);
+    assert.match(
+      withSuper({ ...runtimeManifest, intrinsicHooks: { Shape: ["onUpdate"] } }),
+      /override onUpdate\(dt: number, input: InputState\): void \{\n\s+super\.onUpdate\(dt, input\);\n\s+this\.#onUpdate0\(dt\);/
+    );
   });
 
   it("keeps the sprite's own names apart from the state of a component rooted at it", () => {
     // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: its field is `$name`.
     for (const name of ["frames", "fps", "playing", "frame", "elapsed", "image"]) {
-      const result = getCompiler().compile("C.tsx", `import { AnimatedSprite, useMutable } from "@rge/runtime/jsx";\nfunction C() { const ${name} = useMutable({ n: 1 }); return <AnimatedSprite frames={["a.png"]} />; }`);
+      const result = getCompiler().compile(
+        "C.tsx",
+        `import { AnimatedSprite, useMutable } from "@rge/runtime/jsx";\nfunction C() { const ${name} = useMutable({ n: 1 }); return <AnimatedSprite frames={["a.png"]} />; }`
+      );
       assert.ok(result.ok && result.code.includes(`get $${name}()`), name);
     }
   });
@@ -305,8 +336,18 @@ describe("sprite sheets and sprite options", () => {
     ]);
 
   it("accepts a frame of a sheet and the sprite options, as literals and as state", () => {
-    assert.deepEqual(check(`<Sprite image="a.png" frameWidth={12} frameHeight={12} frame={n} flipX={left} originX={6} originY={12} tint="red" opacity={0.5} />`), []);
-    assert.deepEqual(check(`<AnimatedSprite sheet="a.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={anim} loop={false} flipX={left} />`), []);
+    assert.deepEqual(
+      check(
+        `<Sprite image="a.png" frameWidth={12} frameHeight={12} frame={n} flipX={left} originX={6} originY={12} tint="red" opacity={0.5} />`
+      ),
+      []
+    );
+    assert.deepEqual(
+      check(
+        `<AnimatedSprite sheet="a.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={anim} loop={false} flipX={left} />`
+      ),
+      []
+    );
   });
 
   it("rejects options of the wrong type", () => {
@@ -319,20 +360,23 @@ describe("sprite sheets and sprite options", () => {
     const compiled = compile(
       `function Hero() { const s = useMutable({ left: false, anim: "idle" });
         return <AnimatedSprite sheet="hero.png" frameWidth={12} frameHeight={12} animations="idle:0-1@4, run:2-7@12" animation={s.anim} flipX={s.left} />; }`,
-      "Hero.tsx",
+      "Hero.tsx"
     );
-    assert.match(compiled.code, /super\(\{ sheet: "hero\.png", frameWidth: 12, frameHeight: 12, animations: "idle:0-1@4, run:2-7@12" \}\);/);
+    assert.match(
+      compiled.code,
+      /super\(\{ sheet: "hero\.png", frameWidth: 12, frameHeight: 12, animations: "idle:0-1@4, run:2-7@12" \}\);/
+    );
     assert.match(compiled.code, /if \(this\.animation !== \$1 \|\| this\.flipX !== \$2\) \{\s+this\.animation = \$1;\s+this\.flipX = \$2;/);
     const { Hero } = await load<{ Hero: new () => AnimatedSprite & { s: { [field: string]: unknown } } }>(compiled);
     const world = new World();
     const hero = new Hero();
     world.mount(hero);
     assert.equal(hero.sheetFrame, 0);
-    hero.s.anim = ("run");
+    hero.s.anim = "run";
     world.flush();
     assert.equal(hero.current?.name, "run");
     assert.equal(hero.sheetFrame, 2);
-    hero.s.left = (true);
+    hero.s.left = true;
     world.flush();
     assert.equal(hero.flipX, true);
   });

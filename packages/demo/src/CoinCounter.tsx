@@ -1,4 +1,5 @@
 import { Text } from "@rge/runtime/jsx";
+
 import { useGame } from "./GameState.ts";
 
 /** Shows the coin count. It reads one leaf of the game's state, which the player's action changes: neither knows the other exists. */

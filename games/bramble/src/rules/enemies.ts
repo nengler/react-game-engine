@@ -5,6 +5,7 @@
  * character's map are stepped.
  */
 import { findPath, lineOfSight, moveActorX, moveActorY, type Cell, type PixelActor } from "@rge/runtime";
+
 import { BEETLE_HP, BEETLE_SPEED, BODY, KNOCKBACK, TILE, WISP_GIVE_UP, WISP_HP, WISP_REPATH, WISP_SIGHT, WISP_SPEED } from "./constants.ts";
 import type { EnemyKind, MapId } from "./maps.ts";
 
@@ -69,7 +70,12 @@ export function nextRandom(state: number): [number, number] {
   return [next / 4294967296, next];
 }
 
-const DIRECTIONS: readonly (readonly [number, number])[] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+const DIRECTIONS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [0, -1],
+];
 
 const cellOf = (x: number, y: number): Cell => ({ x: Math.floor((x + BODY / 2) / TILE), y: Math.floor((y + BODY / 2) / TILE) });
 
@@ -82,7 +88,13 @@ function move(enemy: Enemy, vx: number, vy: number, dt: number, world: EnemyWorl
 }
 
 /** Step one enemy by `dt` with the character's box at (px, py). Returns it and the random state. */
-export function stepEnemy(enemy: Enemy, dt: number, player: { readonly x: number; readonly y: number }, world: EnemyWorld, random: number): { enemy: Enemy; random: number } {
+export function stepEnemy(
+  enemy: Enemy,
+  dt: number,
+  player: { readonly x: number; readonly y: number },
+  world: EnemyWorld,
+  random: number
+): { enemy: Enemy; random: number } {
   let e: Enemy = enemy.flash > 0 ? { ...enemy, flash: Math.max(0, enemy.flash - dt) } : enemy;
   let r = random;
   if (e.kind === "beetle") {
@@ -111,7 +123,11 @@ export function stepEnemy(enemy: Enemy, dt: number, player: { readonly x: number
   const here = { x: e.x + BODY / 2, y: e.y + BODY / 2 };
   const there = { x: player.x + BODY / 2, y: player.y + BODY / 2 };
   const distance = Math.hypot(there.x - here.x, there.y - here.y);
-  const sees = distance <= WISP_SIGHT && lineOfSight({ width: world.width(e.map), height: world.height(e.map), tileWidth: TILE, tileHeight: TILE }, here, there, (c, rr) => world.solid(e.map, c, rr));
+  const sees =
+    distance <= WISP_SIGHT &&
+    lineOfSight({ width: world.width(e.map), height: world.height(e.map), tileWidth: TILE, tileHeight: TILE }, here, there, (c, rr) =>
+      world.solid(e.map, c, rr)
+    );
   if (sees) e = { ...e, chasing: true, lost: 0 };
   else if (e.chasing) {
     const lost = e.lost + dt;
@@ -145,7 +161,8 @@ export function stepEnemy(enemy: Enemy, dt: number, player: { readonly x: number
     repath = WISP_REPATH;
   }
   // Drop the cells already reached, then head for the next one's middle (or straight at the character from the last cell).
-  while (path.length > 0 && Math.hypot((path[0] as Cell).x * TILE + TILE / 2 - here.x, (path[0] as Cell).y * TILE + TILE / 2 - here.y) < 2) path = path.slice(1);
+  while (path.length > 0 && Math.hypot((path[0] as Cell).x * TILE + TILE / 2 - here.x, (path[0] as Cell).y * TILE + TILE / 2 - here.y) < 2)
+    path = path.slice(1);
   const target = path.length > 0 ? { x: (path[0] as Cell).x * TILE + TILE / 2, y: (path[0] as Cell).y * TILE + TILE / 2 } : there;
   const len = Math.hypot(target.x - here.x, target.y - here.y) || 1;
   const vx = ((target.x - here.x) / len) * WISP_SPEED;

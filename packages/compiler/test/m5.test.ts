@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * M5a: records and arrays in handler code. Array and object literals (with
  * spreads), member reads on values, the non-mutating array methods with inline
@@ -5,10 +6,22 @@
  * Keyed lists in JSX (M5b) build on this.
  */
 import { after, before, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Sprite, World, type InputState } from "@rge/runtime";
+
 import { DiagnosticCode, type ComponentIR, type ExprIR, type StatementIR } from "../src/index.ts";
-import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, stripSpans, typeCheck, withAuthoringImports as withAuthoring, elementOf } from "./helpers.ts";
+import {
+  cleanOutput,
+  closeCompiler,
+  compile,
+  compileErrors,
+  getCompiler,
+  load,
+  stripSpans,
+  typeCheck,
+  withAuthoringImports as withAuthoring,
+  elementOf,
+} from "./helpers.ts";
 
 after(() => {
   closeCompiler();
@@ -93,7 +106,14 @@ function codes(source: string): string[] {
   return compileErrors(source).map((d) => d.code);
 }
 
-const input = (pressed: string[]): InputState => ({ pressed: (a: string) => pressed.includes(a), down: () => false, released: () => false, pointerX: 0, pointerY: 0 }) as unknown as InputState;
+const input = (pressed: string[]): InputState =>
+  ({
+    pressed: (a: string) => pressed.includes(a),
+    down: () => false,
+    released: () => false,
+    pointerX: 0,
+    pointerY: 0,
+  }) as unknown as InputState;
 
 describe("M5a: IR shape", () => {
   it("types array and record state from the type argument", () => {
@@ -108,7 +128,7 @@ function C() {
   });
   return <Entity name="C" />;
 }`,
-      "C",
+      "C"
     );
     assert.deepEqual(
       c.state.map((s) => s.type),
@@ -117,14 +137,23 @@ function C() {
         { kind: "SourceType", text: "Item" },
         { kind: "Array", element: { kind: "Array", element: { kind: "Primitive", name: "number" } } },
         { kind: "Array", element: { kind: "SourceType", text: "Item | null" } },
-      ],
+      ]
     );
     assert.deepEqual(c.state[0]!.initialValue, { kind: "ArrayLiteral", elements: [] });
-    assert.deepEqual(c.state[1]!.initialValue, { kind: "ObjectLiteral", properties: [{ kind: "Property", name: "id", value: { kind: "StringLiteral", value: "a" } }] });
+    assert.deepEqual(c.state[1]!.initialValue, {
+      kind: "ObjectLiteral",
+      properties: [{ kind: "Property", name: "id", value: { kind: "StringLiteral", value: "a" } }],
+    });
   });
 
   it("lowers literals with spreads, member reads and array methods with arrow callbacks", () => {
-    const c = component(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items = [...s.items.filter((e) => e.n > dt), { id: "x", n: s.items.length }];`), "C");
+    const c = component(
+      withHandler(
+        `const s = useMutable({ items: [] as Item[] });`,
+        `s.items = [...s.items.filter((e) => e.n > dt), { id: "x", n: s.items.length }];`
+      ),
+      "C"
+    );
     const handler = c.hooks.find((h) => h.kind === "OnUpdate");
     assert.ok(handler?.kind === "OnUpdate");
     const set = handler.handler.body[0] as StatementIR & { kind: "SetState"; value: ExprIR };
@@ -175,7 +204,7 @@ function C() {
   const s = useMutable({ items: [] as Item[] });
   return <Entity name="C"><Sprite image={s.items.some((e) => e.n > 3) ? "a.png" : "b.png"} /></Entity>;
 }`,
-      "C",
+      "C"
     );
     const sprite = elementOf(c.root.children[0]!);
     const image = sprite.props[0]!;
@@ -191,7 +220,7 @@ function C({ items }: P) {
   const s = useMutable({ list: items });
   return <Entity name="C" />;
 }`,
-      "C",
+      "C"
     );
     // The props type keeps an array of a source type as text, which generates the same code.
     assert.deepEqual(c.state[0]!.type, { kind: "SourceType", text: "Item[]" });
@@ -210,11 +239,20 @@ describe("M5a: generated code", () => {
   it("emits literals, spreads, member reads and arrow callbacks; an object body is parenthesised", () => {
     const { code } = compile(SWARM, "Swarm.tsx");
     // A write is a call of the field's setter; a handler reads a field as it is now (its pending value), render as committed.
-    assert.match(code, /this\.\$set_s_enemies\(\[\.\.\.this\.#\$s_enemiesNext, \{ id: `e\$\{this\.#\$s_spawnedNext\}`, hp: 2 \+ this\.#\$s_spawnedNext \}\]\);/);
-    assert.match(code, /const next = this\.#\$s_enemiesNext\.map\(\(e\) => \(\{ \.\.\.e, hp: e\.hp - dt \}\)\)\.filter\(\(e\) => e\.hp > 0\);/);
+    assert.match(
+      code,
+      /this\.\$set_s_enemies\(\[\.\.\.this\.#\$s_enemiesNext, \{ id: `e\$\{this\.#\$s_spawnedNext\}`, hp: 2 \+ this\.#\$s_spawnedNext \}\]\);/
+    );
+    assert.match(
+      code,
+      /const next = this\.#\$s_enemiesNext\.map\(\(e\) => \(\{ \.\.\.e, hp: e\.hp - dt \}\)\)\.filter\(\(e\) => e\.hp > 0\);/
+    );
     assert.match(code, /this\.\$set_s_weakest\(next\.find\(\(e\) => e\.hp < 1\)\?\.id \?\? ""\);/);
     assert.match(code, /onHit: \(id\) => \{ this\.\$set_s_enemies\(this\.#\$s_enemiesNext\.filter\(\(e\) => e\.id !== id\)\); \}/);
-    assert.match(code, /const (\$\d+) = \(this\.\$s_enemies\.length >= 3\) \? "full\.png" : "spawning\.png";[^]*?this\.sprite\.image = \1;/);
+    assert.match(
+      code,
+      /const (\$\d+) = \(this\.\$s_enemies\.length >= 3\) \? "full\.png" : "spawning\.png";[^]*?this\.sprite\.image = \1;/
+    );
   });
 
   it("writes an object to a field in a callback and in a hook, and types an array of a union", () => {
@@ -237,8 +275,8 @@ function C() {
     const first = s.items.find((e) => e.n > 0);
     s.found = s.items.some((e) => e.n > dt) && s.items.every((e) => e.n >= 0) && ids.includes("a");
     s.count = s.items.findIndex((e) => e.id === "a") + ids.indexOf("a") + (first?.n ?? 0);
-    s.items = s.items.slice(1).concat([{ id: "b", n: 2 }], s.items.slice(0, 1));`,
-      ),
+    s.items = s.items.slice(1).concat([{ id: "b", n: 2 }], s.items.slice(0, 1));`
+      )
     );
     assert.deepEqual(typeCheck(compiled), []);
   });
@@ -246,7 +284,10 @@ function C() {
   it("leaves members of values to the type-check, which catches a wrong one", () => {
     const compiled = compile(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items = s.items.filter((e) => e.nope);`));
     const errors = typeCheck(compiled);
-    assert.ok(errors.some((d) => d.code === DiagnosticCode.GeneratedTypeError && d.message.includes("nope")), JSON.stringify(errors));
+    assert.ok(
+      errors.some((d) => d.code === DiagnosticCode.GeneratedTypeError && d.message.includes("nope")),
+      JSON.stringify(errors)
+    );
   });
 
   it("type-checks the Swarm module", () => {
@@ -267,7 +308,11 @@ function C() {
     assert.ok(getCompiler().compile("C.tsx", source).ok);
     assert.deepEqual(getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M5Source.tsx`, text: source }]), []);
     const wrong = source.replace(`{ id: "x", n: dt }`, `{ id: "x" }`);
-    assert.ok(getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M5Wrong.tsx`, text: wrong }]).some((d) => d.code === DiagnosticCode.SourceTypeError));
+    assert.ok(
+      getCompiler()
+        .typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M5Wrong.tsx`, text: wrong }])
+        .some((d) => d.code === DiagnosticCode.SourceTypeError)
+    );
   });
 });
 
@@ -283,7 +328,11 @@ describe("M5a: runtime behaviour", () => {
     assert.deepEqual(swarm.s.enemies, [{ id: "e0", hp: 2 }]);
     world.tick(0.5);
     world.tick(0.5);
-    assert.deepEqual(swarm.s.enemies, [{ id: "e0", hp: 2 }, { id: "e1", hp: 3 }, { id: "e2", hp: 4 }]);
+    assert.deepEqual(swarm.s.enemies, [
+      { id: "e0", hp: 2 },
+      { id: "e1", hp: 3 },
+      { id: "e2", hp: 4 },
+    ]);
     assert.equal(swarm.sprite.image, "full.png", "JSX that reads the array's length followed it");
   });
 
@@ -294,12 +343,27 @@ describe("M5a: runtime behaviour", () => {
     for (let i = 0; i < 3; i++) world.tick(0);
     const before = swarm.s.enemies;
     world.tick(1.5);
-    assert.deepEqual(swarm.s.enemies, [{ id: "e0", hp: 0.5 }, { id: "e1", hp: 1.5 }, { id: "e2", hp: 2.5 }]);
+    assert.deepEqual(swarm.s.enemies, [
+      { id: "e0", hp: 0.5 },
+      { id: "e1", hp: 1.5 },
+      { id: "e2", hp: 2.5 },
+    ]);
     assert.notEqual(swarm.s.enemies, before, "a new array");
-    assert.deepEqual(before, [{ id: "e0", hp: 2 }, { id: "e1", hp: 3 }, { id: "e2", hp: 4 }], "the old array and records are untouched");
+    assert.deepEqual(
+      before,
+      [
+        { id: "e0", hp: 2 },
+        { id: "e1", hp: 3 },
+        { id: "e2", hp: 4 },
+      ],
+      "the old array and records are untouched"
+    );
     assert.equal(swarm.s.weakest, "e0", "find and optional member read");
     world.tick(1);
-    assert.deepEqual(swarm.s.enemies.map((e) => e.id), ["e1", "e2"]);
+    assert.deepEqual(
+      swarm.s.enemies.map((e) => e.id),
+      ["e1", "e2"]
+    );
   });
 
   it("passes a callback that filters the parent's array to a child", () => {
@@ -309,7 +373,10 @@ describe("M5a: runtime behaviour", () => {
     for (let i = 0; i < 3; i++) world.tick(0);
     world.tick(0, input(["t"]));
     // The Target's callback ran in the input phase, before the Swarm's update.
-    swarm.s.enemies = ([{ id: "t", hp: 9 }, { id: "u", hp: 9 }]);
+    swarm.s.enemies = [
+      { id: "t", hp: 9 },
+      { id: "u", hp: 9 },
+    ];
     world.flush();
     swarm.target.onInput(input(["t"]));
     world.flush();
@@ -321,9 +388,10 @@ describe("M5a: runtime behaviour", () => {
     const swarm = new Swarm();
     world.mount(swarm);
     world.flush();
-    swarm.s.enemies = (swarm.s.enemies);
+    // oxlint-disable-next-line no-self-assign -- the write itself is what the test exercises
+    swarm.s.enemies = swarm.s.enemies;
     assert.equal(world.flush(), 0);
-    swarm.s.enemies = ([...swarm.s.enemies]);
+    swarm.s.enemies = [...swarm.s.enemies];
     assert.equal(world.flush(), 1, "a copy is a new value");
   });
 });
@@ -333,21 +401,34 @@ describe("M5a: diagnostics", () => {
     assert.deepEqual(codes(withHandler(`const s = useMutable({ items: [] });`, ``)), [DiagnosticCode.UnsupportedStateType]);
     assert.match(compileErrors(withHandler(`const s = useMutable({ items: [] });`, ``))[0]!.message, /enemies: \[\] as EnemyData\[\]/);
     // Since 2026-11-14: `{ id: "a", n: 1 }` is `{ id: string; n: number }`, as TypeScript infers it.
-    assert.match(compile(withHandler(`const s = useMutable({ item: { id: "a", n: 1 } });`, ``)).code, /\$s_item: \{ id: string; n: number \} = /);
+    assert.match(
+      compile(withHandler(`const s = useMutable({ item: { id: "a", n: 1 } });`, ``)).code,
+      /\$s_item: \{ id: string; n: number \} = /
+    );
   });
 
   it("rejects mutating array methods used as values, naming the statement and the immutable alternative", () => {
     for (const method of ["push", "splice", "sort"]) {
       const errors = compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `const r = s.items.${method}((e) => e);`));
-      assert.deepEqual(errors.map((d) => d.code), [DiagnosticCode.UnsupportedExpression], method);
+      assert.deepEqual(
+        errors.map((d) => d.code),
+        [DiagnosticCode.UnsupportedExpression],
+        method
+      );
       assert.match(errors[0]!.message, /in place/, method);
     }
     // `forEach` changes nothing itself: it is refused for a loop, not as a change in place.
     const forEach = compileErrors(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.forEach((e) => e);`));
-    assert.deepEqual(forEach.map((d) => d.code), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(
+      forEach.map((d) => d.code),
+      [DiagnosticCode.UnsupportedExpression]
+    );
     assert.match(forEach[0]!.message, /^`forEach` is not supported: write a `for \(const item of items\)/);
     // As a statement, `push` is written for the author: a new array with the item added.
-    assert.match(compile(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.push({ id: "a", n: 1 });`)).code, /\$set_s_items\(\[\.\.\.this\.#\$s_itemsNext, \{ id: "a", n: 1 \}\]\)/);
+    assert.match(
+      compile(withHandler(`const s = useMutable({ items: [] as Item[] });`, `s.items.push({ id: "a", n: 1 });`)).code,
+      /\$set_s_items\(\[\.\.\.this\.#\$s_itemsNext, \{ id: "a", n: 1 \}\]\)/
+    );
   });
 
   it("rejects array methods outside the allowlist, wrong argument counts and optional calls", () => {
@@ -360,9 +441,15 @@ describe("M5a: diagnostics", () => {
 
   it("takes only inline expression-bodied arrows as array callbacks", () => {
     const state = `const s = useMutable({ items: [] as Item[] });`;
-    assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter((e) => { return e.n > 0; });`)), [DiagnosticCode.UnsupportedExpression]);
+    assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter((e) => { return e.n > 0; });`)), [
+      DiagnosticCode.UnsupportedExpression,
+    ]);
     assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter(dt);`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(codes(withHandler(state, `s.items = s.items.map((e) => (s.items = []));`)), [DiagnosticCode.UnsupportedExpression], "a write is not an expression");
+    assert.deepEqual(
+      codes(withHandler(state, `s.items = s.items.map((e) => (s.items = []));`)),
+      [DiagnosticCode.UnsupportedExpression],
+      "a write is not an expression"
+    );
     assert.deepEqual(codes(withHandler(state, `s.items = s.items.filter(({ n }) => n > 0);`)), [DiagnosticCode.InvalidHandler]);
   });
 
@@ -372,14 +459,20 @@ describe("M5a: diagnostics", () => {
 
   it("rejects object methods, getters and computed names", () => {
     const state = `const s = useMutable({ item: { id: "a", n: 1 } as Item });`;
-    assert.deepEqual(codes(withHandler(state, `s.item = { id: "b", n() { return 1; } } as never;`)).includes(DiagnosticCode.UnsupportedExpression), true);
+    assert.deepEqual(
+      codes(withHandler(state, `s.item = { id: "b", n() { return 1; } } as never;`)).includes(DiagnosticCode.UnsupportedExpression),
+      true
+    );
     assert.deepEqual(codes(withHandler(state, `s.item = { ["id"]: "b", n: 1 };`)), [DiagnosticCode.UnsupportedExpression]);
   });
 
   it("still rejects members of numbers and booleans", () => {
     assert.deepEqual(codes(withHandler(`const s = useMutable({ n: 0 });`, `s.n = s.n.x;`)), [DiagnosticCode.UnsupportedExpression]);
     assert.deepEqual(codes(withHandler(`const s = useMutable({ b: false });`, `s.b = s.b.x;`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.doesNotThrow(() => compile(withHandler(`const s = useMutable({ str: "ab", n: 0 });`, `s.n = s.str.length;`)), "a string's length is fine");
+    assert.doesNotThrow(
+      () => compile(withHandler(`const s = useMutable({ str: "ab", n: 0 });`, `s.n = s.str.length;`)),
+      "a string's length is fine"
+    );
   });
 });
 
@@ -455,7 +548,7 @@ function pack(enemies: EnemyData2[] = []): { world: World; pack: PackInstance } 
   const world = new World();
   const p = new Pack();
   world.mount(p);
-  p.s.enemies = (enemies);
+  p.s.enemies = enemies;
   world.flush();
   return { world, pack: p };
 }
@@ -472,10 +565,19 @@ describe("M5b: IR shape", () => {
     assert.deepEqual(list.dependencies, [{ kind: "State", state: "Pack.s.enemies" }]);
     assert.equal(list.item.name, "e");
     assert.equal(list.index, null);
-    assert.deepEqual(list.key, { kind: "MemberRead", object: { kind: "ParamRead", param: list.item.id, name: "e" }, name: "id", optional: false });
+    assert.deepEqual(list.key, {
+      kind: "MemberRead",
+      object: { kind: "ParamRead", param: list.item.id, name: "e" },
+      name: "id",
+      optional: false,
+    });
     assert.equal(list.element.fieldName, "enemy");
     const speed = list.element.props.find((p) => p.name === "speed");
-    assert.deepEqual(speed && speed.kind === "DynamicProp" && speed.dependencies, [{ kind: "Item" }], "a prop that reads the item is re-applied per item");
+    assert.deepEqual(
+      speed && speed.kind === "DynamicProp" && speed.dependencies,
+      [{ kind: "Item" }],
+      "a prop that reads the item is re-applied per item"
+    );
     assert.equal(list.element.props.find((p) => p.name === "onDefeated")?.kind, "CallbackProp");
   });
 
@@ -497,7 +599,7 @@ interface P { items: Item[] }
 function C({ items }: P) {
   return <Entity name="C">{items.map((it) => <Sprite key={it.id} image={it.id} />)}</Entity>;
 }`,
-      "C",
+      "C"
     );
     const list = c.root.children[0]!;
     assert.ok(list.kind === "KeyedListChild");
@@ -510,7 +612,11 @@ describe("M5b: generated code", () => {
     const { code } = compile(PACK, "Pack.tsx");
     assert.match(code, /readonly enemyItems: Map<string \| number, Enemy> = new Map\(\);/);
     assert.match(code, /#enemyOrder: \(string \| number\)\[\] = \[\];/);
-    assert.match(code, /#enemyRecords: Map<string \| number, \{ current: Pack\["\$s_enemies"\]\[number\] \}> = new Map\(\);/, "a callback reads the item");
+    assert.match(
+      code,
+      /#enemyRecords: Map<string \| number, \{ current: Pack\["\$s_enemies"\]\[number\] \}> = new Map\(\);/,
+      "a callback reads the item"
+    );
     assert.doesNotMatch(code, /#sprite3Records/, "no callback reads the item: no records");
   });
 
@@ -557,20 +663,35 @@ function C() {
 
 describe("M5b: runtime behaviour", () => {
   it("adds items by key between the static siblings", () => {
-    const { pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }]);
+    const { pack: p } = pack([
+      { id: "a", speed: 1 },
+      { id: "b", speed: 2 },
+    ]);
     assert.deepEqual(ids(p), ["bg.png", "1", "2", "fg.png"]);
     assert.deepEqual([...p.enemyItems.keys()], ["a", "b"]);
   });
 
   it("updates an item in place; an unchanged item keeps its identity and is not re-rendered", () => {
-    const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }]);
+    const { world, pack: p } = pack([
+      { id: "a", speed: 1 },
+      { id: "b", speed: 2 },
+    ]);
     const [a, b] = [p.enemyItems.get("a")!, p.enemyItems.get("b")!];
     const renders = { a: 0, b: 0 };
-    for (const [name, item] of [["a", a], ["b", b]] as const) {
+    for (const [name, item] of [
+      ["a", a],
+      ["b", b],
+    ] as const) {
       const render = item.render.bind(item);
-      item.render = () => { renders[name]++; render(); };
+      item.render = () => {
+        renders[name]++;
+        render();
+      };
     }
-    p.s.enemies = ([{ id: "a", speed: 1 }, { id: "b", speed: 5 }]);
+    p.s.enemies = [
+      { id: "a", speed: 1 },
+      { id: "b", speed: 5 },
+    ];
     assert.equal(world.flush(), 2, "the pack and the changed item render once each");
     assert.deepEqual(renders, { a: 0, b: 1 });
     assert.equal(p.enemyItems.get("a"), a);
@@ -580,9 +701,16 @@ describe("M5b: runtime behaviour", () => {
   });
 
   it("removes items whose key is gone", () => {
-    const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }, { id: "c", speed: 3 }]);
+    const { world, pack: p } = pack([
+      { id: "a", speed: 1 },
+      { id: "b", speed: 2 },
+      { id: "c", speed: 3 },
+    ]);
     const b = p.enemyItems.get("b")!;
-    p.s.enemies = ([{ id: "a", speed: 1 }, { id: "c", speed: 3 }]);
+    p.s.enemies = [
+      { id: "a", speed: 1 },
+      { id: "c", speed: 3 },
+    ];
     world.flush();
     assert.deepEqual(ids(p), ["bg.png", "1", "3", "fg.png"]);
     assert.equal(b.parent, null);
@@ -591,12 +719,24 @@ describe("M5b: runtime behaviour", () => {
   });
 
   it("reorders by key, keeping instances, with static siblings in place", () => {
-    const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }, { id: "c", speed: 3 }]);
+    const { world, pack: p } = pack([
+      { id: "a", speed: 1 },
+      { id: "b", speed: 2 },
+      { id: "c", speed: 3 },
+    ]);
     const before = [...p.enemyItems.values()];
-    p.s.enemies = ([{ id: "c", speed: 3 }, { id: "x", speed: 9 }, { id: "a", speed: 1 }, { id: "b", speed: 2 }]);
+    p.s.enemies = [
+      { id: "c", speed: 3 },
+      { id: "x", speed: 9 },
+      { id: "a", speed: 1 },
+      { id: "b", speed: 2 },
+    ];
     world.flush();
     assert.deepEqual(ids(p), ["bg.png", "3", "9", "1", "2", "fg.png"]);
-    assert.ok(before.every((item) => [...p.enemyItems.values()].includes(item)), "same instances");
+    assert.ok(
+      before.every((item) => [...p.enemyItems.values()].includes(item)),
+      "same instances"
+    );
     assert.equal(p.children[0], p.sprite);
     assert.equal(p.children.at(-1), p.sprite2);
   });
@@ -604,15 +744,24 @@ describe("M5b: runtime behaviour", () => {
   it("throws on a duplicate key without changing the list", () => {
     const { world, pack: p } = pack([{ id: "a", speed: 1 }]);
     const a = p.enemyItems.get("a");
-    p.s.enemies = ([{ id: "a", speed: 1 }, { id: "a", speed: 2 }]);
+    p.s.enemies = [
+      { id: "a", speed: 1 },
+      { id: "a", speed: 2 },
+    ];
     assert.throws(() => world.flush(), /Duplicate key "a" in the <Enemy> list of Pack/);
     assert.deepEqual([...p.enemyItems.keys()], ["a"]);
     assert.equal(p.enemyItems.get("a"), a);
   });
 
   it("gives a callback the item's current value, not the one it was created with", () => {
-    const { world, pack: p } = pack([{ id: "a", speed: 1 }, { id: "b", speed: 2 }]);
-    p.s.enemies = ([{ id: "a", speed: 7 }, { id: "b", speed: 2 }]);
+    const { world, pack: p } = pack([
+      { id: "a", speed: 1 },
+      { id: "b", speed: 2 },
+    ]);
+    p.s.enemies = [
+      { id: "a", speed: 7 },
+      { id: "b", speed: 2 },
+    ];
     world.flush();
     p.enemyItems.get("a")!.props.onDefeated!();
     world.flush();
@@ -622,22 +771,45 @@ describe("M5b: runtime behaviour", () => {
   });
 
   it("renders a filtered list inside a conditional, and starts it afresh when it remounts", () => {
-    const { world, pack: p } = pack([{ id: "slow", speed: 1 }, { id: "fast", speed: 8 }, { id: "faster", speed: 9 }]);
-    p.s.showBoss = (true);
+    const { world, pack: p } = pack([
+      { id: "slow", speed: 1 },
+      { id: "fast", speed: 8 },
+      { id: "faster", speed: 9 },
+    ]);
+    p.s.showBoss = true;
     world.flush();
     const boss = p.entity!;
-    assert.deepEqual(boss.children.map((c) => [(c as Sprite).image, c.transform.x]), [["fast.png", 0], ["faster.png", 10]]);
-    p.s.enemies = ([{ id: "faster", speed: 9 }, { id: "fast", speed: 8 }]);
+    assert.deepEqual(
+      boss.children.map((c) => [(c as Sprite).image, c.transform.x]),
+      [
+        ["fast.png", 0],
+        ["faster.png", 10],
+      ]
+    );
+    p.s.enemies = [
+      { id: "faster", speed: 9 },
+      { id: "fast", speed: 8 },
+    ];
     world.flush();
-    assert.deepEqual(boss.children.map((c) => [(c as Sprite).image, c.transform.x]), [["faster.png", 0], ["fast.png", 10]], "the index follows the order");
-    p.s.showBoss = (false);
+    assert.deepEqual(
+      boss.children.map((c) => [(c as Sprite).image, c.transform.x]),
+      [
+        ["faster.png", 0],
+        ["fast.png", 10],
+      ],
+      "the index follows the order"
+    );
+    p.s.showBoss = false;
     world.flush();
     assert.equal(p.entity, null);
     assert.equal(p.sprite3Items.size, 0);
-    p.s.showBoss = (true);
+    p.s.showBoss = true;
     world.flush();
     assert.notEqual(p.entity, boss);
-    assert.deepEqual(p.entity!.children.map((c) => (c as Sprite).image), ["faster.png", "fast.png"]);
+    assert.deepEqual(
+      p.entity!.children.map((c) => (c as Sprite).image),
+      ["faster.png", "fast.png"]
+    );
   });
 
   it("builds the list in the constructor from a prop", async () => {
@@ -646,15 +818,21 @@ describe("M5b: runtime behaviour", () => {
 interface P { items: Item[] }
 function C({ items }: P) {
   return <Entity name="C">{items.map((it) => <Sprite key={it.id} image={it.id} />)}</Entity>;
-}`),
+}`)
     );
     const c = new C({ items: [{ id: "a" }, { id: "b" }] });
-    assert.deepEqual(c.children.map((s) => (s as Sprite).image), ["a", "b"]);
+    assert.deepEqual(
+      c.children.map((s) => (s as Sprite).image),
+      ["a", "b"]
+    );
   });
 });
 
 describe("M5b: diagnostics", () => {
-  const list = (item: string, state = `const s = useMutable({ items: [] as Item[] });\n  const items = s.items;`) => `interface Item { id: string; n: number }
+  const list = (
+    item: string,
+    state = `const s = useMutable({ items: [] as Item[] });\n  const items = s.items;`
+  ) => `interface Item { id: string; n: number }
 function C() {
   ${state}
   return <Entity name="C">{${item}}</Entity>;
@@ -670,24 +848,41 @@ function C() {
   it("warns about an index key, but compiles it", () => {
     const result = getCompiler().compile("C.tsx", withAuthoring(list(`items.map((e, i) => <Sprite key={i} image={e.id} />)`)));
     assert.ok(result.ok);
-    assert.deepEqual(result.diagnostics.map((d) => [d.code, d.severity]), [[DiagnosticCode.InvalidList, "warning"]]);
+    assert.deepEqual(
+      result.diagnostics.map((d) => [d.code, d.severity]),
+      [[DiagnosticCode.InvalidList, "warning"]]
+    );
   });
 
   it("takes one element from an inline arrow", () => {
     // `cond && <El/>` and `cond ? <A/> : <B/>` are allowed now: see tier3.test.ts.
     assert.deepEqual(listCodes(`items.map((e) => e.n > 0 || <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map((e) => <><Sprite key={e.id} image={e.id} /></>)`), [DiagnosticCode.InvalidList]);
-    assert.deepEqual(listCodes(`items.map((e) => { const x = 1; return <Sprite key={e.id} image={e.id} />; })`), [DiagnosticCode.InvalidList]);
+    assert.deepEqual(listCodes(`items.map((e) => { const x = 1; return <Sprite key={e.id} image={e.id} />; })`), [
+      DiagnosticCode.InvalidList,
+    ]);
     // Children on an item, nested and conditional, are allowed now (tier3.test.ts), and so is a list inside an item (nested-lists.test.ts).
-    assert.doesNotThrow(() => compile(list(`items.map((e) => <Entity key={e.id}><Entity name="x"><Sprite image={e.id} /></Entity></Entity>)`)));
-    assert.doesNotThrow(() => compile(list(`items.map((e) => <Entity key={e.id}>{items.map((f) => <Sprite key={f.id} image={f.id} />)}</Entity>)`)));
+    assert.doesNotThrow(() =>
+      compile(list(`items.map((e) => <Entity key={e.id}><Entity name="x"><Sprite image={e.id} /></Entity></Entity>)`))
+    );
+    assert.doesNotThrow(() =>
+      compile(list(`items.map((e) => <Entity key={e.id}>{items.map((f) => <Sprite key={f.id} image={f.id} />)}</Entity>)`))
+    );
     assert.deepEqual(listCodes(`items.map()`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map(({ id }) => <Sprite key={id} image={id} />)`), [DiagnosticCode.InvalidList]);
-    assert.doesNotThrow(() => compile(list(`items.map((e) => { return <Sprite key={e.id} image={e.id} />; })`)), "a block with one return is fine");
+    assert.doesNotThrow(
+      () => compile(list(`items.map((e) => { return <Sprite key={e.id} image={e.id} />; })`)),
+      "a block with one return is fine"
+    );
   });
 
   it("takes any array the component can compute, but not through `?.`", () => {
-    for (const source of [`[{ id: "a" }, { id: "b" }]`, `items.slice(1)`, `items.map((e) => ({ id: e.id, n: e.n * 2 }))`, `items.filter((e) => e.n > 0).slice(0, 3)`]) {
+    for (const source of [
+      `[{ id: "a" }, { id: "b" }]`,
+      `items.slice(1)`,
+      `items.map((e) => ({ id: e.id, n: e.n * 2 }))`,
+      `items.filter((e) => e.n > 0).slice(0, 3)`,
+    ]) {
       const compiled = compile(list(`${source}.map((e) => <Sprite key={e.id} image={e.id} />)`));
       assert.match(compiled.code, /\$spriteList\(\) \{ return /, source);
       assert.deepEqual(typeCheck(compiled), [], source);
@@ -711,8 +906,12 @@ function C() {
   });
 
   it("rejects key on a component's root (it goes where the component is used); a key on a child is a keyed element", () => {
-    assert.deepEqual(codes(`function A() { return <Entity name="A" key="x"><Sprite image="a" /></Entity>; }`), [DiagnosticCode.UnsupportedAttribute]);
-    assert.doesNotThrow(() => compile(`function A() { const s = useMutable({ k: 0 }); return <Entity name="A"><Sprite key={s.k} image="a" /></Entity>; }`));
+    assert.deepEqual(codes(`function A() { return <Entity name="A" key="x"><Sprite image="a" /></Entity>; }`), [
+      DiagnosticCode.UnsupportedAttribute,
+    ]);
+    assert.doesNotThrow(() =>
+      compile(`function A() { const s = useMutable({ k: 0 }); return <Entity name="A"><Sprite key={s.k} image="a" /></Entity>; }`)
+    );
   });
 });
 
@@ -779,16 +978,24 @@ before(async () => {
 });
 
 /** The names of a container's children: images for sprites, widths for colliders, names for entities. */
-const kids = (e: Entity): string[] => e.children.map((c) => (c instanceof Sprite ? c.image : c instanceof Entity ? c.name : `${(c as unknown as { width: number }).width}`));
+const kids = (e: Entity): string[] =>
+  e.children.map((c) => (c instanceof Sprite ? c.image : c instanceof Entity ? c.name : `${(c as unknown as { width: number }).width}`));
 const body = (p: PanelInstance): Entity => p.children[1] as Entity;
 
 describe("M8: IR shape", () => {
   it("marks a component that renders {children}, and keeps the slot among its siblings", () => {
     const c = component(CARD, "Panel");
     assert.equal(c.acceptsChildren, true);
-    assert.deepEqual(c.props.map((p) => p.name), ["title"], "children is not a value prop");
+    assert.deepEqual(
+      c.props.map((p) => p.name),
+      ["title"],
+      "children is not a value prop"
+    );
     const bodyEl = elementOf(c.root.children[1]!);
-    assert.deepEqual(bodyEl.children.map((k) => k.kind), ["StaticChild", "ChildrenSlot", "StaticChild"]);
+    assert.deepEqual(
+      bodyEl.children.map((k) => k.kind),
+      ["StaticChild", "ChildrenSlot", "StaticChild"]
+    );
     assert.equal(component(CARD, "Card").acceptsChildren, false);
   });
 
@@ -796,7 +1003,10 @@ describe("M8: IR shape", () => {
     const card = component(CARD, "Card");
     const panel = elementOf(card.root.children[0]!);
     assert.equal(panel.component.kind, "Local");
-    assert.deepEqual(panel.children.map((k) => k.kind), ["StaticChild", "ConditionalChild", "StaticChild"]);
+    assert.deepEqual(
+      panel.children.map((k) => k.kind),
+      ["StaticChild", "ConditionalChild", "StaticChild"]
+    );
     const conditional = panel.children[1]!;
     assert.ok(conditional.kind === "ConditionalChild");
     assert.deepEqual(conditional.dependencies, [{ kind: "State", state: "Card.s.open" }]);
@@ -838,7 +1048,8 @@ describe("M8: generated code", () => {
   });
 
   it("type-checks authored source: children are required where declared, and rejected where not", () => {
-    const check = (source: string) => getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M8Source${Math.random()}.tsx`, text: source }]);
+    const check = (source: string) =>
+      getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/M8Source${Math.random()}.tsx`, text: source }]);
     const head = `import { Entity, Sprite, type Child } from "@rge/runtime/jsx";
 interface BoxProps { children: Child }
 function Box({ children }: BoxProps) { return <Entity name="Box">{children}</Entity>; }
@@ -847,7 +1058,10 @@ function Leaf({ n }: LeafProps) { return <Sprite image={"a" + n} />; }
 `;
     assert.deepEqual(check(`${head}function Ok() { return <Entity name="Ok"><Box><Sprite image="a" /></Box></Entity>; }`), []);
     assert.ok(check(`${head}function Bad() { return <Entity name="Bad"><Box /></Entity>; }`).length > 0, "children are required");
-    assert.ok(check(`${head}function Bad() { return <Entity name="Bad"><Leaf n={1}><Sprite image="a" /></Leaf></Entity>; }`).length > 0, "Leaf takes no children");
+    assert.ok(
+      check(`${head}function Bad() { return <Entity name="Bad"><Leaf n={1}><Sprite image="a" /></Leaf></Entity>; }`).length > 0,
+      "Leaf takes no children"
+    );
   });
 });
 
@@ -861,10 +1075,10 @@ describe("M8: runtime behaviour", () => {
     const world = new World();
     const card = new Card();
     world.mount(card);
-    card.s.open = (true);
+    card.s.open = true;
     world.flush();
     assert.deepEqual(kids(body(card.panel)), ["1", "first.png", "a-open.png", "last.png", "2"]);
-    card.s.open = (false);
+    card.s.open = false;
     world.flush();
     assert.deepEqual(kids(body(card.panel)), ["1", "first.png", "last.png", "2"]);
   });
@@ -873,10 +1087,10 @@ describe("M8: runtime behaviour", () => {
     const world = new World();
     const card = new Card();
     world.mount(card);
-    card.s.open = (true);
+    card.s.open = true;
     world.flush();
     const open = body(card.panel).children[2] as Sprite;
-    card.s.label = ("b");
+    card.s.label = "b";
     world.flush();
     assert.equal(open.image, "b-open.png", "same instance, the parent's prop followed its state");
     assert.equal(card.panel.props.title, "b");
@@ -886,15 +1100,15 @@ describe("M8: runtime behaviour", () => {
     const world = new World();
     const card = new Card();
     world.mount(card);
-    card.s.open = (true);
-    card.s.label = ("b");
+    card.s.open = true;
+    card.s.label = "b";
     world.flush();
     const first = card.panel2!;
     assert.deepEqual(kids(body(first)), ["1", "inner.png", "inner-b.png", "2"]);
-    card.s.open = (false);
+    card.s.open = false;
     world.flush();
     assert.equal(card.panel2, null);
-    card.s.open = (true);
+    card.s.open = true;
     world.flush();
     assert.notEqual(card.panel2, first);
     assert.deepEqual(kids(body(card.panel2!)), ["1", "inner.png", "inner-b.png", "2"]);
@@ -942,8 +1156,8 @@ function Host() {
       world.mount(host);
       assert.deepEqual(images(host), ["B"]);
       for (const which of order) {
-        if (which === "x") host.s.x = (true);
-        else host.s.y = (true);
+        if (which === "x") host.s.x = true;
+        else host.s.y = true;
         world.flush();
       }
       assert.deepEqual(images(host), ["A", "B", "C"], `turned on in the order ${order}`);
@@ -954,13 +1168,13 @@ function Host() {
     const world = new World();
     const host = new Host();
     world.mount(host);
-    host.s.x = (true);
-    host.s.y = (true);
+    host.s.x = true;
+    host.s.y = true;
     world.flush();
-    host.s.x = (false);
+    host.s.x = false;
     world.flush();
     assert.deepEqual(images(host), ["B", "C"]);
-    host.s.x = (true);
+    host.s.x = true;
     world.flush();
     assert.deepEqual(images(host), ["A", "B", "C"]);
   });
@@ -990,7 +1204,11 @@ function Table() {
 
   it("generates passed attaches", () => {
     const { code } = compile(LIST, "Table.tsx");
-    assert.match(code, /\$parent\.queueAttachPassedChild\(\$item, \[0, \$n\]\);/, "an item's order among passed children is the list's position, then its index");
+    assert.match(
+      code,
+      /\$parent\.queueAttachPassedChild\(\$item, \[0, \$n\]\);/,
+      "an item's order among passed children is the list's position, then its index"
+    );
     assert.match(code, /\$parent\.queueDetachPassedChild\(\$item\);/);
     assert.match(code, /\$parent\.queueReorderPassedChildren\(\$keys\.map\(.*\), \[0\]\);/);
     assert.deepEqual(typeCheck(compile(LIST, "Table.tsx")), []);
@@ -1000,10 +1218,10 @@ function Table() {
     const world = new World();
     const t = new Table();
     world.mount(t);
-    t.s.rows = ([{ id: "a" }, { id: "b" }, { id: "c" }]);
+    t.s.rows = [{ id: "a" }, { id: "b" }, { id: "c" }];
     world.flush();
     assert.deepEqual(kids(t.column), ["header", "a", "b", "c", "footer"]);
-    t.s.rows = ([{ id: "c" }, { id: "x" }, { id: "a" }]);
+    t.s.rows = [{ id: "c" }, { id: "x" }, { id: "a" }];
     world.flush();
     assert.deepEqual(kids(t.column), ["header", "c", "x", "a", "footer"]);
   });
@@ -1011,7 +1229,8 @@ function Table() {
 
 describe("M8: diagnostics", () => {
   const IMPORT = `import { type Child, Entity, Sprite, Collider, useMutable } from "@rge/runtime/jsx";\n`;
-  const box = (props: string, body: string) => `${IMPORT}interface BoxProps { ${props} }\nfunction Box({ ${props.includes("children") ? "children" : ""} }: BoxProps) { return <Entity name="Box">${body}</Entity>; }`;
+  const box = (props: string, body: string) =>
+    `${IMPORT}interface BoxProps { ${props} }\nfunction Box({ ${props.includes("children") ? "children" : ""} }: BoxProps) { return <Entity name="Box">${body}</Entity>; }`;
   const diag = (source: string) => compileErrors(source).map((d) => d.code);
 
   it("types children as Child", () => {
@@ -1025,7 +1244,9 @@ describe("M8: diagnostics", () => {
 
   it("allows one slot, in a container that is always there", () => {
     assert.deepEqual(diag(box("children: Child", "{children}{children}")), [DiagnosticCode.UnsupportedJsxChild]);
-    assert.deepEqual(diag(box("children: Child", `<Entity name="a">{children}</Entity><Entity name="b">{children}</Entity>`)), [DiagnosticCode.UnsupportedJsxChild]);
+    assert.deepEqual(diag(box("children: Child", `<Entity name="a">{children}</Entity><Entity name="b">{children}</Entity>`)), [
+      DiagnosticCode.UnsupportedJsxChild,
+    ]);
     assert.deepEqual(diag(box("children: Child", `{true && <Entity name="a">{children}</Entity>}`)), [DiagnosticCode.UnsupportedJsxChild]);
     assert.deepEqual(diag(box("children: Child", `<Sprite image="a">{children}</Sprite>`)), [DiagnosticCode.UnsupportedJsxChild]);
   });
@@ -1041,7 +1262,10 @@ function Outer({ children }: BoxProps) { return <Entity name="Outer"><Box>{child
 
   it("does not read children as a value", () => {
     assert.deepEqual(diag(box("children: Child", `{children}<Sprite image={children} />`)), [DiagnosticCode.UnsupportedExpression]);
-    assert.deepEqual(diag(box("children: Child", `{children}<Sprite image={String(children)} />`)).includes(DiagnosticCode.UnsupportedExpression), true);
+    assert.deepEqual(
+      diag(box("children: Child", `{children}<Sprite image={String(children)} />`)).includes(DiagnosticCode.UnsupportedExpression),
+      true
+    );
   });
 
   it("rejects a default for children", () => {
@@ -1069,6 +1293,10 @@ function Table() {
   return <Entity name="Table">{s.rows.map((r) => <Box key={r.id}><Entity name="x"><Sprite image="x" /></Entity></Box>)}</Entity>;
 }`;
     assert.doesNotThrow(() => compile(source));
-    assert.ok(diag(`${box("children: Child", "{children}")}\nfunction A() { return <Entity name="A"><Box children={1} /></Entity>; }`).includes(DiagnosticCode.UnsupportedAttribute));
+    assert.ok(
+      diag(`${box("children: Child", "{children}")}\nfunction A() { return <Entity name="A"><Box children={1} /></Entity>; }`).includes(
+        DiagnosticCode.UnsupportedAttribute
+      )
+    );
   });
 });

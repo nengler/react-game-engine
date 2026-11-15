@@ -1,11 +1,13 @@
+import assert from "node:assert/strict";
+import { dirname, join } from "node:path";
 /**
  * `useBody` (REACT_FEEL_PLAN.md, A2): a component moves its own box against solid tiles and solid colliders and learns what it
  * hit in the same step, with no rules file in between.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, World, captureHotState, registerTilemaps, restoreHotState, type TilemapData } from "@rge/runtime";
-import { dirname, join } from "node:path";
+
 import { cleanOutput, closeCompiler, compile, compileErrors, getCompiler, load, typeCheck } from "./helpers.ts";
 
 after(() => {
@@ -15,7 +17,12 @@ after(() => {
 
 // A 6 × 4 room of 8-pixel tiles: a floor along the bottom row (tile 1 is solid, tile 2 is not).
 const ROOM: TilemapData = {
-  width: 6, height: 4, tileWidth: 8, tileHeight: 8, firstGid: 1, solid: [1],
+  width: 6,
+  height: 4,
+  tileWidth: 8,
+  tileHeight: 8,
+  firstGid: 1,
+  solid: [1],
   layers: [{ name: "Tiles", visible: true, data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1] }],
 };
 
@@ -142,7 +149,13 @@ describe("useBody's overlapping", () => {
   it("answers which colliders of a tag overlap the body now, with their data, typed by tag", async () => {
     const compiled = compile(TOWER);
     const data = join(dirname(compiled.fileName), "colliders.ts");
-    assert.deepEqual(getCompiler().typeCheck([{ fileName: compiled.fileName, text: compiled.code }, { fileName: data, text: ENEMY_DATA }]), []);
+    assert.deepEqual(
+      getCompiler().typeCheck([
+        { fileName: compiled.fileName, text: compiled.code },
+        { fileName: data, text: ENEMY_DATA },
+      ]),
+      []
+    );
     assert.match(compiled.code, /overlapping = <Tag extends string>\(tag: Tag\)/, "the hook's function keeps its type parameter");
     const { Field } = await load<{ Field: new (p: { onSee: (ids: string) => void }) => Entity }>(compiled);
     const seen: string[] = [];

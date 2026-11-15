@@ -1,4 +1,5 @@
 import { createPlayer, ScriptedInputBackend, type InputFrame, type PlayerConfig } from "@rge/player";
+
 import { createNodeBackend, type Pixels } from "./backend.ts";
 import { findNativeLibrary } from "./ffi.ts";
 
@@ -25,7 +26,12 @@ export interface Shot {
 export function renderRun(config: PlayerConfig, frames: readonly InputFrame[], options: ShotOptions = {}): Shot[] {
   const backend = createNodeBackend(options.library === undefined ? findNativeLibrary("headless") : options.library);
   const scripted = new ScriptedInputBackend(backend, frames);
-  const player = createPlayer(scripted, { ...config, hidden: true, vsync: false, warn: (message) => options.warnings?.push(message) ?? console.warn(message) });
+  const player = createPlayer(scripted, {
+    ...config,
+    hidden: true,
+    vsync: false,
+    warn: (message) => options.warnings?.push(message) ?? console.warn(message),
+  });
   const keep = options.at === undefined ? null : new Set(options.at);
   const shots: Shot[] = [];
   try {
@@ -34,7 +40,8 @@ export function renderRun(config: PlayerConfig, frames: readonly InputFrame[], o
       player.step();
       if (keep !== null && !keep.has(step)) continue;
       const pixels = backend.readPixels();
-      if (pixels === null) throw new Error("The window kept no pixels: renderRun needs the headless build (npm run native:build:headless).");
+      if (pixels === null)
+        throw new Error("The window kept no pixels: renderRun needs the headless build (npm run native:build:headless).");
       shots.push({ step, pixels: { width: pixels.width, height: pixels.height, rgba: new Uint8Array(pixels.rgba) } });
     }
   } finally {

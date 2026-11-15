@@ -1,8 +1,21 @@
 // What the analyzer finds in a source file: the analysis records for components, props, hooks and imports, and the tables of hook names.
-import { type CallExpression, type ArrowFunction, type Expression, type JsxFragment, type InterfaceDeclaration, type JsxElement, type JsxSelfClosingElement, type Node, type SourceFile, type Statement, type TypeAliasDeclaration, type VariableDeclaration, type TypeLiteralNode } from "typescript/ast";
+import {
+  type CallExpression,
+  type ArrowFunction,
+  type Expression,
+  type JsxFragment,
+  type InterfaceDeclaration,
+  type JsxElement,
+  type JsxSelfClosingElement,
+  type Node,
+  type SourceFile,
+  type Statement,
+  type TypeAliasDeclaration,
+  type VariableDeclaration,
+  type TypeLiteralNode,
+} from "typescript/ast";
+
 import { type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
-
-
 
 /**
  * Source-level understanding of a file: which functions are components, which
@@ -146,7 +159,14 @@ export interface UseStoreCallAnalysis {
 }
 
 /** Future hooks become additional variants. */
-export type HookCallAnalysis = UseStoreCallAnalysis | UseMutableCallAnalysis | UseSoundCallAnalysis | HandlerCallAnalysis | RenderConstAnalysis | RenderBlockAnalysis | UseContextCallAnalysis;
+export type HookCallAnalysis =
+  | UseStoreCallAnalysis
+  | UseMutableCallAnalysis
+  | UseSoundCallAnalysis
+  | HandlerCallAnalysis
+  | RenderConstAnalysis
+  | RenderBlockAnalysis
+  | UseContextCallAnalysis;
 
 /** `const theme = useContext(Theme)` or `const { accent, text: ink } = useContext(Theme)`. */
 export interface UseContextCallAnalysis {
@@ -253,5 +273,6 @@ export const REMOVED_HOOKS: Readonly<Record<string, string>> = {
     "so such a field costs a comparison, not a redraw. `node tools/codemod-mutable.ts <file>` converts a file.",
   useEffect: EFFECT_MESSAGE("useEffect"),
   useLayoutEffect: EFFECT_MESSAGE("useLayoutEffect"),
-  onCollisionEnter: "'onCollisionEnter' is no longer a hook: pass it to the collider, `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`, so you know which collider was hit.",
+  onCollisionEnter:
+    "'onCollisionEnter' is no longer a hook: pass it to the collider, `<Collider width={16} height={24} onCollisionEnter={(other) => …} />`, so you know which collider was hit.",
 };

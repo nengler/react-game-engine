@@ -67,5 +67,4 @@ export class Sprite<P extends object = {}> extends GameObject<P> implements Spri
     this.tint = hostProps.tint;
     this.opacity = hostProps.opacity ?? 1;
   }
-
 }

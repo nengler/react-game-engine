@@ -1,6 +1,7 @@
+import assert from "node:assert/strict";
 /** `createGameState(data, actions)`: actions write a draft of the state directly; readers hear only what changed. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { createGameState, Entity } from "../src/index.ts";
 
 type Screen = "title" | "play";
@@ -28,7 +29,7 @@ function make() {
         s.cursor = 99;
         throw new Error("no");
       },
-    },
+    }
   );
 }
 let useGame = make();
@@ -80,7 +81,10 @@ describe("createGameState(data, actions)", () => {
     useGame.actions().begin();
     assert.equal(useGame.getState().screen, "play");
     assert.equal(useGame.getState().cursor, 1);
-    assert.deepEqual(useGame.store.history.map((h) => [h.action, h.changes.map((c) => c.path).sort()]), [["begin", ["cursor", "open", "screen"]]]);
+    assert.deepEqual(
+      useGame.store.history.map((h) => [h.action, h.changes.map((c) => c.path).sort()]),
+      [["begin", ["cursor", "open", "screen"]]]
+    );
   });
 
   it("commits nothing when an action throws", () => {

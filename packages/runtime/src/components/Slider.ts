@@ -49,7 +49,17 @@ export class Slider<P extends object = {}> extends Flex<P> {
 
   /** `props` and `defaults` are the component's own (see `GameObject`); `hostProps` are this element's. */
   constructor(hostProps: SliderProps = {}, props?: P, defaults?: Partial<P>) {
-    super({ ...hostProps, width: hostProps.width ?? DEFAULT_WIDTH, height: hostProps.height ?? DEFAULT_HEIGHT, background: hostProps.background ?? DEFAULT_TRACK, focusable: hostProps.focusable ?? true }, props, defaults);
+    super(
+      {
+        ...hostProps,
+        width: hostProps.width ?? DEFAULT_WIDTH,
+        height: hostProps.height ?? DEFAULT_HEIGHT,
+        background: hostProps.background ?? DEFAULT_TRACK,
+        focusable: hostProps.focusable ?? true,
+      },
+      props,
+      defaults
+    );
     this.widget = WIDGET_SLIDER;
     this.min = hostProps.min ?? 0;
     this.max = hostProps.max ?? 1;

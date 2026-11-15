@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Its own file, so it runs in a fresh process: the other layout tests give the passes many shapes of input, and a
  * deoptimised pass allocates numbers that the optimised one does not. This measures the steady state a game reaches.
  */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Flex, Shape, Text, type FlexProps, type GameObject } from "@rge/runtime";
+
 import { Layouter, type MeasuredSize } from "../src/layout.ts";
 
 const host = {
@@ -38,7 +40,8 @@ describe("layout: allocation", () => {
     const rows: Flex[] = [];
     for (let r = 0; r < 10; r++) {
       const row = flex({ gap: 2, padding: 1, alignItems: "center", justifyContent: "space-between", width: "grow" });
-      for (let c = 0; c < 4; c++) row.addChild(flex({ width: c % 2 === 0 ? "grow" : "fit", maxWidth: 80 }, box(10 + c, 4), new Text({ text: "abc", size: 8 })));
+      for (let c = 0; c < 4; c++)
+        row.addChild(flex({ width: c % 2 === 0 ? "grow" : "fit", maxWidth: 80 }, box(10 + c, 4), new Text({ text: "abc", size: 8 })));
       rows.push(row);
     }
     const root = flex({ direction: "column", width: "grow", height: "grow", gap: 3 }, ...rows);

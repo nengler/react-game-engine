@@ -1,4 +1,5 @@
 import { createControls, type InputState } from "@rge/runtime";
+
 import type { Input } from "./run.ts";
 
 /** The game's actions and the keys that do each: the one place to rebind. `Main.tsx` hands it to `<Game controls={controls}>`. */

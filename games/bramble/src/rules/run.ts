@@ -6,9 +6,25 @@
  * talking, picking things up, cutting bushes, shrines, hearts and dying, the gate, and the save (`saveOf`, `loadRun`).
  */
 import { moveActorX, moveActorY, type PixelActor } from "@rge/runtime";
-import { BELLS_NEEDED, BODY, BODY_OFFSET, INVENTORY_SLOTS, INVULNERABLE, MAX_HEARTS, NOTICE_SECONDS, REACH, REVEAL_CPS, SAVE_VERSION, SPEED, SWING_SIZE, SWING_TIME, TILE } from "./constants.ts";
-import { knockBack, spawnEnemy, stepEnemy, type Enemy, type EnemyWorld } from "./enemies.ts";
+
+import {
+  BELLS_NEEDED,
+  BODY,
+  BODY_OFFSET,
+  INVENTORY_SLOTS,
+  INVULNERABLE,
+  MAX_HEARTS,
+  NOTICE_SECONDS,
+  REACH,
+  REVEAL_CPS,
+  SAVE_VERSION,
+  SPEED,
+  SWING_SIZE,
+  SWING_TIME,
+  TILE,
+} from "./constants.ts";
 import { DIALOGUE, NEAREST_BELL, type NpcId } from "./dialogue.ts";
+import { knockBack, spawnEnemy, stepEnemy, type Enemy, type EnemyWorld } from "./enemies.ts";
 import { cellAt, findDoor, MAP_IDS, MAPS, mapSize, type Door, type ItemId, type MapId } from "./maps.ts";
 
 export interface Talk {
@@ -91,11 +107,16 @@ export const NO_INPUT: Input = { dx: 0, dy: 0, action: false };
 const START: Run["shrine"] = { map: "overworld", col: 6, row: 42 };
 
 /** Where a body stands when placed on a tile. */
-export const bodyAt = (col: number, row: number): { x: number; y: number } => ({ x: col * TILE + BODY_OFFSET, y: row * TILE + BODY_OFFSET });
+export const bodyAt = (col: number, row: number): { x: number; y: number } => ({
+  x: col * TILE + BODY_OFFSET,
+  y: row * TILE + BODY_OFFSET,
+});
 
 /** Every enemy of every map that has not been defeated, at its spawn. */
 export function spawnAll(defeated: readonly string[]): Enemy[] {
-  return MAP_IDS.flatMap((map) => MAPS[map].enemies.filter((e) => !defeated.includes(e.id)).map((e) => spawnEnemy(e.id, e.kind, map, e.col, e.row)));
+  return MAP_IDS.flatMap((map) =>
+    MAPS[map].enemies.filter((e) => !defeated.includes(e.id)).map((e) => spawnEnemy(e.id, e.kind, map, e.col, e.row))
+  );
 }
 
 export function newRun(): Run {
@@ -146,7 +167,8 @@ function solidOn(run: Run, map: MapId, col: number, row: number, doorsSolid: boo
   return ch === "b" && !run.cut.includes(bushKey(map, col, row));
 }
 
-const overlaps = (ax: number, ay: number, bx: number, by: number, w: number): boolean => ax < bx + w && ax + w > bx && ay < by + w && ay + w > by;
+const overlaps = (ax: number, ay: number, bx: number, by: number, w: number): boolean =>
+  ax < bx + w && ax + w > bx && ay < by + w && ay + w > by;
 
 /** What enemies walk through: the rules for tiles and people, seen from one run. Actors block each other (people, other enemies). */
 function enemyWorld(run: Run): EnemyWorld {
@@ -267,7 +289,10 @@ function touch(run: Run, events: GameEvent[]): Run {
   if (shrine === undefined) next = { ...next, onShrine: null };
   else if (run.onShrine !== shrine.id) {
     events.push({ type: "shrine", id: shrine.id });
-    next = withNotice({ ...next, shrine: { map: run.map, col, row }, hearts: MAX_HEARTS, onShrine: shrine.id }, "The shrine hums. Your progress is kept.");
+    next = withNotice(
+      { ...next, shrine: { map: run.map, col, row }, hearts: MAX_HEARTS, onShrine: shrine.id },
+      "The shrine hums. Your progress is kept."
+    );
   }
 
   const pickup = def.pickups.find((p) => p.col === col && p.row === row && !run.taken.includes(p.id));
@@ -275,7 +300,7 @@ function touch(run: Run, events: GameEvent[]): Run {
     events.push({ type: "pickup", item: pickup.item, id: pickup.id });
     next = withNotice(
       { ...next, taken: [...next.taken, pickup.id], items: { ...next.items, [pickup.item]: (next.items[pickup.item] ?? 0) + 1 } },
-      `Got ${ITEM_NAMES[pickup.item]}!${pickup.item === "bell" ? ` (${(next.items.bell ?? 0) + 1} of ${BELLS_NEEDED})` : ""}`,
+      `Got ${ITEM_NAMES[pickup.item]}!${pickup.item === "bell" ? ` (${(next.items.bell ?? 0) + 1} of ${BELLS_NEEDED})` : ""}`
     );
   }
   return next;
@@ -286,7 +311,10 @@ export function hurt(run: Run, amount: number): StepResult {
   const hearts = run.hearts - amount;
   if (hearts > 0) return { run: { ...run, hearts }, events: [{ type: "hurt", hearts }] };
   const at = bodyAt(run.shrine.col, run.shrine.row + 1);
-  return { run: { ...run, map: run.shrine.map, x: at.x, y: at.y, rx: 0, ry: 0, hearts: MAX_HEARTS, talk: null, onShrine: null }, events: [{ type: "died" }] };
+  return {
+    run: { ...run, map: run.shrine.map, x: at.x, y: at.y, rx: 0, ry: 0, hearts: MAX_HEARTS, talk: null, onShrine: null },
+    events: [{ type: "died" }],
+  };
 }
 
 /** The action button: advance a conversation, start one, cut a bush, or swing. */
@@ -360,7 +388,15 @@ export function step(run: Run, input: Input, dt: number): StepResult {
     const blocked = (x: number, y: number): boolean => boxBlocked(next, x, y);
     moveActorX(actor, (input.dx / len) * SPEED * dt, blocked);
     moveActorY(actor, (input.dy / len) * SPEED * dt, blocked);
-    next = { ...next, x: actor.x, y: actor.y, rx: actor.rx, ry: actor.ry, fx: Math.sign(input.dx) || (input.dy !== 0 ? 0 : next.fx), fy: Math.sign(input.dy) || (input.dx !== 0 ? 0 : next.fy) };
+    next = {
+      ...next,
+      x: actor.x,
+      y: actor.y,
+      rx: actor.rx,
+      ry: actor.ry,
+      fx: Math.sign(input.dx) || (input.dy !== 0 ? 0 : next.fx),
+      fy: Math.sign(input.dy) || (input.dx !== 0 ? 0 : next.fy),
+    };
     next = touch(next, events);
   }
   // The enemies on this map: each moves, and one touching the character hurts them (then they have a moment of safety).
@@ -400,17 +436,45 @@ export interface SaveData {
 }
 
 export function saveOf(run: Run): SaveData {
-  return { version: SAVE_VERSION, items: { ...run.items }, taken: [...run.taken], cut: [...run.cut], shrine: { ...run.shrine }, time: run.time, defeated: [...run.defeated] };
+  return {
+    version: SAVE_VERSION,
+    items: { ...run.items },
+    taken: [...run.taken],
+    cut: [...run.cut],
+    shrine: { ...run.shrine },
+    time: run.time,
+    defeated: [...run.defeated],
+  };
 }
 
 /** A run from a save: standing at its shrine with full hearts. Null for a save of another version or one that is not a save. */
 export function loadRun(save: unknown): Run | null {
   if (typeof save !== "object" || save === null) return null;
   const s = save as Partial<SaveData>;
-  if (s.version !== SAVE_VERSION || s.items === undefined || s.taken === undefined || s.cut === undefined || s.shrine === undefined || typeof s.time !== "number") return null;
+  if (
+    s.version !== SAVE_VERSION ||
+    s.items === undefined ||
+    s.taken === undefined ||
+    s.cut === undefined ||
+    s.shrine === undefined ||
+    typeof s.time !== "number"
+  )
+    return null;
   const at = bodyAt(s.shrine.col, s.shrine.row + 1);
   const defeated = Array.isArray(s.defeated) ? [...s.defeated] : [];
-  return { ...newRun(), map: s.shrine.map, x: at.x, y: at.y, items: { ...s.items }, taken: [...s.taken], cut: [...s.cut], shrine: { ...s.shrine }, time: s.time, defeated, enemies: spawnAll(defeated) };
+  return {
+    ...newRun(),
+    map: s.shrine.map,
+    x: at.x,
+    y: at.y,
+    items: { ...s.items },
+    taken: [...s.taken],
+    cut: [...s.cut],
+    shrine: { ...s.shrine },
+    time: s.time,
+    defeated,
+    enemies: spawnAll(defeated),
+  };
 }
 
 /** The inventory's slots, eight of them, in a fixed order; a slot the character has nothing for is empty (`item` is ""). */
@@ -436,7 +500,8 @@ export function slotsOf(run: Run): Slot[] {
   const slots: Slot[] = [];
   for (const item of SLOT_ORDER) {
     const count = run.items[item] ?? 0;
-    if (count > 0) slots.push({ ...place(slots.length), item, filled: true, name: SLOT_NAMES[item], label: count > 1 ? `x${count}` : "", count });
+    if (count > 0)
+      slots.push({ ...place(slots.length), item, filled: true, name: SLOT_NAMES[item], label: count > 1 ? `x${count}` : "", count });
   }
   while (slots.length < INVENTORY_SLOTS) slots.push({ ...place(slots.length), item: "", filled: false, name: "", label: "", count: 0 });
   return slots;

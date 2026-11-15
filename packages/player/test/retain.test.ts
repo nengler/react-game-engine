@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { AnimatedSprite, Camera, Collider, Entity, Flex, Hud, Pointer, Shape, Sprite, Text, World, type GameObject } from "@rge/runtime";
+
 import { CollisionTracker } from "../src/collide.ts";
 import { FrameBuilder } from "../src/draw.ts";
 
@@ -49,7 +51,7 @@ class Dyn extends Entity {
 /** A tiny deterministic generator, so a failure reproduces. */
 function random(seed: number): () => number {
   let state = seed;
-  return () => ((state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff);
+  return () => (state = (Math.imul(state, 1103515245) + 12345) & 0x7fffffff) / 0x7fffffff;
 }
 
 /** An entity with a shape in it, added to `parent`: the kind of thing a scene is mostly made of. */
@@ -111,10 +113,18 @@ describe("reusing draw records", () => {
         for (let c = 0; c < changes; c++) {
           const d = pick(dyns);
           switch (Math.floor(next() * 8)) {
-            case 0: d.set({ x: next() * 100 }); break;
-            case 1: d.set({ color: pick(["red", "green", "blue"]) }); break;
-            case 2: d.set({ label: pick(["", "a", "bb", "ccc"]) }); break;
-            case 3: d.set({ z: pick([0, 0, 1, -1, 2]) }); break;
+            case 0:
+              d.set({ x: next() * 100 });
+              break;
+            case 1:
+              d.set({ color: pick(["red", "green", "blue"]) });
+              break;
+            case 2:
+              d.set({ label: pick(["", "a", "bb", "ccc"]) });
+              break;
+            case 3:
+              d.set({ z: pick([0, 0, 1, -1, 2]) });
+              break;
             case 4: {
               const parent = pick(containers);
               const fresh = new Dyn();
@@ -136,7 +146,10 @@ describe("reusing draw records", () => {
               moved.markChanged();
               break;
             }
-            default: d.shape.width = 5 + Math.floor(next() * 10); d.markChanged(); break;
+            default:
+              d.shape.width = 5 + Math.floor(next() * 10);
+              d.markChanged();
+              break;
           }
         }
         world.tick(1 / 60);
@@ -171,14 +184,21 @@ describe("reusing draw records", () => {
       const logs: string[][] = [[], []];
       const names = new Map<GameObject, string>();
       everything(root).forEach((o, i) => names.set(o, `o${i}`));
-      const worlds = logs.map((log) => ({ reportCollision: (a: GameObject, b: GameObject) => void log.push(`in ${names.get(a)} ${names.get(b)}`), reportCollisionExit: (a: GameObject, b: GameObject) => void log.push(`out ${names.get(a)} ${names.get(b)}`) }) as unknown as World);
+      const worlds = logs.map(
+        (log) =>
+          ({
+            reportCollision: (a: GameObject, b: GameObject) => void log.push(`in ${names.get(a)} ${names.get(b)}`),
+            reportCollisionExit: (a: GameObject, b: GameObject) => void log.push(`out ${names.get(a)} ${names.get(b)}`),
+          }) as unknown as World
+      );
       const incremental = new CollisionTracker();
       const full = new CollisionTracker(undefined, false);
       let frames = 0;
       for (let frame = 0; frame < 150; frame++) {
         // A few things move or recolour each frame; now and then something is added or removed.
         if (frame > 3) {
-          for (let c = Math.floor(next() * 6); c > 0; c--) pick(dyns).set(next() < 0.8 ? { x: next() * 300 } : { y: next() * 300, color: pick(["red", "blue"]) });
+          for (let c = Math.floor(next() * 6); c > 0; c--)
+            pick(dyns).set(next() < 0.8 ? { x: next() * 300 } : { y: next() * 300, color: pick(["red", "blue"]) });
           if (next() < 0.05) {
             const fresh = new Dyn();
             fresh.set({ x: next() * 300, y: next() * 300 });
@@ -196,7 +216,10 @@ describe("reusing draw records", () => {
         assert.deepEqual(logs[0], logs[1], `seed ${seed} frame ${frame}`);
         frames++;
       }
-      assert.ok(incremental.incrementalFrames > 40, `seed ${seed}: ${incremental.incrementalFrames} of ${frames} frames looked only at what moved`);
+      assert.ok(
+        incremental.incrementalFrames > 40,
+        `seed ${seed}: ${incremental.incrementalFrames} of ${frames} frames looked only at what moved`
+      );
     }
   });
 
@@ -314,7 +337,10 @@ describe("reusing draw records", () => {
     const other = new World();
     const a = new Entity();
     const b = new Entity();
-    for (const [w, e] of [[world, a], [other, b]] as const) {
+    for (const [w, e] of [
+      [world, a],
+      [other, b],
+    ] as const) {
       for (let i = 0; i < 10; i++) addStill(e, 3 + (e === b ? 1 : 0));
       w.mount(e);
     }

@@ -7,6 +7,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { ROOM_COLS, ROOM_ROWS, TILE } from "../src/rules/constants.ts";
 import { ROOM_SPECS } from "./rooms.ts";
 
@@ -41,7 +42,21 @@ ROOM_SPECS.forEach((spec, index) => {
   for (let r = 0; r < ROOM_ROWS; r++) {
     for (let c = 0; c < ROOM_COLS; c++) {
       const ch = at(c, r);
-      tilesData.push(ch === "#" ? (at(c, r - 1) === "#" ? GID.stone : GID.surface) : ch === "^" ? GID.spikeUp : ch === "v" ? GID.spikeDown : ch === "<" ? GID.spikeLeft : ch === ">" ? GID.spikeRight : 0);
+      tilesData.push(
+        ch === "#"
+          ? at(c, r - 1) === "#"
+            ? GID.stone
+            : GID.surface
+          : ch === "^"
+            ? GID.spikeUp
+            : ch === "v"
+              ? GID.spikeDown
+              : ch === "<"
+                ? GID.spikeLeft
+                : ch === ">"
+                  ? GID.spikeRight
+                  : 0
+      );
       markers.push(ch === "E" ? (spec.exit === "end" ? GID.end : GID.exit) : ch === "@" ? GID.start : 0);
     }
   }
@@ -64,8 +79,30 @@ ROOM_SPECS.forEach((spec, index) => {
     ],
     tilesets: [tileset],
     layers: [
-      { id: 1, name: "Tiles", type: "tilelayer", visible: true, opacity: 1, x: 0, y: 0, width: ROOM_COLS, height: ROOM_ROWS, data: tilesData },
-      { id: 2, name: "Markers", type: "tilelayer", visible: false, opacity: 1, x: 0, y: 0, width: ROOM_COLS, height: ROOM_ROWS, data: markers },
+      {
+        id: 1,
+        name: "Tiles",
+        type: "tilelayer",
+        visible: true,
+        opacity: 1,
+        x: 0,
+        y: 0,
+        width: ROOM_COLS,
+        height: ROOM_ROWS,
+        data: tilesData,
+      },
+      {
+        id: 2,
+        name: "Markers",
+        type: "tilelayer",
+        visible: false,
+        opacity: 1,
+        x: 0,
+        y: 0,
+        width: ROOM_COLS,
+        height: ROOM_ROWS,
+        data: markers,
+      },
     ],
   };
   writeFileSync(join(dir, `room${index + 1}.tmj`), `${JSON.stringify(map)}\n`);

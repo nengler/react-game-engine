@@ -1,4 +1,5 @@
 import { Text, type TextChild } from "@rge/runtime/jsx";
+
 import { COLOR } from "./theme.ts";
 
 interface LabelProps {

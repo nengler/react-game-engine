@@ -1,18 +1,32 @@
+import assert from "node:assert/strict";
 /** `<TextInput>`: typed characters from the backend (`Backend.typed`, ABI v9) go into the focused field, through the player's loop. */
 import { describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Button, createControls, createInputState, Entity, Flex, Game, TextInput, World, type GameObject } from "@rge/runtime";
+
 import { createPlayer } from "../src/loop.ts";
 import { RecordingBackend, type DecodedRecord } from "../src/recording.ts";
 
-const controls = createControls({ confirm: ["Z", "Enter"], back: ["X", "Escape"], up: ["ArrowUp", "W"], down: ["ArrowDown", "S"], left: ["ArrowLeft", "A"], right: ["ArrowRight", "D"] });
+const controls = createControls({
+  confirm: ["Z", "Enter"],
+  back: ["X", "Escape"],
+  up: ["ArrowUp", "W"],
+  down: ["ArrowDown", "S"],
+  left: ["ArrowLeft", "A"],
+  right: ["ArrowRight", "D"],
+});
 
 /** A world with a field, focused, and a button below it; `type` runs a step with what was typed and the keys pressed. */
 function field(props: ConstructorParameters<typeof TextInput>[0] = {}) {
   const log: string[] = [];
   const world = new World();
   const root = new Flex({ direction: "column" });
-  const input = new TextInput({ autoFocus: true, onChange: (v) => log.push(`change ${v}`), onSubmit: (v) => log.push(`submit ${v}`), ...props });
+  const input = new TextInput({
+    autoFocus: true,
+    onChange: (v) => log.push(`change ${v}`),
+    onSubmit: (v) => log.push(`submit ${v}`),
+    ...props,
+  });
   const button = new Button({ onPress: () => log.push("press"), pressKey: "M" });
   button.transform.y = 20; // below the field, for the focus to go down to (no layout runs here)
   root.addChild(input);

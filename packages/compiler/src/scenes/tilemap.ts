@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 /**
  * Tiled map (`.tmj`) → the data of a `<Tilemap>`: the tile layers (global tile ids with the flip bits split off, and whether the
  * layer is shown), the size of a cell, which tiles are solid (the tile property `solid`), each tileset's sheet and how it is cut,
@@ -10,7 +11,7 @@
  * drawn unless the `<Tilemap>` names a sheet); each of these says so rather than being quietly wrong.
  */
 import { gunzipSync, inflateSync } from "node:zlib";
-import { posix } from "node:path";
+
 import { DiagnosticCode, error, warning, type CompilerDiagnostic } from "../diagnostics/diagnostics.ts";
 import { readTsx, type TilesetJson } from "./tsx.ts";
 
@@ -114,7 +115,8 @@ function readProperties(list: unknown): Record<string, PropertyValue> {
   const out: Record<string, PropertyValue> = {};
   if (!Array.isArray(list)) return out;
   for (const p of list as { name?: unknown; value?: unknown }[]) {
-    if (typeof p.name === "string" && (typeof p.value === "string" || typeof p.value === "number" || typeof p.value === "boolean")) out[p.name] = p.value;
+    if (typeof p.name === "string" && (typeof p.value === "string" || typeof p.value === "number" || typeof p.value === "boolean"))
+      out[p.name] = p.value;
   }
   return out;
 }
@@ -125,11 +127,15 @@ function decodeLayerData(text: string, compression: unknown, cells: number): { d
   try {
     if (compression === "zlib") bytes = inflateSync(bytes);
     else if (compression === "gzip") bytes = gunzipSync(bytes);
-    else if (compression !== undefined && compression !== "") return { reason: `compression '${String(compression)}' is not supported: set the map's Tile Layer Compression to zlib or gzip, or Tile Layer Format to CSV` };
+    else if (compression !== undefined && compression !== "")
+      return {
+        reason: `compression '${String(compression)}' is not supported: set the map's Tile Layer Compression to zlib or gzip, or Tile Layer Format to CSV`,
+      };
   } catch {
     return { reason: "its data does not decompress" };
   }
-  if (bytes.length !== cells * 4) return { reason: `it holds ${bytes.length} bytes, not ${cells * 4} (${cells} cells), but the map is ${cells}` };
+  if (bytes.length !== cells * 4)
+    return { reason: `it holds ${bytes.length} bytes, not ${cells * 4} (${cells} cells), but the map is ${cells}` };
   const data: number[] = new Array<number>(cells);
   for (let i = 0; i < cells; i++) data[i] = bytes.readUInt32LE(i * 4);
   return { data };
@@ -144,7 +150,16 @@ export function importTilemap(fileName: string, text: string, options: TilemapIm
   };
   const note = (message: string): void => void diagnostics.push(warning(DiagnosticCode.TiledImport, at(message), null));
 
-  let map: { width?: unknown; height?: unknown; tilewidth?: unknown; tileheight?: unknown; infinite?: unknown; layers?: unknown; tilesets?: unknown; properties?: unknown };
+  let map: {
+    width?: unknown;
+    height?: unknown;
+    tilewidth?: unknown;
+    tileheight?: unknown;
+    infinite?: unknown;
+    layers?: unknown;
+    tilesets?: unknown;
+    properties?: unknown;
+  };
   try {
     map = JSON.parse(text) as typeof map;
   } catch {
@@ -154,10 +169,14 @@ export function importTilemap(fileName: string, text: string, options: TilemapIm
   const { width, height, tilewidth, tileheight } = map;
   if (map.infinite === true) {
     const tileLayers = (map.layers as RawLayer[]).some((l) => l.type === "tilelayer");
-    return tileLayers ? fail("an infinite map has no fixed size to draw: turn off Infinite in the map's properties.") : { tilemap: null, diagnostics };
+    return tileLayers
+      ? fail("an infinite map has no fixed size to draw: turn off Infinite in the map's properties.")
+      : { tilemap: null, diagnostics };
   }
   if (typeof width !== "number" || typeof height !== "number" || typeof tilewidth !== "number" || typeof tileheight !== "number") {
-    return (map.layers as RawLayer[]).some((l) => l.type === "tilelayer") ? fail("a map with tile layers needs a numeric width, height, tilewidth and tileheight.") : { tilemap: null, diagnostics };
+    return (map.layers as RawLayer[]).some((l) => l.type === "tilelayer")
+      ? fail("a map with tile layers needs a numeric width, height, tilewidth and tileheight.")
+      : { tilemap: null, diagnostics };
   }
 
   const layers: TilemapLayerOut[] = [];
@@ -177,7 +196,9 @@ export function importTilemap(fileName: string, text: string, options: TilemapIm
     let cells: unknown[];
     if (typeof layer.data === "string") {
       if (layer.encoding !== "base64") {
-        fail(`tile layer '${name}' has text data in an encoding the importer does not read: set the map's Tile Layer Format to CSV or base64.`);
+        fail(
+          `tile layer '${name}' has text data in an encoding the importer does not read: set the map's Tile Layer Format to CSV or base64.`
+        );
         return;
       }
       const decoded = decodeLayerData(layer.data, layer.compression, width * height);
@@ -210,7 +231,8 @@ export function importTilemap(fileName: string, text: string, options: TilemapIm
         flips[i] = flags;
         flipped = true;
       }
-      if ((raw & 0x10000000) !== 0) note(`tile layer '${name}', cell ${i} is a rotated hexagonal tile, which is not supported: it is drawn unrotated.`);
+      if ((raw & 0x10000000) !== 0)
+        note(`tile layer '${name}', cell ${i} is a rotated hexagonal tile, which is not supported: it is drawn unrotated.`);
     }
     layers.push({ name, visible, data, ...(flipped ? { flips } : {}) });
   };
@@ -229,7 +251,16 @@ export function importTilemap(fileName: string, text: string, options: TilemapIm
           if (o["visible"] === false) continue;
           const properties = readProperties(o["properties"]);
           const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-          objects.push({ id: num(o["id"]), name: typeof o["name"] === "string" ? o["name"] : "", type: typeof o["type"] === "string" ? o["type"] : typeof o["class"] === "string" ? o["class"] : "", x: x + num(o["x"]), y: y + num(o["y"]), width: num(o["width"]), height: num(o["height"]), properties });
+          objects.push({
+            id: num(o["id"]),
+            name: typeof o["name"] === "string" ? o["name"] : "",
+            type: typeof o["type"] === "string" ? o["type"] : typeof o["class"] === "string" ? o["class"] : "",
+            x: x + num(o["x"]),
+            y: y + num(o["y"]),
+            width: num(o["width"]),
+            height: num(o["height"]),
+            properties,
+          });
         }
       }
     }
@@ -251,7 +282,9 @@ export function importTilemap(fileName: string, text: string, options: TilemapIm
       const source = String(set.source);
       const xml = /\.tsx$/i.test(source);
       if (!xml && !/\.(tsj|json)$/i.test(source)) {
-        note(`the tileset '${source}' is neither JSON (.tsj) nor XML (.tsx), so it is not read: its tiles are not solid and are not drawn. Save it as .tsj or .tsx, or embed it in the map.`);
+        note(
+          `the tileset '${source}' is neither JSON (.tsj) nor XML (.tsx), so it is not read: its tiles are not solid and are not drawn. Save it as .tsj or .tsx, or embed it in the map.`
+        );
         tilesets.push({ firstGid: base, image: "", columns: 0, tileWidth: tilewidth, tileHeight: tileheight, margin: 0, spacing: 0 });
         continue;
       }
@@ -287,19 +320,28 @@ export function importTilemap(fileName: string, text: string, options: TilemapIm
     if (typeof body.image === "string" && body.image !== "") {
       const fromMap = posix.normalize(posix.join(folder, body.image.split("\\").join("/")));
       const resolved = options.resolveImage === undefined ? fromMap : options.resolveImage(fromMap);
-      if (resolved === null) note(`the tileset image '${fromMap}' (from the map's folder) is not in the assets folder, so a <Tilemap> without \`image\` cannot draw its tiles. Keep tile sheets in the assets folder.`);
+      if (resolved === null)
+        note(
+          `the tileset image '${fromMap}' (from the map's folder) is not in the assets folder, so a <Tilemap> without \`image\` cannot draw its tiles. Keep tile sheets in the assets folder.`
+        );
       else image = resolved;
       columns = numOr(body.columns, 0);
-      if (columns <= 0 && typeof body.imagewidth === "number") columns = Math.floor((body.imagewidth - 2 * margin + spacing) / (tileWidth + spacing));
+      if (columns <= 0 && typeof body.imagewidth === "number")
+        columns = Math.floor((body.imagewidth - 2 * margin + spacing) / (tileWidth + spacing));
     } else if (Array.isArray(body.tiles) && (body.tiles as { image?: unknown }[]).some((t) => typeof t.image === "string")) {
-      note(`a tileset (first id ${base}) is a collection of images, which a <Tilemap> cannot draw from: make it one sheet, or give the <Tilemap> an \`image\`.`);
+      note(
+        `a tileset (first id ${base}) is a collection of images, which a <Tilemap> cannot draw from: make it one sheet, or give the <Tilemap> an \`image\`.`
+      );
     }
     tilesets.push({ firstGid: base, image, columns, tileWidth, tileHeight, margin, spacing });
   }
   tilesets.sort((a, b) => a.firstGid - b.firstGid);
   const firstGid = tilesets[0]?.firstGid ?? 1;
   const properties = readProperties(map.properties);
-  return { tilemap: { width, height, tileWidth: tilewidth, tileHeight: tileheight, firstGid, solid, layers, objects, tilesets, properties }, diagnostics };
+  return {
+    tilemap: { width, height, tileWidth: tilewidth, tileHeight: tileheight, firstGid, solid, layers, objects, tilesets, properties },
+    diagnostics,
+  };
 }
 
 /** The text of `generated/tilemaps.ts` for the maps found, by name: the table `registerTilemaps` takes. */
@@ -313,7 +355,9 @@ export function tilemapsSource(maps: ReadonlyMap<string, TilemapOut>, fromDir: s
   ];
   for (const [name, map] of [...maps].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     lines.push(`  ${JSON.stringify(name)}: {`);
-    lines.push(`    width: ${map.width}, height: ${map.height}, tileWidth: ${map.tileWidth}, tileHeight: ${map.tileHeight}, firstGid: ${map.firstGid},`);
+    lines.push(
+      `    width: ${map.width}, height: ${map.height}, tileWidth: ${map.tileWidth}, tileHeight: ${map.tileHeight}, firstGid: ${map.firstGid},`
+    );
     lines.push(`    solid: ${JSON.stringify(map.solid)},`);
     lines.push("    layers: [");
     for (const layer of map.layers) {

@@ -23,8 +23,10 @@ import { existsSync, mkdirSync, readFileSync, watch, writeFileSync, type FSWatch
 import { registerHooks } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
 import { createPlayer, HOST_BACKEND_KEY, HOST_RUN_KEY, Rewind, type Backend, type Player, type PlayerConfig } from "@rge/player";
 import { GameStore } from "@rge/runtime";
+
 import { startInspector, type Inspector } from "./inspector.ts";
 
 export interface DevOptions {
@@ -124,7 +126,8 @@ export function compileErrors(output: string): string {
 function storesOf(file: string, namespace: Record<string, unknown>, into: Map<string, GameStore<unknown>>): void {
   for (const [name, value] of Object.entries(namespace)) {
     const store = (value as { store?: unknown } | null)?.store;
-    if ((typeof value === "function" || typeof value === "object") && store instanceof GameStore) into.set(`${file}#${name}`, store as GameStore<unknown>);
+    if ((typeof value === "function" || typeof value === "object") && store instanceof GameStore)
+      into.set(`${file}#${name}`, store as GameStore<unknown>);
   }
 }
 
@@ -209,7 +212,13 @@ export async function playWithReload(backend: Backend, options: DevOptions): Pro
   let inspector: Inspector | null = null;
   if (options.inspector !== false) {
     try {
-      inspector = await startInspector({ root: () => player.world.root.children[0] ?? null, stores: () => stores, port: options.inspector ?? 0, log, rewind });
+      inspector = await startInspector({
+        root: () => player.world.root.children[0] ?? null,
+        stores: () => stores,
+        port: options.inspector ?? 0,
+        log,
+        rewind,
+      });
       log(`inspector: ${inspector.url}  (F1 in the window outlines the layout${rewind !== null ? ", F2 pauses to rewind" : ""})`);
     } catch (error) {
       log(`The inspector could not start: ${String(error)}`);

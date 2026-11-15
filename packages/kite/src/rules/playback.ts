@@ -1,4 +1,5 @@
 import { FixedDriver, RGE_KEY_DOWN, RGE_KEY_PRESSED } from "@rge/player";
+
 import type { Controls } from "./body.ts";
 import type { GameEvent } from "./events.ts";
 import { freezeFor } from "./freeze.ts";
@@ -43,7 +44,16 @@ export function playFrame(p: Playback, c: Controls, dt: number): Playback {
       return true;
     }
     const events: GameEvent[] = [];
-    sim = stepSim(sim, { ...c, jumpPressed: ((update[JUMP] as number) & RGE_KEY_PRESSED) !== 0, dashPressed: ((update[DASH] as number) & RGE_KEY_PRESSED) !== 0 }, stepDt, events);
+    sim = stepSim(
+      sim,
+      {
+        ...c,
+        jumpPressed: ((update[JUMP] as number) & RGE_KEY_PRESSED) !== 0,
+        dashPressed: ((update[DASH] as number) & RGE_KEY_PRESSED) !== 0,
+      },
+      stepDt,
+      events
+    );
     frozen = freezeFor(events);
     return false;
   });

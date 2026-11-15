@@ -1,4 +1,5 @@
 import { Entity, Text, useInput } from "@rge/runtime/jsx";
+
 import { useGame } from "./GameState.ts";
 
 export function End() {
@@ -11,9 +12,13 @@ export function End() {
   const seconds = String(Math.floor(time % 60)).padStart(2, "0");
   return (
     <Entity>
-      <Text x={0} y={55} width={320} align="center" size={20}>The gate opens.</Text>
+      <Text x={0} y={55} width={320} align="center" size={20}>
+        The gate opens.
+      </Text>
       <Text x={0} y={85} width={320} align="center" color="#a7b0c8">{`Time ${minutes}:${seconds}`}</Text>
-      <Text x={0} y={120} width={320} align="center" color="#a7b0c8">Press Enter</Text>
+      <Text x={0} y={120} width={320} align="center" color="#a7b0c8">
+        Press Enter
+      </Text>
     </Entity>
   );
 }

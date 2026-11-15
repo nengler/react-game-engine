@@ -1,10 +1,12 @@
+import assert from "node:assert/strict";
 /**
  * Text wrappers (REACT_FEEL_PLAN.md, B3): a component whose props say `children: TextChild | readonly TextChild[]` takes words
  * between its tags, as `<Text>` does, and passes them on with `<Text>{children}</Text>`.
  */
 import { after, describe, it } from "node:test";
-import assert from "node:assert/strict";
+
 import { Entity, Text, World } from "@rge/runtime";
+
 import { DiagnosticCode } from "../src/index.ts";
 import { cleanOutput, closeCompiler, compile, compileErrors, load, typeCheck } from "./helpers.ts";
 
@@ -86,6 +88,9 @@ export function Mixed() {
     const errors = compileErrors(`
 interface P { children: string[][] }
 export function Bad({ children }: P) { return <Text>{children}</Text>; }`);
-    assert.ok(errors.some((d) => /`Child` \(elements[\s\S]*TextChild \| readonly TextChild\[\]/.test(d.message)), JSON.stringify(errors));
+    assert.ok(
+      errors.some((d) => /`Child` \(elements[\s\S]*TextChild \| readonly TextChild\[\]/.test(d.message)),
+      JSON.stringify(errors)
+    );
   });
 });

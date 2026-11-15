@@ -1,6 +1,8 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
 import { createGameState, Entity, Game, Screen, Text, type GameObject } from "@rge/runtime";
+
 import { gameLook, runScript, stories, storiesIn, story, storyRoot } from "../src/index.ts";
 
 const useScore = createGameState<{ score: number }>()(() => ({ score: 0 }));
@@ -30,7 +32,7 @@ describe("stories", () => {
       [
         ["Badge/Plain", { label: "plain" }],
         ["Badge/Scored", { label: "scored" }],
-      ],
+      ]
     );
     assert.equal(loaded[1]!.options.input, "Space, _");
   });
