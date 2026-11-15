@@ -86,7 +86,7 @@ function handlerOf(component: ComponentIR, index = 1): FunctionIR {
   return hook.handler;
 }
 
-describe("M1: function and statement IR", () => {
+describe("handlers: function and statement IR", () => {
   it("lowers every statement kind", () => {
     const fn = handlerOf(
       irOf(`useUpdate((dt) => {
@@ -170,7 +170,7 @@ function C() {
   });
 });
 
-describe("M1: diagnostics", () => {
+describe("handlers: diagnostics", () => {
   const codes = (body: string) =>
     compileErrors(`
 function C() {
@@ -283,7 +283,7 @@ function C() {
   });
 });
 
-describe("M2: hooks and the frame loop", () => {
+describe("hooks and the frame loop", () => {
   it("generates one override per hook kind; several handlers run in source order", () => {
     const { code } = compile(HERO, "Hero.tsx");
     assert.equal(code.match(/override onUpdate\(/g)?.length, 1);

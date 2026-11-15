@@ -1,14 +1,10 @@
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 /**
- * M7: authoring types. Component source imports hooks and built-in elements
- * from `@tsengine/runtime/jsx`; the TypeScript checker then type-checks the TSX
- * itself (wrong props, bad hook arguments, undefined names).
+ * Authoring types. Component source imports hooks and built-in elements from `@tsengine/runtime/jsx`; the TypeScript checker then
+ * type-checks the TSX itself (wrong props, bad hook arguments, undefined names). Imports themselves are in imports.test.ts.
  */
+import assert from "node:assert/strict";
+import { join } from "node:path";
 import { after, describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
 
 import { Transform, runtimeManifest } from "@tsengine/runtime";
 import * as authoring from "@tsengine/runtime/jsx";
@@ -34,7 +30,7 @@ function checkSource(source: string): { code: string; message: string }[] {
 
 const IMPORTS = `import { useMutable, useUpdate, useInput, clamp, Entity, Sprite, Collider } from "@tsengine/runtime/jsx";`;
 
-describe("M7: the authoring module", () => {
+describe("the authoring module", () => {
   it("exports exactly the hooks, built-in elements and functions the compiler accepts, and the engine's own custom hooks", () => {
     const expected = [
       ...runtimeManifest.intrinsics,
@@ -55,7 +51,7 @@ describe("M7: the authoring module", () => {
   });
 });
 
-describe("M7: type-checking authored TSX", () => {
+describe("type-checking authored TSX", () => {
   it("accepts a component that uses every hook, built-in and a transform", () => {
     const source = `${IMPORTS}
 function Hero() {
@@ -158,105 +154,5 @@ function C() {
     // Not imported: an editor reports it, and so does the checker.
     const unimported = checkSource(`function C() { const s = useMutable({ n: 0 }); return <Entity />; }`);
     assert.ok(unimported.some((e) => /useMutable/.test(e.message)));
-  });
-});
-
-describe("M7: imports are mandatory", () => {
-  /** Calls the compiler directly, so the test helpers cannot add imports for us. */
-  const codes = (source: string) =>
-    getCompiler()
-      .compile("Raw.tsx", source)
-      .diagnostics.map((d) => d.code);
-  const messages = (source: string) =>
-    getCompiler()
-      .compile("Raw.tsx", source)
-      .diagnostics.map((d) => d.message);
-
-  it("reports each hook, element and function used without an import, once per name", () => {
-    const source = `function C() {
-  const s = useMutable({ n: 0, m: 0 });
-  useUpdate((dt) => { s.n = clamp(s.n + dt, 0, 10); });
-  useUpdate((dt) => { s.m = clamp(s.m + dt, 0, 10); });
-  return <Entity name="C"><Sprite image="a.png" /><Sprite image="b.png" /></Entity>;
-}`;
-    const result = getCompiler().compile("Raw.tsx", source);
-    assert.ok(!result.ok);
-    assert.ok(result.diagnostics.every((d) => d.code === DiagnosticCode.MissingImport));
-    // useUpdate is used twice, Sprite twice: still one report per name, in order of first use.
-    assert.deepEqual(
-      result.diagnostics.map((d) => /'(\w+)'/.exec(d.message)?.[1]),
-      ["useMutable", "useUpdate", "clamp", "Entity", "Sprite"]
-    );
-  });
-
-  it("names the import line to add", () => {
-    const [message] = messages(`function C() { return <Entity name="C" />; }`);
-    assert.equal(message, `'Entity' is not imported: add \`import { Entity } from "@tsengine/runtime/jsx"\`.`);
-  });
-
-  it("reports a name once per file, however many components use it", () => {
-    const source = `function A() { return <Entity name="A" />; }\nfunction B() { return <Entity name="B" />; }`;
-    assert.deepEqual(codes(source), [DiagnosticCode.MissingImport]);
-  });
-
-  it("is satisfied by importing, and does not ask for globals like Math", () => {
-    const source = `import { useMutable, useUpdate, Entity } from "@tsengine/runtime/jsx";
-function C() {
-  const s = useMutable({ n: 0 });
-  useUpdate(() => { s.n = Math.floor(s.n + 1); });
-  return <Entity name="C" />;
-}`;
-    assert.deepEqual(codes(source), []);
-  });
-
-  it("checks every hook kind, including the ones that shaped earlier tests", () => {
-    for (const hook of ["useMutable", "useUpdate", "useInput"]) {
-      const body = hook === "useMutable" ? `const a = useMutable({ n: 0 });` : `${hook}(() => {});`;
-      const others = ["Entity", ...AUTHORING_HOOKS.filter((h) => h !== hook)].join(", ");
-      const result = codes(`import { ${others} } from "@tsengine/runtime/jsx";\nfunction C() { ${body} return <Entity name="C" />; }`);
-      assert.deepEqual(result, [DiagnosticCode.MissingImport], hook);
-    }
-  });
-
-  it("is a separate error from a name the entry point does not export", () => {
-    assert.deepEqual(codes(`import { Entity, Nope } from "@tsengine/runtime/jsx";\nfunction C() { return <Entity name="C" />; }`), [
-      DiagnosticCode.UnknownImport,
-    ]);
-  });
-});
-
-describe("M7: the CLI type-checks sources", () => {
-  const cli = resolve(dirname(fileURLToPath(import.meta.url)), "../src/cli.ts");
-
-  /** Writes a one-file project inside the repo (so `@tsengine/runtime/jsx` resolves) and runs the CLI on it. */
-  function runCli(source: string, ...flags: string[]) {
-    const dir = join(OUTPUT_ROOT, `m7-cli-${process.pid}`, String(++counter));
-    mkdirSync(join(dir, "src"), { recursive: true });
-    writeFileSync(join(dir, "src", "Coin.tsx"), source);
-    const result = spawnSync(process.execPath, [cli, join(dir, "src"), join(dir, "out"), ...flags], { encoding: "utf8" });
-    return { status: result.status, output: `${result.stdout}${result.stderr}` };
-  }
-
-  const COIN = (props: string) => `${IMPORTS}
-export function Coin() {
-  return <Entity name="coin"><Sprite ${props} /></Entity>;
-}`;
-
-  it("fails with a source type error before anything is generated wrongly", () => {
-    const { status, output } = runCli(COIN(`imag="coin.png"`));
-    assert.equal(status, 1);
-    assert.match(output, /TSE9002/);
-    assert.match(output, /Did you mean 'image'/);
-  });
-
-  it("skips the source check with --no-check", () => {
-    assert.equal(runCli(COIN(`imag="coin.png"`), "--no-check").status, 0);
-  });
-
-  it("fails a source that does not import what it uses, with both the compiler's and TypeScript's error", () => {
-    const { status, output } = runCli(`export function Coin() { return <Entity name="coin" />; }`);
-    assert.equal(status, 1);
-    assert.match(output, /TSE1005: 'Entity' is not imported: add `import \{ Entity \} from "@tsengine\/runtime\/jsx"`/);
-    assert.match(output, /TSE9002/);
   });
 });

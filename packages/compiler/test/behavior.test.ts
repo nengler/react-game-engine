@@ -585,3 +585,47 @@ describe("nested components", () => {
     assert.ok(!level.children.includes(boss));
   });
 });
+
+describe("nested conditionals commit without a World", () => {
+  const NESTED = `
+function Nested() {
+  const s = useMutable({ outer: true, inner: true });
+  return (
+    <Entity name="Nested">
+      {s.outer && (
+        <Entity name="Outer">
+          {s.inner && <Sprite image="deep.png" />}
+        </Entity>
+      )}
+    </Entity>
+  );
+}`;
+
+  it("attaches the full subtree of a freshly constructed object", async () => {
+    const { Nested } = await load<{ Nested: new () => Entity }>(compile(NESTED, "Nested.tsx"));
+    const nested = new Nested();
+    assert.equal(nested.children.length, 1);
+    const outer = nested.children[0]!;
+    assert.equal(outer.children.length, 1);
+    assert.ok(outer.children[0] instanceof Sprite);
+    assert.equal(nested.hasPendingStructure, false);
+    assert.equal(outer.hasPendingStructure, false);
+  });
+
+  it("still settles correctly inside a World when state flips later", async () => {
+    const mod = await load<{ Nested: new () => Entity & { s: { [field: string]: unknown } } }>(compile(NESTED, "Nested.tsx"));
+    const world = new World();
+    const nested = new mod.Nested();
+    world.mount(nested);
+    nested.s.inner = false;
+    world.flush();
+    assert.equal(nested.children[0]!.children.length, 0);
+    nested.s.outer = false;
+    world.flush();
+    assert.equal(nested.children.length, 0);
+    nested.s.outer = true;
+    nested.s.inner = true;
+    world.flush();
+    assert.equal(nested.children[0]!.children.length, 1);
+  });
+});

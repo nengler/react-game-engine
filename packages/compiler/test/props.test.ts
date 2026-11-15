@@ -1,26 +1,25 @@
-import assert from "node:assert/strict";
 /**
- * M4: props and callbacks between components, and `transform` on a component
- * element (placement). A parent passes values and callbacks to a local or
- * imported component; a changed value updates the existing child in place.
+ * Props and callbacks between components. A parent passes values and callbacks to a local or imported component; a changed
+ * value updates the existing child in place. Also the props object (`props.name`) and a callback prop forwarded to a built-in.
  */
+import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
-import { Collider, Entity, Sprite, World } from "@tsengine/runtime";
+import { Entity, Sprite, World, Flex } from "@tsengine/runtime";
 
-import { DiagnosticCode, type ComponentIR } from "../src/index.ts";
+import { DiagnosticCode } from "../src/index.ts";
 import {
   cleanOutput,
   closeCompiler,
   compile,
   compileErrors,
   compileProject,
-  getCompiler,
   load,
   loadProject,
   typeCheck,
   typeCheckProject,
   elementOf,
+  component,
 } from "./helpers.ts";
 
 after(() => {
@@ -81,13 +80,7 @@ before(async () => {
   ({ Enemy, Level } = await load<{ Enemy: typeof Enemy; Level: typeof Level }>(compile(GAME, "Game.tsx")));
 });
 
-function component(source: string, name: string): ComponentIR {
-  const found = compile(source).ir.components.find((c) => c.name === name);
-  assert.ok(found, name);
-  return found;
-}
-
-describe("M4: IR shape", () => {
+describe("props: IR shape", () => {
   it("keeps the props type declaration and describes every prop", () => {
     const { ir } = compile(GAME, "Game.tsx");
     assert.deepEqual(
@@ -161,7 +154,7 @@ function P() { const s = useMutable({ n: 0 }); return <Entity name="P"><Child on
   });
 });
 
-describe("M4: generated code", () => {
+describe("props: generated code", () => {
   it("types the class with its props, passes them and the defaults up, and generates updateProps", () => {
     const { code } = compile(GAME, "Game.tsx");
     assert.match(code, /^export interface EnemyProps \{/m);
@@ -221,7 +214,7 @@ function Host() { return <Entity name="H"><Badge /></Entity>; }`);
   });
 });
 
-describe("M4: runtime behaviour", () => {
+describe("props: runtime behaviour", () => {
   it("updates the child in place when the parent's state changes, rendering the child once", () => {
     const world = new World();
     const level = new Level();
@@ -304,7 +297,7 @@ describe("M4: runtime behaviour", () => {
   });
 });
 
-describe("M4: where props can be read", () => {
+describe("where props can be read", () => {
   it("reads props when a state value is first created, and in handlers, conditions and derived values", async () => {
     const { Counter } = await load<{
       Counter: new (props: { start: number; limit: number; show?: boolean }) => Entity & { updateProps(p: object): void; s: { n: number } };
@@ -372,51 +365,7 @@ function Panel({ onDone }: PanelProps) {
   });
 });
 
-describe("M4: placing a component with transform", () => {
-  const SCENE = `
-function Mover() {
-  const s = useMutable({ x: 0 });
-  return <Entity name="Mover" transform={{ x: s.x }} />;
-}
-function Scene() {
-  const s = useMutable({ spawn: 50, pinned: false });
-  return (
-    <Entity name="Scene" transform={{ x: 100 }}>
-      <Mover transform={{ x: s.spawn, y: 5, global: s.pinned }} />
-    </Entity>
-  );
-}`;
-
-  it("composes the parent's placement under the child's own transform", async () => {
-    const { Scene } = await load<{
-      Scene: new () => Entity & { mover: Entity & { s: { x: number } }; s: { spawn: number; pinned: boolean } };
-    }>(compile(SCENE));
-    const world = new World();
-    const scene = new Scene();
-    world.mount(scene);
-    const mover = scene.mover;
-    assert.deepEqual([mover.placement.x, mover.placement.y, mover.transform.x], [50, 5, 0]);
-    assert.deepEqual([mover.worldTransform().x, mover.worldTransform().y], [150, 5], "scene 100 + placement 50, own transform 0");
-
-    mover.s.x = 7;
-    world.flush();
-    assert.equal(mover.worldTransform().x, 157, "the child moves relative to where it was placed");
-
-    scene.s.spawn = 80;
-    world.flush();
-    assert.equal(mover.worldTransform().x, 187, "placement follows the parent's state");
-
-    scene.s.pinned = true;
-    world.flush();
-    assert.equal(mover.worldTransform().x, 87, "a global placement ignores the scene's transform; the child's own still applies");
-  });
-
-  it("type-checks", () => {
-    assert.deepEqual(typeCheck(compile(SCENE)), []);
-  });
-});
-
-describe("M4: across files", () => {
+describe("props across files", () => {
   const FILES = {
     "Enemy.tsx": `interface EnemyProps { speed: number; onDefeated?: () => void }
 export function Enemy({ speed, onDefeated }: EnemyProps) {
@@ -459,7 +408,7 @@ export function Level() {
   });
 });
 
-describe("M4: diagnostics", () => {
+describe("props: diagnostics", () => {
   const codes = (source: string) => compileErrors(source).map((d) => d.code);
   const withProps = (declaration: string, parameter: string, body = "") =>
     `${declaration}\nfunction A(${parameter}) { ${body} return <Entity name="A" />; }`;
@@ -597,79 +546,7 @@ export function Capped({ speed = clamp(5, 0, 3) }: P) { return <Entity name="Cap
   });
 });
 
-// ---------------------------------------------------------------------------
-// M4b: component forms, roots, collider callbacks
-// ---------------------------------------------------------------------------
-
-describe("M4b: component forms", () => {
-  it("compiles an arrow-function component with props, hooks and state like a function declaration", async () => {
-    const { Badge } = await load<{ Badge: new (props: { label: string; step?: number }) => Entity & { s: { n: number } } }>(
-      compile(`interface BadgeProps { label: string; step?: number }
-export const Badge = ({ label, step = 2 }: BadgeProps) => {
-  const s = useMutable({ n: 0 });
-  useUpdate(() => { s.n += step; });
-  return <Entity name={label} />;
-};`)
-    );
-    const world = new World();
-    const badge = new Badge({ label: "b" });
-    world.mount(badge);
-    world.tick(1);
-    assert.deepEqual([badge.name, badge.s.n], ["b", 2]);
-  });
-
-  it("compiles an arrow with an expression body, which can hold no hooks", async () => {
-    const compiled = compile(`const Dot = () => <Sprite image="dot.png" />;
-const Pair = () => (<Entity name="pair"><Dot /><Dot /></Entity>);`);
-    assert.deepEqual(typeCheck(compiled), []);
-    const { Pair } = await load<{ Pair: new () => Entity }>(compiled);
-    assert.equal(new Pair().children.length, 2);
-  });
-
-  it("supports a default export, as a declaration or as `export default Name;`", () => {
-    const declaration = compile(`export default function Enemy() { return <Entity name="E" />; }`);
-    assert.equal(declaration.ir.components[0]!.isDefaultExport, true);
-    assert.match(declaration.code, /export class Enemy extends Entity \{[\s\S]*\}\n\nexport default Enemy;\n\nexport const prefabs = \{/);
-    const separate = compile(`const Enemy = () => <Entity name="E" />;\nexport default Enemy;`);
-    assert.equal(separate.ir.components[0]!.isDefaultExport, true);
-    assert.deepEqual(typeCheck(separate), []);
-  });
-
-  it("imports a default export under any local name, alone or with named imports", async () => {
-    const project = compileProject({
-      "Enemy.tsx": `interface EnemyProps { speed: number }
-export default function Enemy({ speed }: EnemyProps) { return <Entity name="E" transform={{ x: speed }} />; }
-export function Boss() { return <Entity name="B" />; }`,
-      "Level.tsx": `import Monster, { Boss } from "./Enemy.tsx";
-export function Level() {
-  return <Entity name="L"><Monster speed={4} /><Boss /></Entity>;
-}`,
-    });
-    assert.match(project["Level.tsx"]!.code, /^import Monster, \{ Boss \} from "\.\/Enemy\.ts";$/m);
-    assert.deepEqual(typeCheckProject(project), []);
-    const { Level } = await loadProject<{ Level: new () => Entity & { monster: Entity } }>(project, "Level.tsx");
-    const level = new Level();
-    assert.equal(level.monster.transform.x, 4);
-  });
-
-  it("rejects forms it cannot name or place", () => {
-    assert.deepEqual(codes(`export default function () { return <Entity />; }`), [DiagnosticCode.UnsupportedSyntax]);
-    assert.deepEqual(codes(`let Dot = () => <Entity />;`), [DiagnosticCode.UnsupportedSyntax]);
-    assert.deepEqual(codes(`const Dot = () => 5;`), [DiagnosticCode.InvalidComponentBody]);
-    assert.deepEqual(codes(`export default Missing;`), [DiagnosticCode.UnsupportedSyntax]);
-    assert.deepEqual(codes(`function A() { return <Entity />; } function B() { return <Entity />; } export default A; export default B;`), [
-      DiagnosticCode.UnsupportedSyntax,
-    ]);
-    assert.deepEqual(codes(`let x = 5;`), [DiagnosticCode.UnsupportedSyntax]);
-    assert.deepEqual(codes(`const x = <Entity />;`), [DiagnosticCode.UnsupportedSyntax]);
-  });
-
-  function codes(source: string): string[] {
-    return compileErrors(source).map((d) => d.code);
-  }
-});
-
-describe("M4b: the props object", () => {
+describe("the props object", () => {
   const SOURCE = `interface EnemyProps { speed: number; skin?: "red" | "blue"; onDefeated?: () => void }
 function Enemy(props: EnemyProps) {
   const s = useMutable({ hp: props.speed * 10 });
@@ -739,168 +616,30 @@ function Panel(props: BarProps) { return <Entity name="Panel"><Bar onDone={props
   });
 });
 
-describe("M4b: roots", () => {
-  it("lowers a fragment root to an implicit container, without needing Entity imported", async () => {
-    const source = `import { useMutable, Sprite } from "@tsengine/runtime/jsx";
-function Pair() {
-  const s = useMutable({ on: true });
-  return (<>
-    <Sprite image="a.png" />
-    {s.on && <Sprite image="b.png" />}
-  </>);
-}`;
-    const result = getCompiler().compile("Pair.tsx", source);
-    assert.ok(result.ok, "no import of Entity is required");
-    const root = result.ir.components[0]!.root;
-    assert.deepEqual([root.component.name, root.props.length, root.transform.length], ["Entity", 0, 0]);
-    assert.match(result.code, /export class Pair extends Entity \{/);
-    assert.match(result.code, /super\(\{ name: "Pair" \}\);/);
-    assert.deepEqual(getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/Pair.tsx`, text: source }]), []);
-  });
-
-  it("lets a component be a Sprite, with no container around it", async () => {
-    const compiled = compile(`interface CoinProps { value: number }
-function Coin({ value }: CoinProps) {
-  const s = useMutable({ spin: 0 });
-  useUpdate(() => { s.spin += value; });
-  return <Sprite image={s.spin > 5 ? "gold.png" : "coin.png"} />;
+describe("a callback prop forwarded to a built-in", () => {
+  it("is written as the arrow that calls it: `<Flex onPress={onPress}>`, `props.onPress` too", async () => {
+    const compiled = compile(`
+interface ButtonProps { onPress: () => void; label: string; }
+export function Button({ onPress, label }: ButtonProps) {
+  return <Flex onPress={onPress}><Text size={8}>{label}</Text></Flex>;
 }
-function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }} /></Entity>; }`);
-    assert.match(compiled.code, /export class Coin extends Sprite<CoinProps> \{/);
-    assert.match(
-      compiled.code,
-      /super\(\{ image: undefined as never \}, props\);/,
-      "a dynamic image gets a placeholder; render() sets the real one"
-    );
-    assert.deepEqual(typeCheck(compiled), []);
-    const { Coin, Level } = await load<{ Coin: new (props: { value: number }) => Sprite & { spin: number }; Level: new () => Entity }>(
-      compiled
-    );
-    const world = new World();
-    const level = new Level();
-    world.mount(level);
-    const coin = level.children[0] as Sprite & { spin: number };
-    assert.ok(coin instanceof Coin && coin instanceof Sprite);
-    assert.equal(coin.image, "coin.png");
-    world.tick(1);
-    world.tick(1);
-    assert.equal(coin.image, "gold.png");
-    assert.equal(coin.placement.x, 10);
-    assert.equal(coin.worldTransform().x, 10, "placed like any component");
-  });
-
-  it("passes a static image straight to the Sprite constructor", () => {
-    const { code } = compile(`const Dot = () => <Sprite image="dot.png" transform={{ x: 3 }} />;`);
-    assert.match(code, /super\(\{ image: "dot\.png" \}\);/);
-    assert.match(code, /this\.transform\.x = 3;/);
-  });
-
-  it("lets a component be a Collider whose callback is set after super()", async () => {
-    const compiled = compile(`function Trap() {
-  const s = useMutable({ touches: 0 });
-  return <Collider width={10} height={10} onCollisionEnter={() => { s.touches += 1; }} />;
+export function Plain(props: ButtonProps) {
+  return <Pointer width={4} height={4} onPress={props.onPress} />;
 }`);
-    assert.match(compiled.code, /export class Trap extends Collider \{/);
-    assert.match(
-      compiled.code,
-      /super\(\{ width: 10, height: 10 \}\);\n\s+this\.onCollisionEnter = \(\) => \{ this\.\$set_s_touches/,
-      "an arrow that uses `this` cannot be made inside the super() call"
-    );
     assert.deepEqual(typeCheck(compiled), []);
-    const { Trap } = await load<{ Trap: new () => Collider & { s: { touches: number } } }>(compiled);
+    const { Button, Plain } = await load<{
+      Button: new (p: { onPress: () => void; label: string }) => Flex;
+      Plain: new (p: { onPress: () => void; label: string }) => Entity & { onPress?: () => void };
+    }>(compiled);
+    let presses = 0;
     const world = new World();
-    const trap = new Trap();
-    world.mount(trap);
-    world.reportCollision(trap, new Collider({ width: 1, height: 1 }));
+    const button = new Button({ onPress: () => presses++, label: "go" });
+    const plain = new Plain({ onPress: () => (presses += 10), label: "x" });
+    world.mount(button);
+    world.mount(plain);
     world.flush();
-    assert.equal(trap.s.touches, 1);
-  });
-
-  it("keeps the root's own fields free of state, refs and props", () => {
-    // Since 2026-11-13 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
-    for (const [root, field] of [
-      ['Sprite image="a"', "image"],
-      ["Collider width={1} height={1}", "width"],
-      ["Entity", "name"],
-    ] as const) {
-      assert.ok(
-        compile(`function A() { const ${field} = useMutable({ n: 0 }); return <${root} />; }`).code.includes(`get $${field}()`),
-        `${root}: ${field}`
-      );
-    }
-    // A name of a different built-in is free.
-    assert.ok(
-      compile(`function A() { const image = useMutable({ n: 0 }); return <Collider width={1} height={1} />; }`).code.includes("get image()")
-    );
-  });
-
-  it("takes a component as a root (a see-through container), and rejects children on a leaf built-in (a nested fragment is an implicit Entity)", () => {
-    const run = (source: string) => compileErrors(source).map((d) => d.code);
-    assert.match(
-      compile(`function B() { return <Entity />; } function A() { return <B />; }`).code,
-      /class A extends Entity \{\s+static readonly managed = true;\s+protected override readonly reportsChanges = true;\s+override readonly layoutContents = true;/
-    );
-    assert.deepEqual(run(`function A() { return <Sprite image="a"><Entity /></Sprite>; }`), [DiagnosticCode.UnsupportedJsxChild]);
-    assert.deepEqual(run(`function A() { return <Entity><Collider width={1} height={1}><Entity /></Collider></Entity>; }`), [
-      DiagnosticCode.UnsupportedJsxChild,
-    ]);
-    assert.ok(compile(`function A() { return <Entity><><Sprite image="a" /></></Entity>; }`).code.includes("new Entity()"));
-  });
-});
-
-describe("M4b: collider callbacks", () => {
-  it("types the callback's parameter from the runtime and imports what it needs", () => {
-    const compiled = compile(`function Hero() {
-  return <Entity name="H"><Collider width={1} height={1} onCollisionEnter={(other) => {}} /></Entity>;
-}`);
-    const collider = elementOf(compiled.ir.components[0]!.root.children[0]!);
-    const callback = collider.props.find((p) => p.kind === "CallbackProp");
-    assert.ok(callback?.kind === "CallbackProp");
-    assert.deepEqual(
-      callback.handler.params.map((p) => p.type),
-      [{ kind: "Named", name: "Contact" }]
-    );
-    assert.match(compiled.code, /import \{ Collider, Entity, type Contact \} from "@tsengine\/runtime";/);
-    assert.match(compiled.code, /onCollisionEnter: \(other: Contact\) => \{/);
-    assert.deepEqual(typeCheck(compiled), []);
-  });
-
-  it("rejects a function on a built-in that has no such callback, and an unknown callback name", () => {
-    const run = (jsx: string) => compileErrors(`function A() { return <Entity>${jsx}</Entity>; }`).map((d) => d.code);
-    assert.deepEqual(run(`<Sprite image="a" onClick={() => {}} />`), [DiagnosticCode.UnsupportedAttribute]);
-    assert.deepEqual(run(`<Collider width={1} height={1} onTouch={() => {}} />`), [DiagnosticCode.UnsupportedAttribute]);
-    assert.deepEqual(run(`<Collider width={1} height={1} onCollisionEnter={(a, b) => {}} />`), [DiagnosticCode.InvalidHandler]);
-  });
-
-  it("lets a handler read the other collider's tag and owner, and nothing else", () => {
-    const compiled = compile(`function Hero() {
-  const s = useMutable({ coins: 0, hurt: false });
-  return (
-    <Entity name="H">
-      <Collider width={1} height={1} tag="player" layer="player" hits={["coin", "enemy"]}
-        onCollisionEnter={(other) => { if (other.tag === "coin") s.coins += 1; else if (other.owner === "Spikes") s.hurt = true; }}
-        onCollisionExit={(other) => { if (other.tag === "enemy") s.hurt = false; }} />
-    </Entity>
-  );
-}`);
-    assert.deepEqual(typeCheck(compiled), []);
-    assert.match(compiled.code, /onCollisionExit: \(other: Contact\) =>/);
-    assert.match(compiled.code, /tag: "player"/);
-    const unknown = compileErrors(
-      `function A() { return <Entity><Collider width={1} height={1} onCollisionEnter={(other) => { const w = other.width; }} /></Entity>; }`
-    );
-    assert.match(unknown[0]!.message, /'Contact' has no readable property 'width'/);
-  });
-
-  it("type-checks authored collider callbacks", () => {
-    const source = `import { useMutable, Entity, Collider } from "@tsengine/runtime/jsx";
-function A() {
-  const s = useMutable({ n: 0 });
-  return <Entity name="A"><Collider width={1} height={1} onCollisionEnter={(other) => { s.n += 1; }} /></Entity>;
-}`;
-    const check = (text: string) => getCompiler().typeCheckSources([{ fileName: `${process.cwd()}/.test-output/Cb.tsx`, text }]);
-    assert.deepEqual(check(source), []);
-    assert.ok(check(source.replace("s.n += 1", `s.n = "a"`)).length > 0);
-    assert.ok(check(source.replace("(other) =>", "(other: string) =>")).length > 0, "the parameter is typed");
+    button.onPress!();
+    plain.onPress!();
+    assert.equal(presses, 11);
   });
 });

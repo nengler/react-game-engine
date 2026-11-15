@@ -1,8 +1,8 @@
-import assert from "node:assert/strict";
 /**
- * M12: `<Camera>`. The viewport: its own transform is the view, `zoom`
- * magnifies, and it follows its children: `<Camera><Player /></Camera>`.
+ * `<Camera>`. The viewport: its own transform is the view, `zoom` magnifies, and it follows its children:
+ * `<Camera><Player /></Camera>`.
  */
+import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
 import { Camera, Entity, Sprite, World } from "@tsengine/runtime";
@@ -123,7 +123,7 @@ before(async () => {
   }>(compile(SOURCE, "Cam.tsx")));
 });
 
-describe("M12: IR and generated code", () => {
+describe("<Camera>: IR and generated code", () => {
   const compiled = compile(SOURCE, "Cam.tsx");
   const level = compiled.ir.components.find((c) => c.name === "Level")!;
   const camera = elementOf(level.root.children[0]!);
@@ -172,7 +172,7 @@ describe("M12: IR and generated code", () => {
   });
 });
 
-describe("M12: authored source type-checks", () => {
+describe("<Camera>: authored source type-checks", () => {
   const check = (body: string) =>
     getCompiler().typeCheckSources([
       {
@@ -200,7 +200,7 @@ describe("M12: authored source type-checks", () => {
   });
 });
 
-describe("M12: runtime behaviour", () => {
+describe("<Camera>: runtime behaviour", () => {
   it("updates zoom in place when state changes, keeping the instance, in one render", () => {
     const world = new World();
     const level = new Level();
@@ -297,7 +297,7 @@ describe("M12: runtime behaviour", () => {
   });
 });
 
-describe("M12: a camera rig passes what it follows through {children}", () => {
+describe("a camera rig passes what it follows through {children}", () => {
   const RIG = `
 import { type Child, Camera, Entity, Sprite, useMutable, useUpdate } from "@tsengine/runtime/jsx";
 
@@ -350,7 +350,7 @@ function Stage() {
   });
 });
 
-describe("M12: diagnostics", () => {
+describe("<Camera>: diagnostics", () => {
   it("lets state take the camera's own names, kept in `$name` fields", () => {
     for (const name of ["zoom", "viewTransform", "worldToView", "viewToWorld", "childSpace"]) {
       assert.ok(compile(`function C() { const ${name} = useMutable({ n: 1 }); return <Camera />; }`).code.includes(`get $${name}()`), name);
