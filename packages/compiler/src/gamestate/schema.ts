@@ -67,7 +67,7 @@ export interface GameStateSchemaResult {
   readonly diagnostics: readonly CompilerDiagnostic[];
 }
 
-const SHAPE = "GameState.ts must contain `export const useGame = createGameState<State>()((set) => ({ coins: 0, player: { hp: 10 }, collect: () => set((s) => ({ coins: s.coins + 1 })) }));`";
+const SHAPE = "GameState.ts must contain `export const useGame = createGameState({ coins: 0, player: { hp: 10 } }, { collect(s) { s.coins += 1; } });`";
 
 /**
  * Reads `GameState.ts`: `createGameState(creator)` or `createGameState<State>()(creator)`, exported under a name
@@ -90,7 +90,8 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
       if (!isVariableStatement(statement)) continue;
       for (const declaration of statement.declarationList.declarations) {
         const init = declaration.initializer ? unwrap(declaration.initializer) : undefined;
-        const creatorCall = init && isCallExpression(init) ? creatorOf(init) : undefined;
+        const split = init && isCallExpression(init) ? dataAndActions(init) : undefined;
+        const creatorCall = split ? split.data : init && isCallExpression(init) ? creatorOf(init) : undefined;
         if (!creatorCall) continue;
         found++;
         if (found > 1) {
@@ -100,6 +101,21 @@ export function parseGameState(parser: TsxParser, fileName: string, text: string
         const exported = statement.modifiers?.some((m) => m.kind === SyntaxKind.ExportKeyword) ?? false;
         if (!exported || !isIdentifier(declaration.name)) {
           fail(`${SHAPE}: export it, under a name (\`useGame\`) components import.`, declaration);
+          continue;
+        }
+        if (split) {
+          const before = diagnostics.length;
+          if (!isObjectLiteralExpression(split.data)) {
+            fail(`The game state's data is an object literal: \`createGameState({ coins: 0, player: { hp: 10 } }, { … })\`. ${SHAPE}`, split.data);
+            continue;
+          }
+          if (!isObjectLiteralExpression(split.actions)) {
+            fail(`The game state's actions are an object literal of functions: \`{ collect(s) { s.coins += 1; } }\`. ${SHAPE}`, split.actions);
+            continue;
+          }
+          const tree = readNode(split.data, fail, null, "data");
+          const actions = readActions(split.actions, fail, tree);
+          if (diagnostics.length === before) result = { name: declaration.name.text, tree, actions };
           continue;
         }
         const object = stateObject(creatorCall);
@@ -132,6 +148,32 @@ function creatorOf(call: CallExpression): Expression | undefined {
   return undefined;
 }
 
+/** `createGameState(data, actions)`: its two arguments; undefined if the call is not that form. */
+function dataAndActions(call: CallExpression): { data: Expression; actions: Expression } | undefined {
+  const callee = unwrap(call.expression);
+  if (!isIdentifier(callee) || callee.text !== "createGameState" || call.arguments.length !== 2) return undefined;
+  return { data: unwrap(call.arguments[0]!), actions: unwrap(call.arguments[1]!) };
+}
+
+/** The names of `createGameState`'s actions: each `name(s, …) {}` or `name: (s, …) => …`, not a name the data has. */
+function readActions(object: ObjectLiteralExpression, fail: Fail, tree: GameStateNode): string[] {
+  const names: string[] = [];
+  for (const p of object.properties) {
+    const name = (isPropertyAssignment(p) || isMethodDeclaration(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
+    const value = isPropertyAssignment(p) ? unwrap(p.initializer) : null;
+    if (name === null || (!isMethodDeclaration(p) && !(value !== null && (isArrowFunction(value) || isFunctionExpression(value))))) {
+      fail("Each action is `name(s, …) { … }` or `name: (s, …) => …`: no spreads, computed keys or values.", p);
+      continue;
+    }
+    if (names.includes(name) || Object.hasOwn(tree.children, name)) {
+      fail(`'${name}' is declared twice: an action cannot share a name with another action or a value of the data.`, p);
+      continue;
+    }
+    names.push(name);
+  }
+  return names;
+}
+
 /** The object literal a creator returns: an arrow's expression body, or the one `return` of a block. */
 function stateObject(creator: Expression): ObjectLiteralExpression | null {
   if (!isArrowFunction(creator) && !isFunctionExpression(creator)) return null;
@@ -147,7 +189,7 @@ function stateObject(creator: Expression): ObjectLiteralExpression | null {
   return expression && isObjectLiteralExpression(expression) ? expression : null;
 }
 
-function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[] | null): GameStateNode {
+function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[] | null, form: "creator" | "data" = "creator"): GameStateNode {
   const children: Record<string, GameStateEntry> = {};
   for (const p of object.properties) {
     const named = (isPropertyAssignment(p) || isMethodDeclaration(p) || isShorthandPropertyAssignment(p)) && (isIdentifier(p.name) || isStringLiteral(p.name)) ? p.name.text : null;
@@ -170,12 +212,13 @@ function readNode(object: ObjectLiteralExpression, fail: Fail, actions: string[]
     }
     const value = isPropertyAssignment(p) ? unwrap(p.initializer) : null;
     if (value === null || isArrowFunction(value) || isFunctionExpression(value)) {
-      if (actions === null) fail(`'${key}' is a function inside a nested object: actions live at the top level of the state, next to the objects.`, p);
+      if (form === "data") fail(`'${key}' is a function in the game state's data: actions go in the second argument, \`createGameState(data, { ${key}(s) { … } })\`.`, p);
+      else if (actions === null) fail(`'${key}' is a function inside a nested object: actions live at the top level of the state, next to the objects.`, p);
       else actions.push(key);
       continue;
     }
     if (isObjectLiteralExpression(value)) {
-      children[key] = readNode(value, fail, null);
+      children[key] = readNode(value, fail, null, form);
       continue;
     }
     children[key] = literalLeaf(value) ?? { kind: "value" };

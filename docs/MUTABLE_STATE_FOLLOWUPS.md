@@ -67,6 +67,11 @@ closed, and the decision here is to keep the copy model and not add versions. Wh
 
 ## Open: the game state is not migrated
 
+**Started 2026-11-15.** `createGameState(data, actions)` is built beside the creator form (runtime `GameStore.fromActions`, the
+compiler's schema reader, DESIGN.md "Global state"), with a draft per action and a commit that keeps unchanged objects' identity. The
+demo and the template use it. Left: Kite, Hearth and Bramble; a handler reading the live store; a component write to the store as a
+compile error; read-only selected values; then removing the creator form. The text below is the plan as written.
+
 `createGameState` still takes `set` and `get`, and the state holds its actions. Components write nothing to it directly. The design
 in [MUTABLE_STATE.md](MUTABLE_STATE.md), "The game state: actions write, readers read", is proposed and not built:
 `createGameState(data, actions)`, the data a plain object, each action taking the live state as its first argument and writing it
