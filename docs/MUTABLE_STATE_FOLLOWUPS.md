@@ -116,7 +116,7 @@ Each is real today. The first two cause wrong behavior; the rest cost time.
 4. ~~**A hook's internal mutable has a call-specific name.**~~ *Fixed in #124:* named after the hook (`body.x`, `body2` on a clash).
    Hot-reload keys for a hook's own state changed with it.
 5. ~~**`s` read whole is a copy.**~~ *Fixed 2026-11-14:* in a handler, `s` passed whole is the component's own object for that
-   `useMutable`, made with the component (`#sObject` in the generated class), with a getter and a setter per field. A getter reads the
+   `useMutable`, made the first time a handler passes it and kept (`#sObject` in the generated class), with a getter and a setter per field. A getter reads the
    field as the handler sees it (this step's writes included); a setter goes through the field's setter, so it marks the component dirty
    and renders as `s.hp -= 3` would. So `takeHit(s)` changes the component, as `return s` from a hook already did. In render (props,
    `<Camera shake={shake}>`, `{label(s)}`) it is still a copy of the committed fields, now typed `Readonly<…>`: render writes nothing.
