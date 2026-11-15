@@ -1,4 +1,5 @@
 import { GameObject } from "../GameObject.ts";
+import type { ColliderShape } from "../shapes.ts";
 
 declare global {
   /**
@@ -60,8 +61,16 @@ export interface ColliderProps {
    * bullets, and an enemy that left `hits` out still cannot touch a bullet that does not hit enemies.
    */
   hits?: readonly string[];
-  /** Bodies (`useBody`) cannot move into it: a wall, a crate, a closed door. Default false. */
+  /** Bodies (`useBody`) cannot move into it: a wall, a crate, a closed door. Default false. A solid collider stops bodies at its box, whatever its shape. */
   solid?: boolean;
+  /**
+   * Its shape inside its `width` × `height` box, for what it touches: `"box"` (the default) fills the box; `"circle"` is the circle
+   * inside it (centred, half the shorter side across); `"polygon"` is the convex polygon `points` makes. A pair of plain boxes is
+   * tested as boxes, upright; a pair in which either has another shape is tested exactly, turned with its objects.
+   */
+  shape?: ColliderShape;
+  /** A `"polygon"`'s corners in order, `[x0, y0, x1, y1, …]`, in the collider's own pixels, inside its box. At least three; convex. */
+  points?: readonly number[];
   /**
    * What the collider tells whatever touches it, as `other.data`: a coin's value, an enemy's damage. Any value; typed by tag
    * through `ColliderData`.
@@ -98,6 +107,8 @@ export class Collider<P extends object = {}> extends GameObject<P> implements Ba
   layer: string;
   hits: readonly string[] | undefined;
   solid: boolean;
+  shape: ColliderShape;
+  points: readonly number[];
   data: unknown;
   onCollisionEnter: ((other: Contact) => void) | undefined;
   onCollisionExit: ((other: Contact) => void) | undefined;
@@ -111,6 +122,8 @@ export class Collider<P extends object = {}> extends GameObject<P> implements Ba
     this.layer = hostProps.layer ?? "";
     this.hits = hostProps.hits;
     this.solid = hostProps.solid ?? false;
+    this.shape = hostProps.shape ?? "box";
+    this.points = hostProps.points ?? [];
     this.data = hostProps.data;
     this.onCollisionEnter = hostProps.onCollisionEnter;
     this.onCollisionExit = hostProps.onCollisionExit;

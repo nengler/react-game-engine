@@ -2037,6 +2037,20 @@ is a `multiply` layer cleared to the darkness, with the lights in it drawn with 
   light needs no image and looks the same in tests. No shadows: walls do not block light. A light outside a `<Lighting>` is drawn as a
   glow over what is under it, with normal blending (black at its edge, so it is meant for a lighting layer).
 
+## Collider shapes (2026-11-15)
+
+`<Collider shape="circle">` is the circle inside its box; `shape="polygon" points={[…]}` a convex polygon in its own pixels, inside
+its box. Decided as the smaller of two scopes (NEXT_PRIORITIES.md, "Now", step 8): shapes change what **touches**, not what **stops**.
+
+- **Boxes first, then the shape.** The tracker's sweep, its bands, the native broad phase and the incremental update all still find
+  pairs by box; a pair in which either collider has a shape is then tested exactly (`shapesTouch` in `collide.ts`, the separating
+  axis test in `runtime/src/shapes.ts`), with each collider turned and scaled with its object. Two plain boxes skip it, so a game that
+  uses no shapes pays one property read per pair, and a box is still upright against a box (its rotated bounds), as before. Against a
+  shape, a turned box is exact.
+- **Body queries** (`touching`, `overlapping`) filter by shape the same way (`World.tagIn`, `collidersIn`), against the body's box.
+- **Not built:** solid shapes (a body still stops at a solid collider's box: no slopes, no round pillars), concave polygons, and
+  drawing shapes in the debug overlay (it draws boxes).
+
 ## Custom hooks (priority 7)
 
 "Hooks are compiler intrinsics" extends to the ones an author writes. A function named `use…` (not a built-in hook, not the
