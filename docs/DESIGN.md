@@ -2168,7 +2168,9 @@ function Level() {
 
 **Declaring props.** One parameter, destructured, annotated with the name of
 an `interface` or `type` object type in the same file (`RGE1208` otherwise: no
-rest, renaming, generics or `extends`). Defaults in the destructuring make a
+rest, nesting, generics or `extends`). A prop may be renamed (`{ seed: firstSeed }`, 2026-11-15): the
+binding keeps both names (`PropBindingAnalysis.name` and `local`), the scope declares the local one and every read is
+the prop's (`PropRead`), so a prop and the state it seeds can share a word. Defaults in the destructuring make a
 prop optional and must be constants. `key`, `ref`, `transform` and `children`
 are reserved and cannot be prop names. The declaration is copied into the
 generated module as written (exported), so the type-check validates it. Each
@@ -2353,6 +2355,12 @@ have no such action: `InputState.isAction` tells) move it to the nearest focusab
 a laid-out box's middle; along the direction, plus twice the distance across, so a row before the next row), and `confirm` (Enter and PadA
 without one) presses the focused one. A click on a focusable one focuses it before pressing it. `World.focus(p)` / `World.focused` for
 code. One focused or removed, inert or no longer focusable, loses it; the next tick an `autoFocus` one may take it.
+
+**One mistake, one error, through an inlined hook** (2026-11-15). A custom or library hook is inlined text, and every error
+found inside its expansion maps back to exactly the call's range. A bad argument (`useBody({ x: nowhere })`) was the first
+error, and then the hook's own body failed for it: `'move' is not a method`, `'touching' is not an allowlisted call`, about
+names the author never wrote. `expandCustomHooks` now returns each call's range in the original text, and `compile` keeps only
+the first error on each (`oneErrorPerHookCall`); warnings, and errors anywhere else, are kept.
 
 **Buttons, menus and `onAdjust`** (2026-11-15). Every game had written its own menu: a cursor in state, `useInput` reading up and down,
 a bar behind the row under the cursor. The focus already did that, so three small additions put it to work. `<Button>` is a `Flex`

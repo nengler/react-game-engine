@@ -409,10 +409,30 @@ describe("M4: diagnostics", () => {
     assert.deepEqual(codes(withProps(P, `{ a }`)), [DiagnosticCode.InvalidProps]);
     assert.deepEqual(codes(withProps(P, `props`)), [DiagnosticCode.InvalidProps]);
     assert.deepEqual(codes(withProps(P, `{ a, ...rest }: P`)), [DiagnosticCode.InvalidProps]);
-    assert.deepEqual(codes(withProps(P, `{ a: renamed }: P`)), [DiagnosticCode.InvalidProps]);
+    assert.deepEqual(codes(withProps(P, `{ nope: renamed }: P`)), [DiagnosticCode.InvalidProps], "a renamed prop must still be one");
+    assert.deepEqual(codes(withProps(P, `{ a: { x } }: P`)), [DiagnosticCode.InvalidProps], "no nesting");
     assert.deepEqual(codes(withProps(P, `{ a }: P, other: P`)), [DiagnosticCode.InvalidProps]);
     assert.deepEqual(codes(withProps(P, `{ nope }: P`)), [DiagnosticCode.InvalidProps]);
     assert.deepEqual(codes(withProps(P, `{ a }: P = { a: 1 }`)), [DiagnosticCode.InvalidProps]);
+  });
+
+  it("takes a prop under another name (`{ seed: firstSeed }`), with a default, read live in handlers", async () => {
+    const source = `interface SeedProps { seed: number; speed?: number }
+export function Seeded({ seed: firstSeed, speed: rate = 2 }: SeedProps) {
+  const s = useMutable({ seed: 0, seen: 0 });
+  useUpdate(() => { s.seed = firstSeed * rate; s.seen = firstSeed; });
+  return <Entity name="A" x={firstSeed} />;
+}`;
+    const { Seeded } = await load<{ Seeded: new (props: { seed: number; speed?: number }) => Entity & { s: { seed: number; seen: number }; updateProps(p: { seed: number }): void } }>(compile(source, "Seeded.tsx"));
+    const a = new Seeded({ seed: 3 });
+    const world = new World();
+    world.mount(a);
+    world.tick(1 / 60);
+    assert.deepEqual([a.s.seed, a.transform.x], [6, 3], "the default applies under the new name");
+    a.updateProps({ seed: 5 });
+    world.tick(1 / 60);
+    assert.deepEqual([a.s.seed, a.s.seen, a.transform.x], [10, 5, 5]);
+    assert.deepEqual(typeCheck(compile(source, "Seeded.tsx")), []);
   });
 
   it("rejects props types it cannot describe", () => {

@@ -91,7 +91,10 @@ export interface PropsAnalysis {
 }
 
 export interface PropBindingAnalysis {
+  /** The prop's name in its type. */
   readonly name: string;
+  /** The name the component reads it by: the prop's own, or another (`{ seed: firstSeed }`). */
+  readonly local: string;
   readonly defaultValue: Expression | null;
   readonly node: Node;
 }

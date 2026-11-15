@@ -35,8 +35,8 @@ describe("one mistake, one error", () => {
   });
 
   it("does not report the props again when the props parameter was refused", () => {
-    // Renamed in the destructuring (\`hp: health\`): refused, and \`health\` is not reported again where it is read.
-    assert.equal(only(`interface P { hp: number }\nexport function A({ hp: health }: P) { return <Text>{health}</Text>; }`).code, "RGE1208");
+    // Nested in the destructuring (\`hp: { health }\`): refused, and \`health\` is not reported again where it is read.
+    assert.equal(only(`interface P { hp: { health: number } }\nexport function A({ hp: { health } }: P) { return <Text>{health}</Text>; }`).code, "RGE1208");
   });
 
   it("does not report a component or a function declared inside another as unknown where it is used", () => {

@@ -9,7 +9,7 @@ export function Title({ name }: { name: string }) {
   const { start, openSettings } = useGame.actions();
   return (
     <Flex direction="column" width={320} height={180} alignItems="center" justifyContent="center" gap={16}>
-      <Text size={20}>{name}</Text>
+      <Text size={16}>{name}</Text>
       <Menu gap={4} alignItems="stretch" width={120}>
         <Button autoFocus onPress={start}>
           <Text>Play</Text>

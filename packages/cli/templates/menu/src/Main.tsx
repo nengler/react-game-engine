@@ -9,7 +9,7 @@ export default function Main() {
   const screen = useGame((s) => s.screen);
   const paused = useGame((s) => s.paused);
   return (
-    <Game title="__NAME__" width={320} height={180} background="#10131c" assets="assets" paused={paused}>
+    <Game title="__NAME__" width={320} height={180} background="#10131c" assets="assets" font="font.png" textSize={8} paused={paused}>
       <Screen width={320} height={180} fit="integer">
         {screen === "title" && <Title name="__NAME__" />}
         {screen === "settings" && <Settings />}

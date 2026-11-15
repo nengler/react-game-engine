@@ -56,7 +56,7 @@ export class HookLowering extends ExpressionLowering {
           this.report(code, "`children` cannot have a default value.", binding.node);
         } else {
           this.declaredChildren = true;
-          if (binding) this.componentScope.declare(name, { kind: "children", name });
+          if (binding) this.componentScope.declare(binding.local, { kind: "children", name });
         }
         continue;
       }
@@ -79,10 +79,10 @@ export class HookLowering extends ExpressionLowering {
       }
       out.push({ kind: "PropDecl", name, optional: member.optional || binding?.defaultValue != null, defaultValue, role: member.role, type: member.type });
       if (binding) {
-        if (this.componentScope.hasOwn(name)) {
-          this.report(code, `'${name}' is already declared in this component.`, binding.node);
+        if (this.componentScope.hasOwn(binding.local)) {
+          this.report(code, `'${binding.local}' is already declared in this component.`, binding.node);
         } else {
-          this.componentScope.declare(name, { kind: "prop", name, role: member.role });
+          this.componentScope.declare(binding.local, { kind: "prop", name, role: member.role });
         }
       }
     }

@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseInputScript, runScript, type Player } from "@rge/player";
-import type { GameObject } from "@rge/runtime";
+import { findComponent } from "@rge/testing";
 import { bindings, gameConfig } from "../game.ts";
 import { useGame } from "../src/GameState.ts";
 
 /** Which screen shows, whether play is paused, the volume, and whether the hero is in the world. */
 function seen(player: Player): { screen: string; paused: boolean; volume: number; hero: boolean } {
-  const find = (o: GameObject): boolean => (o as { name?: string }).name === "Hero" || o.children.some(find);
   const { screen, paused, volume } = useGame.getState();
-  return { screen, paused, volume, hero: find(player.world.root) };
+  return { screen, paused, volume, hero: findComponent("Hero", player.world.root) !== null };
 }
 
 test("the title's Play starts the game, Escape pauses it, and the pause menu's Resume plays on", () => {

@@ -13,10 +13,10 @@ export default function Main() {
   });
 
   return (
-    <Game title="__NAME__" width={320} height={180} background="#10131c" assets="assets">
+    <Game title="__NAME__" width={320} height={180} background="#10131c" assets="assets" font="font.png" textSize={8}>
       <Screen width={320} height={180} fit="integer">
         <Hero />
-        <Text x={8} y={8} size={12} color="white">{`steps: ${steps}`}</Text>
+        <Text x={8} y={8} color="white">{`steps: ${steps}`}</Text>
       </Screen>
     </Game>
   );
