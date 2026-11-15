@@ -117,6 +117,22 @@ export { Fade, type FadeProps } from "./components/Fade.ts";
 export { BLEND_MODES, Layer, type BlendMode, type LayerProps } from "./components/Layer.ts";
 export { Light, Lighting, type LightProps, type LightingProps } from "./components/Light.ts";
 export {
+  call,
+  easeIn,
+  easeInOut,
+  easeOut,
+  linear,
+  parallel,
+  sequence,
+  tween,
+  wait,
+  waitFor,
+  type Ease,
+  type Sequence,
+  type SequencePosition,
+  type Step,
+} from "./sequence.ts";
+export {
   COLLIDER_SHAPES,
   geometriesOverlap,
   geometryOf,
