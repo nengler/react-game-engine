@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Any expression in a handler (REACT_FEEL_PLAN.md, A1 step b): `new`, `typeof`, `instanceof`, `in`, the standard library, and any
+ * Any expression in a handler (DESIGN.md, "Any expression in handlers"): `new`, `typeof`, `instanceof`, `in`, the standard library, and any
  * method of, or assignment into, a value the handler made itself. State and props stay immutable.
  */
 import { after, describe, it } from "node:test";

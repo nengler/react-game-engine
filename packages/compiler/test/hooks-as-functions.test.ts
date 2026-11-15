@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Custom hooks that behave like functions (REACT_FEEL_PLAN.md, B6): a destructured parameter, a returned ref, a callback
+ * Custom hooks that behave like functions (DESIGN.md, "Hooks that behave like functions, and functions in the body"): a destructured parameter, a returned ref, a callback
  * argument, and the functions a component declares in its body that a callback argument needs.
  */
 import { after, describe, it } from "node:test";

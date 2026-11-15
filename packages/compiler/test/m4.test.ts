@@ -817,7 +817,7 @@ function Level() { return <Entity name="L"><Coin value={3} transform={{ x: 10 }}
   });
 
   it("keeps the root's own fields free of state, refs and props", () => {
-    // Since REACT_FEEL_PLAN.md B7 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
+    // Since 2026-11-13 a name the root built-in has is the author's to use: a mutable of that name is kept as `$name`.
     for (const [root, field] of [
       ['Sprite image="a"', "image"],
       ["Collider width={1} height={1}", "width"],

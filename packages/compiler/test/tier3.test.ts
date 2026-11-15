@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 /**
- * Tier 3 (docs/TOWER_DEFENSE_PLAN.md): spread props on component elements. `<Enemy {...e} />` spreads for real in the generated
- * code; a named prop after a spread wins; a spread in a keyed list re-renders only the items whose object was replaced.
+ * Spread props on component elements (docs/DESIGN.md, "Spread props"; first used by Hearth). `<Enemy {...e} />` spreads for real in
+ * the generated code; a named prop after a spread wins; a spread in a keyed list re-renders only the items whose object was replaced.
  */
 import { after, before, describe, it } from "node:test";
 

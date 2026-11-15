@@ -14,7 +14,7 @@ const approach = (value: number, target: number, amount: number): number =>
 const sign = (n: number): number => (n > 0 ? 1 : n < 0 ? -1 : 0);
 
 /**
- * Kite's running, falling and jumping written as a component with `useBody` and `useMutable` (REACT_FEEL_PLAN.md, A2), beside the rules the game
+ * Kite's running, falling and jumping written as a component with `useBody` and `useMutable` (DESIGN.md, "Kite's movement with `useBody`, compared"), beside the rules the game
  * plays (`rules/body.ts`), to compare the two: the same numbers and the same order each step, with the room's solid tiles found by
  * the body instead of by `solidAt`. Not in the game: `test/runner.test.ts` plays both on the same input. Only the normal state's
  * ground moves are here (run, fall, a held jump with its grace and buffer, speed kept into a wall, a jump sliding past a ceiling's

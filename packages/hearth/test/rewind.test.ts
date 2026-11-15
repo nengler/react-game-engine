@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Rewind (REACT_FEEL_PLAN.md D1) on a real game: Hearth's battle, in components, played from its winning replay through rewind,
+ * Rewind (DESIGN.md, "Rewind in `tse dev`") on a real game: Hearth's battle, in components, played from its winning replay through rewind,
  * then sent back and played again from a snapshot. A replay that differed from the recording would name the frame.
  */
 import { describe, it } from "node:test";

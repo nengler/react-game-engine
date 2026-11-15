@@ -78,5 +78,5 @@ is a failure: fix it before merging.
 ## Commits
 
 Engine changes (`packages/runtime`, `compiler`, `player`, `player-node`, `cli`, `native`, and `native/`, `host/`) and
-game changes (`packages/kite`, `packages/hearth`, `packages/demo`, `games/bramble`) go in separate commits. The design notes (`docs/DESIGN.md`, `docs/NATIVE_PLAN.md`, a game's
+game changes (`packages/kite`, `packages/hearth`, `packages/demo`, `games/bramble`) go in separate commits. The design notes (`docs/DESIGN.md`, `docs/PLAYER.md`, `docs/LAYOUT.md`, a game's
 `DESIGN.md`) and the guide (`docs/*.html`) change in the same PR as the behaviour they describe.

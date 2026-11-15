@@ -326,7 +326,7 @@ describe("diagnostics", () => {
       DiagnosticCode.UnsupportedStateType,
       `function A() { const s = useMutable({ a: null }); return <Entity />; }`,
     ],
-    // A state named like a runtime member is fine since REACT_FEEL_PLAN.md B7 (root-name.test.ts); one declared twice is not.
+    // A state named like a runtime member is fine since 2026-11-13 (root-name.test.ts); one declared twice is not.
     ["state declared twice", DiagnosticCode.InvalidUseState, `function A() { const s = useMutable({ a: 1, a: 2 }); return <Entity />; }`],
   ];
   for (const [name, code, source] of cases) {

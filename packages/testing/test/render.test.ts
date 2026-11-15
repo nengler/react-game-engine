@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 /**
- * `@tsengine/testing` (REACT_FEEL_PLAN.md, A4): a component's own logic tested as a component, the way a rule is tested as a function.
+ * `@tsengine/testing` (DESIGN.md, "Testing one component: `@tsengine/testing`"): a component's own logic tested as a component, the way a rule is tested as a function.
  * The components are compiled here, as `tse` would compile a game's.
  */
 import { after, before, describe, it, mock } from "node:test";

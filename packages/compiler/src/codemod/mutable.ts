@@ -1,5 +1,5 @@
 /**
- * From `useState` to `useMutable` (docs/MUTABLE_STATE.md): every `const [x, setX] = useState(init)` at the top of a component or
+ * From `useState` to `useMutable` (docs/DESIGN.md, "State: `useMutable`"): every `const [x, setX] = useState(init)` at the top of a component or
  * hook becomes a field of one `useMutable` per function, each read of `x` becomes `s.x`, and each call of `setX` an assignment
  * (`setX(v)` → `s.x = v`, `setX((p) => p + 1)` → `s.x += 1`). It does what is mechanical and says where it stopped: an updater
  * with a block body, a hook that returns a setter, an initial value that reads a name declared later in the body.
@@ -468,7 +468,7 @@ function useRefOf(statement: Node, text: string, sf: SourceFile): { name: string
 }
 
 /**
- * From `useRef` to a `useMutable` field (docs/MUTABLE_STATE_FOLLOWUPS.md, "Decided: remove `useRef`"): `const timer = useRef(0)` becomes a
+ * From `useRef` to a `useMutable` field (docs/DESIGN.md, "State: `useMutable`", "No `useRef`"): `const timer = useRef(0)` becomes a
  * field `timer: 0` of the function's `useMutable` (one is made if there is none, and a field is added to it if there is), and
  * `timer.current` becomes `s.timer`. A ref used as a value (`return timer`, `useThing(timer)`) is where it stops.
  */

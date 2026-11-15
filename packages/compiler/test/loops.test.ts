@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Every loop, `try` and `throw` in a handler (REACT_FEEL_PLAN.md, A1): what a React author writes in a function works in a
+ * Every loop, `try` and `throw` in a handler (DESIGN.md, "Every loop, and `try`, in handlers"): what a React author writes in a function works in a
  * `useUpdate`, a `useInput`, a callback prop and an updater's handler.
  */
 import { after, describe, it } from "node:test";

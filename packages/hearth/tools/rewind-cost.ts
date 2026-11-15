@@ -1,5 +1,5 @@
 /**
- * What rewind costs while playing (REACT_FEEL_PLAN.md D1): Hearth's good build played to the end of wave 10 with and without
+ * What rewind costs while playing (DESIGN.md, "Rewind in `tse dev`"): Hearth's good build played to the end of wave 10 with and without
  * `tse dev`'s recording (each frame's input and state hash, a snapshot each second), on a recording backend. Prints the mean and
  * 99th-percentile script time of a frame during wave 10 for each, the time a snapshot takes, and how long going back a few
  * seconds takes.

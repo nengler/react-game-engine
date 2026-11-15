@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-/** Rewind in `tse dev` (REACT_FEEL_PLAN.md D1): record, snapshot, go back, play again, and say where a replay differs. */
+/** Rewind in `tse dev` (DESIGN.md, "Rewind in `tse dev`"): record, snapshot, go back, play again, and say where a replay differs. */
 import { describe, it } from "node:test";
 
 import { Sound, Text, createGameState, type InputState } from "@tsengine/runtime";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Kite's ground movement two ways (REACT_FEEL_PLAN.md, A2): the rules the game plays (`stepBody`, a plain function over the
+ * Kite's ground movement two ways (DESIGN.md, "Kite's movement with `useBody`, compared"): the rules the game plays (`stepBody`, a plain function over the
  * room's `solidAt`) and the same rules written as a component with `useBody` (`src/Runner.tsx`), which asks the world instead.
  * The same input through both must put the character on the same pixel every step: the feel is the same. What each step costs is
  * printed, not asserted.

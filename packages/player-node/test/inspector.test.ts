@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-/** The development inspector (REACT_FEEL_PLAN.md C4): `tse dev`'s page of the tree, a component's state and the game state. */
+/** The development inspector (DESIGN.md, "Seeing inside a running game"): `tse dev`'s page of the tree, a component's state and the game state. */
 import { describe, it } from "node:test";
 
 import { createPlayer, RecordingBackend, Rewind } from "@tsengine/player";

@@ -135,7 +135,7 @@ export interface FlexProps extends Omit<PressableProps, "onPress">, InputScopePr
   /**
    * How opaque the box and everything in it is drawn, 0 (gone) to 1 (the default): a panel that fades in and out. It multiplies into
    * every colour under the box, so a box inside a box at 0.5 is at 0.25. Each part is drawn at that opacity on its own, so where
-   * parts overlap one shows through the other a little while the box is part way (a whole-box layer would not; see `UI_PLAN.md`).
+   * parts overlap one shows through the other a little while the box is part way (a whole-box layer would not; see docs/LAYOUT.md, "Opacity").
    * With a `transition` a change of opacity fades. A box at 0 draws nothing, but is still laid out and still takes the mouse.
    */
   opacity?: number;
@@ -261,7 +261,7 @@ export class FlexBox {
 
 /**
  * A container that places its children in a row or a column, with the props of CSS flexbox and the sizing of Clay
- * (see docs/UI_PLAN.md). The player lays it out every frame, before drawing: each child's `layoutX` / `layoutY`
+ * (see docs/LAYOUT.md). The player lays it out every frame, before drawing: each child's `layoutX` / `layoutY`
  * is written, so a child's own `transform` still moves it within its slot. A `Shape`, `Sprite` or `Text` keeps its
  * own size; only a `<Flex>` is resized by layout.
  */

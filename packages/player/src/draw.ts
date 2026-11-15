@@ -1229,7 +1229,7 @@ export class FrameBuilder {
 
   /**
    * While true, each build lists every `<Flex>` it lays out in `inspected`, where it was placed (the development overlay draws
-   * them: REACT_FEEL_PLAN.md C4). Off by default: a game pays nothing for it.
+   * them: DESIGN.md, "Seeing inside a running game"). Off by default: a game pays nothing for it.
    */
   inspecting = false;
   /** The `<Flex>` boxes of the last build, while `inspecting`: where each was placed, and whether it is in a `<Hud>`. */

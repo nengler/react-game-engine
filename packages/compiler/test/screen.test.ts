@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * `<Screen>`: the game's fixed resolution, as the root of the game (C1 in docs/UI_PLAN.md), and the layout offset
+ * `<Screen>`: the game's fixed resolution, as the root of the game (docs/LAYOUT.md), and the layout offset
  * every object carries (U1). The compiler learns both from the runtime manifest; these tests check it does.
  */
 import { after, before, describe, it } from "node:test";

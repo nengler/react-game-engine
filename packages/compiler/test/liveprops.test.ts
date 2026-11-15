@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 /**
  * Props read live: a handler of a child reads a prop as its parent has it now, which includes what a handler that ran before it
- * wrote to the parent's state in this step, where `props` holds what the parent's last render copied (docs/MUTABLE_STATE.md,
- * "Shared lists: live everywhere"). Render reads what the frame committed, as before.
+ * wrote to the parent's state in this step, where `props` holds what the parent's last render copied (docs/DESIGN.md,
+ * "State: `useMutable`", rule 3). Render reads what the frame committed, as before.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

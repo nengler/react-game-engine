@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * Statements in the component body (REACT_FEEL_PLAN.md, A1 step c): `let`, loops and a local list built up, as a React render
+ * Statements in the component body (DESIGN.md, "Statements in the component body"): `let`, loops and a local list built up, as a React render
  * would, worked out again only when what they read changes.
  */
 import { after, describe, it } from "node:test";

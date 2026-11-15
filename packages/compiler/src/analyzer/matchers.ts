@@ -42,7 +42,7 @@ export type StatementMatch =
   | { readonly kind: "invalid"; readonly code: DiagnosticCode; readonly message: string; readonly call: CallExpression | null };
 
 /**
- * `const [hp, setHp] = useState(3)`: `useState` is replaced by `useMutable` (docs/MUTABLE_STATE.md). Reported with the conversion
+ * `const [hp, setHp] = useState(3)`: `useState` is replaced by `useMutable` (docs/DESIGN.md, "State: `useMutable`"). Reported with the conversion
  * written out in the author's names; null if the statement is not a `useState` call at all.
  */
 export function matchUseStateStatement(statement: Statement): StatementMatch | null {
@@ -66,7 +66,7 @@ export function matchUseStateStatement(statement: Statement): StatementMatch | n
 }
 
 /**
- * `const timer = useRef(0)`: `useRef` is replaced by `useMutable` (docs/MUTABLE_STATE_FOLLOWUPS.md). Reported with the conversion
+ * `const timer = useRef(0)`: `useRef` is replaced by `useMutable` (docs/DESIGN.md, "State: `useMutable`"). Reported with the conversion
  * written out in the author's names; null if the statement is not a `useRef` call at all.
  */
 export function matchUseRefStatement(statement: Statement): StatementMatch | null {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-/** Context (REACT_FEEL_PLAN.md, C3): `createContext`, `<X.Provider value>` and `useContext`, compiled. */
+/** Context (DESIGN.md, "Context"): `createContext`, `<X.Provider value>` and `useContext`, compiled. */
 import { after, describe, it } from "node:test";
 
 import { Entity, Text, World } from "@tsengine/runtime";

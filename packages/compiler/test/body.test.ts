@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
 /**
- * `useBody` (REACT_FEEL_PLAN.md, A2): a component moves its own box against solid tiles and solid colliders and learns what it
+ * `useBody` (DESIGN.md, "Bodies: `useBody`"): a component moves its own box against solid tiles and solid colliders and learns what it
  * hit in the same step, with no rules file in between.
  */
 import { after, describe, it } from "node:test";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
-/** Contacts carry data (REACT_FEEL_PLAN.md, A3): `<Collider data>` reaches `other.data`, typed by tag through `ColliderData`. */
+/** Contacts carry data (DESIGN.md, "What `other` exposes"): `<Collider data>` reaches `other.data`, typed by tag through `ColliderData`. */
 import { after, describe, it } from "node:test";
 
 import { Collider, Entity, Text, World } from "@tsengine/runtime";

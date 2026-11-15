@@ -1,5 +1,5 @@
 /**
- * The development overlay (REACT_FEEL_PLAN.md C4), drawn over the game in `tse dev` when its key (F1) is pressed: every `<Flex>`
+ * The development overlay (DESIGN.md, "Seeing inside a running game"), drawn over the game in `tse dev` when its key (F1) is pressed: every `<Flex>`
  * box and its padding, every collider (coloured by layer) and every pointer, and, for the box under the mouse, a label with the
  * components it is in, its size and the props that sized it. It is drawn in window pixels after the game's records, and never
  * in a packaged build (the player is given `devtools` only by `tse dev`).

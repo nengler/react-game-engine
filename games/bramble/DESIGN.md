@@ -1,13 +1,22 @@
 # Bramble: design note
 
-A small top-down adventure, the third game made on the engine and the first made from outside it (see
-[`docs/ADVENTURE_PLAN.md`](../../docs/ADVENTURE_PLAN.md)). This is the greybox of milestone M1: the rules and the screens, with
-shapes instead of art. Numbers marked *(guess)* have not been played.
+A small top-down adventure, the third game made on the engine and the first made from outside it. Numbers marked *(guess)* have
+not been played.
+
+**Why this game.** Kite and Hearth are both one screen, a few minutes long, keep nothing between runs, and live inside the
+engine's workspaces. Bramble is the opposite on each count: a world bigger than the screen, scrolled continuously, with interiors
+behind doors; a save and settings kept across runs; maps read from Tiled files with object layers; dialogue with wrapped, revealed
+text, an inventory and a settings screen with rebinding; enemies that find a path to the character. And it is made the way an
+outside author makes a game: from the `tse create` template, installing the engine as packed packages, checked by `tse check`
+from a copy outside the repository. The engine's storage (`createSave`, `createSettings`), `<Text maxWidth reveal>`, `findPath` and
+`lineOfSight`, culled tilemaps, the camera's `deadzone` and `smoothing`, Tiled object layers, lighting and `sequence` were all
+built or first used here.
 
 ## Premise and finish
 
 A walled valley has gone quiet. Find three bells (a cave, an old house, a hedge maze) and ring them at the gate in the north.
-**Finished** means: the character carries three bells and steps onto the gate (`run.done`, the end screen).
+**Finished** means: the character carries three bells and steps onto the gate (`run.done`, the end screen). One ending, twenty to
+thirty minutes for someone new to it *(guess)*.
 
 ## The chain
 
@@ -24,11 +33,13 @@ three bells ──▶ gate
 
 | File | Holds |
 | --- | --- |
-| `constants.ts` | Every number: tile 16, hitbox 10, speed 56 px/s *(guess)*, reach 12 px *(guess)*, 5 hearts, 3 bells |
-| `maps.ts` | The four maps, read from the Tiled files in `scenes/` and checked by `readMap`: the `Ground` layer as text (`.` ground, `#` wall, `~` water, `b` bush) and the people, items, doors, shrines, enemies, gate and bushes from the `Things` object layer (M6) |
+| `constants.ts` | Every number: tile 16, hitbox 10, speed 56 px/s *(guess)*, reach 12 px *(guess)*, 5 hearts, 3 bells, the enemies' numbers |
+| `maps.ts` | The four maps, read from the Tiled files in `scenes/` and checked by `readMap`: the `Ground` layer as text (`.` ground, `#` wall, `~` water, `b` bush) and the people, items, doors, shrines, enemies, gate and bushes from the `Things` object layer |
 | `dialogue.ts` | What four people say: pages before and after the bell nearest them is found |
+| `enemies.ts` | The beetle and the wisp |
 | `run.ts` | `newRun()`, `step(run, input, dt)` returning the run and events, doors, talking, pickups, bushes, shrines, `hurt`, the gate, `saveOf` / `loadRun` |
-| `view.ts` | What the screen draws of a run (`spotsOf`, `heroOf`, `dialogueOf`), called by the components as they render |
+| `view.ts` | What the screen draws of a run (`spotsOf`, `heroOf`, `dialogueOf`, `slotsOf`, `glowsOf`), called by the components as they render |
+| `menu.ts` | The rows of the title, settings and pause menus |
 | `controls.ts` | The actions and their keys, and `readInput` |
 
 - **Movement** is eight-way at one speed (diagonals normalised) through the engine's `moveActorX` / `moveActorY`, against walls,
@@ -36,127 +47,100 @@ three bells ──▶ gate
 - **Doors** are tiles set into walls; stepping on one leads to its partner, and the character arrives one tile out from it. The
   cave needs the lantern and the house the key; a refused door sets a notice and puts the character back outside it.
 - **Talking:** the action, facing a person within reach, starts a conversation; each press moves to the next page; the world
-  waits while someone talks. No choices.
-- **Shrines** (three) save the place and refill the hearts. Hearts run out only through `hurt` (no enemies yet, M5); then the
-  character is back at the last shrine with full hearts, and nothing else is lost.
-- **A save** (`saveOf`) is a plain object with a version: items, picked-up ids, cut bushes, the last shrine, the time. Loading
-  puts the character beside the shrine. Writing it to disk is M3.
+  waits while someone talks. No choices. The dialogue box is `<Text maxWidth lineGap reveal>`: the rules count the typed characters
+  (`talk.shown`, 40 a second *(guess)*); a press finishes the page, the next turns it.
+- **Shrines** (three) save the place and refill the hearts. When the hearts run out the character is back at the last shrine with
+  full hearts, and nothing else is lost.
+- **The game state** holds what the screens share (the run, the screen, whether there is a save); the components compute what they
+  draw from the run (`{spotsOf(run).map((s) => <Sprite key={s.id} … />)}`). Sounds and particles answer the step's events in the
+  `advance` action (`answer(events)` in `effects.ts`).
 
-## Not in the greybox yet
+## The world
 
-Enemies and the swing's damage (M5), saving to disk and settings (M3), the dialogue box with wrapped, revealed text and the
-inventory grid (M4), maps drawn in Tiled by a person (M6; the `.tmj` files are the source since M6.2, but none has yet been saved by Tiled itself), pushable
-blocks in the maze, art, sound and music (M7).
+The overworld is 80 × 48 tiles (1280 × 768 px: four screens across, almost five down); the cave, the house and the maze are maps of
+their own. The camera follows with a dead zone of 24 × 16 and a smoothing of 0.12 s *(guess)*, and stops at the map's edge. The
+player writes only the tilemap cells the view shows.
 
-## The world (M2)
+The maps are `scenes/*.tmj`, edited in Tiled; the `Things` layer has the bool property `data`, which tells the scene importer it is
+the rules' data and not prefabs. They were first written by a tool, and none has yet been saved by Tiled itself.
 
-The overworld is 80 × 48 tiles (1280 × 768 px: four screens across, almost five down). The camera follows with a dead zone of 24 × 16
-and a smoothing of 0.12 s *(guess)*, and stops at the map's edge. The player writes only the tilemap cells the view shows. A door
-step (the map changes, the new map's cells are written for the first time) costs **1.2 to 1.5 ms** of script under Node
-(`node tools/frame-time.ts`), so no hitch needs fixing; the mean step is 0.6 ms, the 99th percentile 5 ms, and one step in 1,433
-took 18 ms (a garbage collection or a JIT step, nowhere near a door).
+## Enemies
 
-## The cave is dark (2026-11-15)
+A **beetle** (2 hearts, 22 px/s) wanders and turns at walls. A **wisp** (3 hearts, 34 px/s) drifts until the character is within six
+tiles and in sight (`lineOfSight`), then follows `findPath` (diagonals, `maxNodes` 600), found again every 0.5 s and not each step,
+and gives up 4 s after last seeing them. The swing (the action with nothing else in front) is a 14 px box that costs each enemy in it
+a heart and knocks it back 14 px; contact costs the character a heart, then a second of safety. Actors block each other (people,
+other enemies; doors are walls to enemies). Enemies keep their place when the character leaves a map; defeated ones are kept in the
+save. A seeded generator (`nextRandom`) makes wandering repeat exactly. Eleven enemies in all: seven on the overworld, two in the
+cave, one in the maze.
 
-The cave is drawn under a `<Lighting ambient="#16162c">` (first a `<Layer>` with a light sprite, then, since step 7, the engine's own
-lights): the lantern is a `<Light radius={56}>` on the character, each item still lying in the cave glows warm and faint and each wisp
-carries a cold light (`glowsOf` in `rules/view.ts`, its numbers *(guess)*). It is the greybox for
-the engine's lighting (NEXT_PRIORITIES.md, "Now", steps 5 to 7). Since step 6 the layer goes through `assets/cave.glsl`, which makes the
-lantern's light flicker a little (`params[0]`, 0.12 *(guess)*) and darkens the screen's edges; the stored story picture is the software
-renderer's, without it. The story `Play/Cave` keeps its
-picture. Not decided yet: how dark it should be when played, and how bright the glows are (the bell and the key glow and the wisp carries a light, all guesses).
+## Saving, settings and the pause screen
 
-## The cave's first visit is a cutscene (2026-11-15)
+- **The save** is written when the character steps onto a shrine (not every step they stand on it), and holds the items, the picked-up
+  and cut ids, the defeated enemies, the last shrine and the time (`saveOf`, with a version). The title shows **Continue** first when a
+  save exists; it loads the run beside its shrine with full hearts. A save that cannot be read is said once and Continue starts a new
+  game.
+- **The settings** (`src/settings.ts`) are kept apart: music and effects volume (tenths), full screen, and the keys. The settings
+  screen follows them with `useStore`. It is a `<Menu>` of rows (`Choices.tsx`): left and right change a value, confirm on a key's row
+  opens `KeyPrompt` (a modal that waits for a key; Escape cancels), "Reset to defaults" puts everything back. They are applied before
+  the first frame and stored at each change.
+- **The pause screen** (`Pause.tsx`, a modal: the world is not stepped and the play screen hears no keys) shows the inventory as eight
+  slots in two rows, empty ones dark, then Resume and Save and quit. Picking up an item shows a card across the top (`Notice.tsx`).
 
-The first time the character steps into the cave, `Play` holds the world for 3.4 s (`CAVE_INTRO_SECONDS`) while a sequence
-(`cutscenes.ts`, the engine's `sequence`) grows the lantern's light out of the dark and shows a line. It is kept in a `useMutable`
-field (`intro`, started from `noCutscene()`), so it is not saved: a run loaded from a save plays it again on the next visit, which is
-fine for now. The whole-game replay (`test/fullrun.ts`) waits it out after the cave's door. The stories `Play/Cave` (after it) and
-`Play/CaveIntro` (during it) keep its pictures. Found while writing it: a field started at `null` could not have its methods called,
-and `import type` from `@tsengine/runtime` is refused in a component (DESIGN.md, "Sequences, for cutscenes").
+## The cave
+
+The cave is drawn under `<Lighting ambient="#16162c">`: the lantern is a `<Light radius={56}>` on the character, each item still lying
+in the cave glows warm and faint, and each wisp carries a cold light (`glowsOf` in `rules/view.ts`, its numbers *(guess)*). The layer
+goes through `assets/cave.glsl`, which makes the lantern's light flicker a little (`params[0]`, 0.12 *(guess)*) and darkens the
+screen's edges; the stored story picture is the software renderer's, without it. Not decided yet: how dark it should be when played,
+and how bright the glows are.
+
+**The first visit is a cutscene.** The first time the character steps into the cave, `Play` holds the world for 3.4 s
+(`CAVE_INTRO_SECONDS`) while a sequence (`cutscenes.ts`, the engine's `sequence`) grows the lantern's light out of the dark and shows
+a line. It is kept in a `useMutable` field (`intro`), so it is not saved: a run loaded from a save plays it again on the next visit,
+which is fine for now. The stories `Play/Cave` (after it) and `Play/CaveIntro` (during it) keep its pictures.
+
+## Tests and performance
+
+- `test/rules.test.ts`, `enemies.test.ts` and `maps.test.ts`: the rules headless, including the reachability search, a wisp that
+  follows a path round a wall, and losing the last heart.
+- Through the game itself: the title, the lantern, a conversation and the cave's door (`replay.test.ts`); Continue, settings and
+  rebinding (`saving.test.ts`); and the whole game from the title to the end screen, planned with `findPath` (`fullrun.test.ts`).
+  A script holds a key until it changes, so `right, right` is one press and `right, _, right` is two.
+- **Frame time** (`node tools/frame-time.ts`, under Node): the mean step is 0.75 ms with the enemies; a door step (the new map's
+  cells written for the first time) costs 1.2 to 1.5 ms, so there is no hitch to fix, and nothing needs filtering by distance to the
+  view. Path searches are bounded by `maxNodes`: the bench's 100 corner-to-corner searches of the whole 80 × 48 map take 1.3 ms each
+  under Node and 20 ms under QuickJS, which is why a wisp never searches the whole map. Not measured under QuickJS.
+
+## Not done
+
+A person has not played it in a window. No pushable blocks in the maze, no pixel font (the built-in font is used at sizes 10 and 20;
+a new game from `tse create` now gets Kite's), no shake or fades, no cave theme, no Quit on the title.
 
 ## Findings while writing
 
-Written down as they were hit, as Kite and Hearth did; the engine is changed only when one is worth it.
+Written down as they were hit; the engine was changed when one was worth it. Each of these is fixed in the engine unless it says
+otherwise.
 
-1. **Side-effect imports are not allowed in a component file** (`TSE1001`). Registering the Tiled maps (`registerTilemaps`) had
-   to move into a plain `.ts` file that `GameState.ts` imports. Fair, but the message does not say where such an import can go. *Since:* the message now says where such an import goes.
-2. **A component cannot compute a list** (`TSE1002`, `TSE1209`): the items of a `.map` come from state or props, optionally
-   `.filter`ed, and the body allows only state, refs and derived `const`s. The rules therefore produce the lists (`viewOf`) and the
-   game state holds them. This is the main cost of the subset for a map with many kinds of thing on it. *Since:* a list's items are any array (`{spotsOf(run).map(…)}`), so `view` left the game state and the components compute what they draw.
-3. **`x !== undefined` is not a condition** (`TSE1302`): a map that may have a gate became a list of zero or one gates. *Since:* `undefined` is a value; the gate is one of the spots.
-4. **The built-in font is not readable under size 10** at 320 × 180 (it is drawn, but letters break up); Kite and Hearth use a
-   bitmap font. Bramble uses multiples of 10 until it has one (M7). *Since 2026-11-15:* `tse create` puts Kite's 5 × 7 pixel font in
-   a new game's `assets/` and its `<Game font textSize={8}>` uses it, so a new game starts with text that reads at any multiple of 8.
-5. **`tse check` under `node --test`:** the child's test run printed `?` for its counts because `NODE_TEST_CONTEXT` made it
-   report to the outer run. `tse check` now clears it. (An engine-tooling finding, fixed.)
-6. **Compile errors name the generated file** (`generated/Play.ts:9:23 … './World.ts'`) when the real cause is in `src/` (the
-   source file had failed to compile, above in the output). Reading the whole output top-down is needed. *Since:* the generated code
-   is not type-checked while a file fails to compile, and a type error in generated code is reported at its line in `src/`.
-
-7. **Props need a declared type** (`TSE1208`): `Menu({ top }: { top: number })` is refused; the type is declared in the file. The message
-   says exactly that. Fine.
-8. **A new engine API is not in the authoring types until the manifest says so.** `InputState.lastPressed()` compiled in plain
-   TypeScript but not in a component (`TSE1301`, "no callable method"), because the compiler reads `handleTypes` in
-   `runtime/src/manifest.ts`. Added there. (Worth a test that every `InputState` method is in the manifest.) *Since:* a runtime test checks every `InputState` method and property is in the manifest.
-9. **`createSettings` takes its type from the defaults**, so `fullscreen: false` became the type `false` and `!s.fullscreen` did not
-   type-check. The game gives the type explicitly (`createSettings<Settings>`); the guide's example does too. *Since:* `createSettings` widens a boolean default (`SettingsOf`); the type is no longer given.
-10. **In a handler, `x !== undefined` is not a condition** (`TSE1302`, again). `capture(input.lastPressed())` hands the maybe-undefined
-    value to a game-state action, which tests it in plain TypeScript. *Since:* fixed with 3: `const key = input.lastPressed(); if (key !== undefined) bindKey(capturing, key);`.
-11. **A script holds a key until it changes**, so `right, right` is one press and `right, _, right` is two. It cost three wrong test
-    scripts (menus move on a press). Not an engine fault; the replay format says it, but nobody reads that twice.
-
-## Saving and settings (M3)
-
-- **The save** is written when the character steps onto a shrine (not every step they stand on it), and holds the items, the picked-up
-  and cut ids, the last shrine and the time (`saveOf`). The title shows **Continue** first when a save exists; it loads the run beside
-  its shrine with full hearts. A save that cannot be read is said once and Continue starts a new game.
-- **The settings** (`src/settings.ts`) are kept apart: music and effects volume (tenths), full screen, and the keys. The settings
-  screen is a list of rows with a cursor: left and right change a value, confirm on a key's row waits for a key (Escape cancels),
-  "Reset to defaults" puts everything back. They are applied before the first frame and stored at each change.
-- Not yet: "Save and quit" and the pause screen (M4), and `Quit` on the title.
-
-12. **A list item's children cannot hold a condition** (`TSE1209`), which the inventory grid needs (an empty slot shows nothing). The message
-    gives the way out: make the item a component (`SlotBox`) that takes the fields as props and holds the `{filled && …}`. That is
-    enough, so no engine change was made (plan 4.3: not needed). *Since:* an item's children may be conditional and nested; `SlotBox` is gone.
-13. **`name` is reserved as a `const`** inside a component (`TSE1103`): `const name = useGame(…)` fails. Renamed `speaker`. *Since:* a game-state value keeps its name (its field is `$name`); a `useState` called `name` still is not allowed.
-14. **Text wrapping and revealing needed no workaround**: `<Text maxWidth lineGap reveal>` (engine, M4.1/4.2) draws the dialogue box; the rules
-    count the typed characters (`talk.shown`, 40 a second *(guess)*; a press finishes the page, the next turns it).
-15. **The scene importer took every Tiled object for a prefab** (M6.2). Moving the doors, people and items into an object layer made
-    `tse check` fail with `TSE1503: Unknown prefab 'door'` for each one, because every map in `scenes/` is also imported as a scene.
-    *Fixed in the engine:* an object layer with the bool property `data` is the rules' (read into `TilemapData.objects`) and the scene
-    importer skips it; Bramble's `Things` layer has it. The tile importer also places objects by their layers' offsets now, as the
-    scene importer did.
-16. **The maps read from Tiled are the text maps, exactly:** a one-off script wrote the objects from the old text maps, and the
-    `MAPS` that `readMap` builds from them was compared with the old `MAPS` before `make-maps.ts` was removed. The rules did not change.
-
-## The pause screen (M4)
-
-Escape opens it over the world (the world is not stepped): the inventory as eight slots, two rows, empty ones dark; then Resume and
-Save and quit (which writes the save and goes to the title). Picking up an item shows a card across the top.
-
-Since the engine's `modal` (2026-11-12), the pause screen is its own component (`Pause.tsx`) with `modal` on its root: while it is
-shown the play screen hears no keys, so it closes itself on Escape, and `Play` no longer returns early from `useInput` when paused.
-The settings screen's wait for a key is `KeyPrompt.tsx`, a modal with no children, so `Menu` lost its `disabled` prop. *Since 2026-11-15:* `Menu.tsx` is `Choices.tsx`, a built-in `<Menu>` of focusable rows: the focus is the cursor, `onAdjust` takes left and right, and the screen looks the same (the stories' pictures did not change). Its own cursor state, its `useInput` and `wrap` are gone.
-
-17. **Narrowing does not reach a callback in the generated code.** In `{capturing !== null && <KeyPrompt onKey={(key) => bindKey(capturing, key)} />}`,
-    TypeScript narrows `capturing` (a `const`) inside the arrow, but the generated callback reads `this.capturing`, which is not
-    narrowed, so the type-check of the generated code fails (`string | null` is not `string`). Written `capturing!` for now. *Should
-    become:* the generator keeps the narrowing (a callback created under a condition could read a `const` taken there). *Since:* the
-    generated callback starts with `$assume(this.capturing !== null)`, which narrows it as the source does (engine DESIGN.md, "Narrowing
-    in the generated code"); the `!` is gone.
-
-## Enemies (M5)
-
-`rules/enemies.ts`. A **beetle** (2 hearts, 22 px/s) wanders and turns at walls. A **wisp** (3 hearts, 34 px/s) drifts until the character
-is within six tiles and in sight (`lineOfSight`), then follows `findPath` (diagonals, `maxNodes` 600), found again every 0.5 s and
-not each step, and gives up 4 s after last seeing them. The swing (the action with nothing else in front) is a 14 px box that costs
-each enemy in it a heart and knocks it back 14 px; contact costs the character a heart, then a second of safety. Actors block each
-other (people, other enemies; doors are walls to enemies). Enemies keep their place when the character leaves a map; defeated ones
-are kept in the save. A seeded generator (`nextRandom`) makes wandering repeat exactly. Eleven enemies in all: seven on the overworld,
-two in the cave, one in the maze. With them the mean step is 0.75 ms under Node (was 0.6), so **plan 2.4 needs no filtering by
-distance**; the busiest view has a handful. Path searches are bounded by `maxNodes`: the bench's 100 corner-to-corner searches of the
-whole 80 × 48 map take 1.3 ms each under Node and 20 ms under QuickJS, which is why a wisp never searches the whole map.
+1. Side-effect imports are not allowed in a component file (`TSE1001`): registering the Tiled maps lives in `src/tilemaps.ts`. The
+   message now says where such an import goes.
+2. A component could not compute a list, test `x !== undefined`, call methods of strings and numbers, or hold a condition in a list
+   item's children (`TSE1002`, `TSE1209`, `TSE1302`): the game kept its lists in the game state and wrapped items in components. All
+   of these now compile, and the workarounds are gone.
+3. A narrowed `const` read in a callback under a condition did not type-check in the generated code: the generated callback now
+   starts with `$assume(…)` (DESIGN.md, "Narrowing in the generated code").
+4. A new engine API is not in the authoring types until the manifest says so (`InputState.lastPressed()`); a runtime test now checks
+   every `InputState` member is in the manifest.
+5. `createSettings` took `false` as the type of a boolean default; it now widens it.
+6. Compile errors named the generated file when the cause was in `src/`; a type error in generated code is now reported at its line
+   in `src/`.
+7. `tse check` under `node --test` printed `?` for its counts (`NODE_TEST_CONTEXT`); `tse check` now clears it.
+8. The scene importer took every Tiled object for a prefab (`TSE1503`); an object layer with the bool property `data` is now the
+   rules'.
+9. Props need a declared type (`TSE1208`); the message says so. Not changed.
+10. The cave's cutscene: a field started at `null` cannot have its methods called (it starts from `noCutscene()`), and
+    `import type` from `@tsengine/runtime` is refused in a component, so `@tsengine/runtime/jsx` re-exports the type (DESIGN.md, "Sequences,
+    for cutscenes").
 
 ## Run it
 
@@ -169,33 +153,3 @@ npm run assets                    # rewrite the art and sound in assets/
 
 From the engine's repository: `npm run bramble:install` repacks the engine and installs it here; `npm run check:outside` checks
 a copy of this folder in a temporary directory.
-
-## After the review: React-like again
-
-The review of this milestone asked which of the workarounds above were the engine's to remove. With findings 1–3, 8–10, 12 and 13
-answered, the components read like React:
-
-- **What is drawn is computed where it is drawn.** `World` is one list, `{spotsOf(run).map((s) => <Sprite key={s.id} … />)}`; the
-  character is one `<Sprite>` in the camera (not a list of one); `Inventory` holds its `{slot.filled && …}` in the list item.
-- **A menu's cursor is the screen's own state** (`useMutable`), and the rows are computed from the game state (`titleRows(hasSave)`,
-  `settingsRows(settings, bindings, capturing)`) and passed to `<Menu rows cursor>` as props. The game state keeps only what is shared:
-  the run, the screen and whether there is a save.
-- **The settings screen listens to the settings itself**: it keeps the values and the keys as its own state and subscribes in
-  `useMount`, returning what `settings.subscribe` returns as the cleanup, so it re-renders when a volume or a key changes and stops
-  listening when it goes. (Until the engine had cleanups, a module-level `settings.subscribe` mirrored them into `useGame`, as
-  `s.settings` and `s.bindings`.)
-
-Every frame of three replays (the title and settings, the cave with the pause screen, and the whole game) draws exactly what it drew
-before the change.
-
-A second review found what still read unlike React, and the engine took three more: methods of strings and numbers
-(`String(seconds).padStart(2, "0")` on the end screen, `id.startsWith("bind:")` in the settings, where a `bindingOf` helper had stood in),
-destructured derived values worked out once (`const { x, y, frame } = heroOf(run)`, `const { name, page, shown, more } = dialogueOf(run)`),
-and `useState` starting from the game state. With them, `<Menu>` owns its cursor and keys and says what was chosen through
-`onChoose` and `onAdjust` (the title, the settings and the pause screen pass actions or an arrow), the screens take several actions in
-one `useGame((s) => s)`, and the inventory's slot holds one condition over a fragment. The three replays still draw every frame as
-before.
-
-Still as it was: sounds and particles answer the step's events in the `advance` action (`answer(events)`), since the engine has no
-`useEffect` on purpose; and a list inside a list item is not built yet. (The play screen kept three refs for the keys until it read them
-in `useUpdate((dt, input) => advance(readInput(input), dt))`, which gets the same input as `useInput`: the refs were never needed.)

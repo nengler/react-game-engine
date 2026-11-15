@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * A root `<Entity>` with no `name` is named after its component (REACT_FEEL_PLAN.md, B1), so `<Entity name="Player">` need not
+ * A root `<Entity>` with no `name` is named after its component (DESIGN.md, "A root named after its component"), so `<Entity name="Player">` need not
  * repeat what the function is called, and `other.owner` in a collision still says which component it touched.
  */
 import { after, describe, it } from "node:test";
@@ -58,7 +58,7 @@ describe("a root's name", () => {
   });
 });
 
-describe("names that the root built-in also has (REACT_FEEL_PLAN.md, B7)", () => {
+describe("names that the root built-in also has (DESIGN.md, 'Roots and component forms')", () => {
   it("lets state be called `name` on an <Entity> root, apart from the entity's own name", async () => {
     const compiled = compile(`export function Badge() {
   const s = useMutable({ name: "Ada" });

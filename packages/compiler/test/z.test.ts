@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 /**
- * `z`: draw order, written in `transform` beside `x` and `y` (priority 3 in docs/NEXT_PRIORITIES.md). The compiler
+ * `z`: draw order, written in `transform` beside `x` and `y` (DESIGN.md, "What is drawn"). The compiler
  * treats it like any transform field; what it means is the player's draw pass, tested in packages/player.
  */
 import { after, before, describe, it } from "node:test";

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-/** The development layout overlay (REACT_FEEL_PLAN.md C4): F1 under `tse dev` outlines boxes, colliders and pointers. */
+/** The development layout overlay (DESIGN.md, "Seeing inside a running game"): F1 under `tse dev` outlines boxes, colliders and pointers. */
 import { describe, it } from "node:test";
 
 import { Collider, Entity, Flex, Game, Pointer } from "@tsengine/runtime";
