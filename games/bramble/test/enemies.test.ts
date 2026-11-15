@@ -77,7 +77,7 @@ test("a beetle wanders, never into a wall, and turns at one", () => {
   assert.notDeepEqual([run.enemies[0]!.dx, run.enemies[0]!.dy], [-1, 0], "and is no longer pushing into the wall");
 });
 
-test("a wisp that sees the character follows a path round a wall, and gives up after four seconds out of sight", () => {
+test("a wisp that sees the character follows a path round a wall when it loses sight", () => {
   // The house's wall (cols 4 to 8, rows 21 to 23) stands between them once the character is on its far side.
   const wisp = spawnEnemy("w", "wisp", "overworld", 11, 22);
   let run = arena("overworld", 11, 19, [wisp]);

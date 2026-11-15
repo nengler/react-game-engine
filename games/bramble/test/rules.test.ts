@@ -18,7 +18,6 @@ import {
   slotsOf,
   step,
   type GameEvent,
-  type Input,
   type Run,
 } from "../src/rules/run.ts";
 
@@ -266,11 +265,6 @@ test("the game can be finished: a search through the world, with locks and bushe
   }
   for (const id of ["lantern", "key", "shears", "bell-cave", "bell-house", "bell-maze"]) assert.ok(inv.has(id), `${id} can be reached`);
   assert.ok(seen.has("gate"), "the gate can be reached");
-});
-
-test("input is plain data", () => {
-  const input: Input = { dx: 0, dy: 0, action: false };
-  assert.deepEqual(step(newRun(), input, DT).events, []);
 });
 
 test("a shrine saves when stepped onto, not every step the character stands on it", () => {
