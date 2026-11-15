@@ -6,6 +6,8 @@ import { HandlerEmitter } from "./handlers.ts";
 export class ElementEmitter extends HandlerEmitter {
   /** The parameters of the keyed lists being emitted (the item, its index): what a child's prop may not read if it is to have a getter. */
   protected readonly itemIds = new Set<LocalId>();
+  /** The keyed lists being emitted, the outermost first: a list inside a list item is a list of that item's own. */
+  protected readonly openLists: KeyedListChildIR[] = [];
 
   // -- fields ---------------------------------------------------------------
 
@@ -26,10 +28,7 @@ export class ElementEmitter extends HandlerEmitter {
       if (child.alternate) this.w.line(`#${el.fieldName}Branches: Map<string | number, 0 | 1> = new Map();`);
       this.w.line(`#${el.fieldName}Order: (string | number)[] = [];`);
       if (this.listNeedsRecords(child)) this.w.line(`#${el.fieldName}Records: Map<string | number, ${this.recordType(child)}> = new Map();`);
-      if (!isNamedListSource(child.source)) {
-        // A computed source (`spotsOf(run)`, `world.enemies.map(…)`): worked out by a method, whose return type names the items' type.
-        this.w.line(`${listSourceMethod(child)}() { return ${this.expr(child.source, true)}; }`);
-      }
+      this.emitListSourceMethods(child, []);
       return;
     }
     const childPresence: Presence = child.kind === "ConditionalChild" ? "conditional" : presence;
@@ -39,6 +38,34 @@ export class ElementEmitter extends HandlerEmitter {
       this.w.line(`${el.fieldName}: ${type} | null = null;`);
     }
     this.emitElementFields(el.children, childPresence);
+  }
+
+  /**
+   * A computed source (`spotsOf(run)`, `world.enemies.map(…)`) is worked out by a method, whose return type names the items' type; so is
+   * a list inside a list item's (`row.cells`), which takes the items it reads of the lists around it as parameters. The lists inside
+   * this one's items are visited too: they are not fields of the component (their state lives in the item's record).
+   */
+  protected emitListSourceMethods(list: KeyedListChildIR, around: readonly KeyedListChildIR[]): void {
+    if (!isNamedListSource(list.source) || around.some((outer) => readsListParams(list.source, outer))) {
+      const params = this.aroundParams(list.source, around);
+      this.w.line(`${listSourceMethod(list)}(${params.map((p) => `${p.name}: ${p.type}`).join(", ")}) { return ${this.expr(list.source, true)}; }`);
+    }
+    const inner = [...around, list];
+    const visit = (children: readonly ChildIR[]): void => {
+      for (const c of children) {
+        if (c.kind === "KeyedListChild") this.emitListSourceMethods(c, inner);
+        else if (c.kind !== "ChildrenSlot") visit(c.element.children);
+      }
+    };
+    visit(list.element.children);
+  }
+
+  /** The items and indexes of the lists around one that its source reads: the source method's parameters. */
+  protected aroundParams(source: ExprIR, around: readonly KeyedListChildIR[]): { name: string; type: string }[] {
+    return around.flatMap((outer) => [
+      ...(readsParam(source, outer.item.id) ? [{ name: outer.item.name, type: this.listItemType(outer, around.slice(0, around.indexOf(outer))) }] : []),
+      ...(outer.index !== null && readsParam(source, outer.index.id) ? [{ name: outer.index.name, type: "number" }] : []),
+    ]);
   }
 
   /** Attach persistent children to their parents (constructor only). */
@@ -172,9 +199,11 @@ export class ElementEmitter extends HandlerEmitter {
     // While its items are made, a prop that reads the item or its index is not given a getter (see `propGetters`).
     const ids = [list.item.id, ...(list.index ? [list.index.id] : [])];
     for (const id of ids) this.itemIds.add(id);
+    this.openLists.push(list);
     try {
       this.emitListBody(list, mount, slot);
     } finally {
+      this.openLists.pop();
       for (const id of ids) this.itemIds.delete(id);
     }
   }
@@ -183,10 +212,13 @@ export class ElementEmitter extends HandlerEmitter {
     const w = this.w;
     const el = list.element;
     const alt = list.alternate;
-    const items = `this.${el.fieldName}Items`;
-    const order = `this.#${el.fieldName}Order`;
-    const branches = `this.#${el.fieldName}Branches`;
-    const records = this.listNeedsRecords(list) ? `this.#${el.fieldName}Records` : null;
+    const state = this.listState(el.fieldName);
+    const { items, order, branches } = state;
+    const records = this.listNeedsRecords(list) ? state.records : null;
+    // A list inside a list item names its record after its depth, so the record of the item around it can still be read.
+    const around = this.openLists.slice(0, -1);
+    const rec = around.length === 0 ? "$rec" : `$rec${around.length}`;
+    const lookups = records ? [...this.mode.itemLookups, { id: list.item.id, text: `${rec}.current` }] : this.mode.itemLookups;
     const item = list.item.name;
     const position = list.index?.name ?? "$n";
     const params = list.index ? `${item}, ${list.index.name}` : item;
@@ -206,7 +238,9 @@ export class ElementEmitter extends HandlerEmitter {
     w.line(`const $parent = ${mount.ref};`);
     // `cond && <El/>`: an item whose condition is false has no instance, as if it were filtered out.
     const filter = list.condition !== null && alt === null ? `.filter((${item}) => ${this.arrowBody(list.condition)})` : "";
-    w.line(`const $list = ${isNamedListSource(list.source) ? this.expr(list.source, true) : `this.${listSourceMethod(list)}()`}${filter};`);
+    const computed = !isNamedListSource(list.source) || around.some((outer) => readsListParams(list.source, outer));
+    const args = computed ? this.aroundParams(list.source, around).map((p) => p.name).join(", ") : "";
+    w.line(`const $list = ${computed ? `this.${listSourceMethod(list)}(${args})` : this.expr(list.source, true)}${filter};`);
     w.line(`const $keys = $list.map((${params}) => ${this.arrowBody(list.key)});`);
     w.line("const $seen = new Set<string | number>();");
     w.block("for (const $key of $keys)", () => {
@@ -235,14 +269,14 @@ export class ElementEmitter extends HandlerEmitter {
       w.open("if ($item === undefined) {");
       // A callback is created once, with the item's first value. It reads the item's current value through this
       // holder, which every render refreshes, and which it keeps after the item is removed (an unmount hook may call it).
-      if (records) w.line(kids.length > 0 ? `const $rec: ${this.recordType(list)} = { current: ${item}, kids: ${this.emptyKids(list)} };` : `const $rec = { current: ${item} };`);
-      this.within({ itemLookup: records ? { id: list.item.id, text: "$rec.current" } : null }, () => {
+      if (records) w.line(kids.length > 0 ? `const ${rec}: ${this.recordType(list)} = { current: ${item}, kids: ${this.emptyKids(list)} };` : `const ${rec} = { current: ${item} };`);
+      this.within({ itemLookups: lookups }, () => {
         if (alt) {
           w.block(`if (${test})`, () => construct(el));
           w.block("else", () => construct(alt));
         } else construct(el);
         if (kids.length > 0) {
-          this.within({ fieldBase: "$rec.kids" }, () => {
+          this.within({ fieldBase: `${rec}.kids` }, () => {
             this.emitMountStatics(kids, mountOf(el, "$item"));
             this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional");
           });
@@ -251,18 +285,18 @@ export class ElementEmitter extends HandlerEmitter {
       w.line(`${items}.set($key, $item);`);
       // Hot reload and saves find a list item by its key, so removing one item does not move state between the others.
       w.line("$item.hotKey = $key;");
-      if (records) w.line(`${records}.set($key, $rec);`);
+      if (records) w.line(`${records}.set($key, ${rec});`);
       // Among a component's passed children, an item's order is the list's own position and then its index (`[2, 5]`), so the list
       // keeps its place between the children written beside it.
       w.line(`${mount.passed ? `$parent.queueAttachPassedChild($item, [${slot}, ${position}])` : `$parent.queueAddChild($item, ${slot}, ${position})`};`);
       if (records || hasDynamicProps(el.props) || (alt !== null && hasDynamicProps(alt.props))) {
         w.close();
         w.open("} else {");
-        if (records) w.line(kids.length > 0 ? `const $rec = ${records}.get($key)!;` : `${records}.get($key)!.current = ${item};`);
+        if (records) w.line(kids.length > 0 ? `const ${rec} = ${records}.get($key)!;` : `${records}.get($key)!.current = ${item};`);
         if (records && kids.length > 0) {
-          w.line(`$rec.current = ${item};`);
+          w.line(`${rec}.current = ${item};`);
           // A child made now (its condition just turned on) may hold a callback: it reads the item through the record too.
-          this.within({ itemLookup: { id: list.item.id, text: "$rec.current" }, fieldBase: "$rec.kids" }, () => this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional"));
+          this.within({ itemLookups: lookups, fieldBase: `${rec}.kids` }, () => this.emitChildUpdates(kids, mountOf(el, "$item"), "conditional"));
         }
         if (alt) {
           w.block(`if (${test})`, () => this.emitPropUpdates(el, view(el)));
@@ -299,20 +333,43 @@ export class ElementEmitter extends HandlerEmitter {
   }
 
   /** What a list keeps for each key: the item's current value and, for an item with children, those children (each `null` until made). */
-  protected recordType(list: KeyedListChildIR): string {
-    const kids = itemDescendants(list.element.children);
-    const fields = kids.map((k) => `${k.fieldName}: ${k.component.name} | null`).join("; ");
-    return `{ current: ${this.listItemType(list)}${kids.length > 0 ? `; kids: { ${fields} }` : ""} }`;
+  protected recordType(list: KeyedListChildIR, around: readonly KeyedListChildIR[] = this.openLists.slice(0, -1)): string {
+    const inner = [...around, list];
+    const fields = itemDescendants(list.element.children).map((k) => {
+      if (!isList(k)) return `${k.fieldName}: ${k.component.name} | null`;
+      // A list of the item's own: its state, as a top-level list keeps it in fields of the component.
+      const f = k.element.fieldName;
+      const type = k.alternate ? `${k.element.component.name} | ${k.alternate.component.name}` : k.element.component.name;
+      return [
+        `${f}Items: Map<string | number, ${type}>`,
+        `${f}Order: (string | number)[]`,
+        ...(this.listNeedsRecords(k) ? [`${f}Records: Map<string | number, ${this.recordType(k, inner)}>`] : []),
+        ...(k.alternate ? [`${f}Branches: Map<string | number, 0 | 1>`] : []),
+      ].join("; ");
+    });
+    return `{ current: ${this.listItemType(list, around)}${fields.length > 0 ? `; kids: { ${fields.join("; ")} }` : ""} }`;
   }
 
-  /** A new item's children, none made yet. */
+  /** A new item's children, none made yet, and its lists empty. */
   protected emptyKids(list: KeyedListChildIR): string {
-    return `{ ${itemDescendants(list.element.children).map((k) => `${k.fieldName}: null`).join(", ")} }`;
+    const fields = itemDescendants(list.element.children).map((k) => {
+      if (!isList(k)) return `${k.fieldName}: null`;
+      const f = k.element.fieldName;
+      return [`${f}Items: new Map()`, `${f}Order: []`, ...(this.listNeedsRecords(k) ? [`${f}Records: new Map()`] : []), ...(k.alternate ? [`${f}Branches: new Map()`] : [])].join(", ");
+    });
+    return `{ ${fields.join(", ")} }`;
+  }
+
+  /** Where a list's state is: fields of the component (the order, records and branches private), or, inside a list item, its record. */
+  protected listState(field: string): { items: string; order: string; records: string; branches: string } {
+    const base = this.mode.fieldBase;
+    const own = base === "this" ? "this.#" : `${base}.`;
+    return { items: `${base}.${field}Items`, order: `${own}${field}Order`, records: `${own}${field}Records`, branches: `${own}${field}Branches` };
   }
 
   /** The element type of a list's items: named through the state field, the props type or the constant, or else the return type of the method that computes them. */
-  protected listItemType(list: KeyedListChildIR): string {
-    if (!isNamedListSource(list.source)) return `ReturnType<${this.c.name}[${JSON.stringify(listSourceMethod(list))}]>[number]`;
+  protected listItemType(list: KeyedListChildIR, around: readonly KeyedListChildIR[] = []): string {
+    if (!isNamedListSource(list.source) || around.some((outer) => readsListParams(list.source, outer))) return `ReturnType<${this.c.name}[${JSON.stringify(listSourceMethod(list))}]>[number]`;
     let base = list.source;
     while (base.kind === "Call" && base.callee.kind === "ArrayMethod") base = base.callee.receiver;
     if (base.kind === "StateRead") return `${this.c.name}[${JSON.stringify(this.state(base.state).name)}][number]`;
@@ -332,8 +389,8 @@ export class ElementEmitter extends HandlerEmitter {
       ...el.children.flatMap((c) => {
         if (c.kind === "ChildrenSlot") return [];
         if (c.kind !== "KeyedListChild") return this.subtreeResets(c.element);
-        const f = c.element.fieldName;
-        return [`this.${f}Items.clear();`, `this.#${f}Order = [];`, ...(this.listNeedsRecords(c) ? [`this.#${f}Records.clear();`] : []), ...(c.alternate ? [`this.#${f}Branches.clear();`] : [])];
+        const { items, order, records, branches } = this.listState(c.element.fieldName);
+        return [`${items}.clear();`, `${order} = [];`, ...(this.listNeedsRecords(c) ? [`${records}.clear();`] : []), ...(c.alternate ? [`${branches}.clear();`] : [])];
       }),
     ];
   }
@@ -422,10 +479,12 @@ export class ElementEmitter extends HandlerEmitter {
     // between two elements.
     if (this.itemIds.size > 0 && list === null) return null;
     if (list !== null && list.alternate !== null) return null;
+    // A list inside a list item: its getter would have to find the outer items again too.
+    if (list !== null && this.openLists.length > 1) return null;
     const dynamic = el.props.filter((p) => p.kind === "DynamicProp");
     const spread = el.props.some((p) => p.kind === "SpreadProp");
     if (dynamic.length === 0 && !spread) return null;
-    const emit = <T>(f: () => T): T => this.within({ inCallback: true, itemLookup: null }, f);
+    const emit = <T>(f: () => T): T => this.within({ inCallback: true, itemLookups: [] }, f);
     // Under the conditions the child is made under (`tower !== null && <Tower …/>`) as they hold now: where they do not, the child is on its
     // way out, and the getter says nothing (the child's last props stand), so it never reads what the condition kept it from.
     const when = this.mode.conditions.map((c) => emit(() => this.expr(this.live(c))));
@@ -471,9 +530,25 @@ function listSourceMethod(list: KeyedListChildIR): string {
   return `$${list.element.fieldName}List`;
 }
 
-/** Every element below a list item (through static and conditional children): each is a field of the item's record. */
-function itemDescendants(children: readonly ChildIR[]): ElementIR[] {
-  return children.flatMap((c) => (c.kind === "StaticChild" || c.kind === "ConditionalChild" ? [c.element, ...itemDescendants(c.element.children)] : []));
+/**
+ * Every element below a list item (through static and conditional children), and every list among them: each element is a field of
+ * the item's record, and each list keeps its state there. What is inside those lists' items is in their own records.
+ */
+function itemDescendants(children: readonly ChildIR[]): (ElementIR | KeyedListChildIR)[] {
+  return children.flatMap((c): (ElementIR | KeyedListChildIR)[] => {
+    if (c.kind === "KeyedListChild") return [c];
+    if (c.kind === "StaticChild" || c.kind === "ConditionalChild") return [c.element, ...itemDescendants(c.element.children)];
+    return [];
+  });
+}
+
+function isList(x: ElementIR | KeyedListChildIR): x is KeyedListChildIR {
+  return "kind" in x && x.kind === "KeyedListChild";
+}
+
+/** Whether an expression reads a list's item or its index. */
+function readsListParams(e: ExprIR, list: KeyedListChildIR): boolean {
+  return readsParam(e, list.item.id) || (list.index !== null && readsParam(e, list.index.id));
 }
 
 /** Whether a render has props to send: a dynamic prop, or a spread that reads something that changes. */

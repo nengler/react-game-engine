@@ -7,10 +7,10 @@ import { param, escapeTemplate, mutableObject, pendingRef, propertyKey, typeText
 /** How some IR is written where the emitter is. Each field is set for a stretch of emitting with `within`. */
 export interface EmitMode {
   /**
-   * While emitting a keyed list: inside a callback prop, a read of the list's item is its current value, looked up by the
-   * item's key (`text`), because the callback was created with the item's first value.
+   * While emitting keyed lists: inside a callback prop, a read of a list's item is its current value, kept in the item's record
+   * (`text`), because the callback was created with the item's first value. One per list being emitted, the outermost first.
    */
-  readonly itemLookup: { readonly id: LocalId; readonly text: string } | null;
+  readonly itemLookups: readonly { readonly id: LocalId; readonly text: string }[];
   /** Emitting a callback prop's body. */
   readonly inCallback: boolean;
   /** Writing `super(…)`'s arguments, where `this` cannot be used: a memo is worked out in place (it reads nothing that changes there). */
@@ -79,7 +79,7 @@ export class ExpressionEmitter {
   protected w: CodeWriter;
   protected readonly stateById: ReadonlyMap<StateId, StateIR>;
   /** Where the emitter is now, and so how some IR is written. Changed only through `within`. */
-  protected mode: EmitMode = { itemLookup: null, inCallback: false, inlineMemos: false, fieldBase: "this", conditions: [], memoLocals: new Map(), renderMemos: new Map(), guard: null };
+  protected mode: EmitMode = { itemLookups: [], inCallback: false, inlineMemos: false, fieldBase: "this", conditions: [], memoLocals: new Map(), renderMemos: new Map(), guard: null };
   /** Whether a callback was written with `$assume`, so the module declares it. */
   usesAssume = false;
   /** The `useMutable`s a handler has passed whole (`takeHit(s)`), by view name: the class gets an object for each (see the generator). */
@@ -226,7 +226,7 @@ export class ExpressionEmitter {
       case "StateRead": return e.live ? pendingRef(this.state(e.state)) : `this.${this.state(e.state).name}`;
       case "LocalRead": return e.name;
       case "ParamRead":
-        return this.mode.itemLookup !== null && this.mode.inCallback && e.param === this.mode.itemLookup.id ? this.mode.itemLookup.text : e.name;
+        return (this.mode.inCallback && this.mode.itemLookups.find((l) => l.id === e.param)?.text) || e.name;
       case "PropertyRead": return `${e.object.name}.${e.name}`;
       case "PropRead": {
         // A prop with a default is never undefined (the runtime applies the default at construction and on update),

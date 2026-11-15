@@ -673,14 +673,14 @@ function C() {
     assert.deepEqual(result.diagnostics.map((d) => [d.code, d.severity]), [[DiagnosticCode.InvalidList, "warning"]]);
   });
 
-  it("takes one element with no children from an inline arrow", () => {
+  it("takes one element from an inline arrow", () => {
     // `cond && <El/>` and `cond ? <A/> : <B/>` are allowed now: see tier3.test.ts.
     assert.deepEqual(listCodes(`items.map((e) => e.n > 0 || <Sprite key={e.id} image={e.id} />)`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map((e) => <><Sprite key={e.id} image={e.id} /></>)`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map((e) => { const x = 1; return <Sprite key={e.id} image={e.id} />; })`), [DiagnosticCode.InvalidList]);
-    // Children on an item, nested and conditional, are allowed now (tier3.test.ts); a list inside an item is not yet.
+    // Children on an item, nested and conditional, are allowed now (tier3.test.ts), and so is a list inside an item (nested-lists.test.ts).
     assert.doesNotThrow(() => compile(list(`items.map((e) => <Entity key={e.id}><Entity name="x"><Sprite image={e.id} /></Entity></Entity>)`)));
-    assert.deepEqual(listCodes(`items.map((e) => <Entity key={e.id}>{items.map((f) => <Sprite key={f.id} image={f.id} />)}</Entity>)`), [DiagnosticCode.InvalidList]);
+    assert.doesNotThrow(() => compile(list(`items.map((e) => <Entity key={e.id}>{items.map((f) => <Sprite key={f.id} image={f.id} />)}</Entity>)`)));
     assert.deepEqual(listCodes(`items.map()`), [DiagnosticCode.InvalidList]);
     assert.deepEqual(listCodes(`items.map(({ id }) => <Sprite key={id} image={id} />)`), [DiagnosticCode.InvalidList]);
     assert.doesNotThrow(() => compile(list(`items.map((e) => { return <Sprite key={e.id} image={e.id} />; })`)), "a block with one return is fine");
