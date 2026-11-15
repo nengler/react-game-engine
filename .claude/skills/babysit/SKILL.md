@@ -45,6 +45,24 @@ Node, packaging the demo), **native** and **native-desktop**
 (`librge`, the C smoke test, the Node host against the real library, packaged builds under a virtual display), and
 **outside** (`check:outside`: Bramble packed, installed and checked from a temporary folder).
 
+## When Actions cannot run CI
+
+Jobs that fail in a few seconds with no steps and no log (the job never got a runner) mean Actions itself is blocked:
+out of minutes, a billing limit, an outage. Check that other PRs' recent runs fail the same way, then run CI locally
+from a clean checkout of the PR's head:
+
+    npm run ci:local -- --ref origin/<pr-branch>        # every job; add job names (check host ...) to run only those
+
+`tools/ci-local.ts` runs the `run:` steps of `.github/workflows/ci.yml` itself, so it cannot drift from CI. It skips
+`uses:` steps and the step that installs system packages: `native-desktop` needs X11, GL and Xvfb on the machine, and
+says so when they are missing. Post its summary on the PR, naming any job that did not pass locally and why.
+
+When the local run passes, do not wait for Actions: merge, and say in the merge commit that CI ran locally (which
+jobs, at which commit) because Actions could not. A job that fails locally counts as passing only when it fails the
+same way on the base branch in the same environment (a machine that cannot do what the job needs, such as
+`native-desktop`'s pixel checks without working GL); say so on the PR and in the merge commit. Any other local failure
+is a failure: fix it before merging.
+
 ## When CI fails
 
 - **A bench budget** (`bench:check`, budgets in `packages/player/bench/budget.json`). Small scenes take hundredths of
